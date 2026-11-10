@@ -8,7 +8,7 @@ Object.defineProperty(exports, "__esModule", {
 exports.CountrySelectWithIcon = CountrySelectWithIcon;
 exports["default"] = CountrySelect;
 
-var _react = _interopRequireWildcard(require("react"));
+var _react = _interopRequireWildcard(require("../../../react-peer.js").getReact());
 
 var _propTypes = _interopRequireDefault(require("../../prop-types/index.js"));
 

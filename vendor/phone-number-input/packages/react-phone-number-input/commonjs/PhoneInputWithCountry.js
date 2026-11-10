@@ -7,7 +7,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports["default"] = void 0;
 
-var _react = _interopRequireDefault(require("react"));
+var _react = _interopRequireDefault(require("../../../react-peer.js").getReact());
 
 var _propTypes = _interopRequireDefault(require("../../prop-types/index.js"));
 

@@ -32,7 +32,11 @@ export type PhoneVendorProps = Omit<
         unicodeFlags?: boolean;
     };
 };
-export const PhoneInput: React.ForwardRefExoticComponent<
-    PhoneVendorProps & React.RefAttributes<HTMLInputElement>
->;
-export function getCountries(): string[];
+export type PhoneRuntime = {
+    PhoneInput: React.ForwardRefExoticComponent<
+        PhoneVendorProps & React.RefAttributes<HTMLInputElement>
+    >;
+    getCountries(): string[];
+};
+/** Private producer boundary: bind the SDK's real peer before vendor initialization. */
+export function createPhoneRuntime(peer: typeof React): PhoneRuntime;

@@ -97,7 +97,11 @@ for (const api of [esm, cjs]) {
     const originalInput = container.querySelector('input[name="phone"]');
     assert(originalInput);
     assert.equal(originalInput.value, '+1 415 555 2671');
-    assert.equal(container.querySelector('select').value, 'US');
+    // Assert React's serialized selected attribute, not Happy DOM 20's
+    // parse-time selectedness. Hydration does not repair that parser state.
+    const selected = html.match(/<option\b[^>]*\sselected=""[^>]*>/g) ?? [];
+    assert.equal(selected.length, 1);
+    assert(selected[0].includes(' value="US"'));
     assert.equal(container.querySelector('img'), null, 'unicode flags need no remote image');
     assert.deepEqual(writes, []);
     const keys = ['window', 'document', 'navigator', 'HTMLElement',
@@ -141,26 +145,33 @@ for (const api of [esm, cjs]) {
         assert.equal(container.querySelector('select').value, 'GH');
         const firstOwner = ownerToken;
         const beforeRetirement = writes.length;
-        await React.act(async () => {
-            const oldInput = input();
-            Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(oldInput, '+442079460958');
-            oldInput.setSelectionRange(oldInput.value.length, oldInput.value.length);
-            oldInput.dispatchEvent(new window.InputEvent('input', {
-                bubbles: true, inputType: 'insertText', data: '+442079460958',
-            }));
-            assert.equal(writes.length, beforeRetirement, 'old vendor continuation is queued');
-            ownerToken = {};
-            value = '+14155552671';
-            mountedRoot.render(node());
-        });
-        assert.equal(writes.length, beforeRetirement);
-        ownerToken = firstOwner;
+        value = '+14155552671';
+        deferred = true;
         await publish();
-        assert.equal(writes.length, beforeRetirement, 'returning to A does not revive the removed controller');
+        assert.equal(container.querySelector('select').value, 'US', 'actual CSR mount uses explicit selection');
+        await React.act(async () => input().focus());
+        await edit('+44 (20) 7946-0958');
+        assert.equal(writes.length, beforeRetirement);
+        // Real owner replacement queues the old deferred editor's unmount
+        // replay. Both host owners remain allowed; only the committed SDK
+        // generation must reject that old cleanup after B has committed.
+        ownerToken = {};
+        value = '+233201234567';
+        await publish();
+        assert.equal(writes.length, beforeRetirement);
+        assert.equal(input().value, '+233 20 123 4567');
+        ownerToken = firstOwner;
+        value = '+14155552671';
+        await publish();
+        assert.equal(writes.length, beforeRetirement, 'returning to A does not revive its old draft');
+        assert.equal(container.querySelector('select').value, 'US');
         await React.act(async () => input().focus());
         await edit('+14155552672');
+        assert.equal(writes.length, beforeRetirement);
+        await React.act(async () => input().blur());
         assert.equal(writes.length, beforeRetirement + 1);
         assert.equal(writes.at(-1).value, '+14155552672');
+        assert.equal(writes.at(-1).reason, 'blur');
         value = '+14155552671';
         deferred = true;
         await publish();

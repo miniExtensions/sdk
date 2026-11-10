@@ -665,6 +665,11 @@ React18.3.1 and19.2.0 run in fresh processes for ESM/CommonJS, strict declaratio
 CSS, SSR/hydration, real editing, Clear, retirement and admitted unmount.
 The vendor guard verifies original/adapted hashes, closed relative runtime edges,
 metadata, licenses and the installed archive; third-party bytes remain frozen.
+The public ESM entry binds the actual consumer React peer before the lazy private
+CommonJS runtime initializes; private modules never dynamically require React.
+SSR selection checks serialized option attributes separately from real CSR
+selection. The deferred-unmount A→B→A case proves cleanup retirement, not an
+unestablished delayed vendor-class callback after a successor commit.
 These synthetic checks do not establish Android/OS IME, telephone navigation,
 visual layout, hosted authorization or native Form/Grid persistence. Android's
 existing formatter caret timer remains part of the private baseline.

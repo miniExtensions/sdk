@@ -481,7 +481,8 @@ it('country selection publishes immediately even while the input commit mode is 
     await f.country('GB');
     assert.equal(f.select().value, 'GB');
     assert.equal(f.writes.length, 1);
-    assert.equal(f.writes[0].value, undefined);
+    // Country selection uses e164 directly; +44 is a canonical partial value.
+    assert.equal(f.writes[0].value, '+44');
     assert.equal(f.writes[0].commit.reason, 'input');
     await f.unmount();
     assert.equal(f.writes.length, 1);
@@ -552,7 +553,7 @@ it('queued Clear then country change keeps distinct captured actions without ref
         f.writes.map(({ value, commit }) => ({ value, reason: commit.reason })),
         [
             { value: undefined, reason: 'clear' },
-            { value: undefined, reason: 'input' },
+            { value: '+44', reason: 'input' },
         ]
     );
     assert.equal(f.select().value, 'GB');
@@ -674,29 +675,42 @@ it('committed owner A→B→A and readonly/mode replacement cannot transfer a de
     assert.equal(f.writes[0].value, 'fresh current A');
 });
 
-it('a queued old vendor callback cannot publish into a new keyed owner even if both host targets remain permitted', async (t) => {
-    const f = await fixture(t, { country: true, value: '+14155552671' });
-    f.state.enforceOwner = false;
-    await f.focus();
-    await act(async () => {
-        f.dispatchEdit('+442079460958');
-        assert.deepEqual(
-            f.writes.slice(),
-            [],
-            'the actual vendor continuation must still be queued for this case'
-        );
-        f.state.owner = {};
-        f.state.target = 'session-B/field-phone/record-B/table-B';
-        f.state.value = '+233201234567';
-        f.publish();
+it('a pending country draft cannot settle across committed owner A→B→A even while both host targets remain permitted', async (t) => {
+    const f = await fixture(t, {
+        country: true,
+        deferred: true,
+        value: '+14155552671',
     });
+    // Both records remain host-authorized. The SDK's committed generation, not
+    // a fixture callback filter, must retire the old editor's unmount replay.
+    f.state.enforceOwner = false;
+    const originalOwner = f.state.owner;
+    await f.focus();
+    await f.edit('+44 (20) 7946-0958');
+    assert.deepEqual(f.writes.slice(), []);
+    assert.equal(f.invocationCount(), 0);
+    f.state.owner = {};
+    f.state.target = 'session-B/field-phone/record-B/table-B';
+    f.state.value = '+233201234567';
+    await f.render();
     assert.deepEqual(f.writes.slice(), []);
     assert.equal(f.invocationCount(), 0);
     assert.equal(f.input().value, '+233 20 123 4567');
+    f.state.owner = originalOwner;
+    f.state.target = 'session-A/field-phone/record-A/table-A';
+    f.state.value = '+14155552671';
+    await f.render();
+    assert.equal(f.invocationCount(), 0);
+    assert.equal(f.input().value, '+1 415 555 2671');
     await f.focus();
-    await f.edit('+233501112222');
+    await f.edit('+14155552672');
+    assert.equal(f.invocationCount(), 0);
+    await f.blur();
+    assert.equal(f.invocationCount(), 1);
     assert.equal(f.writes.length, 1);
-    assert.equal(f.writes[0].target, 'session-B/field-phone/record-B/table-B');
+    assert.equal(f.writes[0].value, '+14155552672');
+    assert.equal(f.writes[0].target, 'session-A/field-phone/record-A/table-A');
+    assert.equal(f.writes[0].commit.reason, 'blur');
 });
 
 it('server renders real country formatting and native associations without a document or a host write', async () => {
@@ -725,7 +739,12 @@ it('server renders real country formatting and native associations without a doc
         assert.equal(input.value, '+1 415 555 2671');
         assert.equal(input.getAttribute('form'), 'existing-form');
         assert.equal(input.getAttribute('aria-label'), 'Contact phone');
-        assert.equal(window.document.querySelector('select')?.value, 'US');
+        // React SSR declares exactly one selected option. Happy DOM 20's
+        // incremental option attachment can misassign the selected property;
+        // it is not the serialization oracle. CSR selection is tested above.
+        const selected = html.match(/<option\b[^>]*\sselected=""[^>]*>/g) ?? [];
+        assert.equal(selected.length, 1);
+        assert.ok(selected[0].includes(' value="US"'));
         assert.equal(window.document.querySelector('img'), null);
         assert.equal(writes, 0);
     } finally {

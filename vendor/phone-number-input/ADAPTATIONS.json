@@ -5,7 +5,7 @@
         {
             "path": "packages/input-format/commonjs/react/Input.js",
             "originalSha256": "c71dd35189fcf4cddd94a3d7ea0ec96ef6656be2da0f213b35ae6d6e58b25821",
-            "adaptedSha256": "5a2967a89982005a25463269dbe28f52e7e1333f5869b41c3d69bccab127db54",
+            "adaptedSha256": "4065561f25218495a244aac44c42ec736ec29201b8fe5b54ba270861a703fed2",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -20,10 +20,19 @@
             "semanticEdits": [
                 {
                     "kind": "replace",
+                    "originalStartByte": 448,
+                    "originalEndByte": 504,
+                    "adaptedStartByte": 448,
+                    "adaptedEndByte": 535,
+                    "originalLiteral": "var _react = _interopRequireWildcard(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireWildcard(require(\"../../../../react-peer.js\").getReact());\n"
+                },
+                {
+                    "kind": "replace",
                     "originalStartByte": 640,
                     "originalEndByte": 729,
-                    "adaptedStartByte": 640,
-                    "adaptedEndByte": 798,
+                    "adaptedStartByte": 671,
+                    "adaptedEndByte": 829,
                     "originalLiteral": "var _excluded = [\"value\", \"parse\", \"format\", \"inputComponent\", \"onChange\", \"onKeyDown\"];\n",
                     "adaptedLiteral": "var _excluded = [\"value\", \"parse\", \"format\", \"inputComponent\", \"onChange\", \"onKeyDown\", \"sdkEnableReplay\", \"sdkCapturePhoneReplay\", \"sdkCapturePhoneChange\"];\n"
                 },
@@ -31,8 +40,8 @@
                     "kind": "insert",
                     "originalStartByte": 3527,
                     "originalEndByte": 3527,
-                    "adaptedStartByte": 3596,
-                    "adaptedEndByte": 3642,
+                    "adaptedStartByte": 3627,
+                    "adaptedEndByte": 3673,
                     "originalLiteral": "",
                     "adaptedLiteral": "      sdkEnableReplay = _ref.sdkEnableReplay,\n"
                 },
@@ -40,8 +49,8 @@
                     "kind": "insert",
                     "originalStartByte": 3875,
                     "originalEndByte": 3875,
-                    "adaptedStartByte": 3990,
-                    "adaptedEndByte": 4423,
+                    "adaptedStartByte": 4021,
+                    "adaptedEndByte": 4454,
                     "originalLiteral": "",
                     "adaptedLiteral": "\n  // Capture while the real ref is alive; the caller owns admission/once semantics.\n  var sdkCapturePhoneReplay = (0, _react.useCallback)(function () {\n    var input = internalRef.current;\n    if (input == null) throw new Error('Phone replay must be captured before input detach');\n    return function () {\n      return (0, _inputControl.onChange)(undefined, input, parse, format, onChange);\n    };\n  }, [parse, format, onChange]);\n"
                 },
@@ -49,8 +58,8 @@
                     "kind": "replace",
                     "originalStartByte": 4560,
                     "originalEndByte": 4567,
-                    "adaptedStartByte": 5108,
-                    "adaptedEndByte": 5241,
+                    "adaptedStartByte": 5139,
+                    "adaptedEndByte": 5272,
                     "originalLiteral": "  }));\n",
                     "adaptedLiteral": "  }, sdkEnableReplay === true && typeof InputComponent !== 'string' ? {\n    sdkCapturePhoneReplay: sdkCapturePhoneReplay\n  } : {}));\n"
                 }
@@ -59,7 +68,8 @@
                 "strip private replay controls before custom/DOM props",
                 "consume only explicit replay opt-in",
                 "retain actual node and original parse/format/callback for replay",
-                "expose replay only to opted-in custom input; never a string DOM node"
+                "expose replay only to opted-in custom input; never a string DOM node",
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
@@ -103,7 +113,7 @@
         {
             "path": "packages/react-phone-number-input/commonjs/CountryIcon.js",
             "originalSha256": "b3fa3cce1d52b63fe61382cfe4813b619f3d743e92e7d8cd81cf2dcdda63c486",
-            "adaptedSha256": "9012622c7f948855bb710cd1ba9b8c11cad719108892ef30aea2da79848c1e39",
+            "adaptedSha256": "7b45f19c5b479dea8b811b058b501a514089738a261478f8c0c201fcb8ca0bd8",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -121,12 +131,27 @@
                     "adaptedStartByte": 360,
                     "adaptedEndByte": 387
                 }
+            ],
+            "importAdaptedSha256": "9012622c7f948855bb710cd1ba9b8c11cad719108892ef30aea2da79848c1e39",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 175,
+                    "originalEndByte": 230,
+                    "adaptedStartByte": 175,
+                    "adaptedEndByte": 258,
+                    "originalLiteral": "var _react = _interopRequireDefault(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireDefault(require(\"../../../react-peer.js\").getReact());\n"
+                }
+            ],
+            "semanticIntent": [
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/CountrySelect.js",
             "originalSha256": "c5d2ea334a96e5037ce42de45d1579c6a6ef43c6be9fbb600563335c3938913b",
-            "adaptedSha256": "9c521264b278e264fbc2642388d4d128fe261c0790ca7767979bed67e4e20f53",
+            "adaptedSha256": "b3c6ddec7e0a977b8b70f3d422634e2b69a86e20f9b79de72cd604aea108c312",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -152,12 +177,27 @@
                     "adaptedStartByte": 774,
                     "adaptedEndByte": 818
                 }
+            ],
+            "importAdaptedSha256": "9c521264b278e264fbc2642388d4d128fe261c0790ca7767979bed67e4e20f53",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 510,
+                    "originalEndByte": 566,
+                    "adaptedStartByte": 510,
+                    "adaptedEndByte": 594,
+                    "originalLiteral": "var _react = _interopRequireWildcard(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireWildcard(require(\"../../../react-peer.js\").getReact());\n"
+                }
+            ],
+            "semanticIntent": [
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/Flag.js",
             "originalSha256": "c35119846d8d28e5bb5fe237d39a68132815722af82ed14f131b6f6a271a0d6c",
-            "adaptedSha256": "282d50abe05458e40823b7510acc7bc6c9e85a8743842e717513ca8fc80539fc",
+            "adaptedSha256": "c1728999df4c8df754215d28dec83a2c771fe40ab118f976ac9373896a0bd105",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -175,12 +215,27 @@
                     "adaptedStartByte": 302,
                     "adaptedEndByte": 329
                 }
+            ],
+            "importAdaptedSha256": "282d50abe05458e40823b7510acc7bc6c9e85a8743842e717513ca8fc80539fc",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 117,
+                    "originalEndByte": 172,
+                    "adaptedStartByte": 117,
+                    "adaptedEndByte": 200,
+                    "originalLiteral": "var _react = _interopRequireDefault(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireDefault(require(\"../../../react-peer.js\").getReact());\n"
+                }
+            ],
+            "semanticIntent": [
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/InputBasic.js",
             "originalSha256": "29b3f5405614467de03e93196007b116c075c440d1ff1201df49a4e1ffa51a33",
-            "adaptedSha256": "db7e0061c1850f8593afa5ed9abc7550f52b76f9e62a47e7c24ae46945eec759",
+            "adaptedSha256": "2e4b64b3598b6dbcf264dfd07013e58d5bea5973e64bc39308e7192edcb86bd2",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -203,22 +258,32 @@
             "semanticEdits": [
                 {
                     "kind": "replace",
+                    "originalStartByte": 483,
+                    "originalEndByte": 539,
+                    "adaptedStartByte": 483,
+                    "adaptedEndByte": 567,
+                    "originalLiteral": "var _react = _interopRequireWildcard(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireWildcard(require(\"../../../react-peer.js\").getReact());\n"
+                },
+                {
+                    "kind": "replace",
                     "originalStartByte": 751,
                     "originalEndByte": 874,
-                    "adaptedStartByte": 751,
-                    "adaptedEndByte": 943,
+                    "adaptedStartByte": 779,
+                    "adaptedEndByte": 971,
                     "originalLiteral": "var _excluded = [\"value\", \"onChange\", \"country\", \"international\", \"withCountryCallingCode\", \"metadata\", \"inputComponent\"];\n",
                     "adaptedLiteral": "var _excluded = [\"value\", \"onChange\", \"country\", \"international\", \"withCountryCallingCode\", \"metadata\", \"inputComponent\", \"sdkEnableReplay\", \"sdkCapturePhoneReplay\", \"sdkCapturePhoneChange\"];\n"
                 }
             ],
             "semanticIntent": [
-                "Basic fallback strips private replay props without changing its native behavior"
+                "Basic fallback strips private replay props without changing its native behavior",
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/InputSmart.js",
             "originalSha256": "08e18b38e801811eeb41b15d18da493de7470251a53a9a9108d966eeb834273e",
-            "adaptedSha256": "5708a982ac703daa93849046bcfa933a2a004dc713f02091d373c51ac47d81f5",
+            "adaptedSha256": "7cad8c8d1813bc943ee8b845ecd535455cb218c6f17a0e50e3e61e17d5898993",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -244,12 +309,27 @@
                     "adaptedStartByte": 726,
                     "adaptedEndByte": 766
                 }
+            ],
+            "importAdaptedSha256": "5708a982ac703daa93849046bcfa933a2a004dc713f02091d373c51ac47d81f5",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 483,
+                    "originalEndByte": 539,
+                    "adaptedStartByte": 483,
+                    "adaptedEndByte": 567,
+                    "originalLiteral": "var _react = _interopRequireWildcard(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireWildcard(require(\"../../../react-peer.js\").getReact());\n"
+                }
+            ],
+            "semanticIntent": [
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/InternationalIcon.js",
             "originalSha256": "ab34510ec82344c89a51fea7830993c796677206b8c6b66c576174c335bf68fc",
-            "adaptedSha256": "2fd9f6403a98ff28fea59c7d765b8533a4b1d3630198dfd79ca985040ac4c45a",
+            "adaptedSha256": "0fe875f4f8738be11a95e61c4cd33009e69cf6ea3dccf0329c47dba9d5255072",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -259,12 +339,27 @@
                     "adaptedStartByte": 225,
                     "adaptedEndByte": 252
                 }
+            ],
+            "importAdaptedSha256": "2fd9f6403a98ff28fea59c7d765b8533a4b1d3630198dfd79ca985040ac4c45a",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 121,
+                    "originalEndByte": 176,
+                    "adaptedStartByte": 121,
+                    "adaptedEndByte": 204,
+                    "originalLiteral": "var _react = _interopRequireDefault(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireDefault(require(\"../../../react-peer.js\").getReact());\n"
+                }
+            ],
+            "semanticIntent": [
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
             "originalSha256": "1b8cb8a7cfe32dfc2fe2507287417075fe6fc3fcdbc5e28b48d0ed24487c1f0b",
-            "adaptedSha256": "836f35694bea45d13b57dbc62938725d149767434ec86f3615e478d421d0005c",
+            "adaptedSha256": "d240bae89c27fe6bf3bbbaa4debb82f3a578676fbfc9bc80ce5c11c92f54b9d0",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -287,10 +382,19 @@
             "semanticEdits": [
                 {
                     "kind": "replace",
+                    "originalStartByte": 448,
+                    "originalEndByte": 503,
+                    "adaptedStartByte": 448,
+                    "adaptedEndByte": 531,
+                    "originalLiteral": "var _react = _interopRequireDefault(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireDefault(require(\"../../../react-peer.js\").getReact());\n"
+                },
+                {
+                    "kind": "replace",
                     "originalStartByte": 1374,
                     "originalEndByte": 1950,
-                    "adaptedStartByte": 1374,
-                    "adaptedEndByte": 2019,
+                    "adaptedStartByte": 1402,
+                    "adaptedEndByte": 2047,
                     "originalLiteral": "var _excluded = [\"name\", \"disabled\", \"readOnly\", \"autoComplete\", \"style\", \"className\", \"inputRef\", \"inputComponent\", \"numberInputProps\", \"smartCaret\", \"countrySelectComponent\", \"countrySelectProps\", \"containerComponent\", \"defaultCountry\", \"countries\", \"countryOptionsOrder\", \"labels\", \"flags\", \"flagComponent\", \"flagUrl\", \"addInternationalOption\", \"internationalIcon\", \"displayInitialValueAsLocalNumber\", \"initialValueFormat\", \"onCountryChange\", \"limitMaxLength\", \"countryCallingCodeEditable\", \"focusInputOnCountrySelection\", \"reset\", \"metadata\", \"international\", \"locales\"];\n",
                     "adaptedLiteral": "var _excluded = [\"name\", \"disabled\", \"readOnly\", \"autoComplete\", \"style\", \"className\", \"inputRef\", \"inputComponent\", \"numberInputProps\", \"smartCaret\", \"countrySelectComponent\", \"countrySelectProps\", \"containerComponent\", \"defaultCountry\", \"countries\", \"countryOptionsOrder\", \"labels\", \"flags\", \"flagComponent\", \"flagUrl\", \"addInternationalOption\", \"internationalIcon\", \"displayInitialValueAsLocalNumber\", \"initialValueFormat\", \"onCountryChange\", \"limitMaxLength\", \"countryCallingCodeEditable\", \"focusInputOnCountrySelection\", \"reset\", \"metadata\", \"international\", \"locales\", \"sdkCapturePhoneChange\", \"sdkEnableReplay\", \"sdkCapturePhoneReplay\"];\n"
                 },
@@ -298,8 +402,8 @@
                     "kind": "insert",
                     "originalStartByte": 8074,
                     "originalEndByte": 8074,
-                    "adaptedStartByte": 8143,
-                    "adaptedEndByte": 8345,
+                    "adaptedStartByte": 8171,
+                    "adaptedEndByte": 8373,
                     "originalLiteral": "",
                     "adaptedLiteral": "      var sdkTicket = typeof _this.props.sdkCapturePhoneChange === 'function'\n        ? _this.props.sdkCapturePhoneChange('country') : null;\n      var sdkDetached = !!(sdkTicket && sdkTicket.detached);\n"
                 },
@@ -307,8 +411,8 @@
                     "kind": "replace",
                     "originalStartByte": 9141,
                     "originalEndByte": 9183,
-                    "adaptedStartByte": 9412,
-                    "adaptedEndByte": 9470,
+                    "adaptedStartByte": 9440,
+                    "adaptedEndByte": 9498,
                     "originalLiteral": "      if (focusInputOnCountrySelection) {\n",
                     "adaptedLiteral": "      if (focusInputOnCountrySelection && !sdkDetached) {\n"
                 },
@@ -316,8 +420,8 @@
                     "kind": "insert",
                     "originalStartByte": 9457,
                     "originalEndByte": 9457,
-                    "adaptedStartByte": 9744,
-                    "adaptedEndByte": 9831,
+                    "adaptedStartByte": 9772,
+                    "adaptedEndByte": 9859,
                     "originalLiteral": "",
                     "adaptedLiteral": "\n      if (sdkDetached) {\n        sdkTicket.deliver(newValue);\n        return;\n      }\n"
                 },
@@ -325,8 +429,8 @@
                     "kind": "replace",
                     "originalStartByte": 9885,
                     "originalEndByte": 9913,
-                    "adaptedStartByte": 10259,
-                    "adaptedEndByte": 10344,
+                    "adaptedStartByte": 10287,
+                    "adaptedEndByte": 10372,
                     "originalLiteral": "        onChange(newValue);\n",
                     "adaptedLiteral": "        if (sdkTicket) sdkTicket.deliver(newValue);\n        else onChange(newValue);\n"
                 },
@@ -334,8 +438,8 @@
                     "kind": "insert",
                     "originalStartByte": 10021,
                     "originalEndByte": 10021,
-                    "adaptedStartByte": 10452,
-                    "adaptedEndByte": 10652,
+                    "adaptedStartByte": 10480,
+                    "adaptedEndByte": 10680,
                     "originalLiteral": "",
                     "adaptedLiteral": "      var sdkTicket = typeof _this.props.sdkCapturePhoneChange === 'function'\n        ? _this.props.sdkCapturePhoneChange('input') : null;\n      var sdkDetached = !!(sdkTicket && sdkTicket.detached);\n"
                 },
@@ -343,8 +447,8 @@
                     "kind": "insert",
                     "originalStartByte": 12482,
                     "originalEndByte": 12482,
-                    "adaptedStartByte": 13113,
-                    "adaptedEndByte": 13197,
+                    "adaptedStartByte": 13141,
+                    "adaptedEndByte": 13225,
                     "originalLiteral": "",
                     "adaptedLiteral": "      if (sdkDetached) {\n        sdkTicket.deliver(value);\n        return;\n      }\n\n"
                 },
@@ -352,8 +456,8 @@
                     "kind": "insert",
                     "originalStartByte": 12774,
                     "originalEndByte": 12774,
-                    "adaptedStartByte": 13489,
-                    "adaptedEndByte": 13545,
+                    "adaptedStartByte": 13517,
+                    "adaptedEndByte": 13573,
                     "originalLiteral": "",
                     "adaptedLiteral": "        if (sdkTicket) return sdkTicket.deliver(value);\n"
                 }
@@ -366,13 +470,14 @@
                 "attached country callback uses captured ticket as sole canonical output",
                 "capture immutable input transaction at entry",
                 "detached input replay delivers computed value without setState",
-                "attached input callback uses captured ticket as sole canonical output"
+                "attached input callback uses captured ticket as sole canonical output",
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
             "path": "packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
             "originalSha256": "8f56d1f109837bc029d270662b22dd88d194d5e5fb9ed88288a0d9463847a45a",
-            "adaptedSha256": "263fecd79b8111614b2945bdae6070e54335bfafbb5b6666d35d2fe5e37f25e8",
+            "adaptedSha256": "247eec7d855bcea8066496927e49f6ea415c58044135bd3ffc1e377dde12de4f",
             "rewrites": [
                 {
                     "originalLiteral": "\"prop-types\"",
@@ -382,6 +487,21 @@
                     "adaptedStartByte": 259,
                     "adaptedEndByte": 286
                 }
+            ],
+            "importAdaptedSha256": "263fecd79b8111614b2945bdae6070e54335bfafbb5b6666d35d2fe5e37f25e8",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 155,
+                    "originalEndByte": 210,
+                    "adaptedStartByte": 155,
+                    "adaptedEndByte": 238,
+                    "originalLiteral": "var _react = _interopRequireDefault(require(\"react\"));\n",
+                    "adaptedLiteral": "var _react = _interopRequireDefault(require(\"../../../react-peer.js\").getReact());\n"
+                }
+            ],
+            "semanticIntent": [
+                "Resolve the actual bound SDK React peer through the relative private bridge; retain all vendor algorithms and transaction/replay hooks."
             ]
         },
         {
@@ -648,11 +768,15 @@
         },
         {
             "path": "sdk-runtime.d.ts",
-            "sha256": "dc4d8e8ba072cd3eccbc8ca83f820ea84a99a7ee6fb65af33827bee17508139f"
+            "sha256": "dfd922e96cb3d5926c34bd158ca9a455cf5333e200f483c021bf006f00a5a243"
         },
         {
             "path": "sdk-runtime.js",
-            "sha256": "cbf6e47507c95668fbaf4b8a43bd646d828c7efc5c306e199b88b2f90a48ead9"
+            "sha256": "1e0c62e811b53b26cdab945e683d6fdc080ba01b8a47203f93668db4d60430e2"
+        },
+        {
+            "path": "react-peer.js",
+            "sha256": "d59693c95118f11ad9ec4d5773cd95f3d880a11ed5a83bebfb8d3022daf82b7e"
         }
     ],
     "externalRuntimeModules": [
@@ -660,225 +784,1123 @@
     ],
     "runtimeEdges": [
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
-            "specifier": "libphonenumber-js/min/metadata",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/metadata.min.json",
-            "line": 3,
+            "from": "vendor/phone-number-input/packages/country-flag-icons/unicode/index.cjs",
+            "specifier": "../commonjs/unicode.js",
+            "target": "vendor/phone-number-input/packages/country-flag-icons/commonjs/unicode.js",
+            "line": 1,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
-            "specifier": "../core/index.cjs",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "line": 4,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
-            "specifier": "../commonjs/PhoneInputWithCountryDefault.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
-            "line": 5,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "../commonjs/PhoneInputWithCountry.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "line": 3,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "../commonjs/libphonenumber/formatPhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
-            "line": 5,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "../commonjs/libphonenumber/formatPhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
-            "line": 6,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/closeBraces.js",
+            "specifier": "./helpers.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/helpers.js",
             "line": 8,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 9,
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/format.js",
+            "specifier": "./templateFormatter.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/templateFormatter.js",
+            "line": 8,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
+            "specifier": "./edit.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/edit.js",
             "line": 11,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
+            "specifier": "./parse.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/parse.js",
             "line": 13,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
-            "specifier": "../commonjs/PhoneInputWithCountry.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
+            "specifier": "./format.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/format.js",
             "line": 15,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
-            "specifier": "react",
-            "external": true,
-            "line": 9
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
-            "specifier": "../locale/en.json",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/locale/en.json",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
-            "specifier": "./PropTypes.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PropTypes.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
-            "specifier": "./PhoneInputWithCountry.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
+            "specifier": "./dom.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/dom.js",
             "line": 17,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "react",
-            "external": true,
-            "line": 10
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
+            "specifier": "../../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 10,
+            "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "prop-types",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
+            "specifier": "../../../prop-types/index.js",
             "target": "vendor/phone-number-input/packages/prop-types/index.js",
             "line": 12,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "classnames",
-            "target": "vendor/phone-number-input/packages/classnames/index.js",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
+            "specifier": "../inputControl.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
             "line": 14,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./InputSmart.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/templateFormatter.js",
+            "specifier": "./helpers.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/helpers.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/input-format/commonjs/templateFormatter.js",
+            "specifier": "./closeBraces.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/closeBraces.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/input-format/react/index.cjs",
+            "specifier": "../commonjs/react/Input.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
+            "line": 3,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/input-format/react/index.cjs",
+            "specifier": "../commonjs/react/Input.js",
+            "target": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
+            "line": 5,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./PhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./AsYouTypeState.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeState.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./AsYouTypeFormatter.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
             "line": 16,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./InputBasic.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./AsYouTypeParser.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
             "line": 18,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./CountrySelect.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./helpers/getCountryByCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
             "line": 20,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./Flag.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./helpers/getCountryByNationalNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
             "line": 22,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./InternationalIcon.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "specifier": "./helpers/isObject.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isObject.js",
             "line": 24,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./helpers/countries.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/countries.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.PatternMatcher.js",
+            "specifier": "./AsYouTypeFormatter.PatternParser.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.PatternParser.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
+            "specifier": "./helpers/checkNumberLength.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
+            "specifier": "./helpers/parseDigits.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
+            "specifier": "./helpers/formatNationalNumberUsingFormat.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./AsYouTypeFormatter.util.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.util.js",
+            "line": 16,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./AsYouTypeFormatter.complete.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
+            "line": 18,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./AsYouTypeFormatter.PatternMatcher.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.PatternMatcher.js",
+            "line": 20,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./helpers/parseDigits.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
+            "line": 22,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./helpers/formatNationalNumberUsingFormat.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
+            "line": 24,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
             "line": 26,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./CountryIcon.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "specifier": "./helpers/applyInternationalSeparatorStyle.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
             "line": 28,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./PropTypes.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PropTypes.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "specifier": "./helpers/extractCountryCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "specifier": "./helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "specifier": "./helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "specifier": "./helpers/stripIddPrefix.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "specifier": "./helpers/parseDigits.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "specifier": "./constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 19,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "specifier": "./isPossible.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "specifier": "./isValid.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "specifier": "./helpers/getNumberType.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "specifier": "./helpers/getPossibleCountriesForNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getPossibleCountriesForNumber.js",
+            "line": 16,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "specifier": "./format.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "line": 18,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./PhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./helpers/extension/createExtensionPattern.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/RegExpCache.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/RegExpCache.js",
+            "line": 16,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/util.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
+            "line": 18,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/utf-8.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/utf-8.js",
+            "line": 20,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/Leniency.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "line": 22,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/parsePreCandidate.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/parsePreCandidate.js",
+            "line": 24,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/isValidPreCandidate.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidPreCandidate.js",
+            "line": 26,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./findNumbers/isValidCandidate.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
+            "line": 28,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
             "line": 30,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./helpers/phoneInputHelpers.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "specifier": "./parsePhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
             "line": 32,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
-            "specifier": "./helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "../isValid.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "../helpers/parseDigits.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "./matchPhoneNumberStringAgainstPhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/matchPhoneNumberStringAgainstPhoneNumber.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "../helpers/getCountryByCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "../format.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "line": 19,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "specifier": "./util.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
+            "line": 21,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/RegExpCache.js",
+            "specifier": "./LRUCache.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/LRUCache.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
+            "specifier": "../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
+            "specifier": "./util.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
+            "specifier": "./utf-8.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/utf-8.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/matchPhoneNumberStringAgainstPhoneNumber.js",
+            "specifier": "../parsePhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/parsePreCandidate.js",
+            "specifier": "./util.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findPhoneNumbersInText.js",
+            "specifier": "./PhoneNumberMatcher.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findPhoneNumbersInText.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "specifier": "./helpers/matchesEntirely.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "specifier": "./helpers/formatNationalNumberUsingFormat.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "specifier": "./helpers/getIddPrefix.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getIddPrefix.js",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
+            "specifier": "./helpers/RFC3966.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/RFC3966.js",
+            "line": 19,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/formatIncompletePhoneNumber.js",
+            "specifier": "./AsYouType.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountries.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountryCallingCode.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/getExampleNumber.js",
+            "specifier": "./PhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/RFC3966.js",
+            "specifier": "./isViablePhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
+            "specifier": "../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "specifier": "./mergeArrays.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/mergeArrays.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
+            "specifier": "../../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/extractExtension.js",
+            "specifier": "./createExtensionPattern.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "specifier": "./stripIddPrefix.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "specifier": "./extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "specifier": "../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "specifier": "./matchesEntirely.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "specifier": "./extractNationalNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "specifier": "./checkNumberLength.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "specifier": "../getCountryCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountryCallingCode.js",
+            "line": 16,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
+            "specifier": "./extractPhoneContext.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractPhoneContext.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
+            "specifier": "../ParseError.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
+            "specifier": "./extractNationalNumberFromPossiblyIncompleteNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
+            "specifier": "./matchesEntirely.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
+            "specifier": "./checkNumberLength.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractPhoneContext.js",
+            "specifier": "../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
+            "specifier": "./applyInternationalSeparatorStyle.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
+            "specifier": "./getCountryByNationalNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
+            "specifier": "./getNumberType.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getIddPrefix.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
+            "specifier": "./matchesEntirely.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getPossibleCountriesForNumber.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
+            "specifier": "../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
+            "specifier": "./extension/createExtensionPattern.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
+            "specifier": "../metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
+            "specifier": "../constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
+            "specifier": "./helpers/checkNumberLength.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossiblePhoneNumber.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossiblePhoneNumber.js",
+            "specifier": "./parsePhoneNumber_.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
+            "specifier": "./helpers/matchesEntirely.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
+            "specifier": "./helpers/getNumberType.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValidPhoneNumber.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValidPhoneNumber.js",
+            "specifier": "./parsePhoneNumber_.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/findNumbers.js",
+            "specifier": "../PhoneNumberMatcher.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/findNumbers.js",
+            "specifier": "../normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/searchNumbers.js",
+            "specifier": "../normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/searchNumbers.js",
+            "specifier": "../PhoneNumberMatcher.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "specifier": "./tools/semver-compare.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/tools/semver-compare.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "specifier": "./helpers/isObject.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isObject.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "specifier": "./helpers/isObject.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isObject.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./constants.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./ParseError.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/isViablePhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
+            "line": 16,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/extension/extractExtension.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/extractExtension.js",
+            "line": 18,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./parseIncompletePhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parseIncompletePhoneNumber.js",
+            "line": 20,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./getCountryCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountryCallingCode.js",
+            "line": 22,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./isPossible.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
+            "line": 24,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./PhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "line": 26,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/matchesEntirely.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "line": 28,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/extractCountryCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "line": 30,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/extractNationalNumber.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
+            "line": 32,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/stripIddPrefix.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
             "line": 34,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/getCountryByCallingCode.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
+            "line": 36,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "specifier": "./helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
+            "line": 38,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parseIncompletePhoneNumber.js",
+            "specifier": "./helpers/parseDigits.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
             "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
+            "specifier": "./parsePhoneNumber_.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError.js",
+            "specifier": "./parsePhoneNumberWithError_.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
+            "specifier": "./parse.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "specifier": "./parsePhoneNumberWithError_.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "specifier": "./ParseError.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/searchPhoneNumbersInText.js",
+            "specifier": "./PhoneNumberMatcher.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/searchPhoneNumbersInText.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
+            "specifier": "./normalizeArguments.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
+            "specifier": "./parsePhoneNumberWithError_.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
+            "specifier": "./ParseError.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
+            "specifier": "./metadata.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
+            "specifier": "./helpers/checkNumberLength.js",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "line": 16,
             "external": false
         },
         {
@@ -1057,646 +2079,36 @@
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/prop-types/index.js",
-            "specifier": "react-is",
-            "target": "vendor/phone-number-input/packages/react-is/index.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/prop-types/index.js",
-            "specifier": "./factoryWithTypeCheckers",
-            "target": "vendor/phone-number-input/packages/prop-types/factoryWithTypeCheckers.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/prop-types/index.js",
-            "specifier": "./factoryWithThrowingShims",
-            "target": "vendor/phone-number-input/packages/prop-types/factoryWithThrowingShims.js",
-            "line": 18,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PropTypes.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
-            "specifier": "react",
-            "external": true,
-            "line": 11
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "from": "vendor/phone-number-input/packages/prop-types/checkPropTypes.js",
+            "specifier": "./lib/ReactPropTypesSecret",
+            "target": "vendor/phone-number-input/packages/prop-types/lib/ReactPropTypesSecret.js",
             "line": 13,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
-            "specifier": "input-format/react",
-            "target": "vendor/phone-number-input/packages/input-format/react/index.cjs",
+            "from": "vendor/phone-number-input/packages/prop-types/checkPropTypes.js",
+            "specifier": "./lib/has",
+            "target": "vendor/phone-number-input/packages/prop-types/lib/has.js",
             "line": 15,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
-            "specifier": "./helpers/inputValuePrefix.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/inputValuePrefix.js",
-            "line": 19,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
-            "specifier": "./helpers/parsePhoneNumberCharacter.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/parsePhoneNumberCharacter.js",
-            "line": 21,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
-            "specifier": "react",
-            "external": true,
-            "line": 11
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
-            "specifier": "./helpers/inputValuePrefix.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/inputValuePrefix.js",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
-            "specifier": "react",
-            "external": true,
-            "line": 11
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
-            "specifier": "classnames",
-            "target": "vendor/phone-number-input/packages/classnames/index.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
-            "specifier": "country-flag-icons/unicode",
-            "target": "vendor/phone-number-input/packages/country-flag-icons/unicode/index.cjs",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
-            "specifier": "react",
-            "external": true,
-            "line": 8
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "from": "vendor/phone-number-input/packages/prop-types/factoryWithThrowingShims.js",
+            "specifier": "./lib/ReactPropTypesSecret",
+            "target": "vendor/phone-number-input/packages/prop-types/lib/ReactPropTypesSecret.js",
             "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
-            "specifier": "classnames",
-            "target": "vendor/phone-number-input/packages/classnames/index.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
-            "specifier": "react",
-            "external": true,
-            "line": 8
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/countries.js",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
-            "specifier": "react",
-            "external": true,
-            "line": 9
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
-            "specifier": "classnames",
-            "target": "vendor/phone-number-input/packages/classnames/index.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
-            "specifier": "./InternationalIcon.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
-            "specifier": "./Flag.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
-            "specifier": "libphonenumber-js/core",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 24,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
-            "specifier": "./getInternationalPhoneNumberPrefix.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
-            "line": 26,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
-            "specifier": "./phoneInputHelpers.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
-            "specifier": "./getInternationalPhoneNumberPrefix.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
-            "specifier": "./countries.js",
-            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/countries.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
-            "specifier": "./parsePhoneNumber_.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError.js",
-            "specifier": "./parsePhoneNumberWithError_.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValidPhoneNumber.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValidPhoneNumber.js",
-            "specifier": "./parsePhoneNumber_.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossiblePhoneNumber.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossiblePhoneNumber.js",
-            "specifier": "./parsePhoneNumber_.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
-            "specifier": "./parsePhoneNumberWithError_.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
-            "specifier": "./ParseError.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/validatePhoneNumberLength.js",
-            "specifier": "./helpers/checkNumberLength.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/findNumbers.js",
-            "specifier": "../PhoneNumberMatcher.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/findNumbers.js",
-            "specifier": "../normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/searchNumbers.js",
-            "specifier": "../normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/legacy/searchNumbers.js",
-            "specifier": "../PhoneNumberMatcher.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findPhoneNumbersInText.js",
-            "specifier": "./PhoneNumberMatcher.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findPhoneNumbersInText.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/searchPhoneNumbersInText.js",
-            "specifier": "./PhoneNumberMatcher.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/searchPhoneNumbersInText.js",
-            "specifier": "./normalizeArguments.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./PhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./helpers/extension/createExtensionPattern.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/RegExpCache.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/RegExpCache.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/util.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
-            "line": 18,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/utf-8.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/utf-8.js",
-            "line": 20,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/Leniency.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "line": 22,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/parsePreCandidate.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/parsePreCandidate.js",
-            "line": 24,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/isValidPreCandidate.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidPreCandidate.js",
-            "line": 26,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./findNumbers/isValidCandidate.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
-            "line": 28,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 30,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumberMatcher.js",
-            "specifier": "./parsePhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
-            "line": 32,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./PhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./AsYouTypeState.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeState.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./AsYouTypeFormatter.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./AsYouTypeParser.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "line": 18,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./helpers/getCountryByCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
-            "line": 20,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./helpers/getCountryByNationalNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
-            "line": 22,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "specifier": "./helpers/isObject.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isObject.js",
-            "line": 24,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "specifier": "./tools/semver-compare.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/tools/semver-compare.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "specifier": "./helpers/isObject.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isObject.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountries.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/getExampleNumber.js",
-            "specifier": "./PhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/formatIncompletePhoneNumber.js",
-            "specifier": "./AsYouType.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouType.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parseIncompletePhoneNumber.js",
-            "specifier": "./helpers/parseDigits.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./AsYouTypeFormatter.util.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.util.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./AsYouTypeFormatter.complete.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
-            "line": 18,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./AsYouTypeFormatter.PatternMatcher.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.PatternMatcher.js",
-            "line": 20,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./helpers/parseDigits.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
-            "line": 22,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./helpers/formatNationalNumberUsingFormat.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
-            "line": 24,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 26,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.js",
-            "specifier": "./helpers/applyInternationalSeparatorStyle.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
-            "line": 28,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/RFC3966.js",
-            "specifier": "./isViablePhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-is/index.js",
-            "specifier": "./cjs/react-is.production.min.js",
-            "target": "vendor/phone-number-input/packages/react-is/cjs/react-is.production.min.js",
-            "line": 4,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-is/index.js",
-            "specifier": "./cjs/react-is.development.js",
-            "target": "vendor/phone-number-input/packages/react-is/cjs/react-is.development.js",
-            "line": 6,
             "external": false
         },
         {
             "from": "vendor/phone-number-input/packages/prop-types/factoryWithTypeCheckers.js",
-            "specifier": "react-is",
+            "specifier": "../react-is/index.js",
             "target": "vendor/phone-number-input/packages/react-is/index.js",
             "line": 10,
             "external": false
         },
         {
             "from": "vendor/phone-number-input/packages/prop-types/factoryWithTypeCheckers.js",
-            "specifier": "object-assign",
+            "specifier": "../object-assign/index.js",
             "target": "vendor/phone-number-input/packages/object-assign/index.js",
             "line": 11,
             "external": false
@@ -1723,789 +2135,524 @@
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/prop-types/factoryWithThrowingShims.js",
-            "specifier": "./lib/ReactPropTypesSecret",
-            "target": "vendor/phone-number-input/packages/prop-types/lib/ReactPropTypesSecret.js",
+            "from": "vendor/phone-number-input/packages/prop-types/index.js",
+            "specifier": "../react-is/index.js",
+            "target": "vendor/phone-number-input/packages/react-is/index.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/prop-types/index.js",
+            "specifier": "./factoryWithTypeCheckers",
+            "target": "vendor/phone-number-input/packages/prop-types/factoryWithTypeCheckers.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/prop-types/index.js",
+            "specifier": "./factoryWithThrowingShims",
+            "target": "vendor/phone-number-input/packages/prop-types/factoryWithThrowingShims.js",
+            "line": 18,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-is/index.js",
+            "specifier": "./cjs/react-is.production.min.js",
+            "target": "vendor/phone-number-input/packages/react-is/cjs/react-is.production.min.js",
+            "line": 4,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-is/index.js",
+            "specifier": "./cjs/react-is.development.js",
+            "target": "vendor/phone-number-input/packages/react-is/cjs/react-is.development.js",
+            "line": 6,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "specifier": "../../classnames/index.js",
+            "target": "vendor/phone-number-input/packages/classnames/index.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "specifier": "./InternationalIcon.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "specifier": "./Flag.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "specifier": "../../classnames/index.js",
+            "target": "vendor/phone-number-input/packages/classnames/index.js",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "specifier": "../../country-flag-icons/unicode/index.cjs",
+            "target": "vendor/phone-number-input/packages/country-flag-icons/unicode/index.cjs",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
             "line": 10,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/input-format/react/index.cjs",
-            "specifier": "../commonjs/react/Input.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
-            "line": 3,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
+            "specifier": "../../classnames/index.js",
+            "target": "vendor/phone-number-input/packages/classnames/index.js",
+            "line": 12,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/input-format/react/index.cjs",
-            "specifier": "../commonjs/react/Input.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
-            "line": 5,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
+            "specifier": "./helpers/inputValuePrefix.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/inputValuePrefix.js",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "specifier": "../../input-format/react/index.cjs",
+            "target": "vendor/phone-number-input/packages/input-format/react/index.cjs",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "specifier": "./helpers/inputValuePrefix.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/inputValuePrefix.js",
+            "line": 19,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "specifier": "./helpers/parsePhoneNumberCharacter.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/parsePhoneNumberCharacter.js",
+            "line": 21,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 12,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "../../classnames/index.js",
+            "target": "vendor/phone-number-input/packages/classnames/index.js",
+            "line": 14,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./InputSmart.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputSmart.js",
+            "line": 16,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./InputBasic.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InputBasic.js",
+            "line": 18,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./CountrySelect.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "line": 20,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./Flag.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/Flag.js",
+            "line": 22,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./InternationalIcon.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/InternationalIcon.js",
+            "line": 24,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./helpers/countries.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/countries.js",
+            "line": 26,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./CountryIcon.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "line": 28,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./PropTypes.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PropTypes.js",
+            "line": 30,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./helpers/phoneInputHelpers.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
+            "line": 32,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "specifier": "./helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "line": 34,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "specifier": "../../../react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 9,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 11,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "specifier": "../locale/en.json",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/locale/en.json",
+            "line": 13,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "specifier": "./PropTypes.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PropTypes.js",
+            "line": 15,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "specifier": "./PhoneInputWithCountry.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PropTypes.js",
+            "specifier": "../../prop-types/index.js",
+            "target": "vendor/phone-number-input/packages/prop-types/index.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/countries.js",
+            "specifier": "../../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "line": 17,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
+            "specifier": "../../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "specifier": "./phoneInputHelpers.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
+            "line": 8,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "specifier": "./getInternationalPhoneNumberPrefix.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "specifier": "./countries.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/countries.js",
+            "line": 12,
             "external": false
         },
         {
             "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/inputValuePrefix.js",
-            "specifier": "libphonenumber-js/core",
+            "specifier": "../../../libphonenumber-js/core/index.cjs",
             "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 9,
             "external": false
         },
         {
             "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/parsePhoneNumberCharacter.js",
-            "specifier": "libphonenumber-js/core",
+            "specifier": "../../../libphonenumber-js/core/index.cjs",
             "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 8,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/country-flag-icons/unicode/index.cjs",
-            "specifier": "../commonjs/unicode.js",
-            "target": "vendor/phone-number-input/packages/country-flag-icons/commonjs/unicode.js",
-            "line": 1,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
-            "specifier": "libphonenumber-js/core",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
+            "specifier": "../../../libphonenumber-js/core/index.cjs",
             "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/normalizeArguments.js",
-            "specifier": "./helpers/isObject.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isObject.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
-            "specifier": "./parsePhoneNumberWithError_.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
-            "specifier": "./ParseError.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber_.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
-            "specifier": "./parse.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
-            "specifier": "./mergeArrays.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/mergeArrays.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "specifier": "./isPossible.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "specifier": "./isValid.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "specifier": "./helpers/getNumberType.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "specifier": "./helpers/getPossibleCountriesForNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getPossibleCountriesForNumber.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
-            "specifier": "./format.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "line": 18,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
-            "specifier": "../../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/RegExpCache.js",
-            "specifier": "./LRUCache.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/LRUCache.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "../isValid.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "../helpers/parseDigits.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "./matchPhoneNumberStringAgainstPhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/matchPhoneNumberStringAgainstPhoneNumber.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "../helpers/getCountryByCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "../format.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "line": 19,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/Leniency.js",
-            "specifier": "./util.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
-            "line": 21,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/parsePreCandidate.js",
-            "specifier": "./util.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
-            "specifier": "../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
-            "specifier": "./util.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/util.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
-            "specifier": "./utf-8.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/utf-8.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "specifier": "./helpers/extractCountryCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "specifier": "./helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "specifier": "./helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "specifier": "./helpers/stripIddPrefix.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "specifier": "./helpers/parseDigits.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeParser.js",
-            "specifier": "./constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 19,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
-            "specifier": "./getCountryByNationalNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
-            "specifier": "./getNumberType.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
-            "specifier": "./helpers/checkNumberLength.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
-            "specifier": "./helpers/parseDigits.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/parseDigits.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
-            "specifier": "./helpers/formatNationalNumberUsingFormat.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.PatternMatcher.js",
-            "specifier": "./AsYouTypeFormatter.PatternParser.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/AsYouTypeFormatter.PatternParser.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
-            "specifier": "./applyInternationalSeparatorStyle.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
-            "line": 9,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
-            "specifier": "../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
-            "specifier": "../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
-            "specifier": "./extension/createExtensionPattern.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/prop-types/checkPropTypes.js",
-            "specifier": "./lib/ReactPropTypesSecret",
-            "target": "vendor/phone-number-input/packages/prop-types/lib/ReactPropTypesSecret.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/prop-types/checkPropTypes.js",
-            "specifier": "./lib/has",
-            "target": "vendor/phone-number-input/packages/prop-types/lib/has.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
-            "specifier": "react",
-            "external": true,
-            "line": 10
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
-            "specifier": "prop-types",
-            "target": "vendor/phone-number-input/packages/prop-types/index.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/react/Input.js",
-            "specifier": "../inputControl.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./ParseError.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/isViablePhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/extension/extractExtension.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/extractExtension.js",
-            "line": 18,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./parseIncompletePhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parseIncompletePhoneNumber.js",
-            "line": 20,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./getCountryCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountryCallingCode.js",
-            "line": 22,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./isPossible.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
             "line": 24,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./PhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/PhoneNumber.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
+            "specifier": "./getInternationalPhoneNumberPrefix.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
             "line": 26,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/matchesEntirely.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
-            "line": 28,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/extractCountryCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
-            "line": 30,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/extractNationalNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
-            "line": 32,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/stripIddPrefix.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
-            "line": 34,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/getCountryByCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
-            "line": 36,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/parse.js",
-            "specifier": "./helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
-            "line": 38,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
+            "specifier": "../../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 9,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isPossible.js",
-            "specifier": "./helpers/checkNumberLength.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
-            "line": 11,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../commonjs/PhoneInputWithCountry.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "line": 3,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../commonjs/libphonenumber/formatPhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
+            "line": 5,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../commonjs/libphonenumber/formatPhoneNumber.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
+            "line": 6,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 8,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
-            "specifier": "./helpers/matchesEntirely.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/isValid.js",
-            "specifier": "./helpers/getNumberType.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 9,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getNumberType.js",
-            "specifier": "./matchesEntirely.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "line": 10,
+            "external": false
+        },
+        {
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 11,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getPossibleCountriesForNumber.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
+            "line": 12,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "specifier": "./helpers/matchesEntirely.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "specifier": "./helpers/formatNationalNumberUsingFormat.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../../libphonenumber-js/core/index.cjs",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/core/index.cjs",
             "line": 13,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "specifier": "../commonjs/PhoneInputWithCountry.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
             "line": 15,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "specifier": "./helpers/getIddPrefix.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getIddPrefix.js",
-            "line": 17,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
+            "specifier": "../../libphonenumber-js/metadata.min.json",
+            "target": "vendor/phone-number-input/packages/libphonenumber-js/metadata.min.json",
+            "line": 3,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/format.js",
-            "specifier": "./helpers/RFC3966.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/RFC3966.js",
-            "line": 19,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
+            "specifier": "../core/index.cjs",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/core/index.cjs",
+            "line": 4,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/findNumbers/matchPhoneNumberStringAgainstPhoneNumber.js",
-            "specifier": "../parsePhoneNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/parsePhoneNumber.js",
-            "line": 8,
+            "from": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
+            "specifier": "../commonjs/PhoneInputWithCountryDefault.js",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "line": 5,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
-            "specifier": "./stripIddPrefix.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
-            "line": 8,
+            "from": "vendor/phone-number-input/sdk-runtime.js",
+            "specifier": "./react-peer.js",
+            "target": "vendor/phone-number-input/react-peer.js",
+            "line": 2,
             "external": false
         },
         {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
-            "specifier": "./extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
-            "specifier": "../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "specifier": "./matchesEntirely.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "specifier": "./extractNationalNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "specifier": "./checkNumberLength.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
-            "line": 14,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
-            "specifier": "../getCountryCallingCode.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountryCallingCode.js",
-            "line": 16,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
-            "specifier": "../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
-            "specifier": "./edit.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/edit.js",
-            "line": 11,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
-            "specifier": "./parse.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/parse.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
-            "specifier": "./format.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/format.js",
-            "line": 15,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/inputControl.js",
-            "specifier": "./dom.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/dom.js",
-            "line": 17,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/extractExtension.js",
-            "specifier": "./createExtensionPattern.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/getCountryCallingCode.js",
-            "specifier": "./metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 13,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
-            "specifier": "./extractNationalNumberFromPossiblyIncompleteNumber.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
-            "specifier": "./matchesEntirely.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/matchesEntirely.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
-            "specifier": "./checkNumberLength.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/checkNumberLength.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
-            "specifier": "./extractPhoneContext.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractPhoneContext.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
-            "specifier": "../ParseError.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/ParseError.js",
-            "line": 12,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/getIddPrefix.js",
-            "specifier": "../metadata.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/metadata.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/format.js",
-            "specifier": "./templateFormatter.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/templateFormatter.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/libphonenumber-js/build/helpers/extractPhoneContext.js",
-            "specifier": "../constants.js",
-            "target": "vendor/phone-number-input/packages/libphonenumber-js/build/constants.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/templateFormatter.js",
-            "specifier": "./helpers.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/helpers.js",
-            "line": 8,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/templateFormatter.js",
-            "specifier": "./closeBraces.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/closeBraces.js",
-            "line": 10,
-            "external": false
-        },
-        {
-            "from": "vendor/phone-number-input/packages/input-format/commonjs/closeBraces.js",
-            "specifier": "./helpers.js",
-            "target": "vendor/phone-number-input/packages/input-format/commonjs/helpers.js",
+            "from": "vendor/phone-number-input/sdk-runtime.js",
+            "specifier": "./packages/react-phone-number-input/min/index.cjs",
+            "target": "vendor/phone-number-input/packages/react-phone-number-input/min/index.cjs",
             "line": 8,
             "external": false
         }
     ],
     "unsupportedRequires": [],
-    "semanticAdaptation": "private-phone-transaction-replay-v1",
+    "semanticAdaptation": "private-phone-transaction-replay-and-bound-react-peer-v2",
     "ownedFileChanges": [
         {
             "path": "sdk-runtime.d.ts",
             "previousSha256": "654b6b45baae8e32097b8b3acce659e557e13fd275a0e294b40c9377bf8072cc",
-            "adaptedSha256": "dc4d8e8ba072cd3eccbc8ca83f820ea84a99a7ee6fb65af33827bee17508139f",
+            "adaptedSha256": "dfd922e96cb3d5926c34bd158ca9a455cf5333e200f483c021bf006f00a5a243",
             "semanticEdits": [
                 {
                     "kind": "insert",
@@ -2524,8 +2671,40 @@
                     "adaptedEndByte": 1196,
                     "originalLiteral": "    numberInputProps?: React.InputHTMLAttributes<HTMLInputElement>;\n",
                     "adaptedLiteral": "    sdkCapturePhoneChange?(kind: PhoneChangeKind): PhoneChangeTransaction;\n    numberInputProps?: React.InputHTMLAttributes<HTMLInputElement> & {\n        sdkEnableReplay?: boolean;\n    };\n"
+                },
+                {
+                    "kind": "replace",
+                    "originalStartByte": 648,
+                    "originalEndByte": 812,
+                    "adaptedStartByte": 1309,
+                    "adaptedEndByte": 1651,
+                    "originalLiteral": "export const PhoneInput: React.ForwardRefExoticComponent<\n    PhoneVendorProps & React.RefAttributes<HTMLInputElement>\n>;\nexport function getCountries(): string[];\n",
+                    "adaptedLiteral": "export type PhoneRuntime = {\n    PhoneInput: React.ForwardRefExoticComponent<\n        PhoneVendorProps & React.RefAttributes<HTMLInputElement>\n    >;\n    getCountries(): string[];\n};\n/** Private producer boundary: bind the SDK's real peer before vendor initialization. */\nexport function createPhoneRuntime(peer: typeof React): PhoneRuntime;\n"
+                }
+            ]
+        },
+        {
+            "path": "sdk-runtime.js",
+            "previousSha256": "cbf6e47507c95668fbaf4b8a43bd646d828c7efc5c306e199b88b2f90a48ead9",
+            "adaptedSha256": "1e0c62e811b53b26cdab945e683d6fdc080ba01b8a47203f93668db4d60430e2",
+            "semanticEdits": [
+                {
+                    "kind": "replace",
+                    "originalStartByte": 14,
+                    "originalEndByte": 161,
+                    "adaptedStartByte": 14,
+                    "adaptedEndByte": 447,
+                    "originalLiteral": "const phone = require(\"./packages/react-phone-number-input/min/index.cjs\");\nexports.PhoneInput = phone;\nexports.getCountries = phone.getCountries;\n",
+                    "adaptedLiteral": "const bindReact = require(\"./react-peer.js\").bindReact;\nlet runtime;\nexports.createPhoneRuntime = function createPhoneRuntime(React) {\n  // Bind before any React-dependent vendor module initializes. Cache only success.\n  bindReact(React);\n  if (!runtime) {\n    const phone = require(\"./packages/react-phone-number-input/min/index.cjs\");\n    runtime = { PhoneInput: phone, getCountries: phone.getCountries };\n  }\n  return runtime;\n};\n"
                 }
             ]
         }
-    ]
+    ],
+    "reactPeerBinding": {
+        "specifier": "react",
+        "source": "src/react/phoneVendor.ts",
+        "factory": "createPhoneRuntime",
+        "bridge": "react-peer.js",
+        "mode": "esm-namespace-before-lazy-vendor"
+    }
 }

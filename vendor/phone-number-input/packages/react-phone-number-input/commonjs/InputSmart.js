@@ -8,7 +8,7 @@ Object.defineProperty(exports, "__esModule", {
 exports.createInput = createInput;
 exports["default"] = void 0;
 
-var _react = _interopRequireWildcard(require("react"));
+var _react = _interopRequireWildcard(require("../../../react-peer.js").getReact());
 
 var _propTypes = _interopRequireDefault(require("../../prop-types/index.js"));
 

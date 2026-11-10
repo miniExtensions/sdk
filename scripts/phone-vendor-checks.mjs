@@ -151,7 +151,7 @@ export function assertPhoneVendor(
     assert.equal(ownedChanges.size, adaptations.ownedFileChanges.length);
     assert.deepEqual(
         [...ownedChanges.keys()].sort(),
-        ['sdk-runtime.d.ts'],
+        ['sdk-runtime.d.ts', 'sdk-runtime.js'],
         'Missing required owned Phone evolution'
     );
     // Fixed facade preimage from the preserved import-only closure packet.
@@ -160,6 +160,18 @@ export function assertPhoneVendor(
         '654b6b45baae8e32097b8b3acce659e557e13fd275a0e294b40c9377bf8072cc',
         'Wrong owned Phone history preimage'
     );
+    assert.equal(
+        ownedChanges.get('sdk-runtime.js').previousSha256,
+        'cbf6e47507c95668fbaf4b8a43bd646d828c7efc5c306e199b88b2f90a48ead9',
+        'Wrong owned Phone runtime preimage'
+    );
+    assert.deepEqual(adaptations.reactPeerBinding, {
+        specifier: 'react',
+        source: 'src/react/phoneVendor.ts',
+        factory: 'createPhoneRuntime',
+        bridge: 'react-peer.js',
+        mode: 'esm-namespace-before-lazy-vendor',
+    });
     for (const file of adaptations.newOwnedFiles) {
         assert(!expected.has(file.path), 'Duplicate owned Phone path');
         expected.add(file.path);
@@ -197,7 +209,11 @@ export function assertPhoneVendor(
             bytes(relative(edge.target));
         }
     }
-    assert.deepEqual([...external].sort(), ['react']);
+    assert.deepEqual(
+        [...external],
+        [],
+        'Private Phone runtime must receive React through its bound peer'
+    );
     const actual = [];
     const visit = (path, prefix = '') => {
         for (const entry of readdirSync(path, { withFileTypes: true })) {

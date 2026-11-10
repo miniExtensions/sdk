@@ -25,7 +25,7 @@ test('checks the complete frozen private Phone closure without importing it', ()
     assert.deepEqual(assertPhoneVendor(), {
         packages: 8,
         runtimeFiles: 111,
-        privateFiles: 145,
+        privateFiles: 146,
         rewrites: 34,
         external: ['react'],
     });
@@ -121,6 +121,40 @@ test('refuses missing owned facade history with unchanged current bytes', (t) =>
     data.ownedFileChanges = [];
     writeFileSync(path, JSON.stringify(data));
     assert.deepEqual(readFileSync(facadePath), currentFacade);
+    assert.throws(
+        () => assertPhoneVendor(directory),
+        /Missing required owned Phone evolution/
+    );
+});
+
+test('refuses a bare React edge without changing the frozen source bytes', (t) => {
+    const { directory } = fixture(t);
+    const path = join(directory, 'ADAPTATIONS.json');
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const edge = data.runtimeEdges.find((item) =>
+        item.target?.endsWith('/react-peer.js')
+    );
+    edge.specifier = 'react';
+    edge.external = true;
+    delete edge.target;
+    writeFileSync(path, JSON.stringify(data));
+    assert.throws(
+        () => assertPhoneVendor(directory),
+        /Private Phone runtime must receive React through its bound peer/
+    );
+});
+
+test('refuses missing owned lazy runtime history with unchanged current bytes', (t) => {
+    const { directory } = fixture(t);
+    const path = join(directory, 'ADAPTATIONS.json');
+    const runtimePath = join(directory, 'sdk-runtime.js');
+    const current = readFileSync(runtimePath);
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    data.ownedFileChanges = data.ownedFileChanges.filter(
+        (item) => item.path !== 'sdk-runtime.js'
+    );
+    writeFileSync(path, JSON.stringify(data));
+    assert.deepEqual(readFileSync(runtimePath), current);
     assert.throws(
         () => assertPhoneVendor(directory),
         /Missing required owned Phone evolution/

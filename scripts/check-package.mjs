@@ -604,7 +604,7 @@ try {
     );
     assert.equal(installedPhone.packages, 8);
     assert.equal(installedPhone.runtimeFiles, 111);
-    assert.equal(installedPhone.privateFiles, 145);
+    assert.equal(installedPhone.privateFiles, 146);
     assert.equal(installedPhone.rewrites, 34);
     await assertPublicDistribution(
         installedPackage,

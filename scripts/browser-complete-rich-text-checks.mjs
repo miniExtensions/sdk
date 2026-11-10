@@ -485,20 +485,13 @@ window.completeRichTextProbe={
         await page.keyboard.press('ControlOrMeta+Home');
         for (let index = 0; index < 5; index++)
             await page.keyboard.press('Shift+ArrowRight');
-        await page.waitForFunction(() => {
-            const state = window.completeRichTextProbe.snapshot();
-            return (
-                state.focused &&
-                state.nativeSelection?.text === 'Alpha' &&
-                state.selection?.from === 1 &&
-                state.selection.to === 6 &&
-                state.nativeSelection.anchorDocPosition === 1 &&
-                state.nativeSelection.focusDocPosition === 6
-            );
-        });
+        // Native selection is the command precondition. Do not wait for the
+        // editor model to catch up before exercising the immediate shortcut.
         const beforeBold = await snapshot();
+        assert.equal(beforeBold.focused, true);
         assert.equal(beforeBold.nativeSelection.text, 'Alpha');
-        assert.deepEqual(beforeBold.selection, { from: 1, to: 6 });
+        assert.equal(beforeBold.nativeSelection.anchorDocPosition, 1);
+        assert.equal(beforeBold.nativeSelection.focusDocPosition, 6);
         evidence.beforeBold = {
             handleId: beforeBold.handleId,
             nativeSelection: beforeBold.nativeSelection,
@@ -513,6 +506,7 @@ window.completeRichTextProbe={
                 .state.value.includes('**Alpha**')
         );
         assert.equal(await editor.locator('strong').textContent(), 'Alpha');
+        assert.deepEqual((await snapshot()).selection, { from: 1, to: 6 });
         const bold = page.getByRole('button', { name: 'Bold', exact: true });
         await bold.waitFor();
         assert.equal(await bold.getAttribute('aria-pressed'), 'true');

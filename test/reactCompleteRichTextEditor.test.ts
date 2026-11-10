@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { it } from 'node:test';
+import { it, type TestContext } from 'node:test';
 import type { Window } from 'happy-dom';
 import { act, createElement as h, createRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
     CompleteRichTextEditor,
     type CompleteRichTextEditorProps,
@@ -11,6 +12,66 @@ import {
     completeRichTextFixture,
     ControlledCompleteEditor,
 } from './completeRichTextTestHarness.js';
+import prosemirrorState = require('prosemirror-state');
+
+const { AllSelection, NodeSelection } = prosemirrorState;
+
+function deferNativeSelectionChanges(t: TestContext, document: Document) {
+    const descriptor = Object.getOwnPropertyDescriptor(
+        document,
+        'dispatchEvent'
+    );
+    const dispatch = document.dispatchEvent;
+    const events: Event[] = [];
+    let holding = true;
+    const restore = () => {
+        holding = false;
+        events.length = 0;
+        if (descriptor)
+            Object.defineProperty(document, 'dispatchEvent', descriptor);
+        else Reflect.deleteProperty(document, 'dispatchEvent');
+    };
+    Object.defineProperty(document, 'dispatchEvent', {
+        configurable: true,
+        writable: true,
+        value: (event: Event) => {
+            if (holding && event.type === 'selectionchange') {
+                events.push(event);
+                return true;
+            }
+            return dispatch.call(document, event);
+        },
+    });
+    t.after(restore);
+    return {
+        pending: () => events.length,
+        release() {
+            holding = false;
+            for (const event of events.splice(0))
+                dispatch.call(document, event);
+        },
+        restore,
+    };
+}
+
+const richTextShortcut = (
+    window: Window,
+    key = 'b',
+    keyCode = 66,
+    isComposing = false
+) => {
+    const mac = /Mac|iP(hone|[oa]d)/.test(window.navigator.platform);
+    return new window.KeyboardEvent('keydown', {
+        key,
+        code: key === 'b' ? 'KeyB' : 'F8',
+        keyCode,
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: !mac,
+        metaKey: mac,
+        isComposing,
+    });
+};
 
 for (const readOnly of [false, true]) {
     it(`renders real formatted Markdown and stored checkboxes in ${readOnly ? 'read-only' : 'editable'} mode`, async (t) => {
@@ -328,6 +389,429 @@ it('models native end movement before and after the real delayed focus reconcili
         cleanup();
     }
 });
+
+for (const reverse of [false, true]) {
+    it(`formats the current native ${reverse ? 'reverse' : 'forward'} range before a coalesced selectionchange arrives`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const adjacentRef = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        const adjacentWrites: string[] = [];
+        await f.render(
+            h(
+                'section',
+                null,
+                h(ControlledCompleteEditor, {
+                    editorRef: ref,
+                    writes,
+                    initial: 'Original details\n\n[x] Complete\n[ ] Pending',
+                }),
+                h(ControlledCompleteEditor, {
+                    editorRef: adjacentRef,
+                    writes: adjacentWrites,
+                    initial: 'Adjacent native document',
+                })
+            )
+        );
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        const adjacent = await f.editor(adjacentRef);
+        const adjacentDocument = adjacent.view.state.doc.toJSON();
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        try {
+            await f.select(view, reverse ? 4 : 1, reverse ? 1 : 4);
+            await act(async () => t.mock.timers.tick(20));
+        } finally {
+            t.mock.timers.reset();
+        }
+        assert.equal(f.document.getSelection()?.toString(), 'Ori');
+        assert.equal(view.state.selection.from, 1);
+        assert.equal(view.state.selection.to, 4);
+        const initialDocument = view.state.doc.toJSON();
+        const pending = deferNativeSelectionChanges(t, f.document);
+        try {
+            const selection = f.document.getSelection();
+            assert(selection);
+            const anchor = view.domAtPos(reverse ? 9 : 1);
+            const head = view.domAtPos(reverse ? 1 : 9);
+            await act(async () =>
+                selection.setBaseAndExtent(
+                    anchor.node,
+                    anchor.offset,
+                    head.node,
+                    head.offset
+                )
+            );
+            assert(pending.pending() > 0);
+            assert.equal(selection.toString(), 'Original');
+            assert.equal(view.state.selection.to, 4);
+            assert.deepEqual(view.state.doc.toJSON(), initialDocument);
+            assert.deepEqual(writes, []);
+            const down = richTextShortcut(f.window);
+            await act(async () =>
+                view.dom.dispatchEvent(down as unknown as Event)
+            );
+            assert.equal(down.defaultPrevented, true);
+            assert.equal(
+                view.dom.querySelector('strong')?.textContent,
+                'Original'
+            );
+            assert.equal(view.state.selection.anchor, reverse ? 9 : 1);
+            assert.equal(view.state.selection.head, reverse ? 1 : 9);
+            assert.deepEqual(writes, [
+                '**Original** details\n\n[x] Complete\n[ ] Pending\n\n\n',
+            ]);
+            const checkboxes = view.dom.querySelectorAll<HTMLInputElement>(
+                'input[type="checkbox"]'
+            );
+            assert.equal(checkboxes[0]?.checked, true);
+            assert.equal(checkboxes[1]?.checked, false);
+            assert.equal(
+                view.state.doc.firstChild?.textContent,
+                'Original details'
+            );
+            assert.deepEqual(
+                adjacent.view.state.doc.toJSON(),
+                adjacentDocument
+            );
+            assert.deepEqual(adjacentWrites, []);
+            assert.equal(ref.current, editor);
+            assert.equal(editor.view, view);
+            await act(async () => pending.release());
+            assert.equal(writes.length, 1);
+        } finally {
+            pending.restore();
+        }
+    });
+}
+
+it('retains stored marks when the native cursor already matches the model', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: 'Original',
+        })
+    );
+    const { view } = await f.editor(ref);
+    await f.select(view, 4);
+    const strong = view.state.schema.marks.strong;
+    assert(strong);
+    await act(async () =>
+        view.dispatch(view.state.tr.addStoredMark(strong.create()))
+    );
+    const state = view.state;
+    await act(async () => {
+        view.dom.dispatchEvent(
+            richTextShortcut(f.window, 'F8', 119) as unknown as Event
+        );
+    });
+    assert.equal(view.state, state);
+    assert.equal(view.state.storedMarks, state.storedMarks);
+    assert.deepEqual(writes, []);
+});
+
+for (const collapsed of [false, true]) {
+    it(`imports only the pending native ${collapsed ? 'cursor' : 'text range'} without a document write`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        await f.render(
+            h(ControlledCompleteEditor, {
+                editorRef: ref,
+                writes,
+                initial: 'Original details',
+            })
+        );
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        try {
+            await f.select(view, 1, 4);
+            await act(async () => t.mock.timers.tick(20));
+        } finally {
+            t.mock.timers.reset();
+        }
+        const document = view.state.doc;
+        const held = deferNativeSelectionChanges(t, f.document);
+        try {
+            const selection = f.document.getSelection();
+            assert(selection);
+            const anchor = view.domAtPos(collapsed ? 9 : 1);
+            const head = view.domAtPos(9);
+            await act(async () =>
+                selection.setBaseAndExtent(
+                    anchor.node,
+                    anchor.offset,
+                    head.node,
+                    head.offset
+                )
+            );
+            assert(held.pending() > 0);
+            assert.equal(view.state.selection.to, 4);
+            await act(async () =>
+                view.dom.dispatchEvent(
+                    richTextShortcut(f.window, 'F8', 119) as unknown as Event
+                )
+            );
+            assert.equal(view.state.selection.from, collapsed ? 9 : 1);
+            assert.equal(view.state.selection.to, 9);
+            assert.equal(view.state.doc, document);
+            assert.deepEqual(writes, []);
+            assert.equal(ref.current, editor);
+            assert.equal(editor.view, view);
+        } finally {
+            held.restore();
+        }
+    });
+}
+
+for (const transition of ['readonly', 'owner'] as const) {
+    it(`does not continue the shortcut when selection publication replaces its ${transition}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        let replaceOwner: (() => void) | undefined;
+        function OwnedEditor() {
+            const [owner, setOwner] = useState(1);
+            replaceOwner = () => setOwner(2);
+            return h(CompleteRichTextEditor, {
+                ref,
+                identity: String(owner),
+                value: owner === 1 ? 'Original details' : 'Successor document',
+                onValueChange: (value) => writes.push(value),
+            });
+        }
+        await f.render(h(OwnedEditor));
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        try {
+            await f.select(view, 1, 4);
+            await act(async () => t.mock.timers.tick(20));
+        } finally {
+            t.mock.timers.reset();
+        }
+        const publish = view.props.dispatchTransaction;
+        const replace = replaceOwner;
+        assert(publish);
+        assert(replace);
+        // Install a real public view callback that changes policy/owner only
+        // after the original dispatcher has published the selection transaction.
+        view.setProps({
+            dispatchTransaction(transaction) {
+                publish.call(view, transaction);
+                if (transaction.selectionSet && !transaction.docChanged) {
+                    if (transition === 'owner') flushSync(replace);
+                    else view.setProps({ editable: () => false });
+                }
+            },
+        });
+        const held = deferNativeSelectionChanges(t, f.document);
+        try {
+            const selection = f.document.getSelection();
+            assert(selection);
+            const anchor = view.domAtPos(1);
+            const head = view.domAtPos(9);
+            await act(async () =>
+                selection.setBaseAndExtent(
+                    anchor.node,
+                    anchor.offset,
+                    head.node,
+                    head.offset
+                )
+            );
+            const down = richTextShortcut(f.window);
+            await act(async () =>
+                view.dom.dispatchEvent(down as unknown as Event)
+            );
+            assert.equal(down.defaultPrevented, true);
+            assert.deepEqual(writes, []);
+            if (transition === 'owner') {
+                const successor = await f.editor(ref);
+                assert.notEqual(successor, editor);
+                assert.equal(view.isDestroyed, true);
+                assert.equal(
+                    successor.view.state.doc.textContent,
+                    'Successor document'
+                );
+                assert.equal(successor.view.dom.querySelector('strong'), null);
+            } else {
+                assert.equal(ref.current, editor);
+                assert.equal(view.editable, false);
+                assert.equal(view.state.doc.textContent, 'Original details');
+                assert.equal(view.dom.querySelector('strong'), null);
+            }
+        } finally {
+            held.restore();
+        }
+    });
+}
+
+for (const blocked of [
+    '229',
+    'composing-event',
+    'composition',
+    'readonly',
+    'unfocused',
+    'all',
+    'node',
+    'outside',
+    'retired',
+] as const) {
+    it(`does not replace an unsupported native selection during ${blocked}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        await f.render(
+            h(ControlledCompleteEditor, {
+                editorRef: ref,
+                writes,
+                initial: 'Original details',
+            })
+        );
+        const { view } = await f.editor(ref);
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        try {
+            await f.select(view, 1, 4);
+            await act(async () => t.mock.timers.tick(20));
+        } finally {
+            t.mock.timers.reset();
+        }
+        if (blocked === 'readonly') {
+            await f.render(
+                h(ControlledCompleteEditor, {
+                    editorRef: ref,
+                    writes,
+                    initial: 'Original details',
+                    readOnly: true,
+                })
+            );
+        }
+        if (blocked === 'all' || blocked === 'node') {
+            await act(async () =>
+                view.dispatch(
+                    view.state.tr.setSelection(
+                        blocked === 'all'
+                            ? new AllSelection(view.state.doc)
+                            : NodeSelection.create(view.state.doc, 0)
+                    )
+                )
+            );
+        }
+        if (blocked === 'composition') {
+            await act(async () =>
+                view.dom.dispatchEvent(
+                    new f.window.CompositionEvent('compositionstart', {
+                        bubbles: true,
+                    }) as unknown as Event
+                )
+            );
+        }
+        const held = deferNativeSelectionChanges(t, f.document);
+        try {
+            const selection = f.document.getSelection();
+            assert(selection);
+            const anchor = view.domAtPos(1);
+            const head = view.domAtPos(9);
+            const outside = f.document.createTextNode('Outside text');
+            f.document.body.append(outside);
+            await act(async () =>
+                selection.setBaseAndExtent(
+                    blocked === 'outside' ? outside : anchor.node,
+                    0,
+                    blocked === 'outside' ? outside : head.node,
+                    blocked === 'outside' ? 8 : head.offset
+                )
+            );
+            if (blocked === 'unfocused') {
+                const button = f.document.createElement('button');
+                f.document.body.append(button);
+                button.focus();
+            }
+            if (blocked === 'retired') {
+                await f.render(
+                    h(ControlledCompleteEditor, {
+                        editorRef: ref,
+                        writes,
+                        initial: 'Original details',
+                        identity: 'successor',
+                    })
+                );
+                assert.equal(view.isDestroyed, true);
+                assert.notEqual(ref.current?.view, view);
+            }
+            const state = view.state;
+            const dispatch = view.props.dispatchTransaction;
+            const transactions: {
+                documentChanged: boolean;
+                selectionSet: boolean;
+                anchor: number;
+                head: number;
+            }[] = [];
+            assert(dispatch);
+            if (!view.isDestroyed) {
+                view.setProps({
+                    dispatchTransaction(transaction) {
+                        transactions.push({
+                            documentChanged: transaction.docChanged,
+                            selectionSet: transaction.selectionSet,
+                            anchor: transaction.selection.anchor,
+                            head: transaction.selection.head,
+                        });
+                        dispatch.call(view, transaction);
+                    },
+                });
+            }
+            await act(async () => {
+                view.dom.dispatchEvent(
+                    richTextShortcut(
+                        f.window,
+                        'F8',
+                        blocked === '229' ? 229 : 119,
+                        blocked === 'composing-event'
+                    ) as unknown as Event
+                );
+            });
+            // The engine may publish decoration/focus metadata. Refusing an
+            // unsupported native range must retain its actual selection,
+            // document and stored marks, without a canonical write.
+            assert.equal(view.state.doc, state.doc);
+            assert.equal(view.state.selection.eq(state.selection), true);
+            assert.deepEqual(view.state.storedMarks, state.storedMarks);
+            if (view.state !== state)
+                t.diagnostic(
+                    `${blocked}: engine state replacement ${JSON.stringify(transactions)}`
+                );
+            assert.equal(
+                transactions.some(
+                    (transaction) =>
+                        transaction.documentChanged ||
+                        (transaction.selectionSet &&
+                            (transaction.anchor !== state.selection.anchor ||
+                                transaction.head !== state.selection.head))
+                ),
+                false,
+                JSON.stringify(transactions)
+            );
+            assert.deepEqual(writes, []);
+        } finally {
+            held.restore();
+            if (view.composing && !view.isDestroyed) {
+                await act(async () =>
+                    view.dom.dispatchEvent(
+                        new f.window.CompositionEvent('compositionend', {
+                            bubbles: true,
+                        }) as unknown as Event
+                    )
+                );
+            }
+        }
+    });
+}
 
 it('serializes a real checkbox transaction to the canonical stored checkbox syntax', async (t) => {
     const f = await completeRichTextFixture(t);

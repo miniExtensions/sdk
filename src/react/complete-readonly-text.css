@@ -1,0 +1,108 @@
+.mx-sdk-complete-readonly-text {
+    position: relative;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout] > .read-only-text {
+    margin: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow: hidden;
+    text-overflow: clip;
+    -webkit-line-clamp: unset;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text a {
+    position: relative;
+    z-index: 1;
+    color: #2563eb;
+    text-decoration: underline;
+    transition-property: all;
+    transition-duration: 75ms;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text a:hover {
+    color: #1d4ed8;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text.text-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text.text-base {
+    font-size: 1rem;
+    line-height: 1.5rem;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text.text-lg {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+}
+
+.mx-sdk-complete-readonly-text > .read-only-text.text-xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+}
+
+.list-linked-record
+    .mx-sdk-complete-readonly-text:not([data-layout])
+    > .read-only-text,
+.cell-short .mx-sdk-complete-readonly-text:not([data-layout]) > .read-only-text,
+.cell-fit-content
+    .mx-sdk-complete-readonly-text:not([data-layout])
+    > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='linked-list'] > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='cell-short'] > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='cell-fit-content']
+    > .read-only-text {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.cell-short .mx-sdk-complete-readonly-text:not([data-layout]) > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='cell-short'] > .read-only-text {
+    -webkit-line-clamp: 1;
+}
+
+.cell-medium
+    .mx-sdk-complete-readonly-text:not([data-layout])
+    > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='cell-medium'] > .read-only-text {
+    -webkit-line-clamp: 2;
+}
+
+.cell-tall .mx-sdk-complete-readonly-text:not([data-layout]) > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='cell-tall'] > .read-only-text {
+    -webkit-line-clamp: 4;
+}
+
+.cell-extra-tall
+    .mx-sdk-complete-readonly-text:not([data-layout])
+    > .read-only-text,
+.mx-sdk-complete-readonly-text[data-layout='cell-extra-tall']
+    > .read-only-text {
+    -webkit-line-clamp: 7;
+}
+
+.mx-sdk-readonly-text-empty {
+    margin: 0;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: row;
+    align-items: center;
+    color: #6b7280;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+
+.mx-sdk-readonly-text-empty-icon {
+    margin-right: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    color: #9ca3af;
+}

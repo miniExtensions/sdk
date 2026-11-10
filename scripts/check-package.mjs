@@ -1,3 +1,4 @@
+import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
     checkNativeFormProgressConsumer,
     nativeFormProgressTypedConsumer,
@@ -99,6 +100,10 @@ import {
 } from './recoverable-image-consumer-checks.mjs';
 import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
 import { checkCompleteLocalizedNumericReactMatrix } from './complete-localized-numeric-consumer-checks.mjs';
+import { checkCompleteReadOnlyPhoneReactMatrix } from './complete-readonly-phone-consumer-checks.mjs';
+import { checkCompleteReadOnlyTextReactMatrix } from './complete-readonly-text-consumer-checks.mjs';
+import { checkCompleteClearableInputReactMatrix } from './complete-clearable-input-consumer-checks.mjs';
+import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
 import { checkCompleteDurationReactMatrix } from './complete-duration-consumer-checks.mjs';
 import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import {
@@ -536,7 +541,8 @@ try {
                 path === 'docs/testing.md' ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
-                path.startsWith('dist/cjs/'),
+                path.startsWith('dist/cjs/') ||
+                path.startsWith('dist/vendor/phone-number-input/'),
             `Unexpected packed file: ${path}`
         );
     }
@@ -559,6 +565,10 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
+        'dist/esm/react/complete-readonly-text.css',
+        'dist/cjs/react/complete-readonly-text.css',
+        'dist/esm/react/complete-clearable-text-input.css',
+        'dist/cjs/react/complete-clearable-text-input.css',
         'dist/esm/react/date.css',
         'dist/cjs/react/date.css',
         'dist/esm/react/datetime.css',
@@ -601,6 +611,13 @@ try {
         packed
     );
     assertModuleFormatReceipt(installedPackage);
+    const installedPhone = assertPhoneVendor(
+        join(installedPackage, 'dist/vendor/phone-number-input')
+    );
+    assert.equal(installedPhone.packages, 8);
+    assert.equal(installedPhone.runtimeFiles, 111);
+    assert.equal(installedPhone.privateFiles, 146);
+    assert.equal(installedPhone.rewrites, 34);
     await assertPublicDistribution(
         installedPackage,
         packed.files.map(({ path }) => path),
@@ -3130,6 +3147,34 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(numericMatrix.versions.length, 2);
     assert.equal(numericMatrix.cleanup, 'completed');
+    const readOnlyPhoneMatrix = checkCompleteReadOnlyPhoneReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(readOnlyPhoneMatrix.versions.length, 2);
+    assert.equal(readOnlyPhoneMatrix.cleanup, 'completed');
+    const readOnlyTextMatrix = checkCompleteReadOnlyTextReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(readOnlyTextMatrix.versions.length, 2);
+    assert.equal(readOnlyTextMatrix.cleanup, 'completed');
+    const clearableInputMatrix = checkCompleteClearableInputReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(clearableInputMatrix.versions.length, 2);
+    assert.equal(clearableInputMatrix.cleanup, 'completed');
+    const phoneMatrix = checkCompletePhoneReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneMatrix.versions.length, 2);
+    assert.equal(phoneMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

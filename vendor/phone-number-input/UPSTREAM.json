@@ -1,0 +1,917 @@
+{
+    "schemaVersion": 1,
+    "baseline": {
+        "react-phone-number-input": "3.3.9",
+        "libphonenumber-js": "1.10.57",
+        "input-format": "0.3.9"
+    },
+    "origin": "Actually installed native monorepo package files; source-read only",
+    "archiveByteEquivalence": "not independently verified",
+    "packages": [
+        {
+            "name": "classnames",
+            "version": "2.5.1",
+            "repository": {
+                "type": "git",
+                "url": "git+https://github.com/JedWatson/classnames.git"
+            },
+            "license": "MIT",
+            "originalPackageJsonSha256": "d3164167a241350c19ddeaa3d19c8cc3e0044db1e78ef369d17177f0eae793f4"
+        },
+        {
+            "name": "country-flag-icons",
+            "version": "1.5.9",
+            "repository": {
+                "type": "git",
+                "url": "git+https://gitlab.com/catamphetamine/country-flag-icons.git"
+            },
+            "license": "MIT",
+            "originalPackageJsonSha256": "e406530e517983705a049d6982fc31ccdb1345ce9479f88d881fdd8734a87fde"
+        },
+        {
+            "name": "input-format",
+            "version": "0.3.9",
+            "repository": {
+                "type": "git",
+                "url": "git+https://gitlab.com/catamphetamine/input-format.git"
+            },
+            "license": "MIT",
+            "originalPackageJsonSha256": "7196bc3afc5c78c104075867b5405063c6baa2ef18ea157b720500799c3944ac"
+        },
+        {
+            "name": "libphonenumber-js",
+            "version": "1.10.57",
+            "repository": {
+                "type": "git",
+                "url": "git+https://gitlab.com/catamphetamine/libphonenumber-js.git"
+            },
+            "license": "MIT",
+            "originalPackageJsonSha256": "2b484238489f7e992a7f2f86188112141ffb83d434d87ffcf4122339f6daaa4a"
+        },
+        {
+            "name": "object-assign",
+            "version": "4.1.1",
+            "repository": "sindresorhus/object-assign",
+            "license": "MIT",
+            "originalPackageJsonSha256": "5990bbffa235fc675debd925d50f6c3f48a2b4526d8c9f7555cadec9029d0d7f"
+        },
+        {
+            "name": "prop-types",
+            "version": "15.8.1",
+            "repository": "facebook/prop-types",
+            "license": "MIT",
+            "originalPackageJsonSha256": "96aa387585c686397a80616d6a563759576e9b9fac1f80d57874aa4ee4730a2c"
+        },
+        {
+            "name": "react-is",
+            "version": "16.13.1",
+            "repository": {
+                "type": "git",
+                "url": "https://github.com/facebook/react.git",
+                "directory": "packages/react-is"
+            },
+            "license": "MIT",
+            "originalPackageJsonSha256": "06784c4340af9853928c519791684487b83076b3c84e8de6ba5f240e33700b71"
+        },
+        {
+            "name": "react-phone-number-input",
+            "version": "3.3.9",
+            "repository": {
+                "type": "git",
+                "url": "git+https://gitlab.com/catamphetamine/react-phone-number-input.git"
+            },
+            "license": "MIT",
+            "originalPackageJsonSha256": "87a7399e06e4fd1fdb9a35f63c6179196d491972ba9eab2c9e7c6cc11533442b"
+        }
+    ],
+    "files": [
+        {
+            "path": "packages/classnames/LICENSE",
+            "sha256": "0c1c24dcc129cb0c02ee9803cfa7a50061c236a3b59b36a714c27f3ade66d7be",
+            "bytes": 1077,
+            "kind": "license"
+        },
+        {
+            "path": "packages/classnames/index.js",
+            "sha256": "c15dcff094566d7119b447bc7484a93e09256b8309282b0d629d756de87fa948",
+            "bytes": 1530,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/classnames/package.json",
+            "sha256": "d3164167a241350c19ddeaa3d19c8cc3e0044db1e78ef369d17177f0eae793f4",
+            "bytes": 1845,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/country-flag-icons/LICENSE",
+            "sha256": "197bacbd1e1d9f40017ab2ae3dadd1383a5aa70bf7a2d749dcef474ec6e3c5eb",
+            "bytes": 1129,
+            "kind": "license"
+        },
+        {
+            "path": "packages/country-flag-icons/commonjs/package.json",
+            "sha256": "796bfc7a739be3cb199e8f3248cee8334e5447a87027120fa617487868bf8c07",
+            "bytes": 84,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/country-flag-icons/commonjs/unicode.js",
+            "sha256": "973bb70d45e151b24c8765813d457d97dacb6a62a47c38c3118bb52e9ab83bdd",
+            "bytes": 791,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/country-flag-icons/package.json",
+            "sha256": "e406530e517983705a049d6982fc31ccdb1345ce9479f88d881fdd8734a87fde",
+            "bytes": 110389,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/country-flag-icons/unicode/index.cjs",
+            "sha256": "b43e046ce90ec75cc20916e5abb43542c4b86fbafa799d36dbcedbe94051a29f",
+            "bytes": 50,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/country-flag-icons/unicode/package.json",
+            "sha256": "777dcaa8fc207ce3f34f7a4d628ddc2fb6726775a62987bd3edf3a3ebbacfd43",
+            "bytes": 297,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/input-format/LICENSE",
+            "sha256": "cfdd54986754c261c5969c4a4d987aff385e055247ceb7942b373e36073eef53",
+            "bytes": 1131,
+            "kind": "license"
+        },
+        {
+            "path": "packages/input-format/commonjs/closeBraces.js",
+            "sha256": "ad5ff4e4a07fb66cb22f1dc79cd7b48b902cb9cb58c1860e39df3cdc14ce7876",
+            "bytes": 977,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/dom.js",
+            "sha256": "1d59d2d39d8d5c0f5b1a1e5446004630f19e3319777eb2ea7edfc4ed8182239e",
+            "bytes": 2693,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/edit.js",
+            "sha256": "c1b3d22bbc26d7e692b57cd485328cc2dcef237ce9d3a84d817cdf3c6c885279",
+            "bytes": 1105,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/format.js",
+            "sha256": "b62dfd739fd5e7e5ece2af94b416d0276a6e55491ddc0c79176a885fff7eec11",
+            "bytes": 2655,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/helpers.js",
+            "sha256": "75a76672ccdb0c460ba15e3a681e26e441b7099eb864ea1198ea87ac6ae4a316",
+            "bytes": 2154,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/inputControl.js",
+            "sha256": "48b483b047099e70138b0cbd67643f4a25088e5a901f23a10226e23fc87ab6cf",
+            "bytes": 5506,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/package.json",
+            "sha256": "442ecba502f7ccafe22b9c5319b54f0c8711ebce9439e7883682ea1797954c8f",
+            "bytes": 78,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/input-format/commonjs/parse.js",
+            "sha256": "071b68fa113768ff802493fec6f4e13831821f6abe350b27e0f4218b872574e8",
+            "bytes": 2025,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/react/Input.js",
+            "sha256": "c71dd35189fcf4cddd94a3d7ea0ec96ef6656be2da0f213b35ae6d6e58b25821",
+            "bytes": 5637,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/commonjs/templateFormatter.js",
+            "sha256": "cb84285fd88b6969e616662205ef49dd5897ca65d1d2a5cbee47b7e68cdb4e3e",
+            "bytes": 4068,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/package.json",
+            "sha256": "7196bc3afc5c78c104075867b5405063c6baa2ef18ea157b720500799c3944ac",
+            "bytes": 3154,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/input-format/react/index.cjs",
+            "sha256": "f132b018607e69281f14134d7f09c12eac622dac2958848548e31f21379cd508",
+            "bytes": 158,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/input-format/react/package.json",
+            "sha256": "1c6f555fdea43c2396a85e52d739a642b502edfd66fd4215b599590e84dd2315",
+            "bytes": 289,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/libphonenumber-js/AUTHORS",
+            "sha256": "beaa0e9121c0209f4f3f64e36340592abb9deebffab818958a32d2cc7088e5b5",
+            "bytes": 97,
+            "kind": "authors-notice"
+        },
+        {
+            "path": "packages/libphonenumber-js/LICENSE",
+            "sha256": "3ba796e4a8c5c5437029fbb47c8921424e902ea152e85150be095826abed0acb",
+            "bytes": 1129,
+            "kind": "license"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouType.js",
+            "sha256": "05caf802029b97efd38572b1382e41e17f4f59f633461a9dcd98cae1c18f7af9",
+            "bytes": 23452,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeFormatter.PatternMatcher.js",
+            "sha256": "14a196088071743c7673ee0b6c3ffc58a65e991c2315347f23a48fbe966830d8",
+            "bytes": 8960,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeFormatter.PatternParser.js",
+            "sha256": "a9952fc4a80439395cdf3ca87965582ac0f32406c2e0ea971c85193da8e3bd13",
+            "bytes": 6525,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeFormatter.complete.js",
+            "sha256": "13ed9562379ddee8b9b0dda2b3dddc865b68a41527322b6eae6b4b99397b4d15",
+            "bytes": 6303,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeFormatter.js",
+            "sha256": "26b76db4a543ff36a1b1a5ab01d32340fa0267bb556952a6de5a995ff1f90c01",
+            "bytes": 38360,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeFormatter.util.js",
+            "sha256": "c456419024568cca9bd5bbad91547713e41aa1cb1121f8bf36bc476cb1eee11c",
+            "bytes": 5173,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeParser.js",
+            "sha256": "914b03e456f496cadd0184ee7f7d9455182b3d39d06171f7f115058aa19c0557",
+            "bytes": 23846,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/AsYouTypeState.js",
+            "sha256": "e807cef00f8893762aa8ba086f2bfa6ab8623e42a1b23a22c8c4c7246ad844da",
+            "bytes": 5183,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/ParseError.js",
+            "sha256": "76ea17ebbf73d982bf69bf499b8a775626fbab2e88e71fc10679b19831fe6166",
+            "bytes": 5604,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/PhoneNumber.js",
+            "sha256": "8555ea685e5594cc3bc31f91c8869a75a24b47445639d1794327179ab74f9d16",
+            "bytes": 7788,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/PhoneNumberMatcher.js",
+            "sha256": "3a8bb8e33b8744afb0c7fa2605048a6515653ead1d4c3d88bbd7c72e9c181b27",
+            "bytes": 18290,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/constants.js",
+            "sha256": "d5835ab5d367c42b7948ede807fb8d749cdee6413ea768ef4c097acbc12e9334",
+            "bytes": 1980,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/LRUCache.js",
+            "sha256": "ed446d910f5e34656cd8a6f9702cf6d66d8d2af45ba464b1115c50f1c33a00d0",
+            "bytes": 3949,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/Leniency.js",
+            "sha256": "cb34f0ebedcdeaa49359a3fa3a9f866855c906ead46d817bc2641f247f7a2af9",
+            "bytes": 16702,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/RegExpCache.js",
+            "sha256": "d08f9f7e6a4e251d7958260eca614aa71737d335f25b29192d575e9435fa3144",
+            "bytes": 1951,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/isValidCandidate.js",
+            "sha256": "263e81f701c76812e1d1a8edf071896c174d9925c028198bd17ebc9eebba29d0",
+            "bytes": 3245,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/isValidPreCandidate.js",
+            "sha256": "4c87bb73b8a35419e44f2d576957537529372408abe9f0b0f8680777806f6f36",
+            "bytes": 1070,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/matchPhoneNumberStringAgainstPhoneNumber.js",
+            "sha256": "51a556d7151f1fd797c243f4a30afe53cce9c3d17aa31ceea3473384e1c0bc2b",
+            "bytes": 2563,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/parsePreCandidate.js",
+            "sha256": "4334b55a53be228c89bc2d0be35997c031b289090a259eb22f02b253fb5179c7",
+            "bytes": 1082,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/utf-8.js",
+            "sha256": "965219ce5be17233bb9264be73935bc152d1b1d38836b62d286f46a8a5ba3ed2",
+            "bytes": 10310,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findNumbers/util.js",
+            "sha256": "973239806a346ce024dcb2f419907a9649324fe6f9878d71b2e52b60176dfe53",
+            "bytes": 1032,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/findPhoneNumbersInText.js",
+            "sha256": "2df31d2ab6375845e0218f3dc5dfc38461b57bb4527bd1930468d8a412611a64",
+            "bytes": 2002,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/format.js",
+            "sha256": "d2e9f0a9e86bd58055280495e67202550629636943a9800326ef468a79c6c599",
+            "bytes": 11459,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/formatIncompletePhoneNumber.js",
+            "sha256": "a1a078c8d828a70dc585e0611a57516c2dcfbaf711bd8380f067b48b6e108f7f",
+            "bytes": 1161,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/getCountries.js",
+            "sha256": "f5ba7dedfb069059d9e95b41abf28d1502adc0f4e3fca0d12194d957ca331fef",
+            "bytes": 418,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/getCountryCallingCode.js",
+            "sha256": "ac75f8f599b8a2b562c90f49107bbcd520466ce0e588cdbfbbf1159ca424cd8c",
+            "bytes": 312,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/getExampleNumber.js",
+            "sha256": "9dfc0ee95ec28af35ca7b5689566bbca12fa894dcfb9c054d318dd059410147e",
+            "bytes": 504,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/RFC3966.js",
+            "sha256": "4760d74112feea68d6e5ee0eaddf59a8dc18411252010a43da7d355377242718",
+            "bytes": 4117,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/applyInternationalSeparatorStyle.js",
+            "sha256": "88f48401b690a8f8efeb34876715e19858f58c14e012aaa830eff5cdc5afce4c",
+            "bytes": 2168,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/checkNumberLength.js",
+            "sha256": "6d41084140d28718a64f06066dbf04e36f95f9222ef9274ee79c8151e525cf50",
+            "bytes": 3922,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extension/createExtensionPattern.js",
+            "sha256": "91bb020975a3338a759646705485e04741acccbdc3ca0c4ec278f7c2bc758a91",
+            "bytes": 5474,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extension/extractExtension.js",
+            "sha256": "7cce549735bf70c0eb0f1ffcd80e8c7bcf9d3115802483a5004703f1fd48899e",
+            "bytes": 1290,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extractCountryCallingCode.js",
+            "sha256": "d6617495500927367e981d6890360e8034e7ef4d07a07ccb7aa65bb1e09b86a2",
+            "bytes": 6362,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+            "sha256": "03bb987dc24761888197d6cf06ebc80a11050e490f9018c1015a4a5c6860cde8",
+            "bytes": 2804,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
+            "sha256": "83b44441398ff845e2739fe6130f76ea96684781c16e2a1a4164ef5db11b5a0f",
+            "bytes": 4797,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extractNationalNumber.js",
+            "sha256": "4e3079f1546bbacbd6f14533282cb307f798c8369c7606cc51301d0385d90cd2",
+            "bytes": 5918,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
+            "sha256": "74cfcd2ba6aa22fe447cd93857edbd84327d6a439a3fd3fc59bd99220242e2d5",
+            "bytes": 5793,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/extractPhoneContext.js",
+            "sha256": "686ef8472e6de94eba889f7636d82b0210dd8a981ceed72a722b3182f0683d58",
+            "bytes": 3860,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/formatNationalNumberUsingFormat.js",
+            "sha256": "9cbd9d4b571443d3269c21a24ea0553a528eae25028f535491d467b7fd732904",
+            "bytes": 2329,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/getCountryByCallingCode.js",
+            "sha256": "bb742e2fecd0285c9094e71fe04b2d0b315d6a6cee621e82cef5be0c32105147",
+            "bytes": 1295,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/getCountryByNationalNumber.js",
+            "sha256": "521cd0a5a67404a431505cde8bdbd600bba71e1c4a484e88550d21d2e2acd5e6",
+            "bytes": 3525,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/getIddPrefix.js",
+            "sha256": "b4268e07865e4ae072e48dd3018bbf009346839d85a7937d0c309aefab4aa34d",
+            "bytes": 1412,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/getNumberType.js",
+            "sha256": "a8aee2a1c139380af6a7da2b56a44c9bc0c7ad842c5ed4f8983739fcfe662112",
+            "bytes": 5031,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/getPossibleCountriesForNumber.js",
+            "sha256": "0050e1f4d87e2194bb0c2a990fab72bb0e2ee9376b02fcff623acba365f3b770",
+            "bytes": 1387,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/isObject.js",
+            "sha256": "d1866d72402e06f27cea272151ab3189b14131ddbb8a0fe8c8750eb0dc2b7d25",
+            "bytes": 312,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/isViablePhoneNumber.js",
+            "sha256": "910d2f654fc23e4a553d138c0a774435fdc1ce210c937701dcd410a459ed324b",
+            "bytes": 4840,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/matchesEntirely.js",
+            "sha256": "da3a35e6284f586792986f6128ccaa2cc020e9bd12a77dcc24ce75800663fd87",
+            "bytes": 564,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/mergeArrays.js",
+            "sha256": "4a9f1dbea92fde76a2c3f304d8d9bb38b8ee210706a1c57acddf81eb6acd977f",
+            "bytes": 1951,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/parseDigits.js",
+            "sha256": "e25a728804e2e8d2ce78d46b63f30f620d12ba4487c265b017e40935f631704c",
+            "bytes": 4313,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/helpers/stripIddPrefix.js",
+            "sha256": "f8fdede1fd822aa754d9de396d0abdba72d0463bfcd9098d3eef028cfc2324df",
+            "bytes": 1382,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/isPossible.js",
+            "sha256": "d69bb95a8a85c4000290568cbf90c37d4177491851fc44ae5a7d67c919b15f93",
+            "bytes": 3294,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/isPossiblePhoneNumber.js",
+            "sha256": "935ec9081ddf2723b1e25300a04eaf5f2f793e9eb8dd13e8a7834549cc80c54a",
+            "bytes": 1979,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/isValid.js",
+            "sha256": "f52be374f0ef2277476759147375f0c3273569f0b9b57e647d0afa114b3b8d25",
+            "bytes": 3314,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/isValidPhoneNumber.js",
+            "sha256": "5cd7722c7eaf074b5ff49fcaa5d93d42801beaaa4ce1b70aac500ddf06fc1308",
+            "bytes": 1967,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/legacy/findNumbers.js",
+            "sha256": "f8d53b2e0e45721005076daa358bc824722b95c2cae23fb6234f775e3a3aa12a",
+            "bytes": 851,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/legacy/searchNumbers.js",
+            "sha256": "9cb4fd1b7d09bba511ca16f162a081cd3384b61a3d44bbe1406c870486afb538",
+            "bytes": 1316,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/metadata.js",
+            "sha256": "afe143d4e907b4e80731cd8e4481becde6520bdc7bfe094eddf0c0420168b54e",
+            "bytes": 21587,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/normalizeArguments.js",
+            "sha256": "b10108e12e8fda7458e4e3ef07dfdc280a335d55dbdc1db1ad9c3cbda58d5c29",
+            "bytes": 4509,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/package.json",
+            "sha256": "1ff5dc28b3a1e140f3bbae2c61397f1d6d8c566b10f57ca3291eb152591637fc",
+            "bytes": 80,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/parse.js",
+            "sha256": "d23e2b0c1a06ad0c13aba23930bcc90e1dd547796c266b677ba9f5ec0e4f452b",
+            "bytes": 14878,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/parseIncompletePhoneNumber.js",
+            "sha256": "4e4a6ebdbd3f5a9011c25be91e75d84a59ef203500738dab0150c5dfbe7de00a",
+            "bytes": 4436,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/parsePhoneNumber.js",
+            "sha256": "ab3b806b9626c4a0b2c4d395fdfe5a96ff095ed54b2ef8c2e0ea6283a429c086",
+            "bytes": 747,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/parsePhoneNumberWithError.js",
+            "sha256": "30eb1d626fe5d8b4e402b051bfc718cf61a0f037e804890706a1bdafdc81236c",
+            "bytes": 801,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/parsePhoneNumberWithError_.js",
+            "sha256": "b7ca8f6da187c29540b919f5b0ef0ffb12865c4bb170c92d692a019cb7d7c5de",
+            "bytes": 1585,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/parsePhoneNumber_.js",
+            "sha256": "9bba942b89f48425e4ef0dfb33458e4af099e08105f7e03bd93de54d20947909",
+            "bytes": 2111,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/searchPhoneNumbersInText.js",
+            "sha256": "20186f29c6bef4f70cf4cffafa66f3b02b002296626b096c35ce3efbfd84cecd",
+            "bytes": 2208,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/tools/semver-compare.js",
+            "sha256": "6d9839ee682b9bc47a96beb3a672209705ece05395687aad43bccdebcd26eb9e",
+            "bytes": 1035,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/build/validatePhoneNumberLength.js",
+            "sha256": "829ed24ab026bbc06cb5b827b9c250ca87931f72d4895b3a91af626c22e10cba",
+            "bytes": 2668,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/core/index.cjs",
+            "sha256": "8eb99eb9971bd34dea97d7db4c015bed8526ee4474851925a6c1661dd7fdcf26",
+            "bytes": 2811,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/core/package.json",
+            "sha256": "53b70c561a95f2986981cb615a09e2430672a0e5d3b527130f2f2e7abc49f09e",
+            "bytes": 261,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/libphonenumber-js/metadata.min.json",
+            "sha256": "418d43af34145841a64dc00be00a47cb8b9099e0ff2f3a78d51eb573ef421cb2",
+            "bytes": 82658,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/libphonenumber-js/package.json",
+            "sha256": "2b484238489f7e992a7f2f86188112141ffb83d434d87ffcf4122339f6daaa4a",
+            "bytes": 9808,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/object-assign/LICENSE",
+            "sha256": "6fb9754611c20f6649f68805e8c990e83261f29316e29de9e6cedae607b8634c",
+            "bytes": 1119,
+            "kind": "license"
+        },
+        {
+            "path": "packages/object-assign/index.js",
+            "sha256": "e02cb9714ef6e561e971fe400644330212f07ca86120587199470d8b759a4b7c",
+            "bytes": 2108,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/object-assign/package.json",
+            "sha256": "5990bbffa235fc675debd925d50f6c3f48a2b4526d8c9f7555cadec9029d0d7f",
+            "bytes": 764,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/prop-types/LICENSE",
+            "sha256": "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce",
+            "bytes": 1080,
+            "kind": "license"
+        },
+        {
+            "path": "packages/prop-types/checkPropTypes.js",
+            "sha256": "294b20ef03d559d6e4fc8731fd50a616eda29070d46db6a7c0ccc338269a5d9c",
+            "bytes": 3868,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/prop-types/factoryWithThrowingShims.js",
+            "sha256": "29540b7e3c2bf11ac0331d69b90d67bca66d234056e61e6b538d7e3a2b4c5819",
+            "bytes": 1639,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/prop-types/factoryWithTypeCheckers.js",
+            "sha256": "a9cdbdea0bc4e98e3d854201c18e3c81dbc89cc00d7e61c1fa53a643510b29a8",
+            "bytes": 22716,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/prop-types/index.js",
+            "sha256": "441834c833751da7e8b3c6185d95130b99b6757cb48373c8f8939a86f9637051",
+            "bytes": 710,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/prop-types/lib/ReactPropTypesSecret.js",
+            "sha256": "c826b66b47220c8e4571bf54d56b4904b6d6061187400c969b040262311000a5",
+            "bytes": 314,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/prop-types/lib/has.js",
+            "sha256": "0616d1a60c9127617ddbd10386bb664a02be3bd46b7321319c166e8e585c73e2",
+            "bytes": 70,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/prop-types/package.json",
+            "sha256": "96aa387585c686397a80616d6a563759576e9b9fac1f80d57874aa4ee4730a2c",
+            "bytes": 1656,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/react-is/LICENSE",
+            "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+            "bytes": 1086,
+            "kind": "license"
+        },
+        {
+            "path": "packages/react-is/cjs/react-is.development.js",
+            "sha256": "f3d39ada5515b4ae30399fe48786c5d49a5760d4b036e04773d7f3c26e256a01",
+            "bytes": 6980,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-is/cjs/react-is.production.min.js",
+            "sha256": "edea7246e3282e6bcfc3589a31f512343212dced2eb0f789da3e4903060b6d5d",
+            "bytes": 2554,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-is/index.js",
+            "sha256": "d34fce01b963097a8d649b95e20aa17a63e4105b54adcce7d7daf1c8524b434e",
+            "bytes": 196,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-is/package.json",
+            "sha256": "06784c4340af9853928c519791684487b83076b3c84e8de6ba5f240e33700b71",
+            "bytes": 530,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/react-phone-number-input/LICENSE",
+            "sha256": "cfdd54986754c261c5969c4a4d987aff385e055247ceb7942b373e36073eef53",
+            "bytes": 1131,
+            "kind": "license"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/CountryIcon.js",
+            "sha256": "b3fa3cce1d52b63fe61382cfe4813b619f3d743e92e7d8cd81cf2dcdda63c486",
+            "bytes": 3767,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/CountrySelect.js",
+            "sha256": "c5d2ea334a96e5037ce42de45d1579c6a6ef43c6be9fbb600563335c3938913b",
+            "bytes": 8988,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/Flag.js",
+            "sha256": "c35119846d8d28e5bb5fe237d39a68132815722af82ed14f131b6f6a271a0d6c",
+            "bytes": 3281,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/InputBasic.js",
+            "sha256": "29b3f5405614467de03e93196007b116c075c440d1ff1201df49a4e1ffa51a33",
+            "bytes": 8430,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/InputSmart.js",
+            "sha256": "08e18b38e801811eeb41b15d18da493de7470251a53a9a9108d966eeb834273e",
+            "bytes": 7542,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/InternationalIcon.js",
+            "sha256": "ab34510ec82344c89a51fea7830993c796677206b8c6b66c576174c335bf68fc",
+            "bytes": 6070,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/PhoneInputWithCountry.js",
+            "sha256": "1b8cb8a7cfe32dfc2fe2507287417075fe6fc3fcdbc5e28b48d0ed24487c1f0b",
+            "bytes": 42576,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/PhoneInputWithCountryDefault.js",
+            "sha256": "8f56d1f109837bc029d270662b22dd88d194d5e5fb9ed88288a0d9463847a45a",
+            "bytes": 2640,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/PropTypes.js",
+            "sha256": "df189ce90fcb3c90ff0b0a3cc545e340190a5c8d96a41f6d5cf22ea86b29d424",
+            "bytes": 626,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/helpers/countries.js",
+            "sha256": "30080ff9baf80755c0f1d93e39adc4924f3ef295ae0538d5dc7098c1ba1ec0f6",
+            "bytes": 4209,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/helpers/getInternationalPhoneNumberPrefix.js",
+            "sha256": "54a54c63185c149b735d8a6b00bd10c11281b54d6c1ef9675232bc1632932866",
+            "bytes": 1656,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/helpers/getPhoneInputWithCountryStateUpdateFromNewProps.js",
+            "sha256": "36a1645ac60bb55f440aeacfb7c6bef060715ed5d72c265e6cdf65959aee754d",
+            "bytes": 10829,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/helpers/inputValuePrefix.js",
+            "sha256": "3faa6b1ad8224204bc5dcfb874028cb529054d8cc7c20a627866432f55e92d61",
+            "bytes": 811,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/helpers/parsePhoneNumberCharacter.js",
+            "sha256": "66840219483a725e40f320d8b3f3511f29a495d3bee65405763107d9bc3d5066",
+            "bytes": 2229,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/helpers/phoneInputHelpers.js",
+            "sha256": "03d25d41f9e4a11fa76e9887c0c1dba5addb0141c7b3449c0a046634e77d2c29",
+            "bytes": 34354,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/libphonenumber/formatPhoneNumber.js",
+            "sha256": "7797aed56b54acc100a90db78a38a7b1a6f61eef3f689013316816530d8b9bc7",
+            "bytes": 1630,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/commonjs/package.json",
+            "sha256": "703c607f8d54eb5b4475e5308e31e46b58757479a340779e3a5759a47957eab0",
+            "bytes": 90,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/react-phone-number-input/core/index.cjs",
+            "sha256": "f8f695e3f3141e313a053301e27a7e166772914663829e096ea1df4b6bb9cd60",
+            "bytes": 877,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/core/package.json",
+            "sha256": "b09fc99d19d31d07db7ade37fa25db2d9c656e311717404fe5be83fe40138d8b",
+            "bytes": 300,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/react-phone-number-input/locale/en.json",
+            "sha256": "4b8a272c882102ae02c24c37cd05960cab6a7b139763f5226f84566d9babb6ca",
+            "bytes": 5730,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/min/index.cjs",
+            "sha256": "f8796dcaaaaf073bca81c39164140aa1a893d7a8f2f7390cc1a208bf37e91f9a",
+            "bytes": 1414,
+            "kind": "runtime"
+        },
+        {
+            "path": "packages/react-phone-number-input/min/package.json",
+            "sha256": "880c1d8900490e46df4180929f9cc7b5af9a9cc8600626a01f28e1f2d0964095",
+            "bytes": 299,
+            "kind": "package-scope"
+        },
+        {
+            "path": "packages/react-phone-number-input/package.json",
+            "sha256": "87a7399e06e4fd1fdb9a35f63c6179196d491972ba9eab2c9e7c6cc11533442b",
+            "bytes": 14150,
+            "kind": "package-scope"
+        },
+        {
+            "path": "upstream-style.css",
+            "sha256": "a7b8714c668a31191afa740c8f3f664bfdbc6848c30696dfb070e7d31a3aa8b2",
+            "bytes": 4807,
+            "kind": "upstream-css"
+        }
+    ]
+}

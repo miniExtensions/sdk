@@ -1,7 +1,24 @@
+export {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+    type CompleteReadOnlyTextLanguage,
+    type CompleteReadOnlyTextSize,
+    type CompleteReadOnlyTextLayout,
+} from './CompleteReadOnlyTextField.js';
 import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
 } from '../ui/borrowedPortalRenderScope.js';
+export {
+    CompletePhoneNumberField,
+    type CompletePhoneNumberFieldProps,
+    type CompletePhoneEditOwner,
+    type CompletePhoneCommit,
+} from './CompletePhoneNumberField.js';
+export {
+    CompleteReadOnlyPhoneNumberField,
+    type CompleteReadOnlyPhoneNumberFieldProps,
+} from './CompleteReadOnlyPhoneNumberField.js';
 export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
     RecoverableImage,
@@ -40,6 +57,13 @@ export {
     type InputClearButtonProps,
 } from './InputClearButton.js';
 export { TextInput, type TextInputProps } from './TextInput.js';
+export {
+    CompleteClearableTextInput,
+    CompleteDeferredClearableTextInput,
+    resolveCurrentClearableInputMobile,
+    type CompleteClearableTextInputProps,
+    type CompleteDeferredClearableTextInputProps,
+} from './CompleteClearableTextInput.js';
 export {
     CompleteDurationField,
     type CompleteDurationFieldProps,

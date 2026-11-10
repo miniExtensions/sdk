@@ -660,3 +660,75 @@ replacement, literal Currency symbols, disabled/empty display and mobile Clear.
 The receipt records archive bundle/CSS hashes, public callback counts, DOM and
 accessibility observations, screenshots, network errors and owned cleanup.
 Keyboard selection replacement is not clipboard-paste or native Form evidence.
+
+## Complete read-only Phone presentation
+
+`test/reactCompleteReadOnlyPhone.test.ts` uses the public React entry and actual
+component. Its synthetic source cases cover literal escaped text and `tel:`
+href, null/undefined/empty versus nonempty whitespace, localized empty text,
+updated values, `_blank`/`noreferrer`, stopped parent propagation and no network
+requests. The test prevents external telephone navigation at its boundary only
+after observing that the component did not cancel the default action.
+
+Normal `pnpm check:package` also runs
+`scripts/complete-readonly-phone-consumer-checks.mjs`. It installs the actual TGZ
+with React18.3.1 and19.2.0, using a fresh runtime process for each version.
+Public ESM/CommonJS exports, strict positive/negative declarations, stylesheet
+resolution, SSR/hydration, value/empty transitions, click semantics, an unchanged
+adjacent draft and remounts are checked through the installed component. Existing
+literal Phone Number and all other package checks remain registered.
+
+These are read-only component and package-boundary checks. They do not certify
+real telephone navigation, browser layout or screen readers, country-code
+editing, mobile Clear, deferred native Form/Grid ownership, backend Save or
+hosted persistence. The existing CI native-browser suite remains enabled and is
+not represented as coverage of this new component.
+
+## Complete Phone qualification boundaries
+
+The normal source component group discovers reactCompletePhone.test.ts and uses
+the actual frozen Phone vendor. The normal package check registers the complete
+Phone installed-TGZ matrix beside the retained read-only and legacy Phone groups.
+React18.3.1 and19.2.0 run in fresh processes for ESM/CommonJS, strict declarations,
+CSS, SSR/hydration, real editing, Clear, retirement and admitted unmount.
+The vendor guard verifies original/adapted hashes, closed relative runtime edges,
+metadata, licenses and the installed archive; third-party bytes remain frozen.
+The public ESM entry binds the actual consumer React peer before the lazy private
+CommonJS runtime initializes; private modules never dynamically require React.
+SSR selection checks serialized option attributes separately from real CSR
+selection. The deferred-unmount A→B→A case proves cleanup retirement, not an
+unestablished delayed vendor-class callback after a successor commit.
+These synthetic checks do not establish Android/OS IME, telephone navigation,
+visual layout, hosted authorization or native Form/Grid persistence. Android's
+existing formatter caret timer remains part of the private baseline.
+
+Complete readonly-text qualification includes real `linkify-react` 3.0.4
+differential source tests against the SDK-owned `linkifyjs` 3.0.5 renderer,
+React 18/19 packed ESM/CommonJS/type/SSR/DOM consumers and standalone Chromium
+layout/link checks. The oracle is development-only so headless consumers retain
+the existing React-optional contract. Native Form/Portal/Formula adoption and
+interactive hosted evidence remain separate from SDK package proof.
+
+## Complete shared clearable input qualification
+
+The complete clearable input has two distinct evidence boundaries. Source
+component tests compare the public components with the frozen native shared
+lifecycle, including original cleanup versus current blur callbacks,
+autocomplete asymmetry, IME, settled/dirty drafts, mode mounts and Clear event
+ordering. Simulated DOM focus events do not certify trusted browser ordering
+or native Form/Portal authority.
+
+Cold installed-package consumers must use the actual public ESM/CommonJS,
+strict declarations, styles and React 18/19 SSR/hydration paths. Keep a stable
+explicit mobile snapshot through hydration. Current-device hint/iPad controls
+must initialize their browser realm before importing UAParser; its IIFE binds
+the window at module initialization. Replacing a global after a server-first
+cached import is not a device-policy oracle.
+
+The existing packed Chromium harness supplies trusted pointer/focus/Clear
+and portable CSS evidence with its existing CSP, archive/input provenance,
+network refusal, browser/server ownership and cleanup. Native Cell rollback,
+queue/current-owner, Email and URL/overlay assembly remain separate host
+checks. Neither a frozen oracle nor a synthetic Save response establishes
+provider persistence, and extraction must not repair a pre-existing owner
+lifecycle by silently changing cleanup or Clear semantics.

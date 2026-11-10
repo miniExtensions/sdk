@@ -311,7 +311,7 @@ SOFTWARE.
 
 ## Linkify (`linkifyjs` 3.0.5)
 
-The complete localized numeric read-only display retains native link tokenization and presentation.
+The complete localized numeric and complete readonly-text displays retain native link tokenization and presentation. Readonly-text source tests use linkify-react 3.0.4 as a development-only native oracle; runtime rendering uses the existing linkifyjs 3.0.5 dependency.
 
 ```text
 Copyright (c) 2021 SoapBox Innovations Inc.
@@ -337,7 +337,7 @@ THE SOFTWARE.
 
 ## Heroicons
 
-The numeric empty-state symbol retains the native NoSymbol icon from [Heroicons](https://github.com/tailwindlabs/heroicons).
+The numeric and complete readonly-text empty-state symbols retain the native NoSymbol icon from [Heroicons](https://github.com/tailwindlabs/heroicons).
 
 ```text
 MIT License
@@ -362,3 +362,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Complete Phone private runtime
+
+The complete Phone package retains the actual native react-phone-number-input
+3.3.9, libphonenumber-js1.10.57 metadata/runtime and input-format0.3.9. Its
+reachable CommonJS/JSON closure also includes classnames2.5.1,
+country-flag-icons1.5.9, prop-types15.8.1, object-assign4.1.1 and react-is16.13.1.
+Full package licenses and the supplied authors notice are retained beneath
+`dist/vendor/phone-number-input/packages`, with a complete private notice file,
+`UPSTREAM.json` and `ADAPTATIONS.json`. Original/adapted hashes record only
+private package-import rewrites and scoped CSS; upstream callback behavior is
+unchanged. React is supplied by the customer. Installed-source provenance does
+not claim independently verified upstream archive byte equivalence.

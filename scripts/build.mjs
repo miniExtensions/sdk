@@ -157,6 +157,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-duration',
         'search-gate',
         'complete-calendly',
+        'complete-verification',
         'complete-portal-chart',
         'date',
         'datetime',

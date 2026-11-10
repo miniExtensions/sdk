@@ -4,7 +4,9 @@ import {
     useId,
     useRef,
     type CSSProperties,
+    type FormEvent,
     type ReactNode,
+    type SyntheticEvent,
 } from 'react';
 import { TextInput } from './TextInput.js';
 import {
@@ -73,7 +75,8 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
             'aria-label':
                 props.ariaLabel ?? (state.title ? undefined : 'Search'),
             'aria-describedby': descriptionId,
-            onCancel: (event) => event.preventDefault(),
+            onCancel: (event: SyntheticEvent<HTMLDialogElement>) =>
+                event.preventDefault(),
         },
         h('div', {
             className: 'mx-sdk-search-gate-overlay',
@@ -119,7 +122,7 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
                 h(
                     'form',
                     {
-                        onSubmit: (event) => {
+                        onSubmit: (event: FormEvent<HTMLFormElement>) => {
                             event.preventDefault();
                             state.submit();
                         },

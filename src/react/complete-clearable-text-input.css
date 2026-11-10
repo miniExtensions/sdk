@@ -1,0 +1,46 @@
+/* Optional, scoped closure for the native shared input wrapper and Clear UI.
+ * Low-specificity fallbacks leave supplied input styles/native utility rules
+ * authoritative. No global input/button reset or field-specific style port.
+ */
+:where(.mx-sdk-complete-clearable-input) {
+    position: relative;
+    flex: 1 1 0%;
+}
+
+:where(.mx-sdk-complete-clearable-input[data-mobile='true'] > input) {
+    padding-right: 2.5rem;
+}
+
+:where(.mx-sdk-complete-clearable-button) {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    color: #111827;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+:where(.mx-sdk-complete-clearable-button:disabled) {
+    cursor: default;
+}
+
+:where(.mx-sdk-complete-clearable-indicator) {
+    display: flex;
+    height: 1.25rem;
+    width: 1.25rem;
+    border-radius: 9999px;
+    background-color: #4b5563;
+}
+
+:where(.mx-sdk-complete-clearable-icon) {
+    margin: auto;
+    height: 0.75rem;
+    width: 0.75rem;
+    color: white;
+}

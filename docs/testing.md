@@ -680,3 +680,27 @@ React 18/19 packed ESM/CommonJS/type/SSR/DOM consumers and standalone Chromium
 layout/link checks. The oracle is development-only so headless consumers retain
 the existing React-optional contract. Native Form/Portal/Formula adoption and
 interactive hosted evidence remain separate from SDK package proof.
+
+## Complete shared clearable input qualification
+
+The complete clearable input has two distinct evidence boundaries. Source
+component tests compare the public components with the frozen native shared
+lifecycle, including original cleanup versus current blur callbacks,
+autocomplete asymmetry, IME, settled/dirty drafts, mode mounts and Clear event
+ordering. Simulated DOM focus events do not certify trusted browser ordering
+or native Form/Portal authority.
+
+Cold installed-package consumers must use the actual public ESM/CommonJS,
+strict declarations, styles and React 18/19 SSR/hydration paths. Keep a stable
+explicit mobile snapshot through hydration. Current-device hint/iPad controls
+must initialize their browser realm before importing UAParser; its IIFE binds
+the window at module initialization. Replacing a global after a server-first
+cached import is not a device-policy oracle.
+
+The existing packed Chromium harness supplies trusted pointer/focus/Clear
+and portable CSS evidence with its existing CSP, archive/input provenance,
+network refusal, browser/server ownership and cleanup. Native Cell rollback,
+queue/current-owner, Email and URL/overlay assembly remain separate host
+checks. Neither a frozen oracle nor a synthetic Save response establishes
+provider persistence, and extraction must not repair a pre-existing owner
+lifecycle by silently changing cleanup or Clear semantics.

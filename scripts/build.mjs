@@ -148,6 +148,7 @@ for (const format of ['esm', 'cjs']) {
         'localized-numeric',
         'complete-phone',
         'complete-readonly-text',
+        'complete-clearable-text-input',
         'complete-duration',
         'date',
         'datetime',

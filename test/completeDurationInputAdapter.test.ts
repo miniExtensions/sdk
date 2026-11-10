@@ -65,7 +65,7 @@ for (const format of formats)
             ['', null],
         ];
         for (const [input, expected] of cases) {
-            const before = f.writes.length;
+            const before: number = f.writes.length;
             assert.equal(f.adapter.setInput(input), true, input);
             assert.equal(f.writes.length, before + 1, input);
             assert.equal(f.writes.at(-1), expected, input);

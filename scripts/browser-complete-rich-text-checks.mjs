@@ -515,14 +515,28 @@ window.completeRichTextProbe={
         await finish('checkbox-storage-readonly');
 
         evidence.phase = 'image-nodeview-caption-zoom';
-        await reset(`![Owned caption](${origin}/owned-image.svg)`);
+        const ownedImageSrc = `${origin}/owned-image.svg`;
+        await reset(`![Owned caption](${ownedImageSrc})`);
         const caption = editor.locator('.caption');
-        const ownedImage = editor.locator('img');
+        // Chromium also renders a ProseMirror-separator IMG after this inline
+        // NodeView. Keep the document asset distinct from that caret helper and
+        // from the zoom portal; its source stays stable when the caption changes.
+        const ownedImageSelector = `.image img[src="${ownedImageSrc}"]`;
+        const ownedImage = editor.locator(ownedImageSelector);
         await ownedImage.waitFor();
-        await page.waitForFunction(() => {
-            const image = document.querySelector('.ProseMirror img');
-            return image?.complete && image.naturalWidth > 0;
-        });
+        assert.equal(await editor.locator('.image img').count(), 1);
+        assert.equal(await ownedImage.getAttribute('src'), ownedImageSrc);
+        assert.equal(await ownedImage.getAttribute('alt'), 'Owned caption');
+        await page.waitForFunction((selector) => {
+            const images = document.querySelectorAll(
+                `.ProseMirror ${selector}`
+            );
+            return (
+                images.length === 1 &&
+                images[0].complete &&
+                images[0].naturalWidth > 0
+            );
+        }, ownedImageSelector);
         assert.equal(await caption.getAttribute('contenteditable'), 'true');
         await caption.fill('Edited owned caption');
         await page
@@ -532,6 +546,10 @@ window.completeRichTextProbe={
             window.completeRichTextProbe
                 .snapshot()
                 .state.value.includes('![Edited owned caption]')
+        );
+        assert.equal(
+            await ownedImage.getAttribute('alt'),
+            'Edited owned caption'
         );
         await update({ readOnly: true });
         assert.equal(await caption.getAttribute('contenteditable'), 'false');

@@ -10,7 +10,11 @@ const within = (root, path) => {
     return part === '' || (!part.startsWith('..') && !isAbsolute(part));
 };
 const fixtureStyle = String.raw`body {margin:16px;font-family:Arial,sans-serif;color:#111827}
-#root form {width:480px;max-width:100%} #adjacent {display:block;margin-top:16px}
+#root form {width:840px;max-width:100%;display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:24px;align-items:start}
+.fixture-primary,.fixture-neighbors {min-width:0}
+#adjacent {display:block;margin-top:16px}
+#root form.fixture-legacy-layout {display:block;width:480px}
+.fixture-legacy-layout .fixture-primary,.fixture-legacy-layout .fixture-neighbors {display:contents}
 .mx-sdk-complete-collaborators.fixture-portable-theme {
  --mx-sdk-collaborator-accent:#7e22ce;
  --mx-sdk-collaborator-tint:#faf5ff;
@@ -21,7 +25,48 @@ const fixtureStyle = String.raw`body {margin:16px;font-family:Arial,sans-serif;c
 const avatar =
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#2563eb"/></svg>';
 
-function browserSource(format) {
+/** Require an actual nonmodal neighbor, rather than a control beneath the popup. */
+export function assertCollaboratorNeighborTarget(measurement) {
+    assert(measurement != null, 'Neighbor measurement is required');
+    const validRect = (rect) =>
+        rect != null &&
+        [rect.left, rect.right, rect.top, rect.bottom].every(Number.isFinite) &&
+        rect.right > rect.left &&
+        rect.bottom > rect.top;
+    assert(
+        validRect(measurement.targetRect),
+        'Neighbor target has no hit area'
+    );
+    assert(validRect(measurement.popupRect), 'Open popup has no hit area');
+    assert.equal(measurement.visible, true, 'Neighbor target is not visible');
+    assert.equal(measurement.disabled, false, 'Neighbor target is disabled');
+    assert.equal(measurement.inert, false, 'Neighbor target is inert');
+    assert.equal(
+        measurement.ariaHidden,
+        false,
+        'Neighbor target is ARIA-hidden'
+    );
+    const x = (measurement.targetRect.left + measurement.targetRect.right) / 2;
+    const y = (measurement.targetRect.top + measurement.targetRect.bottom) / 2;
+    const popup = measurement.popupRect;
+    assert(
+        !(
+            x >= popup.left &&
+            x < popup.right &&
+            y >= popup.top &&
+            y < popup.bottom
+        ),
+        'Neighbor target center overlaps the open popup'
+    );
+    assert.equal(
+        measurement.hitTarget,
+        true,
+        'Neighbor target center is occluded'
+    );
+    return measurement;
+}
+
+export function completeCollaboratorBrowserSource(format) {
     const imports =
         format === 'esm'
             ? `import React from 'react';
@@ -102,15 +147,17 @@ function App({initial}){
   }};
  const component=current.mode==='single'?CompleteSingleCollaboratorField:CompleteMultipleCollaboratorsField;
  return React.createElement('form',{id:'collaborator-form',onSubmit(event){event.preventDefault();state.submits++;}},
-  React.createElement('label',{htmlFor:'native-collaborator'},'Synthetic collaborator'),
-  React.createElement('p',{id:current.helpId},'Supplied collaborator help'),
-  React.createElement('p',{id:current.errorId},'Supplied collaborator error'),
-  React.createElement('section',{id:'field',onClick:()=>state.parentClicks++,onKeyDown:()=>state.parentKeys++},
-   current.mounted?React.createElement(component,{...common,value:current.value}):null),
-  React.createElement('label',{htmlFor:'adjacent'},'Adjacent draft'),
-  React.createElement('input',{id:'adjacent',defaultValue:'Keep adjacent dirty value'}),
-  React.createElement('button',{type:'button',onClick:()=>state.siblingActions++},'Adjacent action'),
-  React.createElement('button',{type:'submit'},'Explicit Save'));
+  React.createElement('div',{className:'fixture-primary'},
+   React.createElement('label',{htmlFor:'native-collaborator'},'Synthetic collaborator'),
+   React.createElement('p',{id:current.helpId},'Supplied collaborator help'),
+   React.createElement('p',{id:current.errorId},'Supplied collaborator error'),
+   React.createElement('section',{id:'field',onClick:()=>state.parentClicks++,onKeyDown:()=>state.parentKeys++},
+    current.mounted?React.createElement(component,{...common,value:current.value}):null)),
+  React.createElement('div',{className:'fixture-neighbors'},
+   React.createElement('label',{htmlFor:'adjacent'},'Adjacent draft'),
+   React.createElement('input',{id:'adjacent',defaultValue:'Keep adjacent dirty value'}),
+   React.createElement('button',{id:'adjacent-action',type:'button',onClick:()=>state.siblingActions++},'Adjacent action'),
+   React.createElement('button',{type:'submit'},'Explicit Save')));
 }
 function mount(){
  root=createRoot(document.getElementById('root'));
@@ -181,7 +228,7 @@ export async function prepareCompleteCollaboratorFixtures({
     report.completeCollaborators = {};
     const routes = {};
     for (const format of formats) {
-        const source = browserSource(format);
+        const source = completeCollaboratorBrowserSource(format);
         const entry = join(
             temporary,
             `complete-collaborators-${format}.${format === 'esm' ? 'mjs' : 'cjs'}`
@@ -319,9 +366,6 @@ export async function checkCompleteCollaboratorBrowser({
 }) {
     assert(formats.includes(format));
     assert.equal(evidence.format, format);
-    await page.waitForFunction(
-        () => window.__nativeProbe?.snapshot().committed > 0
-    );
     const snapshot = () =>
         page.evaluate(() => window.__collaboratorFixture.snapshot());
     const configure = async (patch) => {
@@ -368,6 +412,57 @@ export async function checkCompleteCollaboratorBrowser({
             { timeout: 5000 }
         );
     };
+    const measureNeighbor = (selector) =>
+        page.evaluate((selector) => {
+            const target = document.querySelector(selector);
+            const popup = document.querySelector('#field [role="listbox"]');
+            if (!target || !popup)
+                throw new Error('Current fixture neighbor and popup required');
+            const targetBox = target.getBoundingClientRect();
+            const popupBox = popup.getBoundingClientRect();
+            const rect = (box) => ({
+                left: box.left,
+                right: box.right,
+                top: box.top,
+                bottom: box.bottom,
+            });
+            const hit = document.elementFromPoint(
+                (targetBox.left + targetBox.right) / 2,
+                (targetBox.top + targetBox.bottom) / 2
+            );
+            const style = getComputedStyle(target);
+            return {
+                targetRect: rect(targetBox),
+                popupRect: rect(popupBox),
+                visible:
+                    target.getClientRects().length > 0 &&
+                    style.display !== 'none' &&
+                    style.visibility === 'visible',
+                disabled: target.matches(':disabled'),
+                inert: target.closest('[inert]') != null,
+                ariaHidden: target.closest('[aria-hidden="true"]') != null,
+                hitTarget:
+                    hit != null && (target === hit || target.contains(hit)),
+                hitPopup: hit != null && (popup === hit || popup.contains(hit)),
+                hit: hit
+                    ? {
+                          tagName: hit.tagName,
+                          id: hit.id,
+                          role: hit.getAttribute('role'),
+                          className:
+                              typeof hit.className === 'string'
+                                  ? hit.className
+                                  : null,
+                      }
+                    : null,
+            };
+        }, selector);
+    const legacyLayout = (enabled) =>
+        page.evaluate((enabled) => {
+            const form = document.getElementById('collaborator-form');
+            if (!form) throw new Error('Current fixture form required');
+            form.classList.toggle('fixture-legacy-layout', enabled);
+        }, enabled);
     const portableStyles = () =>
         page.evaluate(() => {
             const root = document.querySelector(
@@ -491,6 +586,8 @@ export async function checkCompleteCollaboratorBrowser({
         assert.equal((await snapshot()).writes.length, expected);
     };
     const groups = [];
+    // Keep completed groups even when a later browser assertion fails.
+    evidence.browserGroups = groups;
     const record = async (name) => {
         const value = await snapshot();
         assert.deepEqual(value.errors, []);
@@ -535,7 +632,11 @@ export async function checkCompleteCollaboratorBrowser({
             await input().press('Enter');
         } else await option.click();
     };
+    let failure;
     try {
+        await page.waitForFunction(
+            () => window.__nativeProbe?.snapshot().committed > 0
+        );
         await ready();
         let value = await snapshot();
         assert(value.mounts >= 2 && value.cleanups >= 1);
@@ -655,6 +756,47 @@ export async function checkCompleteCollaboratorBrowser({
             'rgb(37, 99, 235)'
         );
         evidence.portableCss = { defaultPopup };
+        evidence.neighborTargets = {};
+        let legacyFailure;
+        try {
+            await legacyLayout(true);
+            const legacyAction = await measureNeighbor('#adjacent-action');
+            const legacyInput = await measureNeighbor('#adjacent');
+            evidence.neighborTargets.legacy = {
+                action: legacyAction,
+                input: legacyInput,
+            };
+            await page.screenshot({
+                path: join(
+                    output,
+                    `complete-collaborators-${format}-legacy-overlap.png`
+                ),
+                fullPage: true,
+            });
+            assert.equal(legacyAction.visible, true);
+            assert.equal(legacyAction.disabled, false);
+            assert.equal(legacyAction.inert, false);
+            assert.equal(legacyAction.ariaHidden, false);
+            assert.equal(
+                legacyAction.hitPopup,
+                true,
+                'Original vertical fixture must reproduce the popup interception'
+            );
+            assert.throws(
+                () => assertCollaboratorNeighborTarget(legacyAction),
+                /overlaps the open popup/
+            );
+        } catch (error) {
+            legacyFailure = error;
+            throw error;
+        } finally {
+            try {
+                await legacyLayout(false);
+            } catch (error) {
+                evidence.neighborTargets.legacyRestoreError = error.message;
+                if (!legacyFailure) throw error;
+            }
+        }
         assert.equal(
             await adjacent.evaluate(
                 (node) => node.closest('[inert],[aria-hidden="true"]') === null
@@ -671,10 +813,22 @@ export async function checkCompleteCollaboratorBrowser({
             ),
             true
         );
+        evidence.neighborTargets.corrected = {
+            action: assertCollaboratorNeighborTarget(
+                await measureNeighbor('#adjacent-action')
+            ),
+            input: assertCollaboratorNeighborTarget(
+                await measureNeighbor('#adjacent')
+            ),
+        };
         await adjacentAction.click();
         assert.equal((await snapshot()).siblingActions, 1);
         await input().fill('Alpha');
         await page.getByRole('option').waitFor();
+        evidence.neighborTargets.inputAfterReopen =
+            assertCollaboratorNeighborTarget(
+                await measureNeighbor('#adjacent')
+            );
         await adjacent.click();
         assert.equal(
             await adjacent.evaluate((node) => node === document.activeElement),
@@ -1071,7 +1225,52 @@ export async function checkCompleteCollaboratorBrowser({
         );
         assert.equal(groups.length, 11);
         evidence.browserGroups = groups;
+    } catch (error) {
+        failure = error;
+        evidence.failure = {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+        };
+        try {
+            evidence.failure.state = await snapshot();
+        } catch (captureError) {
+            evidence.failure.stateCaptureError = captureError.message;
+        }
+        try {
+            evidence.failure.ax = await page.locator('body').ariaSnapshot();
+        } catch (captureError) {
+            evidence.failure.axCaptureError = captureError.message;
+        }
+        try {
+            evidence.failure.neighbors = {
+                action: await measureNeighbor('#adjacent-action'),
+                input: await measureNeighbor('#adjacent'),
+            };
+        } catch (captureError) {
+            evidence.failure.neighborCaptureError = captureError.message;
+        }
+        try {
+            const name = `complete-collaborators-${format}-before-cleanup-failed.png`;
+            await page.screenshot({
+                path: join(output, name),
+                fullPage: true,
+            });
+            evidence.failure.screenshot = name;
+        } catch (captureError) {
+            evidence.failure.screenshotCaptureError = captureError.message;
+        }
+        throw error;
     } finally {
-        await page.evaluate(() => window.__collaboratorFixture?.unmount());
+        try {
+            await page.evaluate(() => window.__collaboratorFixture?.unmount());
+            evidence.cleanup = { status: 'completed' };
+        } catch (cleanupError) {
+            evidence.cleanup = {
+                status: 'failed',
+                error: cleanupError.message,
+            };
+            if (!failure) throw cleanupError;
+        }
     }
 }

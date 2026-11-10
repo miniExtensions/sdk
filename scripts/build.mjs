@@ -166,6 +166,10 @@ for (const format of ['esm', 'cjs']) {
             `dist/${format}/react/${name}.css`
         );
     }
+    copyFileSync(
+        'src/react/html/html-description.css',
+        `dist/${format}/react/html-description.css`
+    );
 }
 
 // Prepack inherits this boundary: malformed output must never become a TGZ.

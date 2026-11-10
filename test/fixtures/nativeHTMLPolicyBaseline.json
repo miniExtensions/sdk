@@ -1,0 +1,74 @@
+{
+    "schemaVersion": 1,
+    "source": {
+        "hostHead": "787a2d23dded6c8fbd02132a2eb7ea1a44ee0075",
+        "htmlRendererBlob": "31b3466385350763639538aac1aaf5efa639e209",
+        "dompurify": "2.4.7",
+        "jsdom": "20.0.3"
+    },
+    "scope": "Actual unchanged native sanitizeHTML/hasRenderableHTMLContent, finite hermetic synthetic inputs; not SDK or hosted qualification",
+    "sanitizeCases": [
+        {
+            "input": "<h2 style=\"color:red\">Safe</h2><ul><li>Item</li></ul><script>bad()</script><a href=\"javascript:bad()\">Unsafe</a><img src=\"/owned.svg\" onerror=\"bad()\">",
+            "output": "<h2 style=\"color:red\">Safe</h2><ul><li>Item</li></ul><a>Unsafe</a><img src=\"/owned.svg\">"
+        },
+        {
+            "input": "<iframe src=\"https://example.invalid/embed\" sandbox=\"allow-top-navigation\" referrerpolicy=\"unsafe-url\" loading=\"eager\" srcdoc=\"bad\"></iframe>",
+            "output": "<iframe loading=\"lazy\" referrerpolicy=\"no-referrer\" sandbox=\"allow-downloads allow-forms allow-popups allow-presentation allow-same-origin allow-scripts\" src=\"https://example.invalid/embed\"></iframe>"
+        },
+        {
+            "input": "<iframe src=\"http://example.invalid/embed\"></iframe>",
+            "output": ""
+        },
+        {
+            "input": "<iframe src=\"//example.invalid/embed\"></iframe>",
+            "output": ""
+        },
+        {
+            "input": "<iframe src=\"/relative\"></iframe>",
+            "output": ""
+        },
+        {
+            "input": "<iframe src=\"data:text/html,bad\"></iframe>",
+            "output": ""
+        },
+        {
+            "input": "<iframe src=\"https://\"></iframe>",
+            "output": ""
+        },
+        {
+            "input": "<iframe src=\"javascript:bad()\"></iframe>",
+            "output": ""
+        },
+        {
+            "input": "<form><label>Label</label><input><select><option>Choice</option></select><textarea>Message</textarea><button>Submit</button></form>",
+            "output": "LabelChoiceMessageSubmit"
+        }
+    ],
+    "renderableCases": [
+        {
+            "input": "",
+            "output": false
+        },
+        {
+            "input": "<p><br></p>",
+            "output": false
+        },
+        {
+            "input": "<p>&nbsp; ​</p>",
+            "output": false
+        },
+        {
+            "input": "<p>Meaningful</p>",
+            "output": true
+        },
+        {
+            "input": "<hr>",
+            "output": true
+        },
+        {
+            "input": "<table><tr><td></td></tr></table>",
+            "output": true
+        }
+    ]
+}

@@ -5433,3 +5433,80 @@ the separate four-row default, strict composition buffer and empty-to-null
 commit contract.
 Native-compatible extraction does not silently alter those consumers or adopt
 Form/Portal Save, ownership, masking, append-only or attachment policies.
+
+## Complete HTML and collapsible descriptions
+
+Import the HTML presentation family through its opt-in entry and stylesheet:
+
+```tsx
+import { CompleteTruncatedDescription } from '@miniextensions/sdk/react/html';
+import '@miniextensions/sdk/react/html-description.css';
+
+export function DeliveryHelp() {
+    const html =
+        '<p><strong>Delivery notes</strong></p><p>Keep the entrance clear.</p>';
+    return (
+        <CompleteTruncatedDescription
+            html={html}
+            resetKey="delivery-help"
+            readMoreLabel="Leer más"
+            showLessLabel="Mostrar menos"
+        />
+    );
+}
+```
+
+`CompleteHTMLRenderer` accepts a required HTML string, optional `inline`, and
+native div props. Its forwarded ref exposes the rendered div. Block mode adds
+the native heading, list, table, quote, code and link presentation; `inline`
+omits that block presentation. Caller styles are retained except that
+`contain: paint`, `isolation: isolate` and `position: relative` are always
+enforced. Caller `overflow` wins; otherwise it is `auto`.
+Ordinary mounted style/class updates retain the current nodes when sanitized
+HTML is unchanged; replacing raw HTML still runs the same sanitizer.
+
+`CompleteQuillHTMLRenderer` accepts `html` and optional `className`. It adds
+scoped native Quill Snow presentation and forwards its ref to the inner
+sanitized editor div. After each HTML change, links receive `target="_blank"`
+and `rel="noopener noreferrer"`. Markdown-like input remains literal text;
+these components interpret HTML, not Markdown.
+
+`CompleteTruncatedDescription` accepts `html`, optional inner-renderer
+`className`, `resetKey`, `readMoreLabel` and `showLessLabel`. Labels default to
+`Read more` and `Show less`; supply translations directly. It has no forwarded
+ref. The collapsed viewport is exactly `4.5rem` with hidden overflow. Changing
+HTML or `resetKey` collapses the same-mounted disclosure. Measured content that
+fits needs no toggle; zero measured heights retain the previous overflow
+decision. Expanded content keeps its collapse action when layout shrinks.
+ResizeObserver, window resize and image load/error events update measurements.
+Clipped interactive descendants leave the tab sequence and accessibility tree;
+their exact prior attributes return when visible, expanded or cleaned up. The
+toggle is `type="button"` and retains its viewport's `aria-controls` identity.
+
+All three components use `sanitizeHTML(html)` with the native-compatible
+DOMPurify 2.4.7 policy. Direct `button`, `datalist`, `fieldset`, `form`, `input`,
+`label`, `legend`, `optgroup`, `option`, `output`, `select` and `textarea` tags
+are removed while safe text is retained. Iframes require an explicit valid
+HTTPS source. Accepted frames receive this fixed sandbox, plus
+`referrerpolicy="no-referrer"` and `loading="lazy"`; `srcdoc` is removed:
+
+```text
+allow-downloads allow-forms allow-popups allow-presentation allow-same-origin allow-scripts
+```
+
+`hasRenderableHTMLContent(html)` sanitizes first, ignores markup-only,
+whitespace, nonbreaking-space and native zero-width empty content, and retains
+meaningful text or supported audio, rule, iframe, image, table and video
+content. Both helpers take strings and are exported only from the opt-in HTML
+entry. The presentation components expose no canonical value writer or
+Form/Portal persistence policy.
+
+Node rendering uses a private, lazily created jsdom 20.0.3 parser window.
+Browser bundles must honor the package's `browser` mapping, which selects the
+private browser factory for both ESM and CommonJS and excludes the Node parser.
+That browser module imports without a document; actual sanitization requires a
+browser document. Neither factory reads or replaces an application's global
+DOMPurify instance, hooks or configuration. The generic React and headless
+entries do not import this HTML parser. The scoped stylesheet works without
+Tailwind or a global Quill stylesheet; the separate Markdown editor keeps its
+own API and styling.

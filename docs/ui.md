@@ -5080,3 +5080,33 @@ This export is separate from the existing literal-draft `PhoneNumberField`.
 It adds no country picker, phone formatting, editing, Clear or deferred commit
 behavior, and does not change those legacy APIs. Native Form/Grid ownership and
 backend persistence remain separate application responsibilities.
+
+## Complete readonly text
+
+`CompleteReadOnlyTextField` from `@miniextensions/sdk/react` owns the
+native-compatible literal text, automatic links, localized empty value and
+layout styles. Import `@miniextensions/sdk/react/complete-readonly-text.css`.
+The existing `LiteralText` primitive keeps its inert defaults and optional slots.
+
+```tsx
+<CompleteReadOnlyTextField
+    value={alreadyFormattedAndMaskedText}
+    language="en"
+    textSize="medium"
+    layout="cell-medium"
+/>
+```
+
+The required language uses the existing public `RuntimeLanguage` values. Omitted
+text size inherits surrounding typography. Omitted layout retains native
+`list-linked-record`/`cell-*` compatibility; explicit `default`, `linked-list`,
+`cell-short`, `cell-medium`, `cell-tall`, `cell-extra-tall` or `cell-fit-content`
+controls standalone wrapping/clipping. Cell heights remain caller-owned.
+The default preserves whitespace; fit-content retains native single-line
+clipping rather than expanding wrapped text. Empty values render their localized
+icon/paragraph directly. `'0'` and whitespace remain visible literal values.
+
+Links retain the native Linkify recognition and `_blank` policy. Only link
+clicks stop propagation; ordinary text still activates its containing row.
+The component never interprets HTML, mutates Linkify globals or performs I/O.
+Callers retain conversion, masking, access decisions and canonical values.

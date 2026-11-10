@@ -177,6 +177,7 @@ export function assertModuleFormats(root) {
                 './react/number.css',
                 './react/localized-numeric.css',
                 './react/complete-phone.css',
+                './react/complete-readonly-text.css',
                 './react/complete-duration.css',
                 './react/date.css',
                 './react/datetime.css',

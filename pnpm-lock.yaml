@@ -57,6 +57,9 @@ importers:
       happy-dom:
         specifier: 20.0.11
         version: 20.0.11
+      linkify-react:
+        specifier: 3.0.4
+        version: 3.0.4(linkifyjs@3.0.5)(react@18.3.1)
       playwright:
         specifier: 1.64.0
         version: 1.64.0
@@ -395,6 +398,12 @@ packages:
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  linkify-react@3.0.4:
+    resolution: {integrity: sha512-ar/fLlBw4/pbg5BmpH65dSXpGWhts/+BDV8tCdLN8Pd0P/vtHKjaEw9Gf4Za3Utpn5FhWlQyf57SWriPtoBHtw==}
+    peerDependencies:
+      linkifyjs: ^3.0.0
+      react: '>= 15.0.0'
 
   linkifyjs@3.0.5:
     resolution: {integrity: sha512-1Y9XQH65eQKA9p2xtk+zxvnTeQBG7rdAXSkUG97DmuI/Xhji9uaUzaWxRj6rf9YC0v8KKHkxav7tnLX82Sz5Fg==}
@@ -818,6 +827,11 @@ snapshots:
       istanbul-lib-report: 3.0.1
 
   js-tokens@4.0.0: {}
+
+  linkify-react@3.0.4(linkifyjs@3.0.5)(react@18.3.1):
+    dependencies:
+      linkifyjs: 3.0.5
+      react: 18.3.1
 
   linkifyjs@3.0.5: {}
 

@@ -1,3 +1,10 @@
+export {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+    type CompleteReadOnlyTextLanguage,
+    type CompleteReadOnlyTextSize,
+    type CompleteReadOnlyTextLayout,
+} from './CompleteReadOnlyTextField.js';
 import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,

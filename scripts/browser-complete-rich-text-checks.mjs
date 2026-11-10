@@ -27,6 +27,87 @@ export function completeRichTextZoomKeyboardReady() {
     return event.defaultPrevented;
 }
 
+// Fixture-only ordering observer for pinned prosemirror-view 1.33.1. Its target
+// focus handler queues a 20ms selection reconciliation before focusin bubbles to
+// the document. This later timer therefore observes completion of that earlier
+// callback; elapsed time or an initially equal selection alone is not readiness.
+// The exact installer is serialized into the consumer and exercised in preflight.
+export function installCompleteRichTextFocusObserver({
+    document,
+    getCurrentEditor,
+}) {
+    const reconciliationDelayMs = 20;
+    let generation = 0;
+    let phase = 'idle';
+    let owner = null;
+    let timer = null;
+    let ready = false;
+    let disposed = false;
+    const retire = (reason) => {
+        generation++;
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        owner = null;
+        ready = false;
+        phase = reason;
+    };
+    const isCurrent = (expected) => {
+        const current = getCurrentEditor();
+        return (
+            !disposed &&
+            current === expected.editor &&
+            current?.view === expected.view &&
+            !expected.view.isDestroyed &&
+            expected.view.dom.isConnected &&
+            document.activeElement === expected.view.dom
+        );
+    };
+    const reconcile = () => {
+        if (!disposed && owner && !isCurrent(owner)) retire('retired');
+    };
+    const onFocusIn = (event) => {
+        if (disposed) return;
+        const editor = getCurrentEditor();
+        const view = editor?.view;
+        if (!view || event.target !== view.dom || view.isDestroyed) {
+            if (owner) retire('outside-editor');
+            return;
+        }
+        retire('pending');
+        const admitted = { editor, view, generation };
+        owner = admitted;
+        timer = setTimeout(() => {
+            if (disposed || generation !== admitted.generation) return;
+            timer = null;
+            if (!isCurrent(admitted)) {
+                retire('retired');
+                return;
+            }
+            ready = true;
+            phase = 'ready';
+        }, reconciliationDelayMs);
+    };
+    const onFocusOut = (event) => {
+        if (owner && event.target === owner.view.dom) retire('focus-out');
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return {
+        reconcile,
+        snapshot() {
+            reconcile();
+            return { ready, phase, generation, reconciliationDelayMs };
+        },
+        dispose() {
+            if (disposed) return;
+            disposed = true;
+            retire('disposed');
+            document.removeEventListener('focusin', onFocusIn);
+            document.removeEventListener('focusout', onFocusOut);
+        },
+    };
+}
+
 // An owned, in-memory consumer of the installed packed public API. No saved
 // customer fixture, identity, provider, API transport or clipboard grant is used.
 export async function checkCompleteRichTextBrowser({
@@ -70,6 +151,8 @@ import {flushSync} from 'react-dom';
 import {CompleteRichTextEditor} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
 const editor=createRef(),writes=[],nativeEvents=[],handles=new Map(),observedEvents=new WeakMap();let nextHandle=0,current,update,clipboardStatus={state:'idle'},mounted=true;
+const focusObserver=(${installCompleteRichTextFocusObserver.toString()})({document,getCurrentEditor:()=>editor.current});
+function attachEditor(instance){editor.current=instance;focusObserver.reconcile();}
 const initial={value:'**Bold** and _italic_\\n\\n[ ] task',readOnly:false,owner:1,id:'rich-editor',label:'Synthetic Rich Text',ariaInvalid:false,clipboard:'**Pasted strong**'};
 function describeTarget(target){return target instanceof Element?{id:target.id||null,tag:target.tagName,contentEditable:target.getAttribute('contenteditable'),isContentEditable:target instanceof HTMLElement?target.isContentEditable:null}:null;}
 function nativeDocPosition(view,node,offset){if(!view||view.isDestroyed||!node||!view.dom.contains(node))return null;try{return view.posAtDOM(node,offset);}catch{return null;}}
@@ -78,7 +161,7 @@ function clipboardObservation(event){const data=event.type==='paste'?event.clipb
 function keyboardRuntime(){const handle=editor.current,view=handle?.view,input=view?.input;return{navigatorPlatform:navigator.platform,viewEditable:view?.editable??null,composing:view?.composing??null,input:input?{composing:input.composing??null,compositionEndedAt:input.compositionEndedAt??null,lastKeyCode:input.lastKeyCode??null,lastKeyCodeTime:input.lastKeyCodeTime??null}:null,selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,enabledExtensionNames:handle?.extensions?.extensions.map(extension=>extension.name)??[],pluginCount:view?.state.plugins.length??0,handleKeyDownPluginCount:view?.state.plugins.filter(plugin=>typeof plugin.props.handleKeyDown==='function').length??0,keymapCount:handle?.keymaps?.length??0};}
 function observeEventMicrotask(event,observed){const runtime=keyboardRuntime();observed.microtasks.push({eventPhase:event.eventPhase,defaultPrevented:event.defaultPrevented,runtime});if(event.eventPhase===Event.NONE){observed.defaultPreventedAfterDispatch=event.defaultPrevented;observed.observedAfterDispatch=true;observed.runtimeAfterDispatch=runtime;}}
 for(const type of ['keydown','beforeinput','paste','click']){
- document.addEventListener(type,event=>{const observed={type,trusted:event.isTrusted,key:event.key??null,inputType:event.inputType??null,ctrlKey:event.ctrlKey??null,metaKey:event.metaKey??null,shiftKey:event.shiftKey??null,altKey:event.altKey??null,keyCode:event.keyCode??null,code:event.code??null,which:event.which??null,isComposing:event.isComposing??null,timeStamp:event.timeStamp,target:describeTarget(event.target),activeElementAtCapture:describeTarget(document.activeElement),clipboard:clipboardObservation(event),eventPhaseAtCapture:event.eventPhase,defaultPreventedAtCapture:event.defaultPrevented,defaultPreventedAfterDispatch:null,observedAfterDispatch:false,runtimeAtCapture:keyboardRuntime(),runtimeAfterDispatch:null,bubble:null,microtasks:[]};observedEvents.set(event,observed);nativeEvents.push(observed);queueMicrotask(()=>observeEventMicrotask(event,observed));},true);
+ document.addEventListener(type,event=>{const view=editor.current?.view;const observed={type,trusted:event.isTrusted,key:event.key??null,inputType:event.inputType??null,ctrlKey:event.ctrlKey??null,metaKey:event.metaKey??null,shiftKey:event.shiftKey??null,altKey:event.altKey??null,keyCode:event.keyCode??null,code:event.code??null,which:event.which??null,isComposing:event.isComposing??null,timeStamp:event.timeStamp,target:describeTarget(event.target),editorOwner:current?.owner??null,withinCurrentEditor:!!view&&event.target instanceof Node&&view.dom.contains(event.target),activeElementAtCapture:describeTarget(document.activeElement),clipboard:clipboardObservation(event),eventPhaseAtCapture:event.eventPhase,defaultPreventedAtCapture:event.defaultPrevented,defaultPreventedAfterDispatch:null,observedAfterDispatch:false,runtimeAtCapture:keyboardRuntime(),runtimeAfterDispatch:null,bubble:null,microtasks:[]};observedEvents.set(event,observed);nativeEvents.push(observed);queueMicrotask(()=>observeEventMicrotask(event,observed));},true);
  document.addEventListener(type,event=>{const observed=observedEvents.get(event);if(!observed)return;observed.bubble={eventPhase:event.eventPhase,defaultPrevented:event.defaultPrevented,runtime:keyboardRuntime()};queueMicrotask(()=>observeEventMicrotask(event,observed));});
 }
 function captureHandle(){const handle=editor.current;if(handle&&!handles.has(handle))handles.set(handle,++nextHandle);return handle;}
@@ -86,15 +169,15 @@ function App(){
  const [state,setState]=useState(initial);current=state;update=next=>flushSync(()=>setState(old=>({...old,...next})));
  return h(React.Fragment,null,
   h('label',{id:'rich-label'},state.label),h('p',{id:'rich-help'},'Owned synthetic editor only'),
-  h(CompleteRichTextEditor,{ref:editor,value:state.value,onValueChange:value=>{writes.push({owner:state.owner,value});setState(old=>({...old,value}));},readOnly:state.readOnly,placeholder:'Write owned text',identity:'owned-record-'+state.owner,id:state.id,ariaLabelledBy:'rich-label',ariaDescribedBy:'rich-help',ariaInvalid:state.ariaInvalid,emptyContent:h('b',null,'No owned value')}),
+  h(CompleteRichTextEditor,{ref:attachEditor,value:state.value,onValueChange:value=>{writes.push({owner:state.owner,value});setState(old=>({...old,value}));},readOnly:state.readOnly,placeholder:'Write owned text',identity:'owned-record-'+state.owner,id:state.id,ariaLabelledBy:'rich-label',ariaDescribedBy:'rich-help',ariaInvalid:state.ariaInvalid,emptyContent:h('b',null,'No owned value')}),
   h('button',{type:'button',id:'copy-owned-clipboard',onClick:async()=>{clipboardStatus={state:'copying'};try{await navigator.clipboard.writeText(state.clipboard);clipboardStatus={state:'copied',value:state.clipboard};}catch(error){clipboardStatus={state:'failed',error:error.name+': '+error.message};}}},'Copy owned clipboard'),
   h('button',{type:'button',id:'blur-target'},'Leave editor'));
 }
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
 window.completeRichTextProbe={
  update:next=>update(next),
- snapshot:()=>{const handle=captureHandle(),view=handle?.view,dom=view?.dom,selection=window.getSelection();return{reactVersion:React.version,state:{...current},writes:[...writes],nativeEvents:[...nativeEvents],keyboardRuntime:keyboardRuntime(),clipboard:{...clipboardStatus},handleId:handle?handles.get(handle):null,views:[...handles].map(([instance,id])=>({id,destroyed:!instance.view||instance.view.isDestroyed})),docEnd:docEndPosition(view),selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,nativeSelection:selection?{text:selection.toString(),collapsed:selection.isCollapsed,anchorOffset:selection.anchorOffset,focusOffset:selection.focusOffset,anchorDocPosition:nativeDocPosition(view,selection.anchorNode,selection.anchorOffset),focusDocPosition:nativeDocPosition(view,selection.focusNode,selection.focusOffset)}:null,focused:!!dom&&(document.activeElement===dom||dom.contains(document.activeElement)),roots:document.querySelectorAll('.ProseMirror').length,dom:dom?{id:dom.id,html:dom.innerHTML,text:dom.textContent,editable:dom.contentEditable,label:dom.getAttribute('aria-labelledby'),description:dom.getAttribute('aria-describedby'),invalid:dom.getAttribute('aria-invalid')}:null,bodyPortals:[...document.body.children].filter(node=>node.tagName==='DIV').length};},
- unmount:()=>{if(mounted){captureHandle();mounted=false;flushSync(()=>app.unmount());}}
+ snapshot:()=>{const handle=captureHandle(),view=handle?.view,dom=view?.dom,selection=window.getSelection();return{reactVersion:React.version,state:{...current},writes:[...writes],nativeEvents:[...nativeEvents],keyboardRuntime:keyboardRuntime(),focusReadiness:focusObserver.snapshot(),clipboard:{...clipboardStatus},handleId:handle?handles.get(handle):null,views:[...handles].map(([instance,id])=>({id,destroyed:!instance.view||instance.view.isDestroyed})),docEnd:docEndPosition(view),selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,nativeSelection:selection?{text:selection.toString(),collapsed:selection.isCollapsed,anchorOffset:selection.anchorOffset,focusOffset:selection.focusOffset,anchorDocPosition:nativeDocPosition(view,selection.anchorNode,selection.anchorOffset),focusDocPosition:nativeDocPosition(view,selection.focusNode,selection.focusOffset)}:null,focused:!!dom&&(document.activeElement===dom||dom.contains(document.activeElement)),roots:document.querySelectorAll('.ProseMirror').length,dom:dom?{id:dom.id,html:dom.innerHTML,text:dom.textContent,editable:dom.contentEditable,label:dom.getAttribute('aria-labelledby'),description:dom.getAttribute('aria-describedby'),invalid:dom.getAttribute('aria-invalid')}:null,bodyPortals:[...document.body.children].filter(node=>node.tagName==='DIV').length};},
+ unmount:()=>{if(mounted){captureHandle();mounted=false;focusObserver.dispose();flushSync(()=>app.unmount());}}
 };
 `;
         const entry = join(directory, 'host.mjs');
@@ -273,6 +356,7 @@ window.completeRichTextProbe={
                 const selection = state.selection;
                 if (
                     !state.focused ||
+                    !state.focusReadiness.ready ||
                     !native ||
                     !selection ||
                     native.anchorDocPosition === null ||
@@ -317,6 +401,13 @@ window.completeRichTextProbe={
         await page.goto(origin);
         await waitEditor();
         const editor = page.locator('.ProseMirror');
+        const focusEditor = async () => {
+            await editor.focus();
+            await page.waitForFunction(
+                () =>
+                    window.completeRichTextProbe.snapshot().focusReadiness.ready
+            );
+        };
         let state = await snapshot();
         assert.equal(state.roots, 1);
         assert.equal(state.dom.editable, 'true');
@@ -327,7 +418,7 @@ window.completeRichTextProbe={
             false
         );
         assert.deepEqual(state.writes, []);
-        await editor.focus();
+        await focusEditor();
         await page.keyboard.press('ControlOrMeta+End');
         await page.waitForFunction(() => {
             const state = window.completeRichTextProbe.snapshot();
@@ -390,7 +481,7 @@ window.completeRichTextProbe={
 
         evidence.phase = 'keyboard-and-toolbar';
         await reset('Alpha word');
-        await editor.focus();
+        await focusEditor();
         await page.keyboard.press('ControlOrMeta+Home');
         for (let index = 0; index < 5; index++)
             await page.keyboard.press('Shift+ArrowRight');
@@ -486,6 +577,11 @@ window.completeRichTextProbe={
             'https://example.invalid/owned-code-only',
             async () => {
                 await code.click();
+                await page.waitForFunction(
+                    () =>
+                        window.completeRichTextProbe.snapshot().focusReadiness
+                            .ready
+                );
                 await page.keyboard.press('End');
             }
         );
@@ -521,7 +617,48 @@ window.completeRichTextProbe={
         state = await snapshot();
         assert.equal(state.handleId, readonlyHandle);
         assert.equal(state.dom.editable, 'false');
-        await editor.focus();
+        const beforeReadonlyPointer = state.nativeEvents.length;
+        await editor.click();
+        // Read-only checkboxes deliberately disable input pointer events. Click
+        // their owning presentation at the actual checkbox center, preserving
+        // native hit testing and locator actionability rather than forcing input.
+        const checkboxPresentation = checkbox.locator('..');
+        const checkboxBox = await checkbox.boundingBox();
+        const presentationBox = await checkboxPresentation.boundingBox();
+        assert(checkboxBox && presentationBox);
+        await checkboxPresentation.click({
+            position: {
+                x: checkboxBox.x + checkboxBox.width / 2 - presentationBox.x,
+                y: checkboxBox.y + checkboxBox.height / 2 - presentationBox.y,
+            },
+        });
+        assert.equal(await checkbox.isChecked(), true);
+        const readonlyPointer = await snapshot();
+        const readonlyClicks = readonlyPointer.nativeEvents
+            .slice(beforeReadonlyPointer)
+            .filter((event) => event.type === 'click');
+        assert.equal(readonlyClicks.length, 2);
+        assert(
+            readonlyClicks.every(
+                (event) =>
+                    event.trusted &&
+                    event.withinCurrentEditor &&
+                    event.editorOwner === state.state.owner
+            )
+        );
+        assert.equal(readonlyPointer.state.value, state.state.value);
+        assert.equal(readonlyPointer.writes.length, beforeReadonly);
+        evidence.readonlyPresentation = {
+            method: 'trusted editor and checkbox-presentation pointer clicks',
+            nativeFocusedInputAcceptance: false,
+            editorOwner: state.state.owner,
+            checked: true,
+            clicks: readonlyClicks.map((event) => ({
+                trusted: event.trusted,
+                withinCurrentEditor: event.withinCurrentEditor,
+                target: event.target,
+            })),
+        };
         await page.keyboard.press('ControlOrMeta+End');
         await page.keyboard.type('Denied readonly edit');
         assert.equal((await snapshot()).writes.length, beforeReadonly);

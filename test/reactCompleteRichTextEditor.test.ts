@@ -178,6 +178,157 @@ it('routes real DOM Mod-b and Mod-B through the replacement owner to formatting 
     }
 });
 
+it('models native end movement before and after the real delayed focus reconciliation', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '**Bold** and _italic_\n\n[ ] task',
+        })
+    );
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    const selection = f.document.getSelection();
+    assert(selection);
+    assert.equal(view.state.doc.lastChild?.isTextblock, true);
+    const docEnd = view.state.doc.content.size - 1;
+    const start = view.domAtPos(1);
+    const end = view.domAtPos(docEnd);
+    const initialDocument = view.state.doc.toJSON();
+    const dispatchDescriptor = Object.getOwnPropertyDescriptor(
+        f.document,
+        'dispatchEvent'
+    );
+    const dispatchEvent = f.document.dispatchEvent;
+    const deferredSelectionChanges: Event[] = [];
+    let holdSelectionChanges = false;
+    let intercepted = false;
+    let timersEnabled = false;
+    let focusListenerInstalled = false;
+    let nativeFocusEvents = 0;
+    const observeFocus = (event: Event) => {
+        if (event.target === view.dom) nativeFocusEvents++;
+    };
+    const cleanup = () => {
+        holdSelectionChanges = false;
+        deferredSelectionChanges.length = 0;
+        try {
+            if (intercepted) {
+                if (dispatchDescriptor)
+                    Object.defineProperty(
+                        f.document,
+                        'dispatchEvent',
+                        dispatchDescriptor
+                    );
+                else Reflect.deleteProperty(f.document, 'dispatchEvent');
+                intercepted = false;
+            }
+        } finally {
+            try {
+                if (focusListenerInstalled) {
+                    view.dom.removeEventListener('focus', observeFocus);
+                    focusListenerInstalled = false;
+                }
+            } finally {
+                if (timersEnabled) {
+                    t.mock.timers.reset();
+                    timersEnabled = false;
+                }
+            }
+        }
+    };
+    // Register before intercepting anything. The fixture already owns restoration
+    // of its window/global descriptors; finally below releases our changes first.
+    t.after(cleanup);
+    const nativePosition = () => {
+        assert(selection.anchorNode);
+        return view.posAtDOM(selection.anchorNode, selection.anchorOffset);
+    };
+    const releaseSelectionChanges = () => {
+        holdSelectionChanges = false;
+        for (const event of deferredSelectionChanges.splice(0))
+            dispatchEvent.call(f.document, event);
+    };
+    try {
+        // Seed the observed browser baseline without an editor transaction.
+        selection.collapse(start.node, start.offset);
+        assert.equal(nativePosition(), 1);
+        assert.equal(view.state.selection.from, 1);
+        assert.equal(view.hasFocus(), false);
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        timersEnabled = true;
+        view.dom.addEventListener('focus', observeFocus);
+        focusListenerInstalled = true;
+        await act(async () => {
+            // HTMLElement.focus is the actual DOM entry used by locator.focus;
+            // EditorView.focus would reconcile the DOM selection itself.
+            view.dom.focus();
+        });
+        assert.equal(nativeFocusEvents, 1);
+        assert.equal(f.document.activeElement, view.dom);
+        assert.equal(view.hasFocus(), true);
+
+        // HappyDOM emits selectionchange synchronously. Delay that notification
+        // only, modeling the browser event ordering under investigation. The PM
+        // observer, focus handler, selectionToDOM and editor remain unmodified.
+        Object.defineProperty(f.document, 'dispatchEvent', {
+            configurable: true,
+            writable: true,
+            value: (event: Event) => {
+                if (holdSelectionChanges && event.type === 'selectionchange') {
+                    deferredSelectionChanges.push(event);
+                    return true;
+                }
+                return dispatchEvent.call(f.document, event);
+            },
+        });
+        intercepted = true;
+        holdSelectionChanges = true;
+        await act(async () => selection.collapse(end.node, end.offset));
+        assert(deferredSelectionChanges.length > 0);
+        assert.equal(nativePosition(), docEnd);
+        assert.equal(view.state.selection.from, 1);
+        // prosemirror-view 1.33.1 handlers.focus schedules this exact 20ms
+        // reconciliation; neither the callback nor its selection policy is mocked.
+        await act(async () => t.mock.timers.tick(19));
+        assert.equal(nativePosition(), docEnd);
+        assert.equal(view.state.selection.from, 1);
+        await act(async () => t.mock.timers.tick(1));
+        assert.equal(
+            nativePosition(),
+            1,
+            'The actual PM 20ms focus callback must reproduce the early native move being restored'
+        );
+        assert.equal(view.state.selection.from, 1);
+        assert.deepEqual(writes, []);
+        await act(async () => releaseSelectionChanges());
+
+        // One end move after the actual reconciliation may now be admitted by
+        // the real selectionchange listener, with no synthetic PM command.
+        holdSelectionChanges = true;
+        await act(async () => selection.collapse(end.node, end.offset));
+        assert.equal(nativePosition(), docEnd);
+        assert.equal(view.state.selection.from, 1);
+        await act(async () => releaseSelectionChanges());
+        assert.equal(nativePosition(), docEnd);
+        assert.equal(view.state.selection.from, docEnd);
+        assert.equal(view.state.selection.to, docEnd);
+        await act(async () => t.mock.timers.tick(20));
+        assert.equal(nativePosition(), docEnd);
+        assert.equal(view.state.selection.from, docEnd);
+        assert.equal(view.state.selection.to, docEnd);
+        assert.equal(ref.current, editor);
+        assert.equal(editor.view, view);
+        assert.deepEqual(view.state.doc.toJSON(), initialDocument);
+        assert.deepEqual(writes, []);
+    } finally {
+        cleanup();
+    }
+});
+
 it('serializes a real checkbox transaction to the canonical stored checkbox syntax', async (t) => {
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();

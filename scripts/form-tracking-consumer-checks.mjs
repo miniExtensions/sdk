@@ -30,7 +30,7 @@ import {createRequire} from 'node:module';
 import React from 'react';
 const require=createRequire(import.meta.url),format=process.argv[2],mode=process.argv[3];
 let reads=0;
-Object.defineProperty(globalThis,'navigator',{configurable:true,value:{geolocation:{getCurrentPosition(){reads++;throw new Error('unexpected browser call');}}}});
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{userAgent:'synthetic-tracking-consumer',geolocation:{getCurrentPosition(){reads++;throw new Error('unexpected browser call');}}}});
 const forms=format==='esm'?await import('@miniextensions/sdk/forms'):require('@miniextensions/sdk/forms');
 const api=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
 const {renderToString}=await import('react-dom/server');

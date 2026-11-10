@@ -2411,3 +2411,10 @@ export {
     useFileSelection,
     type FileSelectionOptions,
 } from './useFileSelection.js';
+
+export {
+    CompletePortalChart,
+    type CompletePortalChartProps,
+    type PortalChartData,
+    type PortalChartRow,
+} from './CompletePortalChart.js';

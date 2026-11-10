@@ -116,7 +116,8 @@
                 "default": "./dist/cjs/react/html/index.js"
             }
         },
-        "./react/html-description.css": "./dist/esm/react/html-description.css"
+        "./react/html-description.css": "./dist/esm/react/html-description.css",
+        "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css"
     },
     "files": [
         "dist/esm",
@@ -175,7 +176,8 @@
         "moment": "2.31.0",
         "moment-duration-format": "2.3.2",
         "moment-timezone": "0.5.45",
-        "ua-parser-js": "1.0.39"
+        "ua-parser-js": "1.0.39",
+        "chart.js": "4.4.2"
     },
     "devDependencies": {
         "@types/dompurify": "2.4.0",
@@ -193,7 +195,8 @@
         "prettier": "3.6.2",
         "react": "18.3.1",
         "react-dom": "18.3.1",
-        "typescript": "5.9.3"
+        "typescript": "5.9.3",
+        "react-chartjs-2": "5.3.1"
     },
     "peerDependencies": {
         "react": "^18.3.1 || ^19.0.0"

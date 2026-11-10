@@ -78,7 +78,7 @@ type CanonicalTicket = { detached: boolean; deliver(value: Value): void };
 type Replay = () => void;
 type PhoneTextProps = Omit<
     InputHTMLAttributes<HTMLInputElement>,
-    'onChange'
+    'onChange' | 'defaultValue' | 'children'
 > & {
     onChange?: (event: ChangeEvent<HTMLInputElement> | string) => void;
     /** Private input-format hook; captured only while its actual ref is alive. */

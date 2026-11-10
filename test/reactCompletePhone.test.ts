@@ -89,6 +89,8 @@ async function fixture(
         enforceOwner: true,
         settle: true,
     };
+    // Snapshot empty-array assertions so Node assert does not narrow this live
+    // callback list to never[] across later asynchronous vendor delivery.
     const writes: Array<{
         value: string | undefined;
         target: string;
@@ -219,11 +221,12 @@ async function fixture(
             if (!event.defaultPrevented) {
                 // happy-dom does not perform the browser's default paste mutation.
                 // Apply that mutation, then let the real vendor parse/format it.
-                node.setRangeText(
-                    text,
-                    node.selectionStart ?? 0,
-                    node.selectionEnd ?? 0,
-                    'end'
+                const start = node.selectionStart ?? 0;
+                const end = node.selectionEnd ?? 0;
+                node.setRangeText(text, start, end);
+                node.setSelectionRange(
+                    start + text.length,
+                    start + text.length
                 );
                 node.dispatchEvent(
                     new window.InputEvent('input', {
@@ -353,7 +356,7 @@ it('country inference/default and metadata-only rerenders retain the real input/
         'help-current error-current'
     );
     assert.equal(input.getAttribute('aria-invalid'), 'true');
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
 });
 
 it('actual immediate vendor parsing supports malformed clearing, retry and International selection', async (t) => {
@@ -384,7 +387,7 @@ for (const country of [false, true])
                 : '  literal phone ext. 42  ';
             await f.edit(typed, 'insertFromPaste');
             assert.equal(input.value, typed);
-            assert.deepEqual(f.writes, []);
+            assert.deepEqual(f.writes.slice(), []);
             if (country)
                 assert.equal(
                     f.select().value,
@@ -398,7 +401,7 @@ for (const country of [false, true])
             assert.equal(f.input(), input);
             assert.equal(input.value, typed);
             assert.equal(input.selectionStart, 6);
-            assert.deepEqual(f.writes, []);
+            assert.deepEqual(f.writes.slice(), []);
             if (commit === 'Enter') {
                 const event = await f.key('Enter');
                 assert.equal(event.defaultPrevented, true);
@@ -441,7 +444,7 @@ it('deferred country Backspace leaves browser default editing intact and does no
         'Happy DOM has not performed the browser default deletion'
     );
     await f.edit(before.slice(0, -1), 'deleteContentBackward');
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     await f.blur();
     assert.equal(f.writes.length, 1);
     assert.equal(f.writes[0].value, '+1415555267');
@@ -460,7 +463,7 @@ it('non-phone deferred country text is refused locally and IME Enter does not se
     const composingEnter = await f.key('Enter', true);
     assert.equal(composingEnter.defaultPrevented, true);
     assert.equal(f.window.document.activeElement, f.input());
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     const enter = await f.key('Enter');
     assert.equal(enter.defaultPrevented, true);
     assert.equal(f.writes.length, 1);
@@ -474,7 +477,7 @@ it('country selection publishes immediately even while the input commit mode is 
         defaultCountry: 'GH',
     });
     assert.equal(f.select().value, 'GH');
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     await f.country('GB');
     assert.equal(f.select().value, 'GB');
     assert.equal(f.writes.length, 1);
@@ -591,7 +594,7 @@ for (const country of [false, true])
             await f.focus();
             const input = f.input();
             await f.edit('+44 (20) 7946-0958', 'insertFromPaste');
-            assert.deepEqual(f.writes, []);
+            assert.deepEqual(f.writes.slice(), []);
             f.state.current = admitted;
             await f.unmount();
             assert.equal(input.isConnected, false);
@@ -626,7 +629,7 @@ it('explicit no-settlement unmount drops the draft without invoking the host', a
     f.state.settle = false;
     await f.render();
     await f.unmount();
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     assert.equal(f.invocationCount(), 0);
 });
 
@@ -643,7 +646,7 @@ it('committed owner A→B→A and readonly/mode replacement cannot transfer a de
     await f.render();
     await f.focus();
     await f.blur();
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     assert.equal(f.invocationCount(), 0);
     await f.focus();
     await f.edit('discard on readonly');
@@ -654,7 +657,7 @@ it('committed owner A→B→A and readonly/mode replacement cannot transfer a de
     await f.render();
     await f.focus();
     await f.blur();
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     assert.equal(f.invocationCount(), 0);
     await f.focus();
     await f.edit('discard on country mode');
@@ -662,7 +665,7 @@ it('committed owner A→B→A and readonly/mode replacement cannot transfer a de
     await f.render();
     f.state.country = false;
     await f.render();
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     assert.equal(f.invocationCount(), 0);
     await f.focus();
     await f.edit('fresh current A');
@@ -678,7 +681,7 @@ it('a queued old vendor callback cannot publish into a new keyed owner even if b
     await act(async () => {
         f.dispatchEdit('+442079460958');
         assert.deepEqual(
-            f.writes,
+            f.writes.slice(),
             [],
             'the actual vendor continuation must still be queued for this case'
         );
@@ -687,7 +690,7 @@ it('a queued old vendor callback cannot publish into a new keyed owner even if b
         f.state.value = '+233201234567';
         f.publish();
     });
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     assert.equal(f.invocationCount(), 0);
     assert.equal(f.input().value, '+233 20 123 4567');
     await f.focus();
@@ -740,7 +743,7 @@ it('queued deferred typing→blur→Clear retains both native canonical actions 
     await f.focus();
     const input = f.input();
     await f.edit('+44 (20) 7946-0958');
-    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.writes.slice(), []);
     const clear = f.container.querySelector('button');
     assert.ok(clear);
     await act(async () => {

@@ -28,6 +28,8 @@ const frameHtml = `<!doctype html><meta name="viewport" content="width=device-wi
 <button id="invalid" type="button">Send null event</button>
 <button id="last" type="button">Last frame control</button>
 <script>
+window.__calendlyEscapeTrace={keys:[]};
+window.addEventListener('keydown',event=>{if(event.key==='Escape')window.__calendlyEscapeTrace.keys.push({observedAt:'child-window-bubble',trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,activeId:document.activeElement?.id??null});},{passive:true});
 const send=data=>parent.postMessage(data,'*');
 document.querySelector('#schedule').onclick=()=>send({event:'calendly.event_scheduled'});
 document.querySelector('#duplicate').onclick=()=>{send({event:'calendly.event_scheduled'});send({event:'calendly.event_scheduled'});};
@@ -45,6 +47,7 @@ export async function checkCompleteCalendlyBrowser({
         phase: 'build',
         results: [],
         focusChecks: [],
+        escapeChecks: [],
         pageErrors: [],
         unexpectedRequests: [],
         transport: {
@@ -85,6 +88,9 @@ const mode=new URLSearchParams(location.search).get('mode')||'normal';
 const owners={A:{},B:{}};
 const invalidUrls={http:'http://calendly.com/__sdk_fixture_only__/one',foreign:'https://attacker.invalid/calendly',malformed:'not a URL'};
 let writes=[],submits=0,messages=0,ports=0,capturedNode,capturedWindow,change;
+const escapeTrace={keys:[],cancels:[],closes:[]};
+window.addEventListener('keydown',event=>{if(event.key==='Escape')escapeTrace.keys.push({observedAt:'parent-window-capture',trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,targetTag:event.target?.tagName??null});},{capture:true,passive:true});
+for(const [name,key] of [['cancel','cancels'],['close','closes']])document.addEventListener(name,event=>{if(event.target?.classList?.contains('mx-sdk-calendly-dialog'))escapeTrace[key].push({observedAt:'parent-document-capture',trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,open:event.target.open,activeTag:document.activeElement?.tagName??null});},{capture:true,passive:true});
 const initial={mounted:true,owner:'A',url:invalidUrls[mode]||'https://calendly.com/__sdk_fixture_only__/one?keep=yes',email:'synthetic+booking@example.test',name:'Synthetic & 東京',enabled:true,booked:false,writer:'initial',title:mode==='french'?null:'Book synthetic',reenter:false,second:true,accent:'#0f766e',hover:'#0d9488',focus:'#14b8a6',reserved:'240px'};
 let observed=initial;
 window.addEventListener('message',()=>messages++);
@@ -101,7 +107,7 @@ function App(){
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.completeCalendlyProof={
- snapshot:()=>({react:React.version,writes:[...writes],submits,messages,ports,mounted:observed.mounted,owner:observed.owner,enabled:observed.enabled,booked:observed.booked,writer:observed.writer,title:observed.title,reenter:observed.reenter}),
+ snapshot:()=>({react:React.version,writes:[...writes],submits,messages,ports,mounted:observed.mounted,owner:observed.owner,enabled:observed.enabled,booked:observed.booked,writer:observed.writer,title:observed.title,reenter:observed.reenter,escape:{keys:[...escapeTrace.keys],cancels:[...escapeTrace.cancels],closes:[...escapeTrace.closes]}}),
  change:patch=>change(patch),
  capture(){capturedNode=document.querySelector('[data-fixture-widget="first"] iframe');capturedWindow=capturedNode?.contentWindow;},
  sameFrame:()=>capturedNode===document.querySelector('[data-fixture-widget="first"] iframe'),
@@ -434,6 +440,39 @@ window.completeCalendlyProof={
             await current.waitFor({ state: 'hidden' });
             await focusRestored();
             assert.deepEqual((await snapshot()).writes, []);
+            evidence.phase = 'parent-focused-escape';
+            current = await open();
+            const closeControl = current.getByRole('button', {
+                name: 'Close',
+                exact: true,
+            });
+            await closeControl.focus();
+            assert.equal(
+                await closeControl.evaluate(
+                    (node) => node.ownerDocument.activeElement === node
+                ),
+                true
+            );
+            const parentBefore = (await snapshot()).escape;
+            await page.keyboard.press('Escape');
+            await current.waitFor({ state: 'hidden' });
+            await focusRestored();
+            const parentAfter = (await snapshot()).escape;
+            evidence.escapeChecks.push({
+                mobile,
+                context: 'parent-close-control',
+                before: parentBefore,
+                after: parentAfter,
+                dismissed: true,
+            });
+            assert.equal(parentAfter.keys.length, parentBefore.keys.length + 1);
+            assert.equal(parentAfter.keys.at(-1).trusted, true);
+            assert.equal(
+                parentAfter.cancels.length,
+                parentBefore.cancels.length + 1
+            );
+            assert.deepEqual((await snapshot()).writes, []);
+            evidence.phase = 'child-focused-escape';
             current = await open();
             await current
                 .frameLocator('iframe')
@@ -442,7 +481,51 @@ window.completeCalendlyProof={
                     exact: true,
                 })
                 .focus();
+            const childBody = await current
+                .frameLocator('iframe')
+                .locator('body')
+                .elementHandle();
+            const dialogNode = await current.elementHandle();
+            assert(childBody && dialogNode);
+            const childState = async () => {
+                try {
+                    return await childBody.evaluate((node) => ({
+                        activeId: node.ownerDocument.activeElement?.id ?? null,
+                        hasFocus: node.ownerDocument.hasFocus(),
+                        traceReady: window.__calendlyEscapeTrace != null,
+                        keys: [...(window.__calendlyEscapeTrace?.keys ?? [])],
+                    }));
+                } catch {
+                    return { unavailable: 'child-context' };
+                }
+            };
+            const childBefore = await childState();
+            assert.equal(childBefore.activeId, 'first');
+            const childParentBefore = (await snapshot()).escape;
             await page.keyboard.press('Escape');
+            let dialogAfter;
+            try {
+                dialogAfter = await dialogNode.evaluate((node) => ({
+                    open: node.open,
+                    connected: node.isConnected,
+                    parentActiveIsFrame:
+                        node.ownerDocument.activeElement ===
+                        node.querySelector('iframe'),
+                }));
+            } catch {
+                dialogAfter = { unavailable: 'dialog-context' };
+            }
+            evidence.escapeChecks.push({
+                mobile,
+                context: 'cross-origin-child',
+                childBefore,
+                childAfter: await childState(),
+                parentBefore: childParentBefore,
+                parentAfter: (await snapshot()).escape,
+                dialog: dialogAfter,
+            });
+            // Retain the original failing oracle for this distinguishing run.
+            // Passive telemetry neither closes the frame nor bridges Escape.
             await current.waitFor({ state: 'hidden' });
             await focusRestored();
             assert.deepEqual((await snapshot()).writes, []);

@@ -25,6 +25,7 @@ export async function checkSearchGateBrowser({
         results: [],
         pageErrors: [],
         unexpectedRequests: [],
+        focusChecks: [],
         cleanup: {},
     });
     let directory, server, context, failure;
@@ -62,8 +63,8 @@ function App(){
   h('button',{type:'button',onClick:()=>setSecond(true)},'Open second gate'),
   h('button',{type:'button',onClick:()=>setMounted(false)},'Unmount gate'));
  return h(React.Fragment,null,
-  h('button',{type:'button',onClick:()=>setMounted(true)},'Open gate'),
-  h('button',{type:'button'},'Outside control'),
+  h('button',{type:'button','data-search-proof-control':'open-gate',onClick:()=>setMounted(true)},'Open gate'),
+  h('button',{type:'button','data-search-proof-control':'outside-control'},'Outside control'),
   mounted?h(PortalSearchGate,{searchPageField:field,title:'Search one',hasNoResults:noResults,getCurrentUrl(){urlReads++;return 'https://example.test/portal?keep=yes&search_fld_name=old#fragment';},onNavigate(url){navigations.push({url,recognized:hasSearchPageQueryParam({searchParams:new URL(url).searchParams,searchPageField:field})});},onClearSearch(){clears++;},headerActions:actions,accentColor:'#4f46e5',focusColor:'#6366f1'}):null,
   second?h(PortalSearchGate,{searchPageField:{fieldId:'fld_second',fieldName:'Second'},title:'Search two',getCurrentUrl:()=> 'https://example.test',onNavigate(url){navigations.push({url});},headerActions:h('button',{type:'button',onClick:()=>setSecond(false)},'Unmount second gate')}):null);
 }
@@ -221,23 +222,61 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 .click({ position: { x: 3, y: 3 } });
             assert.equal(await dialog.isVisible(), true);
             await input.focus();
+            const focusInside = async (target, direction, iteration) => {
+                // One synchronous checkpoint computes the original predicate
+                // first, then bounded facts; no extra wait or second oracle.
+                const observation = await target.evaluate((node) => {
+                    const doc = node.ownerDocument;
+                    const active = doc.activeElement;
+                    const inside = node.contains(active);
+                    return {
+                        inside,
+                        activeTag: [
+                            'BODY',
+                            'HTML',
+                            'INPUT',
+                            'BUTTON',
+                            'DIALOG',
+                        ].includes(active?.tagName)
+                            ? active.tagName
+                            : 'OTHER',
+                        activeIsBody: active === doc.body,
+                        activeIsDocumentElement: active === doc.documentElement,
+                        activeIsDialog: active === node,
+                        nearestDialogIsThis:
+                            active?.closest('dialog,[role="dialog"]') === node,
+                        hostControl:
+                            active?.getAttribute('data-search-proof-control') ??
+                            null,
+                        documentHasFocus: doc.hasFocus(),
+                        openDialogCount:
+                            doc.querySelectorAll('dialog[open]').length,
+                    };
+                });
+                evidence.focusChecks.push({
+                    mobile,
+                    direction,
+                    iteration,
+                    ...observation,
+                });
+                return observation.inside;
+            };
             for (let i = 0; i < 10; i++) {
                 await page.keyboard.press('Tab');
                 assert.equal(
-                    await dialog.evaluate((node) =>
-                        node.contains(node.ownerDocument.activeElement)
-                    ),
+                    await focusInside(dialog, 'forward', i),
                     true,
                     'native modal Tab must not reach outside controls'
                 );
             }
-            await page.keyboard.press('Shift+Tab');
-            assert.equal(
-                await dialog.evaluate((node) =>
-                    node.contains(node.ownerDocument.activeElement)
-                ),
-                true
-            );
+            for (let i = 0; i < 10; i++) {
+                await page.keyboard.press('Shift+Tab');
+                assert.equal(
+                    await focusInside(dialog, 'backward', i),
+                    true,
+                    'native modal Shift+Tab must not reach outside controls'
+                );
+            }
             const geometry = await dialog.evaluate((node) => {
                 const panel = node.querySelector('.mx-sdk-search-gate-panel');
                 const bounds = panel.getBoundingClientRect();
@@ -317,6 +356,18 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             );
             await page.keyboard.press('Escape');
             assert.equal(await second.isVisible(), true);
+            for (const direction of ['forward', 'backward']) {
+                for (let i = 0; i < 6; i++) {
+                    await page.keyboard.press(
+                        direction === 'forward' ? 'Tab' : 'Shift+Tab'
+                    );
+                    assert.equal(
+                        await focusInside(second, `second-${direction}`, i),
+                        true,
+                        'the active second gate owns its keyboard loop'
+                    );
+                }
+            }
             await second
                 .getByRole('button', {
                     name: 'Unmount second gate',

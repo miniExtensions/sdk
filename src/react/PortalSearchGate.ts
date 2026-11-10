@@ -5,6 +5,7 @@ import {
     useRef,
     type CSSProperties,
     type FormEvent,
+    type KeyboardEvent,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
@@ -34,6 +35,69 @@ type GateStyle = CSSProperties & {
     '--mx-sdk-search-focus'?: string;
     '--mx-sdk-search-reserved-inline-end'?: string;
 };
+
+// Preserve the native prompt's required Tab loop at both visible-control ends.
+// This does not identify the previous browser failure's focus destination.
+function containTab(event: KeyboardEvent<HTMLDialogElement>) {
+    if (event.key !== 'Tab' || event.defaultPrevented) return;
+    const dialog = event.currentTarget;
+    // Do not act as FocusLock or steal a nested/portalled dialog's keyboard.
+    if (
+        dialog.ownerDocument.activeElement?.closest(
+            'dialog,[role="dialog"]'
+        ) !== dialog
+    )
+        return;
+    const controls = [
+        ...dialog.querySelectorAll<HTMLElement>(
+            'a[href],area[href],button,input,select,textarea,summary,[tabindex]'
+        ),
+    ]
+        .filter((element) => {
+            if (
+                element.tabIndex < 0 ||
+                element.matches(':disabled,input[type="hidden"]')
+            )
+                return false;
+            for (
+                let node: HTMLElement | null = element;
+                node && node !== dialog;
+                node = node.parentElement
+            ) {
+                const style =
+                    node.ownerDocument.defaultView?.getComputedStyle(node);
+                if (
+                    node.hidden ||
+                    node.hasAttribute('inert') ||
+                    style?.display === 'none' ||
+                    style?.visibility === 'hidden' ||
+                    style?.visibility === 'collapse'
+                )
+                    return false;
+            }
+            return true;
+        })
+        .sort((a, b) => {
+            // Positive tabindex precedes the ordinary DOM-order zero cohort.
+            const priority = (node: HTMLElement) =>
+                node.tabIndex > 0 ? node.tabIndex : Infinity;
+            const left = priority(a);
+            const right = priority(b);
+            return left === right ? 0 : left - right;
+        });
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (!first || !last) {
+        event.preventDefault();
+        dialog.focus();
+    } else if (event.shiftKey && dialog.ownerDocument.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && dialog.ownerDocument.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
 
 /**
  * Complete blocking prompt. The native dialog owns modal focus/inertness; the
@@ -77,6 +141,7 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
             'aria-describedby': descriptionId,
             onCancel: (event: SyntheticEvent<HTMLDialogElement>) =>
                 event.preventDefault(),
+            onKeyDown: containTab,
         },
         h('div', {
             className: 'mx-sdk-search-gate-overlay',

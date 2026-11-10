@@ -4904,6 +4904,11 @@ engine.
 The browser shell uses `HTMLDialogElement.showModal`, as the SDK's existing
 attachment shell does, with no Close control and cancellation prevented. It
 requires modern native-dialog support. The browser owns modal focus/inertness;
+the SDK wraps its visible enabled controls at both Tab boundaries, including
+ordinary button/link decorations, and defers to an active nested dialog. This is
+not a programmatic FocusLock handler; browser modality still applies. Arbitrary
+editable/shadow/frame/disclosure header widgets still require their own qualified
+keyboard composition.
 CSS is not the access gate. Import and SSR never access DOM or mutate browser
 globals. The stylesheet is optional and scoped; without it the native dialog
 and real form remain usable. `inputId` is optional; generated IDs isolate

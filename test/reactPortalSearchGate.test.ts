@@ -204,6 +204,163 @@ it('uses actual raw input until explicit submit, then navigates once to the cano
     assert.equal(f.clears, 0);
 });
 
+it('wraps both Tab boundaries without submitting, preserving middle navigation and current enabled controls', async (t) => {
+    const f = await fixture(t, { hasNoResults: true });
+    await f.edit('term');
+    const buttons = () => [...f.container.querySelectorAll('button')];
+    const clear = buttons().find((node) => node.type === 'button');
+    assert.ok(clear);
+    const key = async (shiftKey = false, prevented = false) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        });
+        if (prevented) event.preventDefault();
+        await act(async () => {
+            f.window.document.activeElement?.dispatchEvent(event);
+        });
+        return event;
+    };
+    await act(async () => clear.focus());
+    assert.equal((await key()).defaultPrevented, true);
+    assert.equal(f.window.document.activeElement, f.input());
+    assert.equal((await key(true)).defaultPrevented, true);
+    assert.equal(f.window.document.activeElement, clear);
+    await key(false, true);
+    assert.equal(
+        f.window.document.activeElement,
+        clear,
+        'an already handled Tab is not overridden'
+    );
+    await act(async () => f.input().focus());
+    const enter = new f.window.KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => {
+        f.input().dispatchEvent(enter);
+    });
+    assert.equal(
+        enter.defaultPrevented,
+        false,
+        'native non-Tab keyboard behavior stays with the control/form'
+    );
+    assert.equal(
+        (await key()).defaultPrevented,
+        false,
+        'the browser owns middle navigation'
+    );
+    await f.update({ hasNoResults: false });
+    const submit = buttons().find((node) => node.type === 'submit');
+    assert.ok(submit);
+    await act(async () => submit.focus());
+    assert.equal((await key()).defaultPrevented, true);
+    assert.equal(f.window.document.activeElement, f.input());
+    await f.edit('');
+    assert.equal(submit.disabled, true);
+    assert.equal(
+        (await key()).defaultPrevented,
+        true,
+        'disabled submit is omitted from the single-input loop'
+    );
+    assert.equal(f.window.document.activeElement, f.input());
+    assert.deepEqual(f.navigations, []);
+    assert.equal(f.clears, 0);
+});
+
+it('Tab wrapping respects positive tab order and skips hidden or disabled header decorations', async (t) => {
+    const f = await fixture(t, {
+        hasNoResults: true,
+        headerActions: h(
+            'span',
+            null,
+            h('button', { type: 'button', tabIndex: 2 }, 'Priority decoration'),
+            h(
+                'button',
+                { type: 'button', disabled: true },
+                'Disabled decoration'
+            ),
+            h(
+                'span',
+                { hidden: true },
+                h('button', { type: 'button' }, 'Hidden decoration')
+            ),
+            h(
+                'span',
+                { style: { display: 'none' } },
+                h('button', { type: 'button' }, 'Absent decoration')
+            ),
+            h(
+                'span',
+                { style: { visibility: 'hidden' } },
+                h('button', { type: 'button' }, 'Invisible decoration')
+            )
+        ),
+    });
+    await f.edit('term');
+    const buttons = [...f.container.querySelectorAll('button')];
+    const first = buttons.find(
+        (node) => node.textContent === 'Priority decoration'
+    );
+    const last = buttons.at(-1);
+    assert.ok(first && last);
+    await act(async () => first.focus());
+    await act(async () => {
+        first.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Tab',
+                shiftKey: true,
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(f.window.document.activeElement, last);
+    await act(async () => {
+        last.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Tab',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(f.window.document.activeElement, first);
+    assert.deepEqual(f.navigations, []);
+});
+
+it('does not steal keyboard focus from a nested active dialog', async (t) => {
+    const f = await fixture(t, {
+        headerActions: h(
+            'div',
+            { role: 'dialog', 'aria-label': 'Nested decoration' },
+            h('button', { type: 'button' }, 'Nested control')
+        ),
+    });
+    const nested = [...f.container.querySelectorAll('button')].find(
+        (node) => node.textContent === 'Nested control'
+    );
+    assert.ok(nested);
+    await act(async () => nested.focus());
+    for (const shiftKey of [false, true]) {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            nested.dispatchEvent(event);
+        });
+        assert.equal(event.defaultPrevented, false);
+        assert.equal(f.window.document.activeElement, nested);
+    }
+    assert.deepEqual(f.navigations, []);
+});
+
 it('preserves native truthy description/nullish title-error policies and literal text', async (t) => {
     const f = await fixture(t, {
         title: '',

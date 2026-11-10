@@ -2,6 +2,16 @@ import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
 } from '../ui/borrowedPortalRenderScope.js';
+export {
+    CompletePhoneNumberField,
+    type CompletePhoneNumberFieldProps,
+    type CompletePhoneEditOwner,
+    type CompletePhoneCommit,
+} from './CompletePhoneNumberField.js';
+export {
+    CompleteReadOnlyPhoneNumberField,
+    type CompleteReadOnlyPhoneNumberFieldProps,
+} from './CompleteReadOnlyPhoneNumberField.js';
 export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
     RecoverableImage,

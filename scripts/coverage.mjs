@@ -1,14 +1,19 @@
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { readdir, readFile, rm, mkdir, copyFile } from 'node:fs/promises';
+import { readdir, readFile, rm, mkdir, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkCoverage } from './coverage-policy.mjs';
+import {
+    assertPhoneVendor,
+    phoneRuntimeFilter,
+} from './phone-vendor-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
 const output = 'dist/coverage-test';
 const mode = process.argv[2] ?? 'all';
+assertPhoneVendor(path.join(root, 'vendor/phone-number-input'));
 if (!['all', 'unit', 'component'].includes(mode)) {
     throw new Error('Expected all, unit, or component coverage.');
 }
@@ -34,6 +39,12 @@ run(require.resolve('typescript/bin/tsc'), [
     '--outDir',
     output,
 ]);
+// Preserve source-relative private imports in the isolated test output.
+await cp(
+    path.join(root, 'vendor/phone-number-input'),
+    path.join(root, output, 'vendor/phone-number-input'),
+    { recursive: true, filter: phoneRuntimeFilter }
+);
 const groups = { unit: [], component: [] };
 async function tests(directory, prefix = '') {
     const files = [];

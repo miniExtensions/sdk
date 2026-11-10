@@ -632,3 +632,44 @@ replacement, literal Currency symbols, disabled/empty display and mobile Clear.
 The receipt records archive bundle/CSS hashes, public callback counts, DOM and
 accessibility observations, screenshots, network errors and owned cleanup.
 Keyboard selection replacement is not clipboard-paste or native Form evidence.
+
+## Complete read-only Phone presentation
+
+`test/reactCompleteReadOnlyPhone.test.ts` uses the public React entry and actual
+component. Its synthetic source cases cover literal escaped text and `tel:`
+href, null/undefined/empty versus nonempty whitespace, localized empty text,
+updated values, `_blank`/`noreferrer`, stopped parent propagation and no network
+requests. The test prevents external telephone navigation at its boundary only
+after observing that the component did not cancel the default action.
+
+Normal `pnpm check:package` also runs
+`scripts/complete-readonly-phone-consumer-checks.mjs`. It installs the actual TGZ
+with React18.3.1 and19.2.0, using a fresh runtime process for each version.
+Public ESM/CommonJS exports, strict positive/negative declarations, stylesheet
+resolution, SSR/hydration, value/empty transitions, click semantics, an unchanged
+adjacent draft and remounts are checked through the installed component. Existing
+literal Phone Number and all other package checks remain registered.
+
+These are read-only component and package-boundary checks. They do not certify
+real telephone navigation, browser layout or screen readers, country-code
+editing, mobile Clear, deferred native Form/Grid ownership, backend Save or
+hosted persistence. The existing CI native-browser suite remains enabled and is
+not represented as coverage of this new component.
+
+## Complete Phone qualification boundaries
+
+The normal source component group discovers reactCompletePhone.test.ts and uses
+the actual frozen Phone vendor. The normal package check registers the complete
+Phone installed-TGZ matrix beside the retained read-only and legacy Phone groups.
+React18.3.1 and19.2.0 run in fresh processes for ESM/CommonJS, strict declarations,
+CSS, SSR/hydration, real editing, Clear, retirement and admitted unmount.
+The vendor guard verifies original/adapted hashes, closed relative runtime edges,
+metadata, licenses and the installed archive; third-party bytes remain frozen.
+The public ESM entry binds the actual consumer React peer before the lazy private
+CommonJS runtime initializes; private modules never dynamically require React.
+SSR selection checks serialized option attributes separately from real CSR
+selection. The deferred-unmount A→B→A case proves cleanup retirement, not an
+unestablished delayed vendor-class callback after a successor commit.
+These synthetic checks do not establish Android/OS IME, telephone navigation,
+visual layout, hosted authorization or native Form/Grid persistence. Android's
+existing formatter caret timer remains part of the private baseline.

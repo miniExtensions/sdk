@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
     copyFileSync,
+    cpSync,
     mkdirSync,
     readFileSync,
     rmSync,
@@ -17,12 +18,28 @@ import {
     moduleFormatReceiptPath,
 } from './module-format-checks.mjs';
 
+import {
+    assertPhoneVendor,
+    phoneRuntimeFilter,
+} from './phone-vendor-checks.mjs';
+
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
+assertPhoneVendor();
 
-for (const directory of ['dist/esm', 'dist/cjs']) {
+for (const directory of [
+    'dist/esm',
+    'dist/cjs',
+    'dist/vendor/phone-number-input',
+]) {
     rmSync(directory, { recursive: true, force: true });
 }
+
+// One frozen private CommonJS Phone closure is shared by both output formats.
+cpSync('vendor/phone-number-input', 'dist/vendor/phone-number-input', {
+    recursive: true,
+    filter: phoneRuntimeFilter,
+});
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
     const compile = (actualProject) => {
@@ -129,6 +146,7 @@ for (const format of ['esm', 'cjs']) {
         'text',
         'number',
         'localized-numeric',
+        'complete-phone',
         'complete-duration',
         'date',
         'datetime',

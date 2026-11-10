@@ -181,6 +181,7 @@ export function assertModuleFormats(root) {
                 './react/complete-clearable-text-input.css',
                 './react/complete-multiline.css',
                 './react/complete-duration.css',
+                './react/search-gate.css',
                 './react/date.css',
                 './react/datetime.css',
                 './react/duration.css',

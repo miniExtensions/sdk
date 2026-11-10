@@ -641,6 +641,7 @@ for (const name of [
     'complete-phone',
     'complete-readonly-text',
     'complete-duration',
+    'search-gate',
     'date',
     'datetime',
     'duration',

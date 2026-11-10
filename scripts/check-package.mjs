@@ -106,6 +106,7 @@ import { checkCompleteClearableInputReactMatrix } from './complete-clearable-inp
 import { checkCompleteMultilineReactMatrix } from './complete-multiline-consumer-checks.mjs';
 import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
 import { checkCompleteDurationReactMatrix } from './complete-duration-consumer-checks.mjs';
+import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -563,6 +564,8 @@ try {
         'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/complete-duration.css',
         'dist/cjs/react/complete-duration.css',
+        'dist/esm/react/search-gate.css',
+        'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-readonly-text.css',
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
@@ -3189,6 +3192,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(durationMatrix.versions.length, 2);
     assert.equal(durationMatrix.cleanup, 'completed');
+    const searchGateMatrix = checkSearchGateReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(searchGateMatrix.versions.length, 2);
+    assert.equal(searchGateMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
             consumerDirectory: temporaryDirectory,

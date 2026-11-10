@@ -50,6 +50,13 @@ export type {
 export { refreshPortalSummaryFields } from './summaryRefresh.js';
 export type { PortalSummaryRefreshOptions } from './summaryRefresh.js';
 
+export {
+    getSearchPageQueryKeys,
+    hasSearchPageQueryParam,
+    getSearchPageSubmissionUrl,
+} from './searchGate.js';
+export type { PortalSearchGateField } from './searchGate.js';
+
 export { createPortalInlineEditQueue } from './inlineEditQueue.js';
 export type {
     PortalInlineEditCell,

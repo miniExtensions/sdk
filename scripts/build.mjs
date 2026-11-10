@@ -151,6 +151,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-clearable-text-input',
         'complete-multiline',
         'complete-duration',
+        'search-gate',
         'date',
         'datetime',
         'duration',

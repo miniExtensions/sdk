@@ -17,7 +17,9 @@ native Chromium path for both React versions. Only synthetic prefill and callbac
 writers are used. External transport is intercepted/fulfilled from fixture bytes
 or aborted before provider contact; production never changes the supplied frame.
 
-Browser checks cover actual frame-origin/source messaging, keyboard/focus/Escape,
+Browser checks cover actual frame-origin/source messaging, keyboard/focus,
+parent-focused Escape, the isolated cross-origin child-key boundary and a real
+Shift+Tab path from that child back to Close followed by Escape dismissal,
 outside-pointer/Close, reopening, retirement, reentrant completion, multiple
 instances, geometry and theme/reserved space. Receipts distinguish controlled
 real-frame messages from constructed stale-Window negatives. Cleanup remains

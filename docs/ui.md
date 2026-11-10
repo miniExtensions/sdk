@@ -4082,10 +4082,14 @@ unless `frameTitle` is provided. Invalid URL precedes Booked. `enabled={false}`
 disables opening and retires the frame; native read-only caller fallback remains
 the host's responsibility.
 
-The private dialog initially focuses the supplied iframe, contains sequential
-keyboard traversal with iframe-aware boundaries, dismisses on Escape, Close or
-a pointer gesture beginning on the backdrop, and uses connected native close to
-restore focus. It retains 32rem maximum width and 80vh height. `accentColor`,
+The private dialog initially focuses the supplied iframe and contains sequential
+keyboard traversal with iframe-aware boundaries. Escape dismisses while focus is
+on a parent dialog control. Key events inside a cross-origin provider frame
+belong to that embedded document; the SDK does not bridge them or promise parent
+dismissal from iframe-focused Escape. Tab/Shift+Tab traversal exposes the parent
+Close control, where Escape or explicit Close dismisses. A completed backdrop
+click also dismisses. Connected native close restores focus.
+The dialog retains 32rem maximum width and 80vh height. `accentColor`,
 `hoverColor`, `focusColor`, `reservedInlineEndWidth` (desktop) and `zIndex` are presentation
 values, not authority. Styles are scoped and optional, with no global mutation.
 

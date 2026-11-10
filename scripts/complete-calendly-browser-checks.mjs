@@ -515,25 +515,83 @@ window.completeCalendlyProof={
             } catch {
                 dialogAfter = { unavailable: 'dialog-context' };
             }
+            const childAfter = await childState();
+            const childParentAfter = (await snapshot()).escape;
             evidence.escapeChecks.push({
                 mobile,
                 context: 'cross-origin-child',
                 childBefore,
-                childAfter: await childState(),
+                childAfter,
                 parentBefore: childParentBefore,
-                parentAfter: (await snapshot()).escape,
+                parentAfter: childParentAfter,
                 dialog: dialogAfter,
             });
-            // Retain the original failing oracle for this distinguishing run.
-            // Passive telemetry neither closes the frame nor bridges Escape.
+            // The embedded document owns this key: native Headless UI listens
+            // on its owner window, and no provider Escape bridge is supplied.
+            // Preserve that observed boundary rather than invent cooperation.
+            assert.equal(childBefore.hasFocus, true);
+            assert.equal(childBefore.traceReady, true);
+            assert.equal(childAfter.activeId, 'first');
+            assert.equal(childAfter.hasFocus, true);
+            assert.equal(childAfter.keys.length, childBefore.keys.length + 1);
+            assert.equal(childAfter.keys.at(-1).trusted, true);
+            assert.equal(childAfter.keys.at(-1).activeId, 'first');
+            assert.deepEqual(childParentAfter.keys, childParentBefore.keys);
+            assert.deepEqual(
+                childParentAfter.cancels,
+                childParentBefore.cancels
+            );
+            assert.deepEqual(dialogAfter, {
+                open: true,
+                connected: true,
+                parentActiveIsFrame: true,
+            });
+            assert.equal(await current.isVisible(), true);
+            assert.deepEqual((await snapshot()).writes, []);
+
+            // A real keyboard path must still reach the parent Close control.
+            // Escape there must dismiss, restore the trigger and never write.
+            evidence.phase = 'child-to-parent-keyboard-dismissal';
+            await page.keyboard.press('Shift+Tab');
+            await page.waitForFunction(() =>
+                document.activeElement?.matches('.mx-sdk-calendly-close')
+            );
+            assert.equal(
+                await current
+                    .getByRole('button', { name: 'Close', exact: true })
+                    .evaluate(
+                        (node) => node.ownerDocument.activeElement === node
+                    ),
+                true
+            );
+            const returnedParentBefore = (await snapshot()).escape;
+            await page.keyboard.press('Escape');
             await current.waitFor({ state: 'hidden' });
             await focusRestored();
+            const returnedParentAfter = (await snapshot()).escape;
+            assert.equal(
+                returnedParentAfter.keys.length,
+                returnedParentBefore.keys.length + 1
+            );
+            assert.equal(returnedParentAfter.keys.at(-1).trusted, true);
+            assert.equal(
+                returnedParentAfter.cancels.length,
+                returnedParentBefore.cancels.length + 1
+            );
+            evidence.escapeChecks.push({
+                mobile,
+                context: 'child-to-parent-keyboard-dismissal',
+                before: returnedParentBefore,
+                after: returnedParentAfter,
+                dismissed: true,
+            });
             assert.deepEqual((await snapshot()).writes, []);
+            assert.equal((await snapshot()).submits, 0);
             await open();
             await close();
             evidence.results.push({
                 mobile,
-                case: 'styled-geometry-keyboard-backdrop-escape-close',
+                case: 'styled-geometry-keyboard-backdrop-parent-escape-frame-boundary-close',
                 geometry,
                 themedTrigger,
                 paddingInlineEnd: mobile ? 16 : 240,

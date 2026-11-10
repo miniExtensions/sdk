@@ -266,7 +266,7 @@ export async function prepareHTMLDescriptionNativeFixtures({
             bundleSha256: hash(referenceCode),
             bundleInputs: referenceInputs,
             stylePolicy:
-                'Dedicated reference-only style-src self plus random nonce; no unsafe-inline or browser CSP bypass; candidate HTML and all other fixture policies unchanged',
+                'Dedicated reference-only style nonce plus the immutable vendor inline-SVG image primitive; no external image source, unsafe-inline or browser CSP bypass; candidate HTML and other fixture policies unchanged',
             scope: 'Real immutable public sibling editor plus candidate HTML; stylesheet coexistence, not a combined SDK or One product qualification',
         };
         allowed.set('/html-editor-reference.js', referenceCode);
@@ -278,7 +278,7 @@ export async function prepareHTMLDescriptionNativeFixtures({
         allowed.set(
             '/html-editor-reference.html',
             Buffer.from(
-                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${styleNonce}'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Real editor and HTML stylesheet coexistence</title><link rel="stylesheet" href="/html-editor-reference.css"><link rel="stylesheet" href="/html-editor-reference-fixture.css"></head><body><div id="root"></div><script type="module" src="/html-editor-reference.js"></script></body></html>`
+                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${styleNonce}'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Real editor and HTML stylesheet coexistence</title><link rel="stylesheet" href="/html-editor-reference.css"><link rel="stylesheet" href="/html-editor-reference-fixture.css"></head><body><div id="root"></div><script type="module" src="/html-editor-reference.js"></script></body></html>`
             )
         );
     }

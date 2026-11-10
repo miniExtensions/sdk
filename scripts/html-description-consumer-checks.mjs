@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
@@ -390,6 +391,9 @@ export const htmlDescriptionRichTextReference = Object.freeze({
     react: '18.3.1',
     publicEntry: '@miniextensions/sdk-rich-text-reference/react',
     publicCSS: '@miniextensions/sdk-rich-text-reference/react/rich-text.css',
+    // Exact1b vendor styles/editor.js inline list-handle SVG (488 bytes).
+    listMarkerSHA256:
+        '76ec0e09565a9db8104a232454385ece2e220e8274739c4e6e1acf0b9e765567',
 });
 
 /** CI-only standard package preparation. No fallback build or access route. */
@@ -1264,9 +1268,12 @@ function snapshot() {
         nonceMatches:node.nonce === styleNonce,hasSheet:!!node.sheet,
         ruleCount:node.sheet?.cssRules.length ?? null,
     }));
+    const listMarkerImages = dom ? [...dom.querySelectorAll('li')]
+        .map((node) => getComputedStyle(node,'::before').backgroundImage)
+        .filter((image) => image !== 'none') : [];
     return {...state,writes:[...state.writes],errors:[...state.errors],reactVersion:React.version,
         attached:attached(),sameDOM:savedDOM === dom,text:dom?.textContent ?? null,metrics:metrics(),
-        styleSheets,cspViolations:[...state.cspViolations]};
+        styleSheets,listMarkerImages,cspViolations:[...state.cspViolations]};
 }
 window.__nativeProbe = {snapshot};
 function EditorHolder() {
@@ -1334,6 +1341,19 @@ export async function checkHTMLDescriptionEditorStyleCoexistence({
         )
     );
     assert(before.styleSheets.some((style) => style.ruleCount > 0));
+    assert(before.listMarkerImages.length > 0);
+    for (const image of before.listMarkerImages) {
+        const match = image.match(
+            /^url\(["']?data:image\/svg\+xml;base64,([A-Za-z0-9+/=]+)["']?\)$/
+        );
+        assert(match, 'Reference list handle must retain its owned inline SVG');
+        assert.equal(
+            createHash('sha256')
+                .update(Buffer.from(match[1], 'base64'))
+                .digest('hex'),
+            htmlDescriptionRichTextReference.listMarkerSHA256
+        );
+    }
     for (const [name, value] of Object.entries(before.metrics))
         assert(value, 'Actual editor node missing: ' + name);
     assert.equal(before.metrics.link.color, 'rgb(18, 52, 86)');
@@ -1375,6 +1395,7 @@ export async function checkHTMLDescriptionEditorStyleCoexistence({
     );
     assert.deepEqual(after.errors, []);
     assert.deepEqual(after.cspViolations, []);
+    assert.deepEqual(after.listMarkerImages, before.listMarkerImages);
     assert(
         after.styleSheets.every((style) => style.nonceMatches && style.hasSheet)
     );

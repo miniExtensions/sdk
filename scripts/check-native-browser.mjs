@@ -28,6 +28,7 @@ import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
+import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1769,6 +1770,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeLocalizedNumeric,
+            output,
+        });
+        report.completeDuration = {};
+        await checkCompleteDurationBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeDuration,
             output,
         });
         report.radioInput = {};

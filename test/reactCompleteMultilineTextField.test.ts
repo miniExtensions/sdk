@@ -155,12 +155,11 @@ async function fixture(t: TestContext) {
         data: string
     ) => {
         await act(async () => {
-            textarea().dispatchEvent(
-                new window.CompositionEvent(type, {
-                    bubbles: true,
-                    data,
-                })
-            );
+            const event = new window.CompositionEvent(type, { bubbles: true });
+            // Happy DOM exposes the generic initializer for this constructor.
+            // Retain the browser event's data without widening library types.
+            Object.defineProperty(event, 'data', { value: data });
+            textarea().dispatchEvent(event);
         });
         unchangedEffects();
     };

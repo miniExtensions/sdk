@@ -108,6 +108,7 @@ import { checkHTMLDescriptionReactMatrix } from './html-description-consumer-che
 import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
 import { checkCompleteDurationReactMatrix } from './complete-duration-consumer-checks.mjs';
 import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
+import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -567,6 +568,8 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
+        'dist/esm/react/complete-calendly.css',
+        'dist/cjs/react/complete-calendly.css',
         'dist/esm/react/complete-readonly-text.css',
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
@@ -3210,6 +3213,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(searchGateMatrix.versions.length, 2);
     assert.equal(searchGateMatrix.cleanup, 'completed');
+    const calendlyWidgetMatrix = checkCompleteCalendlyReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(calendlyWidgetMatrix.versions.length, 2);
+    assert.equal(calendlyWidgetMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
             consumerDirectory: temporaryDirectory,

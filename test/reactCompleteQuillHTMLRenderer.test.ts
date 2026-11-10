@@ -89,3 +89,51 @@ it('forwards the actual sanitized editor div and retains Quill class placement',
     await dom.render(null);
     assert.equal(second.current, null);
 });
+
+it('keeps isolated links across presentation-only rerenders and sanitizes changed content', async (t) => {
+    const dom = await htmlPresentationFixture(t);
+    const html =
+        '<p><a href="#owned" target="_self" rel="opener">Owned</a></p>';
+    const ref = createRef<HTMLDivElement>();
+    await dom.render(
+        h(CompleteQuillHTMLRenderer, { html, className: 'first', ref })
+    );
+    const editor = ref.current;
+    assert.ok(editor);
+    const link = editor.querySelector('a');
+    assert.ok(link);
+    await dom.render(
+        h(CompleteQuillHTMLRenderer, { html, className: 'second', ref })
+    );
+    assert.equal(ref.current, editor);
+    assert.equal(editor.querySelector('a'), link);
+    assert.ok(editor.classList.contains('second'));
+    assert.equal(link.target, '_blank');
+    assert.equal(link.rel, 'noopener noreferrer');
+    // Equivalent raw attribute quoting has the same sanitized string, matching
+    // the native React 18 update boundary while still processing new raw HTML.
+    await dom.render(
+        h(CompleteQuillHTMLRenderer, {
+            html: html.replaceAll('"', "'"),
+            className: 'second',
+            ref,
+        })
+    );
+    assert.equal(editor.querySelector('a'), link);
+    assert.equal(link.target, '_blank');
+    assert.equal(link.rel, 'noopener noreferrer');
+    await dom.render(
+        h(CompleteQuillHTMLRenderer, {
+            html: '<p><a href="#replacement">Replacement</a></p>',
+            className: 'second',
+            ref,
+        })
+    );
+    const replacement = editor.querySelector('a');
+    assert.ok(replacement);
+    assert.notEqual(replacement, link);
+    assert.equal(replacement.textContent, 'Replacement');
+    assert.equal(replacement.target, '_blank');
+    assert.equal(replacement.rel, 'noopener noreferrer');
+    dom.unchangedEffects();
+});

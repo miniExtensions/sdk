@@ -642,6 +642,7 @@ for (const name of [
     'complete-readonly-text',
     'complete-duration',
     'search-gate',
+    'complete-calendly',
     'date',
     'datetime',
     'duration',

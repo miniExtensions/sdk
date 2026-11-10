@@ -1,4 +1,4 @@
-import { createElement, forwardRef, type HTMLProps } from 'react';
+import { createElement, forwardRef, useMemo, type HTMLProps } from 'react';
 import { sanitizeHTML } from './sanitizeHTML.js';
 
 export type CompleteHTMLRendererProps = HTMLProps<HTMLDivElement> & {
@@ -31,6 +31,11 @@ export const CompleteHTMLRenderer = forwardRef<
     CompleteHTMLRendererProps
 >(function CompleteHTMLRenderer(props, ref) {
     const { html, className, inline, style, ...restProps } = props;
+    // Retain React 18's sanitized-string update boundary under React 19's
+    // property-object comparison. Presentation-only renders keep live nodes
+    // and Quill's own link attributes; sanitization still runs on every render.
+    const sanitizedHTML = sanitizeHTML(html);
+    const content = useMemo(() => ({ __html: sanitizedHTML }), [sanitizedHTML]);
     return createElement('div', {
         ...restProps,
         className: `${!inline ? baseStyles : ''} ${className || ''} mx-sdk-html${inline ? '' : ' mx-sdk-html--block'}`,
@@ -42,6 +47,6 @@ export const CompleteHTMLRenderer = forwardRef<
             overflow: style?.overflow ?? 'auto',
             position: 'relative',
         },
-        dangerouslySetInnerHTML: { __html: sanitizeHTML(html) },
+        dangerouslySetInnerHTML: content,
     });
 });

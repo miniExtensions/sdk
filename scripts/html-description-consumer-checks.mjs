@@ -116,7 +116,7 @@ const directory = dirname(fileURLToPath(import.meta.url));
 ` +
     policySource +
     String.raw`
-let policyChecks = 0, hydrationGroups = 0, refGroups = 0;
+let policyChecks = 0, hydrationGroups = 0, refGroups = 0, stableHTMLGroups = 0;
 try {
     if (order === 'app-first') for (const name of packageNames) apis.push(await load(name,'/react/html'));
     assert.notEqual(apis[0].sanitizeHTML,apis[1].sanitizeHTML,'two installed public package instances must be observed');
@@ -145,13 +145,13 @@ try {
         const descriptors = keys.map((key) => Object.getOwnPropertyDescriptor(globalThis,key));
         let root,submits = 0,requests = 0;
         const htmlRef = React.createRef(),quillRef = React.createRef();
-        const model = {html:'<p>Initial</p>',quill:'<a href="#owned" target="_self" rel="opener">Owned</a>',description:'<p>Long help</p>'.repeat(8)};
+        const model = {html:'<p>Initial</p>',height:96,quill:'<a href="#owned" target="_self" rel="opener">Owned</a>',quillClass:'consumer',description:'<p>Long help</p>'.repeat(8)};
         const node = () => React.createElement('form',{onSubmit(event) {event.preventDefault();submits++;}},
             React.createElement(api.CompleteHTMLRenderer,{
                 ref:htmlRef,html:model.html,id:'html',role:'note',inline:false,
-                style:{height:96,overflow:'hidden',position:'fixed',contain:'none',isolation:'auto'},
+                style:{height:model.height,overflow:'hidden',position:'fixed',contain:'none',isolation:'auto'},
             }),
-            React.createElement(api.CompleteQuillHTMLRenderer,{ref:quillRef,html:model.quill,className:'consumer'}),
+            React.createElement(api.CompleteQuillHTMLRenderer,{ref:quillRef,html:model.quill,className:model.quillClass}),
             React.createElement(api.CompleteTruncatedDescription,{html:model.description,resetKey:'a'}),
             React.createElement('input',{'aria-label':'Adjacent',defaultValue:'Keep draft'}));
         const markup = renderToString(node());
@@ -174,6 +174,24 @@ try {
             assert.equal(htmlRef.current.style.overflow,'hidden');
             const link = quillRef.current.querySelector('a');
             assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
+            const paragraph = htmlRef.current.querySelector('p');
+            model.height = 128;model.quillClass = 'consumer-next';
+            await React.act(async () => root.render(node()));
+            assert.equal(htmlRef.current,before);assert.equal(htmlRef.current.style.height,'128px');
+            assert.equal(htmlRef.current.querySelector('p'),paragraph,
+                'same HTML and a style update must retain its actual content node');
+            assert.equal(quillRef.current.querySelector('a'),link,
+                'same HTML and a class update must retain the actual isolated link');
+            assert(quillRef.current.classList.contains('consumer-next'));
+            assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
+            const quotedHTML = model.quill.replaceAll('"', "'");
+            assert.equal(api.sanitizeHTML(quotedHTML),api.sanitizeHTML(model.quill));
+            model.quill = quotedHTML;
+            await React.act(async () => root.render(node()));
+            assert.equal(quillRef.current.querySelector('a'),link,
+                'equivalent sanitized content must retain the native string-equality boundary');
+            assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
+            stableHTMLGroups++;
             const adjacent = container.querySelector('input');adjacent.value = 'Retained draft';
             model.html = '<p>Updated</p>';model.quill = '**Literal** [Help](#owned)';
             await React.act(async () => root.render(node()));
@@ -244,7 +262,7 @@ try {
     assert.equal(hookCalls,hooksBeforeUI,'UI and browser-import checks must not use the foreign sanitizer');
     assert.equal(app.sanitize(appInput),appBaseline,'foreign hooks/config survive the complete consumer lifecycle');
     assert.equal(globalReads,0);assert.equal(globalWrites,0);
-    console.log(JSON.stringify({react:React.version,format,order,copies:2,policyChecks,hydrationGroups,refGroups,browserFormats,
+    console.log(JSON.stringify({react:React.version,format,order,copies:2,policyChecks,hydrationGroups,refGroups,stableHTMLGroups,browserFormats,
         globalReads,globalWrites,cleanup:'completed'}));
 } finally {
     if (originalPurifier) Object.defineProperty(globalThis,'DOMPurify',originalPurifier);
@@ -339,6 +357,7 @@ export function checkHTMLDescriptionReactMatrix({
                     assert.equal(result.policyChecks, 30);
                     assert.equal(result.hydrationGroups, 2);
                     assert.equal(result.refGroups, 6);
+                    assert.equal(result.stableHTMLGroups, 2);
                     assert.equal(
                         result.browserFormats,
                         order === 'app-first' ? 2 : 0
@@ -941,26 +960,208 @@ export async function checkHTMLDescriptionBrowser({ page, evidence }) {
         'short/markup-empty/whitespace descriptions with measurable layout need no disclosure'
     );
 
-    await reset({
-        html: '<p>Project diagram</p><p><img id="owned-image" alt="Owned diagram"></p>',
+    const ownedImageURL = new URL(htmlDescriptionBrowserImagePath, page.url())
+        .href;
+    assert.equal(new URL(ownedImageURL).origin, new URL(page.url()).origin);
+    // Persist diagnostics before any wait so a failed image observation retains
+    // its actual canonical source, transport result and cleanup disposition.
+    const ownedImageLoad = {
+        url: ownedImageURL,
+        requests: [],
+        responses: [],
+        requestFailures: [],
+        routeErrors: [],
+        before: null,
+        after: null,
+        final: null,
+        cleanup: {
+            released: false,
+            routeRemoved: false,
+            responseListenerRemoved: false,
+            failureListenerRemoved: false,
+            errors: [],
+        },
+    };
+    evidence.ownedImageLoad = ownedImageLoad;
+    let releaseImage;
+    const heldImage = new Promise((resolve) => {
+        releaseImage = resolve;
     });
-    await page.waitForFunction(() => !window.__nativeProbe.snapshot().toggle);
-    await page.locator('#owned-image').evaluate((node, path) => {
-        node.src = path;
-    }, htmlDescriptionBrowserImagePath);
-    await page.waitForFunction(() => {
-        const image = document.getElementById('owned-image');
-        return (
-            image?.complete &&
-            image.naturalHeight === 160 &&
-            !!window.__nativeProbe.snapshot().toggle
+    const imageRoutes = [];
+    const holdOwnedImage = (route) => {
+        const pending = (async () => {
+            try {
+                const request = route.request();
+                ownedImageLoad.requests.push({
+                    url: request.url(),
+                    method: request.method(),
+                    resourceType: request.resourceType(),
+                });
+                // Include actual route admission in the existing browser wait,
+                // rather than racing a DOM-only fit observation against CDP.
+                await page.evaluate(() => {
+                    window.__htmlFixture.ownedImageAdmitted = true;
+                });
+                await heldImage;
+                // Continue through the existing context-level origin guard and
+                // real owned server asset; never fulfill or synthesize an image.
+                await route.fallback();
+            } catch (error) {
+                ownedImageLoad.routeErrors.push(String(error));
+            }
+        })();
+        imageRoutes.push(pending);
+        return pending;
+    };
+    const recordImageResponse = (response) => {
+        if (response.url() !== ownedImageURL) return;
+        ownedImageLoad.responses.push({
+            url: response.url(),
+            status: response.status(),
+            contentType: response.headers()['content-type'] ?? null,
+        });
+    };
+    const recordImageFailure = (request) => {
+        if (request.url() !== ownedImageURL) return;
+        ownedImageLoad.requestFailures.push({
+            url: request.url(),
+            error: request.failure()?.errorText ?? null,
+        });
+    };
+    const readOwnedImage = () =>
+        page.evaluate(() => {
+            const image = document.getElementById('owned-image');
+            const state = window.__nativeProbe.snapshot();
+            const bounds = image?.getBoundingClientRect();
+            return {
+                image: image
+                    ? {
+                          src: image.getAttribute('src'),
+                          currentSrc: image.currentSrc,
+                          complete: image.complete,
+                          naturalWidth: image.naturalWidth,
+                          naturalHeight: image.naturalHeight,
+                          width: bounds.width,
+                          height: bounds.height,
+                      }
+                    : null,
+                viewport: state.viewport,
+                toggle: state.toggle,
+                requestAdmitted:
+                    window.__htmlFixture.ownedImageAdmitted === true,
+            };
+        });
+    let imageLayout;
+    await page.evaluate(() => {
+        window.__htmlFixture.ownedImageAdmitted = false;
+    });
+    await page.route(ownedImageURL, holdOwnedImage);
+    page.on('response', recordImageResponse);
+    page.on('requestfailed', recordImageFailure);
+    try {
+        await reset({
+            html: `<p>Project diagram</p><p><img id="owned-image" alt="Owned diagram" src="${htmlDescriptionBrowserImagePath}"></p>`,
+        });
+        ownedImageLoad.before = await readOwnedImage();
+        await page.waitForFunction(() => {
+            const image = document.getElementById('owned-image');
+            const state = window.__nativeProbe.snapshot();
+            return (
+                window.__htmlFixture.ownedImageAdmitted === true &&
+                image &&
+                !image.complete &&
+                image.naturalHeight === 0 &&
+                state.viewport.client > 0 &&
+                state.viewport.scroll <= state.viewport.client &&
+                !state.toggle
+            );
+        });
+        ownedImageLoad.before = await readOwnedImage();
+        assert.equal(
+            ownedImageLoad.before.image.src,
+            htmlDescriptionBrowserImagePath
         );
-    });
-    const imageLayout = (await flush()).viewport;
-    assert(imageLayout.scroll > imageLayout.client);
-    await check(
-        'one fixed same-origin owned image load remeasures actual overflow'
-    );
+        assert.equal(ownedImageLoad.before.image.naturalWidth, 0);
+        assert.equal(ownedImageLoad.responses.length, 0);
+        assert(
+            ownedImageLoad.requests.length > 0,
+            'The exact owned image request must be intercepted before release'
+        );
+        releaseImage();
+        ownedImageLoad.cleanup.released = true;
+        await page.waitForFunction(() => {
+            const image = document.getElementById('owned-image');
+            return (
+                image?.complete &&
+                image.naturalHeight === 160 &&
+                !!window.__nativeProbe.snapshot().toggle
+            );
+        });
+        ownedImageLoad.after = await readOwnedImage();
+        assert.equal(ownedImageLoad.after.image.currentSrc, ownedImageURL);
+        assert.equal(ownedImageLoad.after.image.naturalWidth, 80);
+        assert(ownedImageLoad.requests.length > 0);
+        assert(
+            ownedImageLoad.requests.every(
+                (request) =>
+                    request.url === ownedImageURL &&
+                    request.method === 'GET' &&
+                    request.resourceType === 'image'
+            )
+        );
+        assert(ownedImageLoad.responses.length > 0);
+        for (const response of ownedImageLoad.responses) {
+            assert.equal(response.status, 200);
+            assert.match(
+                response.contentType ?? '',
+                /^image\/svg\+xml(?:;|$)/i
+            );
+        }
+        assert.deepEqual(ownedImageLoad.requestFailures, []);
+        assert.deepEqual(ownedImageLoad.routeErrors, []);
+        imageLayout = (await flush()).viewport;
+        assert(imageLayout.scroll > imageLayout.client);
+        await check(
+            'one fixed same-origin owned image load remeasures actual overflow'
+        );
+    } catch (error) {
+        ownedImageLoad.error = String(error);
+        throw error;
+    } finally {
+        // A failed pre-load observation must not leave the real request held or
+        // remove the shared harness's context-level network guard.
+        releaseImage();
+        ownedImageLoad.cleanup.released = true;
+        try {
+            await page.unroute(ownedImageURL, holdOwnedImage);
+            ownedImageLoad.cleanup.routeRemoved = true;
+        } catch (error) {
+            ownedImageLoad.cleanup.errors.push(String(error));
+        } finally {
+            try {
+                // Settle admitted handlers and capture the final DOM while the
+                // exact-target transport diagnostics are still attached.
+                await Promise.all(imageRoutes);
+                ownedImageLoad.final = await readOwnedImage();
+            } catch (error) {
+                ownedImageLoad.cleanup.errors.push(String(error));
+            } finally {
+                page.off('response', recordImageResponse);
+                ownedImageLoad.cleanup.responseListenerRemoved = true;
+                page.off('requestfailed', recordImageFailure);
+                ownedImageLoad.cleanup.failureListenerRemoved = true;
+                try {
+                    await page.evaluate(() => {
+                        delete window.__htmlFixture.ownedImageAdmitted;
+                    });
+                    ownedImageLoad.cleanup.admissionMarkerRemoved = true;
+                } catch (error) {
+                    ownedImageLoad.cleanup.errors.push(String(error));
+                }
+            }
+        }
+    }
+    assert.deepEqual(ownedImageLoad.cleanup.errors, []);
 
     await reset({ html: '<p>' + 'wrapping '.repeat(25) + '</p>', width: 150 });
     await page.waitForFunction(() => !!window.__nativeProbe.snapshot().toggle);

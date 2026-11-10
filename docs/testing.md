@@ -1,5 +1,34 @@
 # Source test coverage
 
+## Complete Calendly widget
+
+`test/reactCompleteCalendlyWidget.test.ts` uses the actual widget, unchanged hook
+and iframe DOM. The 16 expanded native comparisons include eleven direct cases,
+three URL refusals and two named-dialog/focus cases. Resolved-prefill vectors do
+not prove native Redux/schema projection. Existing hook tests remain the direct
+retained-cancel authority proof; detached old DOM activation must not be described
+as invoking that removed handler. Additional controls cover retirement/ABA,
+same-frame writer/cosmetic changes, reentrant scheduling and multiple instances.
+
+`scripts/complete-calendly-consumer-checks.mjs` adds installed React 18/19
+ESM/CJS/types/CSS/SSR/hydration/DOM checks to the mandatory package harness.
+`scripts/complete-calendly-browser-checks.mjs` runs through the existing packed
+native Chromium path for both React versions. Only synthetic prefill and callback
+writers are used. External transport is intercepted/fulfilled from fixture bytes
+or aborted before provider contact; production never changes the supplied frame.
+
+Browser checks cover actual frame-origin/source messaging, keyboard/focus,
+parent-focused Escape, the isolated cross-origin child-key boundary and a real
+Shift+Tab path from that child back to Close followed by Escape dismissal,
+outside-pointer/Close, reopening, retirement, reentrant completion, multiple
+instances, geometry and theme/reserved space. Receipts distinguish controlled
+real-frame messages from constructed stale-Window negatives. Cleanup remains
+fail closed. No real booking, customer prefill transmission, calendar/Airtable
+fixture or hosted acceptance is established by these synthetic checks.
+
+Normal CI is the validation route while a local execution hold applies. Authored
+tests/source review are not executed proof; report exact heads/runs and results.
+
 ## Complete Portal search gate
 
 The additive Search gate source is covered by `test/portalSearchGate.test.ts`

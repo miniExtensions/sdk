@@ -31,6 +31,7 @@ import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
+import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
 import { assertBrowserInputs } from './package-checks.mjs';
 import {
     completeReadOnlyTextBrowserSource,
@@ -2060,6 +2061,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.searchGate,
+            output,
+        });
+        report.completeCalendly = {};
+        await checkCompleteCalendlyBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeCalendly,
             output,
         });
         report.radioInput = {};

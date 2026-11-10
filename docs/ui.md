@@ -4022,6 +4022,83 @@ The caller owns action eligibility, singleflight, authentication, source identit
 requests, errors and retry policy. This presentation does not create a Button
 model or acquire webhook authority. URL actions retain their native link owner.
 
+### Complete Calendly widget
+
+`CompleteCalendlyWidget` from `@miniextensions/sdk/react` owns the complete
+invalid-URL alert, Booked state, scheduling button and named dismissible dialog.
+Its optional scoped stylesheet is
+`@miniextensions/sdk/react/complete-calendly.css`. No native renderer, Tailwind
+build, app Modal or additional booking store is required.
+
+```tsx
+import { CompleteCalendlyWidget } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-calendly.css';
+
+export function Scheduler({
+    ownerKey,
+    booked,
+    onBooked,
+}: {
+    ownerKey: unknown;
+    booked: boolean | null;
+    onBooked(): void;
+}) {
+    return (
+        <CompleteCalendlyWidget
+            configuredUrl="https://calendly.com/your-team/your-event"
+            email={null}
+            name={null}
+            embedDomain="https://your-host.example"
+            ownerKey={ownerKey}
+            booked={booked === true}
+            schedulingTitle="Schedule"
+            onScheduled={onBooked}
+        />
+    );
+}
+```
+
+Exactly one existing `useCalendlyBooking` owns session/frame/message authority.
+The widget renders `session.frame` directly, preserving ref, key, security
+attributes and content window. The supplied generation key owns dialog lifetime;
+new session objects, current-writer echoes and cosmetic changes do not reopen it.
+Dismiss handlers capture that generation's cancel; cleanup only closes its native
+dialog, never a successor booking. No frame is rendered before explicit open.
+`embedDomain` is supplied, not read from browser location during render. Browser
+interaction requires `HTMLDialogElement.showModal`.
+
+Existing HTTPS validation, URL/prefill composition, exact source/origin/event
+checks, consume-before-callback and current-writer semantics are unchanged.
+Owner, composed URL, enabled or booked replacement retires the frame. Title,
+frame title, theme and same-owner callback replacement preserve it. Scheduling
+invokes the authorized callback once; it does not invent an optimistic Booked
+value. The host supplies canonical `booked` and permission-aware inputs.
+
+`schedulingTitle || labels.schedule || 'Schedule'` names trigger and dialog,
+preserving native custom-or-localized title selection. Optional `labels.booked`,
+`labels.invalidUrl` and `labels.close` retain default `✅ Booked`, the native HTTPS
+alert and `Close`. The independent iframe title remains `Schedule with Calendly`
+unless `frameTitle` is provided. Invalid URL precedes Booked. `enabled={false}`
+disables opening and retires the frame; native read-only caller fallback remains
+the host's responsibility.
+
+The private dialog initially focuses the supplied iframe and contains sequential
+keyboard traversal with iframe-aware boundaries. Escape dismisses while focus is
+on a parent dialog control. Key events inside a cross-origin provider frame
+belong to that embedded document; the SDK does not bridge them or promise parent
+dismissal from iframe-focused Escape. Tab/Shift+Tab traversal exposes the parent
+Close control, where Escape or explicit Close dismisses. A completed backdrop
+click also dismisses. Connected native close restores focus.
+The dialog retains 32rem maximum width and 80vh height. `accentColor`,
+`hoverColor`, `focusColor`, `reservedInlineEndWidth` (desktop) and `zIndex` are presentation
+values, not authority. Styles are scoped and optional, with no global mutation.
+
+Native adoption must keep current field-ID/schema/linked-value prefill projection
+and the native authorized writer, then replace its hook-plus-Modal assembly with
+this component. Do not keep another booking hook/state beside it. Form/Portal
+child wiring, pin/lock, messenger composition and hosted stored-value acceptance
+are separate host work. Synthetic messages are not provider booking evidence.
+
 ### Calendly frame lifecycle
 
 `composeCalendlyUrl` and `useCalendlyBooking` from `@miniextensions/sdk/react`

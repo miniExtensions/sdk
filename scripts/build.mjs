@@ -152,6 +152,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-multiline',
         'complete-duration',
         'search-gate',
+        'complete-calendly',
         'date',
         'datetime',
         'duration',

@@ -645,6 +645,7 @@ for (const name of [
     'complete-calendly',
     'complete-verification',
     'complete-portal-chart',
+    'complete-collaborators',
     'date',
     'datetime',
     'duration',

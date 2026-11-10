@@ -118,7 +118,8 @@
             }
         },
         "./react/html-description.css": "./dist/esm/react/html-description.css",
-        "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css"
+        "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
+        "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css"
     },
     "files": [
         "dist/esm",
@@ -145,7 +146,8 @@
         "README.md",
         "LICENSE",
         "THIRD_PARTY_NOTICES.md",
-        "docs/complete-rich-text.md"
+        "docs/complete-rich-text.md",
+        "docs/complete-collaborators.md"
     ],
     "engines": {
         "node": ">=22"
@@ -174,9 +176,11 @@
         "@emotion/unitless": "0.7.5",
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
+        "chart.js": "4.4.2",
         "copy-to-clipboard": "3.3.3",
         "dompurify": "2.4.7",
         "email-validator": "2.0.4",
+        "fuse.js": "6.6.2",
         "fuzzy-search": "3.2.1",
         "gemoji": "6.1.0",
         "hoist-non-react-statics": "3.3.2",
@@ -210,10 +214,10 @@
         "shallowequal": "1.1.0",
         "slugify": "1.6.6",
         "smooth-scroll-into-view-if-needed": "1.1.33",
-        "ua-parser-js": "1.0.39",
-        "chart.js": "4.4.2"
+        "ua-parser-js": "1.0.39"
     },
     "devDependencies": {
+        "@headlessui/react": "2.2.9",
         "@types/dompurify": "2.4.0",
         "@types/jsdom": "20.0.1",
         "@types/moment-duration-format": "2.2.6",
@@ -228,9 +232,9 @@
         "playwright": "1.64.0",
         "prettier": "3.6.2",
         "react": "18.3.1",
+        "react-chartjs-2": "5.3.1",
         "react-dom": "18.3.1",
-        "typescript": "5.9.3",
-        "react-chartjs-2": "5.3.1"
+        "typescript": "5.9.3"
     },
     "peerDependencies": {
         "react": "^18.3.1 || ^19.0.0",

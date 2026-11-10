@@ -5619,26 +5619,30 @@ override its scoped option colors; native input attributes, classes, styles,
 label/ARIA associations and forwarded input refs remain available.
 
 ```tsx
-import { CompleteAddressAutocomplete } from '@miniextensions/sdk/react';
+import {
+    CompleteAddressAutocomplete,
+    type AddressAutocompleteLifecycleProps,
+} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-address.css';
 
-<CompleteAddressAutocomplete
-    identity={{ session: sessionId, field: fieldId, readScope: readOwner }}
-    reads={authorizedAddressReads}
-    value={canonicalValue}
-    onChange={writeCanonicalValue}
-    id="shipping-address"
-    form="shipping-form"
-    aria-label="Shipping address"
-    initialMobile={false}
-    labels={{
-        clear: 'Clear',
-        loadingPredictions: 'Loading address suggestions',
-        loadingDetails: 'Loading selected address',
-        failed: 'Address suggestions could not be loaded. Keep typing or retry.',
-        retry: 'Try again',
-    }}
-/>;
+export function ShippingAddress(props: AddressAutocompleteLifecycleProps) {
+    return (
+        <CompleteAddressAutocomplete
+            {...props}
+            id="shipping-address"
+            form="shipping-form"
+            aria-label="Shipping address"
+            initialMobile={false}
+            labels={{
+                clear: 'Clear',
+                loadingPredictions: 'Loading address suggestions',
+                loadingDetails: 'Loading selected address',
+                failed: 'Address suggestions could not be loaded. Keep typing or retry.',
+                retry: 'Try again',
+            }}
+        />
+    );
+}
 ```
 
 Supply authorized `listPredictions(query, {signal})` and

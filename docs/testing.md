@@ -632,3 +632,26 @@ replacement, literal Currency symbols, disabled/empty display and mobile Clear.
 The receipt records archive bundle/CSS hashes, public callback counts, DOM and
 accessibility observations, screenshots, network errors and owned cleanup.
 Keyboard selection replacement is not clipboard-paste or native Form evidence.
+
+## Complete read-only Phone presentation
+
+`test/reactCompleteReadOnlyPhone.test.ts` uses the public React entry and actual
+component. Its synthetic source cases cover literal escaped text and `tel:`
+href, null/undefined/empty versus nonempty whitespace, localized empty text,
+updated values, `_blank`/`noreferrer`, stopped parent propagation and no network
+requests. The test prevents external telephone navigation at its boundary only
+after observing that the component did not cancel the default action.
+
+Normal `pnpm check:package` also runs
+`scripts/complete-readonly-phone-consumer-checks.mjs`. It installs the actual TGZ
+with React18.3.1 and19.2.0, using a fresh runtime process for each version.
+Public ESM/CommonJS exports, strict positive/negative declarations, stylesheet
+resolution, SSR/hydration, value/empty transitions, click semantics, an unchanged
+adjacent draft and remounts are checked through the installed component. Existing
+literal Phone Number and all other package checks remain registered.
+
+These are read-only component and package-boundary checks. They do not certify
+real telephone navigation, browser layout or screen readers, country-code
+editing, mobile Clear, deferred native Form/Grid ownership, backend Save or
+hosted persistence. The existing CI native-browser suite remains enabled and is
+not represented as coverage of this new component.

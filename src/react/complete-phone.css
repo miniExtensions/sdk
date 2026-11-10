@@ -1,0 +1,36 @@
+.mx-sdk-complete-phone-readonly {
+    position: relative;
+}
+
+.mx-sdk-complete-phone-link {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow: hidden;
+    color: #2563eb;
+    text-decoration: inherit;
+}
+
+.mx-sdk-complete-phone-link:hover {
+    color: #1d4ed8;
+}
+
+.mx-sdk-complete-phone-empty {
+    margin: 0;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: row;
+    align-items: center;
+    color: #6b7280;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+
+.mx-sdk-complete-phone-empty-icon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.25rem;
+    color: #9ca3af;
+}

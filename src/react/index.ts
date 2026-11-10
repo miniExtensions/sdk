@@ -2,6 +2,10 @@ import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
 } from '../ui/borrowedPortalRenderScope.js';
+export {
+    CompleteReadOnlyPhoneNumberField,
+    type CompleteReadOnlyPhoneNumberFieldProps,
+} from './CompleteReadOnlyPhoneNumberField.js';
 export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
     RecoverableImage,

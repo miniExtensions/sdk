@@ -4908,3 +4908,39 @@ credential control. Native numeric producers do not expose Text password masks;
 the application's separate login input retains its masking policy. A host with
 additional active renderer policies must qualify that cohort independently
 instead of assuming that the shared renderer-data type establishes equivalence.
+
+## Complete read-only Phone presentation
+
+The optional `@miniextensions/sdk/react` entry exports
+`CompleteReadOnlyPhoneNumberField` and
+`CompleteReadOnlyPhoneNumberFieldProps`. This complete presentation renders an
+existing saved telephone string as native link text and an unchanged `tel:`
+href, with `target="_blank"`, `rel="noreferrer"` and stopped parent click
+propagation. It does not parse, normalize, validate or resolve the value. The
+host supplies the localized empty message for null, undefined and empty string.
+Whitespace-only and malformed saved strings remain literal nonempty values.
+
+```tsx
+import { CompleteReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-phone.css';
+
+<CompleteReadOnlyPhoneNumberField
+    value={savedPhone}
+    emptyLabel={localizedNoValue}
+/>;
+```
+
+Optional `className` applies to the wrapper or empty-state paragraph, and
+`linkClassName` applies to the anchor. Hosts may retain existing cell/list layout classes;
+those layout-specific line clamps remain outside this standalone component.
+The SDK stylesheet supplies base wrapping and overflow behavior on its own.
+
+The stylesheet supplies the link and empty-state presentation without Tailwind,
+application aliases, injected native controls or another package dependency.
+The component owns no client, store, writer or network operation. It is SSR-safe;
+the browser or operating system owns the eventual telephone action.
+
+This export is separate from the existing literal-draft `PhoneNumberField`.
+It adds no country picker, phone formatting, editing, Clear or deferred commit
+behavior, and does not change those legacy APIs. Native Form/Grid ownership and
+backend persistence remain separate application responsibilities.

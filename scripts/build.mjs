@@ -153,7 +153,12 @@ for (const format of ['esm', 'cjs']) {
         'number',
         'localized-numeric',
         'complete-phone',
+        'complete-readonly-text',
+        'complete-clearable-text-input',
+        'complete-multiline',
         'complete-duration',
+        'search-gate',
+        'complete-calendly',
         'date',
         'datetime',
         'duration',
@@ -168,6 +173,10 @@ for (const format of ['esm', 'cjs']) {
             `dist/${format}/react/${name}.css`
         );
     }
+    copyFileSync(
+        'src/react/html/html-description.css',
+        `dist/${format}/react/html-description.css`
+    );
 }
 
 // Prepack inherits this boundary: malformed output must never become a TGZ.

@@ -95,12 +95,28 @@
         "./react/datetime.css": "./dist/esm/react/datetime.css",
         "./react/duration.css": "./dist/esm/react/duration.css",
         "./react/complete-duration.css": "./dist/esm/react/complete-duration.css",
+        "./react/search-gate.css": "./dist/esm/react/search-gate.css",
+        "./react/complete-calendly.css": "./dist/esm/react/complete-calendly.css",
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
         "./react/single-select.css": "./dist/esm/react/single-select.css",
         "./react/rich-text.css": "./dist/esm/react/rich-text.css",
-        "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css"
+        "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css",
+        "./react/complete-readonly-text.css": "./dist/esm/react/complete-readonly-text.css",
+        "./react/complete-clearable-text-input.css": "./dist/esm/react/complete-clearable-text-input.css",
+        "./react/complete-multiline.css": "./dist/esm/react/complete-multiline.css",
+        "./react/html": {
+            "import": {
+                "types": "./dist/esm/react/html/index.d.ts",
+                "default": "./dist/esm/react/html/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/html/index.d.ts",
+                "default": "./dist/cjs/react/html/index.js"
+            }
+        },
+        "./react/html-description.css": "./dist/esm/react/html-description.css"
     },
     "files": [
         "dist/esm",
@@ -157,10 +173,12 @@
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
         "copy-to-clipboard": "3.3.3",
+        "dompurify": "2.4.7",
         "email-validator": "2.0.4",
         "fuzzy-search": "3.2.1",
         "gemoji": "6.1.0",
         "hoist-non-react-statics": "3.3.2",
+        "jsdom": "20.0.3",
         "linkifyjs": "3.0.5",
         "lodash": "4.17.21",
         "markdown-it": "12.3.2",
@@ -193,6 +211,8 @@
         "ua-parser-js": "1.0.39"
     },
     "devDependencies": {
+        "@types/dompurify": "2.4.0",
+        "@types/jsdom": "20.0.1",
         "@types/moment-duration-format": "2.2.6",
         "@types/node": "22.20.5",
         "@types/react": "18.3.12",
@@ -201,6 +221,7 @@
         "c8": "11.0.0",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
+        "linkify-react": "3.0.4",
         "playwright": "1.64.0",
         "prettier": "3.6.2",
         "react": "18.3.1",
@@ -218,5 +239,9 @@
         "react-dom": {
             "optional": true
         }
+    },
+    "browser": {
+        "./dist/esm/react/html/htmlPurifier.js": "./dist/esm/react/html/htmlPurifier.browser.js",
+        "./dist/cjs/react/html/htmlPurifier.js": "./dist/cjs/react/html/htmlPurifier.browser.js"
     }
 }

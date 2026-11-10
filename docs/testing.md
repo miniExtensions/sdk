@@ -1,5 +1,62 @@
 # Source test coverage
 
+## Complete Calendly widget
+
+`test/reactCompleteCalendlyWidget.test.ts` uses the actual widget, unchanged hook
+and iframe DOM. The 16 expanded native comparisons include eleven direct cases,
+three URL refusals and two named-dialog/focus cases. Resolved-prefill vectors do
+not prove native Redux/schema projection. Existing hook tests remain the direct
+retained-cancel authority proof; detached old DOM activation must not be described
+as invoking that removed handler. Additional controls cover retirement/ABA,
+same-frame writer/cosmetic changes, reentrant scheduling and multiple instances.
+
+`scripts/complete-calendly-consumer-checks.mjs` adds installed React 18/19
+ESM/CJS/types/CSS/SSR/hydration/DOM checks to the mandatory package harness.
+`scripts/complete-calendly-browser-checks.mjs` runs through the existing packed
+native Chromium path for both React versions. Only synthetic prefill and callback
+writers are used. External transport is intercepted/fulfilled from fixture bytes
+or aborted before provider contact; production never changes the supplied frame.
+
+Browser checks cover actual frame-origin/source messaging, keyboard/focus,
+parent-focused Escape, the isolated cross-origin child-key boundary and a real
+Shift+Tab path from that child back to Close followed by Escape dismissal,
+outside-pointer/Close, reopening, retirement, reentrant completion, multiple
+instances, geometry and theme/reserved space. Receipts distinguish controlled
+real-frame messages from constructed stale-Window negatives. Cleanup remains
+fail closed. No real booking, customer prefill transmission, calendar/Airtable
+fixture or hosted acceptance is established by these synthetic checks.
+
+Normal CI is the validation route while a local execution hold applies. Authored
+tests/source review are not executed proof; report exact heads/runs and results.
+
+## Complete Portal search gate
+
+The additive Search gate source is covered by `test/portalSearchGate.test.ts`
+and `test/reactPortalSearchGate.test.ts`: exact name/ID URL aliases, encoding and
+fragments; empty/custom/default copy; raw drafts; no-results/error transitions;
+valid and refused submit; non-submit Clear; metadata replacement; unique
+associations; StrictMode, SSR and unmount. They use the real public helpers,
+component and TextInput, not mocked SDK output. Happy-dom cancellation/DOM checks
+do not prove browser focus trapping or native maker composition.
+
+`scripts/search-gate-consumer-checks.mjs` is registered in the normal package
+check. It installs the packed artifact with React18.3.1 and19.2.0, checks ESM/CJS
+and positive/negative declarations, no-CSS SSR, actual hydration/DOM behavior,
+CSS resolution and controlled URL callbacks. `scripts/search-gate-browser-checks.mjs`
+is registered in the existing native-browser path: styled public SDK import,
+trusted Enter/Tab/Shift+Tab/Escape/backdrop/clear, initial/restored focus,
+simultaneous dialogs, rerender/unmount and wide/narrow geometry. It blocks
+non-fixture requests and retains synthetic screenshots/hashes/cleanup receipts.
+No source/package/browser execution is implied merely by this registration.
+
+Later native adoption requires the actual SearchPage wrapper/PortalView assembly
+to preserve no-query and loaded-zero-result gating, configured metadata refusal,
+and toolbar/settings/Intercom portal composition. Parent view/header/settings
+and shared Modal owners remain independent. Existing five `search-page-*`
+hosted scenarios are affected-flow inputs, not passes from component tests.
+During source preparation's process hold, all these tests remain UNRUN; no
+profile, resource, coverage or CI gate is weakened.
+
 ## Form Save response identity
 
 `test/formSaveIdentity.test.ts` exercises the actual client and Form controller
@@ -673,3 +730,112 @@ unestablished delayed vendor-class callback after a successor commit.
 These synthetic checks do not establish Android/OS IME, telephone navigation,
 visual layout, hosted authorization or native Form/Grid persistence. Android's
 existing formatter caret timer remains part of the private baseline.
+
+Complete readonly-text qualification includes real `linkify-react` 3.0.4
+differential source tests against the SDK-owned `linkifyjs` 3.0.5 renderer,
+React 18/19 packed ESM/CommonJS/type/SSR/DOM consumers and standalone Chromium
+layout/link checks. The oracle is development-only so headless consumers retain
+the existing React-optional contract. Native Form/Portal/Formula adoption and
+interactive hosted evidence remain separate from SDK package proof.
+
+## Complete shared clearable input qualification
+
+The complete clearable input has two distinct evidence boundaries. Source
+component tests compare the public components with the frozen native shared
+lifecycle, including original cleanup versus current blur callbacks,
+autocomplete asymmetry, IME, settled/dirty drafts, mode mounts and Clear event
+ordering. Simulated DOM focus events do not certify trusted browser ordering
+or native Form/Portal authority.
+
+Cold installed-package consumers must use the actual public ESM/CommonJS,
+strict declarations, styles and React 18/19 SSR/hydration paths. Keep a stable
+explicit mobile snapshot through hydration. Current-device hint/iPad controls
+must initialize their browser realm before importing UAParser; its IIFE binds
+the window at module initialization. Replacing a global after a server-first
+cached import is not a device-policy oracle.
+
+The existing packed Chromium harness supplies trusted pointer/focus/Clear
+and portable CSS evidence with its existing CSP, archive/input provenance,
+network refusal, browser/server ownership and cleanup. Native Cell rollback,
+queue/current-owner, Email and URL/overlay assembly remain separate host
+checks. Neither a frozen oracle nor a synthetic Save response establishes
+provider persistence, and extraction must not repair a pre-existing owner
+lifecycle by silently changing cleanup or Clear semantics.
+
+## Complete plain multiline qualification
+
+Keep the complete native-compatible multiline field separate from the legacy
+strict SDK multiline controller. Source comparisons use a frozen mechanical
+native presentation with the actual `TextareaInput` primitive, preserving
+selection-effect timing, raw limits, literal intermediate React changes and
+string clearing. Simulated composition and user-event UTF-16 paste observations
+are not OS IME or provider-persistence evidence.
+
+Cold installed-package checks exercise the actual public ESM/CommonJS exports,
+strict React 18/19 declarations, scoped CSS and SSR/hydration. The existing
+packed Chromium owner supplies real focus, selection, text/paste/resize and
+three-to-thirty-row geometry evidence with its unchanged archive/input checks,
+CSP, no-network policy and cleanup. Synthetic composition events remain labeled
+as such. Preserve the original strict controller and textarea suites unchanged.
+
+Native integration must retain the actual Form callback owner fence and qualify
+real Form and Portal-child callers with exact canonical strings, adjacent-field
+non-effects and explicit Save transport assertions. A frozen leaf oracle does
+not establish retained callback authority, authentication, backend handling or
+hosted persistence. Outstanding held hosted witnesses remain separate.
+
+## Complete HTML description qualification
+
+The source suites `reactCompleteHTMLRenderer.test.ts`,
+`reactCompleteQuillHTMLRenderer.test.ts` and
+`reactCompleteTruncatedDescription.test.ts` use the real opt-in public HTML
+entry. They retain the native sanitizer, iframe and Form-control policy,
+literal Markdown-like HTML text, actual div refs, containment/style precedence,
+Quill link effects, localized disclosure, content/identity resets and exact
+clipped-attribute restoration. SDK components and sanitization remain real;
+geometry and observer notifications are controlled at the external DOM
+boundary. The source fixture disables CSS/JavaScript-file and iframe loading
+and rejects fetch. Listener-removal checks observe actual DOM registrations;
+simulated layout does not establish browser paint, trusted Tab traversal or
+image-network behavior.
+
+`test/fixtures/nativeHTMLPolicyBaseline.json` records nine exact sanitizer outputs
+and six renderability decisions captured from the actual unchanged native
+helpers with DOMPurify 2.4.7 and jsdom 20.0.3. The source comparison preserves
+every recorded string, including attribute order. A separate renderability
+matrix covers empty, entity/zero-width, literal and media content. Real foreign
+DOMPurify hooks and configuration provide isolation controls; an SDK-generated
+expected value is not a native compatibility oracle.
+
+The registered installed-package matrix uses the actual archive in two
+independent package copies. Eight fresh profiles combine React 18.3.1/19.2.0,
+ESM/CommonJS and application-first/SDK-first import order. Assertions cover
+strict declarations, stylesheet/public-entry resolution, private factory and
+global-hook isolation, document-free SSR, hydration identity, callback-ref
+retirement and browser-map bundles that exclude jsdom and Node built-ins. The
+generic React entry is checked separately for accidental parser loading.
+Presentation-only style/class rerenders retain actual content nodes and Quill
+link isolation in both React versions. Equivalent raw quoting with identical
+sanitized output preserves the native string-equality boundary; changed content
+still replaces the sanitized subtree.
+
+The existing native Chromium owner registers twelve HTML description groups
+for actual public components and packaged CSS: sanitizer isolation, native
+props/refs, containment, literal/link effects, scoped block/Snow styles,
+4.5rem geometry, responsive expansion, localized/reset disclosures, trusted
+Tab clipping/restoration, fitting content, image remeasurement and cleanup.
+The fixed same-origin owned image is the explicit resource exception; other
+unexpected network remains refused. Existing CSP, archive-member byte checks,
+bundle-input provenance and page/context/browser/server cleanup remain active.
+
+A separate CI-only React 18.3.1 check installs an immutable public
+`CompleteRichTextEditor` reference. It observes the attached real editor's
+metrics, value and writes before and after adding the HTML stylesheet and
+toggling descriptions, then checks an ordinary fresh editor change. This is
+stylesheet/runtime coexistence evidence for that composition, not full editor,
+combined SDK or native Form/Portal qualification.
+
+These sections describe registered assertions. The new HTML source, package
+and browser runtime checks remain pending qualification; native baseline
+execution alone is not an SDK pass. Hosted authorization, provider frames,
+backend persistence and independent host workflow acceptance remain separate.

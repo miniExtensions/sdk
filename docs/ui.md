@@ -4022,6 +4022,83 @@ The caller owns action eligibility, singleflight, authentication, source identit
 requests, errors and retry policy. This presentation does not create a Button
 model or acquire webhook authority. URL actions retain their native link owner.
 
+### Complete Calendly widget
+
+`CompleteCalendlyWidget` from `@miniextensions/sdk/react` owns the complete
+invalid-URL alert, Booked state, scheduling button and named dismissible dialog.
+Its optional scoped stylesheet is
+`@miniextensions/sdk/react/complete-calendly.css`. No native renderer, Tailwind
+build, app Modal or additional booking store is required.
+
+```tsx
+import { CompleteCalendlyWidget } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-calendly.css';
+
+export function Scheduler({
+    ownerKey,
+    booked,
+    onBooked,
+}: {
+    ownerKey: unknown;
+    booked: boolean | null;
+    onBooked(): void;
+}) {
+    return (
+        <CompleteCalendlyWidget
+            configuredUrl="https://calendly.com/your-team/your-event"
+            email={null}
+            name={null}
+            embedDomain="https://your-host.example"
+            ownerKey={ownerKey}
+            booked={booked === true}
+            schedulingTitle="Schedule"
+            onScheduled={onBooked}
+        />
+    );
+}
+```
+
+Exactly one existing `useCalendlyBooking` owns session/frame/message authority.
+The widget renders `session.frame` directly, preserving ref, key, security
+attributes and content window. The supplied generation key owns dialog lifetime;
+new session objects, current-writer echoes and cosmetic changes do not reopen it.
+Dismiss handlers capture that generation's cancel; cleanup only closes its native
+dialog, never a successor booking. No frame is rendered before explicit open.
+`embedDomain` is supplied, not read from browser location during render. Browser
+interaction requires `HTMLDialogElement.showModal`.
+
+Existing HTTPS validation, URL/prefill composition, exact source/origin/event
+checks, consume-before-callback and current-writer semantics are unchanged.
+Owner, composed URL, enabled or booked replacement retires the frame. Title,
+frame title, theme and same-owner callback replacement preserve it. Scheduling
+invokes the authorized callback once; it does not invent an optimistic Booked
+value. The host supplies canonical `booked` and permission-aware inputs.
+
+`schedulingTitle || labels.schedule || 'Schedule'` names trigger and dialog,
+preserving native custom-or-localized title selection. Optional `labels.booked`,
+`labels.invalidUrl` and `labels.close` retain default `✅ Booked`, the native HTTPS
+alert and `Close`. The independent iframe title remains `Schedule with Calendly`
+unless `frameTitle` is provided. Invalid URL precedes Booked. `enabled={false}`
+disables opening and retires the frame; native read-only caller fallback remains
+the host's responsibility.
+
+The private dialog initially focuses the supplied iframe and contains sequential
+keyboard traversal with iframe-aware boundaries. Escape dismisses while focus is
+on a parent dialog control. Key events inside a cross-origin provider frame
+belong to that embedded document; the SDK does not bridge them or promise parent
+dismissal from iframe-focused Escape. Tab/Shift+Tab traversal exposes the parent
+Close control, where Escape or explicit Close dismisses. A completed backdrop
+click also dismisses. Connected native close restores focus.
+The dialog retains 32rem maximum width and 80vh height. `accentColor`,
+`hoverColor`, `focusColor`, `reservedInlineEndWidth` (desktop) and `zIndex` are presentation
+values, not authority. Styles are scoped and optional, with no global mutation.
+
+Native adoption must keep current field-ID/schema/linked-value prefill projection
+and the native authorized writer, then replace its hook-plus-Modal assembly with
+this component. Do not keep another booking hook/state beside it. Form/Portal
+child wiring, pin/lock, messenger composition and hosted stored-value acceptance
+are separate host work. Synthetic messages are not provider booking evidence.
+
 ### Calendly frame lifecycle
 
 `composeCalendlyUrl` and `useCalendlyBooking` from `@miniextensions/sdk/react`
@@ -4826,6 +4903,120 @@ the same accepted visible detail/schema policy as cells. Headers preserve accept
 order even with zero rows; no first-row values or cached records are consulted.
 Explicit empty, missing or null detail projections expose no columns.
 
+## Complete Portal search gate
+
+`PortalSearchGate` from `@miniextensions/sdk/react` renders the complete blocking
+search prompt, not a Portal list-search textbox or a renderer slot. It owns the
+dialog, input, description, local raw draft/error state and Continue/Search Again/
+Clear controls. It does not load records, qualify configured metadata, grant
+access, change a session or submit a Form.
+
+```tsx
+import { PortalSearchGate } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/search-gate.css';
+
+// Application-owned navigation, matching the native Clear policy.
+function clearSearchParameters() {
+    const url = new URL(window.location.href);
+    const keys: string[] = [];
+    url.searchParams.forEach((_value, key) => keys.push(key));
+    for (const key of keys) {
+        if (key.startsWith('search_')) url.searchParams.delete(key);
+    }
+    window.location.href = url.toString();
+}
+
+// The application has already decided that its qualified Portal needs the gate.
+<PortalSearchGate
+    searchPageField={{ fieldId: 'fld_name', fieldName: 'Customer name' }}
+    title="Find your records"
+    description="Enter {fieldName} to continue."
+    hasNoResults={false}
+    getCurrentUrl={() => window.location.href}
+    onNavigate={(url) => {
+        window.location.href = url;
+    }}
+    onClearSearch={clearSearchParameters}
+/>;
+```
+
+`getCurrentUrl` and `onNavigate` run only on explicit valid submission, in that
+order; neither is called by import, render, mount, metadata changes or unmount.
+The example deliberately preserves full navigation. External consumers may
+capture the URL instead. The component never assigns location or fetches a
+candidate. `onClearSearch` is a host effect, not navigation inside the SDK. The
+native Portal callback removes all `search_*` parameters; this remains native
+because it also owns screen selection and URL policy outside this field.
+
+The exact pure helpers are public from `@miniextensions/sdk/portals`:
+`getSearchPageQueryKeys`, `hasSearchPageQueryParam`,
+`getSearchPageSubmissionUrl`, and `PortalSearchGateField`. Recognition accepts
+either nonblank `search_<fieldName>` or `search_<fieldId>`. Submission deletes
+the configured-ID alias and writes the trimmed term to the exact field-name
+key, preserving other parameters, path and fragment through URL/URLSearchParams.
+An invalid absolute URL still throws, like the native helper; no fallback or
+retry is introduced. Helpers do not establish metadata validity or access.
+
+| Native-compatible input/transition | Complete SDK behavior                                          |
+| ---------------------------------- | -------------------------------------------------------------- |
+| Description truthy                 | Replace every literal `{fieldName}` occurrence.                |
+| Description absent/empty           | Use the existing English default prompt.                       |
+| Error/title nullish                | Existing default; configured empty text remains empty.         |
+| New mount                          | Empty raw draft, never a URL prefill.                          |
+| Field/copy/hasNoResults rerender   | Preserve raw draft, including whitespace.                      |
+| Blank/whitespace submit            | Disabled/refused; no URL read or callback.                     |
+| Explicit valid submit              | Hide local error, trim only for URL, call navigation once.     |
+| `hasNoResults` becomes true        | Show error; typing does not hide it.                           |
+| Submit/Clear while flag stays true | Hide local error; Search Again/Clear labels remain.            |
+| Clear                              | Empty draft/error, then call host callback once; never submit. |
+| Unmount                            | Close local dialog; no navigation, Clear or record effect.     |
+
+`usePortalSearchGate` and `PortalSearchGateOptions` expose the same local state
+coordination for an explicitly custom presentation. The complete component
+already uses that hook: a native wrapper must not keep another draft/error copy.
+The labels retain the current native English defaults; configured description,
+title and no-results message are plain escaped text, not HTML or a new language
+engine.
+
+The browser shell uses `HTMLDialogElement.showModal`, as the SDK's existing
+attachment shell does, with no Close control and cancellation prevented. It
+requires modern native-dialog support. The browser owns modal focus/inertness;
+the SDK wraps its visible enabled controls at both Tab boundaries, including
+ordinary button/link decorations, and defers to an active nested dialog. This is
+not a programmatic FocusLock handler; browser modality still applies. Arbitrary
+editable/shadow/frame/disclosure header widgets still require their own qualified
+keyboard composition.
+CSS is not the access gate. Import and SSR never access DOM or mutate browser
+globals. The stylesheet is optional and scoped; without it the native dialog
+and real form remain usable. `inputId` is optional; generated IDs isolate
+simultaneous instances. `ariaLabel` can supply a dialog name. A visually blank
+configured title keeps its empty heading but gets a fallback accessible Search
+name; described input errors and generated IDs are explicit accessibility
+additions, not a claim about the old native markup.
+
+`accentColor`/`focusColor` and `reservedInlineEndWidth` are container-local
+theme/layout inputs. A future native wrapper can pass `var(--theme-600)` and
+`var(--theme-500)`, plus its Intercom reserved width, without importing application
+contexts. `headerActions` is optional decoration, not a prompt renderer or read
+authority. `panelTestId`/`overlayTestId` permit existing native test associations.
+
+**Native adoption remains separate.** Native `SearchPage` must retain Next title,
+admin/settings integration, current location assignment and Clear; `PortalView`
+retains metadata qualification and no-query/zero-result gate admission. Its
+compatibility helper exports can re-export these SDK helpers. Do not change
+PortalView or shared Modal merely to install the new UI. Native Headless UI
+currently composes document-level toolbar/settings/Intercom portals; a native
+`showModal` top layer cannot preserve those exceptions through `zIndex` alone.
+Controls passed in `headerActions` and their popup destinations need an actual
+native composition decision and browser proof before adoption. The SDK's
+`zIndex` styles its element, not an escape from browser modal/inert semantics.
+
+Source tests, packed React18/19 ESM/CJS/types/SSR/hydration consumers and installed
+styled Chromium proofs are authored/registered separately. They are synthetic
+SDK checks, not executed evidence or native Portal/record/hosted acceptance.
+Native thin-wrapper and configured parent admission tests, plus the existing
+five search-page E2E flows, remain required after safe host integration.
+
 ## Complete native-compatible Duration field
 
 `CompleteDurationField` from `@miniextensions/sdk/react` is the complete
@@ -5080,3 +5271,242 @@ This export is separate from the existing literal-draft `PhoneNumberField`.
 It adds no country picker, phone formatting, editing, Clear or deferred commit
 behavior, and does not change those legacy APIs. Native Form/Grid ownership and
 backend persistence remain separate application responsibilities.
+
+## Complete readonly text
+
+`CompleteReadOnlyTextField` from `@miniextensions/sdk/react` owns the
+native-compatible literal text, automatic links, localized empty value and
+layout styles. Import `@miniextensions/sdk/react/complete-readonly-text.css`.
+The existing `LiteralText` primitive keeps its inert defaults and optional slots.
+
+```tsx
+import { CompleteReadOnlyTextField } from '@miniextensions/sdk/react';
+
+const alreadyFormattedAndMaskedText = 'Literal text https://example.com';
+
+<CompleteReadOnlyTextField
+    value={alreadyFormattedAndMaskedText}
+    language="en"
+    textSize="medium"
+    layout="cell-medium"
+/>;
+```
+
+The required language uses the existing public `RuntimeLanguage` values. Omitted
+text size inherits surrounding typography. Omitted layout retains native
+`list-linked-record`/`cell-*` compatibility; explicit `default`, `linked-list`,
+`cell-short`, `cell-medium`, `cell-tall`, `cell-extra-tall` or `cell-fit-content`
+controls standalone wrapping/clipping. Cell heights remain caller-owned.
+The default preserves whitespace; fit-content retains native single-line
+clipping rather than expanding wrapped text. Empty values render their localized
+icon/paragraph directly. `'0'` and whitespace remain visible literal values.
+
+Links retain the native Linkify recognition and `_blank` policy. Only link
+clicks stop propagation; ordinary text still activates its containing row.
+The component never interprets HTML, mutates Linkify globals or performs I/O.
+Callers retain conversion, masking, access decisions and canonical values.
+
+## Complete shared clearable input
+
+`CompleteClearableTextInput` and `CompleteDeferredClearableTextInput` own the
+shared text-input/Clear presentation and the existing immediate/deferred draft
+lifecycle. They reuse the public `TextInput` and `InputClearButton` primitives;
+they do not parse Email/URL/Text values, own a field queue, authorize a write,
+scan a value, or create a Form store. Import the optional scoped stylesheet
+`@miniextensions/sdk/react/complete-clearable-text-input.css`; its fallback
+styles do not require Tailwind or reset unrelated inputs and buttons.
+
+```tsx
+import { useState } from 'react';
+import { CompleteClearableTextInput } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-clearable-text-input.css';
+
+export function SharedInputExample() {
+    const [value, setValue] = useState('Literal draft');
+    return (
+        <CompleteClearableTextInput
+            value={value}
+            onChange={setValue}
+            onClear={() => setValue('')}
+            clearLabel="Clear answer"
+            initialMobile={false}
+            enableInlineEdit
+            aria-label="Answer"
+            name="answer"
+            autoComplete="off"
+        />
+    );
+}
+```
+
+The required `initialMobile` is an explicit resolved device snapshot, captured
+for each component mount. Supply the same snapshot during server render and
+initial client hydration. `resolveCurrentClearableInputMobile()` is the
+browser bridge for the existing UAParser current-device policy; it returns
+false when there is no window, which alone is not mobile hydration parity.
+Do not replace that policy with a viewport/touch heuristic or call it during
+hydration to change the agreed initial value. It reads only the existing
+bounded current-device inputs and performs no request. A newly mounted
+deferred mode captures its new supplied snapshot; the coordinator's retained
+immediate classification does not replace it.
+
+Immediate mode reports literal typing through `onChange`; Clear invokes only
+`onClear`. Omitted immediate autocomplete becomes `on`. Deferred mode leaves
+omitted autocomplete absent, validates only typing, retains a dirty local draft
+through external echoes and reconciles settled values while clean. Ordinary
+blur commits a changed local value through the current callback. Pending
+unmount settlement deliberately uses the original mounted callback and latest
+passive-effect draft, leaving the consumer's existing writer/ownership guard
+authoritative.
+
+Deferred mode overrides supplied input blur/key-down handlers rather than
+chaining them. Enter prevents implicit Form submission; composing Enter does
+not blur. Clear cancels pending unmount cleanup, clears its local draft and
+invokes `onClear` once. The Clear button does not suppress pointer focus
+transfer: a dirty focused input can commit through blur before the subsequent
+Clear click. Preserve that native event order rather than merging these two
+callbacks into a new write policy. Unmount after blur/Clear must not introduce
+another pending commit.
+
+Mobile Clear uses the actual nonempty displayed draft, a localized accessible
+label and `type=button`; disabled/read-only controls deny its click. The
+forwarded ref and native name/type/form/ARIA, placeholder and input styling
+remain with the consumer. Desktop and tablet do not become mobile because a
+viewport is narrow.
+
+## Complete native-compatible plain multiline field
+
+`CompleteMultilineTextField` owns the complete plain textarea presentation,
+native selection capture/restoration, fixed three-to-thirty-row autosizing,
+vertical resizing, character-limit counter and disabled read-only state. It uses
+the same public `TextareaInput` primitive. Import its scoped stylesheet; no
+Tailwind setup, native renderer slot, Form store or service client is required.
+
+```tsx
+import { useState } from 'react';
+import { CompleteMultilineTextField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-multiline.css';
+
+export function NotesExample() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+        <>
+            <label htmlFor="notes">Notes</label>
+            <CompleteMultilineTextField
+                id="notes"
+                value={value}
+                onChange={setValue}
+                placeholder="Add context"
+                characterLimit={120}
+                hasDescription
+            />
+            <p id="notes-description">
+                Literal text and line breaks are retained.
+            </p>
+        </>
+    );
+}
+```
+
+The consumer retains the canonical string/null value and writer authority.
+`null` displays an empty textarea; ordinary edits and clearing emit strings,
+including `''`. Every delivered React change is forwarded literally, including
+intermediate composition values. Composition-end and blur do not introduce a
+second commit. The component does not buffer IME input, normalize whitespace,
+truncate a delivered value or convert empty text to null. Native DOM maxlength
+editing constraints remain separate from forwarding an already-delivered value.
+
+`characterLimit` is projected without normalization to native `maxLength` and
+the counter. The counter uses UTF-16 string length and warns at or above the
+raw bound. Read-only presentation disables the textarea and removes the
+editable bound/counter without changing the value or emitting edits. Default
+autocomplete is always `off`. `id` and optional `form` retain native association;
+`hasErrorMessage` and `hasDescription` reference `${id}-error` then
+`${id}-description`. Render those elements outside the field when requested.
+A forwarded ref exposes the actual textarea. The optional CSS custom property
+`--mx-sdk-multiline-focus-color` customizes the standalone normal focus color;
+consumer utility styles retain precedence over scoped fallback selectors.
+
+This API deliberately coexists with the public `MultilineTextField` binding
+and `renderMultilineTextField`. Their internal `MultilineTextControl` retains
+the separate four-row default, strict composition buffer and empty-to-null
+commit contract.
+Native-compatible extraction does not silently alter those consumers or adopt
+Form/Portal Save, ownership, masking, append-only or attachment policies.
+
+## Complete HTML and collapsible descriptions
+
+Import the HTML presentation family through its opt-in entry and stylesheet:
+
+```tsx
+import { CompleteTruncatedDescription } from '@miniextensions/sdk/react/html';
+import '@miniextensions/sdk/react/html-description.css';
+
+export function DeliveryHelp() {
+    const html =
+        '<p><strong>Delivery notes</strong></p><p>Keep the entrance clear.</p>';
+    return (
+        <CompleteTruncatedDescription
+            html={html}
+            resetKey="delivery-help"
+            readMoreLabel="Leer más"
+            showLessLabel="Mostrar menos"
+        />
+    );
+}
+```
+
+`CompleteHTMLRenderer` accepts a required HTML string, optional `inline`, and
+native div props. Its forwarded ref exposes the rendered div. Block mode adds
+the native heading, list, table, quote, code and link presentation; `inline`
+omits that block presentation. Caller styles are retained except that
+`contain: paint`, `isolation: isolate` and `position: relative` are always
+enforced. Caller `overflow` wins; otherwise it is `auto`.
+Ordinary mounted style/class updates retain the current nodes when sanitized
+HTML is unchanged; replacing raw HTML still runs the same sanitizer.
+
+`CompleteQuillHTMLRenderer` accepts `html` and optional `className`. It adds
+scoped native Quill Snow presentation and forwards its ref to the inner
+sanitized editor div. After each HTML change, links receive `target="_blank"`
+and `rel="noopener noreferrer"`. Markdown-like input remains literal text;
+these components interpret HTML, not Markdown.
+
+`CompleteTruncatedDescription` accepts `html`, optional inner-renderer
+`className`, `resetKey`, `readMoreLabel` and `showLessLabel`. Labels default to
+`Read more` and `Show less`; supply translations directly. It has no forwarded
+ref. The collapsed viewport is exactly `4.5rem` with hidden overflow. Changing
+HTML or `resetKey` collapses the same-mounted disclosure. Measured content that
+fits needs no toggle; zero measured heights retain the previous overflow
+decision. Expanded content keeps its collapse action when layout shrinks.
+ResizeObserver, window resize and image load/error events update measurements.
+Clipped interactive descendants leave the tab sequence and accessibility tree;
+their exact prior attributes return when visible, expanded or cleaned up. The
+toggle is `type="button"` and retains its viewport's `aria-controls` identity.
+
+All three components use `sanitizeHTML(html)` with the native-compatible
+DOMPurify 2.4.7 policy. Direct `button`, `datalist`, `fieldset`, `form`, `input`,
+`label`, `legend`, `optgroup`, `option`, `output`, `select` and `textarea` tags
+are removed while safe text is retained. Iframes require an explicit valid
+HTTPS source. Accepted frames receive this fixed sandbox, plus
+`referrerpolicy="no-referrer"` and `loading="lazy"`; `srcdoc` is removed:
+
+```text
+allow-downloads allow-forms allow-popups allow-presentation allow-same-origin allow-scripts
+```
+
+`hasRenderableHTMLContent(html)` sanitizes first, ignores markup-only,
+whitespace, nonbreaking-space and native zero-width empty content, and retains
+meaningful text or supported audio, rule, iframe, image, table and video
+content. Both helpers take strings and are exported only from the opt-in HTML
+entry. The presentation components expose no canonical value writer or
+Form/Portal persistence policy.
+
+Node rendering uses a private, lazily created jsdom 20.0.3 parser window.
+Browser bundles must honor the package's `browser` mapping, which selects the
+private browser factory for both ESM and CommonJS and excludes the Node parser.
+That browser module imports without a document; actual sanitization requires a
+browser document. Neither factory reads or replaces an application's global
+DOMPurify instance, hooks or configuration. The generic React and headless
+entries do not import this HTML parser. The scoped stylesheet works without
+Tailwind or a global Quill stylesheet; the separate Markdown editor keeps its
+own API and styling.

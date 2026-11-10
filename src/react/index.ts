@@ -1,3 +1,10 @@
+export {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+    type CompleteReadOnlyTextLanguage,
+    type CompleteReadOnlyTextSize,
+    type CompleteReadOnlyTextLayout,
+} from './CompleteReadOnlyTextField.js';
 import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
@@ -36,6 +43,11 @@ export {
     type CalendlyBookingSession,
     type CalendlyBooking,
 } from './CalendlyBooking.js';
+export {
+    CompleteCalendlyWidget,
+    type CompleteCalendlyWidgetProps,
+    type CompleteCalendlyWidgetLabels,
+} from './CompleteCalendlyWidget.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';
 export {
@@ -54,6 +66,17 @@ export {
     type InputClearButtonProps,
 } from './InputClearButton.js';
 export { TextInput, type TextInputProps } from './TextInput.js';
+export {
+    CompleteClearableTextInput,
+    CompleteDeferredClearableTextInput,
+    resolveCurrentClearableInputMobile,
+    type CompleteClearableTextInputProps,
+    type CompleteDeferredClearableTextInputProps,
+} from './CompleteClearableTextInput.js';
+export {
+    CompleteMultilineTextField,
+    type CompleteMultilineTextFieldProps,
+} from './CompleteMultilineTextField.js';
 export {
     CompleteDurationField,
     type CompleteDurationFieldProps,
@@ -296,6 +319,15 @@ import type {
     FormAttachmentController,
     FormAttachmentSnapshot,
 } from '../forms/attachmentController.js';
+
+export {
+    PortalSearchGate,
+    type PortalSearchGateProps,
+} from './PortalSearchGate.js';
+export {
+    usePortalSearchGate,
+    type PortalSearchGateOptions,
+} from './usePortalSearchGate.js';
 
 /** A file chooser's bubbling cancel is not cancellation of its surrounding dialog. */
 export function isDialogCancellation(event: {

@@ -177,7 +177,13 @@ export function assertModuleFormats(root) {
                 './react/number.css',
                 './react/localized-numeric.css',
                 './react/complete-phone.css',
+                './react/complete-readonly-text.css',
+                './react/complete-clearable-text-input.css',
+                './react/complete-multiline.css',
+                './react/html-description.css',
                 './react/complete-duration.css',
+                './react/search-gate.css',
+                './react/complete-calendly.css',
                 './react/date.css',
                 './react/datetime.css',
                 './react/duration.css',
@@ -209,7 +215,11 @@ export function assertModuleFormats(root) {
             });
             continue;
         }
-        assert(subpath === '.' || /^\.\/[A-Za-z0-9_-]+$/.test(subpath));
+        assert(
+            subpath === '.' ||
+                /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
+                subpath === './react/html'
+        );
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)
         );

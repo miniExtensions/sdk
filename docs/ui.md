@@ -5236,8 +5236,9 @@ A forwarded ref exposes the actual textarea. The optional CSS custom property
 `--mx-sdk-multiline-focus-color` customizes the standalone normal focus color;
 consumer utility styles retain precedence over scoped fallback selectors.
 
-This API deliberately coexists with `MultilineTextControl` and
-`renderMultilineTextField`. Those existing SDK APIs retain their separate
-four-row default, strict composition buffer and empty-to-null commit contract.
+This API deliberately coexists with the public `MultilineTextField` binding
+and `renderMultilineTextField`. Their internal `MultilineTextControl` retains
+the separate four-row default, strict composition buffer and empty-to-null
+commit contract.
 Native-compatible extraction does not silently alter those consumers or adopt
 Form/Portal Save, ownership, masking, append-only or attachment policies.

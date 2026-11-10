@@ -467,7 +467,7 @@ function App({revision}) {
                 }) : null,
                 React.createElement('p',{id:model.id + '-error'},'Synthetic error'),
                 React.createElement('p',{id:model.id + '-description'},'Synthetic description'),
-                React.createElement('input',{id:'adjacent-' + kind,defaultValue:'Keep adjacent'}))),
+                React.createElement('input',{id:'adjacent-' + kind,defaultValue:'Keep adjacent'})));
         }),
         React.createElement('label',{htmlFor:'paste-source'},'Synthetic paste source'),
         React.createElement('textarea',{id:'paste-source',defaultValue:''}));

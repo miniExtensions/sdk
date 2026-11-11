@@ -5736,7 +5736,8 @@ All 27 palettes retain ten raw RGB channel strings, including legacy indigo.
 `ThemeBoundary` from `@miniextensions/sdk/react` renders a div. Set `theme`
 explicitly for a standalone root (`DEFAULT_THEME_COLOR` is blue). Omit both
 `theme` and `tokens` to inherit without injecting a default. A complete `tokens`
-snapshot wins over palette projection; ordinary `style` wins locally. Selection
+snapshot wins over palette projection; ordinary `style` (including SDK semantic
+variables) wins locally. Omitted boundaries also inherit semantic overrides. Selection
 stays with your state. Nested scopes, separate roots and unmount never mutate
 `document`, body, or another boundary.
 

@@ -7,12 +7,14 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const typedConsumer = `
-import {createElement,createRef} from 'react';
+import {createElement,createRef,type CSSProperties} from 'react';
 import {ThemeBoundary,getThemePortalProps,useThemeSnapshot,type ThemeSnapshot} from '@miniextensions/sdk/react';
 import {getThemeStyles,DEFAULT_THEME_COLOR,type ThemeTokens} from '@miniextensions/sdk/ui';
 const tokens:ThemeTokens={...getThemeStyles(DEFAULT_THEME_COLOR),'--theme-600':'1 2 3'};
 const snapshot:ThemeSnapshot={theme:'yellow-light',tokens};
-createElement(ThemeBoundary,{...snapshot,ref:createRef<HTMLDivElement>(),style:{backgroundColor:'white','--theme-500':'4 5 6'}},'Content');
+const nativeStyle:CSSProperties={display:'contents'};
+createElement(ThemeBoundary,{theme:'blue',style:nativeStyle});
+createElement(ThemeBoundary,{...snapshot,ref:createRef<HTMLDivElement>(),style:{backgroundColor:'white','--theme-500':'4 5 6','--mx-sdk-accent':'purple'}},'Content');
 createElement('div',getThemePortalProps(snapshot));
 function hook(){return getThemePortalProps(useThemeSnapshot());}
 // @ts-expect-error an effective snapshot must contain all ten raw tokens

@@ -13,7 +13,15 @@ import {
     type ThemeTokens,
 } from '../ui/theme.js';
 
-export type ThemeStyle = CSSProperties & Partial<ThemeTokens>;
+export type ThemeStyle = CSSProperties &
+    Partial<ThemeTokens> & {
+        '--mx-sdk-accent'?: string;
+        '--mx-sdk-button-background'?: string;
+        '--mx-sdk-button-hover'?: string;
+        '--mx-sdk-button-focus'?: string;
+        '--mx-sdk-button-foreground'?: string;
+        '--mx-sdk-button-hover-foreground'?: string;
+    };
 
 /** Styling inputs only. Native/consumer state remains the selection owner. */
 export type ThemeSnapshot = {
@@ -38,9 +46,9 @@ const ThemeContext = createContext<ThemeSnapshot>({});
  */
 export function getThemePortalProps(snapshot: ThemeSnapshot): ThemePortalProps {
     return {
-        className: 'mx-sdk-theme',
+        className: snapshot.tokens ? 'mx-sdk-theme' : '',
         style: snapshot.tokens ? { ...snapshot.tokens } : undefined,
-        'data-mx-theme': snapshot.theme,
+        'data-mx-theme': snapshot.tokens ? snapshot.theme : undefined,
     };
 }
 
@@ -74,10 +82,10 @@ export const ThemeBoundary: React.ForwardRefExoticComponent<
             {
                 ...div,
                 ref,
-                className: ['mx-sdk-theme', className]
+                className: [ownTokens && 'mx-sdk-theme', className]
                     .filter(Boolean)
                     .join(' '),
-                'data-mx-theme': snapshot.theme,
+                'data-mx-theme': ownTokens ? snapshot.theme : undefined,
                 style: { ...ownTokens, ...style },
             },
             children

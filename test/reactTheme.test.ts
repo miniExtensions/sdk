@@ -21,7 +21,11 @@ it('server renders explicit tokens without browser globals, CSS or default injec
     assert(explicit.includes('--theme-600:79 70 229'));
     assert(!explicit.includes('<style') && !explicit.includes('<script'));
     assert.equal(typeof document, 'undefined');
-    assert.equal(getThemePortalProps({}).style, undefined);
+    assert.deepEqual(getThemePortalProps({}), {
+        className: '',
+        style: undefined,
+        'data-mx-theme': undefined,
+    });
 });
 
 async function fixture(t: TestContext) {

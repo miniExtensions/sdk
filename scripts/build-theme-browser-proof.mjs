@@ -245,6 +245,39 @@ export function browserMain() {
                     'button',
                     { className: 'mx-sdk-button', id: 'editor-button' },
                     'Editor blue'
+                ),
+                h(
+                    SDK.ThemeBoundary,
+                    {
+                        theme: 'green',
+                        id: 'semantic-parent',
+                        style: {
+                            '--mx-sdk-accent': 'rgb(90 80 70)',
+                            '--mx-sdk-button-foreground': 'rgb(11 12 13)',
+                        },
+                    },
+                    h(
+                        SDK.ThemeBoundary,
+                        { id: 'semantic-inherit' },
+                        h(
+                            'button',
+                            {
+                                className: 'mx-sdk-button',
+                                id: 'semantic-button',
+                            },
+                            'Inherited semantic override'
+                        ),
+                        h(SDK.CompleteDurationField, {
+                            fieldId: 'semantic-duration',
+                            sessionId: 'semantic',
+                            owner,
+                            format: 'h:mm',
+                            value: 60,
+                            onChange: (value) => writes.push(value),
+                            title: 'Inherited Duration',
+                            inputId: 'semantic-duration',
+                        })
+                    )
                 )
             )
         )
@@ -385,6 +418,22 @@ export function browserMain() {
                     .getElementById('unnamed')
                     .getAttribute('data-mx-theme') === null,
                 'no named default injection'
+            );
+            check(
+                style('semantic-button').color === 'rgb(11, 12, 13)',
+                'omitted nested boundary preserves semantic foreground'
+            );
+            check(
+                style('semantic-button')
+                    .getPropertyValue('--mx-sdk-accent')
+                    .trim() === 'rgb(90 80 70)',
+                'omitted nested boundary preserves semantic accent'
+            );
+            document.getElementById('semantic-duration').focus();
+            await settleTransitions();
+            check(
+                style('semantic-duration').borderTopColor === 'rgb(90, 80, 70)',
+                'omitted nested boundary preserves actual Duration focus accent'
             );
             custom = true;
             publish();

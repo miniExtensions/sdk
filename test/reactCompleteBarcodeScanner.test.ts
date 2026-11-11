@@ -392,6 +392,7 @@ for (const fieldType of ['barcode', 'email', 'url', 'singleLineText'] as const)
                 enableQRCodeScannerForFormField: enabled,
                 autoStartCamera: true,
                 readOnly,
+                className: 'consumer-scanner',
                 setValue() {},
             });
             return h(
@@ -412,6 +413,7 @@ for (const fieldType of ['barcode', 'email', 'url', 'singleLineText'] as const)
         assert(f.document.querySelector('[data-testid=qr-scanner-button]'));
         if (fieldType !== 'barcode') await f.click('Scan barcode or QR code');
         assert(f.document.querySelector('video'));
+        assert(f.document.querySelector('.consumer-scanner[role=dialog]'));
         readOnly = true;
         await f.render(h(Host));
         assert.equal(f.document.querySelector('video'), null);

@@ -164,6 +164,7 @@ export function useBarcodeScannerButton(options: BarcodeScannerButtonOptions) {
                       runInLoop: options.runInLoop,
                       ownerKey: session,
                       style: options.style,
+                      className: options.className,
                       desktopViewportOffset: options.desktopViewportOffset,
                   })
                 : null,

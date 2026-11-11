@@ -235,6 +235,18 @@ export async function checkCompleteDateBrowser({
         input = await open('datetime');
         assert.equal(await input.inputValue(), '2024-07-01 10:30');
         assert.deepEqual((await snapshot()).writes, []);
+        await input.click();
+        await page
+            .locator('.rdtDay:not(.rdtOld):not(.rdtNew)[data-value="2"]')
+            .click();
+        assert.equal((await snapshot()).value, '2024-07-02T14:30:00.000Z');
+        await input.click();
+        await page.getByRole('cell', { name: '10:30', exact: true }).click();
+        await page.locator('.rdtCounter .rdtBtn').first().click();
+        assert.equal((await snapshot()).value, '2024-07-02T15:30:00.000Z');
+        assert.equal(await input.inputValue(), '2024-07-02 11:30');
+        assert.equal((await snapshot()).saves.length, 0);
+        await page.getByRole('button', { name: 'Outside calendar' }).click();
         await input.fill('2024-07-02 08:15');
         await page.keyboard.press('Enter');
         assert.equal((await snapshot()).value, '2024-07-02T12:15:00.000Z');

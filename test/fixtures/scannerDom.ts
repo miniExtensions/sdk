@@ -110,6 +110,9 @@ export async function scannerDom(t: TestContext) {
             root.render(strict ? h(StrictMode, null, node) : node)
         );
     };
+    const renderSync = (node: ReactNode, strict = false) => {
+        act(() => root.render(strict ? h(StrictMode, null, node) : node));
+    };
     const tick = async () => {
         await act(async () => {
             await new Promise<void>((resolve) =>
@@ -133,6 +136,7 @@ export async function scannerDom(t: TestContext) {
         document: window.document,
         host,
         render,
+        renderSync,
         click,
         tick,
         unmount,

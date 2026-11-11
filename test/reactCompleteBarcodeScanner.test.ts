@@ -27,6 +27,61 @@ const vendorDecodeOnceFromStream =
 const result = (text: string) => ({ getText: () => text }) as Result;
 const device = { kind: 'videoinput' } as MediaDeviceInfo;
 
+// First in this process: exercise the real cold module handoff, without a
+// production loader seam or a mocked dialog/runtime.
+it('retires a cold dialog load before any camera work and admits a fresh successor', async (t) => {
+    const f = await fixture(t);
+    const media = cameraStream();
+    const writes: string[] = [];
+    let lists = 0,
+        acquisitions = 0,
+        decodes = 0;
+    t.mock.method(
+        BrowserMultiFormatReader.prototype,
+        'listVideoInputDevices',
+        async () => {
+            lists++;
+            return [device];
+        }
+    );
+    t.mock.method(f.mediaDevices, 'getUserMedia', async () => {
+        acquisitions++;
+        return media.stream;
+    });
+    t.mock.method(
+        BrowserMultiFormatReader.prototype,
+        'decodeOnceFromStream',
+        async () => {
+            decodes++;
+            return result('fresh');
+        }
+    );
+    const scanner = (ownerKey: string) =>
+        h(api.CompleteBarcodeScanner, {
+            ownerKey,
+            onUpdate: (value) => {
+                writes.push(value);
+            },
+            onDismiss() {},
+        });
+    // StrictMode requests the runtime, but retirement happens in the same
+    // stack, before the real dynamic import can fulfill.
+    f.renderSync(scanner('retired'), true);
+    f.renderSync(null);
+    assert.deepEqual([lists, acquisitions, decodes], [0, 0, 0]);
+    await act(async () => {
+        await import('../src/react/scannerDialogRuntime.js');
+    });
+    assert.deepEqual([lists, acquisitions, decodes], [0, 0, 0]);
+    assert.deepEqual(writes, []);
+    assert.equal(f.document.querySelector('[role=dialog], video'), null);
+
+    await f.render(scanner('successor'));
+    assert.deepEqual([lists, acquisitions, decodes], [1, 1, 1]);
+    assert.deepEqual(writes, ['fresh']);
+    assert.equal(media.stops(), 1);
+});
+
 for (const failure of [
     'no-device',
     'permission-denied',

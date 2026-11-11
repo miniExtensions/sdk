@@ -1,3 +1,5 @@
+import { assertDateVendor } from './date-vendor-checks.mjs';
+import { bundleDatePopover } from './date-popover-vendor.mjs';
 import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import assert from 'node:assert/strict';
 import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
@@ -38,6 +40,7 @@ const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
 assertRichTextVendor();
 assertPhoneVendor();
+assertDateVendor();
 
 for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
     rmSync(directory, { recursive: true, force: true });
@@ -49,6 +52,7 @@ cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
     recursive: true,
     filter: richTextRuntimeFilter,
 });
+cpSync('vendor/date-time', 'dist/vendor/date-time', { recursive: true });
 cpSync('vendor/headlessui-address', 'dist/vendor/headlessui-address', {
     recursive: true,
 });
@@ -103,6 +107,9 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
 await bundlePortalChart();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
+if (process.argv.includes('--capture-date-popover'))
+    await bundleDatePopover(process.cwd(), true);
+await bundleDatePopover();
 
 mkdirSync('dist/cjs', { recursive: true });
 writeFileSync('dist/cjs/package.json', '{"type":"commonjs"}\n');
@@ -183,6 +190,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-portal-chart',
         'complete-address',
         'complete-collaborators',
+        'complete-date',
         'date',
         'datetime',
         'duration',

@@ -1,3 +1,4 @@
+import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
@@ -1522,6 +1523,7 @@ try {
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
+            'scripts/complete-date-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -2114,6 +2116,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeLocalizedNumeric,
+            output,
+        });
+        report.completeDate = {};
+        await checkCompleteDateBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeDate,
             output,
         });
         report.completeDuration = {};

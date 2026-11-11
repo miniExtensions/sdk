@@ -1135,3 +1135,19 @@ The scanner dialog bundles the pinned Headless UI 2.2.9 closure using the SDK's
 existing verified input and license policy. React and React DOM remain optional
 external peers. Each format ships complete-barcode-scanner.provenance.json and
 complete-barcode-scanner.LICENSES.txt beside the private dialog runtime.
+
+## Complete Date picker
+
+The complete native-compatible Date picker includes the unchanged compiled
+miniExtensions/react-datetime 3.1.0 fork at
+`6fb5a547de6328f4103b4c5928c79a05473aea85` (MIT, Javier Marquez).
+Its artifact preserves the fork's year/month-before-day correction and
+moment-timezone adaptation. The private export bridge changes no picker code.
+See `vendor/date-time/UPSTREAM.json` and the distributed `dist/vendor/date-time`
+for frozen hashes, original metadata, stylesheet and license. React and ReactDOM
+are resolved from the consumer, matching the SDK's optional peer contract.
+
+The private Radix Popover closure is built from pinned 1.1.14 and supported
+dependencies. Its exact per-format input hashes and full MIT/ISC/0BSD notices are
+recorded in `vendor/date-popover` and distributed beside the built runtime as
+`complete-date.provenance.json` and `complete-date.LICENSES.txt`.

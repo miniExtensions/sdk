@@ -1,3 +1,5 @@
+import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
+import { assertDateVendor } from './date-vendor-checks.mjs';
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
@@ -587,6 +589,14 @@ try {
                 path.startsWith('dist/vendor/rich-markdown-editor/') ||
                 path.startsWith('dist/vendor/phone-number-input/') ||
                 [
+                    'dist/vendor/date-time/index.cjs',
+                    'dist/vendor/date-time/index.d.cts',
+                    'dist/vendor/date-time/LICENSE.txt',
+                    'dist/vendor/date-time/ONCLICKOUTSIDE-LICENSE.txt',
+                    'dist/vendor/date-time/UPSTREAM.json',
+                    'dist/vendor/date-time/upstream.cjs',
+                    'dist/vendor/date-time/upstream.css',
+                    'dist/vendor/date-time/upstream.package.json',
                     'dist/vendor/headlessui-address/combobox.js',
                     'dist/vendor/headlessui-address/package.json',
                     'dist/vendor/headlessui-address/provenance.json',
@@ -600,6 +610,10 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'dist/esm/react/complete-date.css',
+        'dist/cjs/react/complete-date.css',
+        'dist/esm/react/date/index.js',
+        'dist/cjs/react/date/index.js',
         'dist/esm/react/theme.css',
         'dist/cjs/react/theme.css',
         'dist/esm/react/button.css',
@@ -690,6 +704,7 @@ try {
         packed
     );
     assertModuleFormatReceipt(installedPackage);
+    assertDateVendor(installedPackage, 'dist/vendor/date-time');
     const installedPhone = assertPhoneVendor(
         join(installedPackage, 'dist/vendor/phone-number-input')
     );
@@ -3306,6 +3321,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(themeMatrix.versions.length, 2);
     assert.equal(themeMatrix.cleanup, 'completed');
+    const dateMatrix = checkCompleteDateReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateMatrix.versions.length, 2);
+    assert.equal(dateMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

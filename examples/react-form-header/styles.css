@@ -1,0 +1,170 @@
+:root {
+    font-family: system-ui, sans-serif;
+    color: #183d34;
+    background: #f3f5ef;
+    font-synthesis: none;
+}
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+}
+main {
+    max-width: 1000px;
+    margin: auto;
+    padding: 3rem 1.5rem;
+}
+.introduction {
+    max-width: 720px;
+    margin-bottom: 2rem;
+}
+.introduction h1 {
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    letter-spacing: -0.045em;
+    line-height: 1.1;
+}
+p {
+    line-height: 1.6;
+}
+.eyebrow {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    color: #397467;
+}
+.controls,
+.events {
+    background: white;
+    border: 1px solid #d6e1da;
+    border-radius: 1rem;
+    padding: 1.25rem;
+    margin: 1rem 0;
+}
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+}
+.controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.controls .title-control {
+    flex: 1 0 100%;
+}
+.title-control input {
+    flex: 1;
+    min-width: 0;
+}
+.records {
+    display: flex;
+    gap: 0.3rem;
+}
+input,
+select,
+button,
+textarea {
+    font: inherit;
+}
+select,
+input[type='text'],
+textarea {
+    border: 1px solid #b3c9bc;
+    border-radius: 0.4rem;
+    padding: 0.6rem 0.75rem;
+}
+button {
+    border: 1px solid #a8c9b7;
+    border-radius: 0.4rem;
+    background: #f2f7f1;
+    color: #164e43;
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+}
+button[aria-pressed='true'] {
+    background: #1c6756;
+    color: white;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid #247c67;
+    outline-offset: 3px;
+}
+.form-preview {
+    overflow: hidden;
+    background: white;
+    border: 1px solid #c7d8cd;
+    border-radius: 1rem;
+    margin-top: 2rem;
+    box-shadow: 0 12px 40px #193e3110;
+}
+.form-content {
+    position: relative;
+    padding: 2.5rem;
+}
+.sample-field {
+    display: grid;
+    gap: 0.75rem;
+    margin: 2rem 0;
+}
+.sample-field label {
+    font-weight: 600;
+}
+.sample-field textarea {
+    resize: vertical;
+    width: 100%;
+}
+.events h2 {
+    font-size: 1rem;
+}
+.events output {
+    overflow-wrap: anywhere;
+}
+@media (max-width: 540px) {
+    main {
+        padding: 1.5rem 0.8rem;
+    }
+    .form-content {
+        padding: 1.5rem;
+    }
+    .controls,
+    .events {
+        padding: 1rem;
+    }
+    .controls .title-control {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+@media print {
+    body {
+        background: white;
+    }
+    main {
+        max-width: none;
+        padding: 0;
+    }
+    .introduction,
+    .controls,
+    .events {
+        display: none;
+    }
+    .form-preview {
+        box-shadow: none;
+        border: none;
+    }
+    .form-content {
+        padding: 1rem 0;
+    }
+}
+
+/* The stock cover intentionally extends 80px beyond its 136px positioner.
+   Match the native receiver's 96px inset before placing header content. */
+.form-content--covered {
+    padding-top: 6rem;
+}

@@ -252,3 +252,16 @@ export {
     type ProjectFormCompletionNavigationInput,
     type ProjectFormCompletionCloseInput,
 } from './completion.js';
+
+export {
+    shouldRenderFormCover,
+    projectFormHeader,
+    resolveFormFooterDescription,
+    type FormHeaderDisplayInput,
+    resolveFormHeaderTitle,
+    resolveFormDisplayText,
+    resolveFormLogo,
+    type FormDisplaySource,
+    type FormDisplayField,
+    type FormPresentationIdentity,
+} from './header.js';

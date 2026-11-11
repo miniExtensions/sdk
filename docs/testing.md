@@ -13,6 +13,13 @@ signatures or emitting code. Private popup wrappers need this boundary too;
 an inferred transitive React/Radix return can pass a checkout build but fail Git
 preparation beneath `node_modules` with TS2742.
 
+## Standalone starter delivery
+
+Register a shipped starter in the package manifest, required packed paths and
+customer-kit copy list. The kit validates relative documentation links against
+its copied files, separately from validating the complete TGZ. A starter present
+in the TGZ can still be missing from the delivered customer kit.
+
 ## Complete Calendly widget
 
 `test/reactCompleteCalendlyWidget.test.ts` uses the actual widget, unchanged hook

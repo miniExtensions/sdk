@@ -2492,3 +2492,16 @@ export {
     type ThemePortalProps,
     type ThemeStyle,
 } from './ThemeBoundary.js';
+
+export {
+    CompleteFormHeader,
+    CompleteFormFooterDescription,
+    CompleteFormCover,
+    formHeaderLabels,
+    type CompleteFormHeaderProps,
+    type CompleteFormFooterDescriptionProps,
+    type CompleteFormCoverProps,
+    type FormHeaderPreview,
+    type FormHeaderSettingsTarget,
+    type FormHeaderLabels,
+} from './CompleteFormHeader.js';

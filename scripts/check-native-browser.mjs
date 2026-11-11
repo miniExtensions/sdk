@@ -3777,7 +3777,8 @@ try {
             });
         assert.equal(
             results.length,
-            24 +
+            // Include the complete field-presentation assembly in fixed cases.
+            25 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

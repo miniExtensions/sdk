@@ -110,11 +110,28 @@ export function CompleteFormFieldPresentation(
     const descriptionMount = props.visible === false ? null : placement;
     const [renderedDescriptionMount, setRenderedDescriptionMount] =
         useState(descriptionMount);
-    if (renderedDescriptionMount !== descriptionMount) {
+    const descriptionMountChanged =
+        renderedDescriptionMount !== descriptionMount;
+    if (descriptionMountChanged) {
         setRenderedDescriptionMount(descriptionMount);
         setFailedImageUrl(null);
-        setTooltipOpen(false);
     }
+    const hasTooltip = descriptionMount === 'tooltip' && hasDescription;
+    // Native Tooltip unmounts when its trigger has no content. Retire only its
+    // popup state here; an image-only failure must retain the failed-URL latch.
+    if (
+        (descriptionMountChanged || !hasTooltip) &&
+        (tooltipOpen || popupReady)
+    ) {
+        setTooltipOpen(false);
+        setPopupReady(false);
+    }
+    useEffect(() => {
+        if (!hasTooltip && closeTimer.current !== undefined) {
+            clearTimeout(closeTimer.current);
+            closeTimer.current = undefined;
+        }
+    }, [hasTooltip]);
     const semanticTitle = props.semanticTitle?.trim()
         ? props.semanticTitle
         : props.title.trim()
@@ -242,7 +259,7 @@ export function CompleteFormFieldPresentation(
                 { className: 'mx-sdk-field-title-row' },
                 label,
                 props.titleActions,
-                placement === 'tooltip' && hasDescription
+                hasTooltip
                     ? h(
                           'span',
                           {
@@ -265,6 +282,15 @@ export function CompleteFormFieldPresentation(
                                           ? tooltipId
                                           : undefined,
                                   onFocus: openTooltip,
+                                  onBlur: () => {
+                                      // A cold lazy popup has no mounted
+                                      // outside-focus listener yet. Retire it
+                                      // if focus leaves before it is ready.
+                                      if (!popupReady) {
+                                          cancelClose();
+                                          setTooltipOpen(false);
+                                      }
+                                  },
                                   onClick: openTooltip,
                                   onKeyDown: (
                                       event: KeyboardEvent<HTMLButtonElement>

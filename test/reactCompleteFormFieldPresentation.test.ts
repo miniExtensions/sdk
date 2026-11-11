@@ -237,6 +237,41 @@ it('omits absent help/error targets and places real HTML before or after the com
     }
 });
 
+it('cancels a focused tooltip when focus leaves before its optional popup commits', async (t) => {
+    const f = await fixture(t);
+    await f.render(
+        h(
+            'main',
+            null,
+            shell({
+                description: '<p>Deferred tooltip help</p>',
+                descriptionPlacement: 'tooltip',
+            }),
+            shell({ title: 'Adjacent field' })
+        )
+    );
+    const button = trigger(f);
+    const adjacent = f.container.querySelectorAll('textarea')[1];
+    assert.ok(adjacent);
+    // Both real focus transitions occur before the optional popup can commit;
+    // no popup/module double is needed to exercise the missing blur boundary.
+    await act(async () => {
+        button.focus();
+        adjacent.focus();
+        // Settle the actual optional resource after blur, so a late resolution
+        // cannot escape this fixture's DOM realm or reopen the popup.
+        await import('../src/react/fieldTooltipPopup.js');
+    });
+    assert.equal(f.window.document.activeElement, adjacent);
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+    assert.equal(button.getAttribute('aria-describedby'), null);
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+    f.unchangedEffects();
+});
+
 it('retains exactly one hidden tooltip help target beside a separately focusable popup', async (t) => {
     const f = await fixture(t);
     await f.render(
@@ -358,6 +393,115 @@ it('uses no absent text description for image-only tooltip or markup-empty HTML'
     assert.equal(image(f).src, imageA);
     assert.equal(textarea(f).getAttribute('aria-describedby'), null);
     assertUniqueIds(f);
+});
+
+it('retires an image-only popup when failure removes its trigger without clearing the failed URL', async (t) => {
+    const f = await fixture(t);
+    const config: Partial<Props> = {
+        descriptionPlacement: 'tooltip',
+        descriptionImageUrl: imageA,
+    };
+    await f.render(shell(config));
+    const controlId = textarea(f).id;
+    await f.click(trigger(f));
+    const popup = f.window.document.body.querySelector('[role="tooltip"]');
+    assert.ok(popup);
+    assert.equal(trigger(f).getAttribute('aria-describedby'), popup.id);
+    await f.imageEvent(image(f), 'error');
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+    assert.equal(
+        f.container.querySelector('.mx-sdk-field-tooltip-trigger'),
+        null
+    );
+    await f.render(shell(config));
+    assert.equal(
+        f.container.querySelector('.mx-sdk-field-tooltip-trigger'),
+        null,
+        'Same failed URL does not retry when the tooltip disappears'
+    );
+    await f.render(shell({ ...config, descriptionImageUrl: imageB }));
+    assert.equal(textarea(f).id, controlId);
+    assert.equal(trigger(f).getAttribute('aria-expanded'), 'false');
+    assert.equal(trigger(f).getAttribute('aria-describedby'), null);
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null,
+        'A replacement image must not reopen the retired popup'
+    );
+    await f.click(trigger(f));
+    assert.equal(image(f).src, imageB);
+    await f.render(shell(config));
+    assert.equal(
+        f.container.querySelector('.mx-sdk-field-tooltip-trigger'),
+        null,
+        'Healthy B does not replace the failed-A latch'
+    );
+    await f.render(
+        shell({ ...config, description: '<p>Replacement text help</p>' })
+    );
+    assert.equal(trigger(f).getAttribute('aria-expanded'), 'false');
+    assert.equal(trigger(f).getAttribute('aria-describedby'), null);
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null,
+        'Replacement text also starts with a closed tooltip'
+    );
+    await f.click(trigger(f));
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]')?.textContent,
+        'Replacement text help'
+    );
+    assert.equal(
+        f.window.document.body.querySelector('img'),
+        null,
+        'Text restoration must not silently retry failed A'
+    );
+    assert.equal(
+        textarea(f).getAttribute('aria-describedby')?.endsWith('-description'),
+        true
+    );
+    assertUniqueIds(f);
+    f.unchangedEffects();
+});
+
+it('retires an open text tooltip when its description is cleared and restored in the same placement', async (t) => {
+    const f = await fixture(t);
+    const config: Partial<Props> = {
+        descriptionPlacement: 'tooltip',
+        description: '<p>Initial tooltip text</p>',
+    };
+    await f.render(shell(config));
+    await f.click(trigger(f));
+    assert.ok(f.window.document.body.querySelector('[role="tooltip"]'));
+    await f.render(shell({ ...config, description: '<p>&nbsp;<br></p>' }));
+    assert.equal(
+        f.container.querySelector('.mx-sdk-field-tooltip-trigger'),
+        null
+    );
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+    assert.equal(textarea(f).getAttribute('aria-describedby'), null);
+    await f.render(
+        shell({ ...config, description: '<p>Restored tooltip text</p>' })
+    );
+    assert.equal(trigger(f).getAttribute('aria-expanded'), 'false');
+    assert.equal(trigger(f).getAttribute('aria-describedby'), null);
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+    await f.click(trigger(f));
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]')?.textContent,
+        'Restored tooltip text'
+    );
+    assertUniqueIds(f);
+    f.unchangedEffects();
 });
 
 it('keeps preview image recovery focusable inside a portaled tooltip without submitting', async (t) => {

@@ -130,7 +130,7 @@
 }
 
 :where(.mx-sdk-complete-checkbox__grid[data-checkbox-grid-value='true']) {
-    border-color: transparent;
+    border-width: 0;
     background-color: var(--mx-sdk-field-theme-color-muted, #60a5fa);
 }
 

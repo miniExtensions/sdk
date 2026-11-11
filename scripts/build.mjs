@@ -168,6 +168,7 @@ for (const format of ['esm', 'cjs']) {
         'number',
         'localized-numeric',
         'form-tracking',
+        'form-completion',
         'complete-phone',
         'complete-readonly-text',
         'complete-clearable-text-input',

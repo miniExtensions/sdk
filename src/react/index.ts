@@ -2456,6 +2456,15 @@ export {
 } from './CompleteFormTrackingDisclosure.js';
 
 export {
+    CompleteFormCompletion,
+    CompleteFormCompletionMessage,
+    useFormCompletionCountdown,
+    type CompleteFormCompletionProps,
+    type CompleteFormCompletionMessageProps,
+    type FormCompletionAction,
+} from './CompleteFormCompletion.js';
+
+export {
     CompleteBarcodeScanner,
     defaultBarcodeScannerLabels,
 } from './CompleteBarcodeScanner.js';

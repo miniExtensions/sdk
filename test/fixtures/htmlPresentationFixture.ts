@@ -50,6 +50,15 @@ export async function htmlPresentationFixture(t: TestContext) {
         document: window.document,
         navigator: window.navigator,
         HTMLElement: window.HTMLElement,
+        HTMLInputElement: window.HTMLInputElement,
+        HTMLTextAreaElement: window.HTMLTextAreaElement,
+        Element: window.Element,
+        Node: window.Node,
+        NodeFilter: window.NodeFilter,
+        DocumentFragment: window.DocumentFragment,
+        CustomEvent: window.CustomEvent,
+        MutationObserver: window.MutationObserver,
+        getComputedStyle: window.getComputedStyle.bind(window),
         HTMLDivElement: window.HTMLDivElement,
         HTMLAnchorElement: window.HTMLAnchorElement,
         HTMLImageElement: window.HTMLImageElement,
@@ -79,6 +88,10 @@ export async function htmlPresentationFixture(t: TestContext) {
     t.after(async () => {
         try {
             if (root) await act(async () => root?.unmount());
+            // Radix FocusScope schedules its unmount autofocus event at zero
+            // delay. Complete that real external lifecycle before removing the
+            // platform realm used by CustomEvent/document in its cleanup.
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
             assert.equal(
                 [...observers].filter((entry) => entry.elements.size > 0)
                     .length,

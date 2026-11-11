@@ -58,6 +58,10 @@ import {
     checkCompleteMultilineBrowser,
 } from './complete-multiline-consumer-checks.mjs';
 import {
+    prepareFieldPresentationBrowserFixtures,
+    checkFieldPresentationBrowser,
+} from './field-presentation-consumer-checks.mjs';
+import {
     checkHTMLDescriptionBrowser,
     checkHTMLDescriptionEditorStyleCoexistence,
 } from './html-description-consumer-checks.mjs';
@@ -1521,6 +1525,7 @@ try {
             'scripts/complete-readonly-text-consumer-checks.mjs',
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
+            'scripts/field-presentation-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
@@ -1936,6 +1941,17 @@ try {
             hash,
         });
         const collaboratorFixtures = await prepareCompleteCollaboratorFixtures({
+            temporary,
+            archive,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareFieldPresentationBrowserFixtures({
             temporary,
             archive,
             installed,
@@ -2785,6 +2801,13 @@ try {
             await checkCompleteMultilineBrowser({
                 page,
                 evidence: report.completeMultiline,
+            });
+        });
+        await run('field-presentation', async (page, origin) => {
+            await page.goto(origin + '/field-presentation.html');
+            await checkFieldPresentationBrowser({
+                page,
+                evidence: report.fieldPresentation,
             });
         });
         for (const format of portalChartFixtures.formats) {
@@ -3763,7 +3786,8 @@ try {
             });
         assert.equal(
             results.length,
-            24 +
+            // Include the complete field-presentation assembly in fixed cases.
+            25 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

@@ -178,6 +178,8 @@ for (const format of ['esm', 'cjs']) {
         'form-tracking',
         'form-completion',
         'form-header',
+        'field-presentation',
+        'complete-checkbox',
         'complete-phone',
         'complete-readonly-text',
         'complete-clearable-text-input',

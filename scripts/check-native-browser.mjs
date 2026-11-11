@@ -32,6 +32,7 @@ import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
+import { checkThemeBrowser } from './theme-browser-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
@@ -2120,6 +2121,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeDuration,
+            output,
+        });
+        report.theme = {};
+        await checkThemeBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.theme,
             output,
         });
         report.searchGate = {};

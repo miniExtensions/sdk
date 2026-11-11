@@ -2482,3 +2482,13 @@ export type {
     BarcodeScannerButtonOptions,
     BarcodeScannerFieldOptions,
 } from './useBarcodeScannerButton.js';
+
+export {
+    ThemeBoundary,
+    getThemePortalProps,
+    useThemeSnapshot,
+    type ThemeBoundaryProps,
+    type ThemeSnapshot,
+    type ThemePortalProps,
+    type ThemeStyle,
+} from './ThemeBoundary.js';

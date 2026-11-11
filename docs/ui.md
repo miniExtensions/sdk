@@ -5725,3 +5725,36 @@ custom icon-button classes. No application renderer, context or stylesheet is
 required. Media permission is requested only by a configured initial auto-start
 or explicit scanner start. Camera hardware acceptance is separate from synthetic
 media/decoder qualification.
+
+## Portable theme composition
+
+`@miniextensions/sdk/ui` exports the native-compatible `ThemeColor`,
+`ThemeTokens`, `colorsToCssVars`, `ALL_THEME_COLORS`, `DEFAULT_THEME_COLOR`
+and pure `getThemeStyles(color)`. It has no React or browser requirement.
+All 27 palettes retain ten raw RGB channel strings, including legacy indigo.
+
+`ThemeBoundary` from `@miniextensions/sdk/react` renders a div. Set `theme`
+explicitly for a standalone root (`DEFAULT_THEME_COLOR` is blue). Omit both
+`theme` and `tokens` to inherit without injecting a default. A complete `tokens`
+snapshot wins over palette projection; ordinary `style` wins locally. Selection
+stays with your state. Nested scopes, separate roots and unmount never mutate
+`document`, body, or another boundary.
+
+Import `@miniextensions/sdk/react/theme.css` explicitly to bridge raw tokens to
+existing SDK accent and Button variables. Import each component's stylesheet
+separately. Without theme CSS, raw tokens still render/inherit and the leaf's
+existing defaults/custom styles apply. The bridge preserves configured Button
+`data-color` values and light-palette foregrounds. SDK Button uses hover700;
+native Button keeps hover500. Existing native numeric600 and Duration500 local
+accent overrides keep precedence. Fixed-color leaf styles, error/disabled
+states, Tooltip black surfaces, background and width policy stay with their
+existing owners; this is not a whole-component recoloring contract.
+
+A detached portal must apply `getThemePortalProps(snapshot)` to its actual DOM
+wrapper. Pass `useThemeSnapshot()` explicitly, or construct an effective
+`{theme, tokens}` snapshot. Put custom raw tokens in the complete `tokens`
+input when they must propagate. React context carries supplied styling data;
+it does not create CSS inheritance across a portal. DOM-only styles (including
+raw tokens supplied only via `style`) are deliberately not discovered, read
+with computed styles, or promised propagation. No generic portal engine,
+script/style injection or global theme store is installed.

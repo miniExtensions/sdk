@@ -8,7 +8,6 @@ import {
     useState,
     type CSSProperties,
 } from 'react';
-import { ScannerDialog } from './scannerDialogRuntime.js';
 import { ScannerReader } from './scannerReader.js';
 
 export type BarcodeScannerLabels = {
@@ -79,9 +78,29 @@ export function ScannerIcon({ stop = false }: { stop?: boolean }) {
 /** Complete camera/dialog UI, separate from the display-only BarcodeField. */
 export function CompleteBarcodeScanner(props: CompleteBarcodeScannerProps) {
     const labels = props.labels ?? defaultBarcodeScannerLabels;
+    const [runtime, setRuntime] =
+        useState<typeof import('./scannerDialogRuntime.js')>();
+    const [loadError, setLoadError] = useState<{ error: unknown }>();
     const [dismissed, setDismissed] = useState(false);
     const isDismissed = useRef(false);
     const dispose = useRef<() => void>(() => {});
+    useEffect(() => {
+        let active = true;
+        // Like the other complete controls, public import and SSR must not
+        // initialize ReactDOM before a browser exists. No video/camera mounts
+        // until its owned dialog is ready, and retired mounts cannot revive.
+        void import('./scannerDialogRuntime.js').then(
+            (loaded) => {
+                if (active && !isDismissed.current) setRuntime(loaded);
+            },
+            (error: unknown) => {
+                if (active && !isDismissed.current) setLoadError({ error });
+            }
+        );
+        return () => {
+            active = false;
+        };
+    }, []);
     const dismiss = () => {
         if (isDismissed.current) return;
         isDismissed.current = true;
@@ -89,13 +108,14 @@ export function CompleteBarcodeScanner(props: CompleteBarcodeScannerProps) {
         setDismissed(true);
         props.onDismiss();
     };
-    if (dismissed) return null;
+    if (loadError) throw loadError.error;
+    if (dismissed || !runtime) return null;
     const style: CSSProperties & { '--mx-sdk-scanner-offset'?: string } = {
         ...props.style,
         '--mx-sdk-scanner-offset': `${props.desktopViewportOffset ?? 0}px`,
     };
     return h(
-        ScannerDialog,
+        runtime.ScannerDialog,
         {
             title: labels.scan_barcode_or_qr_code,
             closeLabel: labels.close,

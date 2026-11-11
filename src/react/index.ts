@@ -1,4 +1,14 @@
 export {
+    CompleteAddressAutocomplete,
+    type CompleteAddressAutocompleteProps,
+    type AddressAutocompleteLabels,
+} from './CompleteAddressAutocomplete.js';
+export {
+    useAddressAutocomplete,
+    type AddressAutocompleteIdentity,
+    type AddressAutocompleteLifecycleProps,
+} from './useAddressAutocomplete.js';
+export {
     CompleteReadOnlyTextField,
     type CompleteReadOnlyTextFieldProps,
     type CompleteReadOnlyTextLanguage,
@@ -343,6 +353,7 @@ import type {
 export {
     PortalSearchGate,
     type PortalSearchGateProps,
+    type PortalSearchGateDialogProps,
 } from './PortalSearchGate.js';
 export {
     usePortalSearchGate,
@@ -2437,6 +2448,12 @@ export {
     type PortalChartData,
     type PortalChartRow,
 } from './CompletePortalChart.js';
+
+export {
+    CompleteFormTrackingDisclosure,
+    type CompleteFormTrackingDisclosureProps,
+    type FormTrackingDisclosureLabels,
+} from './CompleteFormTrackingDisclosure.js';
 
 export {
     CompleteBarcodeScanner,

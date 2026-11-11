@@ -1,3 +1,6 @@
+import { assertSourcePackageBuild } from './source-package-checks.mjs';
+import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
+import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
     checkNativeFormProgressConsumer,
@@ -523,6 +526,10 @@ function run(command, args, cwd = temporaryDirectory) {
 try {
     // check:package also works alone; never pack leftover build output.
     run(process.execPath, ['scripts/build.mjs'], process.cwd());
+    const sourcePackage = assertSourcePackageBuild(process.cwd());
+    console.log(
+        `SDK source preparation matches checkout: ${sourcePackage.declarations} declarations in ${sourcePackage.formats} formats`
+    );
     const packed = JSON.parse(
         run(
             'npm',
@@ -557,7 +564,15 @@ try {
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
                 path.startsWith('dist/vendor/rich-markdown-editor/') ||
-                path.startsWith('dist/vendor/phone-number-input/'),
+                path.startsWith('dist/vendor/phone-number-input/') ||
+                [
+                    'dist/vendor/headlessui-address/combobox.js',
+                    'dist/vendor/headlessui-address/package.json',
+                    'dist/vendor/headlessui-address/provenance.json',
+                    'dist/vendor/headlessui-address/react-peer.js',
+                    'dist/vendor/headlessui-address/sdk-runtime.d.ts',
+                    'dist/vendor/headlessui-address/sdk-runtime.js',
+                ].includes(path),
             `Unexpected packed file: ${path}`
         );
     }
@@ -596,6 +611,8 @@ try {
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
         'dist/cjs/react/complete-clearable-text-input.css',
+        'dist/esm/react/complete-address.css',
+        'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
         'dist/cjs/react/complete-multiline.css',
         'dist/esm/react/html-description.css',
@@ -3220,6 +3237,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
+    const trackingMatrix = checkFormTrackingReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(trackingMatrix.profiles.length, 4);
+    assert.equal(trackingMatrix.cleanup, 'completed');
     const collaboratorMatrix = checkCompleteCollaboratorReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3264,6 +3289,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(calendlyWidgetMatrix.versions.length, 2);
     assert.equal(calendlyWidgetMatrix.cleanup, 'completed');
+    const addressMatrix = checkCompleteAddressReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(addressMatrix.versions.length, 2);
+    assert.equal(addressMatrix.cleanup, 'completed');
     const barcodeMatrix = checkCompleteBarcodeReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

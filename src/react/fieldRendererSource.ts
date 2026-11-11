@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { createContext } from 'react';
 
 /** React-only identity for transient renderer input; never an owner or write lease. */

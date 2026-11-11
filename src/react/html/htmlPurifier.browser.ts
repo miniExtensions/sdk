@@ -1,3 +1,4 @@
+import type * as DOMPurify from 'dompurify';
 import { createHTMLPurifier } from './createHTMLPurifier.js';
 
 let purifier: ReturnType<typeof createHTMLPurifier> | undefined;

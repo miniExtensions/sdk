@@ -86,6 +86,7 @@
                 "default": "./dist/cjs/field-types.js"
             }
         },
+        "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
@@ -119,6 +120,7 @@
         },
         "./react/html-description.css": "./dist/esm/react/html-description.css",
         "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
+        "./react/complete-address.css": "./dist/esm/react/complete-address.css",
         "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css"
     },
@@ -163,7 +165,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node --test scripts/address-combobox-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",
@@ -220,6 +222,7 @@
     },
     "devDependencies": {
         "@headlessui/react": "2.2.9",
+        "headlessui-address-source": "npm:@headlessui/react@1.7.2",
         "@types/dompurify": "2.4.0",
         "@types/jsdom": "20.0.1",
         "@types/moment-duration-format": "2.2.6",

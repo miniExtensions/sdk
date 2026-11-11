@@ -5000,16 +5000,23 @@ theme/layout inputs. A future native wrapper can pass `var(--theme-600)` and
 contexts. `headerActions` is optional decoration, not a prompt renderer or read
 authority. `panelTestId`/`overlayTestId` permit existing native test associations.
 
-**Native adoption remains separate.** Native `SearchPage` must retain Next title,
-admin/settings integration, current location assignment and Clear; `PortalView`
-retains metadata qualification and no-query/zero-result gate admission. Its
-compatibility helper exports can re-export these SDK helpers. Do not change
-PortalView or shared Modal merely to install the new UI. Native Headless UI
-currently composes document-level toolbar/settings/Intercom portals; a native
-`showModal` top layer cannot preserve those exceptions through `zIndex` alone.
-Controls passed in `headerActions` and their popup destinations need an actual
-native composition decision and browser proof before adoption. The SDK's
-`zIndex` styles its element, not an escape from browser modal/inert semantics.
+For framework hosts with document-level maker portals, `renderDialog` accepts
+`PortalSearchGateDialogProps`: the already-built complete SDK panel as `children`,
+`title`, `ariaLabel`, `description`, `descriptionId`, and `initialFocus`. Return a
+framework modal shell around those children. The shell owns non-dismissal,
+initial/Tab/restored focus, modal accessibility and native portal compatibility.
+It must not render another prompt, input or local draft/error state. The SDK
+never opens or closes a browser dialog when this shell is supplied; the same
+SDK state and all explicit navigation/Clear behavior remain above the shell.
+Use a stable component inside the callback when the shell needs hooks.
+
+Native `SearchPage` uses this seam with its existing HeadlessUI Modal because
+its toolbar, settings, Publish feedback and Intercom use document portals. A
+native `showModal` top layer cannot preserve those surfaces through z-index.
+The native shell retains its current theme, Intercom spacing and focus behavior;
+it can register the supplied description through its framework's own description
+component. `PortalView` still qualifies metadata and decides no-query/zero-result
+admission. Native adoption and browser acceptance remain separate from SDK tests.
 
 Source tests, packed React18/19 ESM/CJS/types/SSR/hydration consumers and installed
 styled Chromium proofs are authored/registered separately. They are synthetic
@@ -5607,6 +5614,73 @@ copy the code/loading/cache/error state into the wrapper. Do not change
 `LoginPageExtensionView`, `loginIntoExtensionUsingLoginPage`, SDK auth safety or
 backend policy. This SDK stage is not native adoption, actual code delivery,
 credential-storage qualification or hosted authentication acceptance.
+
+## Complete React Address autocomplete
+
+`CompleteAddressAutocomplete` from `@miniextensions/sdk/react` owns the complete
+Combobox, input/ref, mobile Clear, options, official embedded Google Maps
+attribution, loading and explicit retry presentation. Import the optional
+`@miniextensions/sdk/react/complete-address.css` for standalone styles. It needs
+no Tailwind or monorepo assets. `theme.activeBackground` and `theme.activeText`
+override its scoped option colors; native input attributes, classes, styles,
+label/ARIA associations and forwarded input refs remain available.
+
+```tsx
+import {
+    CompleteAddressAutocomplete,
+    type AddressAutocompleteLifecycleProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-address.css';
+
+export function ShippingAddress(props: AddressAutocompleteLifecycleProps) {
+    return (
+        <CompleteAddressAutocomplete
+            {...props}
+            id="shipping-address"
+            form="shipping-form"
+            aria-label="Shipping address"
+            initialMobile={false}
+            labels={{
+                clear: 'Clear',
+                loadingPredictions: 'Loading address suggestions',
+                loadingDetails: 'Loading selected address',
+                failed: 'Address suggestions could not be loaded. Keep typing or retry.',
+                retry: 'Try again',
+            }}
+        />
+    );
+}
+```
+
+Supply authorized `listPredictions(query, {signal})` and
+`getFormattedAddress(placeId, {signal})` closures. This component never creates
+a client, accepts a session, adds a destination, performs Save or automatically
+retries. Identity members compare by reference/value; replace the relevant
+session, field or read-scope member whenever that authority changes. An observed
+A→B→A transition creates fresh ownership. Render-only labels/classes/callback
+changes preserve pending reads and use the latest committed writer. Disabled or
+read-only controls retire reads and suppress editing/selection/retry; a read-only
+input remains focusable. Abort listeners and writers may reenter synchronously;
+obsolete edit receipts cannot write through a successor owner or newer edit.
+
+The external canonical value remains authoritative even when no place is
+selected, including empty/null and values longer than `maxLength`. Manual edits
+write raw text before scheduling the existing 800 ms nonempty-query debounce.
+Selecting a current prediction writes its description synchronously, then
+formatted details may replace it. `maxLength` recognizes the caller's capped
+echo without imposing a second cap/store. External replacements and unmount
+retire obsolete work, including when a transport ignores abort. Each expected
+echo expires after one commit, including an unchanged capped value. A same-value
+assignment cannot signal an external reset; change an identity member for that.
+
+`useAddressAutocomplete` exposes the same lifecycle for other presentations and
+reuses the unchanged public request engine. Pass options directly from its
+current `state.predictions`; copies and old options are refused. Retained retry
+callbacks are tied to their exact failed snapshot. Supply the same explicit
+`initialMobile` value to server render and hydration, then remount for a new
+device policy. Required labels are caller-localized; native adapters supply all
+supported languages. The legacy DOM control/model and its composition/cap
+policy remain independent APIs.
 
 ## Complete Barcode / QR scanner
 

@@ -266,6 +266,13 @@ export async function prepareCompleteCollaboratorFixtures({
                 bytes: bytes.length,
             };
             if (within(installed, path)) {
+                const packagePath = relative(installed, path).replaceAll(
+                    '\\',
+                    '/'
+                );
+                // The ordinary React barrel reaches Address's shared closure.
+                // Admit only its three shipped runtime files and bind their
+                // bytes to this archive, just like the format-specific child.
                 assert(
                     within(join(installed, 'dist', format), path) ||
                         within(
@@ -275,12 +282,15 @@ export async function prepareCompleteCollaboratorFixtures({
                         within(
                             join(installed, 'dist/vendor/rich-markdown-editor'),
                             path
-                        ),
-                    'Collaborator browser imported source or wrong SDK format'
+                        ) ||
+                        [
+                            'dist/vendor/headlessui-address/combobox.js',
+                            'dist/vendor/headlessui-address/react-peer.js',
+                            'dist/vendor/headlessui-address/sdk-runtime.js',
+                        ].includes(packagePath),
+                    `Collaborator browser imported source or wrong SDK format: ${packagePath}`
                 );
-                item.archiveMember =
-                    'package/' +
-                    relative(installed, path).replaceAll('\\', '/');
+                item.archiveMember = 'package/' + packagePath;
                 assert.deepEqual(
                     bytes,
                     execFileSync('tar', ['-xOf', archive, item.archiveMember])

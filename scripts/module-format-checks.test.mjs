@@ -646,6 +646,7 @@ for (const name of [
     'complete-verification',
     'complete-barcode-scanner',
     'complete-portal-chart',
+    'complete-address',
     'complete-collaborators',
     'date',
     'datetime',

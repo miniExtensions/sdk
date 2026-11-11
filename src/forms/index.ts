@@ -200,3 +200,17 @@ export {
     type FormSaveCoordinatorOptions,
     type FormSaveInvocation,
 } from './saveCoordinator.js';
+
+export {
+    getEffectiveFormTracking,
+    captureFormTrackingPolicy,
+    readBrowserFormLocation,
+    prepareAllocatedFormTracking,
+    type FormTrackingState,
+    type EffectiveFormTracking,
+    type CapturedFormTrackingPolicy,
+    type FormLocation,
+    type FormLocationReader,
+    type PreparedFormTracking,
+    type FormLocationErrorReporter,
+} from './tracking.js';

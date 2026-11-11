@@ -1,3 +1,5 @@
+import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
+import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -2132,6 +2134,27 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeCalendly,
+            output,
+        });
+        for (const format of ['esm', 'cjs']) {
+            const key =
+                format === 'esm'
+                    ? 'completeAddress'
+                    : 'completeAddressCommonJS';
+            report[key] = {};
+            await checkCompleteAddressBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report[key],
+                output,
+                format,
+            });
+        }
+        report.formTracking = {};
+        await checkFormTrackingBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formTracking,
             output,
         });
         report.completeBarcode = {};

@@ -15,7 +15,7 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const completeDateBrowserSource = `
 import React,{createElement as h,useLayoutEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {CompleteDateField} from '@miniextensions/sdk/react/date';
+import {DateField,CompleteDateField} from '@miniextensions/sdk/react/date';
 const date={type:'date',options:{dateFormat:{format:'YYYY-MM-DD'}}};
 const datetime={type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'America/New_York'}};
 const mode=new URLSearchParams(location.search).get('mode')||'date';
@@ -25,7 +25,7 @@ function App(){
  const latest=useRef(state);useLayoutEffect(()=>{latest.current=state;});observed=state;change=patch=>setState(old=>({...old,...patch}));
  const dialog=useRef(null);useLayoutEffect(()=>{if(state.dialog&&!dialog.current.open)dialog.current.showModal();},[state.dialog]);
  const owner=state.owner;
- const field=state.mounted?h(CompleteDateField,{id:state.id,sessionId:state.session,airtableDateConfig:state.config,value:state.value,setValue(value){if(!latest.current.current||latest.current.readonly||latest.current.owner!==owner)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},owner:{token:owner,isCurrent:()=>latest.current.current&&latest.current.owner===owner},readOnly:state.readonly,dateRange:state.readonly?'today or in the future':undefined,language:'en',title:'Appointment',description:'Choose a synthetic date',formId:'date-form',calendarAlign:state.align}):null;
+ const field=state.mounted?h(state.config.type==='date'?DateField:CompleteDateField,{id:state.id,sessionId:state.session,airtableDateConfig:state.config,value:state.value,setValue(value){if(!latest.current.current||latest.current.readonly||latest.current.owner!==owner)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},owner:{token:owner,isCurrent:()=>latest.current.current&&latest.current.owner===owner},readOnly:state.readonly,dateRange:state.readonly?'today or in the future':undefined,language:'en',title:'Appointment',description:'Choose a synthetic date',formId:'date-form',calendarAlign:state.align}):null;
  const controls=h(React.Fragment,null,
   h('div',{className:'fixture-toolbar'},
    h('button',{type:'button'},'Outside calendar'),

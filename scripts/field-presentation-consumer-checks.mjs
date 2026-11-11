@@ -407,6 +407,7 @@ function snapshot() {
    const control=section.querySelector('textarea,input,button[aria-pressed]');
    const title=section.querySelector('.mx-sdk-field-title');
    const describedBy=control?.getAttribute('aria-describedby');
+   const rectangle=shell?.getBoundingClientRect();
    return[key,{value:model.value,id:control?.id??null,form:control?.form?.id??null,
     checked:control&&'checked'in control?control.checked:null,disabled:control?.disabled??null,
     labelId:title?.id??null,labelTag:title?.tagName??null,
@@ -414,7 +415,8 @@ function snapshot() {
     descriptionIds:describedBy?.split(/\s+/)??[],
     descriptionsLocal:!describedBy||describedBy.split(/\s+/).every(id=>{const target=document.getElementById(id);return target&&section.contains(target);}),
     title:title?.textContent??null,visible:!!shell,
-    width:shell?.getBoundingClientRect().width??null,basis:shell?getComputedStyle(shell).flexBasis:null}];
+    top:rectangle?.top??null,left:rectangle?.left??null,
+    height:rectangle?.height??null,width:rectangle?.width??null}];
   }))};
 }
 function publish() {
@@ -651,6 +653,15 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
             assert(value.descriptionsLocal, name + ': feedback stays local');
             if (value.labelTag === 'LABEL') assert(value.labelIsLocal);
             if (value.id != null) assert.equal(value.form, 'external-form');
+            if (value.visible) {
+                for (const measurement of ['top', 'left', 'height', 'width'])
+                    assert(
+                        Number.isFinite(value[measurement]),
+                        name + ': finite field rectangle ' + measurement
+                    );
+                assert(value.height > 0, name + ': visible field has height');
+                assert(value.width > 0, name + ': visible field has width');
+            }
         }
         assert.equal(snapshot.requests, 0);
         assert.equal(snapshot.actions.submits, 0);
@@ -887,6 +898,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
         () => document.querySelector('#row-notes-a img')?.naturalWidth === 48
     );
     await row('notes-a').locator('img').dispatchEvent('error');
+    await row('notes-a').getByRole('status').waitFor();
     assert.equal(await row('notes-a').getByRole('status').count(), 1);
     await row('notes-a').getByRole('button', { name: 'Try again' }).click();
     await page.waitForFunction(
@@ -897,23 +909,46 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     await page.getByRole('tooltip').waitFor();
     assert.equal(await input('notes-a').getAttribute('aria-describedby'), null);
     assert.equal(await page.getByRole('tooltip').locator('img').count(), 1);
-    await verify(
+    value = await verify(
         'controlled local image decode failure/replacement/preview retry and image-only tooltip'
     );
+    const writesBeforeLayout = value.writes;
+    const assertNotesShareRow = (snapshot, name, maximumWidth) => {
+        const first = snapshot.rows['notes-a'];
+        const second = snapshot.rows['notes-b'];
+        assert(
+            Math.abs(first.top - second.top) <= 1,
+            name + ': fields share their rendered row'
+        );
+        assert(
+            second.left >= first.left + first.width - 1,
+            name + ': fields occupy separate horizontal space'
+        );
+        assert(first.width < maximumWidth, name + ': first field width');
+        assert(second.width < maximumWidth, name + ': second field width');
+        assert.deepEqual(snapshot.writes, writesBeforeLayout);
+    };
 
     await page.setViewportSize({ width: 900, height: 900 });
     value = await verify('desktop same-row layout');
-    assert(value.rows['notes-a'].width < 500);
-    assert(value.rows['notes-b'].width < 500);
+    assertNotesShareRow(value, 'desktop same-row layout', 500);
     await page.setViewportSize({ width: 390, height: 900 });
     value = await verify('mobile stacks same-row fields by default');
-    assert.equal(value.rows['notes-a'].basis, '100%');
-    assert.equal(value.rows['notes-b'].basis, '100%');
+    const firstMobile = value.rows['notes-a'];
+    const secondMobile = value.rows['notes-b'];
+    assert(
+        secondMobile.top >= firstMobile.top + firstMobile.height - 1,
+        'Default mobile fields occupy separate vertical rows'
+    );
+    assert(
+        Math.abs(firstMobile.left - secondMobile.left) <= 1,
+        'Default mobile fields align at the same row start'
+    );
+    assert.deepEqual(value.writes, writesBeforeLayout);
     await update('notes-a', { mobile: true });
     await update('notes-b', { mobile: true });
     value = await verify('explicit mobile same-row layout');
-    assert(value.rows['notes-a'].width < 220);
-    assert(value.rows['notes-b'].width < 220);
+    assertNotesShareRow(value, 'explicit mobile same-row layout', 220);
 
     evidence.groups = groups;
     evidence.limits = [

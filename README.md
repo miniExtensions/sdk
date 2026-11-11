@@ -775,3 +775,7 @@ criteria/cleanup lifecycle; it is not a new SDK export or a general filter build
 [Complete Form completion](docs/form-completion.md) provides the stock success UI,
 current message and redirect projection, instance-local countdown and explicit
 host effect plans. Try the [standalone example](examples/react-form-completion/README.md).
+
+[Complete Form header, cover and footer description](docs/form-header.md) provides
+stock presentation, selected accepted-field projection, safe HTML and explicit
+preview capabilities. Try the [standalone example](examples/react-form-header/README.md).

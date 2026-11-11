@@ -124,7 +124,7 @@ export function CompleteCheckboxField(
             },
             h(
                 'span',
-                { className: 'mx-sdk-complete-checkbox__sr-only' },
+                { className: 'mx-sdk-complete-checkbox__sr-only sr-only' },
                 String(checked)
             ),
             h(

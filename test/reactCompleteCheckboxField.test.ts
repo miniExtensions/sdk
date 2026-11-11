@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Window } from 'happy-dom';
 import { it, type TestContext } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { createElement as h } from 'react';
@@ -28,6 +29,7 @@ function button(fixture: Fixture) {
 }
 async function checkboxFixture(t: TestContext) {
     const fixture = await htmlPresentationFixture(t);
+    assert.ok(fixture.window instanceof Window);
     // Match the browser's module realm: ReactDOM feature detection sees the
     // actual fixture document before the shell's popup dependency is imported.
     const { CompleteFormFieldPresentation } = await import(

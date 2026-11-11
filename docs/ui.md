@@ -4510,19 +4510,25 @@ a Form provider or Saves; the generic entry keeps its existing runtime dependenc
 
 ```tsx
 import { DateField } from '@miniextensions/sdk/react/date';
+import { useState } from 'react';
 import '@miniextensions/sdk/react/date.css';
 
-<DateField
-    id="due-date"
-    title="Due date"
-    language="en"
-    airtableDateConfig={{
-        type: 'date',
-        options: { dateFormat: { format: 'D/M/YYYY' } },
-    }}
-    value={value}
-    setValue={setValue}
-/>;
+export function DueDate() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+        <DateField
+            id="due-date"
+            title="Due date"
+            language="en"
+            airtableDateConfig={{
+                type: 'date',
+                options: { dateFormat: { format: 'D/M/YYYY' } },
+            }}
+            value={value}
+            setValue={setValue}
+        />
+    );
+}
 ```
 
 `mode="readOnly"` displays the formatted Date or localized empty text without an

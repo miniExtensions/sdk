@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { Window } from 'happy-dom';
+import { Window, type Event as ResourceBoundaryEvent } from 'happy-dom';
 import { act, createElement as h, StrictMode, useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import type { CompleteFormFieldPresentationProps } from '../src/react/CompleteFormFieldPresentation.js';
@@ -539,6 +539,86 @@ it('keeps preview image recovery focusable inside a portaled tooltip without sub
     await f.click(retryButton);
     assert.equal(image(f).src, imageA);
     assert.equal(f.window.document.body.querySelector('[role="status"]'), null);
+    f.unchangedEffects();
+});
+
+it('distinguishes bubbling synthetic image errors from native resource failures without filtering genuine Window errors', async (t) => {
+    const f = await fixture(t);
+    const windowErrors: string[] = [];
+    const collectWindowError = (event: ResourceBoundaryEvent) => {
+        // Match the browser proof's existing collector for both generic
+        // resource events (no error/message) and genuine ErrorEvent objects.
+        const error = 'error' in event ? event.error : undefined;
+        const message = 'message' in event ? event.message : undefined;
+        windowErrors.push(String(error || message));
+    };
+    f.window.addEventListener('error', collectWindowError);
+    t.after(() => f.window.removeEventListener('error', collectWindowError));
+    await f.render(
+        shell({
+            descriptionImageUrl: imageA,
+            description: '<p>Local image recovery</p>',
+            preview: true,
+        })
+    );
+    const firstImage = image(f);
+    await act(async () => {
+        firstImage.dispatchEvent(
+            new f.window.Event('error', {
+                bubbles: true,
+                cancelable: true,
+                composed: true,
+            })
+        );
+    });
+    assert.deepEqual(
+        windowErrors,
+        ['undefined'],
+        'A fabricated bubbling resource error reaches the unfiltered Window collector'
+    );
+    assert.equal(f.container.querySelector('img'), null);
+    assert.ok(f.container.querySelector('[role="status"]'));
+    await f.click(retry(f));
+    const replacementImage = image(f);
+    assert.ok(
+        replacementImage !== firstImage,
+        'Preview retry mounts a real replacement image node'
+    );
+    assert.equal(replacementImage.src, imageA);
+    // Actual image resource error events do not bubble, cancel or cross a
+    // shadow boundary. Keep their delivery distinct from automation defaults.
+    const resourceError = new f.window.Event('error', {
+        bubbles: false,
+        cancelable: false,
+        composed: false,
+    });
+    await act(async () => {
+        replacementImage.dispatchEvent(resourceError);
+    });
+    assert.deepEqual(
+        windowErrors,
+        ['undefined'],
+        'Native resource failure updates the image lifecycle without a global application error'
+    );
+    assert.equal(f.container.querySelector('img'), null);
+    assert.ok(f.container.querySelector('[role="status"]'));
+    await f.click(retry(f));
+    assert.equal(image(f).src, imageA);
+    assert.equal(f.container.querySelector('[role="status"]'), null);
+    const applicationError = new Error('Genuine synthetic application error');
+    await act(async () => {
+        f.window.dispatchEvent(
+            new f.window.ErrorEvent('error', {
+                error: applicationError,
+                message: applicationError.message,
+            })
+        );
+    });
+    assert.deepEqual(
+        windowErrors,
+        ['undefined', String(applicationError)],
+        'The same collector still detects genuine Window ErrorEvent failures'
+    );
     f.unchangedEffects();
 });
 

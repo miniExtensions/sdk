@@ -897,7 +897,14 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     await page.waitForFunction(
         () => document.querySelector('#row-notes-a img')?.naturalWidth === 48
     );
-    await row('notes-a').locator('img').dispatchEvent('error');
+    // Native image resource errors are non-bubbling, non-cancelable events.
+    // Keep this element failure distinct from the unchanged Window runtime-
+    // error guard; Playwright's default bubbling generic Event reaches it.
+    await row('notes-a').locator('img').dispatchEvent('error', {
+        bubbles: false,
+        cancelable: false,
+        composed: false,
+    });
     await row('notes-a').getByRole('status').waitFor();
     assert.equal(await row('notes-a').getByRole('status').count(), 1);
     await row('notes-a').getByRole('button', { name: 'Try again' }).click();

@@ -4,6 +4,7 @@ import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
+import { checkFieldPresentationReactMatrix } from './field-presentation-consumer-checks.mjs';
 import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
@@ -581,6 +582,7 @@ try {
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
+                path === 'docs/field-presentation.md' ||
                 headerStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
@@ -644,6 +646,7 @@ try {
         'dist/cjs/react/form-completion.css',
         'docs/form-completion.md',
         'docs/form-header.md',
+        'docs/field-presentation.md',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -660,6 +663,10 @@ try {
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
         'dist/cjs/react/complete-multiline.css',
+        'dist/esm/react/field-presentation.css',
+        'dist/cjs/react/field-presentation.css',
+        'dist/esm/react/complete-checkbox.css',
+        'dist/cjs/react/complete-checkbox.css',
         'dist/esm/react/html-description.css',
         'dist/cjs/react/html-description.css',
         'dist/esm/react/date.css',
@@ -3277,6 +3284,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(completeMultilineMatrix.versions.length, 2);
     assert.equal(completeMultilineMatrix.cleanup, 'completed');
+    const fieldPresentationMatrix = checkFieldPresentationReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(fieldPresentationMatrix.versions.length, 2);
+    assert.equal(fieldPresentationMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

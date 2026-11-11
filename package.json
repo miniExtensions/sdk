@@ -136,7 +136,9 @@
                 "types": "./dist/cjs/react/date/index.d.ts",
                 "default": "./dist/cjs/react/date/index.js"
             }
-        }
+        },
+        "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
+        "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css"
     },
     "files": [
         "dist/esm",
@@ -174,6 +176,7 @@
         "examples/react-form-completion/build.mjs",
         "examples/react-form-completion/tsconfig.json",
         "docs/form-header.md",
+        "docs/field-presentation.md",
         "examples/react-form-header/README.md",
         "examples/react-form-header/main.ts",
         "examples/react-form-header/index.html",

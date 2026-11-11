@@ -124,7 +124,18 @@
         "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
         "./react/form-completion.css": "./dist/esm/react/form-completion.css",
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css",
-        "./react/theme.css": "./dist/esm/react/theme.css"
+        "./react/theme.css": "./dist/esm/react/theme.css",
+        "./react/complete-date.css": "./dist/esm/react/complete-date.css",
+        "./react/date": {
+            "import": {
+                "types": "./dist/esm/react/date/index.d.ts",
+                "default": "./dist/esm/react/date/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/date/index.d.ts",
+                "default": "./dist/cjs/react/date/index.js"
+            }
+        }
     },
     "files": [
         "dist/esm",
@@ -232,7 +243,7 @@
     },
     "devDependencies": {
         "@headlessui/react": "2.2.9",
-        "headlessui-address-source": "npm:@headlessui/react@1.7.2",
+        "@radix-ui/react-popover": "1.1.14",
         "@types/dompurify": "2.4.0",
         "@types/jsdom": "20.0.1",
         "@types/moment-duration-format": "2.2.6",
@@ -243,6 +254,7 @@
         "c8": "11.0.0",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
+        "headlessui-address-source": "npm:@headlessui/react@1.7.2",
         "linkify-react": "3.0.4",
         "playwright": "1.64.0",
         "prettier": "3.6.2",

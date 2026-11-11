@@ -941,3 +941,27 @@ The Address vendor reproduction compares whitespace-only compiler output, with
 identifiers and code retained, so esbuild's dependency-path comments cannot tie
 a package to pnpm's symlink layout. A flat Git-prepare layout regression checks
 identical output and retains rejection of a modified upstream source file.
+
+## Complete Date picker qualification
+
+`reactCompleteDate.test.ts` exercises the actual pinned picker and native
+compatibility helpers. It covers native date/instant commits, invalid/partial
+draft recovery, semantic versus cosmetic metadata, caret, readonly/range,
+current writers, Enter/IME containment and mounted previous-month January 31
+selection in 2024 and 2025. Cold server rendering runs in a separate process;
+client libraries initialize only after the test browser realm exists.
+
+The normal package check registers `complete-date-consumer-checks.mjs` with
+independent React/ReactDOM 18.3.1 and 19.2.0 installs, both module formats,
+positive/negative declarations, CSS resolution, cold SSR/hydration, real
+mount/update/unmount, outside-pointer dismissal, original loaded instant bytes
+and one consumer React/ReactDOM instance. Its mounted fork checks exercise the
+actual click-outside ref path, including React 19 without `findDOMNode`.
+
+The existing packed Chromium owner registers `complete-date-browser-checks.mjs`
+for trusted keyboard/pointer, boundary selection, metadata/blur recovery,
+DateTime Enter and one explicit Save with adjacent text, dialog-container
+placement, narrow collision geometry, close/reopen and unmount. Installed
+inputs, vendor/CSS bytes, no-network policy and cleanup remain guarded.
+These synthetic proofs do not establish OS IME, a screen-reader pass, native
+Form/Portal authorization, provider persistence or hosted acceptance.

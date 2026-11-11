@@ -4499,6 +4499,68 @@ backend-only treatment of client-zone ranges without token-bound provenance.
 Use existing public `TextInput` for a supplied native input; retain picker-specific
 composition and themed wrappers with the host.
 
+### Complete native-compatible Date and DateTime picker
+
+`CompleteDateField` and `CompleteDateFieldProps` from the opt-in
+`@miniextensions/sdk/react/date` entry include the full calendar/time picker,
+localized native input grammar, drafts, blur recovery, range policy and popup.
+Import `@miniextensions/sdk/react/complete-date.css` for portable default styles;
+Tailwind and a host picker/render slot are unnecessary. Moment locale assets
+are loaded by this entry. Core and generic React imports do not load the picker.
+Install matching supported React and ReactDOM versions; both remain SDK peers.
+
+```tsx
+import { useState } from 'react';
+import { CompleteDateField } from '@miniextensions/sdk/react/date';
+import '@miniextensions/sdk/react/complete-date.css';
+
+export function Appointment() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+        <CompleteDateField
+            id="appointment"
+            title="Appointment"
+            language="en"
+            airtableDateConfig={{
+                type: 'dateTime',
+                options: {
+                    dateFormat: { format: 'M/D/YYYY' },
+                    timeFormat: { format: 'h:mma' },
+                    timeZone: 'America/New_York',
+                },
+            }}
+            value={value}
+            setValue={setValue}
+        />
+    );
+}
+```
+
+Date writes retain `YYYY-MM-DD`; DateTime picker/typed commits use the existing
+native timezone/range helpers and UTC minute precision. An untouched loaded
+value is not rewritten by rendering. The existing ISO-only `DateField`,
+`DateTimeField` and strict models retain their separate explicit-offset contract,
+including original seconds, fractions and offset bytes.
+
+Equivalent metadata and cosmetic props preserve unfinished text and caret.
+Changing effective grammar, timezone, field kind, `id`, `sessionId` or optional
+`owner.token` resets to the current controlled display and retires old actions.
+Supply `owner.isCurrent()` when an external canonical owner can retire before
+React commits. Callback-only updates use the current committed writer; a writer
+may return `false` to refuse. Unmount and readonly transitions retire edits.
+The component creates no Form store, request or implicit Save. Enter commits
+without submitting; composing Enter is contained without committing. Clearing
+the input and committing writes null.
+
+An enclosing native label can continue to target `id`; `formId`,
+`ariaDescribedBy`, `ariaInvalid` and `inputRef` preserve host associations.
+Optional `title`, `description`, `error` and `calendarLabel` supply standalone
+presentation. The controlled Radix popup supports `calendarAlign`, viewport
+collisions, Escape/outside dismissal and nearest `[role="dialog"]` placement.
+Scoped popup/input CSS uses `--mx-sdk-accent` or the native `--theme-500` value.
+Canonical storage, session identity, authorization and explicit Save remain
+with the consuming application.
+
 ### Native radio input
 
 `RadioInput` from `@miniextensions/sdk/react` forwards the native input ref,

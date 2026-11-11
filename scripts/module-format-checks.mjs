@@ -193,6 +193,7 @@ export function assertModuleFormats(root) {
                 './react/complete-portal-chart.css',
                 './react/complete-collaborators.css',
                 './react/date.css',
+                './react/complete-date.css',
                 './react/datetime.css',
                 './react/duration.css',
                 './react/currency.css',
@@ -226,7 +227,8 @@ export function assertModuleFormats(root) {
         assert(
             subpath === '.' ||
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
-                subpath === './react/html'
+                subpath === './react/html' ||
+                subpath === './react/date'
         );
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

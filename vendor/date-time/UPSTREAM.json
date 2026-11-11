@@ -1,0 +1,25 @@
+{
+    "repository": "https://github.com/miniExtensions/react-datetime",
+    "revision": "6fb5a547de6328f4103b4c5928c79a05473aea85",
+    "version": "3.1.0",
+    "license": "MIT",
+    "licenseSource": "https://github.com/arqex/react-datetime/blob/master/LICENSE.txt",
+    "licenseBlob": "4849e2ff874c38819c955b5821a93602dc3d3818",
+    "distBlob": "2a17899795931143db8c31d0e6957cb31365e911",
+    "adaptation": "Unchanged compiled fork; SDK-owned CommonJS default-export bridge and React 18/19 declarations. No picker algorithm or click-outside code changes.",
+    "externalDependencies": [
+        "react",
+        "react-dom",
+        "moment-timezone"
+    ],
+    "sha256": {
+        "index.d.cts": "37996c0c8c81f6b4d973536d428363918ba58b7b5415d869445ef15a5be3d6eb",
+        "upstream.css": "807769d9f76f573b5df1a03298b102fe4490f153d628331b84123324b696c533",
+        "upstream.cjs": "c8908a9fa51176fd4d00dbad0af14df735969b323f4aafe73c411b09145a8a35",
+        "index.cjs": "aca7d66913ab0a92c80f0dc69154c8985404999a7964947e9d64b4e814e83812",
+        "LICENSE.txt": "74ddd7303802a1ae63b1848236c4b4b36b5a37a889904d7fe372a9d227807834",
+        "upstream.package.json": "f03cad2f912dec9cf0475d04c2533f858992a5d36c2e71a155f76e6e10ff6b7f",
+        "ONCLICKOUTSIDE-LICENSE.txt": "4cfb5a60e57f875c3e18e3fc98a321ad0ae875263ffad0ecb25f96f8c84983df"
+    },
+    "bundledClickOutsideLicenseSource": "https://github.com/Pomax/react-onclickoutside/blob/master/LICENSE"
+}

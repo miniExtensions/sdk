@@ -64,6 +64,12 @@ it('retires a cold dialog load before any camera work and admits a fresh success
             },
             onDismiss() {},
         });
+    const trigger = f.document.createElement('button');
+    trigger.textContent = 'Original scan trigger';
+    f.document.body.append(trigger);
+    t.after(() => trigger.remove());
+    // The user activates the scanner before its private dialog module exists.
+    trigger.focus();
     // StrictMode requests the runtime, but retirement happens in the same
     // stack, before the real dynamic import can fulfill.
     f.renderSync(scanner('retired'), true);
@@ -80,6 +86,11 @@ it('retires a cold dialog load before any camera work and admits a fresh success
     assert.deepEqual([lists, acquisitions, decodes], [1, 1, 1]);
     assert.deepEqual(writes, ['fresh']);
     assert.equal(media.stops(), 1);
+    await f.click('Close');
+    assert(
+        f.document.activeElement === trigger,
+        'cold scanner returns focus to its original trigger'
+    );
 });
 
 for (const failure of [

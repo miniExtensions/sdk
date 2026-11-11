@@ -49,6 +49,74 @@ export type CompleteBarcodeScannerProps = BarcodeScannerLayout & {
     ownerKey?: unknown;
 };
 type Failure = 'no-device' | 'permission-denied' | 'decode-error';
+const focusEpochs = new WeakMap<Document, number>();
+
+function useScannerReturnFocus(dismissed: boolean) {
+    const target = useRef<HTMLElement | null>();
+    const registration = useRef<{ document: Document; retiredAt?: number }>();
+    const useCommittedEffect =
+        typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    useCommittedEffect(() => {
+        if (dismissed) return;
+        const owner = document;
+        if (target.current === undefined)
+            target.current =
+                owner.activeElement instanceof HTMLElement
+                    ? owner.activeElement
+                    : null;
+        const current: { document: Document; retiredAt?: number } = {
+            document: owner,
+        };
+        registration.current = current;
+        focusEpochs.set(owner, (focusEpochs.get(owner) ?? 0) + 1);
+        return () => {
+            // Snapshot before a replacement's layout registration, including
+            // replacements still waiting for their private dialog module.
+            current.retiredAt = focusEpochs.get(owner);
+        };
+    }, [dismissed]);
+    useEffect(() => {
+        if (dismissed) return;
+        const current = registration.current;
+        if (!current) return;
+        return () => {
+            // Headless restores from its own unmount microtask. Its history
+            // misses the trigger on a cold lazy import; restore our earlier
+            // capture after that teardown, without stealing a newer focus.
+            queueMicrotask(() =>
+                queueMicrotask(() => {
+                    const owner = current.document;
+                    const saved = target.current;
+                    if (
+                        registration.current !== current ||
+                        current.retiredAt !== focusEpochs.get(owner) ||
+                        !saved?.isConnected ||
+                        saved === owner.body ||
+                        Boolean((saved as HTMLButtonElement).disabled) ||
+                        saved.closest('[inert], [hidden]')
+                    )
+                        return;
+                    const dialogs = owner.querySelectorAll(
+                        '.mx-sdk-scanner[role=dialog]'
+                    );
+                    const top = dialogs[dialogs.length - 1];
+                    if (top && !top.contains(saved)) return;
+                    const active = owner.activeElement;
+                    if (
+                        active &&
+                        active !== owner.body &&
+                        active !== owner.documentElement &&
+                        active !== saved &&
+                        active.isConnected
+                    )
+                        return;
+                    saved.focus({ preventScroll: true });
+                })
+            );
+        };
+    }, [dismissed]);
+}
+
 const classifyFailure = (error: unknown): Failure =>
     typeof error === 'object' &&
     error !== null &&
@@ -82,6 +150,7 @@ export function CompleteBarcodeScanner(props: CompleteBarcodeScannerProps) {
         useState<typeof import('./scannerDialogRuntime.js')>();
     const [loadError, setLoadError] = useState<{ error: unknown }>();
     const [dismissed, setDismissed] = useState(false);
+    useScannerReturnFocus(dismissed);
     const isDismissed = useRef(false);
     const dispose = useRef<() => void>(() => {});
     useEffect(() => {

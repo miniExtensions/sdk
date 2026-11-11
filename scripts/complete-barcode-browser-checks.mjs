@@ -181,6 +181,11 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
             await page.keyboard.press('Escape');
             await page.getByRole('dialog').waitFor({ state: 'detached' });
             await button.waitFor();
+            await page.waitForFunction(
+                () =>
+                    document.activeElement?.getAttribute('data-testid') ===
+                    'qr-scanner-button'
+            );
             assert(
                 await button.evaluate((node) => node === document.activeElement)
             );
@@ -199,6 +204,11 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
                         .getByRole('button', { name: 'Close', exact: true })
                         .click();
                 await page.getByRole('dialog').waitFor({ state: 'detached' });
+                await page.waitForFunction(
+                    () =>
+                        document.activeElement?.getAttribute('data-testid') ===
+                        'qr-scanner-button'
+                );
                 assert(
                     await button.evaluate(
                         (node) => node === document.activeElement

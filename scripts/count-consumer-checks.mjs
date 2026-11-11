@@ -115,7 +115,9 @@ export async function checkCountConsumer({
         );
         assert.match(
             readFileSync(
-                require.resolve('@miniextensions/sdk/react/complete-readonly-text.css'),
+                require.resolve(
+                    '@miniextensions/sdk/react/complete-readonly-text.css'
+                ),
                 'utf8'
             ),
             /\.mx-sdk-complete-readonly-text/
@@ -270,7 +272,9 @@ export async function checkCountConsumer({
                     [undefined, 'No Value'],
                 ]) {
                     await act(async () =>
-                        root.render(h(react.CountField, { value, language: 'en' }))
+                        root.render(
+                            h(react.CountField, { value, language: 'en' })
+                        )
                     );
                     assert.equal(container.textContent, expected);
                     assert.equal(input(), null);

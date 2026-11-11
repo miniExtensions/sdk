@@ -503,7 +503,10 @@ try {
     await assertMasks(page);
     await inert();
     const controlled = page.locator('#controlled-count-preview');
-    assert.equal(await controlled.locator('.read-only-text').textContent(), '0');
+    assert.equal(
+        await controlled.locator('.read-only-text').textContent(),
+        '0'
+    );
     const controlledGroup = controlled.getByRole('group', {
         name: 'Related records',
     });
@@ -519,7 +522,10 @@ try {
         '0',
     ]) {
         await controlled
-            .getByRole('button', { name: 'Replace controlled Count', exact: true })
+            .getByRole('button', {
+                name: 'Replace controlled Count',
+                exact: true,
+            })
             .click();
         assert.equal(await controlledGroup.textContent(), expected);
         assert.equal(

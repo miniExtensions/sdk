@@ -83,6 +83,18 @@ type PresentationProps = {
 function useSettingsCommand(props: PresentationProps) {
     const current = useRef(props);
     current.current = props;
+    const presentation = useRef({ ...props.identity, epoch: 0 });
+    if (
+        presentation.current.owner !== props.identity.owner ||
+        presentation.current.configuration !== props.identity.configuration ||
+        presentation.current.record !== props.identity.record
+    ) {
+        presentation.current = {
+            ...props.identity,
+            epoch: presentation.current.epoch + 1,
+        };
+    }
+    const epoch = presentation.current.epoch;
     const mounted = useRef(false);
     useEffect(() => {
         mounted.current = true;
@@ -91,20 +103,24 @@ function useSettingsCommand(props: PresentationProps) {
         };
     }, []);
     // Each rendered capability belongs to this accepted owner/config/record.
-    const identity = props.identity;
+    // The epoch also retires first-A commands after an A–B–A transition.
+    const identity = presentation.current;
     const preview = props.preview;
     return (target: FormHeaderSettingsTarget) => {
-        const latest = current.current;
-        if (
-            !mounted.current ||
-            preview == null ||
-            latest.preview !== preview ||
-            latest.identity.owner !== identity.owner ||
-            latest.identity.configuration !== identity.configuration ||
-            latest.identity.record !== identity.record ||
-            !preview.showPlaceholders ||
-            preview.isCurrent?.() === false
-        )
+        if (preview == null) return;
+        const isAdmitted = () => {
+            const latest = current.current;
+            return (
+                mounted.current &&
+                presentation.current.epoch === epoch &&
+                latest.preview === preview &&
+                latest.identity.owner === identity.owner &&
+                latest.identity.configuration === identity.configuration &&
+                latest.identity.record === identity.record &&
+                preview.showPlaceholders
+            );
+        };
+        if (!isAdmitted() || preview.isCurrent?.() === false || !isAdmitted())
             return;
         preview.onOpenSettings?.(target);
     };
@@ -222,7 +238,10 @@ export function CompleteFormHeader(props: CompleteFormHeaderProps): ReactNode {
                   props.description?.truncate
                       ? h(CompleteTruncatedDescription, {
                             html,
-                            resetKey: props.identity.record,
+                            resetKey: JSON.stringify([
+                                props.identity.owner,
+                                props.identity.record,
+                            ]),
                             readMoreLabel: labels.readMore,
                             showLessLabel: labels.showLess,
                         })

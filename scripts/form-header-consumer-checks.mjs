@@ -51,7 +51,7 @@ const keys=['window','document','navigator','HTMLElement','IS_REACT_ACT_ENVIRONM
 const originals=keys.map(key=>Object.getOwnPropertyDescriptor(globalThis,key));
 for(const key of keys)Object.defineProperty(globalThis,key,{configurable:true,value:key==='IS_REACT_ACT_ENVIRONMENT'?true:domWindow[key]});
 const container=domWindow.document.createElement('main');domWindow.document.body.append(container);container.innerHTML=html;
-const original=container.firstChild,errors=[];const {hydrateRoot}=await import('react-dom/client');let root;
+const original=container.firstChild,errors=[];const {hydrateRoot}=await import('react-dom/client');const {flushSync}=await import('react-dom');let root;
 try {
  await React.act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>errors.push(error.message)});});
  assert.deepEqual(errors,[]);assert.equal(container.firstChild,original);
@@ -59,10 +59,23 @@ try {
  for(const record of ['B','A']){identity={...identity,record:'table:'+record};source=staticSource('Record '+record);await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1').textContent,'Record '+record);}
  child=true;await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('img').length,0);assert.equal(container.querySelector('h1').textContent,'Record A');
  child=false;enabled=false;source={type:'field',field:{status:'resolved',field,value:''}};await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1'),null);assert(!container.textContent.includes('Safe description'));assert(!container.textContent.includes('Safe footer'));assert.equal(container.querySelectorAll('button').length,0);
- preview={showPlaceholders:true,showFieldSources:true,onOpenSettings:target=>calls.push(target)};enabled=true;identity={...identity,configuration:'preview'};
+ let retirementChecks=0;
+ preview={showPlaceholders:true,showFieldSources:true,onOpenSettings:target=>calls.push(target),isCurrent(){
+  retirementChecks++;
+  if(retirementChecks===1){
+   const originalIdentity=identity;
+   flushSync(()=>{identity={...identity,record:'table:retiring-B'};root.render(element());});
+   flushSync(()=>{identity=originalIdentity;root.render(element());});
+  }
+  return true;
+ }};enabled=true;identity={...identity,configuration:'preview'};
  await React.act(async()=>root.render(element()));
  const footerButton=Array.from(container.querySelectorAll('button')).find(button=>button.textContent.includes('Footer from Airtable'));
- assert(footerButton,'Missing selected-field footer placeholder');await React.act(async()=>footerButton.click());assert.deepEqual(calls,['footer']);
+ assert(footerButton,'Missing selected-field footer placeholder');await React.act(async()=>footerButton.click());
+ assert.equal(retirementChecks,1);assert.deepEqual(calls,[],'First-A callback must retire after synchronous A–B–A inside isCurrent');
+ const currentFooterButton=Array.from(container.querySelectorAll('button')).find(button=>button.textContent.includes('Footer from Airtable'));
+ assert(currentFooterButton,'Missing current footer placeholder after A–B–A');await React.act(async()=>currentFooterButton.click());
+ assert.equal(retirementChecks,2);assert.deepEqual(calls,['footer'],'The new current presentation dispatches exactly once');
  preview=undefined;identity={...identity,configuration:'public'};await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('button').length,0);assert.deepEqual(calls,['footer']);
  source={type:'field',field:{status:'missing'}};await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1').textContent,'Fallback name');
  await React.act(async()=>root.unmount());root=undefined;

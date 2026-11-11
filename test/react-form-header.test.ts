@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { Window } from 'happy-dom';
-import { createElement as h } from 'react';
+import { createElement as h, useLayoutEffect, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
     CompleteFormHeader,
@@ -730,5 +730,99 @@ it('admits an empty cover placeholder only for the current visible root preview'
     );
     assert.equal(f.container.childElementCount, 0);
     assert.deepEqual(calls, ['cover']);
+    f.unchangedEffects();
+});
+
+for (const boundary of ['owner', 'configuration', 'record'] as const) {
+    it(`retires an in-flight preview command across synchronous ${boundary} A–B–A with the same capability`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const { flushSync } = await import('react-dom');
+        const calls: string[] = [];
+        let commitIdentity: ((next: typeof identity) => void) | undefined;
+        let transitionDuringCheck = true;
+        const capability = {
+            ...preview,
+            isCurrent: () => {
+                if (transitionDuringCheck) {
+                    transitionDuringCheck = false;
+                    const changeIdentity = commitIdentity;
+                    assert.ok(changeIdentity);
+                    const otherIdentity = {
+                        ...identity,
+                        [boundary]: `different-${boundary}`,
+                    };
+                    flushSync(() => changeIdentity(otherIdentity));
+                    assert.equal(
+                        f.container.querySelector('output')?.textContent,
+                        otherIdentity[boundary]
+                    );
+                    flushSync(() => changeIdentity(identity));
+                    assert.equal(
+                        f.container.querySelector('output')?.textContent,
+                        identity[boundary]
+                    );
+                }
+                return true;
+            },
+            onOpenSettings: (target: string) => calls.push(target),
+        };
+        function Host() {
+            const [acceptedIdentity, setIdentity] = useState(identity);
+            useLayoutEffect(() => {
+                commitIdentity = (next) => setIdentity(next);
+                return () => {
+                    commitIdentity = undefined;
+                };
+            }, []);
+            return h(
+                'div',
+                null,
+                h('output', null, acceptedIdentity[boundary]),
+                h(CompleteFormHeader, {
+                    ...defaults,
+                    identity: acceptedIdentity,
+                    preview: capability,
+                })
+            );
+        }
+        await f.render(h(Host));
+        await f.click(button(f, 'Add logo'));
+        assert.equal(transitionDuringCheck, false);
+        assert.deepEqual(calls, []);
+        await f.click(button(f, 'Add logo'));
+        assert.deepEqual(calls, ['logo']);
+        f.unchangedEffects();
+    });
+}
+
+it('scopes create-record truncation to its owner while retaining expansion through configuration-only changes', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    f.setGeometry({ clientHeight: 72, scrollHeight: 144 });
+    const render = (owner: string, configuration: string) =>
+        f.render(
+            h(CompleteFormHeader, {
+                ...defaults,
+                identity: { owner, configuration, record: 'create' },
+                description: {
+                    enabled: true,
+                    source: staticSource(longHTML),
+                    truncate: true,
+                },
+            })
+        );
+    await render('owner-a', 'config-a');
+    await f.click(button(f, 'Read more'));
+    assert.equal(button(f, 'Show less').getAttribute('aria-expanded'), 'true');
+    await render('owner-a', 'config-b');
+    assert.equal(button(f, 'Show less').getAttribute('aria-expanded'), 'true');
+    await render('owner-a', 'config-a');
+    assert.equal(button(f, 'Show less').getAttribute('aria-expanded'), 'true');
+    await render('owner-b', 'config-a');
+    assert.equal(button(f, 'Read more').getAttribute('aria-expanded'), 'false');
+    await f.click(button(f, 'Read more'));
+    assert.equal(button(f, 'Show less').getAttribute('aria-expanded'), 'true');
+    await render('owner-a', 'config-a');
+    assert.equal(button(f, 'Read more').getAttribute('aria-expanded'), 'false');
+    assert.match(f.container.textContent ?? '', /Shared record description 7/);
     f.unchangedEffects();
 });

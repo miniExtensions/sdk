@@ -73,8 +73,9 @@ Description and footer master switches outrank retained source data. Both use th
 public safe semantic HTML components, so sanitized empty content is absent and
 meaningful media-only content remains. Pass a current record identity such as
 `tableId:recordId` (or `create`); truncation resets across record A → B → A even
-when content is identical. Owner/configuration identity must change when accepted
-authority changes.
+when content is identical. The owner scopes record identity, including create
+drafts; configuration-only changes retain expansion when record and content are
+unchanged. Owner/configuration identity must change when accepted authority changes.
 
 Public consumers omit `preview`. An optional host preview capability provides
 placeholder visibility, field-source visibility, and explicit settings commands;

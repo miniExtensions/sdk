@@ -1,4 +1,5 @@
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
+import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
@@ -1524,6 +1525,7 @@ try {
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
+            'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -2144,6 +2146,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.searchGate,
+            output,
+        });
+        report.recordComments = {};
+        await checkRecordCommentsBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.recordComments,
             output,
         });
         report.completeCalendly = {};

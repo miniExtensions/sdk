@@ -39,6 +39,7 @@ export function createFormCompletionCountdown(
     let epoch = 0;
     let deadline = 0;
     let timer: unknown;
+    let completionTimer: unknown;
     const listeners = new Set<() => void>();
     const publish = (next: FormCompletionCountdownSnapshot) => {
         snapshot = next;
@@ -48,35 +49,65 @@ export function createFormCompletionCountdown(
         epoch++;
         if (timer !== undefined) clock.clearTimeout(timer);
         timer = undefined;
+        if (completionTimer !== undefined) clock.clearTimeout(completionTimer);
+        completionTimer = undefined;
+    };
+    const isRunning = (expectedEpoch: number) =>
+        expectedEpoch === epoch && snapshot.status === 'running';
+    const finish = (expectedEpoch: number) => {
+        if (
+            !attached ||
+            expectedEpoch !== epoch ||
+            snapshot.status !== 'running'
+        )
+            return;
+        clear();
+        const completedEpoch = epoch;
+        const completed: FormCompletionCountdownSnapshot = {
+            count: 0,
+            status: 'completed',
+        };
+        publish(completed);
+        // Subscribers may revoke/reset ownership before external dispatch.
+        if (attached && completedEpoch === epoch && snapshot === completed)
+            complete();
     };
     const schedule = () => {
         if (!attached || snapshot.status !== 'running') return;
         const capturedEpoch = epoch;
-        const remaining = Math.max(0, deadline - clock.now());
-        timer = clock.setTimeout(
+        const current = () =>
+            attached &&
+            capturedEpoch === epoch &&
+            snapshot.status === 'running';
+        // Keep the terminal deadline registered from activation, independently
+        // of presentation ticks. Reconnection replaces both owned handles.
+        completionTimer = clock.setTimeout(
             () => {
-                if (
-                    !attached ||
-                    capturedEpoch !== epoch ||
-                    snapshot.status !== 'running'
-                )
-                    return;
-                timer = undefined;
-                const count = Math.max(
-                    0,
-                    Math.ceil((deadline - clock.now()) / 1000)
-                );
-                if (count === 0) {
-                    clear();
-                    publish({ count: 0, status: 'completed' });
-                    complete();
-                } else {
-                    publish({ count, status: 'running' });
-                    schedule();
-                }
+                if (!current()) return;
+                finish(capturedEpoch);
             },
-            Math.min(1000, remaining)
+            Math.max(0, deadline - clock.now())
         );
+        const scheduleTick = () => {
+            const remaining = deadline - clock.now();
+            if (remaining <= 1000 || !current()) return;
+            timer = clock.setTimeout(
+                () => {
+                    if (!current()) return;
+                    timer = undefined;
+                    publish({
+                        count: Math.max(
+                            1,
+                            Math.ceil((deadline - clock.now()) / 1000)
+                        ),
+                        status: 'running',
+                    });
+                    scheduleTick();
+                },
+                remaining % 1000 || 1000
+            );
+        };
+        scheduleTick();
     };
     const start = (duration = initial) => {
         if (
@@ -89,10 +120,11 @@ export function createFormCompletionCountdown(
             throw new RangeError('Invalid countdown duration');
         clear();
         deadline = clock.now() + duration * 1000;
+        const activationEpoch = epoch;
         publish({ count: duration, status: 'running' });
+        if (!isRunning(activationEpoch)) return;
         if (duration === 0 && attached) {
-            publish({ count: 0, status: 'completed' });
-            complete();
+            finish(activationEpoch);
         } else {
             schedule();
         }

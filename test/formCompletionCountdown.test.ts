@@ -27,6 +27,14 @@ function clock() {
         adapter,
         stale,
         pending: () => scheduled.size,
+        runPending() {
+            const initial = [...scheduled].sort((a, b) => a[1].at - b[1].at);
+            for (const [id, entry] of initial) {
+                if (!scheduled.delete(id)) continue;
+                now = entry.at;
+                entry.callback();
+            }
+        },
         tick(ms: number) {
             const until = now + ms;
             while (true) {
@@ -100,7 +108,6 @@ it('reset while running replaces timers; stale callbacks, stop and retirement ca
     c.reset(5);
     stale();
     assert.equal(c.getSnapshot().count, 5);
-    assert.equal(time.pending(), 1);
     time.tick(3000);
     assert.equal(c.getSnapshot().count, 2);
     c.stop();
@@ -239,4 +246,73 @@ it('truthfully reports adapter rejection and a failed authority read without cal
         { status: 'failed', attempted: 0, error }
     );
     assert.equal(calls, 1);
+});
+
+it('registers the terminal deadline at activation independently of presentation ticks', () => {
+    const time = clock();
+    let completed = 0;
+    const controller = createFormCompletionCountdown({
+        start: 2,
+        clock: time.adapter,
+        onComplete: () => {
+            completed++;
+        },
+    });
+    controller.start();
+    time.runPending();
+    assert.equal(completed, 1);
+    assert.equal(controller.getSnapshot().count, 0);
+    assert.equal(time.pending(), 0);
+});
+
+it('subscriber retirement cannot resurrect zero activation or dispatch a completed effect', () => {
+    for (const start of [0, 2])
+        for (const revokeAt of ['running', 'completed']) {
+            const time = clock();
+            let calls = 0;
+            const c = createFormCompletionCountdown({
+                start,
+                clock: time.adapter,
+                onComplete: () => {
+                    calls++;
+                },
+            });
+            c.subscribe(() => {
+                if (c.getSnapshot().status === revokeAt) c.retire();
+            });
+            c.start();
+            time.tick(10000);
+            assert.equal(calls, 0);
+            assert.equal(c.getSnapshot().status, 'retired');
+            assert.equal(time.pending(), 0);
+        }
+});
+it('subscriber resets replace activation and completion without duplicate old-owner timers or effects', () => {
+    for (const resetAt of ['running', 'completed']) {
+        const time = clock();
+        const calls: number[] = [];
+        let replaced = false;
+        const c = createFormCompletionCountdown({
+            start: 0,
+            clock: time.adapter,
+            onComplete: () => {
+                calls.push(time.adapter.now());
+            },
+        });
+        c.subscribe(() => {
+            if (!replaced && c.getSnapshot().status === resetAt) {
+                replaced = true;
+                c.reset(1);
+            }
+        });
+        c.start();
+        assert.deepEqual(calls.slice(), []);
+        time.tick(999);
+        assert.deepEqual(calls.slice(), []);
+        time.tick(1);
+        assert.deepEqual(calls.slice(), [1000]);
+        time.tick(10000);
+        assert.deepEqual(calls.slice(), [1000]);
+        assert.equal(time.pending(), 0);
+    }
 });

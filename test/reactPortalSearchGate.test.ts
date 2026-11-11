@@ -671,7 +671,7 @@ it('changes modal shells without resetting the SDK draft or allocating effects',
     assert.deepEqual(f.navigations, []);
 });
 
-it('keeps packaged form spacing when the complete panel is rendered by a framework shell', async (t) => {
+it('keeps complete form spacing in default and framework shells', async (t) => {
     const f = await fixture(
         t,
         {
@@ -686,7 +686,7 @@ it('keeps packaged form spacing when the complete panel is rendered by a framewo
             window.document.documentElement.style.fontSize = '16px';
             const stylesheet = window.document.createElement('style');
             stylesheet.textContent = readFileSync(
-                new URL('../src/react/search-gate.css', import.meta.url),
+                'src/react/search-gate.css',
                 'utf8'
             );
             window.document.head.append(stylesheet);

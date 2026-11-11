@@ -111,6 +111,7 @@ import { checkCompleteClearableInputReactMatrix } from './complete-clearable-inp
 import { checkCompleteMultilineReactMatrix } from './complete-multiline-consumer-checks.mjs';
 import { checkHTMLDescriptionReactMatrix } from './html-description-consumer-checks.mjs';
 import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
+import { checkThemeReactMatrix } from './theme-consumer-checks.mjs';
 import { checkCompleteDurationReactMatrix } from './complete-duration-consumer-checks.mjs';
 import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
@@ -592,6 +593,8 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'dist/esm/react/theme.css',
+        'dist/cjs/react/theme.css',
         'dist/esm/react/button.css',
         'dist/cjs/react/button.css',
         'dist/esm/react/checkbox.css',
@@ -3285,6 +3288,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(phoneMatrix.versions.length, 2);
     assert.equal(phoneMatrix.cleanup, 'completed');
+    const themeMatrix = checkThemeReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(themeMatrix.versions.length, 2);
+    assert.equal(themeMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

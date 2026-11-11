@@ -162,6 +162,7 @@ for (const format of ['esm', 'cjs']) {
 
 for (const format of ['esm', 'cjs']) {
     for (const name of [
+        'theme',
         'button',
         'checkbox',
         'text',

@@ -1,0 +1,41 @@
+/* Optional container bridge. No reset, default palette, DOM or CSS injection.
+   Existing component-local variables and configured data-color values win. */
+.mx-sdk-theme {
+    --mx-sdk-accent: rgb(var(--theme-600));
+    --mx-sdk-button-background: rgb(var(--theme-600));
+    --mx-sdk-button-hover: rgb(var(--theme-700));
+    --mx-sdk-button-focus: rgb(var(--theme-600));
+}
+/* An unnamed inheriting boundary must retain ancestor foreground overrides. */
+.mx-sdk-theme[data-mx-theme] {
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-theme:is(
+    [data-mx-theme='red-light'],
+    [data-mx-theme='orange-light'],
+    [data-mx-theme='orange'],
+    [data-mx-theme='amber'],
+    [data-mx-theme='yellow-light'],
+    [data-mx-theme='yellow'],
+    [data-mx-theme='lime'],
+    [data-mx-theme='green'],
+    [data-mx-theme='emerald'],
+    [data-mx-theme='teal'],
+    [data-mx-theme='cyan']
+) {
+    --mx-sdk-button-foreground: #111827;
+}
+.mx-sdk-theme[data-mx-theme='sky'] {
+    --mx-sdk-button-foreground: #000;
+}
+.mx-sdk-theme[data-mx-theme='red-light'] {
+    --mx-sdk-button-hover-foreground: #000;
+}
+.mx-sdk-theme:is(
+    [data-mx-theme='orange-light'],
+    [data-mx-theme='yellow-light'],
+    [data-mx-theme='yellow']
+) {
+    --mx-sdk-button-hover-foreground: #111827;
+}

@@ -420,6 +420,45 @@ for (const year of [2024, 2025])
         assert.deepEqual(f.writes, [`${year}-01-31`]);
     });
 
+it('owns focused-popup Escape, restores input focus and removes its listener on close', async (t) => {
+    const f = await fixture(t);
+    await f.open();
+    const popup = f.window.document.getElementById(
+        f.input().getAttribute('aria-controls')!
+    );
+    assert.ok(popup instanceof f.window.HTMLElement);
+    await act(async () => popup.focus());
+    const cancelledEscape = new f.window.KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+    });
+    // An earlier application handler can already own this keyboard event.
+    cancelledEscape.preventDefault();
+    await act(async () => popup.dispatchEvent(cancelledEscape));
+    assert.equal(
+        cancelledEscape.defaultPrevented,
+        true,
+        'A prior Escape cancellation remains respected'
+    );
+    assert.equal(f.input().getAttribute('aria-expanded'), 'true');
+    const escape = new f.window.KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => popup.dispatchEvent(escape));
+    assert.equal(escape.defaultPrevented, true);
+    assert.equal(f.input().getAttribute('aria-expanded'), 'false');
+    assert.equal(f.window.document.activeElement, f.input());
+    const later = await f.key('Escape');
+    assert.equal(
+        later.defaultPrevented,
+        false,
+        'Closed picker leaves later Escape to its owner'
+    );
+});
+
 it('commits a blank DateTime day at midnight, edits real time counters and clears to null', async (t) => {
     const f = await fixture(t, { value: null, airtableDateConfig: datetime });
     await f.open();

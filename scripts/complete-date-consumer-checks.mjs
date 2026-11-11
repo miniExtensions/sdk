@@ -88,6 +88,7 @@ async function mounted(directory, format, happyDomModulePath) {
         'HTMLElement',
         'HTMLInputElement',
         'Node',
+        'NodeFilter',
         'Element',
         'CustomEvent',
         'MutationObserver',
@@ -135,7 +136,8 @@ async function mounted(directory, format, happyDomModulePath) {
                 publish();
             },
         });
-    const publish = () => root.render(element());
+    let shell = (child) => child;
+    const publish = () => root.render(shell(element()));
     const render = async (patch) => {
         props = { ...props, ...patch };
         await React.act(async () => publish());
@@ -276,12 +278,84 @@ async function mounted(directory, format, happyDomModulePath) {
         );
         assert.equal(vendor('react'), React);
         assert.equal(vendor('react-dom'), consumer('react-dom'));
+        const Dialog = consumer('@radix-ui/react-dialog');
+        props = { ...initial };
+        shell = (child) =>
+            React.createElement(
+                Dialog.Root,
+                { defaultOpen: true },
+                React.createElement(
+                    Dialog.Portal,
+                    null,
+                    React.createElement(
+                        Dialog.Content,
+                        {
+                            'aria-label': 'External native dialog',
+                            'aria-describedby': undefined,
+                        },
+                        React.createElement(
+                            Dialog.Title,
+                            null,
+                            'External native dialog'
+                        ),
+                        child
+                    )
+                )
+            );
+        await React.act(async () => publish());
+        const externalDialog = document.querySelector(
+            '[role="dialog"][aria-label="External native dialog"]'
+        );
+        assert(externalDialog, 'Actual external Radix dialog mounted');
+        const nestedInput = externalDialog.querySelector('input');
+        assert(nestedInput);
+        await React.act(async () => nestedInput.focus());
+        assert.equal(nestedInput.getAttribute('aria-expanded'), 'true');
+        const nestedPopup = document.getElementById(
+            nestedInput.getAttribute('aria-controls')
+        );
+        assert(nestedPopup && externalDialog.contains(nestedPopup));
+        // Exercise Escape from popup focus as well as from the input. The
+        // independently bundled popup must not dismiss the native dialog.
+        await React.act(async () => nestedPopup.focus());
+        await React.act(async () =>
+            nestedPopup.dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(
+            externalDialog.isConnected,
+            true,
+            'Escape preserves the parent dialog'
+        );
+        assert.equal(nestedInput.getAttribute('aria-expanded'), 'false');
+        assert.equal(document.activeElement, nestedInput);
+        await React.act(async () =>
+            nestedInput.dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(
+            externalDialog.isConnected,
+            false,
+            'A later Escape still dismisses the native dialog'
+        );
+        assert.equal(submits, 0);
         return {
             react: React.version,
             format,
             groups: 1,
             hydration: true,
             mountedMonthBoundaryYears: [2024, 2025],
+            externalRadixDialogEscape: true,
             submits,
         };
     } finally {
@@ -327,6 +401,7 @@ export function checkCompleteDateReactMatrix({
                     `react-dom@${version.react}`,
                     `@types/react@${version.types}`,
                     `@types/react-dom@${version.domTypes}`,
+                    '@radix-ui/react-dialog@1.1.14',
                 ],
                 { cwd: directory, stdio: 'inherit' }
             );

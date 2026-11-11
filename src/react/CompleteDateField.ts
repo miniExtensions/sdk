@@ -130,6 +130,36 @@ export function CompleteDateField(
     const close = () => {
         if (current()) setPopup((old) => ({ ...old, open: false }));
     };
+    commitEffect(() => {
+        if (!open) return;
+        const anchor = anchorRef.current;
+        const document = anchor?.ownerDocument;
+        const window = document?.defaultView;
+        if (!anchor || !document || !window) return;
+        // A consuming dialog can use a separate Radix module/context. Own the
+        // focused popup's Escape before its document-level dismissal listener.
+        const escape = (event: KeyboardEvent) => {
+            const target = event.target;
+            if (
+                event.key !== 'Escape' ||
+                event.defaultPrevented ||
+                event.isComposing ||
+                !(target instanceof window.Node) ||
+                (!anchor.contains(target) &&
+                    !document.getElementById(calendarId)?.contains(target)) ||
+                !current()
+            )
+                return;
+            event.preventDefault();
+            event.stopPropagation();
+            // Focus while still open, so the picker's focus handler cannot
+            // reopen it during dismissal. Do not move unrelated outside focus.
+            anchor.querySelector('input')?.focus({ preventScroll: true });
+            close();
+        };
+        window.addEventListener('keydown', escape, true);
+        return () => window.removeEventListener('keydown', escape, true);
+    }, [open, lease, calendarId]);
     const blur = () => {
         const active = current();
         if (!active) return;

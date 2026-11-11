@@ -14,7 +14,9 @@ const options:RecordCommentsControllerOptions={owner:{isCurrent:()=>true},childE
 const controller=createRecordCommentsController(options);
 const labels:RecordCommentsLabels={...recordCommentsLabels,title:'Comentarios'};
 createElement(CompleteRecordComments,{controller,labels});
-createElement(CompleteRecordCommentsDialog,{controller,labels,dismiss(){},reservedInlineEndWidth:'440px'});
+createElement(CompleteRecordCommentsDialog,{controller,labels,dismiss(){},reservedInlineEndWidth:'440px',returnFocusTo:{current:null}});
+// @ts-expect-error focus restoration accepts an actual optional element ref
+createElement(CompleteRecordCommentsDialog,{controller,labels,dismiss(){},returnFocusTo:'menu-item-id'});
 presentRecordComment({id:'native',createdTime:'2024-01-01',lastUpdatedTime:null,text:'raw',actor:{type:'public',extensionId:'ext'},authorLabel:'Verified'});
 // @ts-expect-error actual captured ownership is mandatory
 createRecordCommentsController({...options,owner:'record-A'});
@@ -89,6 +91,7 @@ async function installed(directory, happyDomModulePath) {
             React.createElement(api.CompleteRecordCommentsDialog, {
                 controller,
                 labels: displayLabels,
+                returnFocusTo: { current: null },
                 dismiss() {
                     dismissals++;
                 },

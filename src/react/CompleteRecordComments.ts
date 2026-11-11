@@ -216,6 +216,8 @@ export function CompleteRecordComments(
 
 export type CompleteRecordCommentsDialogProps = CompleteRecordCommentsProps & {
     dismiss(): void;
+    /** Stable invoker when the activation control is temporary, such as a menu. */
+    returnFocusTo?: { readonly current: HTMLElement | null };
     reservedInlineEndWidth?: string;
     zIndex?: number;
 };
@@ -243,7 +245,10 @@ export function CompleteRecordCommentsDialog(
         if (!dialog) return;
         const document = dialog.ownerDocument;
         const window = document.defaultView;
-        const entry = { node: dialog, opener: document.activeElement };
+        const entry = {
+            node: dialog,
+            opener: props.returnFocusTo?.current ?? document.activeElement,
+        };
         const stack = dialogStacks.get(document) ?? [];
         dialogStacks.set(document, stack);
         stack.push(entry);

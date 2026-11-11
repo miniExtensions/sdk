@@ -66,6 +66,9 @@ backdrop and Escape stay available during a send. The SDK owns named-dialog
 semantics, focus containment/restoration and the 42rem/80vh header/body/footer
 layout. Theme CSS variables, desktop messenger inset and z-index are optional
 plain presentation inputs. No private native context is required.
+When a transient menu item opens the dialog, pass its stable invoker ref as
+`returnFocusTo`; the SDK captures that target at opening and restores it only
+while it remains connected.
 
 Source component/controller tests and packed React 18/19 ESM/CommonJS,
 declarations, CSS and SSR/hydration checks exercise synthetic transports. The

@@ -47,7 +47,7 @@ export async function checkRecordCommentsBrowser({
         const root = realpathSync(consumer);
         directory = mkdtempSync(join(root, '.record-comments-browser-'));
         const source = `
-import React,{createElement as h,useState} from 'react';
+import React,{createElement as h,useState,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
 import {CompleteRecordCommentsDialog,recordCommentsLabels} from '@miniextensions/sdk/react';
@@ -57,7 +57,7 @@ const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,openS
 const labels=mode==='spanish'?{...recordCommentsLabels,title:'Comentarios',addComment:'Añadir comentario',send:'Enviar',close:'Cerrar'}:mode==='literal'?{...recordCommentsLabels,title:'<Comentarios>'}:recordCommentsLabels;
 function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:40},(_,index)=>({id:String(index),text:'Literal row '+index+' @[missing]',createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
 const first=controller('captured-A'),second=controller('captured-B');
-function App(){const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,h('button',{onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
+function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,mode==='stable-invoker'?h('button',{ref:invoker},'Record options'):null,mode==='stable-invoker'&&open?null:h('button',{onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,returnFocusTo:mode==='stable-invoker'?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),openSecond:()=>openSecond()};
 `;
@@ -229,6 +229,24 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
         await page.screenshot({
             path: join(output, 'complete-record-comments-desktop.png'),
             fullPage: true,
+        });
+
+        await open('stable-invoker');
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Open comments', exact: true })
+                .count(),
+            0
+        );
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Record options', exact: true })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        evidence.results.push({
+            group: 'temporary-activation-stable-return-focus',
         });
 
         await open('pending');

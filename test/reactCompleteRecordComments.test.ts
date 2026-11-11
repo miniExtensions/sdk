@@ -26,7 +26,8 @@ function deferred<T>() {
 }
 async function fixture(
     t: TestContext,
-    patch: Partial<CompleteRecordCommentsDialogProps> = {}
+    patch: Partial<CompleteRecordCommentsDialogProps> = {},
+    prepare?: () => void
 ) {
     const window = new Window();
     const keys = [
@@ -59,6 +60,7 @@ async function fixture(
     opener.textContent = 'Opener';
     window.document.body.append(opener);
     opener.focus();
+    prepare?.();
     const root = createRoot(host as unknown as HTMLElement);
     let reads = 0,
         writes = 0,
@@ -296,6 +298,22 @@ it('pending append keeps Close/backdrop available and settles captured cache aft
     await act(async () => pending.resolve());
     assert.equal(invalidations, 1);
     assert.equal(writes, 1);
+});
+
+it('restores a stable host invoker after a temporary activation control is removed', async (t) => {
+    const returnFocusTo: { current: HTMLElement | null } = { current: null };
+    let temporary: HTMLButtonElement | undefined;
+    const f = await fixture(t, { returnFocusTo }, () => {
+        assert.ok(document.activeElement instanceof HTMLElement);
+        returnFocusTo.current = document.activeElement;
+        temporary = document.createElement('button');
+        temporary.textContent = 'Temporary menu action';
+        document.body.append(temporary);
+        temporary.focus();
+    });
+    temporary?.remove();
+    await f.unmount();
+    assert.equal(f.window.document.activeElement, f.opener);
 });
 
 it('newest disableSending hides composer and supplied language remains literal', async (t) => {

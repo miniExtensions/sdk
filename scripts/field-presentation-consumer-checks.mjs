@@ -827,7 +827,18 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
 
     await update('checkbox-a', { readOnly: true, style: 'toggle' });
     assert.equal(await input('checkbox-a').isDisabled(), true);
-    await row('checkbox-a').locator('label').click();
+    const readonlyLabel = row('checkbox-a').locator('label');
+    await readonlyLabel.scrollIntoViewIfNeeded();
+    const readonlyLabelBounds = await readonlyLabel.boundingBox();
+    assert(readonlyLabelBounds);
+    // A real pointer can hit the label, while the associated disabled input
+    // remains inert. Playwright's label.click() instead waits for that input
+    // to become enabled and never delivers this readonly-negative interaction.
+    await page.mouse.click(
+        readonlyLabelBounds.x + readonlyLabelBounds.width / 2,
+        readonlyLabelBounds.y + readonlyLabelBounds.height / 2
+    );
+    assert.equal(await input('checkbox-a').isDisabled(), true);
     value = await verify('readonly projects to disabled native checkbox');
     assert.equal(value.writes.length, 4);
     await update('checkbox-b', { loading: true });

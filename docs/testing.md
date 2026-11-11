@@ -1,5 +1,11 @@
 # Source test coverage
 
+On macOS, run package/module-format checks with a canonical `TMPDIR` (for
+example `/private/tmp`). Native Node resolution returns real paths; a fixture
+created under the `/var` alias otherwise fails the unchanged exact-path
+comparison against `/private/var`. Keep those comparisons intact. Use the
+project's pinned pnpm through Corepack when the global pnpm version differs.
+
 ## Git source preparation
 
 The mandatory package check builds the actual source beneath `node_modules`

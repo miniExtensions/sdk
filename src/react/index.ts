@@ -2434,6 +2434,14 @@ export function AirtableList<
     return createElement(AirtablePortal<S>, props);
 }
 
+export {
+    CompleteRecordComments,
+    CompleteRecordCommentsDialog,
+    recordCommentsLabels,
+    type RecordCommentsLabels,
+    type CompleteRecordCommentsProps,
+    type CompleteRecordCommentsDialogProps,
+} from './CompleteRecordComments.js';
 export { ButtonField, renderButtonField } from './ButtonField.js';
 export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
 

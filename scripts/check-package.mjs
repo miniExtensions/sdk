@@ -1,4 +1,5 @@
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
+import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
@@ -578,6 +579,7 @@ try {
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
+                path === 'docs/complete-record-comments.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
@@ -610,6 +612,7 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'docs/complete-record-comments.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/date/index.js',
@@ -640,6 +643,8 @@ try {
         'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
         'dist/cjs/react/complete-calendly.css',
+        'dist/esm/react/complete-record-comments.css',
+        'dist/cjs/react/complete-record-comments.css',
         'dist/esm/react/form-completion.css',
         'dist/cjs/react/form-completion.css',
         'docs/form-completion.md',
@@ -3342,6 +3347,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(searchGateMatrix.versions.length, 2);
     assert.equal(searchGateMatrix.cleanup, 'completed');
+    const recordCommentsMatrix = checkRecordCommentsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(recordCommentsMatrix.versions.length, 2);
+    assert.equal(recordCommentsMatrix.cleanup, 'completed');
     const calendlyWidgetMatrix = checkCompleteCalendlyReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

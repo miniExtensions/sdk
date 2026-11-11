@@ -1,5 +1,8 @@
 # miniExtensions SDK
 
+Complete child-record comments are available through the public controller and
+React components; see [complete record comments](docs/complete-record-comments.md).
+
 **Development preview. Not published to npm.** The APIs and shipped recipes are
 still evolving; check the configuration and lifecycle limits before integration.
 

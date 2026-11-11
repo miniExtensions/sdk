@@ -1,4 +1,12 @@
 export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
+export {
+    createRecordCommentsController,
+    presentRecordComment,
+    type RecordComment,
+    type RecordCommentsController,
+    type RecordCommentsControllerOptions,
+    type RecordCommentsSnapshot,
+} from './recordComments.js';
 export type {
     BorrowedButtonContext,
     BorrowedButtonIntent,

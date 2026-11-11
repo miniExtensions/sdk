@@ -185,6 +185,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-duration',
         'search-gate',
         'complete-calendly',
+        'complete-record-comments',
         'complete-verification',
         'complete-barcode-scanner',
         'complete-portal-chart',

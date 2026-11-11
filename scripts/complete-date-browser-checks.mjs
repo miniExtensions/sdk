@@ -26,7 +26,14 @@ function App(){
  const dialog=useRef(null);useLayoutEffect(()=>{if(state.dialog&&!dialog.current.open)dialog.current.showModal();},[state.dialog]);
  const owner=state.owner;
  const field=state.mounted?h(CompleteDateField,{id:state.id,sessionId:state.session,airtableDateConfig:state.config,value:state.value,setValue(value){if(!latest.current.current||latest.current.readonly||latest.current.owner!==owner)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},owner:{token:owner,isCurrent:()=>latest.current.current&&latest.current.owner===owner},readOnly:state.readonly,dateRange:state.readonly?'today or in the future':undefined,language:'en',title:'Appointment',description:'Choose a synthetic date',formId:'date-form',calendarAlign:state.align}):null;
- const controls=h(React.Fragment,null,field,h('label',{htmlFor:'adjacent'},'Adjacent draft'),h('input',{id:'adjacent',value:state.adjacent,onChange:e=>change({adjacent:e.target.value})}),h('button',{type:'submit'},'Save'),h('button',{type:'button',onMouseDown:e=>e.preventDefault(),onClick:()=>change({config:{...state.config,options:{...state.config.options,dateFormat:{format:'D/M/YYYY'}}}})},'European format'),h('button',{type:'button',onMouseDown:e=>e.preventDefault(),onClick:()=>change({owner:{},session:'replacement',value:'2024-03-15'})},'Replace owner'),h('button',{type:'button',onMouseDown:e=>e.preventDefault(),onClick:()=>change({mounted:false})},'Remove field'));
+ const controls=h(React.Fragment,null,
+  h('div',{className:'fixture-toolbar'},
+   h('button',{type:'button'},'Outside calendar'),
+   h('button',{type:'button',onPointerDown:e=>e.stopPropagation(),onMouseDown:e=>e.preventDefault(),onClick:()=>change({config:{...state.config,options:{...state.config.options,dateFormat:{format:'D/M/YYYY'}}}})},'European format'),
+   h('button',{type:'button',onPointerDown:e=>e.stopPropagation(),onMouseDown:e=>e.preventDefault(),onClick:()=>change({owner:{},session:'replacement',value:'2024-03-15'})},'Replace owner'),
+   h('button',{type:'button',onPointerDown:e=>e.stopPropagation(),onMouseDown:e=>e.preventDefault(),onClick:()=>change({mounted:false})},'Remove field')),
+  field,h('label',{htmlFor:'adjacent'},'Adjacent draft'),h('input',{id:'adjacent',value:state.adjacent,onChange:e=>change({adjacent:e.target.value})}),h('button',{type:'submit'},'Save'));
+
  return h('form',{id:'date-form',onSubmit:event=>{event.preventDefault();saves.push({value:latest.current.value,adjacent:latest.current.adjacent});setState(old=>({...old,saveCount:old.saveCount+1}));}},state.dialog?h('dialog',{ref:dialog,role:'dialog','aria-label':'Synthetic modal',className:'host-dialog'},controls):controls,h('output',{'aria-label':'Canonical value'},JSON.stringify(state.value)),h('output',{'aria-label':'Save count'},String(state.saveCount)),h('output',{'aria-label':'Saved values'},JSON.stringify(saves.at(-1)??null)));
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
@@ -215,7 +222,7 @@ export async function checkCompleteDateBrowser({
         await page.keyboard.press('Escape');
         assert.equal(await input.getAttribute('aria-expanded'), 'false');
         await input.click();
-        await page.getByRole('textbox', { name: 'Adjacent draft' }).click();
+        await page.getByRole('button', { name: 'Outside calendar' }).click();
         assert.equal(await input.getAttribute('aria-expanded'), 'false');
         await input.fill('2025-02-');
         await page.getByRole('button', { name: 'European format' }).click();
@@ -244,6 +251,10 @@ export async function checkCompleteDateBrowser({
                 adjacent: 'Adjacent unsaved text',
             },
         ]);
+        assert.equal(
+            await page.locator('output[aria-label="Save count"]').textContent(),
+            '1'
+        );
         await finish('datetime-enter-explicit-save');
 
         input = await open('dialog');

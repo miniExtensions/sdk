@@ -7,8 +7,11 @@ using the checkout's resolved dependencies, then compares every ESM/CommonJS
 emitted declaration byte for byte with the normal checkout build. Both builds
 retain declaration, module-format and vendor guards; this check makes no install
 or network request.
-Type-only React and DOMPurify namespaces keep inferred declaration types nameable
-in this preparation context without widening public signatures or emitting code.
+Type-only React and DOMPurify namespaces and explicit React element returns keep
+declarations nameable in this preparation context without widening public
+signatures or emitting code. Private popup wrappers need this boundary too;
+an inferred transitive React/Radix return can pass a checkout build but fail Git
+preparation beneath `node_modules` with TS2742.
 
 ## Complete Calendly widget
 

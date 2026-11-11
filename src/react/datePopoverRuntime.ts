@@ -9,11 +9,12 @@ import {
     type PopoverContentProps,
 } from '@radix-ui/react-popover';
 import { createElement as h } from 'react';
+import type * as React from 'react';
 
 export function DatePopoverContent({
     container,
     ...props
-}: PopoverContentProps & { container?: HTMLElement }) {
+}: PopoverContentProps & { container?: HTMLElement }): React.ReactElement {
     return h(
         Portal,
         { container },

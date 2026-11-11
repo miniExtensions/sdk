@@ -268,8 +268,10 @@ export function recordPortalChartInputs({
         };
         if (within(installed, path)) {
             // The ordinary React barrel also reaches the existing private
-            // Phone and Rich Text closures, shared by ESM/CJS. Bind those
-            // exact shipped subtrees too; no other vendor or format is allowed.
+            // Phone, Rich Text, and Address closures, shared by ESM/CJS.
+            // Bind their shipped bytes too. Address admits only its three
+            // runtime files, never another vendor, source alias, or format.
+            const packagePath = relative(installed, path).replaceAll('\\', '/');
             assert(
                 within(join(installed, 'dist', format), path) ||
                     within(
@@ -279,11 +281,15 @@ export function recordPortalChartInputs({
                     within(
                         join(installed, 'dist/vendor/rich-markdown-editor'),
                         path
-                    ),
-                'Chart browser imported a source alias or wrong SDK format'
+                    ) ||
+                    [
+                        'dist/vendor/headlessui-address/combobox.js',
+                        'dist/vendor/headlessui-address/react-peer.js',
+                        'dist/vendor/headlessui-address/sdk-runtime.js',
+                    ].includes(packagePath),
+                `Chart browser imported a source alias or wrong SDK format: ${packagePath}`
             );
-            const member =
-                'package/' + relative(installed, path).replaceAll('\\', '/');
+            const member = 'package/' + packagePath;
             assert.deepEqual(
                 bytes,
                 execFileSync('tar', ['-xOf', archive, member])

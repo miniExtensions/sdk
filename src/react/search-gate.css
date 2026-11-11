@@ -67,7 +67,7 @@
     line-height: 1.25rem;
 }
 .mx-sdk-search-gate-body > * + *,
-.mx-sdk-search-gate form > * + * {
+.mx-sdk-search-gate-panel form > * + * {
     margin-top: 1rem;
 }
 .mx-sdk-search-gate-field label {

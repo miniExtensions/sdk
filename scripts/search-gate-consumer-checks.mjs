@@ -108,6 +108,10 @@ async function checkInstalled(directory, happyDomModulePath) {
                 value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
             })
         );
+        window.document.documentElement.style.fontSize = '16px';
+        const stylesheet = window.document.createElement('style');
+        stylesheet.textContent = css;
+        window.document.head.append(stylesheet);
         const host = window.document.createElement('div');
         host.innerHTML = html;
         window.document.body.append(host);
@@ -227,6 +231,9 @@ async function checkInstalled(directory, happyDomModulePath) {
                 host.querySelector('[role=dialog]').getAttribute('aria-label'),
                 'Search'
             );
+            const actions = host.querySelector('.mx-sdk-search-gate-actions');
+            assert(actions);
+            assert.equal(window.getComputedStyle(actions).marginTop, '16px');
             const shellInput = host.querySelector('input');
             await act(async () => {
                 Object.getOwnPropertyDescriptor(

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import {
@@ -665,6 +666,43 @@ it('changes modal shells without resetting the SDK draft or allocating effects',
     assert.equal(f.container.querySelector('dialog')?.open, true);
     assert.equal(f.input().value, 'retained draft');
     assert.equal(f.window.document.activeElement, f.input());
+    assert.equal(f.reads, 0);
+    assert.equal(f.clears, 0);
+    assert.deepEqual(f.navigations, []);
+});
+
+it('keeps packaged form spacing when the complete panel is rendered by a framework shell', async (t) => {
+    const f = await fixture(
+        t,
+        {
+            renderDialog: ({ children, ariaLabel }) =>
+                h(
+                    'section',
+                    { role: 'dialog', 'aria-label': ariaLabel },
+                    children
+                ),
+        },
+        (window) => {
+            window.document.documentElement.style.fontSize = '16px';
+            const stylesheet = window.document.createElement('style');
+            stylesheet.textContent = readFileSync(
+                new URL('../src/react/search-gate.css', import.meta.url),
+                'utf8'
+            );
+            window.document.head.append(stylesheet);
+            return () => stylesheet.remove();
+        }
+    );
+    const expectSpacing = () => {
+        const actions = f.container.querySelector(
+            '.mx-sdk-search-gate-actions'
+        );
+        assert.ok(actions);
+        assert.equal(f.window.getComputedStyle(actions).marginTop, '16px');
+    };
+    expectSpacing();
+    await f.update({ renderDialog: undefined });
+    expectSpacing();
     assert.equal(f.reads, 0);
     assert.equal(f.clears, 0);
     assert.deepEqual(f.navigations, []);

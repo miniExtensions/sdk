@@ -122,7 +122,8 @@
         "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
         "./react/complete-address.css": "./dist/esm/react/complete-address.css",
         "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
-        "./react/form-completion.css": "./dist/esm/react/form-completion.css"
+        "./react/form-completion.css": "./dist/esm/react/form-completion.css",
+        "./react/form-header.css": "./dist/esm/react/form-header.css"
     },
     "files": [
         "dist/esm",
@@ -158,7 +159,15 @@
         "examples/react-form-completion/styles.css",
         "examples/react-form-completion/dev.mjs",
         "examples/react-form-completion/build.mjs",
-        "examples/react-form-completion/tsconfig.json"
+        "examples/react-form-completion/tsconfig.json",
+        "docs/form-header.md",
+        "examples/react-form-header/README.md",
+        "examples/react-form-header/main.ts",
+        "examples/react-form-header/index.html",
+        "examples/react-form-header/styles.css",
+        "examples/react-form-header/build.mjs",
+        "examples/react-form-header/dev.mjs",
+        "examples/react-form-header/tsconfig.json"
     ],
     "engines": {
         "node": ">=22"

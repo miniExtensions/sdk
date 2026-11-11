@@ -1,6 +1,7 @@
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
+import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
 import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
@@ -520,6 +521,10 @@ const completionStarterFiles = [
     'tsconfig.json',
 ].map((path) => `examples/react-form-completion/${path}`);
 
+const headerStarterFiles = completionStarterFiles.map((path) =>
+    path.replace('react-form-completion/', 'react-form-header/')
+);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -571,6 +576,8 @@ try {
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/form-completion.md' ||
+                path === 'docs/form-header.md' ||
+                headerStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
@@ -618,6 +625,10 @@ try {
         'dist/esm/react/form-completion.css',
         'dist/cjs/react/form-completion.css',
         'docs/form-completion.md',
+        'docs/form-header.md',
+        ...headerStarterFiles,
+        'dist/esm/react/form-header.css',
+        'dist/cjs/react/form-header.css',
         ...completionStarterFiles,
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
@@ -3317,6 +3328,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(verificationMatrix.versions.length, 2);
     assert.equal(verificationMatrix.cleanup, 'completed');
+    const headerMatrix = checkFormHeaderReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(headerMatrix.versions.length, 2);
+    assert.equal(headerMatrix.cleanup, 'completed');
     const completionMatrix = checkFormCompletionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

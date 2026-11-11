@@ -647,6 +647,7 @@ for (const name of [
     'complete-portal-chart',
     'complete-address',
     'complete-collaborators',
+    'form-header',
     'date',
     'datetime',
     'duration',

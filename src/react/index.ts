@@ -2463,3 +2463,16 @@ export {
     type CompleteFormCompletionMessageProps,
     type FormCompletionAction,
 } from './CompleteFormCompletion.js';
+
+export {
+    CompleteFormHeader,
+    CompleteFormFooterDescription,
+    CompleteFormCover,
+    formHeaderLabels,
+    type CompleteFormHeaderProps,
+    type CompleteFormFooterDescriptionProps,
+    type CompleteFormCoverProps,
+    type FormHeaderPreview,
+    type FormHeaderSettingsTarget,
+    type FormHeaderLabels,
+} from './CompleteFormHeader.js';

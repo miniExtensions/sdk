@@ -1,3 +1,4 @@
+import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import assert from 'node:assert/strict';
 import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
 import { bundleCollaboratorPicker } from './collaborator-picker-vendor-checks.mjs';
@@ -29,6 +30,7 @@ import {
     phoneRuntimeFilter,
 } from './phone-vendor-checks.mjs';
 
+await assertAddressCombobox();
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
 assertRichTextVendor();
@@ -43,6 +45,9 @@ for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
 cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
     recursive: true,
     filter: richTextRuntimeFilter,
+});
+cpSync('vendor/headlessui-address', 'dist/vendor/headlessui-address', {
+    recursive: true,
 });
 cpSync('vendor/phone-number-input', 'dist/vendor/phone-number-input', {
     recursive: true,
@@ -168,6 +173,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-calendly',
         'complete-verification',
         'complete-portal-chart',
+        'complete-address',
         'complete-collaborators',
         'date',
         'datetime',

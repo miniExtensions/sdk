@@ -875,3 +875,59 @@ These authored proofs are not executed evidence until exact-head CI passes. No r
 credential, OTP, provider, account, storage/session installation or native Form/Portal
 acceptance is part of these SDK proofs. Native thin-wrapper request/continuation,
 full existing host tests and supported composition/host acceptance remain later work.
+
+## Complete Address qualification
+
+`reactCompleteAddressAutocomplete.test.ts` exercises the real component and
+public lifecycle hook: raw debounce, exact/forged/stale options, selection/detail
+order, committed writers and capped unchanged echoes, external replacement,
+session/field/read-scope A→B→A, stale Retry, cancellation, StrictMode/unmount, synchronous abort-listener owner/unmount/edit reentrancy,
+discarded render callbacks, disabled/readOnly retirement,
+controlled null/text, actual refs, keyboard selection, mobile Clear, ARIA/form,
+portable attribution and supplied Spanish/Japanese status/retry labels. The
+existing request engine and DOM control suites retain their independent policy.
+
+In these unselected fixtures, native Headless UI 1.7.2 activates the first
+available suggestion when typing opens the list. With two suggestions, ArrowDown advances to the second;
+ArrowUp returns to the first before Enter. Source, packed and trusted browser
+proofs keep two choices so a single-option fixture cannot hide this distinction.
+The native browser owner executes both ESM and CommonJS Address consumers for
+each configured React version; successful fixture preparation alone is not a
+keyboard or browser acceptance result.
+
+The prediction Retry button completes a read outside the native popup's focus
+boundary. The browser proof explicitly reopens those results with ArrowDown
+and asserts that this keyboard intent allocates no additional read or Save.
+
+The mandatory package check registers `complete-address-consumer-checks.mjs`
+for cold installed React 18/19 ESM/CommonJS, strict positive/negative types,
+SSR/hydration, DOM editing, read cancellation, Clear/ref and stylesheet exports.
+The native Chromium owner registers `complete-address-browser-checks.mjs` for
+trusted keyboard/Tab/Clear, standalone option/attribution geometry, narrow
+editing, owner replacement and explicit prediction/detail retries with localized
+UI. It records installed input/bundle/CSS hashes and owned cleanup. All reads
+are synthetic callback adapters; external network is refused. These registered
+assertions do not themselves claim executed proof or native Form/Save/provider
+persistence, fixture acceptance, OS IME or a screen-reader pass.
+
+Chart and Collaborator browser fixtures import the ordinary React barrel, so
+their input receipts also include Address's frozen `combobox.js`, `react-peer.js`
+and `sdk-runtime.js`. Each exact runtime file stays bound to the packed archive;
+neighboring vendor paths, unlisted Address files and opposite formats remain
+refused. A successful fixture build is separate from executed Chromium proof.
+
+Headless UI 1.7.2 is a build-only dependency under the `headlessui-address-source`
+alias, separate from Collaborator's Headless UI 2.2.9 build. The Address source
+guard still verifies the original package identity, all source hashes and exact
+regenerated output; both picker versions remain absent from runtime dependencies.
+The frozen private Combobox and
+Transition closure uses the same consumer-React binding as the existing Phone
+vendor. The build/source gate regenerates its unchanged upstream closure and
+permits only the documented React-peer substitution; it never imports the
+unrelated Portal/ReactDOM initialization graph into generic React source tests.
+The full license and Google attribution policy remain in third-party notices.
+
+The Address vendor reproduction compares whitespace-only compiler output, with
+identifiers and code retained, so esbuild's dependency-path comments cannot tie
+a package to pnpm's symlink layout. A flat Git-prepare layout regression checks
+identical output and retains rejection of a modified upstream source file.

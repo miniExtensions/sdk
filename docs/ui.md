@@ -5614,3 +5614,70 @@ copy the code/loading/cache/error state into the wrapper. Do not change
 `LoginPageExtensionView`, `loginIntoExtensionUsingLoginPage`, SDK auth safety or
 backend policy. This SDK stage is not native adoption, actual code delivery,
 credential-storage qualification or hosted authentication acceptance.
+
+## Complete React Address autocomplete
+
+`CompleteAddressAutocomplete` from `@miniextensions/sdk/react` owns the complete
+Combobox, input/ref, mobile Clear, options, official embedded Google Maps
+attribution, loading and explicit retry presentation. Import the optional
+`@miniextensions/sdk/react/complete-address.css` for standalone styles. It needs
+no Tailwind or monorepo assets. `theme.activeBackground` and `theme.activeText`
+override its scoped option colors; native input attributes, classes, styles,
+label/ARIA associations and forwarded input refs remain available.
+
+```tsx
+import {
+    CompleteAddressAutocomplete,
+    type AddressAutocompleteLifecycleProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-address.css';
+
+export function ShippingAddress(props: AddressAutocompleteLifecycleProps) {
+    return (
+        <CompleteAddressAutocomplete
+            {...props}
+            id="shipping-address"
+            form="shipping-form"
+            aria-label="Shipping address"
+            initialMobile={false}
+            labels={{
+                clear: 'Clear',
+                loadingPredictions: 'Loading address suggestions',
+                loadingDetails: 'Loading selected address',
+                failed: 'Address suggestions could not be loaded. Keep typing or retry.',
+                retry: 'Try again',
+            }}
+        />
+    );
+}
+```
+
+Supply authorized `listPredictions(query, {signal})` and
+`getFormattedAddress(placeId, {signal})` closures. This component never creates
+a client, accepts a session, adds a destination, performs Save or automatically
+retries. Identity members compare by reference/value; replace the relevant
+session, field or read-scope member whenever that authority changes. An observed
+A→B→A transition creates fresh ownership. Render-only labels/classes/callback
+changes preserve pending reads and use the latest committed writer. Disabled or
+read-only controls retire reads and suppress editing/selection/retry; a read-only
+input remains focusable. Abort listeners and writers may reenter synchronously;
+obsolete edit receipts cannot write through a successor owner or newer edit.
+
+The external canonical value remains authoritative even when no place is
+selected, including empty/null and values longer than `maxLength`. Manual edits
+write raw text before scheduling the existing 800 ms nonempty-query debounce.
+Selecting a current prediction writes its description synchronously, then
+formatted details may replace it. `maxLength` recognizes the caller's capped
+echo without imposing a second cap/store. External replacements and unmount
+retire obsolete work, including when a transport ignores abort. Each expected
+echo expires after one commit, including an unchanged capped value. A same-value
+assignment cannot signal an external reset; change an identity member for that.
+
+`useAddressAutocomplete` exposes the same lifecycle for other presentations and
+reuses the unchanged public request engine. Pass options directly from its
+current `state.predictions`; copies and old options are refused. Retained retry
+callbacks are tied to their exact failed snapshot. Supply the same explicit
+`initialMobile` value to server render and hydration, then remount for a new
+device policy. Required labels are caller-localized; native adapters supply all
+supported languages. The legacy DOM control/model and its composition/cap
+policy remain independent APIs.

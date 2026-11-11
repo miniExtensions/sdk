@@ -10,6 +10,13 @@ or network request.
 Type-only React and DOMPurify namespaces keep inferred declaration types nameable
 in this preparation context without widening public signatures or emitting code.
 
+## Standalone starter delivery
+
+Register a shipped starter in the package manifest, required packed paths and
+customer-kit copy list. The kit validates relative documentation links against
+its copied files, separately from validating the complete TGZ. A starter present
+in the TGZ can still be missing from the delivered customer kit.
+
 ## Complete Calendly widget
 
 `test/reactCompleteCalendlyWidget.test.ts` uses the actual widget, unchanged hook

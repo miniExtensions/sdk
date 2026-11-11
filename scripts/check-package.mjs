@@ -3746,6 +3746,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 .filter(
                     (path) =>
                         path.startsWith('docs/') ||
+                        headerStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
                             'README.md',

@@ -120,6 +120,64 @@ export async function checkAdditionalRuntimeOperations({ consumerDirectory }) {
         });
     let checks = 0;
     for (const [entry, sdk] of modules) {
+        // Actual installed core, no document/browser globals or default provider.
+        let collections = 0;
+        const provider = sdk.createCachedDeviceFingerprintProvider(() => {
+            collections++;
+            return {
+                version: 1,
+                visitorId: 'synthetic-installed-visitor-0001',
+            };
+        });
+        const captured = [];
+        const firstForm = {
+            extensionScreen: 'form_loaded',
+            payload: {
+                hasParentExtension: false,
+                formRecord: { type: 'create', data: {} },
+                publicFields: { state: { allowCreatingOnlyOneRecord: true } },
+            },
+        };
+        const finalScreen = {
+            type: 'redirect',
+            url: 'https://example.test/final',
+        };
+        const loaderClient = sdk.createMiniExtensionsClient({
+            apiOrigin: 'https://sdk.example.test',
+            session: { visitor: 'installed-session' },
+            fetch: async (_url, init) => {
+                captured.push(JSON.parse(String(init.body)));
+                return json(captured.length === 1 ? firstForm : finalScreen);
+            },
+        });
+        const published = [];
+        assert.deepEqual(
+            await sdk.loadExtensionWithCapabilities({
+                client: loaderClient,
+                input: {
+                    shareId: 'synthetic_share',
+                    recordId: null,
+                    query: {},
+                    context: { type: 'direct-url' },
+                },
+                provider,
+                isCurrent: () => true,
+                publish: (result) => published.push(result),
+            }),
+            finalScreen
+        );
+        assert.deepEqual(published, [finalScreen]);
+        assert.equal(captured.length, 2);
+        assert.deepEqual(captured[0].deviceFingerprint, {
+            version: 1,
+            visitorId: null,
+        });
+        assert.deepEqual(
+            captured[1].deviceFingerprint,
+            await sdk.getDeviceFingerprint(provider)
+        );
+        assert.equal(collections, 1);
+        checks++;
         for (const operation of cases) {
             const isTrpc = operation.route.includes('.');
             const resultResponse = () =>

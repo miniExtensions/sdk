@@ -994,3 +994,32 @@ batches/partial recovery with the SDK's private drafts or one-file upload model.
 The synthetic host baseline permits an explicit next click after a reported or
 transport failure; the gate preserves it without automatically acknowledging an
 unknown journal attempt or inventing accepted client authority.
+
+### Limited create Form loading
+
+`loadExtensionWithCapabilities` runs the complete capability-first handshake with
+your real client, or an explicit native `transport`. Supply an `isCurrent` receipt
+that stays false after retirement (use a monotonic generation for context ABA),
+and optionally an AbortSignal and final-only `publish` callback. It returns the
+final canonical screen union, including redirects and authentication screens.
+
+The first direct-root request sends `{ version: 1, visitorId: null }`. Only a
+successful root limited CREATE Form starts the explicitly supplied provider and
+a second request. Missing, invalid or rejected identity throws
+`LimitedFormLoadError` with `code: 'capability_unavailable'`; retirement throws
+`code: 'retired'`. Neither exposes the first limited Form. There is no orchestration
+retry. Native transports retain their own physical retry policy.
+
+Wrap your collector with `createCachedDeviceFingerprintProvider(collect)`. Each
+instance owns its in-flight and successful identity; failures are evicted for a
+later explicit attempt. Deliberately share that same instance with applicable
+allocated Compute and Save preparation using `getDeviceFingerprint` and
+`requiresFormDeviceFingerprint`. Create-to-edit drops eligibility. A retiring load
+never cancels shared collection or changes allocated Save settlement. Core
+includes no browser collector, telemetry, default provider or global cache.
+
+Original logical input (including saved progress), client session, query, timezone
+and view mode are detached once. Every transport gets a fresh detached request;
+host-only transport context may resolve afresh. Host progress revision/writer
+provenance stays with the existing publication owner and must never be sent,
+reread or written by the loader.

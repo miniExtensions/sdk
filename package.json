@@ -86,6 +86,7 @@
                 "default": "./dist/cjs/field-types.js"
             }
         },
+        "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",

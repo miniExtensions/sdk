@@ -2447,3 +2447,9 @@ export {
     type PortalChartData,
     type PortalChartRow,
 } from './CompletePortalChart.js';
+
+export {
+    CompleteFormTrackingDisclosure,
+    type CompleteFormTrackingDisclosureProps,
+    type FormTrackingDisclosureLabels,
+} from './CompleteFormTrackingDisclosure.js';

@@ -3137,3 +3137,31 @@ The package check executes this exact shipped fence with synthetic host ports.
 It establishes composition behavior, not real host adoption, browser acceptance
 or live persistence. Lead-owned native integration must implement and qualify
 these ports against its existing store, queue and request snapshot boundary.
+
+## Optional tracking in an allocated final Save
+
+`getEffectiveFormTracking` shares the native enabled/destination policy with
+`CompleteFormTrackingDisclosure` from `/react`. Supply localized `ipAddress` and
+`location` labels, and the actual `isLastPage`, `readOnly` and `preview` gates.
+Import optional `@miniextensions/sdk/react/form-tracking.css` for portable styling.
+Importing, rendering and evaluating policy never reads location. IP remains
+backend-owned; this API supplies no IP address and changes no tracking defaults.
+
+Inside an existing host's genuinely allocated final Save, synchronously capture
+its draft, record, owner/session/token, destinations and
+`captureFormTrackingPolicy(config)`. Only then await
+`prepareAllocatedFormTracking({policy, readLocation, onError})`. An explicitly
+authorized browser host may supply `() => readBrowserFormLocation(onError)`.
+The lazy browser reader requests once with the native 15000ms timeout. Denial,
+reader errors and diagnostic errors fall back to an empty coordinate result.
+Zero coordinates and separately configured axes are preserved. The SDK does not
+log/cache coordinates, retry, cancel, own transport or move a result to a successor.
+Disabled and IP-only policies never invoke the supplied reader. Compute and
+non-final actions must retain their existing host paths without invoking it.
+
+This is explicit host-allocated preparation, **not automatic FormController
+tracking**. Do not read location before `controller.save()` or pass an async
+function to its synchronous lifecycle callback. Its existing revision and
+pretransport authority guards are unchanged. The host retains coalescing, queued
+request rereads, original request settlement and authority. Never pass a mutable
+current-config getter in place of the captured policy.

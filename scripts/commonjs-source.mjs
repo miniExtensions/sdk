@@ -1,4 +1,12 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+    cpSync,
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -15,6 +23,19 @@ export function withCommonJsSource(root, compile) {
             recursive: true,
             dereference: true,
         });
+        const purifier = join(stage, 'react/html/htmlPurifier.ts');
+        if (existsSync(purifier)) {
+            const source = readFileSync(purifier, 'utf8');
+            if (source.split('createRequire(import.meta.url)').length !== 2)
+                throw new Error('Expected one lazy HTML parser resolver');
+            writeFileSync(
+                purifier,
+                source.replace(
+                    'createRequire(import.meta.url)',
+                    'createRequire(__filename)'
+                )
+            );
+        }
         writeFileSync(join(stage, 'package.json'), '{"type":"commonjs"}\n');
         const project = join(stage, 'tsconfig.json');
         writeFileSync(

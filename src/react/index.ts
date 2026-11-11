@@ -2454,3 +2454,12 @@ export {
     type CompleteFormTrackingDisclosureProps,
     type FormTrackingDisclosureLabels,
 } from './CompleteFormTrackingDisclosure.js';
+
+export {
+    CompleteFormCompletion,
+    CompleteFormCompletionMessage,
+    useFormCompletionCountdown,
+    type CompleteFormCompletionProps,
+    type CompleteFormCompletionMessageProps,
+    type FormCompletionAction,
+} from './CompleteFormCompletion.js';

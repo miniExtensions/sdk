@@ -1,0 +1,89 @@
+@import './html-description.css';
+.mx-sdk-form-completion {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    color: var(--mx-sdk-completion-color, #166534);
+    background: var(--mx-sdk-completion-background, #f0fdf4);
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+.mx-sdk-form-completion-icon {
+    flex: 0 0 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.125rem;
+}
+.mx-sdk-form-completion-content {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-form-completion p {
+    margin: 0;
+}
+.mx-sdk-form-completion .ql-container {
+    font-size: inherit;
+}
+.mx-sdk-form-completion-text a {
+    text-decoration: underline;
+}
+.mx-sdk-form-completion-status,
+.mx-sdk-form-completion-actions {
+    margin-top: 0.5rem !important;
+}
+.mx-sdk-form-completion-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.mx-sdk-form-completion-actions button {
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    border: 1px solid currentColor;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: transparent;
+}
+.mx-sdk-form-completion-actions button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+.mx-sdk-form-completion-actions button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+.mx-sdk-form-completion-spinner {
+    display: inline-block;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: mx-sdk-completion-spin 0.75s linear infinite;
+}
+@keyframes mx-sdk-completion-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mx-sdk-form-completion-spinner {
+        animation: none;
+    }
+}
+
+.mx-sdk-completion-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

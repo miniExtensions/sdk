@@ -214,3 +214,41 @@ export {
     type PreparedFormTracking,
     type FormLocationErrorReporter,
 } from './tracking.js';
+
+export {
+    createFormCompletionCountdown,
+    dispatchFormCompletionCommands,
+    type FormCompletionClock,
+    type FormCompletionCountdown,
+    type FormCompletionCountdownOptions,
+    type FormCompletionCountdownSnapshot,
+    type FormCompletionDispatchReceipt,
+} from './completionCountdown.js';
+
+export {
+    projectFormCompletion,
+    projectFormCompletionNavigation,
+    projectFormCompletionClose,
+    normalizeFormCompletionRedirectURL,
+    resolveDynamicFormCompletionRedirect,
+    makeDefaultSuccessMessage,
+    makeRedirectingToNewFormSuccessMessage,
+    makeRedirectingToURLSuccessMessage,
+    makeDefaultSubmitAnotherFormLabel,
+    makeDefaultCopySubmittedFormLabel,
+    resolveSubmitAnotherFormLabel,
+    canOfferRootNewRecordActions,
+    automaticNewFormAutoSubmitGuardKey,
+    formCompletionLabels,
+    type FormCompletionConfiguration,
+    type FormCompletionFields,
+    type ProjectFormCompletionInput,
+    type FormCompletionProjection,
+    type FormCompletionLabels,
+    type FormCompletionNavigationAction,
+    type FormCompletionNavigateCommand,
+    type FormCompletionCloseCommand,
+    type FormCompletionCommand,
+    type ProjectFormCompletionNavigationInput,
+    type ProjectFormCompletionCloseInput,
+} from './completion.js';

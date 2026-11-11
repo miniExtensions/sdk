@@ -121,7 +121,8 @@
         "./react/html-description.css": "./dist/esm/react/html-description.css",
         "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
         "./react/complete-address.css": "./dist/esm/react/complete-address.css",
-        "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css"
+        "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
+        "./react/form-completion.css": "./dist/esm/react/form-completion.css"
     },
     "files": [
         "dist/esm",
@@ -149,7 +150,15 @@
         "LICENSE",
         "THIRD_PARTY_NOTICES.md",
         "docs/complete-rich-text.md",
-        "docs/complete-collaborators.md"
+        "docs/complete-collaborators.md",
+        "docs/form-completion.md",
+        "examples/react-form-completion/README.md",
+        "examples/react-form-completion/main.ts",
+        "examples/react-form-completion/index.html",
+        "examples/react-form-completion/styles.css",
+        "examples/react-form-completion/dev.mjs",
+        "examples/react-form-completion/build.mjs",
+        "examples/react-form-completion/tsconfig.json"
     ],
     "engines": {
         "node": ">=22"
@@ -253,6 +262,8 @@
     },
     "browser": {
         "./dist/esm/react/html/htmlPurifier.js": "./dist/esm/react/html/htmlPurifier.browser.js",
-        "./dist/cjs/react/html/htmlPurifier.js": "./dist/cjs/react/html/htmlPurifier.browser.js"
+        "./dist/cjs/react/html/htmlPurifier.js": "./dist/cjs/react/html/htmlPurifier.browser.js",
+        "./src/react/html/htmlPurifier.js": "./src/react/html/htmlPurifier.browser.ts",
+        "./src/react/html/htmlPurifier.ts": "./src/react/html/htmlPurifier.browser.ts"
     }
 }

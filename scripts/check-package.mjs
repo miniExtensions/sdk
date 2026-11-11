@@ -1,6 +1,7 @@
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
+import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
     checkNativeFormProgressConsumer,
@@ -509,6 +510,16 @@ const browserStarterFiles = [
     'src/rememberedSession.ts',
 ].map((path) => `examples/browser/${path}`);
 
+const completionStarterFiles = [
+    'README.md',
+    'main.ts',
+    'index.html',
+    'styles.css',
+    'dev.mjs',
+    'build.mjs',
+    'tsconfig.json',
+].map((path) => `examples/react-form-completion/${path}`);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -559,6 +570,8 @@ try {
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-collaborators.md' ||
+                path === 'docs/form-completion.md' ||
+                completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
@@ -602,6 +615,10 @@ try {
         'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
         'dist/cjs/react/complete-calendly.css',
+        'dist/esm/react/form-completion.css',
+        'dist/cjs/react/form-completion.css',
+        'docs/form-completion.md',
+        ...completionStarterFiles,
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
         'dist/esm/react/complete-readonly-text.css',
@@ -3300,6 +3317,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(verificationMatrix.versions.length, 2);
     assert.equal(verificationMatrix.cleanup, 'completed');
+    const completionMatrix = checkFormCompletionReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(completionMatrix.versions.length, 2);
+    assert.equal(completionMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
             consumerDirectory: temporaryDirectory,
@@ -3682,6 +3707,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 .filter(
                     (path) =>
                         path.startsWith('docs/') ||
+                        completionStarterFiles.includes(path) ||
                         [
                             'README.md',
                             'LICENSE',

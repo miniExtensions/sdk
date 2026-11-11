@@ -771,3 +771,7 @@ The shipped browser starter also includes a typed
 [single direct scalar/select Portal filter recipe](docs/portals.md#one-direct-scalar-filter-recipe),
 reused by its actual controls. It uses the existing condition compiler and owned
 criteria/cleanup lifecycle; it is not a new SDK export or a general filter builder.
+
+[Complete Form completion](docs/form-completion.md) provides the stock success UI,
+current message and redirect projection, instance-local countdown and explicit
+host effect plans. Try the [standalone example](examples/react-form-completion/README.md).

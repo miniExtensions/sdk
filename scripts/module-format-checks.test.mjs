@@ -644,6 +644,7 @@ for (const name of [
     'search-gate',
     'complete-calendly',
     'complete-verification',
+    'complete-barcode-scanner',
     'complete-portal-chart',
     'complete-address',
     'complete-collaborators',

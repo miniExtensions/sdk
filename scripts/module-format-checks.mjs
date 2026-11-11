@@ -171,6 +171,7 @@ export function assertModuleFormats(root) {
         // Opt-in stylesheets are assets, never JavaScript modules.
         if (
             [
+                './react/theme.css',
                 './react/button.css',
                 './react/checkbox.css',
                 './react/text.css',
@@ -189,6 +190,7 @@ export function assertModuleFormats(root) {
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/complete-verification.css',
+                './react/complete-barcode-scanner.css',
                 './react/complete-portal-chart.css',
                 './react/complete-collaborators.css',
                 './react/date.css',

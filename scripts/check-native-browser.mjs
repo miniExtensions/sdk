@@ -32,9 +32,11 @@ import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
+import { checkThemeBrowser } from './theme-browser-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
+import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
 import { assertBrowserInputs } from './package-checks.mjs';
 import {
@@ -2121,6 +2123,13 @@ try {
             evidence: report.completeDuration,
             output,
         });
+        report.theme = {};
+        await checkThemeBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.theme,
+            output,
+        });
         report.searchGate = {};
         await checkSearchGateBrowser({
             browser,
@@ -2154,6 +2163,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.formTracking,
+            output,
+        });
+        report.completeBarcode = {};
+        await checkCompleteBarcodeBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeBarcode,
             output,
         });
         report.completeVerification = {};

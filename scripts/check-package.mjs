@@ -112,9 +112,11 @@ import { checkCompleteClearableInputReactMatrix } from './complete-clearable-inp
 import { checkCompleteMultilineReactMatrix } from './complete-multiline-consumer-checks.mjs';
 import { checkHTMLDescriptionReactMatrix } from './html-description-consumer-checks.mjs';
 import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
+import { checkThemeReactMatrix } from './theme-consumer-checks.mjs';
 import { checkCompleteDurationReactMatrix } from './complete-duration-consumer-checks.mjs';
 import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
+import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
@@ -598,6 +600,8 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'dist/esm/react/theme.css',
+        'dist/cjs/react/theme.css',
         'dist/esm/react/button.css',
         'dist/cjs/react/button.css',
         'dist/esm/react/checkbox.css',
@@ -630,6 +634,8 @@ try {
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
         ...completionStarterFiles,
+        'dist/esm/react/complete-barcode-scanner.css',
+        'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
         'dist/esm/react/complete-readonly-text.css',
@@ -3293,6 +3299,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(phoneMatrix.versions.length, 2);
     assert.equal(phoneMatrix.cleanup, 'completed');
+    const themeMatrix = checkThemeReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(themeMatrix.versions.length, 2);
+    assert.equal(themeMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3321,6 +3334,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(addressMatrix.versions.length, 2);
     assert.equal(addressMatrix.cleanup, 'completed');
+    const barcodeMatrix = checkCompleteBarcodeReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(barcodeMatrix.versions.length, 2);
+    assert.equal(barcodeMatrix.cleanup, 'completed');
     const verificationMatrix = checkCompleteVerificationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

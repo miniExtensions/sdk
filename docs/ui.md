@@ -5681,3 +5681,81 @@ callbacks are tied to their exact failed snapshot. Supply the same explicit
 device policy. Required labels are caller-localized; native adapters supply all
 supported languages. The legacy DOM control/model and its composition/cap
 policy remain independent APIs.
+
+## Complete Barcode / QR scanner
+
+`CompleteBarcodeScanner` owns the dialog, focus management, camera preview,
+decoding, failure/retry/manual-entry controls and cleanup. Import its stylesheet.
+`BarcodeField` retains its existing display-only contract and never opens a camera.
+
+```tsx
+import { useBarcodeScannerButtonInField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-barcode-scanner.css';
+export function Scanner({ write }: { write: (text: string) => void }) {
+    const scanner = useBarcodeScannerButtonInField({
+        fieldType: 'barcode',
+        autoStartCamera: false,
+        setValue: write,
+        ownerKey: 'current-record',
+    });
+    return (
+        <>
+            {scanner.barcodeScannerButton}
+            {scanner.scannerComponent}
+        </>
+    );
+}
+```
+
+Barcode enables the button by default. Email, URL and singleLineText require
+`enableQRCodeScannerForFormField`; readOnly suppresses both the button and stale
+autoStartCamera. A later enable does not replay initial auto-start. Changing
+ownerKey or runInLoop retires the old session; use an explicit fresh start.
+Ordinary callback replacement updates future delivery without cancelling an
+already admitted write or lookup. Those operations settle once in the caller. A rejected callback closes the scanner
+without replay; the caller owns its error presentation.
+Nonempty scans retain the native strictly-greater-than-one-second throttle and
+loop mode restarts after 500ms. Dismissal, disable, owner change and unmount
+retire camera/restart work without replaying or rolling back caller operations.
+
+Labels accept the native localization keys, with English defaults. style carries
+theme variables into the dialog portal; desktopViewportOffset reserves desktop
+space for a support panel. buttonAppearance:'unstyled' preserves a caller's
+custom icon-button classes. No application renderer, context or stylesheet is
+required. Media permission is requested only by a configured initial auto-start
+or explicit scanner start. Camera hardware acceptance is separate from synthetic
+media/decoder qualification.
+
+## Portable theme composition
+
+`@miniextensions/sdk/ui` exports the native-compatible `ThemeColor`,
+`ThemeTokens`, `colorsToCssVars`, `ALL_THEME_COLORS`, `DEFAULT_THEME_COLOR`
+and pure `getThemeStyles(color)`. It has no React or browser requirement.
+All 27 palettes retain ten raw RGB channel strings, including legacy indigo.
+
+`ThemeBoundary` from `@miniextensions/sdk/react` renders a div. Set `theme`
+explicitly for a standalone root (`DEFAULT_THEME_COLOR` is blue). Omit both
+`theme` and `tokens` to inherit without injecting a default. A complete `tokens`
+snapshot wins over palette projection; ordinary `style` (including SDK semantic
+variables) wins locally. Omitted boundaries also inherit semantic overrides. Selection
+stays with your state. Nested scopes, separate roots and unmount never mutate
+`document`, body, or another boundary.
+
+Import `@miniextensions/sdk/react/theme.css` explicitly to bridge raw tokens to
+existing SDK accent and Button variables. Import each component's stylesheet
+separately. Without theme CSS, raw tokens still render/inherit and the leaf's
+existing defaults/custom styles apply. The bridge preserves configured Button
+`data-color` values and light-palette foregrounds. SDK Button uses hover700;
+native Button keeps hover500. Existing native numeric600 and Duration500 local
+accent overrides keep precedence. Fixed-color leaf styles, error/disabled
+states, Tooltip black surfaces, background and width policy stay with their
+existing owners; this is not a whole-component recoloring contract.
+
+A detached portal must apply `getThemePortalProps(snapshot)` to its actual DOM
+wrapper. Pass `useThemeSnapshot()` explicitly, or construct an effective
+`{theme, tokens}` snapshot. Put custom raw tokens in the complete `tokens`
+input when they must propagate. React context carries supplied styling data;
+it does not create CSS inheritance across a portal. DOM-only styles (including
+raw tokens supplied only via `style`) are deliberately not discovered, read
+with computed styles, or promised propagation. No generic portal engine,
+script/style injection or global theme store is installed.

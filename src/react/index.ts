@@ -2465,6 +2465,35 @@ export {
 } from './CompleteFormCompletion.js';
 
 export {
+    CompleteBarcodeScanner,
+    defaultBarcodeScannerLabels,
+} from './CompleteBarcodeScanner.js';
+export type {
+    CompleteBarcodeScannerProps,
+    BarcodeScannerLabels,
+    BarcodeScannerLayout,
+} from './CompleteBarcodeScanner.js';
+export {
+    useBarcodeScannerButton,
+    useBarcodeScannerButtonInField,
+    qrScannerButtonTestId,
+} from './useBarcodeScannerButton.js';
+export type {
+    BarcodeScannerButtonOptions,
+    BarcodeScannerFieldOptions,
+} from './useBarcodeScannerButton.js';
+
+export {
+    ThemeBoundary,
+    getThemePortalProps,
+    useThemeSnapshot,
+    type ThemeBoundaryProps,
+    type ThemeSnapshot,
+    type ThemePortalProps,
+    type ThemeStyle,
+} from './ThemeBoundary.js';
+
+export {
     CompleteFormHeader,
     CompleteFormFooterDescription,
     CompleteFormCover,

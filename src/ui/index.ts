@@ -296,3 +296,12 @@ export type {
     BorrowedFormRenderPort,
     BorrowedFormRenderScope,
 } from './borrowedFormRenderScope.js';
+
+export {
+    colorsToCssVars,
+    DEFAULT_THEME_COLOR,
+    ALL_THEME_COLORS,
+    getThemeStyles,
+    type ThemeColor,
+    type ThemeTokens,
+} from './theme.js';

@@ -1,3 +1,4 @@
+import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
@@ -524,6 +525,10 @@ function run(command, args, cwd = temporaryDirectory) {
 try {
     // check:package also works alone; never pack leftover build output.
     run(process.execPath, ['scripts/build.mjs'], process.cwd());
+    const sourcePackage = assertSourcePackageBuild(process.cwd());
+    console.log(
+        `SDK source preparation matches checkout: ${sourcePackage.declarations} declarations in ${sourcePackage.formats} formats`
+    );
     const packed = JSON.parse(
         run(
             'npm',

@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { createElement, forwardRef, type InputHTMLAttributes } from 'react';
 
 export type TextInputProps = Omit<

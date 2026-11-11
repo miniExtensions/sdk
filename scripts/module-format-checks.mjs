@@ -188,6 +188,7 @@ export function assertModuleFormats(root) {
                 './react/form-tracking.css',
                 './react/form-completion.css',
                 './react/complete-verification.css',
+                './react/complete-barcode-scanner.css',
                 './react/complete-portal-chart.css',
                 './react/complete-collaborators.css',
                 './react/date.css',

@@ -35,6 +35,7 @@ import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localiz
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
+import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
 import { assertBrowserInputs } from './package-checks.mjs';
 import {
@@ -2154,6 +2155,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.formTracking,
+            output,
+        });
+        report.completeBarcode = {};
+        await checkCompleteBarcodeBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeBarcode,
             output,
         });
         report.completeVerification = {};

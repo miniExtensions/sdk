@@ -2463,3 +2463,22 @@ export {
     type CompleteFormCompletionMessageProps,
     type FormCompletionAction,
 } from './CompleteFormCompletion.js';
+
+export {
+    CompleteBarcodeScanner,
+    defaultBarcodeScannerLabels,
+} from './CompleteBarcodeScanner.js';
+export type {
+    CompleteBarcodeScannerProps,
+    BarcodeScannerLabels,
+    BarcodeScannerLayout,
+} from './CompleteBarcodeScanner.js';
+export {
+    useBarcodeScannerButton,
+    useBarcodeScannerButtonInField,
+    qrScannerButtonTestId,
+} from './useBarcodeScannerButton.js';
+export type {
+    BarcodeScannerButtonOptions,
+    BarcodeScannerFieldOptions,
+} from './useBarcodeScannerButton.js';

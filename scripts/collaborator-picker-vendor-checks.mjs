@@ -19,7 +19,7 @@ const localImports = [
     './TextInput.js',
     '../ui/collaboratorSelection.js',
 ];
-const external = ['react/*', 'react-dom/*', 'fuse.js'];
+
 const peerNamespace = 'collaborator-esm-peer';
 const peerFacade = (name) =>
     `export * from ${JSON.stringify(name)};\nimport * as peer from ${JSON.stringify(name)};\nexport default peer;\n`;
@@ -77,6 +77,34 @@ function verifyPackage(root, manifest, expected) {
  * React/DOM stay optional SDK peers and Fuse retains its pinned production package.
  */
 export async function bundleCollaboratorPicker(root = process.cwd()) {
+    return bundleHeadlessRuntime(
+        root,
+        'completeCollaboratorPickerRuntime',
+        'complete-collaborators',
+        localImports,
+        ['fuse.js']
+    );
+}
+
+/** Scanner-specific dialog, using the already pinned/licensed Headless UI input. */
+export async function bundleScannerDialog(root = process.cwd()) {
+    return bundleHeadlessRuntime(
+        root,
+        'scannerDialogRuntime',
+        'complete-barcode-scanner',
+        [],
+        []
+    );
+}
+
+async function bundleHeadlessRuntime(
+    root,
+    runtime,
+    receiptName,
+    ownedImports,
+    extraExternals
+) {
+    const external = ['react/*', 'react-dom/*', ...extraExternals];
     root = resolve(root);
     const provenanceRoot = join(root, 'vendor/collaborator-picker');
     const upstream = json(join(provenanceRoot, 'UPSTREAM.json'));
@@ -101,7 +129,7 @@ export async function bundleCollaboratorPicker(root = process.cwd()) {
     );
     const receipts = [];
     for (const format of ['esm', 'cjs']) {
-        const child = `dist/${format}/react/completeCollaboratorPickerRuntime.js`;
+        const child = `dist/${format}/react/${runtime}.js`;
         const path = join(root, child);
         const result = await build({
             absWorkingDir: root,
@@ -150,7 +178,8 @@ export async function bundleCollaboratorPicker(root = process.cwd()) {
                                 filter: /^(?:\.\/(?:CompleteCollaboratorField|PersonBadge|TextInput)\.js|\.\.\/ui\/collaboratorSelection\.js)$/,
                             },
                             (args) =>
-                                args.resolveDir === dirname(path)
+                                args.resolveDir === dirname(path) &&
+                                ownedImports.includes(args.path)
                                     ? { path: args.path, external: true }
                                     : undefined
                         );
@@ -222,7 +251,12 @@ export async function bundleCollaboratorPicker(root = process.cwd()) {
             schemaVersion: 1,
             child,
             sha256: hash(bytes),
-            external: ['react', 'react-dom', 'fuse.js', ...localImports],
+            external: [
+                'react',
+                'react-dom',
+                ...extraExternals,
+                ...ownedImports,
+            ],
             adaptation:
                 format === 'esm'
                     ? 'Only bare React/ReactDOM CommonJS require calls use an SDK-owned ESM namespace facade; no global require or Node polyfill.'
@@ -235,18 +269,12 @@ export async function bundleCollaboratorPicker(root = process.cwd()) {
             ),
         };
         writeFileSync(
-            join(
-                root,
-                `dist/${format}/react/complete-collaborators.provenance.json`
-            ),
+            join(root, `dist/${format}/react/${receiptName}.provenance.json`),
             JSON.stringify(receipt, null, 4) + '\n'
         );
         copyFileSync(
             join(provenanceRoot, 'LICENSES.txt'),
-            join(
-                root,
-                `dist/${format}/react/complete-collaborators.LICENSES.txt`
-            )
+            join(root, `dist/${format}/react/${receiptName}.LICENSES.txt`)
         );
         receipts.push({
             format,
@@ -255,5 +283,10 @@ export async function bundleCollaboratorPicker(root = process.cwd()) {
             packages: receipt.packages,
         });
     }
-    console.error('[sdk-collaborator-picker-bundle]', JSON.stringify(receipts));
+    console.error(
+        runtime === 'completeCollaboratorPickerRuntime'
+            ? '[sdk-collaborator-picker-bundle]'
+            : '[sdk-barcode-dialog-bundle]',
+        JSON.stringify(receipts)
+    );
 }

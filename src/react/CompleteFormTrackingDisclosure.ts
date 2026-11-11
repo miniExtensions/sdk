@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { createElement as h, Fragment } from 'react';
 import type { EffectiveFormTracking } from '../forms/tracking.js';
 

@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { createElement, forwardRef, type ButtonHTMLAttributes } from 'react';
 
 export type InputClearButtonProps = Omit<

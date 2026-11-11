@@ -1,3 +1,4 @@
+import type * as DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { createHTMLPurifier } from './createHTMLPurifier.js';
 

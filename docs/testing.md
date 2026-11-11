@@ -1,5 +1,15 @@
 # Source test coverage
 
+## Git source preparation
+
+The mandatory package check builds the actual source beneath `node_modules`
+using the checkout's resolved dependencies, then compares every ESM/CommonJS
+emitted declaration byte for byte with the normal checkout build. Both builds
+retain declaration, module-format and vendor guards; this check makes no install
+or network request.
+Type-only React and DOMPurify namespaces keep inferred declaration types nameable
+in this preparation context without widening public signatures or emitting code.
+
 ## Complete Calendly widget
 
 `test/reactCompleteCalendlyWidget.test.ts` uses the actual widget, unchanged hook

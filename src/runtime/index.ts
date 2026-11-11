@@ -20,3 +20,15 @@ export type {
 } from './types.js';
 export type * from './types.js';
 export type * from './rendererTypes.js';
+export {
+    createCachedDeviceFingerprintProvider,
+    getDeviceFingerprint,
+    requiresFormDeviceFingerprint,
+    loadExtensionWithCapabilities,
+    LimitedFormLoadError,
+    type CollectedDeviceFingerprint,
+    type DeviceFingerprintProvider,
+    type LimitedFormLoadErrorCode,
+    type ExtensionLoadTransport,
+    type CapabilityExtensionLoadOptions,
+} from './limitedFormLoad.js';

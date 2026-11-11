@@ -1377,6 +1377,18 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         portalViewAvailabilityTypedConsumer +
         portalReadFailureTypedConsumer +
         `
+import { loadExtensionWithCapabilities, createCachedDeviceFingerprintProvider, getDeviceFingerprint, requiresFormDeviceFingerprint, LimitedFormLoadError } from '@miniextensions/sdk';
+import type { LoadExtensionInput, LoadExtensionResult, DeviceFingerprintProvider } from '@miniextensions/sdk';
+export async function checkLimitedFormLoad(client: MiniExtensionsClient, input: LoadExtensionInput) {
+    const provider: DeviceFingerprintProvider = createCachedDeviceFingerprintProvider(async () => ({version:1, visitorId:'synthetic-installed-visitor-0001'}));
+    const identity = await getDeviceFingerprint(provider);
+    const result: LoadExtensionResult = await loadExtensionWithCapabilities({client, input, provider, isCurrent: () => true});
+    if (result.extensionScreen === 'form_loaded') requiresFormDeviceFingerprint(input.context, result.payload);
+    const error = new LimitedFormLoadError('retired');
+    // @ts-expect-error host currentness is required
+    loadExtensionWithCapabilities({client, input, provider});
+    return {identity, result, error};
+}
 import type { DurationFormat } from '@miniextensions/sdk/formulas';
 const publicDurationFormat: DurationFormat = 'h:mm:ss.SSS';
 export const durationDisplay: string = getFormattedDuration('1.234', publicDurationFormat, true);

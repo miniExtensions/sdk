@@ -4,8 +4,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The original picker artifact is frozen, including its actual peer requires. */
-export function assertDateVendor(root = process.cwd()) {
-    const directory = join(root, 'vendor/date-time');
+export function assertDateVendor(
+    root = process.cwd(),
+    relativeDirectory = 'vendor/date-time'
+) {
+    const directory = join(root, relativeDirectory);
     const receipt = JSON.parse(readFileSync(join(directory, 'UPSTREAM.json')));
     assert.equal(receipt.revision, '6fb5a547de6328f4103b4c5928c79a05473aea85');
     assert.deepEqual(

@@ -278,6 +278,12 @@ export async function checkCompleteDateBrowser({
         await page.keyboard.press('Escape');
         assert.equal(await input.getAttribute('aria-expanded'), 'false');
         await input.click();
+        await input.fill('2025-02-');
+        await page.getByRole('button', { name: 'Replace owner' }).click();
+        assert.equal(await input.inputValue(), '2024-03-15');
+        assert.equal(await input.getAttribute('aria-expanded'), 'false');
+        assert.deepEqual((await snapshot()).writes, []);
+        await input.click();
         await page.getByRole('button', { name: 'Remove field' }).click();
         assert.equal(await popup.count(), 0);
         await finish('dialog-collision-reopen-unmount');

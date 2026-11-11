@@ -259,7 +259,7 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
-    checkCountConsumer,
+    checkCountReactMatrix,
     countReactTypedConsumer,
 } from './count-consumer-checks.mjs';
 import {
@@ -3009,13 +3009,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed read-only attachment presentation: ${readonlyAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
-    const countProof = await checkCountConsumer({
-        consumerDirectory: temporaryDirectory,
+    const countProof = checkCountReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(countProof.checks, 20);
+    assert.equal(countProof.versions.length, 2);
+    assert.equal(countProof.cleanup, 'completed');
     console.log(
-        `Installed Count renderer, readonly native display, shared Number CSS and local example: ${countProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        'Installed Count React18/19: packed ESM/CJS, strict NodeNext/Bundler declarations, public CSS and 20 regression groups per version passed.'
     );
     const autoNumberProof = await checkAutoNumberConsumer({
         consumerDirectory: temporaryDirectory,

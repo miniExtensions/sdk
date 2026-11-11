@@ -16,7 +16,24 @@ import {
     type PortalSearchGateOptions,
 } from './usePortalSearchGate.js';
 
+export type PortalSearchGateDialogProps = {
+    /** Complete SDK panel, including its heading, description and real controls. */
+    children: ReactNode;
+    title: string;
+    ariaLabel: string;
+    description: string;
+    descriptionId: string;
+    initialFocus: { readonly current: HTMLInputElement | null };
+};
+
 export type PortalSearchGateProps = PortalSearchGateOptions & {
+    /**
+     * Optional framework modal shell. It must preserve blocking admission,
+     * non-dismissal, initial/Tab/restore focus and the supplied accessible name
+     * and description. It receives SDK UI, never a replacement prompt renderer.
+     * The default remains the native browser modal dialog.
+     */
+    renderDialog?(props: PortalSearchGateDialogProps): ReactNode;
     inputId?: string;
     ariaLabel?: string;
     className?: string;
@@ -116,6 +133,7 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
     const input = useRef<HTMLInputElement>(null);
     const useCommitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    const usesNativeDialog = props.renderDialog == null;
     useCommitEffect(() => {
         const node = dialog.current;
         if (node == null) return;
@@ -124,13 +142,113 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
         // Close while connected: removal first clears the browser's modal
         // lifetime, so a later passive close cannot restore its opener focus.
         return () => node.close();
-    }, []);
+    }, [usesNativeDialog]);
     const style: GateStyle = {
         '--mx-sdk-search-accent': props.accentColor,
         '--mx-sdk-search-focus': props.focusColor,
         '--mx-sdk-search-reserved-inline-end': props.reservedInlineEndWidth,
         zIndex: props.zIndex,
     };
+    const panel = h(
+        'section',
+        {
+            className: 'mx-sdk-search-gate-panel',
+            style: props.renderDialog ? style : undefined,
+            'data-testid': props.panelTestId,
+        },
+        h(
+            'header',
+            { className: 'mx-sdk-search-gate-header' },
+            h('h2', { id: titleId }, state.title),
+            props.headerActions
+        ),
+        h(
+            'div',
+            { className: 'mx-sdk-search-gate-body' },
+            h('p', { id: descriptionId }, state.description),
+            state.showError
+                ? h(
+                      'div',
+                      {
+                          className: 'mx-sdk-search-gate-error',
+                          id: errorId,
+                      },
+                      h(
+                          'svg',
+                          {
+                              viewBox: '0 0 20 20',
+                              'aria-hidden': true,
+                              focusable: 'false',
+                          },
+                          h('circle', { cx: 10, cy: 10, r: 9 }),
+                          h('path', { d: 'M7 7l6 6m0-6-6 6' })
+                      ),
+                      h('p', null, state.noResultsMessage)
+                  )
+                : null,
+            h(
+                'form',
+                {
+                    onSubmit: (event: FormEvent<HTMLFormElement>) => {
+                        event.preventDefault();
+                        state.submit();
+                    },
+                },
+                h(
+                    'div',
+                    { className: 'mx-sdk-search-gate-field' },
+                    h(
+                        'label',
+                        { htmlFor: inputId },
+                        props.searchPageField.fieldName
+                    ),
+                    h(TextInput, {
+                        ref: input,
+                        id: inputId,
+                        type: 'text',
+                        value: state.searchTerm,
+                        placeholder: state.placeholder,
+                        'aria-describedby': state.showError
+                            ? `${descriptionId} ${errorId}`
+                            : descriptionId,
+                        'aria-invalid': state.showError,
+                        onChange: (event) =>
+                            state.setSearchTerm(event.target.value),
+                    })
+                ),
+                h(
+                    'div',
+                    { className: 'mx-sdk-search-gate-actions' },
+                    h(
+                        'button',
+                        { type: 'submit', disabled: state.disabled },
+                        props.hasNoResults ? 'Search Again' : 'Continue'
+                    ),
+                    props.hasNoResults
+                        ? h(
+                              'button',
+                              {
+                                  type: 'button',
+                                  className: 'mx-sdk-search-gate-clear',
+                                  onClick: state.clear,
+                              },
+                              'Clear'
+                          )
+                        : null
+                )
+            )
+        )
+    );
+    if (props.renderDialog) {
+        return props.renderDialog({
+            children: panel,
+            title: state.title,
+            description: state.description,
+            ariaLabel: props.ariaLabel ?? (state.title || 'Search'),
+            descriptionId,
+            initialFocus: input,
+        });
+    }
     return h(
         'dialog',
         {
@@ -153,94 +271,6 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
             'aria-hidden': true,
             'data-testid': props.overlayTestId,
         }),
-        h(
-            'section',
-            {
-                className: 'mx-sdk-search-gate-panel',
-                'data-testid': props.panelTestId,
-            },
-            h(
-                'header',
-                { className: 'mx-sdk-search-gate-header' },
-                h('h2', { id: titleId }, state.title),
-                props.headerActions
-            ),
-            h(
-                'div',
-                { className: 'mx-sdk-search-gate-body' },
-                h('p', { id: descriptionId }, state.description),
-                state.showError
-                    ? h(
-                          'div',
-                          {
-                              className: 'mx-sdk-search-gate-error',
-                              id: errorId,
-                          },
-                          h(
-                              'svg',
-                              {
-                                  viewBox: '0 0 20 20',
-                                  'aria-hidden': true,
-                                  focusable: 'false',
-                              },
-                              h('circle', { cx: 10, cy: 10, r: 9 }),
-                              h('path', { d: 'M7 7l6 6m0-6-6 6' })
-                          ),
-                          h('p', null, state.noResultsMessage)
-                      )
-                    : null,
-                h(
-                    'form',
-                    {
-                        onSubmit: (event: FormEvent<HTMLFormElement>) => {
-                            event.preventDefault();
-                            state.submit();
-                        },
-                    },
-                    h(
-                        'div',
-                        { className: 'mx-sdk-search-gate-field' },
-                        h(
-                            'label',
-                            { htmlFor: inputId },
-                            props.searchPageField.fieldName
-                        ),
-                        h(TextInput, {
-                            ref: input,
-                            id: inputId,
-                            type: 'text',
-                            value: state.searchTerm,
-                            placeholder: state.placeholder,
-                            'aria-describedby': state.showError
-                                ? `${descriptionId} ${errorId}`
-                                : descriptionId,
-                            'aria-invalid': state.showError,
-                            onChange: (event) =>
-                                state.setSearchTerm(event.target.value),
-                        })
-                    ),
-                    h(
-                        'div',
-                        { className: 'mx-sdk-search-gate-actions' },
-                        h(
-                            'button',
-                            { type: 'submit', disabled: state.disabled },
-                            props.hasNoResults ? 'Search Again' : 'Continue'
-                        ),
-                        props.hasNoResults
-                            ? h(
-                                  'button',
-                                  {
-                                      type: 'button',
-                                      className: 'mx-sdk-search-gate-clear',
-                                      onClick: state.clear,
-                                  },
-                                  'Clear'
-                              )
-                            : null
-                    )
-                )
-            )
-        )
+        panel
     );
 }

@@ -35,7 +35,9 @@ The additive Search gate source is covered by `test/portalSearchGate.test.ts`
 and `test/reactPortalSearchGate.test.ts`: exact name/ID URL aliases, encoding and
 fragments; empty/custom/default copy; raw drafts; no-results/error transitions;
 valid and refused submit; non-submit Clear; metadata replacement; unique
-associations; StrictMode, SSR and unmount. They use the real public helpers,
+associations; StrictMode, SSR and unmount. The framework-shell cases retain the
+real SDK panel/state/URL policy and assert zero native-dialog lifecycle calls;
+switching shells retains the raw draft. They use the real public helpers,
 component and TextInput, not mocked SDK output. Happy-dom cancellation/DOM checks
 do not prove browser focus trapping or native maker composition.
 

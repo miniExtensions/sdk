@@ -5000,16 +5000,23 @@ theme/layout inputs. A future native wrapper can pass `var(--theme-600)` and
 contexts. `headerActions` is optional decoration, not a prompt renderer or read
 authority. `panelTestId`/`overlayTestId` permit existing native test associations.
 
-**Native adoption remains separate.** Native `SearchPage` must retain Next title,
-admin/settings integration, current location assignment and Clear; `PortalView`
-retains metadata qualification and no-query/zero-result gate admission. Its
-compatibility helper exports can re-export these SDK helpers. Do not change
-PortalView or shared Modal merely to install the new UI. Native Headless UI
-currently composes document-level toolbar/settings/Intercom portals; a native
-`showModal` top layer cannot preserve those exceptions through `zIndex` alone.
-Controls passed in `headerActions` and their popup destinations need an actual
-native composition decision and browser proof before adoption. The SDK's
-`zIndex` styles its element, not an escape from browser modal/inert semantics.
+For framework hosts with document-level maker portals, `renderDialog` accepts
+`PortalSearchGateDialogProps`: the already-built complete SDK panel as `children`,
+`title`, `ariaLabel`, `description`, `descriptionId`, and `initialFocus`. Return a
+framework modal shell around those children. The shell owns non-dismissal,
+initial/Tab/restored focus, modal accessibility and native portal compatibility.
+It must not render another prompt, input or local draft/error state. The SDK
+never opens or closes a browser dialog when this shell is supplied; the same
+SDK state and all explicit navigation/Clear behavior remain above the shell.
+Use a stable component inside the callback when the shell needs hooks.
+
+Native `SearchPage` uses this seam with its existing HeadlessUI Modal because
+its toolbar, settings, Publish feedback and Intercom use document portals. A
+native `showModal` top layer cannot preserve those surfaces through z-index.
+The native shell retains its current theme, Intercom spacing and focus behavior;
+it can register the supplied description through its framework's own description
+component. `PortalView` still qualifies metadata and decides no-query/zero-result
+admission. Native adoption and browser acceptance remain separate from SDK tests.
 
 Source tests, packed React18/19 ESM/CJS/types/SSR/hydration consumers and installed
 styled Chromium proofs are authored/registered separately. They are synthetic

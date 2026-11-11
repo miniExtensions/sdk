@@ -343,6 +343,7 @@ import type {
 export {
     PortalSearchGate,
     type PortalSearchGateProps,
+    type PortalSearchGateDialogProps,
 } from './PortalSearchGate.js';
 export {
     usePortalSearchGate,

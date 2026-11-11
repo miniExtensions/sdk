@@ -5607,3 +5607,47 @@ copy the code/loading/cache/error state into the wrapper. Do not change
 `LoginPageExtensionView`, `loginIntoExtensionUsingLoginPage`, SDK auth safety or
 backend policy. This SDK stage is not native adoption, actual code delivery,
 credential-storage qualification or hosted authentication acceptance.
+
+## Complete Barcode / QR scanner
+
+`CompleteBarcodeScanner` owns the dialog, focus management, camera preview,
+decoding, failure/retry/manual-entry controls and cleanup. Import its stylesheet.
+`BarcodeField` retains its existing display-only contract and never opens a camera.
+
+```tsx
+import { useBarcodeScannerButtonInField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-barcode-scanner.css';
+export function Scanner({ write }: { write: (text: string) => void }) {
+    const scanner = useBarcodeScannerButtonInField({
+        fieldType: 'barcode',
+        autoStartCamera: false,
+        setValue: write,
+        ownerKey: 'current-record',
+    });
+    return (
+        <>
+            {scanner.barcodeScannerButton}
+            {scanner.scannerComponent}
+        </>
+    );
+}
+```
+
+Barcode enables the button by default. Email, URL and singleLineText require
+`enableQRCodeScannerForFormField`; readOnly suppresses both the button and stale
+autoStartCamera. A later enable does not replay initial auto-start. Changing
+ownerKey or runInLoop retires the old session; use an explicit fresh start.
+Ordinary callback replacement updates future delivery without cancelling an
+already admitted write or lookup. Those operations settle once in the caller. A rejected callback closes the scanner
+without replay; the caller owns its error presentation.
+Nonempty scans retain the native strictly-greater-than-one-second throttle and
+loop mode restarts after 500ms. Dismissal, disable, owner change and unmount
+retire camera/restart work without replaying or rolling back caller operations.
+
+Labels accept the native localization keys, with English defaults. style carries
+theme variables into the dialog portal; desktopViewportOffset reserves desktop
+space for a support panel. buttonAppearance:'unstyled' preserves a caller's
+custom icon-button classes. No application renderer, context or stylesheet is
+required. Media permission is requested only by a configured initial auto-start
+or explicit scanner start. Camera hardware acceptance is separate from synthetic
+media/decoder qualification.

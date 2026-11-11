@@ -1095,3 +1095,15 @@ MIT and tslib's 0BSD notices. The corresponding
 versions, registry integrity values, source URLs and individual input hashes.
 The build checks those inputs against the reviewed version/license inventory;
 it does not broaden the consumer's React, image-source or identity authority.
+
+### Barcode / QR decoding
+
+The complete scanner uses the declared `@zxing/library` 0.20.0 dependency
+(MIT, https://github.com/zxing-js/library/tree/v0.20.0). Its published package
+retains the upstream license. Scanner-specific attachment retirement and UI
+are SDK-owned; the decoder is not upgraded during this extraction.
+
+The scanner dialog bundles the pinned Headless UI 2.2.9 closure using the SDK's
+existing verified input and license policy. React and React DOM remain optional
+external peers. Each format ships complete-barcode-scanner.provenance.json and
+complete-barcode-scanner.LICENSES.txt beside the private dialog runtime.

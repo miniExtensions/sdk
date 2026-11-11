@@ -14,7 +14,8 @@
     "rootEntrySha256": {
         "dist/headlessui.esm.js": "2f7290afc2b874fa6dc4d2cb3bbc60b3385260fdf8d29dcc7dbbcff91f54c2f9",
         "dist/index.cjs": "1ed8e34dfd51a5dc9f8646dd864e4e49b361a19157ba4b4ac48103a0a5c26fa4",
-        "dist/components/combobox/combobox.js": "cee115ef8dccd9ff9230f38e8261f2d5782f3bceadb17ed9340f5cefb2f6c6f7"
+        "dist/components/combobox/combobox.js": "cee115ef8dccd9ff9230f38e8261f2d5782f3bceadb17ed9340f5cefb2f6c6f7",
+        "dist/components/dialog/dialog.js": "44f566ea5e7275cb2808c859398285dbd6e03309a9209d532290fbb2ccb4389e"
     },
     "allowedPackages": {
         "@headlessui/react": {

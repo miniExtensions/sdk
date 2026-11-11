@@ -119,7 +119,8 @@
         },
         "./react/html-description.css": "./dist/esm/react/html-description.css",
         "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
-        "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css"
+        "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
+        "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css"
     },
     "files": [
         "dist/esm",
@@ -176,6 +177,7 @@
         "@emotion/unitless": "0.7.5",
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
+        "@zxing/library": "0.20.0",
         "chart.js": "4.4.2",
         "copy-to-clipboard": "3.3.3",
         "dompurify": "2.4.7",

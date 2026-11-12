@@ -8,10 +8,27 @@ import { build } from 'esbuild';
 const version = '6.5.438';
 const engineSha256 =
     '2792b7c390ad6d5f4245d326b70deebbc990fa4bcac691412f6df886abb9e867';
+const licenseSha256 =
+    '93db28d6b86557c97d8320d1a317882c5a6f4f9862862412c6676e8a9ef76ca3';
 const child = 'react/document-preview/pdfEngineRuntime.js';
+const archiveCaptureBudget = 1024 * 1024;
 const receiptPath =
     'dist/esm/react/document-preview/pdfEngineRuntime.receipt.json';
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+function pinnedLicense(source) {
+    const notice = source.match(/^\/\*\*[\s\S]*?\*\//)?.[0];
+    assert(
+        notice,
+        'Private PDF module must retain its upstream license notice'
+    );
+    assert.equal(
+        sha(Buffer.from(notice)),
+        licenseSha256,
+        'Private PDF license notice must match the pinned upstream bytes'
+    );
+    return notice;
+}
 
 export async function bundleDocumentPDF(root = process.cwd()) {
     root = resolve(root);
@@ -29,6 +46,7 @@ export async function bundleDocumentPDF(root = process.cwd()) {
         engineSha256,
         'PDF engine source must match pinned immutable input'
     );
+    const license = pinnedLicense(original);
     const environmentLine = /^const isNodeJS = [^\n]+;$/gm;
     assert.equal([...original.matchAll(environmentLine)].length, 1);
     // Specialize the one verified environment binding through esbuild's
@@ -74,6 +92,8 @@ export async function bundleDocumentPDF(root = process.cwd()) {
                 },
             ],
             minifySyntax: true,
+            minifyWhitespace: true,
+            banner: { js: license },
             outfile: output,
             write: false,
             metafile: true,
@@ -98,6 +118,10 @@ export async function bundleDocumentPDF(root = process.cwd()) {
         );
         const bytes = result.outputFiles[0].contents;
         assert(
+            bytes.length <= archiveCaptureBudget,
+            'Private PDF module must fit the existing archive-proof capture budget'
+        );
+        assert(
             !/getBuiltinModule|@napi-rs\/canvas/.test(
                 Buffer.from(bytes).toString('utf8')
             ),
@@ -114,6 +138,7 @@ export async function bundleDocumentPDF(root = process.cwd()) {
     const receipt = {
         version,
         engineSha256,
+        licenseSha256,
         browserOnly: true,
         specialization: 'browser-isNodeJS-false',
         outputs,
@@ -126,6 +151,7 @@ export function assertDocumentPDFBundle(root) {
     const receipt = JSON.parse(readFileSync(join(root, receiptPath), 'utf8'));
     assert.equal(receipt.version, version);
     assert.equal(receipt.engineSha256, engineSha256);
+    assert.equal(receipt.licenseSha256, licenseSha256);
     assert.equal(receipt.browserOnly, true);
     assert.equal(receipt.specialization, 'browser-isNodeJS-false');
     assert.equal(receipt.outputs.length, 2);
@@ -134,6 +160,11 @@ export function assertDocumentPDFBundle(root) {
         assert.equal(entry.format, format);
         assert.equal(entry.path, `dist/${format}/${child}`);
         const bytes = readFileSync(join(root, entry.path));
+        pinnedLicense(bytes.toString('utf8'));
+        assert(
+            bytes.length <= archiveCaptureBudget,
+            'Private PDF module exceeds the existing archive-proof capture budget'
+        );
         assert.equal(bytes.length, entry.size);
         assert.equal(
             sha(bytes),

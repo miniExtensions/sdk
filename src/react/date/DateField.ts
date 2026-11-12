@@ -6,26 +6,31 @@ import {
 import { CompleteReadOnlyTextField } from '../CompleteReadOnlyTextField.js';
 import { formatDateInputValue } from '../../ui/dateInputCompatibility.js';
 
-type DateProps = Omit<
+type DateProps<Kind extends 'date' | 'dateTime'> = Omit<
     CompleteDateFieldProps,
     'airtableDateConfig' | 'setValue'
 > & {
     airtableDateConfig: Extract<
         CompleteDateFieldProps['airtableDateConfig'],
-        { type: 'date' }
+        { type: Kind }
     >;
     /** The binding API is available separately from the /react entry. */
     binding?: never;
 };
 
-export type ControlledDateFieldProps = DateProps &
+type ControlledDateProps<Kind extends 'date' | 'dateTime'> = DateProps<Kind> &
     (
         | { mode?: 'input'; setValue: CompleteDateFieldProps['setValue'] }
         | { mode: 'readOnly'; setValue?: never }
     );
 
-/** The complete calendar-date field; no host renderer or Form provider needed. */
-export function DateField(props: ControlledDateFieldProps): ReactElement {
+export type ControlledDateFieldProps = ControlledDateProps<'date'>;
+export type ControlledDateTimeFieldProps = ControlledDateProps<'dateTime'>;
+
+/** Shared complete picker and literal display; the host retains canonical writes. */
+function renderControlledDateField(
+    props: ControlledDateFieldProps | ControlledDateTimeFieldProps
+): ReactElement {
     if (props.mode !== 'readOnly')
         return createElement(CompleteDateField, props);
     const describedBy =
@@ -69,4 +74,17 @@ export function DateField(props: ControlledDateFieldProps): ReactElement {
     );
 }
 
+/** The complete calendar-date field; no host renderer or Form provider needed. */
+export function DateField(props: ControlledDateFieldProps): ReactElement {
+    return renderControlledDateField(props);
+}
+
+/** The complete date/time picker, with native instant bytes and timezone policy. */
+export function DateTimeField(
+    props: ControlledDateTimeFieldProps
+): ReactElement {
+    return renderControlledDateField(props);
+}
+
 export type DateFieldProps = ControlledDateFieldProps;
+export type DateTimeFieldProps = ControlledDateTimeFieldProps;

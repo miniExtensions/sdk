@@ -194,6 +194,7 @@ export function assertModuleFormats(root) {
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',
                 './react/complete-barcode-scanner.css',
+                './react/barcode.css',
                 './react/complete-portal-chart.css',
                 './react/complete-collaborators.css',
                 './react/date.css',

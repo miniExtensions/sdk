@@ -190,6 +190,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-record-comments',
         'complete-verification',
         'complete-barcode-scanner',
+        'barcode',
         'complete-portal-chart',
         'complete-address',
         'complete-collaborators',

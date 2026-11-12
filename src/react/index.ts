@@ -137,6 +137,9 @@ import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
 export {
     BarcodeField,
+    BindingBarcodeField,
+    type BindingBarcodeFieldProps,
+    type ControlledBarcodeFieldProps,
     renderBarcodeField,
     type BarcodeFieldProps,
     type BarcodeFieldOptions,

@@ -72,14 +72,23 @@ function App(){const[parentOpen,setParentOpen]=useState(true);const[state,setSta
  const content=h('form',{onSubmit:event=>{event.preventDefault();stats.submits++;}},h('label',null,'Original value',h('input',{value:state.value,readOnly:true})),scanner.barcodeScannerButton,scanner.scannerComponent);
  return params.get('nested')==='true'?h(NativeDialog,{open:parentOpen,onClose(){stats.parentDismissed++;setParentOpen(false);},style:{position:'fixed',inset:0,zIndex:50,padding:'80px',background:'#ddd'}},h('div',null,h(NativeDialog.Title,null,'Native finder'),content)):content;
 }
-createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
+function EditorApp(){
+ const[state,setState]=useState({owner:'A',readOnly:false,value:{text:'00042',type:'qr',metadata:{source:'browser'}},sibling:'Keep sibling'});
+ patch=change=>flushSync(()=>setState(old=>({...old,...change})));
+ return h('form',{id:'editor-form',onSubmit:event=>{event.preventDefault();stats.submits++;}},
+  h(BarcodeField,{mode:'controlled',value:state.value,onChange:value=>{stats.writes.push(value);setState(old=>({...old,value}));},language:'en',title:'Barcode answer',id:'editor-barcode',form:'editor-form',describedBy:'editor-help',initialMobile:true,clearLabel:'Clear barcode',enableInlineEdit:params.get('deferred')==='true',readOnly:state.readOnly,displayOnly:state.displayOnly,owner:{token:state.owner,isCurrent:()=>true}}),
+  h('p',{id:'editor-help'},'Scan or enter exact text'),
+  h('label',null,'Sibling',h('input',{value:state.sibling,onChange:event=>setState(old=>({...old,sibling:event.target.value}))})),
+  h('button',{type:'submit'},'Save'));
+}
+createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(params.has('editor')?EditorApp:App)));
 window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),release:()=>held?.(),snapshot:()=>({...stats,writes:[...stats.writes],tracks:tracks.map(track=>track.readyState)}),cleanup:()=>{clearInterval(interval);for(const track of tracks)track.stop();}};
 `;
         for (const format of ['esm', 'cjs']) {
             const api =
                 format === 'esm'
-                    ? "import {useBarcodeScannerButton,useBarcodeScannerButtonInField} from '@miniextensions/sdk/react';"
-                    : "const {useBarcodeScannerButton,useBarcodeScannerButtonInField}=require('@miniextensions/sdk/react');";
+                    ? "import {BarcodeField,useBarcodeScannerButton,useBarcodeScannerButtonInField} from '@miniextensions/sdk/react';"
+                    : "const {BarcodeField,useBarcodeScannerButton,useBarcodeScannerButtonInField}=require('@miniextensions/sdk/react');";
             writeFileSync(
                 join(directory, `${format}.js`),
                 source
@@ -106,12 +115,19 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
                 bundle.outputFiles[0].contents
             );
         }
-        const css = readFileSync(
-            join(
-                root,
-                'node_modules/@miniextensions/sdk/dist/esm/react/complete-barcode-scanner.css'
-            )
-        );
+        const cssBundle = await build({
+            absWorkingDir: root,
+            entryPoints: [
+                consumerRequire.resolve(
+                    '@miniextensions/sdk/react/barcode.css'
+                ),
+            ],
+            bundle: true,
+            write: false,
+            metafile: true,
+        });
+        await assertBrowserInputs(cssBundle.metafile, root);
+        const css = cssBundle.outputFiles[0].contents;
         server = createServer((request, response) => {
             response.setHeader('Cache-Control', 'no-store');
             const url = new URL(request.url, 'http://localhost');
@@ -160,6 +176,110 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
         const snapshot = () =>
             page.evaluate(() => window.barcodeProof.snapshot());
         for (const format of ['esm', 'cjs']) {
+            await visit(format, 'editor=true');
+            const answer = page.getByRole('textbox', {
+                name: 'Barcode answer',
+                exact: true,
+            });
+            assert.equal(await answer.inputValue(), '00042');
+            assert.equal((await snapshot()).acquisitions, 0);
+            assert.equal(await answer.getAttribute('form'), 'editor-form');
+            assert.equal(
+                await answer.getAttribute('aria-describedby'),
+                'editor-help'
+            );
+            await page
+                .getByRole('textbox', { name: 'Sibling' })
+                .fill('Sibling draft');
+            await answer.fill('  001 雪 <literal>');
+            assert.deepEqual((await snapshot()).writes.at(-1), {
+                text: '  001 雪 <literal>',
+                type: 'qr',
+                metadata: { source: 'browser' },
+            });
+            await page
+                .getByRole('button', { name: 'Clear barcode', exact: true })
+                .click();
+            assert.deepEqual((await snapshot()).writes.at(-1), {
+                text: '',
+                type: 'qr',
+                metadata: { source: 'browser' },
+            });
+            assert.equal((await snapshot()).submits, 0);
+            assert.equal(
+                await page
+                    .getByRole('textbox', { name: 'Sibling' })
+                    .inputValue(),
+                'Sibling draft'
+            );
+            await page.evaluate(() => window.barcodeProof.mode('success'));
+            await page
+                .getByRole('button', { name: 'Scan barcode or QR code' })
+                .click();
+            await page.waitForFunction(
+                () =>
+                    window.barcodeProof.snapshot().writes.at(-1)?.text ===
+                    '<SCANNED-123>'
+            );
+            assert.deepEqual((await snapshot()).writes.at(-1), {
+                text: '<SCANNED-123>',
+                type: 'qr',
+                metadata: { source: 'browser' },
+            });
+            assert.equal((await snapshot()).submits, 0);
+            await page
+                .getByRole('button', { name: 'Save', exact: true })
+                .click();
+            assert.equal((await snapshot()).submits, 1);
+            await page.evaluate(() =>
+                window.barcodeProof.patch({ displayOnly: true, value: null })
+            );
+            assert.equal(
+                await page
+                    .getByRole('textbox', {
+                        name: 'Barcode answer',
+                        exact: true,
+                    })
+                    .count(),
+                0
+            );
+            assert.match(await page.locator('main').textContent(), /No Value/);
+            assert.equal(
+                await page
+                    .getByRole('button', { name: 'Scan barcode or QR code' })
+                    .count(),
+                0
+            );
+            await visit(format, 'editor=true&deferred=true');
+            await answer.fill('retired draft');
+            assert.deepEqual((await snapshot()).writes, []);
+            await page.evaluate(() => {
+                window.barcodeProof.patch({
+                    owner: 'B',
+                    value: { text: 'B', type: 'code128' },
+                });
+                window.barcodeProof.patch({
+                    owner: 'A',
+                    value: { text: 'returned A', type: 'qr' },
+                });
+            });
+            assert.equal(await answer.inputValue(), 'returned A');
+            assert.deepEqual((await snapshot()).writes, []);
+            await answer.fill('accepted successor');
+            await answer.press('Enter');
+            assert.deepEqual((await snapshot()).writes, [
+                { text: 'accepted successor', type: 'qr' },
+            ]);
+            assert.equal((await snapshot()).submits, 0);
+            evidence.profiles.push({
+                format,
+                editor: true,
+                metadata: true,
+                clear: true,
+                scan: true,
+                deferredABA: true,
+                explicitSave: true,
+            });
             await visit(format);
             const button = page.getByRole('button', {
                 name: 'Scan barcode or QR code',

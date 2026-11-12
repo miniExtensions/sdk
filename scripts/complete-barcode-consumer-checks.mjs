@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { barcodeReactTypedConsumer } from './barcode-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -8,7 +9,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const barcodeTypedConsumer = `
 import {createElement} from 'react';
-import {CompleteBarcodeScanner,useBarcodeScannerButton,useBarcodeScannerButtonInField,type CompleteBarcodeScannerProps} from '@miniextensions/sdk/react';
+import {BarcodeField,BindingBarcodeField,type ControlledBarcodeFieldProps,type BindingBarcodeFieldProps,CompleteBarcodeScanner,useBarcodeScannerButton,useBarcodeScannerButtonInField,type CompleteBarcodeScannerProps} from '@miniextensions/sdk/react';
+const controlled:ControlledBarcodeFieldProps={mode:'controlled',value:{text:'0001',type:'qr'},onChange(value){const exact:string|undefined=value.text;void exact;},language:'en',initialMobile:true};
+createElement(BarcodeField,controlled);
+declare const binding:BindingBarcodeFieldProps;
+createElement(BarcodeField,binding);createElement(BindingBarcodeField,binding);
+// @ts-expect-error controlled fields require a writer
+createElement(BarcodeField,{mode:'controlled',value:null,language:'en'});
+// @ts-expect-error binding is never silently converted to an editor
+const mixed:ControlledBarcodeFieldProps={...controlled,binding:binding.binding};void mixed;
 const props:CompleteBarcodeScannerProps={onUpdate(text){const exact:string=text;void exact;},onDismiss(){},ownerKey:'record-A',desktopViewportOffset:440,style:{color:'black'}};
 createElement(CompleteBarcodeScanner,props);
 function Scanner(){const scan=useBarcodeScannerButton({autoStartCamera:false,hideButton:false,runInLoop:true,setValue:async text=>{void text;}});return scan.scannerComponent;}
@@ -22,7 +31,7 @@ const injected:CompleteBarcodeScannerProps={...props,renderModal(){}};
 void Scanner;void Field;void injected;
 `;
 
-async function installed(directory, happyDomModulePath, ssr) {
+export async function installed(directory, happyDomModulePath, ssr, loadESM) {
     const require = createRequire(join(directory, 'package.json'));
     if (ssr) {
         Reflect.deleteProperty(globalThis, 'navigator');
@@ -31,14 +40,7 @@ async function installed(directory, happyDomModulePath, ssr) {
         const { renderToString } = require('react-dom/server');
         for (const api of [
             require('@miniextensions/sdk/react'),
-            await import(
-                pathToFileURL(
-                    join(
-                        directory,
-                        'node_modules/@miniextensions/sdk/dist/esm/react/index.js'
-                    )
-                )
-            ),
+            await loadESM(),
         ]) {
             const html = renderToString(
                 React.createElement(api.CompleteBarcodeScanner, {
@@ -49,6 +51,20 @@ async function installed(directory, happyDomModulePath, ssr) {
                 })
             );
             assert(!html.includes('<video')); // dialog camera work is a client effect
+            const editor = renderToString(
+                React.createElement(api.BarcodeField, {
+                    mode: 'controlled',
+                    value: { text: '0001', type: 'qr' },
+                    language: 'en',
+                    onChange() {
+                        assert.fail('SSR editor write');
+                    },
+                    title: 'Barcode',
+                })
+            );
+            assert(editor.includes('value="0001"'));
+            assert(!editor.includes('<video'));
+            assert.equal(typeof api.BindingBarcodeField, 'function');
             function Field() {
                 const scanner = api.useBarcodeScannerButtonInField({
                     fieldType: 'email',
@@ -157,26 +173,64 @@ async function installed(directory, happyDomModulePath, ssr) {
         'utf8'
     );
     assert(css.includes('.mx-sdk-scanner-panel'));
+    const editorCSS = readFileSync(
+        require.resolve('@miniextensions/sdk/react/barcode.css'),
+        'utf8'
+    );
+    assert(editorCSS.includes('.mx-sdk-barcode-editor-input'));
+    assert(editorCSS.includes('./complete-clearable-text-input.css'));
     const profiles = [];
     try {
         for (const [format, api] of [
             ['cjs', require('@miniextensions/sdk/react')],
-            [
-                'esm',
-                await import(
-                    pathToFileURL(
-                        join(
-                            directory,
-                            'node_modules/@miniextensions/sdk/dist/esm/react/index.js'
-                        )
-                    )
-                ),
-            ],
+            ['esm', await loadESM()],
         ]) {
             const host = window.document.createElement('main');
             window.document.body.append(host);
             const root = createRoot(host);
             let writes = [];
+            const metadata = { source: 'packed' };
+            const editorProps = {
+                mode: 'controlled',
+                value: { text: '0001', type: 'qr', metadata },
+                onChange: (value) => writes.push(value),
+                language: 'en',
+                initialMobile: true,
+                title: 'Packed barcode',
+                id: 'packed-barcode',
+                form: 'packed-form',
+                clearLabel: 'Clear packed barcode',
+            };
+            await React.act(async () =>
+                root.render(React.createElement(api.BarcodeField, editorProps))
+            );
+            assert.equal(host.querySelector('input').value, '0001');
+            assert.equal(host.querySelector('label').htmlFor, 'packed-barcode');
+            assert.equal(
+                host.querySelector('input').getAttribute('form'),
+                'packed-form'
+            );
+            assert.equal(media, decodes);
+            assert.equal(window.document.querySelector('video'), null);
+            const clear = Array.from(host.querySelectorAll('button')).find(
+                (b) => b.getAttribute('aria-label') === 'Clear packed barcode'
+            );
+            assert.ok(clear);
+            await React.act(async () => clear.click());
+            assert.deepEqual(writes, [{ text: '', type: 'qr', metadata }]);
+            writes = [];
+            await React.act(async () =>
+                root.render(
+                    React.createElement(api.BarcodeField, {
+                        ...editorProps,
+                        displayOnly: true,
+                        value: null,
+                    })
+                )
+            );
+            assert.equal(host.querySelector('input,button'), null);
+            assert.match(host.textContent, /No Value/);
+            assert.deepEqual(writes, []);
             function Host() {
                 const scan = api.useBarcodeScannerButtonInField({
                     fieldType: 'barcode',
@@ -252,6 +306,13 @@ export function checkCompleteBarcodeReactMatrix({
             join(directory, 'package.json'),
             JSON.stringify({ private: true, type: 'module' })
         );
+        const runtime = join(directory, 'barcode-runtime.mjs');
+        writeFileSync(
+            runtime,
+            `import {installed} from ${JSON.stringify(pathToFileURL(fileURLToPath(import.meta.url)).href)};
+process.stdout.write(JSON.stringify(await installed(process.argv[2],process.argv[3],process.argv[4]==='ssr',()=>import('@miniextensions/sdk/react'))));
+`
+        );
         for (const [react, types, domTypes] of [
             ['18.3.1', '18.3.12', '18.3.1'],
             ['19.2.0', '19.2.2', '19.2.2'],
@@ -287,13 +348,33 @@ export function checkCompleteBarcodeReactMatrix({
                     name,
                 ]);
             }
+            // Compile the unchanged legacy wrapper/render-override contract too.
+            writeFileSync(
+                join(directory, 'legacy-barcode.tsx'),
+                barcodeReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--target',
+                'ES2022',
+                '--module',
+                'NodeNext',
+                '--moduleResolution',
+                'NodeNext',
+                '--jsx',
+                'react-jsx',
+                'legacy-barcode.tsx',
+            ]);
             const results = [];
             for (const mode of ['ssr', 'dom'])
                 results.push(
                     JSON.parse(
                         run(process.execPath, [
-                            fileURLToPath(import.meta.url),
-                            '--consumer',
+                            runtime,
                             directory,
                             happyDomModulePath,
                             mode,
@@ -307,13 +388,3 @@ export function checkCompleteBarcodeReactMatrix({
         rmSync(directory, { recursive: true, force: true });
     }
 }
-if (process.argv[2] === '--consumer')
-    process.stdout.write(
-        JSON.stringify(
-            await installed(
-                process.argv[3],
-                process.argv[4],
-                process.argv[5] === 'ssr'
-            )
-        )
-    );

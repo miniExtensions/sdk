@@ -21,6 +21,8 @@ export type CompleteDeferredClearableTextInputProps = Omit<
     value: string;
     onChange: (value: string) => void;
     onClear: () => void;
+    /** Optional separate authority path for a dirty deferred writer's final settlement. */
+    onUnmountChange?: (value: string) => void;
     /** Localized accessible name, resolved by the consumer. */
     clearLabel: string;
     /**
@@ -82,6 +84,7 @@ export const CompleteClearableTextInput = forwardRef<
         value,
         onChange,
         onClear,
+        onUnmountChange,
         clearLabel,
         initialMobile,
         validateInput,
@@ -97,6 +100,7 @@ export const CompleteClearableTextInput = forwardRef<
             value,
             onChange,
             onClear,
+            onUnmountChange,
             clearLabel,
             initialMobile,
             validateInput,
@@ -136,6 +140,7 @@ export const CompleteDeferredClearableTextInput = forwardRef<
         value,
         onChange,
         onClear,
+        onUnmountChange,
         clearLabel,
         initialMobile,
         validateInput,
@@ -158,7 +163,10 @@ export const CompleteDeferredClearableTextInput = forwardRef<
 
     useEffect(() => {
         return () => {
-            if (shouldCleanup.current) onChange(latestLocalValueRef.current);
+            if (shouldCleanup.current) {
+                shouldCleanup.current = false;
+                (onUnmountChange ?? onChange)(latestLocalValueRef.current);
+            }
         };
         // The original mounted writer is intentional. Ordinary blur below uses
         // the current callback; cleanup must never adopt a successor writer.

@@ -6,7 +6,9 @@ import { join, resolve } from 'node:path';
 
 export const completePhoneTypedConsumer = String.raw`import { createElement } from 'react';
 import { CompletePhoneNumberField, type CompletePhoneNumberFieldProps,
-    type CompletePhoneEditOwner, type CompletePhoneCommit } from '@miniextensions/sdk/react';
+    type CompletePhoneEditOwner, type CompletePhoneCommit,
+    PhoneNumberField, type PhoneNumberFieldProps, type TextFieldProps,
+    type PhoneEditOwner, type PhoneCommit } from '@miniextensions/sdk/react';
 const owner: CompletePhoneEditOwner = { token: {}, isCurrent: () => true };
 const props: CompletePhoneNumberFieldProps = {
     value: '+233201234567', showCountryCodes: true, defaultCountry: 'GH',
@@ -18,6 +20,21 @@ const props: CompletePhoneNumberFieldProps = {
 };
 createElement(CompletePhoneNumberField, props);
 createElement(CompletePhoneNumberField, { value: '', onValueChange() {} });
+const canonical: PhoneNumberFieldProps = props;
+const canonicalOwner: PhoneEditOwner = owner;
+const canonicalCommit = (commit: PhoneCommit) => commit.reason;
+declare const bindingProps: TextFieldProps;
+createElement(PhoneNumberField, bindingProps);
+createElement(PhoneNumberField, canonical);
+createElement(PhoneNumberField, { value: null, onValueChange() {} });
+// @ts-expect-error a caller must select binding or controlled props, never both
+const mixed: PhoneNumberFieldProps = { ...props, binding: bindingProps.binding };
+// @ts-expect-error a controlled field cannot inject the binding renderer
+const injected: PhoneNumberFieldProps = { ...props, render() { return null; } };
+// @ts-expect-error controlled-only options cannot silently configure a binding field
+const ambiguous: PhoneNumberFieldProps = { ...bindingProps, showCountryCodes: true };
+// @ts-expect-error the canonical deferred contract retains its owner requirement
+const canonicalUnowned: PhoneNumberFieldProps = { value: '', commit: 'deferred', onValueChange() {} };
 // @ts-expect-error deferred edits require an actual host owner
 const unowned: CompletePhoneNumberFieldProps = { value: '', commit: 'deferred', onValueChange() {} };
 // @ts-expect-error telephone data is not a numeric value
@@ -26,7 +43,8 @@ const numeric: CompletePhoneNumberFieldProps = { ...props, value: 233 };
 createElement(CompletePhoneNumberField, { ...props, input: { onChange() {} } });
 // @ts-expect-error complete Phone is React-only
 import { CompletePhoneNumberField as CorePhone } from '@miniextensions/sdk';
-void unowned; void numeric; void CorePhone;
+void unowned; void numeric; void CorePhone; void mixed; void injected; void ambiguous;
+void canonicalUnowned; void canonicalOwner; void canonicalCommit;
 `;
 
 const runtime = String.raw`import assert from 'node:assert/strict';
@@ -57,8 +75,9 @@ for (const api of [esm, cjs]) {
     assert.equal(typeof api.CompletePhoneNumberField, 'function');
     assert.equal(typeof api.CompleteReadOnlyPhoneNumberField, 'function');
     assert.equal(typeof api.PhoneNumberField, 'function', 'legacy public component remains exported');
+    assert.equal(typeof api.ReadOnlyPhoneNumberField, 'function');
     assert.equal(typeof globalThis.document, 'undefined');
-    const Component = api.CompletePhoneNumberField;
+    for (const Component of [api.CompletePhoneNumberField, api.PhoneNumberField]) {
     let value = '+14155552671';
     let deferred = false;
     let hint = 'Enter phone';
@@ -239,6 +258,7 @@ for (const api of [esm, cjs]) {
         }
     }
 }
+}
 console.log(JSON.stringify({ react: React.version, groups, cleanup: 'completed' }));
 `;
 
@@ -313,7 +333,7 @@ export function checkCompletePhoneReactMatrix({
                 )
             );
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 2);
+            assert.equal(result.groups, 4);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);
             console.log(

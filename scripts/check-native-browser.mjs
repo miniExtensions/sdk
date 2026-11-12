@@ -2220,19 +2220,26 @@ try {
             evidence: report.completeCalendly,
             output,
         });
-        for (const format of ['esm', 'cjs']) {
-            const key =
-                format === 'esm'
-                    ? 'completeAddress'
-                    : 'completeAddressCommonJS';
-            report[key] = {};
-            await checkCompleteAddressBrowser({
-                browser,
-                consumer: temporary,
-                evidence: report[key],
-                output,
-                format,
-            });
+        for (const control of ['complete', 'natural']) {
+            for (const format of ['esm', 'cjs']) {
+                const key =
+                    control === 'natural'
+                        ? format === 'esm'
+                            ? 'addressField'
+                            : 'addressFieldCommonJS'
+                        : format === 'esm'
+                          ? 'completeAddress'
+                          : 'completeAddressCommonJS';
+                report[key] = {};
+                await checkCompleteAddressBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report[key],
+                    output,
+                    format,
+                    control,
+                });
+            }
         }
         report.formTracking = {};
         await checkFormTrackingBrowser({

@@ -52,11 +52,11 @@ assert.equal('AddressField' in require('@miniextensions/sdk'),false);
 const naturalCss=readFileSync(require.resolve('@miniextensions/sdk/react/address-field.css'),'utf8');assert(naturalCss.includes('complete-address.css'));assert(naturalCss.includes('complete-readonly-text.css'));
 const labels={clear:'Borrar',loadingPredictions:'Cargando sugerencias',loadingDetails:'Cargando la dirección seleccionada',failed:'No se pudieron cargar las sugerencias.',retry:'Intentar de nuevo'};
 let groups=0;
-for(const api of [esm,cjs]){
+for(const api of [esm,cjs]) for(const Control of [api.CompleteAddressAutocomplete,api.AddressField]){
  let writes=[],queries=[],details=[],network=0,submits=0,resolveDetail,root;
  const ref=React.createRef();let model={value:'',identity:{session:'s',field:'f',readScope:'A'},mounted:true};
  const props=()=>({identity:model.identity,value:model.value,onChange(value){writes.push(value);model.value=value;root.render(view());},reads:{async listPredictions(query,{signal}){queries.push({query,signal});return [{placeId:'p',description:'Selected address'},{placeId:'p2',description:'Second address'}];},getFormattedAddress(placeId,{signal}){details.push({placeId,signal,prior:[...writes]});return new Promise(resolve=>resolveDetail=resolve);}},labels,initialMobile:true,id:'address',form:'address-form','aria-label':'Address','aria-describedby':'hint',maxLength:60,ref});
- const view=()=>React.createElement(React.StrictMode,null,model.mounted?React.createElement(api.CompleteAddressAutocomplete,props()):null);
+ const view=()=>React.createElement(React.StrictMode,null,model.mounted?React.createElement(Control,props()):null);
  const readonly=renderToString(React.createElement(api.AddressField,{mode:'readonly',value:'https://example.invalid',language:'ja'}));assert(readonly.includes('href="https://example.invalid"'));assert(!readonly.includes('combobox'));assert(!readonly.includes('<input'));
  const manual=renderToString(React.createElement(api.AddressField,{mode:'manual',value:null,onChange(){throw Error('SSR must not write');},labels:{clear:'Clear'},initialMobile:false,explanation:'Standalone only'}));assert(manual.includes('Standalone only'));assert(!manual.includes('combobox'));
  assert.equal(typeof document,'undefined');const html=renderToString(view());assert(html.includes('value=""'));assert.equal(queries.length,0);
@@ -158,7 +158,7 @@ export function checkCompleteAddressReactMatrix({
                 )
             );
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 2);
+            assert.equal(result.groups, 4);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);
         }

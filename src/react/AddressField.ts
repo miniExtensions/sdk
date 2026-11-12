@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import {
     createElement as h,
     forwardRef,
@@ -124,7 +125,10 @@ function ManualAddressField({
 }
 
 /** Complete configured Address presentation; the caller owns accepted values. */
-export const AddressField = forwardRef<HTMLInputElement, AddressFieldProps>(
+export const AddressField: React.ForwardRefExoticComponent<
+    React.PropsWithoutRef<AddressFieldProps> &
+        React.RefAttributes<HTMLInputElement>
+> = forwardRef<HTMLInputElement, AddressFieldProps>(
     function AddressField(props, ref) {
         if (props.mode === 'readonly') {
             return h(CompleteReadOnlyTextField, {

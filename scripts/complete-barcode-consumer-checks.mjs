@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { barcodeReactTypedConsumer } from './barcode-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -347,6 +348,27 @@ process.stdout.write(JSON.stringify(await installed(process.argv[2],process.argv
                     name,
                 ]);
             }
+            // Compile the unchanged legacy wrapper/render-override contract too.
+            writeFileSync(
+                join(directory, 'legacy-barcode.tsx'),
+                barcodeReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--target',
+                'ES2022',
+                '--module',
+                'NodeNext',
+                '--moduleResolution',
+                'NodeNext',
+                '--jsx',
+                'react-jsx',
+                'legacy-barcode.tsx',
+            ]);
             const results = [];
             for (const mode of ['ssr', 'dom'])
                 results.push(

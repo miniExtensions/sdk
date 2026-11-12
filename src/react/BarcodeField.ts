@@ -19,9 +19,8 @@ export type { ControlledBarcodeFieldProps } from './ControlledBarcodeField.js';
 export type BarcodeFieldOptions = { className?: string };
 export type BindingBarcodeFieldProps = FieldProps &
     BarcodeFieldOptions & { mode?: never };
-export type BarcodeFieldProps =
-    | BindingBarcodeFieldProps
-    | ControlledBarcodeFieldProps;
+/** Retain the original named binding props for existing consumer wrappers. */
+export type BarcodeFieldProps = BindingBarcodeFieldProps;
 
 /** Only the supplied text is presented; the owner retains the native object/type. */
 function barcodeText(value: unknown): string | null {
@@ -143,7 +142,9 @@ export function BindingBarcodeField({
 }
 
 /** Canonical editor with an explicit controlled contract; binding calls stay display-only. */
-export function BarcodeField(props: BarcodeFieldProps): ReactNode {
+export function BarcodeField(
+    props: BarcodeFieldProps | ControlledBarcodeFieldProps
+): ReactNode {
     return props.mode === 'controlled'
         ? createElement(ControlledBarcodeField, props)
         : createElement(BindingBarcodeField, props);

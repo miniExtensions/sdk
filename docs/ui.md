@@ -3247,7 +3247,8 @@ Existing `<BarcodeField binding={...}>` calls and `renderBarcodeField` remain
 display-only, including visibility, masking and retirement behavior. The explicit
 `BindingBarcodeField`/`BindingBarcodeFieldProps` exports name that compatibility
 contract. `ControlledBarcodeFieldProps` names the controlled branch;
-`BarcodeFieldProps` is their discriminated union.
+`BarcodeFieldProps` retains its original binding-props meaning for existing
+consumer wrappers. The component itself accepts the discriminated union.
 
 The optional `/react` entry exports `BarcodeField`, `BarcodeFieldProps`,
 `BarcodeFieldOptions` and `renderBarcodeField`. Install the renderer in the existing

@@ -3,6 +3,8 @@ import {
     createElement as h,
     forwardRef,
     useId,
+    useImperativeHandle,
+    useRef,
     type ForwardedRef,
     type ReactNode,
 } from 'react';
@@ -71,6 +73,10 @@ function ManualAddressField({
     inputRef: ForwardedRef<HTMLInputElement>;
 }) {
     const generatedId = useId();
+    const ownedInput = useRef<HTMLInputElement | null>(null);
+    useImperativeHandle(inputRef, () => ownedInput.current!, [
+        props.enableInlineEdit,
+    ]);
     const {
         mode: _mode,
         identity: _identity,
@@ -97,10 +103,20 @@ function ManualAddressField({
             className: ['mx-sdk-address-input', input.className]
                 .filter(Boolean)
                 .join(' '),
-            ref: inputRef,
+            ref: ownedInput,
             value: value ?? '',
             onChange: write,
-            onClear: () => write(''),
+            onClear: () => {
+                if (input.disabled || input.readOnly) return;
+                const current = ownedInput.current;
+                write('');
+                if (
+                    current != null &&
+                    current === ownedInput.current &&
+                    current.isConnected
+                )
+                    current.focus();
+            },
             autoComplete: 'off',
             clearLabel: labels.clear,
             initialMobile:

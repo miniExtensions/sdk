@@ -253,13 +253,44 @@ it('keeps manual preview controlled, associated, capped by its writer and non-su
     );
     const clear = f.container.querySelector('button')!;
     assert.equal(clear.type, 'button');
+    clear.focus();
+    assert.equal(f.container.ownerDocument.activeElement === clear, true);
     await act(async () => clear.click());
     assert.equal(f.inputValue(), '');
-    assert.equal(f.ref.current, f.container.ownerDocument.activeElement);
+    assert.equal(
+        Object.is(f.ref.current, f.container.ownerDocument.activeElement),
+        true
+    );
     assert.deepEqual(f.queries, []);
     assert.deepEqual(f.details, []);
     await f.replace({ ...f.props(), value: 'External replacement' });
     assert.equal(f.inputValue(), 'External replacement');
+    const manual = f.props();
+    assert(manual.mode === 'manual');
+    const immediateInput = f.ref.current;
+    await f.replace({ ...manual, enableInlineEdit: true });
+    assert.equal(Object.is(f.ref.current, immediateInput), false);
+    assert.equal(
+        Object.is(f.ref.current, f.container.querySelector('input')),
+        true
+    );
+    const deferredClear = f.container.querySelector('button')!;
+    deferredClear.focus();
+    await act(async () => deferredClear.click());
+    assert.equal(f.inputValue(), '');
+    assert.equal(
+        Object.is(f.ref.current, f.container.ownerDocument.activeElement),
+        true
+    );
+    const deferredInput = f.ref.current;
+    const deferred = f.props();
+    assert(deferred.mode === 'manual');
+    await f.replace({ ...deferred, enableInlineEdit: false });
+    assert.equal(Object.is(f.ref.current, deferredInput), false);
+    assert.equal(
+        Object.is(f.ref.current, f.container.querySelector('input')),
+        true
+    );
 });
 
 it('preserves raw queries, synchronous capped selection and retirement across readonly A-B-A', async (t) => {

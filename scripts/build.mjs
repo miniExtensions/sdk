@@ -180,6 +180,7 @@ for (const format of ['esm', 'cjs']) {
         'number',
         'localized-numeric',
         'form-tracking',
+        'form-group',
         'form-completion',
         'form-header',
         'field-presentation',

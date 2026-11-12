@@ -2708,6 +2708,12 @@ export {
 } from './CompleteFormTrackingDisclosure.js';
 
 export {
+    FormGroup,
+    type FormGroupProps,
+    type FormGroupPreview,
+} from './FormGroup.js';
+
+export {
     CompleteFormCompletion,
     CompleteFormCompletionMessage,
     useFormCompletionCountdown,

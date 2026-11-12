@@ -4,6 +4,11 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+    singleCollaboratorReactTypedConsumer,
+    singleCollaboratorNodeTypedConsumer,
+} from './single-collaborator-consumer-checks.mjs';
 import {
     multipleCollaboratorsNodeTypedConsumer,
     multipleCollaboratorsReactTypedConsumer,
@@ -11,7 +16,8 @@ import {
 
 export const completeCollaboratorTypedConsumer = String.raw`import { createElement } from 'react';
 import {
-    CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField,
+    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField,
+    type ControlledSingleCollaboratorFieldProps, type SingleCollaboratorFieldProps,
     type CompleteCollaborator, type CompleteCollaboratorEditOwner,
     type CompleteSingleCollaboratorFieldProps,
     type CompleteMultipleCollaboratorsFieldProps, type ControlledMultipleCollaboratorsFieldProps,
@@ -32,6 +38,16 @@ const multiple: CompleteMultipleCollaboratorsFieldProps<Native> = {
     labels: { empty: 'No people', remove: (label) => 'Remove ' + label },
     onValueChange(value) { const originals: Native[] = value; void originals; },
 };
+const controlledSingle: ControlledSingleCollaboratorFieldProps<Native> = { ...single, mode: 'controlled' };
+createElement(SingleCollaboratorField<Native>, controlledSingle);
+createElement(SingleCollaboratorField<Native>, { ...controlledSingle, value: null });
+declare const legacySingle: SingleCollaboratorFieldProps;
+createElement(SingleCollaboratorField, legacySingle);
+createElement(BindingSingleCollaboratorField, legacySingle);
+// @ts-expect-error binding and controlled capabilities cannot be combined
+createElement(SingleCollaboratorField<Native>, { ...controlledSingle, binding: legacySingle.binding });
+// @ts-expect-error the complete contract requires explicit controlled discrimination
+createElement(SingleCollaboratorField<Native>, single);
 createElement(CompleteSingleCollaboratorField<Native>, single);
 createElement(CompleteSingleCollaboratorField<Native>, { ...single, value: null });
 createElement(CompleteMultipleCollaboratorsField<Native>, multiple);
@@ -81,7 +97,7 @@ const editableServerNode = (api, common) => React.createElement('form', { id: 's
     React.createElement('label', { id: 'ssr-label', htmlFor: 'ssr-person' }, 'Assignee'),
     React.createElement('span', { id: 'ssr-help' }, 'Choose a person'),
     React.createElement('span', { id: 'ssr-error' }, 'Required'),
-    React.createElement(api.CompleteSingleCollaboratorField, {
+    React.createElement(api.SingleCollaboratorField, { mode: 'controlled',
         ...common, value: null, inputId: 'ssr-person', formId: 'ssr-form',
         ariaLabel: 'Assignee', labelledBy: 'ssr-label',
         describedBy: 'ssr-help ssr-error', invalid: true,
@@ -147,14 +163,14 @@ if (mode === 'ssr') {
     let mounted = false, api, groups = 0;
     const node = () => {
         const token = model.token;
-        const Component = model.mode === 'single' ? api.CompleteSingleCollaboratorField : api.MultipleCollaboratorsField;
+        const Component = model.mode === 'single' ? api.SingleCollaboratorField : api.MultipleCollaboratorsField;
         return React.createElement(React.StrictMode, null,
             React.createElement('form', { id: 'people-form', onSubmit(event) { event.preventDefault(); submits++; } },
                 React.createElement('label', { htmlFor: 'person' }, 'Assigned people'),
                 React.createElement('span', { id: 'person-help' }, 'Choose supplied people'),
                 React.createElement('span', { id: 'person-error' }, 'Required'),
                 React.createElement(Component, {
-                    mode: model.mode === 'multiple' ? 'controlled' : undefined,
+                    mode: 'controlled',
                     choices: model.choices, value: model.value,
                     owner: { token, isCurrent: () => model.current && model.token === token },
                     readOnly: model.readOnly, visible: model.visible,
@@ -433,8 +449,8 @@ const { build } = await import(pathToFileURL(process.argv[2]).href);
 const format = process.argv[3];
 const sdk = resolve('node_modules/@miniextensions/sdk');
 const script = format === 'esm'
- ? "import {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};"
- : "const {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};";
+ ? "import {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};"
+ : "const {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};";
 writeFileSync('production-entry.' + (format === 'esm' ? 'mjs' : 'cjs'), script);
 const result = await build({ entryPoints: ['production-entry.' + (format === 'esm' ? 'mjs' : 'cjs')], bundle: true, platform: 'browser', format: 'esm', minify: true, write: false, metafile: true, define: {'process.env.NODE_ENV':'"production"'} });
 const inputs = Object.keys(result.metafile.inputs);
@@ -534,6 +550,44 @@ console.log(JSON.stringify(result));`
             ]);
             writeFileSync(join(directory, 'consumer-runtime.mjs'), runtime);
             writeFileSync(
+                join(directory, 'legacy-consumer.tsx'),
+                singleCollaboratorReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--module',
+                'NodeNext',
+                '--moduleResolution',
+                'NodeNext',
+                '--target',
+                'ES2022',
+                '--jsx',
+                'react-jsx',
+                'legacy-consumer.tsx',
+            ]);
+            const legacyHelper = fileURLToPath(
+                new URL(
+                    './single-collaborator-consumer-checks.mjs',
+                    import.meta.url
+                )
+            );
+            writeFileSync(
+                join(directory, 'legacy-consumer.mjs'),
+                `import { checkSingleCollaboratorConsumer } from ${JSON.stringify(pathToFileURL(legacyHelper).href)}; console.log(JSON.stringify(await checkSingleCollaboratorConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]})));`
+            );
+            const legacySingle = JSON.parse(
+                run(process.execPath, [
+                    'legacy-consumer.mjs',
+                    happyDomModulePath,
+                ])
+            );
+            assert.equal(legacySingle.checks, 94);
+
+            writeFileSync(
                 join(directory, 'production-build.mjs'),
                 productionBuild
             );
@@ -584,6 +638,25 @@ console.log(JSON.stringify(result));`
                     'ES2022',
                     typed,
                     legacyTyped,
+                ]);
+                const legacySingleTyped = `legacy-binding.${suffix}`;
+                writeFileSync(
+                    join(directory, legacySingleTyped),
+                    singleCollaboratorNodeTypedConsumer
+                );
+                run(process.execPath, [
+                    typescriptBin,
+                    '--noEmit',
+                    '--strict',
+                    '--skipLibCheck',
+                    'false',
+                    '--module',
+                    'NodeNext',
+                    '--moduleResolution',
+                    'NodeNext',
+                    '--target',
+                    'ES2022',
+                    legacySingleTyped,
                 ]);
                 const relative = `dist/${format}/react/CompleteCollaboratorField.js`;
                 const child = readFileSync(join(installed, relative));
@@ -675,6 +748,7 @@ console.log(JSON.stringify(result));`
                     format,
                     ssr: true,
                     legacyBindingChecks: legacy.checks,
+                    legacySingleBindingChecks: legacySingle.checks,
                     syntheticGroups: dom.groups,
                     production: true,
                     childSha256: createHash('sha256')

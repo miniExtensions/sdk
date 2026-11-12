@@ -1591,8 +1591,9 @@ every platform input method or screen reader. The example contacts no backend.
 ## React Email presentation
 
 The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
-`EmailFieldOptions` and `renderEmailField`. `EmailField` delegates to `TextField`;
-its props and options are aliases of `TextFieldProps` and `TextFieldOptions`.
+`EmailFieldOptions`, `ControlledEmailFieldProps`, `EmailEditOwner` and
+`renderEmailField`. Binding-mode `EmailField` delegates to `TextField`;
+its legacy props and options remain aliases of `TextFieldProps` and `TextFieldOptions`.
 The existing `{ binding, render }` override replaces all stock markup.
 
 ```tsx
@@ -1651,6 +1652,63 @@ After building, `node examples/react-email/dev.mjs` serves the synthetic public
 API example at `http://127.0.0.1:4183`. `node scripts/check-email-browser.mjs`
 checks native entry, clearing, remounts and surrounding-form Enter behavior.
 Simulated composition checks do not certify real OS input methods.
+
+For complete native email presentation, use the same natural public component
+with the explicit controlled contract:
+
+```tsx
+import { EmailField, type EmailEditOwner } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/text.css';
+
+export function NativeEmail({
+    value,
+    onChange,
+    owner,
+}: {
+    value: string | null;
+    onChange(value: string): void;
+    owner: EmailEditOwner;
+}) {
+    return (
+        <EmailField
+            mode="controlled"
+            value={value}
+            onChange={onChange}
+            language="en"
+            enableInlineEdit
+            owner={owner}
+            id="contact-email"
+            form="contact-form"
+            placeholder="Work email"
+            initialMobile={false}
+        />
+    );
+}
+```
+
+This branch supplies the actual `type="email"` input, envelope, Clear and
+opt-in `enableQRCodeScannerForFormField` scanner through the existing shared
+engines. The same optional `text.css` includes its scoped styling and scanner,
+Clear and readonly dependencies. No host renderer or Tailwind compiler is needed.
+`initialMobile` is captured per mount; use the same value during SSR and hydration.
+`inputRef`, `id`, `form`, `describedBy`, `labelledBy` and `invalid` carry the
+host's existing associations. Validation and Save remain with the page/server.
+
+Controlled changes and Clear write strings, including `''`; `null` only displays
+as an empty input. The browser's email-input sanitization remains native.
+Immediate mode retains native form Enter behavior, so the enclosing page owns
+its submit policy. Deferred mode (`enableInlineEdit`) requires an owner with a
+captured generation `token` and `isCurrent()` authority check. Non-IME Enter
+blurs without submitting; dirty blur can write before a later Clear click.
+Genuine dirty unmount settles once through the original mounted writer if that
+owner remains current. A replacement, retired owner or missing deferred owner
+cannot adopt that pending value. Renew the token when field/record/edit policy
+is replaced, including A-to-B-to-A transitions; a raw value is not authority.
+
+`readOnly` and `disabled` render a disabled editor. `displayOnly` instead reuses
+the existing readonly text/link presentation with the supplied language and
+never invokes the writer. A caller cannot mix controlled props with `binding`
+or `render`. The binding/slot examples and semantics above remain unchanged.
 
 ## React URL presentation
 
@@ -2701,9 +2759,10 @@ local browser verification.
 The optional `/react` entry exports `DateTimeField`, `DateTimeFieldProps`,
 `DateTimeFieldOptions` and `renderDateTimeField` for explicit-offset timestamps.
 The binding component keeps its `{ binding, render }` API; supplying `render`
-still replaces all markup. `DateTimeField` remains an alias of `DateField`; the
-shared binding component selects the calendar or timestamp control from the
-accepted model kind.
+still replaces all markup. `BindingDateTimeField` explicitly names this legacy
+contract; the existing `DateTimeField` binding name remains compatible. The
+complete controlled `DateTimeField` uses the opt-in `/react/date` entry below.
+The binding component selects its control from the accepted model kind.
 
 ```tsx
 import { DateTimeField } from '@miniextensions/sdk/react';
@@ -4630,8 +4689,12 @@ the disabled-input presentation. Both retain loaded Date bytes. Native switches
 may map configuration, associations and current-owner authority directly into
 these props; no native calendar or renderer callback is needed.
 
-`CompleteDateField` and `CompleteDateFieldProps` from the opt-in
-`@miniextensions/sdk/react/date` entry include the full calendar/time picker,
+`DateTimeField` and `DateTimeFieldProps` from the opt-in
+`@miniextensions/sdk/react/date` entry provide the complete date/time field.
+`ControlledDateTimeFieldProps` names the same controlled contract. Use
+`/react/datetime.css` for its picker, readonly text and legacy styles.
+`CompleteDateField` remains a compatibility export for existing consumers.
+Both natural components reuse the full calendar/time picker,
 localized native input grammar, drafts, blur recovery, range policy and popup.
 Import `@miniextensions/sdk/react/complete-date.css` for portable default styles;
 Tailwind and a host picker/render slot are unnecessary. Moment locale assets
@@ -4640,13 +4703,13 @@ Install matching supported React and ReactDOM versions; both remain SDK peers.
 
 ```tsx
 import { useState } from 'react';
-import { CompleteDateField } from '@miniextensions/sdk/react/date';
-import '@miniextensions/sdk/react/complete-date.css';
+import { DateTimeField } from '@miniextensions/sdk/react/date';
+import '@miniextensions/sdk/react/datetime.css';
 
 export function Appointment() {
     const [value, setValue] = useState<string | null>(null);
     return (
-        <CompleteDateField
+        <DateTimeField
             id="appointment"
             title="Appointment"
             language="en"
@@ -4668,7 +4731,8 @@ export function Appointment() {
 Date writes retain `YYYY-MM-DD`; DateTime picker/typed commits use the existing
 native timezone/range helpers and UTC minute precision. An untouched loaded
 value is not rewritten by rendering. The existing binding-based `DateField`,
-`BindingDateField`, `DateTimeField` and strict models retain their separate explicit-offset contract,
+`BindingDateField`, `BindingDateTimeField`, `/react` `DateTimeField` and strict
+models retain their separate explicit-offset contract,
 including original seconds, fractions and offset bytes.
 
 Equivalent metadata and cosmetic props preserve unfinished text and caret.
@@ -5963,3 +6027,18 @@ it does not create CSS inheritance across a portal. DOM-only styles (including
 raw tokens supplied only via `style`) are deliberately not discovered, read
 with computed styles, or promised propagation. No generic portal engine,
 script/style injection or global theme store is installed.
+
+### Complete controlled Checkbox
+
+`CheckboxField` from `@miniextensions/sdk/react` accepts either the existing
+`{ binding, render?, className? }` contract or controlled `{ value, onChange }`
+props. Controlled props provide the native checkbox, toggle, button and readonly
+modes, standalone title/feedback or shell `presentation` associations. Import
+`@miniextensions/sdk/react/checkbox.css` for all modes and configured scheduling.
+
+Pass `calendly` with explicit `configuredUrl`, resolved `email`/`name`,
+`embedDomain`, stable current `ownerKey` and `onScheduled` admission. The SDK
+composes its qualified widget; there is no native renderer slot. Scheduling
+completion uses only `onScheduled`, ordinary edits only `onChange`; neither
+implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
+value). Existing `CompleteCheckboxField` remains compatible.

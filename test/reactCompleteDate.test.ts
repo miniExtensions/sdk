@@ -88,7 +88,7 @@ async function fixture(
                       : window[key as keyof Window],
         });
     const { createRoot } = await import('react-dom/client');
-    const { DateField, CompleteDateField } = await import(
+    const { DateField, DateTimeField } = await import(
         '../src/react/date/index.js'
     );
     const form = window.document.createElement('form');
@@ -132,7 +132,10 @@ async function fixture(
                               ...props,
                               airtableDateConfig: props.airtableDateConfig,
                           })
-                        : h(CompleteDateField, props)
+                        : h(DateTimeField, {
+                              ...props,
+                              airtableDateConfig: props.airtableDateConfig,
+                          })
                 )
             );
     };
@@ -221,19 +224,30 @@ async function fixture(
         render,
         replace,
         writes,
-        async display(value: string | null) {
+        async display(
+            value: string | null,
+            config: CompleteDateFieldProps['airtableDateConfig'] = iso
+        ) {
+            const display = {
+                mode: 'readOnly' as const,
+                id: props.id,
+                value,
+                language: 'fr' as const,
+                title: 'Deadline',
+                description: 'Calendar help',
+                error: 'Calendar error',
+            };
             await act(async () =>
                 root.render(
-                    h(DateField, {
-                        mode: 'readOnly',
-                        id: props.id,
-                        airtableDateConfig: iso,
-                        value,
-                        language: 'fr',
-                        title: 'Deadline',
-                        description: 'Calendar help',
-                        error: 'Calendar error',
-                    })
+                    config.type === 'date'
+                        ? h(DateField, {
+                              ...display,
+                              airtableDateConfig: config,
+                          })
+                        : h(DateTimeField, {
+                              ...display,
+                              airtableDateConfig: config,
+                          })
                 )
             );
         },
@@ -572,6 +586,37 @@ it('renders canonical readonly Date text and localized empty state without an ed
         'date-description date-error'
     );
     await f.display(null);
+    assert.match(f.form.textContent ?? '', /Pas de Valeur/);
+    assert.deepEqual(f.writes, []);
+});
+
+for (const row of [
+    { typed: '2024-03-10 02:30', expected: '2024-03-10T07:30:00.000Z' },
+    { typed: '2024-11-03 01:30', expected: '2024-11-03T05:30:00.000Z' },
+])
+    it(`natural DateTime preserves existing DST interpretation for ${row.typed}`, async (t) => {
+        const f = await fixture(t, {
+            airtableDateConfig: {
+                ...datetime,
+                options: { ...datetime.options, timeZone: 'America/New_York' },
+            },
+            value: null,
+        });
+        await f.edit(row.typed);
+        await f.key('Enter');
+        assert.deepEqual(f.writes, [row.expected]);
+    });
+
+it('natural DateTime readonly replaces an open picker without writing or changing offset bytes', async (t) => {
+    const value = '2024-07-01T10:30:12.345-04:00';
+    const f = await fixture(t, { airtableDateConfig: datetime, value });
+    await f.open();
+    await f.display(value, datetime);
+    assert.equal(f.form.querySelector('input'), null);
+    assert.equal(f.window.document.querySelector('[role=dialog]'), null);
+    assert.match(f.form.textContent ?? '', /2024-07-01 14:30/);
+    assert.equal(f.props().value, value);
+    await f.display(null, datetime);
     assert.match(f.form.textContent ?? '', /Pas de Valeur/);
     assert.deepEqual(f.writes, []);
 });

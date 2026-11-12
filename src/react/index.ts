@@ -1,3 +1,11 @@
+import {
+    ControlledCheckboxField,
+    type ControlledCheckboxFieldProps,
+} from './ControlledCheckboxField.js';
+export type {
+    ControlledCheckboxFieldProps,
+    CheckboxCalendlyOptions,
+} from './ControlledCheckboxField.js';
 export {
     CompleteAddressAutocomplete,
     type CompleteAddressAutocompleteProps,
@@ -23,6 +31,14 @@ import {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
 } from './CompletePhoneNumberField.js';
+import {
+    ControlledEmailField,
+    type ControlledEmailFieldProps,
+} from './ControlledEmailField.js';
+export type {
+    ControlledEmailFieldProps,
+    EmailEditOwner,
+} from './ControlledEmailField.js';
 export {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
@@ -313,9 +329,14 @@ import {
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
 import { countInput, type CountFieldOptions } from './CountField.js';
 export { renderCountField, type CountFieldOptions } from './CountField.js';
+import {
+    ControlledAutoNumberField,
+    type AutoNumberControlledProps,
+} from './AutoNumberField.js';
 export {
     renderAutoNumberField,
     type AutoNumberFieldOptions,
+    type AutoNumberControlledProps,
 } from './AutoNumberField.js';
 import {
     renderOwnedRatingInput,
@@ -1078,7 +1099,7 @@ export function CountField({
 }
 export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
 /** Computed native numbers have no local input model or write action. */
-export function AutoNumberField({
+export function BindingAutoNumberField({
     binding,
     render,
     className,
@@ -1111,6 +1132,25 @@ export function AutoNumberField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setInput: () => {},
     });
+}
+/** Explicit binding mode; the historical props alias remains unchanged. */
+export type AutoNumberBindingProps = AutoNumberFieldProps & {
+    mode?: 'binding';
+    value?: never;
+    language?: never;
+    textSize?: never;
+    layout?: never;
+};
+type AutoNumberProps = AutoNumberControlledProps | AutoNumberBindingProps;
+
+/** Complete controlled display or the original binding contract, selected explicitly. */
+export function AutoNumberField(props: AutoNumberControlledProps): ReactNode;
+export function AutoNumberField(props: AutoNumberBindingProps): ReactNode;
+export function AutoNumberField(props: AutoNumberProps): ReactNode;
+export function AutoNumberField(props: AutoNumberProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledAutoNumberField, props)
+        : createElement(BindingAutoNumberField, props);
 }
 export type TextFieldProps = FieldProps & TextFieldOptions;
 export function TextField({
@@ -1218,10 +1258,28 @@ export type UrlFieldProps = TextFieldProps;
 export function UrlField(props: UrlFieldProps): ReactNode {
     return createElement(TextField, props);
 }
-/** Email preserves exact text; surrounding page and server owners validate it. */
+/** Binding callers retain their literal text contract. Controlled callers use
+ * the complete email input; page/server owners still validate and save. */
 export type EmailFieldProps = TextFieldProps;
-export function EmailField(props: EmailFieldProps): ReactNode {
-    return createElement(TextField, props);
+type LegacyEmailComponentProps = EmailFieldProps & {
+    mode?: never;
+    value?: never;
+    onChange?: never;
+};
+type ControlledEmailComponentProps = ControlledEmailFieldProps & {
+    binding?: never;
+    render?: never;
+};
+type EmailComponentProps =
+    | LegacyEmailComponentProps
+    | ControlledEmailComponentProps;
+export function EmailField(props: LegacyEmailComponentProps): ReactNode;
+export function EmailField(props: ControlledEmailComponentProps): ReactNode;
+export function EmailField(props: EmailComponentProps): ReactNode;
+export function EmailField(props: EmailComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledEmailField, props)
+        : createElement(TextField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
@@ -1464,12 +1522,26 @@ export function CurrencyField(props: CurrencyFieldProps): ReactNode {
 export function DurationField(props: DurationFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
-export type CheckboxFieldProps = FieldProps & CheckboxFieldOptions;
-export function CheckboxField({
+export type BoundCheckboxFieldProps = FieldProps &
+    CheckboxFieldOptions & {
+        value?: never;
+        onChange?: never;
+        calendly?: never;
+    };
+export type CheckboxFieldProps =
+    | BoundCheckboxFieldProps
+    | ControlledCheckboxFieldProps;
+/** Complete controlled field or compatible borrowed binding; neither saves implicitly. */
+export function CheckboxField(props: CheckboxFieldProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BoundCheckboxField, props)
+        : createElement(ControlledCheckboxField, props);
+}
+function BoundCheckboxField({
     binding,
     render,
     className,
-}: CheckboxFieldProps): ReactNode {
+}: BoundCheckboxFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (
@@ -2080,8 +2152,11 @@ export function DateField({
         clear: () => binding.date?.clear(),
     });
 }
-/** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
-export const DateTimeField = DateField;
+/** Explicit legacy binding API; complete date/time pickers use /react/date. */
+export const BindingDateTimeField = DateField;
+export type BindingDateTimeFieldProps = DateTimeFieldProps;
+/** Legacy binding name retained unchanged. Controlled DateTimeField uses /react/date. */
+export const DateTimeField = BindingDateTimeField;
 /** Explicit legacy ISO/binding API. Complete calendar dates use /react/date. */
 export const BindingDateField = DateField;
 export type BindingDateFieldProps = DateFieldProps;

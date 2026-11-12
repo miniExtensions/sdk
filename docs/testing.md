@@ -55,6 +55,11 @@ fixture or hosted acceptance is established by these synthetic checks.
 Normal CI is the validation route while a local execution hold applies. Authored
 tests/source review are not executed proof; report exact heads/runs and results.
 
+Parent-document Escape stays inside the native scheduling dialog without
+preventing the browser's cancel action. Preserve real host Modal nesting:
+scheduling cancellation keeps the outer Form/draft and restores its trigger;
+a subsequent Escape may dismiss that outer Form normally.
+
 ## Complete Portal search gate
 
 The additive Search gate source is covered by `test/portalSearchGate.test.ts`

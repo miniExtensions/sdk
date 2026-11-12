@@ -1212,7 +1212,9 @@ SOFTWARE.
 The SDK bundles a private browser-only PDF engine and distributes the matching
 legacy module worker, CMaps, standard fonts and WASM. Its verified upstream
 `isNodeJS` environment binding is specialized to `false` during the browser build;
-Node-only factories are removed. Upstream runtime source and distributed asset
+Node-only factories are removed. Its global API/testing registrations become local
+bindings; the SDK consumes named exports without replacing other PDF libraries.
+Upstream runtime source and distributed asset
 bytes are pinned and checked. The complete Apache 2.0 license is included at
 `dist/vendor/document-preview/pdfjs-6.5.438/LICENSE`; upstream license notices
 remain in the bundled engine, worker and assets.

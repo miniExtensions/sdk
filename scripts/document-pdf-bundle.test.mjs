@@ -85,6 +85,17 @@ test('both private PDF formats retain the exact pinned upstream license notice',
         );
     }
 });
+test('private PDF formats do not publish over unrelated document-library globals', async (t) => {
+    const { root, receipt } = await fixture(t);
+    for (const output of receipt.outputs)
+        assert.equal(
+            /globalThis\.(?:pdfjsLib|_pdfjsTestingUtils)\s*=/.test(
+                readFileSync(join(root, output.path), 'utf8')
+            ),
+            false,
+            `${output.format} must not register over another PDF library`
+        );
+});
 test('changed private PDF output and redirected receipt paths are refused', async (t) => {
     const { root, receipt } = await fixture(t);
     const path = join(root, receipt.outputs[0].path);

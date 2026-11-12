@@ -51,7 +51,17 @@ export async function bundleDocumentPDF(root = process.cwd()) {
     assert.equal([...original.matchAll(environmentLine)].length, 1);
     // Specialize the one verified environment binding through esbuild's
     // identifier substitution, including references inside private factories.
-    const browserSource = original.replace(environmentLine, '');
+    let browserSource = original.replace(environmentLine, '');
+    // This adapter uses named ESM exports and an explicitly owned worker port.
+    // Keep the upstream convenience registrations local so importing it cannot
+    // replace another field's document-library globals.
+    for (const [registration, local] of [
+        ['globalThis.pdfjsLib =', 'const __sdkPDFExports ='],
+        ['globalThis._pdfjsTestingUtils =', 'const __sdkPDFTestingUtils ='],
+    ]) {
+        assert.equal(browserSource.split(registration).length, 2);
+        browserSource = browserSource.replace(registration, local);
+    }
     const outputs = [];
     for (const [directory, format] of [
         ['esm', 'esm'],
@@ -141,6 +151,7 @@ export async function bundleDocumentPDF(root = process.cwd()) {
         licenseSha256,
         browserOnly: true,
         specialization: 'browser-isNodeJS-false',
+        globalRegistration: 'private-named-exports',
         outputs,
     };
     writeFileSync(join(root, receiptPath), JSON.stringify(receipt) + '\n');
@@ -154,6 +165,7 @@ export function assertDocumentPDFBundle(root) {
     assert.equal(receipt.licenseSha256, licenseSha256);
     assert.equal(receipt.browserOnly, true);
     assert.equal(receipt.specialization, 'browser-isNodeJS-false');
+    assert.equal(receipt.globalRegistration, 'private-named-exports');
     assert.equal(receipt.outputs.length, 2);
     for (const [index, format] of ['esm', 'cjs'].entries()) {
         const entry = receipt.outputs[index];
@@ -161,6 +173,12 @@ export function assertDocumentPDFBundle(root) {
         assert.equal(entry.path, `dist/${format}/${child}`);
         const bytes = readFileSync(join(root, entry.path));
         pinnedLicense(bytes.toString('utf8'));
+        assert(
+            !/globalThis\.(?:pdfjsLib|_pdfjsTestingUtils)\s*=/.test(
+                bytes.toString('utf8')
+            ),
+            'Private PDF adapter must preserve unrelated document-library globals'
+        );
         assert(
             bytes.length <= archiveCaptureBudget,
             'Private PDF module exceeds the existing archive-proof capture budget'

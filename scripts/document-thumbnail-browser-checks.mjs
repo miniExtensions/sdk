@@ -36,6 +36,8 @@ ${format === 'cjs' ? "const {CreatedTimeField}=require('@miniextensions/sdk/reac
 const data=${JSON.stringify(fixtures)};
 const decode=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
 const initialPromiseTry=Promise.try;
+const nativePDFGlobals={api:Object.freeze({owner:'unrelated-pdf-api'}),testing:Object.freeze({owner:'unrelated-pdf-testing'}),worker:Object.freeze({WorkerMessageHandler:Object.freeze({owner:'unrelated-pdf-worker'})})};
+globalThis.pdfjsLib=nativePDFGlobals.api;globalThis._pdfjsTestingUtils=nativePDFGlobals.testing;globalThis.pdfjsWorker=nativePDFGlobals.worker;
 const made=[],revoked=[];const createURL=URL.createObjectURL.bind(URL),revokeURL=URL.revokeObjectURL.bind(URL);
 URL.createObjectURL=blob=>{const url=createURL(blob);made.push(url);return url;};URL.revokeObjectURL=url=>{revoked.push(url);revokeURL(url);};
 let change,observed,submits=0,retainedImage;
@@ -56,7 +58,7 @@ function App(){
  h('div',{id:'document-host',style:{marginTop:state.far?'1800px':0,width:state.grid?'520px':'300px',height:state.grid?'420px':undefined}},state.mounted?h(CreatedTimeField,props):null),h('button',{type:'submit'},'Explicit Save'));
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.documentFixture={snapshot:()=>({react:React.version,submits,state:observed,made:[...made],revoked:[...revoked],promiseTryPreserved:Promise.try===initialPromiseTry}),change:patch=>change(patch),rememberImage:()=>{retainedImage=document.querySelector('#document-host img');},oldImageSource:()=>retainedImage?.getAttribute('src')??null};
+window.documentFixture={snapshot:()=>({react:React.version,submits,state:observed,made:[...made],revoked:[...revoked],promiseTryPreserved:Promise.try===initialPromiseTry,pdfGlobalsPreserved:globalThis.pdfjsLib===nativePDFGlobals.api&&globalThis._pdfjsTestingUtils===nativePDFGlobals.testing&&globalThis.pdfjsWorker===nativePDFGlobals.worker}),change:patch=>change(patch),rememberImage:()=>{retainedImage=document.querySelector('#document-host img');},oldImageSource:()=>retainedImage?.getAttribute('src')??null};
 `;
 }
 
@@ -310,6 +312,11 @@ export async function checkDocumentThumbnailBrowser({
                 );
                 assert.equal(snapshot.submits, 0);
                 assert.equal(snapshot.promiseTryPreserved, true);
+                assert.equal(
+                    snapshot.pdfGlobalsPreserved,
+                    true,
+                    'SDK previews must preserve unrelated PDF library globals'
+                );
                 assert.equal(
                     await page.locator('#neighbor').inputValue(),
                     'independent unsaved draft'

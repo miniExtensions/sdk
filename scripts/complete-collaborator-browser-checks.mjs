@@ -1041,10 +1041,71 @@ export async function checkCompleteCollaboratorBrowser({
             'refused selection/removal commit no private value and consume focus requests before unrelated later canonical changes'
         );
 
+        for (const refuseChanges of [false, true]) {
+            await configure({
+                mode: 'multiple',
+                valueTags: [],
+                choiceTags: ['A', 'B'],
+                refuseChanges,
+            });
+            await input().fill('Alpha');
+            await page.getByRole('option').first().waitFor();
+            const start = (await snapshot()).writes.length;
+            try {
+                await page.evaluate(() => {
+                    const request = window.requestAnimationFrame;
+                    const frames = [];
+                    window.requestAnimationFrame = (callback) => {
+                        frames.push(callback);
+                        return frames.length;
+                    };
+                    window.__flushCollaboratorPointerFrames = () => {
+                        window.requestAnimationFrame = request;
+                        const pending = frames.splice(0);
+                        pending.forEach((callback) =>
+                            callback(performance.now())
+                        );
+                        return document.activeElement?.id === 'adjacent';
+                    };
+                    document
+                        .querySelector('#field [role="option"]')
+                        .dispatchEvent(
+                            new MouseEvent('mousedown', {
+                                button: 0,
+                                bubbles: true,
+                                cancelable: true,
+                            })
+                        );
+                });
+                await adjacent.focus();
+                assert.equal(
+                    await page.evaluate(() =>
+                        window.__flushCollaboratorPointerFrames()
+                    ),
+                    true
+                );
+            } finally {
+                await page.evaluate(() => {
+                    window.__flushCollaboratorPointerFrames?.();
+                    delete window.__flushCollaboratorPointerFrames;
+                });
+            }
+            await writeCount(start + 1);
+            await canonical(refuseChanges ? [] : ['A']);
+            assert.equal(
+                (await snapshot()).adjacent,
+                'Keep adjacent dirty value'
+            );
+        }
+        await record(
+            'accepted and refused pointer selections cannot reclaim an adjacent draft after their pending animation frames'
+        );
+
         await configure({
             mode: 'multiple',
             valueTags: [],
             choiceTags: ['A', 'B'],
+            refuseChanges: false,
         });
         await input().fill('Alpha');
         await page.evaluate(() => window.__collaboratorFixture.rememberInput());

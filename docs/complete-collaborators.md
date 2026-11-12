@@ -89,6 +89,11 @@ writer cannot leave a selected value behind. A focus request belongs only to
 that attempted action and is consumed at its first reconciliation; a later
 external value cannot fulfill an earlier refused request.
 
+Pointer selection uses the same canonical proposal and focus receipt as removal.
+It does not queue the picker's separate deferred refocus. After an accepted or
+refused selection, moving to an adjacent field cannot be undone by a later
+animation frame. Keyboard selection still uses the actual combobox actions.
+
 `owner.token` identifies the actual current field/session/record/configuration
 generation. `owner.isCurrent()` must read current caller authority when an
 action runs. This is an explicit native-object action boundary, not a grant

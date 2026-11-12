@@ -11,6 +11,7 @@ import {
     useRef,
     type ButtonHTMLAttributes,
     type ChangeEvent,
+    type MouseEvent,
     type Ref,
     type ReactNode,
 } from 'react';
@@ -21,6 +22,7 @@ import {
     type CollaboratorAvatarPolicy,
 } from './CompleteCollaboratorField.js';
 import { TextInput, type TextInputProps } from './TextInput.js';
+import { removeCollaboratorSelection } from '../ui/collaboratorSelection.js';
 
 export type CollaboratorPickerProps<T extends CompleteCollaborator> = {
     value: readonly T[];
@@ -155,6 +157,24 @@ export function CollaboratorPicker<T extends CompleteCollaborator>(
                             key: `${collaborator.id}-${index}`,
                             value: collaborator,
                             className: 'mx-sdk-collaborator-option',
+                            // The controlled field owns accepted/refused focus.
+                            // Headless UI's pointer handler queues an unfenced
+                            // refocus that can close a subsequently opened field.
+                            onMouseDown: (event: MouseEvent) => {
+                                event.preventDefault();
+                                if (event.button !== 0 || props.disabled)
+                                    return;
+                                props.onChange(
+                                    props.value.some(
+                                        (value) => value.id === collaborator.id
+                                    )
+                                        ? removeCollaboratorSelection(
+                                              props.value,
+                                              collaborator.id
+                                          )
+                                        : [...props.value, collaborator]
+                                );
+                            },
                         },
                         h(CollaboratorAvatar, {
                             profilePicUrl: collaborator.profilePicUrl,

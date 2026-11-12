@@ -640,6 +640,46 @@ it('single pointer selection/removal uses the same complete picker and never sub
     assert.equal(f.window.document.activeElement, f.input());
 });
 
+for (const accept of [true, false]) {
+    it(`multiple pointer selection cannot reclaim adjacent focus on a later frame, accepted=${accept}`, async (t) => {
+        const f = await fixture(t, { multiple: true, value: [] });
+        f.state.accept = accept;
+        await f.open();
+        const originalRequest = globalThis.requestAnimationFrame;
+        const pending = new Map<number, FrameRequestCallback>();
+        let next = 0;
+        globalThis.requestAnimationFrame = (callback) => {
+            const id = ++next;
+            pending.set(id, callback);
+            return id;
+        };
+        try {
+            await act(async () => {
+                f.option(first).dispatchEvent(
+                    new f.window.MouseEvent('mousedown', {
+                        bubbles: true,
+                        cancelable: true,
+                        button: 0,
+                    })
+                );
+            });
+            assert.equal(f.count(), 1);
+            assert.equal(f.state.many.length, accept ? 1 : 0);
+            if (accept) assert.equal(f.state.many[0], first);
+            await act(async () => f.adjacent.focus());
+            await act(async () => {
+                const callbacks = [...pending.values()];
+                pending.clear();
+                callbacks.forEach((callback) => callback(0));
+            });
+            assert.equal(f.window.document.activeElement === f.adjacent, true);
+            assert.equal(f.count(), 1);
+        } finally {
+            globalThis.requestAnimationFrame = originalRequest;
+        }
+    });
+}
+
 it('empty-input pointer opening and focused reopening retain the offered rows without proposing a value', async (t) => {
     const f = await fixture(t);
     const input = f.input();

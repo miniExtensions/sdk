@@ -2056,6 +2056,9 @@ export function DateField({
 }
 /** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
 export const DateTimeField = DateField;
+/** Explicit legacy ISO/binding API. Complete calendar dates use /react/date. */
+export const BindingDateField = DateField;
+export type BindingDateFieldProps = DateFieldProps;
 
 import type {
     PortalSortEditorModel,

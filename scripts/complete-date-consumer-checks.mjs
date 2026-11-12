@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { checkDateRendererConsumer } from './date-renderer-consumer-checks.mjs';
+import { checkDateTimeRendererConsumer } from './datetime-renderer-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
@@ -14,9 +16,24 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const completeDateTypedConsumer = `
 import {createElement,createRef} from 'react';
-import {CompleteDateField,type CompleteDateFieldProps} from '@miniextensions/sdk/react/date';
+import {DateField,CompleteDateField,type CompleteDateFieldProps,type DateFieldProps} from '@miniextensions/sdk/react/date';
+import {DateField as LegacyDateField,BindingDateField,type BindingDateFieldProps} from '@miniextensions/sdk/react';
+import type {FormFieldBinding} from '@miniextensions/sdk/forms';
 const date:CompleteDateFieldProps={id:'date',sessionId:'session',airtableDateConfig:{type:'dateTime',options:{dateFormat:{format:'M/D/YYYY'},timeFormat:{format:'h:mma'},timeZone:'America/New_York'}},value:'2024-07-01T10:30:12.345-04:00',setValue(value){const native:string|null=value;void native;return true;},language:'en',owner:{token:{},isCurrent:()=>true},calendarAlign:'end',inputRef:createRef<HTMLInputElement>(),title:'Appointment',description:'Help',error:'Error',formId:'native-form'};
 createElement(CompleteDateField,date);
+const controlled:DateFieldProps={...date,airtableDateConfig:{type:'date',options:{dateFormat:{format:'D/M/YYYY'}}}};
+createElement(DateField,controlled);
+
+const {setValue,...display}=controlled;
+createElement(DateField,{...display,mode:'readOnly'});
+declare const binding:FormFieldBinding;
+const legacy:BindingDateFieldProps={binding};
+createElement(LegacyDateField,legacy);
+createElement(BindingDateField,legacy);
+// @ts-expect-error DateTime remains on its separate compatibility contract
+createElement(DateField,date);
+// @ts-expect-error mixed binding/controlled authority is not a supported contract
+createElement(DateField,{...controlled,binding});
 // @ts-expect-error native dates are canonical string/null values
 const wrongValue:CompleteDateFieldProps={...date,value:12};
 // @ts-expect-error no native picker/render slot is needed or admitted
@@ -128,14 +145,19 @@ async function mounted(directory, format, happyDomModulePath) {
         submits++;
     });
     const element = () =>
-        React.createElement(api.CompleteDateField, {
-            ...props,
-            setValue(value) {
-                writes.push(value);
-                props = { ...props, value };
-                publish();
-            },
-        });
+        React.createElement(
+            props.airtableDateConfig.type === 'date'
+                ? api.DateField
+                : api.CompleteDateField,
+            {
+                ...props,
+                setValue(value) {
+                    writes.push(value);
+                    props = { ...props, value };
+                    publish();
+                },
+            }
+        );
     let shell = (child) => child;
     const publish = () => root.render(shell(element()));
     const render = async (patch) => {
@@ -272,6 +294,24 @@ async function mounted(directory, format, happyDomModulePath) {
         );
         assert(css.includes('.mx-sdk-complete-date-popup'));
         assert(css.includes('.mx-sdk-complete-date-input'));
+        const naturalCss = readFileSync(
+            consumer.resolve('@miniextensions/sdk/react/date.css'),
+            'utf8'
+        );
+        assert(naturalCss.includes("@import './complete-date.css'"));
+        shell = () =>
+            React.createElement(api.DateField, {
+                mode: 'readOnly',
+                id: 'display-date',
+                value: '2024-02-29',
+                language: 'en',
+                airtableDateConfig: iso,
+            });
+        await React.act(async () => publish());
+        assert.equal(container.querySelector('input'), null);
+        assert(container.textContent.includes('2024-02-29'));
+        assert.equal(writes.length, count);
+        shell = (child) => child;
         const installed = join(directory, 'node_modules/@miniextensions/sdk');
         const vendor = createRequire(
             join(installed, 'dist/vendor/date-time/index.cjs')
@@ -364,7 +404,7 @@ async function mounted(directory, format, happyDomModulePath) {
     }
 }
 
-export function checkCompleteDateReactMatrix({
+export async function checkCompleteDateReactMatrix({
     archivePath,
     typescriptBin,
     happyDomModulePath,
@@ -427,6 +467,16 @@ export function checkCompleteDateReactMatrix({
                     { cwd: directory, stdio: 'inherit' }
                 );
             }
+            const bindingDate = await checkDateRendererConsumer({
+                consumerDirectory: directory,
+                happyDomModulePath,
+            });
+            const bindingTime = await checkDateTimeRendererConsumer({
+                consumerDirectory: directory,
+                happyDomModulePath,
+            });
+            assert.equal(bindingDate.checks, 16);
+            assert.equal(bindingTime.checks, 18);
             const profiles = [];
             for (const format of ['esm', 'cjs']) {
                 const result = JSON.parse(

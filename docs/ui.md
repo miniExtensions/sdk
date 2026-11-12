@@ -2457,8 +2457,10 @@ Enter behavior. Simulated composition does not certify real OS input methods.
 The optional `/react` entry exports `DateField`, `DateFieldProps`,
 `DateFieldOptions` and `renderDateField` for calendar dates. The binding component
 keeps its `{ binding, render }` API; supplying `render` still replaces all markup.
-The shared binding component selects the calendar or timestamp control from the
-accepted model kind; `DateTimeField` remains its compatibility alias.
+The binding contract selects the calendar or timestamp control from the accepted
+model kind. `BindingDateField` explicitly names that legacy contract; existing
+`DateField` and `DateTimeField` binding callers remain compatible. The complete natural `DateField` at `/react/date` is a separate controlled
+contract. Do not combine binding and controlled props.
 
 ```tsx
 import { DateField } from '@miniextensions/sdk/react';
@@ -4550,12 +4552,46 @@ composition and themed wrappers with the host.
 
 ### Complete native-compatible Date and DateTime picker
 
+`DateField` from `/react/date` is the public complete calendar-date field. Import `/react/date.css` for its calendar, readonly text and legacy ISO
+styles. Its controlled props are separate from the existing `{binding, render}` API
+on `/react` (also explicitly exported as `BindingDateField`). Neither path creates
+a Form provider or Saves; the generic entry keeps its existing runtime dependencies.
+
+```tsx
+import { DateField } from '@miniextensions/sdk/react/date';
+import { useState } from 'react';
+import '@miniextensions/sdk/react/date.css';
+
+export function DueDate() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+        <DateField
+            id="due-date"
+            title="Due date"
+            language="en"
+            airtableDateConfig={{
+                type: 'date',
+                options: { dateFormat: { format: 'D/M/YYYY' } },
+            }}
+            value={value}
+            setValue={setValue}
+        />
+    );
+}
+```
+
+`mode="readOnly"` displays the formatted Date or localized empty text without an
+input or writer (`setValue` is omitted). `readOnly` on an input instead preserves
+the disabled-input presentation. Both retain loaded Date bytes. Native switches
+may map configuration, associations and current-owner authority directly into
+these props; no native calendar or renderer callback is needed.
+
 `CompleteDateField` and `CompleteDateFieldProps` from the opt-in
 `@miniextensions/sdk/react/date` entry include the full calendar/time picker,
 localized native input grammar, drafts, blur recovery, range policy and popup.
 Import `@miniextensions/sdk/react/complete-date.css` for portable default styles;
 Tailwind and a host picker/render slot are unnecessary. Moment locale assets
-are loaded by this entry. Core and generic React imports do not load the picker.
+are loaded by this calendar entry. Core and generic React imports do not load the picker.
 Install matching supported React and ReactDOM versions; both remain SDK peers.
 
 ```tsx
@@ -4587,8 +4623,8 @@ export function Appointment() {
 
 Date writes retain `YYYY-MM-DD`; DateTime picker/typed commits use the existing
 native timezone/range helpers and UTC minute precision. An untouched loaded
-value is not rewritten by rendering. The existing ISO-only `DateField`,
-`DateTimeField` and strict models retain their separate explicit-offset contract,
+value is not rewritten by rendering. The existing binding-based `DateField`,
+`BindingDateField`, `DateTimeField` and strict models retain their separate explicit-offset contract,
 including original seconds, fractions and offset bytes.
 
 Equivalent metadata and cosmetic props preserve unfinished text and caret.

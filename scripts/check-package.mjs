@@ -6,6 +6,7 @@ import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
+import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
 import { checkFieldPresentationReactMatrix } from './field-presentation-consumer-checks.mjs';
 import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
@@ -588,6 +589,7 @@ try {
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
                 path === 'docs/field-presentation.md' ||
+                path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
@@ -657,6 +659,9 @@ try {
         'docs/form-completion.md',
         'docs/form-header.md',
         'docs/field-presentation.md',
+        'docs/form-groups.md',
+        'dist/esm/react/form-group.css',
+        'dist/cjs/react/form-group.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -3317,6 +3322,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const formGroupMatrix = checkFormGroupReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(formGroupMatrix.versions.length, 2);
+    assert.equal(formGroupMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

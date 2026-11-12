@@ -254,6 +254,14 @@ export {
 } from './completion.js';
 
 export {
+    groupFormFieldsBySections,
+    type FormSectionHeader,
+    type FormSectionField,
+    type FormFieldsGroup,
+    type FormFieldSection,
+} from './formSections.js';
+
+export {
     shouldRenderFormCover,
     projectFormHeader,
     resolveFormFooterDescription,

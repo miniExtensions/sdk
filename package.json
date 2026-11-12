@@ -87,6 +87,7 @@
             }
         },
         "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
+        "./react/form-group.css": "./dist/esm/react/form-group.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
@@ -180,6 +181,7 @@
         "examples/react-form-completion/build.mjs",
         "examples/react-form-completion/tsconfig.json",
         "docs/form-header.md",
+        "docs/form-groups.md",
         "docs/field-presentation.md",
         "examples/react-form-header/README.md",
         "examples/react-form-header/main.ts",

@@ -198,6 +198,7 @@ for (const format of ['esm', 'cjs']) {
         'barcode',
         'complete-portal-chart',
         'complete-address',
+        'address-field',
         'complete-collaborators',
         'complete-date',
         'date',

@@ -194,6 +194,7 @@ export function assertModuleFormats(root) {
                 './react/complete-clearable-text-input.css',
                 './react/complete-multiline.css',
                 './react/complete-address.css',
+                './react/address-field.css',
                 './react/html-description.css',
                 './react/complete-duration.css',
                 './react/search-gate.css',

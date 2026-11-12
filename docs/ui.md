@@ -6077,6 +6077,32 @@ copy the code/loading/cache/error state into the wrapper. Do not change
 backend policy. This SDK stage is not native adoption, actual code delivery,
 credential-storage qualification or hosted authentication acceptance.
 
+## Configured Address field
+
+`AddressField` is the natural public React API for the configured Address field.
+Import `@miniextensions/sdk/react/address-field.css`; it includes the existing
+portable autocomplete, clearable, readonly and scanner styles.
+
+- Default `mode: 'autocomplete'` uses the existing complete control and lifecycle.
+  Supply `identity`, authorized `reads`, canonical `value`/`onChange`, localized
+  labels and native input/form/ARIA attributes. Raw queries and description then
+  formatted-address writes retain the existing request engine and capped-echo bridge.
+- `mode: 'manual'` accepts a controlled value/writer, clear label and optional
+  explanation. It has no identity/read capability. The SDK owns preview text,
+  description association, mobile Clear, counter and optional inline deferred input.
+- `mode: 'readonly'` accepts already converted/masked text and language, with optional
+  text size/layout. It renders the existing readonly text presentation without any
+  writer, prediction read, scanner or request owner.
+- Character limits remain an accepted-writer policy; pass the same `maxLength` used
+  by the caller's cap. External committed values are displayed intact. The counter
+  can be disabled for compatibility callers that already own one.
+- Optional `scanner` data reuses the existing SDK scanner controls and ownership.
+  It adds no native renderer slot or new camera permission path. Readonly mode never
+  mounts scanner controls. The host remains responsible for permitted configuration.
+
+Existing `CompleteAddressAutocomplete`, its props, lifecycle hook, request engine
+and stylesheet remain compatible. No singleton client, credential or Save is added.
+
 ## Complete React Address autocomplete
 
 `CompleteAddressAutocomplete` from `@miniextensions/sdk/react` owns the complete

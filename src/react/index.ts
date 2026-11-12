@@ -16,6 +16,14 @@ export {
     type CompleteAddressAutocompleteProps,
     type AddressAutocompleteLabels,
 } from './CompleteAddressAutocomplete.js';
+export { AddressField } from './AddressField.js';
+export type {
+    AddressFieldProps,
+    AutocompleteAddressFieldProps,
+    ManualAddressFieldProps,
+    ReadOnlyAddressFieldProps,
+    AddressFieldScannerOptions,
+} from './AddressField.js';
 export {
     useAddressAutocomplete,
     type AddressAutocompleteIdentity,

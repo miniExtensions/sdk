@@ -1,3 +1,11 @@
+import {
+    ControlledCheckboxField,
+    type ControlledCheckboxFieldProps,
+} from './ControlledCheckboxField.js';
+export type {
+    ControlledCheckboxFieldProps,
+    CheckboxCalendlyOptions,
+} from './ControlledCheckboxField.js';
 export {
     CompleteAddressAutocomplete,
     type CompleteAddressAutocompleteProps,
@@ -1487,12 +1495,26 @@ export function CurrencyField(props: CurrencyFieldProps): ReactNode {
 export function DurationField(props: DurationFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
-export type CheckboxFieldProps = FieldProps & CheckboxFieldOptions;
-export function CheckboxField({
+export type BoundCheckboxFieldProps = FieldProps &
+    CheckboxFieldOptions & {
+        value?: never;
+        onChange?: never;
+        calendly?: never;
+    };
+export type CheckboxFieldProps =
+    | BoundCheckboxFieldProps
+    | ControlledCheckboxFieldProps;
+/** Complete controlled field or compatible borrowed binding; neither saves implicitly. */
+export function CheckboxField(props: CheckboxFieldProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BoundCheckboxField, props)
+        : createElement(ControlledCheckboxField, props);
+}
+function BoundCheckboxField({
     binding,
     render,
     className,
-}: CheckboxFieldProps): ReactNode {
+}: BoundCheckboxFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (

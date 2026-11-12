@@ -210,7 +210,7 @@ import {
     checkLinkedRecordsRendererConsumer,
     linkedRecordsReactTypedConsumer,
 } from './linked-records-renderer-consumer-checks.mjs';
-import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
+import { checkCheckboxReactMatrix } from './checkbox-consumer-checks.mjs';
 import {
     checkMultipleSelectConsumer,
     multipleSelectReactTypedConsumer,
@@ -2786,14 +2786,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
     );
-    const checkboxProof = await checkCheckboxConsumer({
-        consumerDirectory: temporaryDirectory,
+    const checkboxProof = checkCheckboxReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
     });
-    assert.equal(checkboxProof.checks, 8);
-    console.log(
-        `Installed Checkbox input, renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
-    );
+    assert.equal(checkboxProof.versions.length, 2);
+    assert.equal(checkboxProof.cleanup, 'completed');
     const linkedRecordsRendererProof = await checkLinkedRecordsRendererConsumer(
         {
             consumerDirectory: temporaryDirectory,

@@ -326,9 +326,14 @@ import {
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
 import { countInput, type CountFieldOptions } from './CountField.js';
 export { renderCountField, type CountFieldOptions } from './CountField.js';
+import {
+    ControlledAutoNumberField,
+    type AutoNumberControlledProps,
+} from './AutoNumberField.js';
 export {
     renderAutoNumberField,
     type AutoNumberFieldOptions,
+    type AutoNumberControlledProps,
 } from './AutoNumberField.js';
 import {
     renderOwnedRatingInput,
@@ -1091,7 +1096,7 @@ export function CountField({
 }
 export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
 /** Computed native numbers have no local input model or write action. */
-export function AutoNumberField({
+export function BindingAutoNumberField({
     binding,
     render,
     className,
@@ -1124,6 +1129,25 @@ export function AutoNumberField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setInput: () => {},
     });
+}
+/** Explicit binding mode; the historical props alias remains unchanged. */
+export type AutoNumberBindingProps = AutoNumberFieldProps & {
+    mode?: 'binding';
+    value?: never;
+    language?: never;
+    textSize?: never;
+    layout?: never;
+};
+type AutoNumberProps = AutoNumberControlledProps | AutoNumberBindingProps;
+
+/** Complete controlled display or the original binding contract, selected explicitly. */
+export function AutoNumberField(props: AutoNumberControlledProps): ReactNode;
+export function AutoNumberField(props: AutoNumberBindingProps): ReactNode;
+export function AutoNumberField(props: AutoNumberProps): ReactNode;
+export function AutoNumberField(props: AutoNumberProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledAutoNumberField, props)
+        : createElement(BindingAutoNumberField, props);
 }
 export type TextFieldProps = FieldProps & TextFieldOptions;
 export function TextField({

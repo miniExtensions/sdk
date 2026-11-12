@@ -4,10 +4,16 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+    singleCollaboratorReactTypedConsumer,
+    singleCollaboratorNodeTypedConsumer,
+} from './single-collaborator-consumer-checks.mjs';
 
 export const completeCollaboratorTypedConsumer = String.raw`import { createElement } from 'react';
 import {
-    CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField,
+    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField,
+    type ControlledSingleCollaboratorFieldProps, type SingleCollaboratorFieldProps,
     type CompleteCollaborator, type CompleteCollaboratorEditOwner,
     type CompleteSingleCollaboratorFieldProps,
     type CompleteMultipleCollaboratorsFieldProps,
@@ -28,6 +34,16 @@ const multiple: CompleteMultipleCollaboratorsFieldProps<Native> = {
     labels: { empty: 'No people', remove: (label) => 'Remove ' + label },
     onValueChange(value) { const originals: Native[] = value; void originals; },
 };
+const controlled: ControlledSingleCollaboratorFieldProps<Native> = { ...single, mode: 'controlled' };
+createElement(SingleCollaboratorField<Native>, controlled);
+createElement(SingleCollaboratorField<Native>, { ...controlled, value: null });
+declare const legacy: SingleCollaboratorFieldProps;
+createElement(SingleCollaboratorField, legacy);
+createElement(BindingSingleCollaboratorField, legacy);
+// @ts-expect-error binding and controlled capabilities cannot be combined
+createElement(SingleCollaboratorField<Native>, { ...controlled, binding: legacy.binding });
+// @ts-expect-error the complete contract requires explicit controlled discrimination
+createElement(SingleCollaboratorField<Native>, single);
 createElement(CompleteSingleCollaboratorField<Native>, single);
 createElement(CompleteSingleCollaboratorField<Native>, { ...single, value: null });
 createElement(CompleteMultipleCollaboratorsField<Native>, multiple);
@@ -68,7 +84,7 @@ const editableServerNode = (api, common) => React.createElement('form', { id: 's
     React.createElement('label', { id: 'ssr-label', htmlFor: 'ssr-person' }, 'Assignee'),
     React.createElement('span', { id: 'ssr-help' }, 'Choose a person'),
     React.createElement('span', { id: 'ssr-error' }, 'Required'),
-    React.createElement(api.CompleteSingleCollaboratorField, {
+    React.createElement(api.SingleCollaboratorField, { mode: 'controlled',
         ...common, value: null, inputId: 'ssr-person', formId: 'ssr-form',
         ariaLabel: 'Assignee', labelledBy: 'ssr-label',
         describedBy: 'ssr-help ssr-error', invalid: true,
@@ -133,13 +149,14 @@ if (mode === 'ssr') {
     let mounted = false, api, groups = 0;
     const node = () => {
         const token = model.token;
-        const Component = model.mode === 'single' ? api.CompleteSingleCollaboratorField : api.CompleteMultipleCollaboratorsField;
+        const Component = model.mode === 'single' ? api.SingleCollaboratorField : api.CompleteMultipleCollaboratorsField;
         return React.createElement(React.StrictMode, null,
             React.createElement('form', { id: 'people-form', onSubmit(event) { event.preventDefault(); submits++; } },
                 React.createElement('label', { htmlFor: 'person' }, 'Assigned people'),
                 React.createElement('span', { id: 'person-help' }, 'Choose supplied people'),
                 React.createElement('span', { id: 'person-error' }, 'Required'),
                 React.createElement(Component, {
+                    ...(model.mode === 'single' ? { mode: 'controlled' } : {}),
                     choices: model.choices, value: model.value,
                     owner: { token, isCurrent: () => model.current && model.token === token },
                     readOnly: model.readOnly, visible: model.visible,
@@ -410,8 +427,8 @@ const { build } = await import(pathToFileURL(process.argv[2]).href);
 const format = process.argv[3];
 const sdk = resolve('node_modules/@miniextensions/sdk');
 const script = format === 'esm'
- ? "import {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField};"
- : "const {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField};";
+ ? "import {SingleCollaboratorField,CompleteMultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {SingleCollaboratorField,CompleteMultipleCollaboratorsField};"
+ : "const {SingleCollaboratorField,CompleteMultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={SingleCollaboratorField,CompleteMultipleCollaboratorsField};";
 writeFileSync('production-entry.' + (format === 'esm' ? 'mjs' : 'cjs'), script);
 const result = await build({ entryPoints: ['production-entry.' + (format === 'esm' ? 'mjs' : 'cjs')], bundle: true, platform: 'browser', format: 'esm', minify: true, write: false, metafile: true, define: {'process.env.NODE_ENV':'"production"'} });
 const inputs = Object.keys(result.metafile.inputs);
@@ -473,6 +490,44 @@ export function checkCompleteCollaboratorReactMatrix({
             ]);
             writeFileSync(join(directory, 'consumer-runtime.mjs'), runtime);
             writeFileSync(
+                join(directory, 'legacy-consumer.tsx'),
+                singleCollaboratorReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--module',
+                'NodeNext',
+                '--moduleResolution',
+                'NodeNext',
+                '--target',
+                'ES2022',
+                '--jsx',
+                'react-jsx',
+                'legacy-consumer.tsx',
+            ]);
+            const legacyHelper = fileURLToPath(
+                new URL(
+                    './single-collaborator-consumer-checks.mjs',
+                    import.meta.url
+                )
+            );
+            writeFileSync(
+                join(directory, 'legacy-consumer.mjs'),
+                `import { checkSingleCollaboratorConsumer } from ${JSON.stringify(pathToFileURL(legacyHelper).href)}; console.log(JSON.stringify(await checkSingleCollaboratorConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]})));`
+            );
+            const legacy = JSON.parse(
+                run(process.execPath, [
+                    'legacy-consumer.mjs',
+                    happyDomModulePath,
+                ])
+            );
+            assert.equal(legacy.checks, 94);
+
+            writeFileSync(
                 join(directory, 'production-build.mjs'),
                 productionBuild
             );
@@ -517,6 +572,25 @@ export function checkCompleteCollaboratorReactMatrix({
                     '--target',
                     'ES2022',
                     typed,
+                ]);
+                const legacyTyped = `legacy-binding.${suffix}`;
+                writeFileSync(
+                    join(directory, legacyTyped),
+                    singleCollaboratorNodeTypedConsumer
+                );
+                run(process.execPath, [
+                    typescriptBin,
+                    '--noEmit',
+                    '--strict',
+                    '--skipLibCheck',
+                    'false',
+                    '--module',
+                    'NodeNext',
+                    '--moduleResolution',
+                    'NodeNext',
+                    '--target',
+                    'ES2022',
+                    legacyTyped,
                 ]);
                 const relative = `dist/${format}/react/CompleteCollaboratorField.js`;
                 const child = readFileSync(join(installed, relative));
@@ -607,6 +681,7 @@ export function checkCompleteCollaboratorReactMatrix({
                     react: version.react,
                     format,
                     ssr: true,
+                    legacyBindingChecks: legacy.checks,
                     syntheticGroups: dom.groups,
                     production: true,
                     childSha256: createHash('sha256')

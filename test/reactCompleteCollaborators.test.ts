@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+    SingleCollaboratorField,
     CompleteSingleCollaboratorField,
     CompleteMultipleCollaboratorsField,
     type CompleteCollaborator,
@@ -244,8 +245,9 @@ async function fixture(
                   value: state.many,
                   onValueChange: write,
               })
-            : h(CompleteSingleCollaboratorField<Person>, {
+            : h(SingleCollaboratorField<Person>, {
                   ...common,
+                  mode: 'controlled',
                   value: state.single,
                   onValueChange: write,
               });

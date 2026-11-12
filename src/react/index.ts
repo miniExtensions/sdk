@@ -146,6 +146,9 @@ export {
 } from './BarcodeField.js';
 export {
     SingleCollaboratorField,
+    BindingSingleCollaboratorField,
+    type BindingSingleCollaboratorFieldProps,
+    type ControlledSingleCollaboratorFieldProps,
     renderSingleCollaboratorField,
     type SingleCollaboratorFieldProps,
     type SingleCollaboratorFieldOptions,

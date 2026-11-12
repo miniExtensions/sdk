@@ -3313,6 +3313,40 @@ Form/Grid/List displays and run the page's interaction, remount and retirement
 checks. Fixture generation records browser verification as pending; injected DOM
 checks do not replace native pointer, keyboard, text-selection or layout inspection.
 
+## React Single Collaborator controlled field
+
+`SingleCollaboratorField` from `@miniextensions/sdk/react` accepts the complete
+picker contract with `mode="controlled"`. It owns search, choice rows,
+badges, avatar DOM, keyboard/pointer interaction and focus; the caller retains
+canonical object/null values and current write authority. No renderer injection,
+SDK client or implicit Save is required.
+
+```tsx
+import { SingleCollaboratorField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-collaborators.css';
+
+<SingleCollaboratorField
+    mode="controlled"
+    value={assignee}
+    choices={offeredCollaborators}
+    owner={currentEditOwner}
+    onValueChange={setAssignee}
+    title="Assignee"
+    inputId="assignee"
+    formId="record-form"
+    describedBy="assignee-help assignee-error"
+/>;
+```
+
+`ControlledSingleCollaboratorFieldProps<T>` preserves extra native object
+metadata and exact supplied references. See [Complete Collaborator fields](complete-collaborators.md)
+for choice, owner, avatar, localization and readonly contracts. The existing
+`CompleteSingleCollaboratorField` remains compatible. Calls using `binding`
+(with no `mode`) and the original named `SingleCollaboratorFieldProps`, options
+and render helper retain their display-only behavior; the explicit
+`BindingSingleCollaboratorField` export is equivalent to those binding calls.
+Controlled calls cannot supply `binding` or `render`.
+
 ## React Single Collaborator presentation
 
 The optional `/react` entry exports `SingleCollaboratorField`,

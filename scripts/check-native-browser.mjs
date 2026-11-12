@@ -2162,6 +2162,22 @@ try {
             evidence: report.createdTime,
             output,
         });
+        report.lastModifiedTime = {};
+        await checkCreatedTimeControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.lastModifiedTime,
+            output,
+            field: 'lastModifiedTime',
+        });
+        report.lastModifiedTimeDocuments = {};
+        await checkDocumentThumbnailBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.lastModifiedTimeDocuments,
+            output,
+            field: 'lastModifiedTime',
+        });
         report.createdTimeDocuments = {};
         await checkDocumentThumbnailBrowser({
             browser,

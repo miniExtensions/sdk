@@ -279,11 +279,15 @@ export {
     type CreatedByFieldOptions,
 } from './CreatedByField.js';
 import {
+    ControlledLastModifiedTimeField,
+    type ControlledLastModifiedTimeFieldProps,
     lastModifiedTimeInput,
     type LastModifiedTimeFieldOptions,
 } from './LastModifiedTimeField.js';
 export {
     renderLastModifiedTimeField,
+    type ControlledLastModifiedTimeFieldProps,
+    type LastModifiedTimeFieldConfig,
     type LastModifiedTimeFieldOptions,
 } from './LastModifiedTimeField.js';
 import {
@@ -779,8 +783,37 @@ const status = (snapshot: FormFieldSnapshot) =>
     );
 export type LastModifiedTimeFieldProps = FieldProps &
     LastModifiedTimeFieldOptions;
+export type BindingLastModifiedTimeFieldProps = LastModifiedTimeFieldProps;
+type BindingLastModifiedTimeComponentProps = LastModifiedTimeFieldProps & {
+    [Key in Exclude<
+        keyof ControlledLastModifiedTimeFieldProps,
+        keyof LastModifiedTimeFieldProps
+    >]?: never;
+};
+type LastModifiedTimeComponentProps =
+    | BindingLastModifiedTimeComponentProps
+    | ControlledLastModifiedTimeFieldProps;
+
+/** Complete controlled display or the original readonly binding contract. */
+export function LastModifiedTimeField(
+    props: BindingLastModifiedTimeComponentProps
+): ReactNode;
+export function LastModifiedTimeField(
+    props: ControlledLastModifiedTimeFieldProps
+): ReactNode;
+export function LastModifiedTimeField(
+    props: LastModifiedTimeComponentProps
+): ReactNode;
+export function LastModifiedTimeField(
+    props: LastModifiedTimeComponentProps
+): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingLastModifiedTimeField, props)
+        : createElement(ControlledLastModifiedTimeField, props);
+}
+
 /** Valid supplied modification timestamps stay readonly without recomputation. */
-export function LastModifiedTimeField({
+export function BindingLastModifiedTimeField({
     binding,
     render,
     className,

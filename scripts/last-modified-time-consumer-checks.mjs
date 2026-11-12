@@ -8,8 +8,8 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 export const lastModifiedTimeReactTypedConsumer = `
 import type { ReactNode } from 'react';
 import {
-    LastModifiedTimeField, renderLastModifiedTimeField, AirtableForm, AirtableGrid, AirtableList,
-    type LastModifiedTimeFieldProps, type LastModifiedTimeFieldOptions, type DateTimeFieldOptions,
+    LastModifiedTimeField, BindingLastModifiedTimeField, renderLastModifiedTimeField, AirtableForm, AirtableGrid, AirtableList,
+    type LastModifiedTimeFieldProps, type BindingLastModifiedTimeFieldProps, type ControlledLastModifiedTimeFieldProps, type LastModifiedTimeFieldOptions, type DateTimeFieldOptions,
 } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/datetime.css';
@@ -29,6 +29,18 @@ export const renderers: FieldRendererSlots<ReactNode> = {
 };
 export function BoundLastModifiedTime(props: LastModifiedTimeFieldProps) {
     return <LastModifiedTimeField {...props} {...options} />;
+}
+const controlled:ControlledLastModifiedTimeFieldProps={value:'2026-11-12T12:30:00Z',language:'fr',fieldConfig:{type:'lastModifiedTime',options:{isValid:true,result:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}}}}};
+export const controlledDisplay=<LastModifiedTimeField {...controlled}/>;
+export const dateLanguage=<LastModifiedTimeField {...controlled} dateLanguage="fr"/>;
+export function ExplicitBinding(props:BindingLastModifiedTimeFieldProps){const old:LastModifiedTimeFieldProps=props;return <BindingLastModifiedTimeField {...old}/>;}
+// @ts-expect-error No controlled renderer injection.
+export const injected=<LastModifiedTimeField {...controlled} render={()=>null}/>;
+// @ts-expect-error No controlled writer authority.
+export const writable=<LastModifiedTimeField {...controlled} setValue={()=>{}}/>;
+export function Mixed(props:LastModifiedTimeFieldProps){
+    // @ts-expect-error Binding and controlled ownership cannot mix.
+    return <LastModifiedTimeField {...controlled} binding={props.binding}/>;
 }
 export function Override(props: LastModifiedTimeFieldProps) {
     return <LastModifiedTimeField {...props} render={({ snapshot }) => <span>{String(snapshot.value == null)}</span>} />;

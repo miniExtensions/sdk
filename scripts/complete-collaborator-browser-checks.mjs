@@ -1301,7 +1301,7 @@ export async function checkCompleteCollaboratorBrowser({
         await record(
             'whole-root StrictMode unmount/remount preserves caller values without reviving a retired action'
         );
-        assert.equal(groups.length, 11);
+        assert.equal(groups.length, 12);
         evidence.browserGroups = groups;
     } catch (error) {
         failure = error;

@@ -40,6 +40,8 @@ export type ControlledCreatedTimeFieldProps = Pick<
     value: string | null | undefined;
     /** The accepted Created-time result's date/dateTime configuration. */
     dateConfig: DateInputCompatibilityConfig;
+    /** Date text locale; defaults to language without changing empty-value labels. */
+    dateLanguage?: CompleteReadOnlyTextFieldProps['language'];
     /** A supplied owner may retire presentation; it grants no write authority. */
     owner?: CreatedTimeDisplayOwner;
     /** Distinguish source/record lifetimes without borrowing a binding. */
@@ -122,7 +124,7 @@ export function ControlledCreatedTimeField(
                 text = formatDateInputValue({
                     airtableValue: value,
                     airtableFieldConfig: props.dateConfig,
-                    language: props.language,
+                    language: props.dateLanguage ?? props.language,
                 });
         }
     }

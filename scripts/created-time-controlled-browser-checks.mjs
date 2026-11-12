@@ -75,7 +75,7 @@ function App(){
  const owner={token,isCurrent:()=>state.current&&latest.current.current};
  const action=(label,patch)=>h('button',{type:'button',onClick:()=>change(patch)},label);
  const options={disableDownloadFiles:false,displayMode:state.mode==='icon'?'icon':'thumbnail'};
- const props={value:state.value,dateConfig,language:'en',owner,identity:state.identity,displayContext:state.mode==='editable'?'editable':'readonly',displayAsAttachments:['attachment','icon','inert'].includes(state.mode),displayAsButton:['attachment','button','editable'].includes(state.mode),buttonLabel:'Open supplied URL',inert:state.mode==='inert',attachmentOptions:options,presentation:{association:{kind:'group',controlId:'created-display',labelId:'created-title',descriptionId:'created-help',errorId:'created-error',formId:'native-form'},chromeOwner:'shell'}};
+ const props={value:state.value,dateConfig:state.dateConfig??dateConfig,language:state.language??'en',dateLanguage:state.dateLanguage,owner,identity:state.identity,displayContext:state.mode==='editable'?'editable':'readonly',displayAsAttachments:['attachment','icon','inert'].includes(state.mode),displayAsButton:['attachment','button','editable'].includes(state.mode),buttonLabel:'Open supplied URL',inert:state.mode==='inert',attachmentOptions:options,presentation:{association:{kind:'group',controlId:'created-display',labelId:'created-title',descriptionId:'created-help',errorId:'created-error',formId:'native-form'},chromeOwner:'shell'}};
  return h('form',{id:'native-form',onSubmit:e=>{e.preventDefault();submits++;}},
   h('nav',{'aria-label':'Fixture controls'},action('Text',{mode:'text',value:'2026-11-12T12:30:00Z',far:false}),action('Attachment',{mode:'attachment',value:location.origin+'/image.jpg',far:false}),action('Offscreen attachment',{mode:'attachment',value:location.origin+'/offscreen.jpg',far:true}),action('Icon',{mode:'icon',value:location.origin+'/image.jpg',far:false}),action('Retry image',{mode:'attachment',value:location.origin+'/retry.jpg',far:false}),action('HTTP PDF',{mode:'attachment',value:location.origin+'/fixture.pdf',far:false}),action('URL button',{mode:'button',value:location.origin+'/a',far:false}),action('Replace URL',{value:location.origin+'/b',identity:'b'}),action('Restore URL',{mode:'button',value:location.origin+'/a',identity:'a'}),action('Inert',{mode:'inert',value:location.origin+'/image.jpg',far:false}),action('Retire',{current:false}),action('Remove',{mounted:false})),
   h('section',{className:'binding-natural'},h(CreatedTimeField,{binding})),h('section',{className:'binding-explicit'},h(BindingCreatedTimeField,{binding})),h(TextField,{binding:neighbor}),
@@ -327,6 +327,66 @@ export async function checkCreatedTimeControlledBrowser({
             .getByRole('textbox', { name: 'Neighbor', exact: true })
             .fill('Independent neighbor');
         assert.equal((await snapshot()).neighbor, 'Independent neighbor');
+        const localeProps = {
+            language: 'fr',
+            dateLanguage: 'en',
+            dateConfig: {
+                type: 'dateTime',
+                options: {
+                    dateFormat: { format: 'dddd D MMMM YYYY' },
+                    timeFormat: { format: 'HH:mm' },
+                    timeZone: 'America/New_York',
+                },
+            },
+        };
+        await page.evaluate(
+            (patch) => window.createdBrowser.change(patch),
+            localeProps
+        );
+        await page.waitForFunction(() =>
+            document
+                .querySelector('#created-display')
+                ?.textContent.includes('Thursday 12 November 2026 07:30')
+        );
+        await page.evaluate(() =>
+            window.createdBrowser.change({ value: null })
+        );
+        await page.waitForFunction(() =>
+            document
+                .querySelector('#created-display')
+                ?.textContent.includes('Pas de Valeur')
+        );
+        await page.evaluate(() =>
+            window.createdBrowser.change({
+                value: '2026-11-12T12:30:00Z',
+                dateLanguage: undefined,
+            })
+        );
+        await page.waitForFunction(() =>
+            document
+                .querySelector('#created-display')
+                ?.textContent.includes('jeudi 12 novembre 2026 07:30')
+        );
+        await page.evaluate(() =>
+            window.createdBrowser.change({ dateLanguage: 'en' })
+        );
+        await page.waitForFunction(() =>
+            document
+                .querySelector('#created-display')
+                ?.textContent.includes('Thursday 12 November 2026 07:30')
+        );
+        await page.evaluate(() =>
+            window.createdBrowser.change({
+                language: 'en',
+                dateLanguage: undefined,
+                dateConfig: undefined,
+            })
+        );
+        await page.waitForFunction(() =>
+            document
+                .querySelector('#created-display')
+                ?.textContent.includes('2026-11-12 07:30')
+        );
         await finish('public-binding-alias-controlled-text-and-sibling');
         await click('Offscreen attachment');
         assert.equal(await display().locator('img').count(), 0);

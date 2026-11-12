@@ -42,6 +42,9 @@ const controlled: ControlledCreatedTimeFieldProps = {
     dateConfig: {type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}},
 };
 export const controlledDisplay = <CreatedTimeField {...controlled} />;
+export const separateDateLanguage = <CreatedTimeField {...controlled} dateLanguage="en" />;
+// @ts-expect-error A date locale override does not widen the supported languages.
+export const unsupportedDateLanguage = <CreatedTimeField {...controlled} dateLanguage="unsupported" />;
 // @ts-expect-error Controlled display cannot inject a host renderer.
 export const injectedDisplay = <CreatedTimeField {...controlled} render={() => null} />;
 // @ts-expect-error Computed controlled display has no setter.
@@ -49,6 +52,10 @@ export const writableDisplay = <CreatedTimeField {...controlled} setValue={() =>
 export function MixedBinding(props: CreatedTimeFieldProps) {
     // @ts-expect-error Binding and controlled inputs are distinct contracts.
     return <CreatedTimeField {...controlled} binding={props.binding} />;
+}
+export function BindingDateLanguage(props: CreatedTimeFieldProps) {
+    // @ts-expect-error A date locale override belongs only to controlled display.
+    return <CreatedTimeField {...props} dateLanguage="en" />;
 }
 export function Override(props: CreatedTimeFieldProps) {
     return <CreatedTimeField {...props} render={({ snapshot }) => <span>{String(snapshot.value == null)}</span>} />;

@@ -799,6 +799,7 @@ export function LastModifiedTimeField({
 export type CreatedTimeFieldProps = FieldProps & CreatedTimeFieldOptions;
 export type BindingCreatedTimeFieldProps = CreatedTimeFieldProps;
 type BindingCreatedTimeComponentProps = CreatedTimeFieldProps & {
+    dateLanguage?: never;
     value?: never;
     dateConfig?: never;
     owner?: never;

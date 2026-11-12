@@ -19,7 +19,7 @@ import {
 const typedConsumer = `
 import {createElement} from 'react';
 import {CreatedTimeField,BindingCreatedTimeField,type CreatedTimeFieldProps,type BindingCreatedTimeFieldProps,type ControlledCreatedTimeFieldProps,type DocumentThumbnailOptions,type DocumentThumbnailSource} from '@miniextensions/sdk/react';
-const controlled:ControlledCreatedTimeFieldProps={value:'2026-11-12T12:30:00Z',language:'en',dateConfig:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}},displayAsAttachments:true,displayAsButton:true,attachmentOptions:{isInGrid:true,disableDownloadFiles:true},owner:{token:{},isCurrent:()=>true}};
+const controlled:ControlledCreatedTimeFieldProps={value:'2026-11-12T12:30:00Z',language:'fr',dateLanguage:'en',dateConfig:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}},displayAsAttachments:true,displayAsButton:true,attachmentOptions:{isInGrid:true,disableDownloadFiles:true},owner:{token:{},isCurrent:()=>true}};
 createElement(CreatedTimeField,controlled);
 declare const old:CreatedTimeFieldProps;
 const alias:BindingCreatedTimeFieldProps=old;
@@ -27,6 +27,10 @@ const original:CreatedTimeFieldProps=alias;
 const binding=original.binding;
 createElement(CreatedTimeField,original);
 createElement(BindingCreatedTimeField,alias);
+// @ts-expect-error Date formatting options do not broaden binding props.
+createElement(CreatedTimeField,{...old,dateLanguage:'en'});
+// @ts-expect-error A date override uses the existing supported languages.
+createElement(CreatedTimeField,{...controlled,dateLanguage:'unsupported'});
 // @ts-expect-error The legacy props still require a binding.
 const missing:CreatedTimeFieldProps=controlled;
 // @ts-expect-error The explicit alias cannot receive controlled data.
@@ -90,6 +94,24 @@ async function profile(directory, format, happyDomModulePath) {
     assert.doesNotMatch(html, /<input|<button|<iframe/);
     assert.equal(typeof document, 'undefined');
     assert.equal(typeof api.BindingCreatedTimeField, 'function');
+    const localeProps = {
+        language: 'fr',
+        dateLanguage: 'en',
+        dateConfig: {
+            type: 'dateTime',
+            options: {
+                dateFormat: { format: 'dddd D MMMM YYYY' },
+                timeFormat: { format: 'HH:mm' },
+                timeZone: 'America/New_York',
+            },
+        },
+    };
+    assert.match(
+        server.renderToString(
+            h(api.CreatedTimeField, { ...initial, ...localeProps })
+        ),
+        /Thursday 12 November 2026 07:30/
+    );
     for (const style of [
         'datetime',
         'complete-readonly-text',
@@ -208,6 +230,14 @@ async function profile(directory, format, happyDomModulePath) {
         );
         assert.equal(group.getAttribute('aria-invalid'), 'true');
         assert.equal(container.querySelector('input,select,textarea'), null);
+        await render(localeProps);
+        assert.match(container.textContent, /Thursday 12 November 2026 07:30/);
+        await render({ ...localeProps, value: null });
+        assert.match(container.textContent, /Pas de Valeur/);
+        await render({ ...localeProps, dateLanguage: undefined });
+        assert.match(container.textContent, /jeudi 12 novembre 2026 07:30/);
+        await render(localeProps);
+        assert.match(container.textContent, /Thursday 12 November 2026 07:30/);
         await render({ value: null, language: 'es' });
         assert.match(container.textContent, /Sin Valor/);
         let coercions = 0;
@@ -403,7 +433,7 @@ async function profile(directory, format, happyDomModulePath) {
         return {
             react: React.version,
             format,
-            groups: 12,
+            groups: 13,
             ssr: true,
             hydration: true,
             requests,
@@ -523,7 +553,7 @@ export async function checkCreatedTimeReactMatrix({
                     )
                 );
                 assert.equal(result.react, version.react);
-                assert.equal(result.groups, 12);
+                assert.equal(result.groups, 13);
                 profiles.push(result);
             }
             versions.push({ react: version.react, legacy, profiles });

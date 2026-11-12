@@ -92,6 +92,51 @@ it('uses the existing date formatter locale without changing the global locale',
     }
 });
 
+it('preserves an explicit date language separately from localized empty text in both native contexts', () => {
+    const original = moment.locale();
+    moment.locale('es');
+    try {
+        const dateConfig: ControlledCreatedTimeFieldProps['dateConfig'] = {
+            type: 'dateTime',
+            options: {
+                dateFormat: { format: 'dddd D MMMM YYYY' },
+                timeFormat: { format: 'HH:mm' },
+                timeZone: 'America/New_York',
+            },
+        };
+        const configured = {
+            ...base,
+            language: 'fr' as const,
+            dateLanguage: 'en' as const,
+            dateConfig,
+        };
+        for (const displayContext of ['readonly', 'editable'] as const) {
+            const markup = renderToStaticMarkup(
+                h(ControlledCreatedTimeField, { ...configured, displayContext })
+            );
+            assert.match(markup, /Thursday 12 November 2026 07:30/);
+            assert.match(
+                renderToStaticMarkup(
+                    h(ControlledCreatedTimeField, {
+                        ...configured,
+                        displayContext,
+                        value: null,
+                    })
+                ),
+                /Pas de Valeur/
+            );
+        }
+        const fallback = { ...configured, dateLanguage: undefined };
+        assert.match(
+            renderToStaticMarkup(h(ControlledCreatedTimeField, fallback)),
+            /jeudi 12 novembre 2026 07:30/
+        );
+        assert.equal(moment.locale(), 'es');
+    } finally {
+        moment.locale(original);
+    }
+});
+
 it('keeps null, malformed timestamps and invalid shapes distinct', () => {
     for (const value of [null, undefined]) {
         const markup = renderToStaticMarkup(

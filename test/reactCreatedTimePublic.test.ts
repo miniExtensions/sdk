@@ -36,6 +36,9 @@ function publicTypes(old: CreatedTimeFieldProps) {
     h(CreatedTimeField, unchanged);
     h(BindingCreatedTimeField, explicit);
     h(CreatedTimeField, controlled);
+    h(CreatedTimeField, { ...controlled, dateLanguage: 'en' });
+    // @ts-expect-error The date override uses the same supported language contract.
+    h(CreatedTimeField, { ...controlled, dateLanguage: 'unsupported' });
     // @ts-expect-error A caller must choose binding or controlled data.
     h(CreatedTimeField, { ...controlled, binding });
     // @ts-expect-error A controlled field cannot inject a binding renderer.
@@ -44,6 +47,8 @@ function publicTypes(old: CreatedTimeFieldProps) {
     h(CreatedTimeField, { ...controlled, setValue: () => {} });
     // @ts-expect-error Binding compatibility does not silently accept controlled flags.
     h(CreatedTimeField, { ...old, displayAsButton: true });
+    // @ts-expect-error Date display options do not broaden legacy binding props.
+    h(CreatedTimeField, { ...old, dateLanguage: 'en' });
     // @ts-expect-error The explicit binding alias still requires its binding.
     h(BindingCreatedTimeField, controlled);
     return binding;

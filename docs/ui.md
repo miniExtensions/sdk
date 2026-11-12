@@ -2633,6 +2633,11 @@ display or existing binding consumers. `ControlledCreatedTimeFieldProps` require
 the supplied `value`, `dateConfig` and `language`. It formats through the shared
 date engine and readonly text primitive; it never creates a timestamp or setter.
 The application supplies the accepted date/dateTime result configuration explicitly.
+Optional `dateLanguage` selects the date text's locale separately from the localized
+empty-value `language`; it defaults to `language`. For example, a host preserving
+English named-month dates with French empty text supplies `language="fr"` and
+`dateLanguage="en"`. The override uses the same supported language codes, preserves
+the configured timezone, and does not change the legacy binding's raw timestamp.
 
 ```tsx
 import { CreatedTimeField } from '@miniextensions/sdk/react';

@@ -390,7 +390,8 @@ The mandatory package harness also runs
 Each installed archive consumer retains the20 binding groups below, checks the
 natural controlled API and explicit binding alias through strict ESM/CommonJS
 declarations and JSX, resolves shared CSS exports, and runs cold SSR, hydration
-and DOM cases. Controlled cases cover timezone output, null/invalid shapes,
+and DOM cases. Controlled cases cover timezone output, named-month date language
+independent of localized empty text, locale transitions, null/invalid shapes,
 associated feedback, readonly/editable dispatch precedence, inert resources and
 retained owner, token and A→B→A negatives with zero implicit requests or form
 submissions. Synthetic DOM lifecycle tests do not establish native browser focus

@@ -182,6 +182,7 @@ for (const format of ['esm', 'cjs']) {
         'form-tracking',
         'form-completion',
         'form-header',
+        'form-validation-summary',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

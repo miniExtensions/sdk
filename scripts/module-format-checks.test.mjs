@@ -650,6 +650,7 @@ for (const name of [
     'complete-address',
     'complete-collaborators',
     'form-header',
+    'form-validation-summary',
     'date',
     'datetime',
     'duration',

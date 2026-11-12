@@ -3165,3 +3165,52 @@ function to its synchronous lifecycle callback. Its existing revision and
 pretransport authority guards are unchanged. The host retains coalescing, queued
 request rereads, original request settlement and authority. Never pass a mutable
 current-config getter in place of the captured policy.
+
+## Form validation summary
+
+```tsx
+import { createElement } from 'react';
+import {
+    FormValidationSummary,
+    type FormValidationDiagnostic,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/form-validation-summary.css';
+
+const diagnostics: readonly FormValidationDiagnostic[] = [
+    {
+        fieldId: 'fld_name',
+        fieldTitle: 'Full name',
+        errorMessage: 'Field is required',
+    },
+];
+
+export const summary = createElement(FormValidationSummary, {
+    heading: 'Please correct the following fields',
+    diagnostics,
+});
+```
+
+Supply already-authorized field diagnostics in display order and a localized
+heading. The SDK renders the complete error Alert and list. It renders each
+semantic field title as a literal `#fieldId` anchor followed by a space and the
+parenthesized message. Keep semantic titles even when inline field labels are
+hidden. Field IDs must be unique; items retain their React identity by field ID.
+Text is rendered literally, without HTML interpretation.
+
+Replace the diagnostics prop when existing host validation changes. An empty
+array renders nothing. The component does not calculate validation, retain error
+state, localize messages, or change page/section navigation. Keep generic
+administrative errors in the native host; do not pass them as field diagnostics.
+
+For native adoption, retain the existing `loadingState.type === 'error'` and
+`error.type` discrimination. Replace only the field-validation summary with
+`FormValidationSummary`, mapping `error.errors` to `diagnostics` and the existing
+localized `please_correct_the_following_fields()` string to `heading`. Keep the
+existing generic `AdminOnlyErrorMessage` branch. Clearing remains governed by the
+host's existing validation/loading-state transition. No expansion or focus
+behavior is added.
+
+The CSS is independent of Tailwind and carries the native red error palette,
+scrolling/flex layout, zero corner radius, list spacing and underlined links.
+Native consumer validation and browser/manual parity must be verified at the
+final integration pin; SDK component tests alone do not verify FormLoaded.

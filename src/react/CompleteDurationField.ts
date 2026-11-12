@@ -2,7 +2,9 @@ import type * as React from 'react';
 import {
     createElement as h,
     useId,
+    useImperativeHandle,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
     type Ref,
@@ -50,6 +52,17 @@ export function CompleteDurationField(props: CompleteDurationFieldProps) {
     const generatedId = useId();
     const id = props.inputId ?? generatedId;
     const adapter = useDurationInputAdapter(props);
+    const input = useRef<HTMLInputElement | null>(null);
+    useImperativeHandle(props.inputRef, () => input.current!, []);
+    // Focus belongs to this DOM input, independently of canonical ownership.
+    // A new owner resets text and retires callbacks without inventing a blur.
+    // SSR has no node and never reads a browser global.
+    const node = input.current;
+    const focused =
+        !props.readOnly &&
+        isDurationFormat(props.format) &&
+        node != null &&
+        node.ownerDocument.activeElement === node;
     const identity = useMemo(
         () => ({}),
         [props.fieldId, props.sessionId, props.owner.token]
@@ -59,21 +72,19 @@ export function CompleteDurationField(props: CompleteDurationFieldProps) {
         format: props.format,
         value: props.value,
         text: canonicalText(props),
-        focused: false,
     }));
     // Derive before commit, rather than painting an old grammar/owner for an effect.
     // Equivalent metadata and canonical echoes never replace a focused draft/caret.
     if (
         draft.identity !== identity ||
         draft.format !== props.format ||
-        (!draft.focused && !Object.is(draft.value, props.value))
+        (!focused && !Object.is(draft.value, props.value))
     ) {
         setDraft({
             identity,
             format: props.format,
             value: props.value,
             text: canonicalText(props),
-            focused: draft.identity === identity && draft.focused,
         });
     }
     const invalid = props.invalid === true || Boolean(props.error);
@@ -103,7 +114,7 @@ export function CompleteDurationField(props: CompleteDurationFieldProps) {
             'div',
             { className: 'mx-sdk-complete-duration-control' },
             h(TextInput, {
-                ref: props.inputRef,
+                ref: input,
                 type: 'text',
                 className: classes(
                     'mx-sdk-complete-duration-input',
@@ -121,18 +132,10 @@ export function CompleteDurationField(props: CompleteDurationFieldProps) {
                 'aria-describedby': describedBy,
                 'aria-invalid': invalid,
                 onChange: (event) => change(event.target.value),
-                onFocus: () => {
-                    if (adapter.canEdit())
-                        setDraft((previous) => ({
-                            ...previous,
-                            focused: true,
-                        }));
-                },
                 onBlur: () => {
                     if (!adapter.isCurrent()) return;
                     setDraft((previous) => ({
                         ...previous,
-                        focused: false,
                         value: props.value,
                         // Native blur leaves the focused draft and re-reads the
                         // controlled canonical value, including delayed/refused echoes.

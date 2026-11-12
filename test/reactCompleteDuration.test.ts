@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
-import { Window } from 'happy-dom';
+import { Window, type HTMLInputElement as HappyInput } from 'happy-dom';
 import {
     act,
     createElement as h,
@@ -538,4 +538,186 @@ it('StrictMode remount and a genuine unmount do not write, and unmount retires r
     assert.equal(live.canEdit(), false);
     assert.equal(live.setInput('7'), false);
     assert.deepEqual(writes, []);
+});
+
+function retainedInputCallbacks(input: HappyInput) {
+    const key = Object.keys(input).find((name) =>
+        name.startsWith('__reactProps$')
+    );
+    const props: unknown = key ? Reflect.get(input, key) : null;
+    assert.ok(props != null && typeof props === 'object');
+    assert.ok('onChange' in props && typeof props.onChange === 'function');
+    assert.ok('onBlur' in props && typeof props.onBlur === 'function');
+    const change = props.onChange;
+    const blur = props.onBlur;
+    return {
+        change: (text: string) =>
+            change({ target: { value: text }, currentTarget: input }),
+        blur: () => blur({ target: input, currentTarget: input }),
+    };
+}
+
+for (const scope of ['row', 'parent'] as const)
+    it(`retains actual DOM focus through observed ${scope} owner replacement/ABA and one controlled successor edit`, async (t) => {
+        const firstToken = { scope, generation: 1 };
+        const secondToken = { scope, generation: 2 };
+        let currentToken = firstToken;
+        const firstOwner = {
+            token: firstToken,
+            isCurrent: () => currentToken === firstToken,
+        };
+        const secondOwner = {
+            token: secondToken,
+            isCurrent: () => currentToken === secondToken,
+        };
+        const f = await fixture(t, { owner: firstOwner });
+        const commit = f.props.onChange;
+        const calls: { writer: string; value: number | null }[] = [];
+        const writer =
+            (name: string): DurationProps['onChange'] =>
+            (value) => {
+                calls.push({ writer: name, value });
+                return commit(value);
+            };
+        await f.update({ onChange: writer('first') });
+        const node = f.input();
+        await f.focus();
+        await f.edit('17');
+        const stale = retainedInputCallbacks(node);
+        currentToken = secondToken;
+        await f.update({
+            owner: secondOwner,
+            value: 80,
+            onChange: writer('second'),
+        });
+        assert.equal(f.input(), node);
+        assert.equal(f.window.document.activeElement, node);
+        assert.equal(
+            node.value,
+            '1:20.000',
+            'new owner resets the previous raw draft'
+        );
+        await act(async () => stale.change('9'));
+        assert.deepEqual(f.writes, [17]);
+
+        currentToken = firstToken;
+        await f.update({
+            owner: firstOwner,
+            value: 60,
+            onChange: writer('successor'),
+        });
+        assert.equal(f.input(), node);
+        assert.equal(f.window.document.activeElement, node);
+        assert.equal(node.value, '1:00.000');
+        await act(async () => stale.change('10'));
+        assert.deepEqual(
+            f.writes,
+            [17],
+            'old callback remains retired after token ABA'
+        );
+        let focusEvents = 0;
+        node.addEventListener('focus', () => {
+            focusEvents++;
+        });
+        await f.focus();
+        assert.equal(
+            focusEvents,
+            0,
+            'already-focused input has no new focus transition'
+        );
+        await f.edit('8');
+        assert.equal(
+            node.value,
+            '8',
+            'current canonical echo must retain the raw draft'
+        );
+        node.setSelectionRange(0, 1);
+        await f.update({
+            value: 8,
+            placeholder: 'Equivalent successor metadata',
+        });
+        assert.equal(node.value, '8');
+        assert.equal(node.selectionStart, 0);
+        assert.equal(node.selectionEnd, 1);
+        await act(async () => stale.blur());
+        assert.equal(node.value, '8', 'old blur cannot reformat the successor');
+        assert.deepEqual(calls, [
+            { writer: 'first', value: 17 },
+            { writer: 'successor', value: 8 },
+        ]);
+        await f.blur();
+        assert.equal(node.value, '0:08.000');
+        assert.deepEqual(f.writes, [17, 8]);
+        const retainedSuccessor = retainedInputCallbacks(node);
+        await f.unmount();
+        await act(async () => retainedSuccessor.change('11'));
+        assert.deepEqual(
+            f.writes,
+            [17, 8],
+            'unmount never writes or admits retained intent'
+        );
+    });
+
+it('keeps a genuine blur/refocus control through current owner replacement', async (t) => {
+    const f = await fixture(t);
+    const node = f.input();
+    await f.focus();
+    await f.update({ value: 80, owner: { token: {}, isCurrent: () => true } });
+    assert.equal(f.window.document.activeElement, node);
+    await f.blur();
+    assert.notEqual(f.window.document.activeElement, node);
+    await f.focus();
+    await f.edit('8');
+    assert.equal(node.value, '8');
+    assert.deepEqual(f.writes, [8]);
+    await f.blur();
+    assert.equal(node.value, '0:08.000');
+    assert.deepEqual(f.writes, [8]);
+});
+
+it('refreshes disabled current-owner values without treating retained focus as write authority', async (t) => {
+    const f = await fixture(t);
+    await f.focus();
+    await f.edit('7');
+    await f.update({
+        owner: { token: {}, isCurrent: () => true },
+        value: 120,
+        readOnly: true,
+    });
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.input().value, '2:00.000');
+    await f.edit('8');
+    assert.deepEqual(f.writes, [7]);
+    await f.update({ value: 130 });
+    assert.equal(f.input().value, '2:10.000');
+    await f.update({ readOnly: false });
+    await f.focus();
+    await f.edit('9');
+    assert.equal(f.input().value, '9');
+    assert.deepEqual(f.writes, [7, 9]);
+});
+
+it('keeps object and callback input refs current across ref replacement and unmount', async (t) => {
+    const first: (HTMLInputElement | null)[] = [];
+    const second: (HTMLInputElement | null)[] = [];
+    const f = await fixture(t, {
+        inputRef: (node) => {
+            first.push(node);
+        },
+    });
+    const node = f.input();
+    assert.equal(first.at(-1), node);
+    await f.update({
+        inputRef: (next) => {
+            second.push(next);
+        },
+    });
+    assert.equal(first.at(-1), null);
+    assert.equal(second.at(-1), node);
+    const object = { current: null as HTMLInputElement | null };
+    await f.update({ inputRef: object });
+    assert.equal(second.at(-1), null);
+    assert.equal(object.current, node);
+    await f.unmount();
+    assert.equal(object.current, null);
 });

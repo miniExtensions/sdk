@@ -43,7 +43,7 @@ export function withCommonJsSource(root, compile) {
             JSON.stringify({
                 extends: '../../tsconfig.cjs.json',
                 compilerOptions: { rootDir: '.', outDir: '../cjs' },
-                include: ['**/*.ts'],
+                include: ['**/*.ts', '../../types/**/*.d.ts'],
             }) + '\n'
         );
         return compile(project);

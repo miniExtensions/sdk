@@ -385,6 +385,32 @@ Task IDs: 3815.
 
 ## Created Time presentation checks
 
+The mandatory package harness also runs
+`scripts/created-time-controlled-consumer-checks.mjs` with React18.3.1 and19.2.0.
+Each installed archive consumer retains the20 binding groups below, checks the
+natural controlled API and explicit binding alias through strict ESM/CommonJS
+declarations and JSX, resolves shared CSS exports, and runs cold SSR, hydration
+and DOM cases. Controlled cases cover timezone output, null/invalid shapes,
+associated feedback, readonly/editable dispatch precedence, inert resources and
+retained owner, token and A→B→A negatives with zero implicit requests or form
+submissions. Synthetic DOM lifecycle tests do not establish native browser focus
+or native canvas/worker behavior. Registration alone is not execution proof.
+
+The installed matrix also exercises literal preloaded TXT, quoted CSV, sanitized
+HTML, inert URI admission and revision retirement through each public module
+format. Strict declarations/JSX reject missing byte MIME/revision, unpaired PDF
+assets and native renderer injection. The normal browser harness additionally
+runs `scripts/document-thumbnail-browser-checks.mjs` on both React versions and
+both installed module formats with owned localhost fixtures: real PDF module
+workers/canvas/page/zoom/all-page/download controls, HTTP known-PDF modals, TIFF
+pixels, resource visibility and credential-free requests, sanitized HTML and
+owner/content disposal. External provider/tracker traffic is blocked before
+contact; contexts, servers, workers and object URLs are task owned and closed.
+Source tests include actual PDF.js worker threads and canvas, separately from
+Chromium evidence. Pinned worker/assets/private-browser bundle content guards
+run in the mandatory package umbrella. No hosted/native application acceptance
+is implied by these synthetic consumers.
+
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
 They cover raw timestamp strings, offsets and fractional seconds, naive and
 invalid strings, null/missing/nonstring values, and single-line CR/LF sanitization

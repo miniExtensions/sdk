@@ -2,6 +2,7 @@ import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mj
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
+import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
@@ -219,6 +220,7 @@ import {
     checkCreatedTimeConsumer,
     createdTimeReactTypedConsumer,
 } from './created-time-consumer-checks.mjs';
+import { checkCreatedTimeReactMatrix } from './created-time-controlled-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
     checkReactSingleSelectConsumer,
@@ -564,6 +566,7 @@ try {
             process.cwd()
         )
     )[0];
+    const documentFiles = new Set(documentAssetPaths(process.cwd()));
     for (const { path } of packed.files) {
         assert(
             path === 'package.json' ||
@@ -588,6 +591,7 @@ try {
                 headerStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
+                documentFiles.has(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
                 path.startsWith('dist/vendor/rich-markdown-editor/') ||
@@ -612,6 +616,7 @@ try {
         );
     }
     for (const path of [
+        ...documentFiles,
         'docs/browser-lifecycle.md',
         'docs/testing.md',
         'docs/complete-record-comments.md',
@@ -3355,6 +3360,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(themeMatrix.versions.length, 2);
     assert.equal(themeMatrix.cleanup, 'completed');
+    const createdTimeMatrix = await checkCreatedTimeReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(createdTimeMatrix.versions.length, 2);
+    assert.equal(createdTimeMatrix.cleanup, 'completed');
     const dateMatrix = await checkCompleteDateReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

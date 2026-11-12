@@ -1,4 +1,6 @@
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
+import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
+import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
@@ -1530,6 +1532,7 @@ try {
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
+            'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -2141,6 +2144,20 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeDate,
+            output,
+        });
+        report.createdTime = {};
+        await checkCreatedTimeControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.createdTime,
+            output,
+        });
+        report.createdTimeDocuments = {};
+        await checkDocumentThumbnailBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.createdTimeDocuments,
             output,
         });
         report.completeDuration = {};

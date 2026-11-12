@@ -234,7 +234,13 @@ export {
 } from './SingleSelectField.js';
 import { LookupControl, type LookupFieldOptions } from './LookupField.js';
 export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
-import { RollupControl, type RollupFieldOptions } from './RollupField.js';
+import {
+    RollupControl,
+    ControlledRollupField,
+    type ControlledRollupFieldProps,
+    type RollupFieldOptions,
+} from './RollupField.js';
+export type { ControlledRollupFieldProps } from './RollupField.js';
 export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
 import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
 export {
@@ -1109,9 +1115,29 @@ export function LookupField({
         className,
     });
 }
+/** Compatibility binding props retain the inert computed-answer contract. */
 export type RollupFieldProps = FieldProps & RollupFieldOptions;
+type BoundRollupComponentProps = RollupFieldProps & {
+    mode?: never;
+    isValid?: never;
+    value?: never;
+    language?: never;
+    textSize?: never;
+    layout?: never;
+};
+type RollupComponentProps =
+    | BoundRollupComponentProps
+    | ControlledRollupFieldProps;
+export function RollupField(props: BoundRollupComponentProps): ReactNode;
+export function RollupField(props: ControlledRollupFieldProps): ReactNode;
+export function RollupField(props: RollupComponentProps): ReactNode;
+export function RollupField(props: RollupComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledRollupField, props)
+        : createElement(BoundRollupField, props);
+}
 /** Present the accepted computed answer without borrowing any binding actions. */
-export function RollupField({
+function BoundRollupField({
     binding,
     render,
     className,

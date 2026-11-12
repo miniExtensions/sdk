@@ -10,6 +10,53 @@ import {
     type FieldRendererProps,
 } from '../ui/rendererRegistry.js';
 import { textConfiguration } from './TextField.js';
+import {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+} from './CompleteReadOnlyTextField.js';
+
+/** Native owners supply current metadata validity and their existing readable
+ * conversion. This presentation never hydrates, computes or writes a result. */
+export type ControlledRollupFieldProps = Omit<
+    CompleteReadOnlyTextFieldProps,
+    'value'
+> & {
+    mode: 'controlled';
+    binding?: never;
+    render?: never;
+} & (
+        | { isValid: true; value: CompleteReadOnlyTextFieldProps['value'] }
+        | { isValid: false; value?: never }
+    );
+
+export function ControlledRollupField(
+    props: ControlledRollupFieldProps
+): ReactNode {
+    if (props.isValid) return createElement(CompleteReadOnlyTextField, props);
+    return createElement(
+        'div',
+        {
+            role: 'alert',
+            className: ['mx-sdk-rollup-error', props.className]
+                .filter(Boolean)
+                .join(' '),
+        },
+        createElement(
+            'svg',
+            { viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': true },
+            createElement('path', {
+                fillRule: 'evenodd',
+                clipRule: 'evenodd',
+                d: 'M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5ZM9.53 8.47a.75.75 0 0 0-1.06 1.06L10.94 12l-2.47 2.47a.75.75 0 0 0 1.06 1.06L12 13.06l2.47 2.47a.75.75 0 0 0 1.06-1.06L13.06 12l2.47-2.47a.75.75 0 0 0-1.06-1.06L12 10.94 9.53 8.47Z',
+            })
+        ),
+        createElement(
+            'p',
+            { 'aria-label': 'error-message' },
+            'This field has an invalid value. Check the field in Airtable.'
+        )
+    );
+}
 
 export type RollupFieldOptions = { className?: string };
 type RollupControlProps = Pick<

@@ -289,9 +289,12 @@ No CSS import is required. Lookup remains a separate presentation.
 
 [Rollup presentation](docs/ui.md#react-rollup-presentation) exports
 `RollupField`, `RollupFieldProps`, `RollupFieldOptions` and the typed
-`renderRollupField` slot. It displays supplied aggregate results as inert text
-using existing native formatting, without evaluating the aggregation or reading
-linked records. No CSS import is required. Lookup keeps its separate contract.
+`renderRollupField` slot. An explicit controlled branch accepts current validity
+and already-converted text for complete readonly presentation, using
+`complete-readonly-text.css`. Existing bindings display supplied aggregate results
+as inert text using existing native formatting, without evaluating the aggregation
+or reading linked records. Binding rendering requires no CSS import. Lookup keeps
+its separate contract.
 
 [Lookup presentation](docs/ui.md#react-lookup-presentation) exports `LookupField`,
 `LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing

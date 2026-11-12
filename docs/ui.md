@@ -3297,6 +3297,32 @@ wrapper, label and `output`. Existing core and `/ui` exports remain React-free.
 
 ## React Rollup presentation
 
+`RollupField` also accepts an explicit `mode="controlled"` branch with
+`ControlledRollupFieldProps`. Native owners pass current `isValid` metadata and,
+only when valid, the string returned by their existing readable conversion:
+
+```tsx
+import { RollupField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+
+<RollupField
+    mode="controlled"
+    isValid={true}
+    value="CHF 0.000"
+    language="en"
+/>;
+<RollupField mode="controlled" isValid={false} language="en" />;
+```
+
+The SDK owns the complete invalid-result alert and valid readonly text UI:
+literal markup, linkification with link-click propagation containment, localized
+empty values, and optional `textSize`, `layout` and `className`. The native owner
+retains conversion, linked-table context and current metadata validity. Invalid
+metadata carries no stale value. No binding, client, write callback, aggregation
+or injected React renderer belongs in this branch. The exported
+`RollupFieldProps` compatibility alias remains binding-only. Mixed branch props
+are rejected. The binding and slot contracts below retain their inert semantics.
+
 The optional `/react` entry exports `RollupField`, `RollupFieldProps`,
 `RollupFieldOptions` and `renderRollupField`. They display the supplied aggregate
 answer as inert, selectable text. No aggregation, expression evaluation, linked

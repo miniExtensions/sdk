@@ -72,11 +72,11 @@ export function completeCollaboratorBrowserSource(format) {
             ? `import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField} from '@miniextensions/sdk/react';\n`
+import {CompleteSingleCollaboratorField,MultipleCollaboratorsField} from '@miniextensions/sdk/react';\n`
             : `const React = require('react');
 const {createRoot} = require('react-dom/client');
 const {flushSync} = require('react-dom');
-const {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField} = require('@miniextensions/sdk/react');\n`;
+const {CompleteSingleCollaboratorField,MultipleCollaboratorsField} = require('@miniextensions/sdk/react');\n`;
     return (
         imports +
         `const format = ${JSON.stringify(format)};\n` +
@@ -145,14 +145,14 @@ function App({initial}){
     writer:current.writer,adjacent:document.getElementById('adjacent')?.value});
    if(!current.refuseChanges)update(previous=>({...previous,value:next,revision:previous.revision+1}));
   }};
- const component=current.mode==='single'?CompleteSingleCollaboratorField:CompleteMultipleCollaboratorsField;
+ const component=current.mode==='single'?CompleteSingleCollaboratorField:MultipleCollaboratorsField;
  return React.createElement('form',{id:'collaborator-form',onSubmit(event){event.preventDefault();state.submits++;}},
   React.createElement('div',{className:'fixture-primary'},
    React.createElement('label',{htmlFor:'native-collaborator'},'Synthetic collaborator'),
    React.createElement('p',{id:current.helpId},'Supplied collaborator help'),
    React.createElement('p',{id:current.errorId},'Supplied collaborator error'),
    React.createElement('section',{id:'field',onClick:()=>state.parentClicks++,onKeyDown:()=>state.parentKeys++},
-    current.mounted?React.createElement(component,{...common,value:current.value}):null)),
+    current.mounted?React.createElement(component,{...common,mode:current.mode==='multiple'?'controlled':undefined,value:current.value}):null)),
   React.createElement('div',{className:'fixture-neighbors'},
    React.createElement('label',{htmlFor:'adjacent'},'Adjacent draft'),
    React.createElement('input',{id:'adjacent',defaultValue:'Keep adjacent dirty value'}),
@@ -992,6 +992,13 @@ export async function checkCompleteCollaboratorBrowser({
         value = await snapshot();
         assert.deepEqual(value.valueTags, []);
         assert.deepEqual(value.writes.at(-1).valueTags, []);
+        assert.equal(
+            await input().evaluate(
+                (element) => element === document.activeElement
+            ),
+            true,
+            'accepted last multiple removal returns focus to the current input'
+        );
         await input().fill('');
         await page
             .getByRole('button', { name: 'Open supplied choices', exact: true })

@@ -183,6 +183,9 @@ export {
 } from './CompleteCollaboratorField.js';
 export {
     MultipleCollaboratorsField,
+    BindingMultipleCollaboratorsField,
+    type BindingMultipleCollaboratorsFieldProps,
+    type ControlledMultipleCollaboratorsFieldProps,
     renderMultipleCollaboratorsField,
     type MultipleCollaboratorsFieldProps,
     type MultipleCollaboratorsFieldOptions,

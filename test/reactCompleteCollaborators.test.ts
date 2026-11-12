@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
     CompleteSingleCollaboratorField,
     CompleteMultipleCollaboratorsField,
+    MultipleCollaboratorsField,
     type CompleteCollaborator,
     type CompleteSingleCollaboratorFieldProps,
 } from '../src/react/index.js';
@@ -239,7 +240,8 @@ async function fixture(
             publish();
         };
         const control = state.multiple
-            ? h(CompleteMultipleCollaboratorsField<Person>, {
+            ? h(MultipleCollaboratorsField<Person>, {
+                  mode: 'controlled',
                   ...common,
                   value: state.many,
                   onValueChange: write,
@@ -847,6 +849,29 @@ it('ID removal deletes every matching occurrence without cloning or deduplicatin
     await f.pointer(f.removal(retired));
     assert.equal(f.count(), 2);
     assert.deepEqual(f.invocations[1]?.value, []);
+});
+
+it('multiple accepted badge removal returns focus to its input while refusal cannot focus a later external clear', async (t) => {
+    const f = await fixture(t, { multiple: true, value: [first, second] });
+    await f.pointer(f.removal(first));
+    assert.equal(f.state.many[0], second);
+    assert.equal(f.window.document.activeElement === f.input(), true);
+    f.state.accept = false;
+    await f.pointer(f.removal(second));
+    assert.equal(f.state.many[0], second);
+    assert.equal(f.count(), 2);
+    await f.focusAdjacent();
+    f.state.many = [];
+    await f.render();
+    assert.equal(f.window.document.activeElement === f.adjacent, true);
+    assert.equal(f.count(), 2);
+    f.state.accept = true;
+    f.state.many = [second];
+    await f.render();
+    await f.keyboardRemove(second);
+    assert.deepEqual(f.state.many, []);
+    assert.equal(f.window.document.activeElement === f.input(), true);
+    assert.equal(f.count(), 3);
 });
 
 it('stored retired identities remain removable but are never discovered or merged into offered choices', async (t) => {

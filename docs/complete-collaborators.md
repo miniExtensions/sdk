@@ -1,6 +1,6 @@
 # Complete Collaborator fields
 
-`CompleteSingleCollaboratorField` and `CompleteMultipleCollaboratorsField` own
+`CompleteSingleCollaboratorField` and controlled `MultipleCollaboratorsField` own
 the searchable picker, option rows, selected badges, images, keyboard and
 pointer interaction, focus handoff, readonly presentation and styles. They use
 the same public UI in an independent site and in a native application adapter.
@@ -43,6 +43,29 @@ function Assignee(props: {
     );
 }
 ```
+
+Use the natural public name for a complete controlled multiple field:
+
+```tsx
+import {
+    MultipleCollaboratorsField,
+    type ControlledMultipleCollaboratorsFieldProps,
+} from '@miniextensions/sdk/react';
+
+function Reviewers(
+    props: Omit<ControlledMultipleCollaboratorsFieldProps, 'mode'>
+) {
+    return <MultipleCollaboratorsField {...props} mode="controlled" />;
+}
+```
+
+The explicit discriminator keeps existing `<MultipleCollaboratorsField binding={binding}
+render={...} />` calls and `MultipleCollaboratorsFieldProps` compatible. The same
+binding contract is available as `BindingMultipleCollaboratorsField` and
+`BindingMultipleCollaboratorsFieldProps`; `renderMultipleCollaboratorsField`
+remains display-only. `ControlledMultipleCollaboratorsFieldProps<Person>` names
+the controlled contract. `CompleteMultipleCollaboratorsField` remains a
+compatible alias for the complete picker without a discriminator.
 
 Multiple uses `value: readonly Person[]` and proposes `Person[]`; Single
 proposes the original offered object or `null`. Entries are never converted

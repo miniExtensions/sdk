@@ -3,7 +3,10 @@
 On macOS, run package/module-format checks with a canonical `TMPDIR` (for
 example `/private/tmp`). Native Node resolution returns real paths; a fixture
 created under the `/var` alias otherwise fails the unchanged exact-path
-comparison against `/private/var`. Keep those comparisons intact. Use the
+comparison against `/private/var`. Retained artifact directories must also use
+canonical parents: set `SDK_CHECKED_ARTIFACT_DIR` and
+`SDK_BROWSER_PROOF_ARTIFACT_DIR` beneath `/private/tmp`, not the `/tmp` symlink.
+Keep those comparisons intact. Use the
 project's pinned pnpm through Corepack when the global pnpm version differs.
 
 ## Git source preparation

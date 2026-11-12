@@ -1591,8 +1591,9 @@ every platform input method or screen reader. The example contacts no backend.
 ## React Email presentation
 
 The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
-`EmailFieldOptions` and `renderEmailField`. `EmailField` delegates to `TextField`;
-its props and options are aliases of `TextFieldProps` and `TextFieldOptions`.
+`EmailFieldOptions`, `ControlledEmailFieldProps`, `EmailEditOwner` and
+`renderEmailField`. Binding-mode `EmailField` delegates to `TextField`;
+its legacy props and options remain aliases of `TextFieldProps` and `TextFieldOptions`.
 The existing `{ binding, render }` override replaces all stock markup.
 
 ```tsx
@@ -1651,6 +1652,63 @@ After building, `node examples/react-email/dev.mjs` serves the synthetic public
 API example at `http://127.0.0.1:4183`. `node scripts/check-email-browser.mjs`
 checks native entry, clearing, remounts and surrounding-form Enter behavior.
 Simulated composition checks do not certify real OS input methods.
+
+For complete native email presentation, use the same natural public component
+with the explicit controlled contract:
+
+```tsx
+import { EmailField, type EmailEditOwner } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/text.css';
+
+export function NativeEmail({
+    value,
+    onChange,
+    owner,
+}: {
+    value: string | null;
+    onChange(value: string): void;
+    owner: EmailEditOwner;
+}) {
+    return (
+        <EmailField
+            mode="controlled"
+            value={value}
+            onChange={onChange}
+            language="en"
+            enableInlineEdit
+            owner={owner}
+            id="contact-email"
+            form="contact-form"
+            placeholder="Work email"
+            initialMobile={false}
+        />
+    );
+}
+```
+
+This branch supplies the actual `type="email"` input, envelope, Clear and
+opt-in `enableQRCodeScannerForFormField` scanner through the existing shared
+engines. The same optional `text.css` includes its scoped styling and scanner,
+Clear and readonly dependencies. No host renderer or Tailwind compiler is needed.
+`initialMobile` is captured per mount; use the same value during SSR and hydration.
+`inputRef`, `id`, `form`, `describedBy`, `labelledBy` and `invalid` carry the
+host's existing associations. Validation and Save remain with the page/server.
+
+Controlled changes and Clear write strings, including `''`; `null` only displays
+as an empty input. The browser's email-input sanitization remains native.
+Immediate mode retains native form Enter behavior, so the enclosing page owns
+its submit policy. Deferred mode (`enableInlineEdit`) requires an owner with a
+captured generation `token` and `isCurrent()` authority check. Non-IME Enter
+blurs without submitting; dirty blur can write before a later Clear click.
+Genuine dirty unmount settles once through the original mounted writer if that
+owner remains current. A replacement, retired owner or missing deferred owner
+cannot adopt that pending value. Renew the token when field/record/edit policy
+is replaced, including A-to-B-to-A transitions; a raw value is not authority.
+
+`readOnly` and `disabled` render a disabled editor. `displayOnly` instead reuses
+the existing readonly text/link presentation with the supplied language and
+never invokes the writer. A caller cannot mix controlled props with `binding`
+or `render`. The binding/slot examples and semantics above remain unchanged.
 
 ## React URL presentation
 
@@ -1727,9 +1785,11 @@ Simulated composition does not certify real OS input methods.
 ## React Phone Number presentation
 
 The optional `/react` entry exports `PhoneNumberField`, `PhoneNumberFieldProps`,
-`PhoneNumberFieldOptions` and `renderPhoneNumberField`. `PhoneNumberField`
-delegates to `TextField`; its props and options are aliases of `TextFieldProps`
-and `TextFieldOptions`. The existing `{ binding, render }` override replaces all
+`PhoneNumberFieldOptions` and `renderPhoneNumberField`. With `binding`,
+`PhoneNumberField` still delegates to `TextField`; its binding props and options
+retain `TextFieldProps` and `TextFieldOptions`. Controlled `value`/`onValueChange`
+props instead select the [complete editor](#complete-editable-phone-field),
+without accepting a binding or renderer override. The existing `{ binding, render }` override replaces all
 stock markup.
 
 ```tsx
@@ -1786,7 +1846,7 @@ it performs no SMS, OTP, verification, lookup or network request.
 
 Applications own their enclosing HTML form's submit policy: stopped key-event
 bubbling does not prevent native Enter submission. Clear is `type="button"`.
-There is no separate Phone Number stylesheet. Import the existing optional
+The binding presentation has no separate stylesheet. Import the existing optional
 `@miniextensions/sdk/react/text.css`, override its `mx-sdk-text*` classes or supply
 your own styles. JavaScript does not import CSS; `className` decorates the wrapper.
 Core and `/ui` remain React-free.
@@ -2457,8 +2517,10 @@ Enter behavior. Simulated composition does not certify real OS input methods.
 The optional `/react` entry exports `DateField`, `DateFieldProps`,
 `DateFieldOptions` and `renderDateField` for calendar dates. The binding component
 keeps its `{ binding, render }` API; supplying `render` still replaces all markup.
-The shared binding component selects the calendar or timestamp control from the
-accepted model kind; `DateTimeField` remains its compatibility alias.
+The binding contract selects the calendar or timestamp control from the accepted
+model kind. `BindingDateField` explicitly names that legacy contract; existing
+`DateField` and `DateTimeField` binding callers remain compatible. The complete natural `DateField` at `/react/date` is a separate controlled
+contract. Do not combine binding and controlled props.
 
 ```tsx
 import { DateField } from '@miniextensions/sdk/react';
@@ -2697,9 +2759,10 @@ local browser verification.
 The optional `/react` entry exports `DateTimeField`, `DateTimeFieldProps`,
 `DateTimeFieldOptions` and `renderDateTimeField` for explicit-offset timestamps.
 The binding component keeps its `{ binding, render }` API; supplying `render`
-still replaces all markup. `DateTimeField` remains an alias of `DateField`; the
-shared binding component selects the calendar or timestamp control from the
-accepted model kind.
+still replaces all markup. `BindingDateTimeField` explicitly names this legacy
+contract; the existing `DateTimeField` binding name remains compatible. The
+complete controlled `DateTimeField` uses the opt-in `/react/date` entry below.
+The binding component selects its control from the accepted model kind.
 
 ```tsx
 import { DateTimeField } from '@miniextensions/sdk/react';
@@ -3200,6 +3263,57 @@ package subpath, editor, Clear, Save or lookup action is added. Core and `/ui`
 remain React-free.
 
 ## React Barcode presentation
+
+### Canonical editor and compatible binding presentation
+
+`BarcodeField` from `@miniextensions/sdk/react` accepts an explicit controlled
+contract for the complete native-compatible editor. Import its scoped CSS:
+
+```tsx
+import { useState } from 'react';
+import { BarcodeField } from '@miniextensions/sdk/react';
+import type { AirtableBarcodeValue } from '@miniextensions/sdk';
+import '@miniextensions/sdk/react/barcode.css';
+
+export function BarcodeAnswer() {
+    const [value, setValue] = useState<AirtableBarcodeValue | null>(null);
+    return (
+        <BarcodeField
+            mode="controlled"
+            value={value}
+            onChange={setValue}
+            language="en"
+            title="Barcode"
+            id="barcode"
+            form="answers"
+            clearLabel="Clear barcode"
+            initialMobile={false}
+        />
+    );
+}
+```
+
+Controlled edits, Clear and accepted scans replace only `text`; current `type`
+and enumerable metadata are retained. Null/type-only values display blank.
+`displayOnly` selects the native read-only text/empty presentation. `readOnly`
+disables editing and scanning. The scanner is offered by default but does not
+allocate a camera until opened; explicit `autoStartCamera` retains the existing
+scanner policy. The component creates no client, provider operation or Save.
+
+`enableInlineEdit` reuses the native deferred-input lifecycle: typing remains a
+draft until blur or non-composing Enter. A dirty genuine unmount settles once
+against its current owner. Hosts can supply `owner: {token, isCurrent}`; replace
+`token` on actual owner/configuration replacement and deny stale authority in
+`isCurrent`. Committed owner/configuration A/B/A transitions retire old input
+and scanner work; ordinary value echoes and callback refreshes keep focused
+drafts. DOM IDs and form association never grant write authority.
+
+Existing `<BarcodeField binding={...}>` calls and `renderBarcodeField` remain
+display-only, including visibility, masking and retirement behavior. The explicit
+`BindingBarcodeField`/`BindingBarcodeFieldProps` exports name that compatibility
+contract. `ControlledBarcodeFieldProps` names the controlled branch;
+`BarcodeFieldProps` retains its original binding-props meaning for existing
+consumer wrappers. The component itself accepts the discriminated union.
 
 The optional `/react` entry exports `BarcodeField`, `BarcodeFieldProps`,
 `BarcodeFieldOptions` and `renderBarcodeField`. Install the renderer in the existing
@@ -4501,23 +4615,61 @@ composition and themed wrappers with the host.
 
 ### Complete native-compatible Date and DateTime picker
 
-`CompleteDateField` and `CompleteDateFieldProps` from the opt-in
-`@miniextensions/sdk/react/date` entry include the full calendar/time picker,
+`DateField` from `/react/date` is the public complete calendar-date field. Import `/react/date.css` for its calendar, readonly text and legacy ISO
+styles. Its controlled props are separate from the existing `{binding, render}` API
+on `/react` (also explicitly exported as `BindingDateField`). Neither path creates
+a Form provider or Saves; the generic entry keeps its existing runtime dependencies.
+
+```tsx
+import { DateField } from '@miniextensions/sdk/react/date';
+import { useState } from 'react';
+import '@miniextensions/sdk/react/date.css';
+
+export function DueDate() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+        <DateField
+            id="due-date"
+            title="Due date"
+            language="en"
+            airtableDateConfig={{
+                type: 'date',
+                options: { dateFormat: { format: 'D/M/YYYY' } },
+            }}
+            value={value}
+            setValue={setValue}
+        />
+    );
+}
+```
+
+`mode="readOnly"` displays the formatted Date or localized empty text without an
+input or writer (`setValue` is omitted). `readOnly` on an input instead preserves
+the disabled-input presentation. Both retain loaded Date bytes. Native switches
+may map configuration, associations and current-owner authority directly into
+these props; no native calendar or renderer callback is needed.
+
+`DateTimeField` and `DateTimeFieldProps` from the opt-in
+`@miniextensions/sdk/react/date` entry provide the complete date/time field.
+`ControlledDateTimeFieldProps` names the same controlled contract. Use
+`/react/datetime.css` for its picker, readonly text and legacy styles.
+`CompleteDateField` remains a compatibility export for existing consumers.
+Both natural components reuse the full calendar/time picker,
 localized native input grammar, drafts, blur recovery, range policy and popup.
 Import `@miniextensions/sdk/react/complete-date.css` for portable default styles;
 Tailwind and a host picker/render slot are unnecessary. Moment locale assets
-are loaded by this entry. Core and generic React imports do not load the picker.
+are loaded by this calendar entry. Core and generic React imports do not load the picker.
 Install matching supported React and ReactDOM versions; both remain SDK peers.
 
 ```tsx
 import { useState } from 'react';
-import { CompleteDateField } from '@miniextensions/sdk/react/date';
-import '@miniextensions/sdk/react/complete-date.css';
+import { DateTimeField } from '@miniextensions/sdk/react/date';
+import '@miniextensions/sdk/react/datetime.css';
 
 export function Appointment() {
     const [value, setValue] = useState<string | null>(null);
     return (
-        <CompleteDateField
+        <DateTimeField
             id="appointment"
             title="Appointment"
             language="en"
@@ -4538,8 +4690,9 @@ export function Appointment() {
 
 Date writes retain `YYYY-MM-DD`; DateTime picker/typed commits use the existing
 native timezone/range helpers and UTC minute precision. An untouched loaded
-value is not rewritten by rendering. The existing ISO-only `DateField`,
-`DateTimeField` and strict models retain their separate explicit-offset contract,
+value is not rewritten by rendering. The existing binding-based `DateField`,
+`BindingDateField`, `BindingDateTimeField`, `/react` `DateTimeField` and strict
+models retain their separate explicit-offset contract,
 including original seconds, fractions and offset bytes.
 
 Equivalent metadata and cosmetic props preserve unfinished text and caret.
@@ -5251,21 +5404,23 @@ instead of assuming that the shared renderer-data type establishes equivalence.
 
 ## Complete editable Phone field
 
-`CompletePhoneNumberField` is the complete native-compatible Phone editor in
-`@miniextensions/sdk/react`. It owns plain literal input and the actual country
+`PhoneNumberField` with controlled `value` and `onValueChange` props is the complete
+native-compatible Phone editor in `@miniextensions/sdk/react`.
+`CompletePhoneNumberField` retains the same controlled implementation and props
+for existing callers. The natural API owns plain literal input and the actual country
 picker, international formatter, Unicode flags, mobile Clear and transient edit
 lifetime. Import `@miniextensions/sdk/react/complete-phone.css`; no application
 CSS, native renderer slot, client or second canonical store is required.
 
 ```tsx
 import { useState } from 'react';
-import { CompletePhoneNumberField } from '@miniextensions/sdk/react';
+import { PhoneNumberField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-phone.css';
 
 export function StandalonePhone() {
     const [phone, setPhone] = useState<string | undefined>('+233201234567');
     return (
-        <CompletePhoneNumberField
+        <PhoneNumberField
             value={phone}
             showCountryCodes
             defaultCountry="GH"
@@ -5303,13 +5458,23 @@ The private runtime freezes react-phone-number-input3.3.9,
 libphonenumber-js1.10.57 and input-format0.3.9, their metadata and license closure.
 Both module formats use that same private runtime; consumer parser overrides do
 not select different parsing code. No private vendor import is a customer API.
-The existing literal-draft `PhoneNumberField` contract remains unchanged.
+The existing `PhoneNumberField` binding contract remains unchanged. Its controlled
+and binding props are mutually exclusive. `PhoneEditOwner` and `PhoneCommit`
+provide the natural type names; their existing `Complete*` type names remain
+compatible. `PhoneNumberFieldProps` remains the legacy `TextFieldProps` alias,
+including assignability and contextual renderer typing. Controlled callers may
+use `ControlledPhoneNumberFieldProps` without changing the component name.
+Deferred controlled edits still require the actual host owner, and
+the host still owns any `undefined` to `null` persistence adapter. Plain Clear
+remains `''`; country callbacks retain the real vendor's string/undefined values
+and blur-before-Clear ordering. Neither API form performs an implicit Save.
 
 ## Complete read-only Phone presentation
 
 The optional `@miniextensions/sdk/react` entry exports
-`CompleteReadOnlyPhoneNumberField` and
-`CompleteReadOnlyPhoneNumberFieldProps`. This complete presentation renders an
+`ReadOnlyPhoneNumberField` and `ReadOnlyPhoneNumberFieldProps`, with
+`CompleteReadOnlyPhoneNumberField` and `CompleteReadOnlyPhoneNumberFieldProps`
+retained as compatible names. This complete presentation renders an
 existing saved telephone string as native link text and an unchanged `tel:`
 href, with `target="_blank"`, `rel="noreferrer"` and stopped parent click
 propagation. It does not parse, normalize, validate or resolve the value. The
@@ -5317,10 +5482,10 @@ host supplies the localized empty message for null, undefined and empty string.
 Whitespace-only and malformed saved strings remain literal nonempty values.
 
 ```tsx
-import { CompleteReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
+import { ReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-phone.css';
 
-<CompleteReadOnlyPhoneNumberField
+<ReadOnlyPhoneNumberField
     value="+233 20 123 4567"
     emptyLabel="No saved phone"
 />;
@@ -5336,7 +5501,7 @@ application aliases, injected native controls or another package dependency.
 The component owns no client, store, writer or network operation. It is SSR-safe;
 the browser or operating system owns the eventual telephone action.
 
-This export is separate from the existing literal-draft `PhoneNumberField`.
+This export is separate from the binding and controlled editable `PhoneNumberField`.
 It adds no country picker, phone formatting, editing, Clear or deferred commit
 behavior, and does not change those legacy APIs. Native Form/Grid ownership and
 backend persistence remain separate application responsibilities.
@@ -5748,7 +5913,8 @@ policy remain independent APIs.
 
 `CompleteBarcodeScanner` owns the dialog, focus management, camera preview,
 decoding, failure/retry/manual-entry controls and cleanup. Import its stylesheet.
-`BarcodeField` retains its existing display-only contract and never opens a camera.
+The binding form of `BarcodeField` retains its display-only contract. Its explicit
+controlled form composes this same scanner with the complete text editor.
 
 ```tsx
 import { useBarcodeScannerButtonInField } from '@miniextensions/sdk/react';
@@ -5821,3 +5987,18 @@ it does not create CSS inheritance across a portal. DOM-only styles (including
 raw tokens supplied only via `style`) are deliberately not discovered, read
 with computed styles, or promised propagation. No generic portal engine,
 script/style injection or global theme store is installed.
+
+### Complete controlled Checkbox
+
+`CheckboxField` from `@miniextensions/sdk/react` accepts either the existing
+`{ binding, render?, className? }` contract or controlled `{ value, onChange }`
+props. Controlled props provide the native checkbox, toggle, button and readonly
+modes, standalone title/feedback or shell `presentation` associations. Import
+`@miniextensions/sdk/react/checkbox.css` for all modes and configured scheduling.
+
+Pass `calendly` with explicit `configuredUrl`, resolved `email`/`name`,
+`embedDomain`, stable current `ownerKey` and `onScheduled` admission. The SDK
+composes its qualified widget; there is no native renderer slot. Scheduling
+completion uses only `onScheduled`, ordinary edits only `onChange`; neither
+implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
+value). Existing `CompleteCheckboxField` remains compatible.

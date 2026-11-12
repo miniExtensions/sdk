@@ -238,6 +238,10 @@ attachment-display and explicit masking modes require a custom renderer.
 `EmailFieldProps`, `EmailFieldOptions` and the typed `renderEmailField` slot. It
 reuses the Text control and optional `@miniextensions/sdk/react/text.css` for native
 single-line text drafts; page and server validation remain authoritative.
+The same natural `EmailField` also accepts `mode="controlled"` with
+`ControlledEmailFieldProps` for the complete email input, icon, Clear and optional
+scanner. Legacy binding props remain unchanged. Deferred editing requires an
+explicit current `EmailEditOwner`; the host still owns Save and persistence.
 
 [URL presentation](docs/ui.md#react-url-presentation) exports `UrlField`,
 `UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses
@@ -385,9 +389,15 @@ native fractions such as `0.25` remain `0.25`, without percent scaling or a suff
 
 [Phone Number presentation](docs/ui.md#react-phone-number-presentation) exports
 `PhoneNumberField`, `PhoneNumberFieldProps`, `PhoneNumberFieldOptions` and the typed
-`renderPhoneNumberField` slot. It reuses the Text control and optional
-`@miniextensions/sdk/react/text.css` for literal single-line drafts, with no phone
-normalization, country selector or dialing action.
+`renderPhoneNumberField` slot. Existing `binding` callers and the renderer slot
+retain literal single-line drafts with optional `@miniextensions/sdk/react/text.css`.
+The same natural `PhoneNumberField` name also accepts controlled `value` and
+`onValueChange` props for the complete country/plain editor, with explicit deferred
+edit ownership and optional `@miniextensions/sdk/react/complete-phone.css`.
+`ReadOnlyPhoneNumberField` renders saved telephone text and links. Binding and
+controlled props cannot be mixed; the existing `Complete*` exports remain available.
+`PhoneNumberFieldProps` retains its binding-based type contract;
+`ControlledPhoneNumberFieldProps` names the complete controlled contract.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

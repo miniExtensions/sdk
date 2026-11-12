@@ -271,6 +271,55 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             await React.act(async () => clear.click());
             assert.deepEqual(writes.at(-1), { writer: 'current', value: null });
             assert.equal(input.value, '');
+            for (const boundary of ['row', 'parent']) {
+                await React.act(async () => input.focus());
+                const previousScope = state.scope;
+                state.scope = {};
+                state.writer = boundary + '-successor';
+                state.value = 90;
+                await React.act(async () => publish());
+                if (boundary === 'parent') {
+                    state.scope = previousScope;
+                    state.value = 60;
+                    await React.act(async () => publish());
+                }
+                assert.equal(ref.current, input);
+                assert.equal(window.document.activeElement, input);
+                let focusEvents = 0;
+                const countFocus = () => {
+                    focusEvents++;
+                };
+                input.addEventListener('focus', countFocus);
+                await React.act(async () => input.focus());
+                input.removeEventListener('focus', countFocus);
+                assert.equal(
+                    focusEvents,
+                    0,
+                    'retained input has no new focus event'
+                );
+                const beforeEdit = writes.length;
+                await setInput(input, '8');
+                assert.equal(input.value, '8');
+                assert.deepEqual(writes.at(-1), {
+                    writer: boundary + '-successor',
+                    value: 8,
+                });
+                assert.equal(writes.length, beforeEdit + 1);
+                input.setSelectionRange(0, 1);
+                await React.act(async () => publish());
+                assert.equal(input.selectionStart, 0);
+                assert.equal(input.selectionEnd, 1);
+                await React.act(async () => input.blur());
+                assert.equal(input.value, '0:08.000');
+                assert.equal(writes.length, beforeEdit + 1);
+                await React.act(async () => input.focus());
+                await setInput(input, '9');
+                assert.equal(input.value, '9');
+                assert.equal(writes.length, beforeEdit + 2);
+                await React.act(async () => input.blur());
+                assert.equal(input.value, '0:09.000');
+                assert.equal(writes.length, beforeEdit + 2);
+            }
             state.value = 90;
             state.scope = {};
             await React.act(async () => publish());
@@ -284,6 +333,29 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             await React.act(async () => publish());
             await setInput(input, '9');
             assert.equal(writes.length, beforeRefusal);
+            let callbackNode = null;
+            let callbackCleanups = 0;
+            const callbackRef = (node) => {
+                callbackNode = node;
+                if (node && React.version.startsWith('19.'))
+                    return () => {
+                        callbackNode = null;
+                        callbackCleanups++;
+                    };
+            };
+            await React.act(async () =>
+                root.render(element({ ...properties(), inputRef: callbackRef }))
+            );
+            assert.equal(ref.current, null);
+            assert.equal(callbackNode, input);
+            await React.act(async () => publish());
+            assert.equal(callbackNode, null);
+            assert.equal(ref.current, input);
+            if (React.version.startsWith('19.'))
+                assert(
+                    callbackCleanups > 0,
+                    'React19 callback-ref cleanup is preserved'
+                );
             groups++;
         } finally {
             mounted = false;

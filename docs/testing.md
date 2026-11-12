@@ -55,6 +55,11 @@ fixture or hosted acceptance is established by these synthetic checks.
 Normal CI is the validation route while a local execution hold applies. Authored
 tests/source review are not executed proof; report exact heads/runs and results.
 
+Parent-document Escape stays inside the native scheduling dialog without
+preventing the browser's cancel action. Preserve real host Modal nesting:
+scheduling cancellation keeps the outer Form/draft and restores its trigger;
+a subsequent Escape may dismiss that outer Form normally.
+
 ## Complete Portal search gate
 
 The additive Search gate source is covered by `test/portalSearchGate.test.ts`
@@ -758,6 +763,20 @@ unestablished delayed vendor-class callback after a successor commit.
 These synthetic checks do not establish Android/OS IME, telephone navigation,
 visual layout, hosted authorization or native Form/Grid persistence. Android's
 existing formatter caret timer remains part of the private baseline.
+
+The natural `PhoneNumberField` API retains the existing binding path and also
+accepts mutually exclusive complete controlled props. The Phone source suites
+exercise controlled null/plain Clear, deferred owner A→B→A and actual vendor
+blur→Clear ordering through that public name, while retaining all legacy binding
+and `Complete*` cases. Readonly literal presentation is also checked through
+`ReadOnlyPhoneNumberField`. Both installed Phone matrices exercise natural and
+compatibility names in each module format and retain strict mixed-prop rejection,
+React 18/19, CSS, SSR/hydration and cleanup. Native Form switches, real host
+authority and explicit Save remain separate adoption evidence.
+The original Phone consumer matrix also keeps `PhoneNumberFieldProps` assignable
+to `TextFieldProps` and preserves contextual binding-render callbacks. The new
+controlled contract uses `ControlledPhoneNumberFieldProps`; widening the old
+alias would break those existing typed consumers even when runtime cases pass.
 
 Complete readonly-text qualification includes real `linkify-react` 3.0.4
 differential source tests against the SDK-owned `linkifyjs` 3.0.5 renderer,

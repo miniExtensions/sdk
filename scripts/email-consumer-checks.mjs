@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import {
     EmailField, TextField, renderEmailField, AirtableForm, AirtableGrid, AirtableList,
     type EmailFieldProps, type EmailFieldOptions, type TextFieldProps, type TextFieldOptions,
+    type ControlledEmailFieldProps, type EmailEditOwner,
 } from '@miniextensions/sdk/react';
 import type {
     FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope,
@@ -27,6 +28,20 @@ export function BoundEmail(props: EmailFieldProps) {
 }
 export function EmailOverride(props: EmailFieldProps) {
     return <EmailField {...props} render={({ snapshot }) => <span>{String(snapshot.value ?? '')}</span>} />;
+}
+export function ControlledEmail(props: ControlledEmailFieldProps) {
+    return <EmailField {...props} />;
+}
+export function NativeEmail(owner: EmailEditOwner, binding: EmailFieldProps['binding']) {
+    const props = { mode: 'controlled' as const, value: 'Mail@example.test',
+        onChange: (_value: string) => {}, language: 'en' as const };
+    const direct = <EmailField {...props} />;
+    const deferred = <EmailField {...props} enableInlineEdit owner={owner} />;
+    // @ts-expect-error Deferred native input requires its captured owner.
+    const missingOwner = <EmailField {...props} enableInlineEdit />;
+    // @ts-expect-error Controlled and legacy binding props cannot be combined.
+    const mixed = <EmailField {...props} binding={binding} />;
+    return <>{direct}{deferred}{missingOwner}{mixed}</>;
 }
 export function checkEmailKinds(email: FieldRendererProps<'email'>, text: FieldRendererProps<'singleLineText'>) {
     renderEmailField(email);
@@ -74,6 +89,13 @@ export async function checkEmailConsumer({
     try {
         const css = require.resolve('@miniextensions/sdk/react/text.css');
         assert.match(readFileSync(css, 'utf8'), /\.mx-sdk-text:focus-visible/);
+        const emailStyles = readFileSync(css, 'utf8');
+        assert.match(emailStyles, /\.mx-sdk-email-input/);
+        assert.match(emailStyles, /\.mx-sdk-email-icon/);
+        assert.match(
+            emailStyles,
+            /@import '\.\/complete-clearable-text-input\.css'/
+        );
         assert.throws(
             () => require.resolve('@miniextensions/sdk/react/email.css'),
             { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }
@@ -343,6 +365,72 @@ export async function checkEmailConsumer({
                 // The accepted host has retired after configuration replacement.
                 await act(async () => root.render(tree()));
                 assert.equal(input(), null);
+                assert.equal(requests, 0);
+                checks++;
+
+                const controlledWrites = [];
+                let currentEmail = true;
+                let controlled = {
+                    mode: 'controlled',
+                    value: 'Seed+Tag@Example.TEST',
+                    onChange: (value) => controlledWrites.push(value),
+                    language: 'en',
+                    id: 'controlled-email',
+                    form: 'controlled-form',
+                    initialMobile: true,
+                    owner: { token: {}, isCurrent: () => currentEmail },
+                };
+                const controlledTree = (overrides = {}) => {
+                    controlled = { ...controlled, ...overrides };
+                    return h(StrictMode, null, h(react.EmailField, controlled));
+                };
+                await act(async () => root.render(controlledTree()));
+                assert.equal(input().type, 'email');
+                assert.equal(input().autocomplete, 'off');
+                assert.equal(input().getAttribute('form'), 'controlled-form');
+                assert.ok(container.querySelector('.mx-sdk-email-icon'));
+                await edit('MiXeD+Tag@Example.TEST');
+                assert.deepEqual(controlledWrites, ['MiXeD+Tag@Example.TEST']);
+                checks++;
+
+                await act(async () =>
+                    root.render(
+                        controlledTree({
+                            enableInlineEdit: true,
+                            value: 'MiXeD+Tag@Example.TEST',
+                        })
+                    )
+                );
+                await act(async () => input().focus());
+                await edit('Deferred@Example.TEST');
+                assert.equal(controlledWrites.length, 1);
+                const controlledClear = container.querySelector('button');
+                await act(async () => controlledClear.focus());
+                await act(async () => controlledClear.click());
+                assert.deepEqual(controlledWrites, [
+                    'MiXeD+Tag@Example.TEST',
+                    'Deferred@Example.TEST',
+                    '',
+                ]);
+                checks++;
+
+                await act(async () => input().focus());
+                await edit('Retired@Example.TEST');
+                currentEmail = false;
+                await act(async () =>
+                    root.render(
+                        controlledTree({
+                            displayOnly: true,
+                            value: 'Seed@example.com',
+                        })
+                    )
+                );
+                assert.equal(input(), null);
+                assert.equal(
+                    container.querySelector('a').getAttribute('href'),
+                    'mailto:Seed@example.com'
+                );
+                assert.equal(controlledWrites.length, 3);
                 assert.equal(requests, 0);
                 checks++;
             } finally {

@@ -1,4 +1,7 @@
-/* Optional scoped defaults; native input behavior is independent of this file. */
+@import './complete-date.css';
+@import './complete-readonly-text.css';
+
+/* Includes the complete calendar and legacy ISO/binding control styles. */
 .mx-sdk-date-field {
     display: inline-flex;
     flex-direction: column;

@@ -22,7 +22,9 @@ async function fixture(
     config: FieldConfig<'checkbox'> = {},
     initial: boolean | null | undefined = null
 ) {
-    const window = new Window();
+    const window = new Window({
+        settings: { navigation: { disableChildFrameNavigation: true } },
+    });
     for (const key of ['AbortController', 'AbortSignal'] as const)
         Object.defineProperty(window, key, { value: globalThis[key] });
     const keys = [
@@ -512,4 +514,114 @@ it('preserves empty feedback, exposes validation, and refuses an incompatible or
     assert.equal(f.input().disabled, true);
     await show({ ...scalar.state, retired: true });
     assert.equal(f.container.querySelector('input'), null);
+});
+
+for (const checkboxStyle of ['checkbox', 'toggle', 'button'] as const) {
+    it(`natural controlled ${checkboxStyle} preserves binding replacement and explicit writes`, async (t) => {
+        const f = await fixture(t);
+        const changes: boolean[] = [];
+        const controlled = (value: boolean | null, readOnly = false) =>
+            h(CheckboxField, {
+                value,
+                readOnly,
+                checkboxStyle,
+                onChange: (checked) => changes.push(checked),
+                title: 'Approve request',
+                feedback: 'Approval required',
+                form: 'approval-form',
+            });
+        await f.render(controlled(null));
+        const control = f.container.querySelector('input,button');
+        assert.ok(control instanceof f.window.HTMLElement);
+        assert.equal(control.getAttribute('form'), 'approval-form');
+        assert.ok(control.getAttribute('aria-describedby'));
+        if (control.tagName === 'BUTTON')
+            assert.equal(control.getAttribute('type'), 'button');
+        await act(async () => control.click());
+        assert.deepEqual(changes, [true]);
+        assert.equal(f.binding.getSnapshot().value, null);
+        await f.render(controlled(true, true));
+        assert.equal(f.input().checked, true);
+        assert.equal(f.input().disabled, true);
+        await act(async () => f.input().click());
+        assert.deepEqual(changes, [true]);
+        await f.render(h(CheckboxField, { binding: f.binding }));
+        await act(async () => f.input().click());
+        assert.equal(f.binding.getSnapshot().value, true);
+        await f.render(controlled(false));
+        assert.equal(f.binding.getSnapshot().value, true);
+        assert.deepEqual(changes, [true]);
+    });
+}
+
+it('natural configured Checkbox owns Calendly composition and retires replaced authority without implicit writes', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const ownerA = {};
+    const ownerB = {};
+    const view = (ownerKey: object, value = false, readOnly = false) =>
+        h(CheckboxField, {
+            value,
+            readOnly,
+            checkboxStyle: 'button',
+            title: 'Approval',
+            onChange: () =>
+                assert.fail('Scheduling must use explicit completion intent'),
+            calendly: {
+                configuredUrl: 'https://calendly.com/synthetic/no-booking',
+                email: 'ada+team@example.invalid',
+                name: 'Ada & Grace',
+                embedDomain: 'https://consumer.invalid',
+                ownerKey,
+                onScheduled: () => writes.push(ownerKey === ownerA ? 'A' : 'B'),
+                schedulingTitle: 'Schedule approval',
+            },
+        });
+    await f.render(view(ownerA));
+    assert.equal(f.container.querySelector('iframe'), null);
+    assert.deepEqual(writes, []);
+    const open = async () => {
+        const button = f.container.querySelector('button');
+        assert.ok(button);
+        await act(async () => button.click());
+        const frame = f.container.querySelector('iframe');
+        assert.ok(frame?.contentWindow);
+        return frame;
+    };
+    const message = async (
+        frame: Awaited<ReturnType<typeof open>>,
+        origin = 'https://calendly.com'
+    ) =>
+        act(async () => {
+            const event = new f.window.MessageEvent('message', {
+                data: { event: 'calendly.event_scheduled' },
+                origin,
+            });
+            Object.defineProperty(event, 'source', {
+                value: frame.contentWindow,
+            });
+            f.window.dispatchEvent(event);
+        });
+    const retired = await open();
+    const url = new URL(retired.src);
+    assert.equal(url.searchParams.get('email'), 'ada+team@example.invalid');
+    assert.equal(url.searchParams.get('name'), 'Ada & Grace');
+    await f.render(view(ownerB));
+    assert.equal(f.container.querySelector('iframe'), null);
+    await f.render(view(ownerA));
+    await message(retired);
+    assert.deepEqual(writes, []);
+    const current = await open();
+    await message(current, 'https://untrusted.invalid');
+    assert.deepEqual(writes, []);
+    await message(current);
+    await message(current);
+    assert.deepEqual(writes, ['A']);
+    assert.equal(f.container.querySelector('iframe'), null);
+    await f.render(view(ownerA, true));
+    assert.match(f.container.textContent ?? '', /Booked/);
+    await f.render(view(ownerA, false, true));
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.container.querySelector('button,iframe'), null);
+    assert.equal(f.binding.getSnapshot().value, null);
 });

@@ -3,7 +3,10 @@ import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CompleteReadOnlyPhoneNumberField } from '../src/react/index.js';
+import {
+    CompleteReadOnlyPhoneNumberField,
+    ReadOnlyPhoneNumberField,
+} from '../src/react/index.js';
 
 async function mount(t: TestContext, node: ReactNode) {
     const window = new Window();
@@ -65,6 +68,29 @@ async function mount(t: TestContext, node: ReactNode) {
     await render(node);
     return { window, container, render };
 }
+
+it('natural ReadOnlyPhoneNumberField preserves the literal telephone and empty presentation', async (t) => {
+    const value = '  +1 (202) 555-0100 <em>desk</em>  ';
+    const f = await mount(
+        t,
+        h(ReadOnlyPhoneNumberField, { value, emptyLabel: 'No saved phone' })
+    );
+    const link = f.container.querySelector('a');
+    assert.ok(link);
+    assert.equal(link.textContent, value);
+    assert.equal(link.getAttribute('href'), `tel:${value}`);
+    assert.equal(f.container.querySelector('em'), null);
+    assert.equal(link.target, '_blank');
+    assert.equal(link.rel, 'noreferrer');
+    await f.render(
+        h(ReadOnlyPhoneNumberField, {
+            value: null,
+            emptyLabel: 'No saved phone',
+        })
+    );
+    assert.equal(f.container.querySelector('a'), null);
+    assert.equal(f.container.textContent, 'No saved phone');
+});
 
 it('server-renders the saved telephone text and href literally without markup injection', async () => {
     assert.equal(typeof globalThis.document, 'undefined');

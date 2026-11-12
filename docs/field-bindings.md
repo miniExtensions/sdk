@@ -562,8 +562,8 @@ calendar days. DateTime editing accepts only
 required. Naive/local timestamps, week/ordinal dates, space separators, `24:00`,
 leap seconds and the conservative unknown-local-offset `-00:00` are refused.
 An explicit offset defines the instant; the SDK never guesses an ambiguous or
-nonexistent local time from DST rules. Natural-language and date-picker behavior
-remain outside this slice.
+nonexistent local time from DST rules. This binding contract remains separate from the controlled complete `DateField`
+calendar API; see [the complete picker](ui.md#complete-native-compatible-date-and-datetime-picker).
 
 Accepted native strings are preserved byte-for-byte. `setInput` retains partial
 or invalid text separately from the last accepted native answer. An editable

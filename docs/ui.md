@@ -2686,10 +2686,106 @@ for source, package and native browser verification.
 
 ## React Created Time presentation
 
-The optional `/react` entry exports `CreatedTimeField`, `CreatedTimeFieldProps`,
-`CreatedTimeFieldOptions` and `renderCreatedTimeField`. The binding component
-accepts `{ binding, render }` plus `className` and `clearLabel`; a supplied `render`
-replaces its stock markup. The options alias `DateTimeFieldOptions`.
+The optional `/react` entry exports the natural `CreatedTimeField` for controlled
+display or existing binding consumers. `ControlledCreatedTimeFieldProps` requires
+the supplied `value`, `dateConfig` and `language`. It formats through the shared
+date engine and readonly text primitive; it never creates a timestamp or setter.
+The application supplies the accepted date/dateTime result configuration explicitly.
+Optional `dateLanguage` selects the date text's locale separately from the localized
+empty-value `language`; it defaults to `language`. For example, a host preserving
+English named-month dates with French empty text supplies `language="fr"` and
+`dateLanguage="en"`. The override uses the same supported language codes, preserves
+the configured timezone, and does not change the legacy binding's raw timestamp.
+
+```tsx
+import { CreatedTimeField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+import '@miniextensions/sdk/react/button.css';
+
+export function CreatedDisplay({ value }: { value: string | null }) {
+    return (
+        <CreatedTimeField
+            value={value}
+            language="en"
+            dateConfig={{
+                type: 'dateTime',
+                options: {
+                    dateFormat: { format: 'YYYY-MM-DD' },
+                    timeFormat: { format: 'HH:mm' },
+                    timeZone: 'America/New_York',
+                },
+            }}
+        />
+    );
+}
+```
+
+Readonly `displayAsAttachments` selects one accepted HTTP(S) resource before
+`displayAsButton`; a button admits the existing safe link policy, including mailto.
+The computed `displayContext="editable"` path ignores both flags and keeps date
+formatting. Null/missing values use localized empty text; malformed runtime shapes
+use `invalidValueLabel` without coercion. `masked` prevents value/config inspection.
+`presentation` composes the existing shell's label, help, error and form association.
+The shell remains the single owner of that chrome.
+
+`owner` optionally supplies `{token, isCurrent()}` and `identity` distinguishes
+source lifetimes. A false/throwing owner omits the display; current-owner checks
+also guard retained resource actions, URL replacement, A→B→A and cleanup. `inert`
+prevents resource activation/loading for preview or authority projection. No source
+fetch, Save, provider action, editor, upload or field writer is acquired.
+
+Attachment options project grid/icon/thumbnail layout, size/fit, name visibility
+and independent Open/Download permissions. Images use the shared recoverable image;
+thumbnail loading follows visibility, while icon mode matches native immediate
+image display. A current explicit action opens the native dialog. URL-only image
+and exact lowercase `.pdf` modal classification matches native dispatch. `labels`
+supplies localized resource actions/retry/error text. Download is explicit,
+cancelable and owner scoped.
+
+`attachmentOptions.documentPreview` explicitly admits generic document content.
+Omitting it preserves URI-only behavior without speculative document requests.
+Its `source` is either `{kind: 'uri', mimeType?, revision?}` or
+`{kind: 'bytes', bytes: Uint8Array, mimeType, revision}`. Owned bytes are copied;
+replace the byte view or revision when content changes. URI mode uses credential-free
+HEAD discovery only when MIME is absent, then a cancelable GET for admitted types.
+This resource load never fetches a field/source model or changes its canonical URL.
+Unknown/octet-stream, Office, archive and provider formats remain unavailable.
+
+One SDK content leaf renders literal TXT, quoted CSV tables, sanitized HTML,
+PNG/BMP/JPEG/GIF, first-directory TIFF (including native uncompressed/PackBits),
+and PDF. Malformed CSV is unavailable. HTML cannot load embedded resources,
+navigate, submit controls or install styles/global IDs. Form thumbnails exclude
+exact lowercase `.pdf` URLs and hide PDF controls; grid thumbnails retain PDF
+page, zoom/reset and single/all-page controls. Grid PDF Download uses admitted
+bytes and respects `disableDownloadFiles`. MIME discovered for an opaque thumbnail
+stays private and cannot reclassify its modal.
+
+PDF requires both `pdfWorkerUrl` and `pdfResourceBaseUrl`. Deploy the exported
+`@miniextensions/sdk/react/document-preview/pdfjs-6.5.438/*` assets unchanged at
+one same-origin base ending in `/`; set the worker URL to its `pdf.worker.mjs`.
+The package carries a version-matched module worker, CMaps, fonts and WASM with an
+integrity manifest. The application supplies asset URLs explicitly; there is no
+CDN, guessed worker location, global worker setting or external provider.
+
+`documentPreview` also enables an SDK canvas viewer for canonically known
+lowercase `.pdf` modals, including HTTP resources admitted by the URL policy.
+This uses credential-free bytes and a local worker, not an HTTP iframe exception.
+Without this option, existing HTTPS-only sanitized PDF frame behavior remains.
+Each worker, reader, canvas and object URL belongs to the visible current
+owner/token/identity/content revision and is retired on replacement, concealment
+or unmount. Startup errors show localized unavailable feedback and terminate the
+owned worker. No native React renderer or provider callback is accepted.
+
+The private browser PDF engine is bundled at build time; consumers retain the
+SDK's Node >=22 engine contract and optional React18/19 peers. Importing or
+server-rendering the public field creates no worker or document request.
+
+`CreatedTimeFieldProps` deliberately retains the original required `binding` shape.
+`BindingCreatedTimeField` and `BindingCreatedTimeFieldProps` name the compatibility
+contract explicitly. It accepts `{ binding, render }` plus `className` and
+`clearLabel`; a supplied `render` replaces its stock markup. Controlled inputs
+cannot be mixed with binding/renderer inputs. `CreatedTimeFieldOptions` still aliases
+`DateTimeFieldOptions`, and `renderCreatedTimeField` keeps the typed physical slot.
 
 ```tsx
 import { CreatedTimeField } from '@miniextensions/sdk/react';
@@ -2718,11 +2814,11 @@ export const createdTimeRenderers: FieldRendererSlots<ReactNode> = {
 };
 ```
 
-The control presents the supplied native timestamp string without parsing,
+The binding control presents the supplied native timestamp string without parsing,
 formatting, validation or timezone conversion. It retains offset spelling,
 fractional seconds, whitespace, naive timestamps and invalid strings accepted by
 the owner. Nested `date` or `dateTime` result metadata is not interpreted, and
-metadata changes do not normalize the native answer. Use a custom renderer for
+metadata changes do not normalize the native answer. Use controlled props for
 formatted dates. The single-line input sanitizes CR/LF in its displayed value;
 rendering does not write that DOM representation back to the owner.
 
@@ -2748,8 +2844,10 @@ detail hosts without fabricating computed inline editing bindings. Data loading
 and form submission remain explicit application operations. Editable DateTime and
 Text controls keep their existing behavior.
 
-Styles reuse optional `@miniextensions/sdk/react/datetime.css` and the
-`mx-sdk-datetime*` classes; no Created Time stylesheet is added. The synthetic
+Binding styles reuse optional `@miniextensions/sdk/react/datetime.css` and the
+`mx-sdk-datetime*` classes. Controlled display reuses readonly-text, button,
+HTML-description and field-presentation styles as applicable; no Created Time
+stylesheet is added. The synthetic
 `examples/react-created-time` fixture uses public exports. See [Created Time
 presentation checks](testing.md#created-time-presentation-checks) for package and
 local browser verification.
@@ -3481,6 +3579,21 @@ retirement checks. Fixture generation leaves browser verification pending; nativ
 browser interaction and layout inspection are separate from its injected DOM checks.
 
 ## React Multiple Collaborators presentation
+
+For a complete searchable picker, import `MultipleCollaboratorsField` with
+`mode="controlled"`, authoritative `choices`, ordered native `value`, current
+`owner` and `onValueChange`. `ControlledMultipleCollaboratorsFieldProps<T>`
+preserves the caller's native object subtype. Import
+`@miniextensions/sdk/react/complete-collaborators.css` for the complete UI.
+See [Complete Collaborator fields](complete-collaborators.md) for the controlled
+contract, ownership, images and accessible associations.
+
+The existing binding contract below remains display-only. It is also explicitly
+exported as `BindingMultipleCollaboratorsField` and
+`BindingMultipleCollaboratorsFieldProps`. The original named
+`MultipleCollaboratorsFieldProps`, unchanged binding JSX and custom `render`
+contextual typing remain compatible. `CompleteMultipleCollaboratorsField`
+continues to provide the complete picker without the controlled discriminator.
 
 The optional `/react` entry exports `MultipleCollaboratorsField`,
 `MultipleCollaboratorsFieldProps`, `MultipleCollaboratorsFieldOptions` and

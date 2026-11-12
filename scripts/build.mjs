@@ -1,4 +1,6 @@
 import { assertDateVendor } from './date-vendor-checks.mjs';
+import { copyDocumentAssets } from './document-preview-assets.mjs';
+import { bundleDocumentPDF } from './document-pdf-bundle.mjs';
 import { bundleDatePopover } from './date-popover-vendor.mjs';
 import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import assert from 'node:assert/strict';
@@ -53,6 +55,7 @@ cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
     filter: richTextRuntimeFilter,
 });
 cpSync('vendor/date-time', 'dist/vendor/date-time', { recursive: true });
+copyDocumentAssets();
 cpSync('vendor/headlessui-address', 'dist/vendor/headlessui-address', {
     recursive: true,
 });
@@ -105,6 +108,7 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
 
 // Both compilers have finished; bundle only the Chart adapter closure.
 await bundlePortalChart();
+await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
 if (process.argv.includes('--capture-date-popover'))

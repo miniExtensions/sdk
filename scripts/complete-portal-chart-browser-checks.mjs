@@ -247,6 +247,8 @@ export function recordPortalChartInputs({
     temporary,
     installed,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     format,
     regular,
     hash,
@@ -290,10 +292,7 @@ export function recordPortalChartInputs({
                 `Chart browser imported a source alias or wrong SDK format: ${packagePath}`
             );
             const member = 'package/' + packagePath;
-            assert.deepEqual(
-                bytes,
-                execFileSync('tar', ['-xOf', archive, member])
-            );
+            assert.deepEqual(bytes, readArchiveMember(member));
             item.archiveMember = member;
         }
         if (within(chartRoot, path))
@@ -343,6 +342,8 @@ export function recordPortalChartInputs({
 export async function prepareCompletePortalChartFixtures({
     temporary,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     installed,
     allowed,
     report,
@@ -385,7 +386,7 @@ export async function prepareCompletePortalChartFixtures({
     const css = regular(cssPath);
     const cssMember =
         'package/' + relative(installed, cssPath).replaceAll('\\', '/');
-    assert.deepEqual(css, execFileSync('tar', ['-xOf', archive, cssMember]));
+    assert.deepEqual(css, readArchiveMember(cssMember));
     allowed.set('/complete-portal-chart.css', css);
     allowed.set(
         '/complete-portal-chart-fixture.css',
@@ -419,6 +420,7 @@ export async function prepareCompletePortalChartFixtures({
             temporary,
             installed,
             archive,
+            readArchiveMember,
             format,
             regular,
             hash,

@@ -9,14 +9,18 @@ import {
     singleCollaboratorReactTypedConsumer,
     singleCollaboratorNodeTypedConsumer,
 } from './single-collaborator-consumer-checks.mjs';
+import {
+    multipleCollaboratorsNodeTypedConsumer,
+    multipleCollaboratorsReactTypedConsumer,
+} from './multiple-collaborators-consumer-checks.mjs';
 
 export const completeCollaboratorTypedConsumer = String.raw`import { createElement } from 'react';
 import {
-    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField,
+    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField,
     type ControlledSingleCollaboratorFieldProps, type SingleCollaboratorFieldProps,
     type CompleteCollaborator, type CompleteCollaboratorEditOwner,
     type CompleteSingleCollaboratorFieldProps,
-    type CompleteMultipleCollaboratorsFieldProps,
+    type CompleteMultipleCollaboratorsFieldProps, type ControlledMultipleCollaboratorsFieldProps,
     type CollaboratorAvatarPolicy,
 } from '@miniextensions/sdk/react';
 type Native = CompleteCollaborator & { nativeMetadata: { order: number } };
@@ -34,19 +38,28 @@ const multiple: CompleteMultipleCollaboratorsFieldProps<Native> = {
     labels: { empty: 'No people', remove: (label) => 'Remove ' + label },
     onValueChange(value) { const originals: Native[] = value; void originals; },
 };
-const controlled: ControlledSingleCollaboratorFieldProps<Native> = { ...single, mode: 'controlled' };
-createElement(SingleCollaboratorField<Native>, controlled);
-createElement(SingleCollaboratorField<Native>, { ...controlled, value: null });
-declare const legacy: SingleCollaboratorFieldProps;
-createElement(SingleCollaboratorField, legacy);
-createElement(BindingSingleCollaboratorField, legacy);
+const controlledSingle: ControlledSingleCollaboratorFieldProps<Native> = { ...single, mode: 'controlled' };
+createElement(SingleCollaboratorField<Native>, controlledSingle);
+createElement(SingleCollaboratorField<Native>, { ...controlledSingle, value: null });
+declare const legacySingle: SingleCollaboratorFieldProps;
+createElement(SingleCollaboratorField, legacySingle);
+createElement(BindingSingleCollaboratorField, legacySingle);
 // @ts-expect-error binding and controlled capabilities cannot be combined
-createElement(SingleCollaboratorField<Native>, { ...controlled, binding: legacy.binding });
+createElement(SingleCollaboratorField<Native>, { ...controlledSingle, binding: legacySingle.binding });
 // @ts-expect-error the complete contract requires explicit controlled discrimination
 createElement(SingleCollaboratorField<Native>, single);
 createElement(CompleteSingleCollaboratorField<Native>, single);
 createElement(CompleteSingleCollaboratorField<Native>, { ...single, value: null });
 createElement(CompleteMultipleCollaboratorsField<Native>, multiple);
+const controlled: ControlledMultipleCollaboratorsFieldProps<Native> = { ...multiple, mode: 'controlled' };
+createElement(MultipleCollaboratorsField<Native>, controlled);
+// @ts-expect-error the controlled contract requires its explicit discriminator
+createElement(MultipleCollaboratorsField<Native>, multiple);
+// @ts-expect-error binding/custom rendering must not enter controlled mode
+createElement(MultipleCollaboratorsField<Native>, { ...controlled, binding: {} });
+// @ts-expect-error the SDK owns the complete runtime DOM
+createElement(MultipleCollaboratorsField<Native>, { ...controlled, render: () => null });
+
 // @ts-expect-error native collaborator objects are not ID strings
 const ids: CompleteSingleCollaboratorFieldProps<Native> = { ...single, value: 'usr_a' };
 // @ts-expect-error writes retain native object arrays, not scalar strings
@@ -98,7 +111,8 @@ if (mode === 'ssr') {
     let writes = 0;
     const owner = { token: {}, isCurrent: () => true };
     const common = { choices: [a, b], owner, onValueChange() { writes++; } };
-    const html = renderToString(React.createElement(api.CompleteMultipleCollaboratorsField, { ...common, value: [a, retired, duplicate], readOnly: true }));
+    const html = renderToString(React.createElement(api.MultipleCollaboratorsField, { mode: 'controlled', ...common, value: [a, retired, duplicate], readOnly: true }));
+    assert.equal(html, renderToString(React.createElement(api.CompleteMultipleCollaboratorsField, { ...common, value: [a, retired, duplicate], readOnly: true })));
     assert(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
     assert(!html.includes('src="https://avatars.example.invalid/a.png"'), 'no image network authority by default');
     assert(!html.includes('role="combobox"'));
@@ -118,7 +132,7 @@ if (mode === 'ssr') {
     assert(fieldGroup[0].includes('aria-describedby="ssr-help ssr-error"'));
     assert(fieldGroup[0].includes('aria-invalid="true"'));
     assert(/<div\b[^>]*aria-busy="true"[^>]*>/.test(editable), 'real picker loading container advertises busy state');
-    const avatars = renderToString(React.createElement(api.CompleteMultipleCollaboratorsField, { ...common, value: [a], readOnly: true, avatarPolicy: { type: 'direct', allowedOrigins: ['https://avatars.example.invalid'] } }));
+    const avatars = renderToString(React.createElement(api.MultipleCollaboratorsField, { mode: 'controlled', ...common, value: [a], readOnly: true, avatarPolicy: { type: 'direct', allowedOrigins: ['https://avatars.example.invalid'] } }));
     assert(avatars.includes('src="https://avatars.example.invalid/a.png"'));
     assert(avatars.includes('alt=""') && avatars.includes('width="32"') && avatars.includes('height="32"'));
     assert.equal(writes, 0);
@@ -149,14 +163,14 @@ if (mode === 'ssr') {
     let mounted = false, api, groups = 0;
     const node = () => {
         const token = model.token;
-        const Component = model.mode === 'single' ? api.SingleCollaboratorField : api.CompleteMultipleCollaboratorsField;
+        const Component = model.mode === 'single' ? api.SingleCollaboratorField : api.MultipleCollaboratorsField;
         return React.createElement(React.StrictMode, null,
             React.createElement('form', { id: 'people-form', onSubmit(event) { event.preventDefault(); submits++; } },
                 React.createElement('label', { htmlFor: 'person' }, 'Assigned people'),
                 React.createElement('span', { id: 'person-help' }, 'Choose supplied people'),
                 React.createElement('span', { id: 'person-error' }, 'Required'),
                 React.createElement(Component, {
-                    ...(model.mode === 'single' ? { mode: 'controlled' } : {}),
+                    mode: 'controlled',
                     choices: model.choices, value: model.value,
                     owner: { token, isCurrent: () => model.current && model.token === token },
                     readOnly: model.readOnly, visible: model.visible,
@@ -188,7 +202,7 @@ if (mode === 'ssr') {
         const hydrationErrors = [];
         const hydrationCommon = { choices: [a, b], owner: { token: {}, isCurrent: () => true }, onValueChange() { throw Error('Hydration must not propose a collaborator edit'); } };
         for (const [html, rendered, selector] of [
-            [server.html, React.createElement(api.CompleteMultipleCollaboratorsField, { ...hydrationCommon, value: [a, retired, duplicate], readOnly: true }), 'li'],
+            [server.html, React.createElement(api.MultipleCollaboratorsField, { mode: 'controlled', ...hydrationCommon, value: [a, retired, duplicate], readOnly: true }), 'li'],
             [server.editable, editableServerNode(api, hydrationCommon), 'input'],
         ]) {
             const host = window.document.createElement('div');
@@ -365,8 +379,16 @@ if (mode === 'ssr') {
         assert.equal(container.querySelectorAll('.mx-sdk-collaborator-badge').length, 2);
         await pointer(remove(retired.name));
         assert.equal(writes.at(-1).length, 1); assert.equal(writes.at(-1)[0], b);
+        assert.equal(window.document.activeElement === field(), true, 'accepted multiple badge removal focuses its current input');
         await pointer(remove('Beta'));
-        assert.deepEqual(writes.at(-1), []); groups++;
+        assert.deepEqual(writes.at(-1), []);
+        assert.equal(window.document.activeElement === field(), true, 'last removal preserves input focus');
+        await publish({ value: [b], refuse: true });
+        await pointer(remove('Beta'));
+        assert.equal(model.value[0], b);
+        await React.act(async () => adjacent.focus());
+        await publish({ value: [], refuse: false });
+        assert.equal(window.document.activeElement === adjacent, true, 'refused multiple removal cannot focus a later external clear'); groups++;
 
         await publish({ choices: [], value: [retired], token: {} });
         await edit('retired@example.invalid');
@@ -427,8 +449,8 @@ const { build } = await import(pathToFileURL(process.argv[2]).href);
 const format = process.argv[3];
 const sdk = resolve('node_modules/@miniextensions/sdk');
 const script = format === 'esm'
- ? "import {SingleCollaboratorField,CompleteMultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {SingleCollaboratorField,CompleteMultipleCollaboratorsField};"
- : "const {SingleCollaboratorField,CompleteMultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={SingleCollaboratorField,CompleteMultipleCollaboratorsField};";
+ ? "import {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};"
+ : "const {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};";
 writeFileSync('production-entry.' + (format === 'esm' ? 'mjs' : 'cjs'), script);
 const result = await build({ entryPoints: ['production-entry.' + (format === 'esm' ? 'mjs' : 'cjs')], bundle: true, platform: 'browser', format: 'esm', minify: true, write: false, metafile: true, define: {'process.env.NODE_ENV':'"production"'} });
 const inputs = Object.keys(result.metafile.inputs);
@@ -488,6 +510,44 @@ export function checkCompleteCollaboratorReactMatrix({
                 '--no-audit',
                 '--no-fund',
             ]);
+            writeFileSync(
+                join(directory, 'legacy-multiple.mjs'),
+                `import {checkMultipleCollaboratorsConsumer} from ${JSON.stringify(
+                    new URL(
+                        './multiple-collaborators-consumer-checks.mjs',
+                        import.meta.url
+                    ).href
+                )};
+const result = await checkMultipleCollaboratorsConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]});
+console.log(JSON.stringify(result));`
+            );
+            const legacy = JSON.parse(
+                run(process.execPath, [
+                    'legacy-multiple.mjs',
+                    happyDomModulePath,
+                ]).trim()
+            );
+            assert.equal(legacy.checks, 86);
+            writeFileSync(
+                join(directory, 'legacy-multiple.tsx'),
+                multipleCollaboratorsReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--module',
+                'ESNext',
+                '--moduleResolution',
+                'Bundler',
+                '--target',
+                'ES2022',
+                '--jsx',
+                'react-jsx',
+                'legacy-multiple.tsx',
+            ]);
             writeFileSync(join(directory, 'consumer-runtime.mjs'), runtime);
             writeFileSync(
                 join(directory, 'legacy-consumer.tsx'),
@@ -519,13 +579,13 @@ export function checkCompleteCollaboratorReactMatrix({
                 join(directory, 'legacy-consumer.mjs'),
                 `import { checkSingleCollaboratorConsumer } from ${JSON.stringify(pathToFileURL(legacyHelper).href)}; console.log(JSON.stringify(await checkSingleCollaboratorConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]})));`
             );
-            const legacy = JSON.parse(
+            const legacySingle = JSON.parse(
                 run(process.execPath, [
                     'legacy-consumer.mjs',
                     happyDomModulePath,
                 ])
             );
-            assert.equal(legacy.checks, 94);
+            assert.equal(legacySingle.checks, 94);
 
             writeFileSync(
                 join(directory, 'production-build.mjs'),
@@ -555,6 +615,11 @@ export function checkCompleteCollaboratorReactMatrix({
                 );
                 const suffix = format === 'esm' ? 'mts' : 'cts';
                 const typed = `complete-collaborators.${suffix}`;
+                const legacyTyped = `legacy-multiple.${suffix}`;
+                writeFileSync(
+                    join(directory, legacyTyped),
+                    multipleCollaboratorsNodeTypedConsumer
+                );
                 writeFileSync(
                     join(directory, typed),
                     completeCollaboratorTypedConsumer
@@ -572,10 +637,11 @@ export function checkCompleteCollaboratorReactMatrix({
                     '--target',
                     'ES2022',
                     typed,
+                    legacyTyped,
                 ]);
-                const legacyTyped = `legacy-binding.${suffix}`;
+                const legacySingleTyped = `legacy-binding.${suffix}`;
                 writeFileSync(
-                    join(directory, legacyTyped),
+                    join(directory, legacySingleTyped),
                     singleCollaboratorNodeTypedConsumer
                 );
                 run(process.execPath, [
@@ -590,7 +656,7 @@ export function checkCompleteCollaboratorReactMatrix({
                     'NodeNext',
                     '--target',
                     'ES2022',
-                    legacyTyped,
+                    legacySingleTyped,
                 ]);
                 const relative = `dist/${format}/react/CompleteCollaboratorField.js`;
                 const child = readFileSync(join(installed, relative));
@@ -682,6 +748,7 @@ export function checkCompleteCollaboratorReactMatrix({
                     format,
                     ssr: true,
                     legacyBindingChecks: legacy.checks,
+                    legacySingleBindingChecks: legacySingle.checks,
                     syntheticGroups: dom.groups,
                     production: true,
                     childSha256: createHash('sha256')

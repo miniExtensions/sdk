@@ -196,6 +196,8 @@ mount();
 export async function prepareCompleteCollaboratorFixtures({
     temporary,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     installed,
     allowed,
     report,
@@ -218,7 +220,7 @@ export async function prepareCompleteCollaboratorFixtures({
     const css = regular(cssPath);
     const cssMember =
         'package/' + relative(installed, cssPath).replaceAll('\\', '/');
-    assert.deepEqual(css, execFileSync('tar', ['-xOf', archive, cssMember]));
+    assert.deepEqual(css, readArchiveMember(cssMember));
     allowed.set('/complete-collaborators.css', css);
     allowed.set(
         '/complete-collaborator-fixture.css',
@@ -291,10 +293,7 @@ export async function prepareCompleteCollaboratorFixtures({
                     `Collaborator browser imported source or wrong SDK format: ${packagePath}`
                 );
                 item.archiveMember = 'package/' + packagePath;
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, item.archiveMember])
-                );
+                assert.deepEqual(bytes, readArchiveMember(item.archiveMember));
             }
             inputs.push(item);
         }

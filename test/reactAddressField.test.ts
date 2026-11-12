@@ -19,7 +19,14 @@ const identity = { session: 'A', field: 'address', readScope: 'token-A' };
 
 async function fixture(t: TestContext, manual = false) {
     const window = new Window({ url: 'https://address.example.invalid' });
+    let network = 0;
+    const rejectNetwork = async () => {
+        network++;
+        throw Error('Unexpected real network');
+    };
+    Object.defineProperty(window, 'fetch', { value: rejectNetwork });
     const globals = {
+        fetch: rejectNetwork,
         window,
         document: window.document,
         navigator: window.navigator,
@@ -129,6 +136,7 @@ async function fixture(t: TestContext, manual = false) {
         try {
             await act(async () => root.unmount());
             assert.equal(submits, 0);
+            assert.equal(network, 0);
             assert.equal(ref.current, null);
         } finally {
             t.mock.timers.reset();
@@ -196,7 +204,10 @@ async function fixture(t: TestContext, manual = false) {
     };
 }
 
-it('renders natural readonly and manual modes on the server without read or write authority', () => {
+it('renders natural readonly and manual modes on the server without read or write authority', (t) => {
+    t.mock.method(globalThis, 'fetch', () => {
+        throw Error('Unexpected server-render network');
+    });
     let writes = 0;
     const readonly = renderToString(
         h(AddressField, {

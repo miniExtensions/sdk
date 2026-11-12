@@ -3540,6 +3540,21 @@ browser interaction and layout inspection are separate from its injected DOM che
 
 ## React Multiple Collaborators presentation
 
+For a complete searchable picker, import `MultipleCollaboratorsField` with
+`mode="controlled"`, authoritative `choices`, ordered native `value`, current
+`owner` and `onValueChange`. `ControlledMultipleCollaboratorsFieldProps<T>`
+preserves the caller's native object subtype. Import
+`@miniextensions/sdk/react/complete-collaborators.css` for the complete UI.
+See [Complete Collaborator fields](complete-collaborators.md) for the controlled
+contract, ownership, images and accessible associations.
+
+The existing binding contract below remains display-only. It is also explicitly
+exported as `BindingMultipleCollaboratorsField` and
+`BindingMultipleCollaboratorsFieldProps`. The original named
+`MultipleCollaboratorsFieldProps`, unchanged binding JSX and custom `render`
+contextual typing remain compatible. `CompleteMultipleCollaboratorsField`
+continues to provide the complete picker without the controlled discriminator.
+
 The optional `/react` entry exports `MultipleCollaboratorsField`,
 `MultipleCollaboratorsFieldProps`, `MultipleCollaboratorsFieldOptions` and
 `renderMultipleCollaboratorsField`. Install the renderer in the existing physical

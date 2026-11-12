@@ -72,11 +72,11 @@ export function completeCollaboratorBrowserSource(format) {
             ? `import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField} from '@miniextensions/sdk/react';\n`
+import {CompleteSingleCollaboratorField,MultipleCollaboratorsField} from '@miniextensions/sdk/react';\n`
             : `const React = require('react');
 const {createRoot} = require('react-dom/client');
 const {flushSync} = require('react-dom');
-const {CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField} = require('@miniextensions/sdk/react');\n`;
+const {CompleteSingleCollaboratorField,MultipleCollaboratorsField} = require('@miniextensions/sdk/react');\n`;
     return (
         imports +
         `const format = ${JSON.stringify(format)};\n` +
@@ -145,14 +145,14 @@ function App({initial}){
     writer:current.writer,adjacent:document.getElementById('adjacent')?.value});
    if(!current.refuseChanges)update(previous=>({...previous,value:next,revision:previous.revision+1}));
   }};
- const component=current.mode==='single'?CompleteSingleCollaboratorField:CompleteMultipleCollaboratorsField;
+ const component=current.mode==='single'?CompleteSingleCollaboratorField:MultipleCollaboratorsField;
  return React.createElement('form',{id:'collaborator-form',onSubmit(event){event.preventDefault();state.submits++;}},
   React.createElement('div',{className:'fixture-primary'},
    React.createElement('label',{htmlFor:'native-collaborator'},'Synthetic collaborator'),
    React.createElement('p',{id:current.helpId},'Supplied collaborator help'),
    React.createElement('p',{id:current.errorId},'Supplied collaborator error'),
    React.createElement('section',{id:'field',onClick:()=>state.parentClicks++,onKeyDown:()=>state.parentKeys++},
-    current.mounted?React.createElement(component,{...common,value:current.value}):null)),
+    current.mounted?React.createElement(component,{...common,mode:current.mode==='multiple'?'controlled':undefined,value:current.value}):null)),
   React.createElement('div',{className:'fixture-neighbors'},
    React.createElement('label',{htmlFor:'adjacent'},'Adjacent draft'),
    React.createElement('input',{id:'adjacent',defaultValue:'Keep adjacent dirty value'}),
@@ -991,6 +991,13 @@ export async function checkCompleteCollaboratorBrowser({
         value = await snapshot();
         assert.deepEqual(value.valueTags, []);
         assert.deepEqual(value.writes.at(-1).valueTags, []);
+        assert.equal(
+            await input().evaluate(
+                (element) => element === document.activeElement
+            ),
+            true,
+            'accepted last multiple removal returns focus to the current input'
+        );
         await input().fill('');
         await page
             .getByRole('button', { name: 'Open supplied choices', exact: true })
@@ -1033,10 +1040,71 @@ export async function checkCompleteCollaboratorBrowser({
             'refused selection/removal commit no private value and consume focus requests before unrelated later canonical changes'
         );
 
+        for (const refuseChanges of [false, true]) {
+            await configure({
+                mode: 'multiple',
+                valueTags: [],
+                choiceTags: ['A', 'B'],
+                refuseChanges,
+            });
+            await input().fill('Alpha');
+            await page.getByRole('option').first().waitFor();
+            const start = (await snapshot()).writes.length;
+            try {
+                await page.evaluate(() => {
+                    const request = window.requestAnimationFrame;
+                    const frames = [];
+                    window.requestAnimationFrame = (callback) => {
+                        frames.push(callback);
+                        return frames.length;
+                    };
+                    window.__flushCollaboratorPointerFrames = () => {
+                        window.requestAnimationFrame = request;
+                        const pending = frames.splice(0);
+                        pending.forEach((callback) =>
+                            callback(performance.now())
+                        );
+                        return document.activeElement?.id === 'adjacent';
+                    };
+                    document
+                        .querySelector('#field [role="option"]')
+                        .dispatchEvent(
+                            new MouseEvent('mousedown', {
+                                button: 0,
+                                bubbles: true,
+                                cancelable: true,
+                            })
+                        );
+                });
+                await adjacent.focus();
+                assert.equal(
+                    await page.evaluate(() =>
+                        window.__flushCollaboratorPointerFrames()
+                    ),
+                    true
+                );
+            } finally {
+                await page.evaluate(() => {
+                    window.__flushCollaboratorPointerFrames?.();
+                    delete window.__flushCollaboratorPointerFrames;
+                });
+            }
+            await writeCount(start + 1);
+            await canonical(refuseChanges ? [] : ['A']);
+            assert.equal(
+                (await snapshot()).adjacent,
+                'Keep adjacent dirty value'
+            );
+        }
+        await record(
+            'accepted and refused pointer selections cannot reclaim an adjacent draft after their pending animation frames'
+        );
+
         await configure({
             mode: 'multiple',
             valueTags: [],
             choiceTags: ['A', 'B'],
+            refuseChanges: false,
         });
         await input().fill('Alpha');
         await page.evaluate(() => window.__collaboratorFixture.rememberInput());
@@ -1232,7 +1300,7 @@ export async function checkCompleteCollaboratorBrowser({
         await record(
             'whole-root StrictMode unmount/remount preserves caller values without reviving a retired action'
         );
-        assert.equal(groups.length, 11);
+        assert.equal(groups.length, 12);
         evidence.browserGroups = groups;
     } catch (error) {
         failure = error;

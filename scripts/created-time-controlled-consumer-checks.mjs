@@ -15,6 +15,10 @@ import {
     checkCreatedTimeConsumer,
     createdTimeReactTypedConsumer,
 } from './created-time-consumer-checks.mjs';
+import {
+    checkLastModifiedTimeConsumer,
+    lastModifiedTimeReactTypedConsumer,
+} from './last-modified-time-consumer-checks.mjs';
 
 const typedConsumer = `
 import {createElement} from 'react';
@@ -81,7 +85,12 @@ async function load(consumer, format) {
           );
 }
 
-async function profile(directory, format, happyDomModulePath) {
+async function profile(
+    directory,
+    format,
+    happyDomModulePath,
+    field = 'createdTime'
+) {
     const consumer = createRequire(join(directory, 'package.json'));
     const React = consumer('react');
     const { createElement: h, act } = React;
@@ -89,7 +98,31 @@ async function profile(directory, format, happyDomModulePath) {
     assert.equal(typeof document, 'undefined');
     const api = await load(consumer, format);
     const server = consumer('react-dom/server');
-    const html = server.renderToString(h(api.CreatedTimeField, initial));
+    const Field =
+        field === 'createdTime'
+            ? api.CreatedTimeField
+            : (props) => {
+                  const { dateConfig, ...common } = props;
+                  return h(api.LastModifiedTimeField, {
+                      ...common,
+                      fieldConfig: {
+                          type: 'lastModifiedTime',
+                          options: {
+                              isValid: props.isValid ?? true,
+                              result: dateConfig,
+                          },
+                      },
+                  });
+              };
+    assert.equal(
+        typeof api[
+            field === 'createdTime'
+                ? 'BindingCreatedTimeField'
+                : 'BindingLastModifiedTimeField'
+        ],
+        'function'
+    );
+    const html = server.renderToString(h(Field, initial));
     assert.match(html, /2026-11-12 07:30/);
     assert.doesNotMatch(html, /<input|<button|<iframe/);
     assert.equal(typeof document, 'undefined');
@@ -107,9 +140,7 @@ async function profile(directory, format, happyDomModulePath) {
         },
     };
     assert.match(
-        server.renderToString(
-            h(api.CreatedTimeField, { ...initial, ...localeProps })
-        ),
+        server.renderToString(h(Field, { ...initial, ...localeProps })),
         /Thursday 12 November 2026 07:30/
     );
     for (const style of [
@@ -180,7 +211,7 @@ async function profile(directory, format, happyDomModulePath) {
         const errors = [];
         const { hydrateRoot } = consumer('react-dom/client');
         await act(async () => {
-            root = hydrateRoot(container, h(api.CreatedTimeField, initial), {
+            root = hydrateRoot(container, h(Field, initial), {
                 onRecoverableError: (error) => errors.push(error),
             });
         });
@@ -211,7 +242,7 @@ async function profile(directory, format, happyDomModulePath) {
                         h('span', { id: association.labelId }, 'Created'),
                         h('span', { id: association.descriptionId }, 'Help'),
                         h('span', { id: association.errorId }, 'Feedback'),
-                        h(api.CreatedTimeField, {
+                        h(Field, {
                             ...initial,
                             owner,
                             identity: 'record-a',
@@ -235,9 +266,36 @@ async function profile(directory, format, happyDomModulePath) {
         await render({ ...localeProps, value: null });
         assert.match(container.textContent, /Pas de Valeur/);
         await render({ ...localeProps, dateLanguage: undefined });
-        assert.match(container.textContent, /jeudi 12 novembre 2026 07:30/);
+        assert.match(
+            container.textContent,
+            field === 'createdTime'
+                ? /jeudi 12 novembre 2026 07:30/
+                : /Thursday 12 November 2026 07:30/
+        );
         await render(localeProps);
         assert.match(container.textContent, /Thursday 12 November 2026 07:30/);
+        if (field === 'lastModifiedTime') {
+            await render({ isValid: false });
+            assert.match(container.textContent, /No Value/);
+            await render({
+                isValid: true,
+                dateConfig: {
+                    type: 'date',
+                    options: { dateFormat: { format: 'YYYY-MM-DD' } },
+                },
+                value: '2026-11-13',
+            });
+            assert.match(container.textContent, /2026-11-13/);
+            await render({
+                isValid: false,
+                displayAsAttachments: true,
+                displayAsButton: true,
+                value: 'https://example.invalid/a.png',
+                attachmentOptions: { disableDownloadFiles: true },
+            });
+            assert.equal(container.querySelector('a'), null);
+            assert.ok(container.querySelector('button'));
+        }
         await render({ value: null, language: 'es' });
         assert.match(container.textContent, /Sin Valor/);
         let coercions = 0;
@@ -455,6 +513,7 @@ export async function checkCreatedTimeReactMatrix({
     archivePath,
     typescriptBin,
     happyDomModulePath,
+    field = 'createdTime',
 }) {
     const temporary = mkdtempSync(join(tmpdir(), 'sdk-created-time-'));
     const versions = [];
@@ -491,17 +550,43 @@ export async function checkCreatedTimeReactMatrix({
                 ],
                 { cwd: directory, stdio: 'inherit', timeout: 120000 }
             );
+            const currentTypedConsumer =
+                field === 'createdTime'
+                    ? typedConsumer
+                    : typedConsumer
+                          .replaceAll('CreatedTime', 'LastModifiedTime')
+                          .replace(
+                              "dateConfig:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}}",
+                              "fieldConfig:{type:'lastModifiedTime',options:{isValid:true,result:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}}}}"
+                          ) +
+                      `
+// @ts-expect-error Binding mode cannot mix controlled preview props through spreads.
+createElement(LastModifiedTimeField,{...old,inert:true});
+// @ts-expect-error Binding mode cannot borrow controlled identity.
+createElement(LastModifiedTimeField,{...old,identity:{}});
+`;
             for (const extension of ['mts', 'cts', 'tsx']) {
                 const name = `created-time.${extension}`;
                 writeFileSync(
                     join(directory, name),
                     extension === 'tsx'
-                        ? createdTimeReactTypedConsumer +
+                        ? (field === 'createdTime'
+                              ? createdTimeReactTypedConsumer
+                              : lastModifiedTimeReactTypedConsumer) +
                               "\nimport {createElement} from 'react';\nimport type {DocumentThumbnailOptions,DocumentThumbnailSource} from '@miniextensions/sdk/react';\n" +
-                              typedConsumer.slice(
-                                  typedConsumer.indexOf('const preloaded:')
+                              (field === 'lastModifiedTime'
+                                  ? 'declare const old:LastModifiedTimeFieldProps;\n'
+                                  : '') +
+                              (field === 'createdTime'
+                                  ? typedConsumer
+                                  : currentTypedConsumer
+                              ).slice(
+                                  (field === 'createdTime'
+                                      ? typedConsumer
+                                      : currentTypedConsumer
+                                  ).indexOf('const preloaded:')
                               )
-                        : typedConsumer
+                        : currentTypedConsumer
                 );
                 execFileSync(
                     process.execPath,
@@ -532,6 +617,7 @@ export async function checkCreatedTimeReactMatrix({
                         '--legacy',
                         directory,
                         happyDomModulePath,
+                        field,
                     ],
                     { cwd: directory, encoding: 'utf8' }
                 )
@@ -548,6 +634,7 @@ export async function checkCreatedTimeReactMatrix({
                             directory,
                             format,
                             happyDomModulePath,
+                            field,
                         ],
                         { cwd: directory, encoding: 'utf8' }
                     )
@@ -558,7 +645,7 @@ export async function checkCreatedTimeReactMatrix({
             }
             versions.push({ react: version.react, legacy, profiles });
             console.log(
-                `Installed Created Time React${version.react}: legacy20 groups and controlled ESM/CJS/types/JSX/CSS/SSR/hydration/owner checks passed.`
+                `Installed ${field} React${version.react}: legacy20 groups and controlled ESM/CJS/types/JSX/CSS/SSR/hydration/owner checks passed.`
             );
         }
         return { versions, cleanup: 'completed' };
@@ -569,13 +656,22 @@ export async function checkCreatedTimeReactMatrix({
 if (process.argv[2] === '--profile')
     console.log(
         JSON.stringify(
-            await profile(process.argv[3], process.argv[4], process.argv[5])
+            await profile(
+                process.argv[3],
+                process.argv[4],
+                process.argv[5],
+                process.argv[6]
+            )
         )
     );
 if (process.argv[2] === '--legacy')
     console.log(
         JSON.stringify(
-            await checkCreatedTimeConsumer({
+            await (
+                process.argv[5] === 'lastModifiedTime'
+                    ? checkLastModifiedTimeConsumer
+                    : checkCreatedTimeConsumer
+            )({
                 consumerDirectory: process.argv[3],
                 happyDomModulePath: process.argv[4],
             })

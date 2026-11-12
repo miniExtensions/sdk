@@ -648,6 +648,7 @@ for (const name of [
     'complete-barcode-scanner',
     'complete-portal-chart',
     'complete-address',
+    'address-field',
     'complete-collaborators',
     'form-header',
     'date',

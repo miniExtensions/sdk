@@ -5923,3 +5923,18 @@ it does not create CSS inheritance across a portal. DOM-only styles (including
 raw tokens supplied only via `style`) are deliberately not discovered, read
 with computed styles, or promised propagation. No generic portal engine,
 script/style injection or global theme store is installed.
+
+### Complete controlled Checkbox
+
+`CheckboxField` from `@miniextensions/sdk/react` accepts either the existing
+`{ binding, render?, className? }` contract or controlled `{ value, onChange }`
+props. Controlled props provide the native checkbox, toggle, button and readonly
+modes, standalone title/feedback or shell `presentation` associations. Import
+`@miniextensions/sdk/react/checkbox.css` for all modes and configured scheduling.
+
+Pass `calendly` with explicit `configuredUrl`, resolved `email`/`name`,
+`embedDomain`, stable current `ownerKey` and `onScheduled` admission. The SDK
+composes its qualified widget; there is no native renderer slot. Scheduling
+completion uses only `onScheduled`, ordinary edits only `onChange`; neither
+implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
+value). Existing `CompleteCheckboxField` remains compatible.

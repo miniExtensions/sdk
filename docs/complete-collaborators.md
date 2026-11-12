@@ -143,7 +143,10 @@ can override `--mx-sdk-collaborator-accent`, `--mx-sdk-collaborator-tint`,
 `--mx-sdk-collaborator-focus` and `--mx-sdk-collaborator-active` on that root
 without supplying a renderer or a global utility stylesheet.
 
-The older `SingleCollaboratorField`, `MultipleCollaboratorsField` and their
-renderer-slot helpers remain deliberately display-only, including their
-mask-before-read and no-action contracts. These complete controls are an
-explicit additional API.
+The natural `SingleCollaboratorField` and `MultipleCollaboratorsField` names
+accept these complete picker contracts with an explicit `mode="controlled"`.
+Their original binding calls (with no mode), explicit `Binding` exports and
+renderer-slot helpers remain display-only, including their mask-before-read
+and no-action contracts. `SingleCollaboratorFieldProps` retains its original
+binding shape; `ControlledSingleCollaboratorFieldProps<T>` names the controlled
+single contract. The `Complete` exports remain compatible.

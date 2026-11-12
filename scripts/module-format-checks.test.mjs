@@ -634,6 +634,7 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
 
 for (const name of [
     'button',
+    'form-group',
     'checkbox',
     'text',
     'number',
@@ -648,6 +649,7 @@ for (const name of [
     'complete-barcode-scanner',
     'complete-portal-chart',
     'complete-address',
+    'address-field',
     'complete-collaborators',
     'form-header',
     'date',

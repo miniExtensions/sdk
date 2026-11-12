@@ -4,6 +4,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
+import { richTextDocumentNavigationKeys } from './browser-complete-rich-text-checks.mjs';
 
 // Native input through the installed canonical API. The host owns one draft and
 // explicit submit; this fixture never supplies an SDK client or editor renderer.
@@ -119,6 +120,9 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                   route.abort())
         );
         await page.goto(origin);
+        const documentKeys = richTextDocumentNavigationKeys(
+            await page.evaluate(() => navigator.platform)
+        );
         const editor = page.getByRole('textbox', { name: 'Notes' });
         await editor.waitFor();
         const snapshot = () =>
@@ -144,7 +148,7 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
             'formatted Markdown, checkbox, label/help/error and form ancestry'
         );
         await editor.click();
-        await editor.press('ControlOrMeta+End');
+        await editor.press(documentKeys.end);
         await page.keyboard.type(' typed');
         await page.waitForFunction(() =>
             window.canonicalRichText.snapshot().state.value.includes('typed')
@@ -191,7 +195,7 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         await page.evaluate(() => window.canonicalRichText.staleEvent());
         assert.equal((await snapshot()).writes.length, writes);
         await editor.click();
-        await editor.press('ControlOrMeta+End');
+        await editor.press(documentKeys.end);
         await page.keyboard.type(' current');
         await page.waitForFunction(
             () =>

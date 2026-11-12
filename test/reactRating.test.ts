@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     NumberField,
+    type RatingFieldProps,
     RatingField,
     FieldRenderer,
     renderRatingField,
@@ -192,7 +193,11 @@ it('RatingField and NumberField keep native ratings and precision without scalin
         },
         0.25
     );
-    for (const Component of [RatingField, NumberField]) {
+    const bindingComponents: Array<(props: RatingFieldProps) => ReactNode> = [
+        RatingField,
+        NumberField,
+    ];
+    for (const Component of bindingComponents) {
         await f.render(
             h(Component, { binding: f.binding, className: 'rating' })
         );

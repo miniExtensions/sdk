@@ -87,6 +87,7 @@
             }
         },
         "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
+        "./react/form-group.css": "./dist/esm/react/form-group.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
@@ -122,6 +123,7 @@
         "./react/html-description.css": "./dist/esm/react/html-description.css",
         "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
         "./react/complete-address.css": "./dist/esm/react/complete-address.css",
+        "./react/address-field.css": "./dist/esm/react/address-field.css",
         "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
         "./react/form-completion.css": "./dist/esm/react/form-completion.css",
         "./react/barcode.css": "./dist/esm/react/barcode.css",
@@ -180,6 +182,7 @@
         "examples/react-form-completion/build.mjs",
         "examples/react-form-completion/tsconfig.json",
         "docs/form-header.md",
+        "docs/form-groups.md",
         "docs/field-presentation.md",
         "examples/react-form-header/README.md",
         "examples/react-form-header/main.ts",

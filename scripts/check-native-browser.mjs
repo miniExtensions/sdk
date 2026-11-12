@@ -68,6 +68,10 @@ import {
     checkFieldPresentationBrowser,
 } from './field-presentation-consumer-checks.mjs';
 import {
+    prepareFormGroupBrowserFixtures,
+    checkFormGroupBrowser,
+} from './form-group-consumer-checks.mjs';
+import {
     checkHTMLDescriptionBrowser,
     checkHTMLDescriptionEditorStyleCoexistence,
 } from './html-description-consumer-checks.mjs';
@@ -1537,6 +1541,7 @@ try {
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
+            'scripts/form-group-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
@@ -1972,6 +1977,18 @@ try {
             regular,
             hash,
         });
+        await prepareFormGroupBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         const multilineEntry = join(temporary, 'complete-multiline.mjs');
         writeFileSync(multilineEntry, completeMultilineBrowserSource);
         const multilineBundle = await build({
@@ -2227,19 +2244,26 @@ try {
             evidence: report.completeCalendly,
             output,
         });
-        for (const format of ['esm', 'cjs']) {
-            const key =
-                format === 'esm'
-                    ? 'completeAddress'
-                    : 'completeAddressCommonJS';
-            report[key] = {};
-            await checkCompleteAddressBrowser({
-                browser,
-                consumer: temporary,
-                evidence: report[key],
-                output,
-                format,
-            });
+        for (const control of ['complete', 'natural']) {
+            for (const format of ['esm', 'cjs']) {
+                const key =
+                    control === 'natural'
+                        ? format === 'esm'
+                            ? 'addressField'
+                            : 'addressFieldCommonJS'
+                        : format === 'esm'
+                          ? 'completeAddress'
+                          : 'completeAddressCommonJS';
+                report[key] = {};
+                await checkCompleteAddressBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report[key],
+                    output,
+                    format,
+                    control,
+                });
+            }
         }
         report.formTracking = {};
         await checkFormTrackingBrowser({
@@ -2858,6 +2882,10 @@ try {
                 page,
                 evidence: report.fieldPresentation,
             });
+        });
+        await run('form-group', async (page, origin) => {
+            await page.goto(origin + '/form-group.html');
+            await checkFormGroupBrowser({ page, evidence: report.formGroup });
         });
         for (const format of portalChartFixtures.formats) {
             await run(
@@ -3835,8 +3863,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include the complete field-presentation assembly in fixed cases.
-            25 +
+            // Include complete field presentation and one-page section groups.
+            26 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

@@ -1,4 +1,9 @@
 import {
+    CompleteLocalizedNumericField,
+    type CompleteLocalizedNumericRendererProps,
+    type CompleteLocalizedNumericFieldOptions,
+} from './CompleteLocalizedNumericField.js';
+import {
     ControlledCheckboxField,
     type ControlledCheckboxFieldProps,
 } from './ControlledCheckboxField.js';
@@ -11,6 +16,14 @@ export {
     type CompleteAddressAutocompleteProps,
     type AddressAutocompleteLabels,
 } from './CompleteAddressAutocomplete.js';
+export { AddressField } from './AddressField.js';
+export type {
+    AddressFieldProps,
+    AutocompleteAddressFieldProps,
+    ManualAddressFieldProps,
+    ReadOnlyAddressFieldProps,
+    AddressFieldScannerOptions,
+} from './AddressField.js';
 export {
     useAddressAutocomplete,
     type AddressAutocompleteIdentity,
@@ -231,7 +244,13 @@ export {
 } from './SingleSelectField.js';
 import { LookupControl, type LookupFieldOptions } from './LookupField.js';
 export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
-import { RollupControl, type RollupFieldOptions } from './RollupField.js';
+import {
+    RollupControl,
+    ControlledRollupField,
+    type ControlledRollupFieldProps,
+    type RollupFieldOptions,
+} from './RollupField.js';
+export type { ControlledRollupFieldProps } from './RollupField.js';
 export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
 import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
 export {
@@ -1106,9 +1125,29 @@ export function LookupField({
         className,
     });
 }
+/** Compatibility binding props retain the inert computed-answer contract. */
 export type RollupFieldProps = FieldProps & RollupFieldOptions;
+type BoundRollupComponentProps = RollupFieldProps & {
+    mode?: never;
+    isValid?: never;
+    value?: never;
+    language?: never;
+    textSize?: never;
+    layout?: never;
+};
+type RollupComponentProps =
+    | BoundRollupComponentProps
+    | ControlledRollupFieldProps;
+export function RollupField(props: BoundRollupComponentProps): ReactNode;
+export function RollupField(props: ControlledRollupFieldProps): ReactNode;
+export function RollupField(props: RollupComponentProps): ReactNode;
+export function RollupField(props: RollupComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledRollupField, props)
+        : createElement(BoundRollupField, props);
+}
 /** Present the accepted computed answer without borrowing any binding actions. */
-export function RollupField({
+function BoundRollupField({
     binding,
     render,
     className,
@@ -1357,6 +1396,38 @@ export function EmailField(props: EmailComponentProps): ReactNode {
         ? createElement(ControlledEmailField, props)
         : createElement(TextField, props);
 }
+/** The controlled Number facade uses the existing localized numeric engine.
+ * Binding callers retain their raw scalar grammar and native units. */
+export type ControlledNumberFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'number' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundNumberComponentProps = NumberFieldProps &
+    DurationFieldOptions &
+    CurrencyFieldOptions & {
+        mode?: never;
+        field?: never;
+        options?: never;
+    };
+type NumberComponentProps =
+    | BoundNumberComponentProps
+    | ControlledNumberFieldProps;
+export function NumberField(props: BoundNumberComponentProps): ReactNode;
+export function NumberField(props: ControlledNumberFieldProps): ReactNode;
+export function NumberField(props: NumberComponentProps): ReactNode;
+export function NumberField(props: NumberComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'number'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
+    return createElement(BoundNumberField, props);
+}
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
 export type RatingFieldProps = NumberFieldProps & RatingFieldOptions;
@@ -1423,7 +1494,7 @@ function BoundIconRatingField({
 export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
-export function NumberField({
+function BoundNumberField({
     binding,
     render,
     className,
@@ -2645,6 +2716,12 @@ export {
     type CompleteFormTrackingDisclosureProps,
     type FormTrackingDisclosureLabels,
 } from './CompleteFormTrackingDisclosure.js';
+
+export {
+    FormGroup,
+    type FormGroupProps,
+    type FormGroupPreview,
+} from './FormGroup.js';
 
 export {
     CompleteFormCompletion,

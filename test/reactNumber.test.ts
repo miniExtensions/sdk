@@ -465,3 +465,65 @@ it('hidden and retired owners do not leave an editable control or reset retained
     await f.render(h(NumberField, { binding: f.binding }));
     assert.equal(f.container.querySelector('input'), null);
 });
+
+it('controlled Number uses localized canonical writes while binding Number retains raw drafts', async (t) => {
+    const f = await fixture(t, { allowNegativeNumbers: true }, 1234.5);
+    await f.render(
+        h(NumberField, {
+            mode: 'controlled',
+            field: {
+                ...f.props(),
+                displayConfig: {
+                    numberSeparator: 'space-comma',
+                    showThousandsSeparator: true,
+                    allowNegativeNumbers: true,
+                },
+            },
+            options: { input: { id: 'native-number', form: 'existing-form' } },
+        })
+    );
+    assert.equal(f.input().value, '1 234,50');
+    assert.equal(f.input().id, 'native-number');
+    assert.equal(f.input().getAttribute('form'), 'existing-form');
+    await act(async () => f.input().focus());
+    await f.edit('-42,755');
+    assert.equal(f.binding.getSnapshot().value, -42.76);
+    assert.equal(f.input().value, '-42,755');
+    await f.edit('0,');
+    assert.equal(f.binding.getSnapshot().value, 0);
+    assert.equal(f.input().value, '0,');
+    await f.edit('');
+    assert.equal(f.binding.getSnapshot().value, null);
+    await f.render(h(NumberField, { binding: f.binding }));
+    await f.edit('1e2');
+    assert.equal(f.binding.getSnapshot().value, 100);
+    assert.equal(f.input().value, '1e2');
+});
+
+it('controlled Number display preserves zero and empty values without an editable control', async (t) => {
+    const f = await fixture(t, {}, 0);
+    for (const [value, text] of [
+        [0, '0,00'],
+        [null, 'No amount'],
+    ] as const) {
+        await f.render(
+            h(NumberField, {
+                mode: 'controlled',
+                field: {
+                    ...f.props(),
+                    value,
+                    displayConfig: { numberSeparator: 'period-comma' },
+                    capability: { type: 'readonly' },
+                },
+                options: {
+                    presentation: 'display',
+                    showLabel: false,
+                    emptyLabel: 'No amount',
+                },
+            })
+        );
+        assert.equal(f.container.querySelector('input'), null);
+        assert.ok(f.container.textContent?.includes(text));
+    }
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});

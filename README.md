@@ -289,9 +289,12 @@ No CSS import is required. Lookup remains a separate presentation.
 
 [Rollup presentation](docs/ui.md#react-rollup-presentation) exports
 `RollupField`, `RollupFieldProps`, `RollupFieldOptions` and the typed
-`renderRollupField` slot. It displays supplied aggregate results as inert text
-using existing native formatting, without evaluating the aggregation or reading
-linked records. No CSS import is required. Lookup keeps its separate contract.
+`renderRollupField` slot. An explicit controlled branch accepts current validity
+and already-converted text for complete readonly presentation, using
+`complete-readonly-text.css`. Existing bindings display supplied aggregate results
+as inert text using existing native formatting, without evaluating the aggregation
+or reading linked records. Binding rendering requires no CSS import. Lookup keeps
+its separate contract.
 
 [Lookup presentation](docs/ui.md#react-lookup-presentation) exports `LookupField`,
 `LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing
@@ -401,6 +404,17 @@ edit ownership and optional `@miniextensions/sdk/react/complete-phone.css`.
 controlled props cannot be mixed; the existing `Complete*` exports remain available.
 `PhoneNumberFieldProps` retains its binding-based type contract;
 `ControlledPhoneNumberFieldProps` names the complete controlled contract.
+
+`NumberField` also accepts an explicit `mode: 'controlled'` with a canonical
+`field` whose `physicalKind` is `'number'`, plus optional `options`. This branch
+reuses `CompleteLocalizedNumericField` for localized input and display; import
+`@miniextensions/sdk/react/localized-numeric.css`. Set
+`options.presentation: 'display'` for readonly output. The host retains the
+canonical number/null writer, current-owner guard and explicit Save action.
+`ControlledNumberFieldProps` names this contract; `NumberFieldProps` keeps the
+existing binding API and raw scalar drafts. Percent, Currency, Duration and
+Rating binding callers retain their existing units and grammar. The
+`CompleteLocalizedNumericField` exports remain available.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

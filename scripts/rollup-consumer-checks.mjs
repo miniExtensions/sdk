@@ -1,13 +1,33 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 export const rollupReactTypedConsumer = `
 import type { ReactNode } from 'react';
-import { RollupField, renderRollupField, AirtableForm, AirtableGrid, AirtableList, type RollupFieldProps, type RollupFieldOptions } from '@miniextensions/sdk/react';
+import { RollupField, renderRollupField, AirtableForm, AirtableGrid, AirtableList, type RollupFieldProps, type RollupFieldOptions, type ControlledRollupFieldProps } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
+const nativeProps: ControlledRollupFieldProps = {mode: 'controlled', isValid: true, value: 'CHF 0.000', language: 'fr', textSize: 'large', layout: 'cell-medium'};
+export function Native() { return <RollupField {...nativeProps} />; }
+export function Invalid() { return <RollupField mode="controlled" isValid={false} language="en" />; }
+export function Conditional({valid}: {valid: boolean}) { return <RollupField mode="controlled" language="en" {...(valid ? {isValid:true, value:"0"} : {isValid:false})} />; }
+// @ts-expect-error controlled mode cannot borrow a binding
+const mixed: ControlledRollupFieldProps = {...nativeProps, binding: {} as RollupFieldProps['binding']};
+// @ts-expect-error raw values must use the owner's existing readable conversion
+const raw: ControlledRollupFieldProps = {...nativeProps, value: 0};
+// @ts-expect-error invalid metadata cannot carry a stale converted result
+const stale: ControlledRollupFieldProps = {mode:'controlled', isValid:false, value:'stale', language:'en'};
+// @ts-expect-error controlled presentation has no injected renderer
+const injected: ControlledRollupFieldProps = {...nativeProps, render: () => null};
+// @ts-expect-error no setter or aggregation engine
+const setter: ControlledRollupFieldProps = {...nativeProps, setValue: () => {}};
+// @ts-expect-error explicit mode is required
+export const implicit = <RollupField isValid={true} value="0" language="en" />;
+void mixed; void raw; void stale; void injected; void setter;
 const options: RollupFieldOptions = { className: 'rollup-consumer' };
 // @ts-expect-error Rollup has no editor or write option.
 const write: RollupFieldOptions = { setValue: (value: number) => {} };
@@ -154,7 +174,14 @@ export async function checkRollupConsumer({
             value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
         });
     const { createElement: h, act, StrictMode } = require('react');
-    const { createRoot } = require('react-dom/client');
+    const { createRoot, hydrateRoot } = require('react-dom/client');
+    const { renderToString } = require('react-dom/server');
+    const css = readFileSync(
+        require.resolve('@miniextensions/sdk/react/complete-readonly-text.css'),
+        'utf8'
+    );
+    assert.match(css, /\.mx-sdk-complete-readonly-text/);
+    assert.match(css, /\.mx-sdk-rollup-error/);
     let checks = 0;
     try {
         for (const format of ['esm', 'cjs']) {
@@ -174,6 +201,32 @@ export async function checkRollupConsumer({
             );
             assert.equal(ui.renderRollupField, undefined);
             assert.equal(typeof react.RollupField, 'function');
+            const ssr = window.document.createElement('div');
+            const element = h(react.RollupField, {
+                mode: 'controlled',
+                isValid: true,
+                value: 'CHF 0.000',
+                language: 'en',
+            });
+            ssr.innerHTML = renderToString(element);
+            window.document.body.append(ssr);
+            const errors = [];
+            let hydrated;
+            try {
+                await act(async () => {
+                    hydrated = hydrateRoot(ssr, element, {
+                        onRecoverableError: (error) => errors.push(error),
+                    });
+                });
+                assert.equal(
+                    ssr.querySelector('.read-only-text').textContent,
+                    'CHF 0.000'
+                );
+                assert.deepEqual(errors, []);
+            } finally {
+                if (hydrated) await act(async () => hydrated.unmount());
+                ssr.remove();
+            }
             const { loaded, expected } = rollupLoadedFixture();
             let requests = 0;
             const fields = forms.createFormFieldBindings({
@@ -266,6 +319,67 @@ export async function checkRollupConsumer({
                 await act(async () => fields.destroy());
                 assert.equal(container.querySelector('output'), null);
                 checks++;
+                const native = (value, language = 'en') =>
+                    h(react.RollupField, {
+                        mode: 'controlled',
+                        isValid: true,
+                        value,
+                        language,
+                    });
+                for (const value of [
+                    'CHF 0.000',
+                    'false',
+                    '1, 0, false',
+                    '<b>literal</b> https://example.test/rollup',
+                ]) {
+                    await act(async () => root.render(native(value)));
+                    assert.equal(
+                        container.querySelector('.read-only-text').textContent,
+                        value
+                    );
+                    assert.equal(
+                        container.querySelector('output,input,button,img,b'),
+                        null
+                    );
+                    checks++;
+                }
+                assert.equal(
+                    container.querySelector('a').getAttribute('target'),
+                    '_blank'
+                );
+                await act(async () =>
+                    root.render(
+                        h(react.RollupField, {
+                            mode: 'controlled',
+                            isValid: false,
+                            language: 'en',
+                        })
+                    )
+                );
+                assert.match(
+                    container.querySelector('[role="alert"]').textContent,
+                    /invalid value/
+                );
+                assert.equal(
+                    container.querySelector('.read-only-text,a'),
+                    null
+                );
+                checks++;
+                await act(async () => root.render(native(null, 'es')));
+                assert.equal(
+                    container.querySelector('[data-testid="no-value-test-id"]')
+                        .textContent,
+                    'Sin Valor'
+                );
+                checks++;
+                await act(async () => root.render(native('Recovered')));
+                assert.equal(
+                    container.querySelector('.read-only-text').textContent,
+                    'Recovered'
+                );
+                assert.equal(container.querySelector('[role="alert"]'), null);
+                assert.equal(requests, 0);
+                checks++;
             } finally {
                 await act(async () => root.unmount());
                 scope.destroy();
@@ -283,3 +397,116 @@ export async function checkRollupConsumer({
     }
     return { checks };
 }
+
+export const rollupControlledTypedConsumer = `
+import {createElement as h} from 'react';
+import {RollupField,type RollupFieldProps,type ControlledRollupFieldProps} from '@miniextensions/sdk/react';
+const props:ControlledRollupFieldProps={mode:'controlled',isValid:true,value:'0',language:'en',layout:'cell-medium',textSize:'large'};
+h(RollupField,props);
+h(RollupField,{mode:'controlled',isValid:false,language:'en'});
+function bound(props:RollupFieldProps){h(RollupField,props);}
+// @ts-expect-error native raw values require the existing host conversion
+const raw:ControlledRollupFieldProps={...props,value:0};
+// @ts-expect-error invalid result has no stale converted value
+const invalid:ControlledRollupFieldProps={mode:'controlled',isValid:false,value:'stale',language:'en'};
+// @ts-expect-error bindings and controlled values cannot be mixed
+const mixed:ControlledRollupFieldProps={...props,binding:{} as RollupFieldProps['binding']};
+// @ts-expect-error no injected React renderer
+const renderer:ControlledRollupFieldProps={...props,render:()=>null};
+// @ts-expect-error no canonical setter
+const setter:ControlledRollupFieldProps={...props,setValue:()=>{}};
+void raw;void invalid;void mixed;void renderer;void setter;void bound;
+`;
+
+export function checkRollupReactMatrix({
+    archivePath,
+    typescriptBin,
+    happyDomModulePath,
+}) {
+    const directory = mkdtempSync(join(tmpdir(), 'sdk-rollup-matrix-'));
+    const versions = [];
+    const run = (command, args) =>
+        execFileSync(command, args, { cwd: directory, stdio: 'inherit' });
+    try {
+        writeFileSync(
+            join(directory, 'package.json'),
+            JSON.stringify({
+                private: true,
+                type: 'module',
+                dependencies: { '@miniextensions/sdk': `file:${archivePath}` },
+            })
+        );
+        for (const version of [
+            { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
+            { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
+        ]) {
+            run('npm', [
+                'install',
+                '--ignore-scripts',
+                '--strict-peer-deps',
+                '--no-audit',
+                '--no-fund',
+                '--package-lock=false',
+                `react@${version.react}`,
+                `react-dom@${version.react}`,
+                `@types/react@${version.types}`,
+                `@types/react-dom@${version.domTypes}`,
+            ]);
+            for (const extension of ['mts', 'cts', 'tsx']) {
+                const name = `rollup.${extension}`;
+                writeFileSync(
+                    join(directory, name),
+                    extension === 'tsx'
+                        ? rollupReactTypedConsumer
+                        : rollupControlledTypedConsumer
+                );
+                run(process.execPath, [
+                    typescriptBin,
+                    '--noEmit',
+                    '--jsx',
+                    'react-jsx',
+                    '--strict',
+                    '--skipLibCheck',
+                    'false',
+                    '--target',
+                    'ES2022',
+                    '--module',
+                    'NodeNext',
+                    '--moduleResolution',
+                    'NodeNext',
+                    name,
+                ]);
+            }
+            const result = JSON.parse(
+                execFileSync(
+                    process.execPath,
+                    [
+                        fileURLToPath(import.meta.url),
+                        '--run-consumer',
+                        directory,
+                        happyDomModulePath,
+                    ],
+                    { cwd: directory, encoding: 'utf8' }
+                )
+            );
+            assert.equal(result.checks, 40);
+            versions.push({ react: version.react, ...result });
+            console.log(
+                `Installed Rollup React${version.react}: ${result.checks} ESM/CJS binding/controlled scenarios, SSR/hydration, MTS/CTS/JSX and CSS passed.`
+            );
+        }
+        return { versions, cleanup: 'completed' };
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
+}
+
+if (process.argv[2] === '--run-consumer')
+    console.log(
+        JSON.stringify(
+            await checkRollupConsumer({
+                consumerDirectory: process.argv[3],
+                happyDomModulePath: process.argv[4],
+            })
+        )
+    );

@@ -3322,20 +3322,26 @@ canonical object/null values and current write authority. No renderer injection,
 SDK client or implicit Save is required.
 
 ```tsx
-import { SingleCollaboratorField } from '@miniextensions/sdk/react';
+import {
+    SingleCollaboratorField,
+    type ControlledSingleCollaboratorFieldProps,
+} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-collaborators.css';
 
-<SingleCollaboratorField
-    mode="controlled"
-    value={assignee}
-    choices={offeredCollaborators}
-    owner={currentEditOwner}
-    onValueChange={setAssignee}
-    title="Assignee"
-    inputId="assignee"
-    formId="record-form"
-    describedBy="assignee-help assignee-error"
-/>;
+export function AssigneeField(
+    props: Omit<ControlledSingleCollaboratorFieldProps, 'mode'>
+) {
+    return (
+        <SingleCollaboratorField
+            {...props}
+            mode="controlled"
+            title="Assignee"
+            inputId="assignee"
+            formId="record-form"
+            describedBy="assignee-help assignee-error"
+        />
+    );
+}
 ```
 
 `ControlledSingleCollaboratorFieldProps<T>` preserves extra native object

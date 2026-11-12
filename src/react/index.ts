@@ -1189,15 +1189,20 @@ export function MultilineTextField({
 }
 /** Binding callers retain their literal text contract. Controlled callers use
  * the complete editor with explicit host-owned value and edit authority. */
-export type PhoneNumberFieldProps =
+export type PhoneNumberFieldProps = TextFieldProps;
+export type ControlledPhoneNumberFieldProps = CompletePhoneNumberFieldProps & {
+    binding?: never;
+    render?: never;
+};
+type PhoneNumberComponentProps =
     | (TextFieldProps & {
           value?: never;
           onValueChange?: never;
           commit?: never;
           owner?: never;
       })
-    | (CompletePhoneNumberFieldProps & { binding?: never; render?: never });
-export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
+    | ControlledPhoneNumberFieldProps;
+export function PhoneNumberField(props: PhoneNumberComponentProps): ReactNode {
     return props.binding !== undefined
         ? createElement(TextField, props)
         : createElement(CompletePhoneNumberField, props);

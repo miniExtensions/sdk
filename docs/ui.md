@@ -5310,7 +5310,10 @@ not select different parsing code. No private vendor import is a customer API.
 The existing `PhoneNumberField` binding contract remains unchanged. Its controlled
 and binding props are mutually exclusive. `PhoneEditOwner` and `PhoneCommit`
 provide the natural type names; their existing `Complete*` type names remain
-compatible. Deferred controlled edits still require the actual host owner, and
+compatible. `PhoneNumberFieldProps` remains the legacy `TextFieldProps` alias,
+including assignability and contextual renderer typing. Controlled callers may
+use `ControlledPhoneNumberFieldProps` without changing the component name.
+Deferred controlled edits still require the actual host owner, and
 the host still owns any `undefined` to `null` persistence adapter. Plain Clear
 remains `''`; country callbacks retain the real vendor's string/undefined values
 and blur-before-Clear ordering. Neither API form performs an implicit Save.

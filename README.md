@@ -387,6 +387,8 @@ The same natural `PhoneNumberField` name also accepts controlled `value` and
 edit ownership and optional `@miniextensions/sdk/react/complete-phone.css`.
 `ReadOnlyPhoneNumberField` renders saved telephone text and links. Binding and
 controlled props cannot be mixed; the existing `Complete*` exports remain available.
+`PhoneNumberFieldProps` retains its binding-based type contract;
+`ControlledPhoneNumberFieldProps` names the complete controlled contract.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

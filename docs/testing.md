@@ -768,6 +768,10 @@ and `Complete*` cases. Readonly literal presentation is also checked through
 compatibility names in each module format and retain strict mixed-prop rejection,
 React 18/19, CSS, SSR/hydration and cleanup. Native Form switches, real host
 authority and explicit Save remain separate adoption evidence.
+The original Phone consumer matrix also keeps `PhoneNumberFieldProps` assignable
+to `TextFieldProps` and preserves contextual binding-render callbacks. The new
+controlled contract uses `ControlledPhoneNumberFieldProps`; widening the old
+alias would break those existing typed consumers even when runtime cases pass.
 
 Complete readonly-text qualification includes real `linkify-react` 3.0.4
 differential source tests against the SDK-owned `linkifyjs` 3.0.5 renderer,

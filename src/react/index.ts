@@ -19,15 +19,23 @@ import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
 } from '../ui/borrowedPortalRenderScope.js';
+import {
+    CompletePhoneNumberField,
+    type CompletePhoneNumberFieldProps,
+} from './CompletePhoneNumberField.js';
 export {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
     type CompletePhoneEditOwner,
     type CompletePhoneCommit,
+    type CompletePhoneEditOwner as PhoneEditOwner,
+    type CompletePhoneCommit as PhoneCommit,
 } from './CompletePhoneNumberField.js';
 export {
     CompleteReadOnlyPhoneNumberField,
+    CompleteReadOnlyPhoneNumberField as ReadOnlyPhoneNumberField,
     type CompleteReadOnlyPhoneNumberFieldProps,
+    type CompleteReadOnlyPhoneNumberFieldProps as ReadOnlyPhoneNumberFieldProps,
 } from './CompleteReadOnlyPhoneNumberField.js';
 export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
@@ -1179,10 +1187,25 @@ export function MultilineTextField({
         setValue: (value) => binding.setValue(value).accepted,
     });
 }
-/** Phone drafts stay literal text without formatting or dialing actions. */
+/** Binding callers retain their literal text contract. Controlled callers use
+ * the complete editor with explicit host-owned value and edit authority. */
 export type PhoneNumberFieldProps = TextFieldProps;
-export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
-    return createElement(TextField, props);
+export type ControlledPhoneNumberFieldProps = CompletePhoneNumberFieldProps & {
+    binding?: never;
+    render?: never;
+};
+type PhoneNumberComponentProps =
+    | (TextFieldProps & {
+          value?: never;
+          onValueChange?: never;
+          commit?: never;
+          owner?: never;
+      })
+    | ControlledPhoneNumberFieldProps;
+export function PhoneNumberField(props: PhoneNumberComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(TextField, props)
+        : createElement(CompletePhoneNumberField, props);
 }
 /** URL drafts stay literal text and grant no navigation authority. */
 export type UrlFieldProps = TextFieldProps;

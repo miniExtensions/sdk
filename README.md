@@ -380,9 +380,15 @@ native fractions such as `0.25` remain `0.25`, without percent scaling or a suff
 
 [Phone Number presentation](docs/ui.md#react-phone-number-presentation) exports
 `PhoneNumberField`, `PhoneNumberFieldProps`, `PhoneNumberFieldOptions` and the typed
-`renderPhoneNumberField` slot. It reuses the Text control and optional
-`@miniextensions/sdk/react/text.css` for literal single-line drafts, with no phone
-normalization, country selector or dialing action.
+`renderPhoneNumberField` slot. Existing `binding` callers and the renderer slot
+retain literal single-line drafts with optional `@miniextensions/sdk/react/text.css`.
+The same natural `PhoneNumberField` name also accepts controlled `value` and
+`onValueChange` props for the complete country/plain editor, with explicit deferred
+edit ownership and optional `@miniextensions/sdk/react/complete-phone.css`.
+`ReadOnlyPhoneNumberField` renders saved telephone text and links. Binding and
+controlled props cannot be mixed; the existing `Complete*` exports remain available.
+`PhoneNumberFieldProps` retains its binding-based type contract;
+`ControlledPhoneNumberFieldProps` names the complete controlled contract.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

@@ -8,6 +8,8 @@ export const completeReadOnlyPhoneTypedConsumer = String.raw`import { createElem
 import {
     CompleteReadOnlyPhoneNumberField,
     type CompleteReadOnlyPhoneNumberFieldProps,
+    ReadOnlyPhoneNumberField,
+    type ReadOnlyPhoneNumberFieldProps,
 } from '@miniextensions/sdk/react';
 const props: CompleteReadOnlyPhoneNumberFieldProps = {
     value: '+233 20 123 4567',
@@ -18,6 +20,11 @@ const props: CompleteReadOnlyPhoneNumberFieldProps = {
 createElement(CompleteReadOnlyPhoneNumberField, props);
 createElement(CompleteReadOnlyPhoneNumberField, { ...props, value: null });
 createElement(CompleteReadOnlyPhoneNumberField, { ...props, value: undefined });
+const canonical: ReadOnlyPhoneNumberFieldProps = props;
+createElement(ReadOnlyPhoneNumberField, canonical);
+createElement(ReadOnlyPhoneNumberField, { ...canonical, value: null });
+// @ts-expect-error the canonical read-only field cannot accept a writer
+const canonicalWriter: ReadOnlyPhoneNumberFieldProps = { ...canonical, onValueChange() {} };
 // @ts-expect-error saved phone text is never a numeric value
 const numeric: CompleteReadOnlyPhoneNumberFieldProps = { ...props, value: 233 };
 // @ts-expect-error the presentation owns no writer
@@ -26,7 +33,7 @@ const writer: CompleteReadOnlyPhoneNumberFieldProps = { ...props, onValueChange(
 createElement(CompleteReadOnlyPhoneNumberField, { value: '+233' });
 // @ts-expect-error complete phone presentation is React-only
 import { CompleteReadOnlyPhoneNumberField as CorePhone } from '@miniextensions/sdk';
-void numeric; void writer; void CorePhone;
+void numeric; void writer; void CorePhone; void canonicalWriter;
 `;
 const consumerRuntime = String.raw`import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -62,7 +69,8 @@ for (const api of [esm, cjs]) {
     assert.equal(typeof api.CompleteReadOnlyPhoneNumberField, 'function');
     assert.equal(typeof api.PhoneNumberField, 'function');
     assert.equal(typeof globalThis.document, 'undefined');
-    const Component = api.CompleteReadOnlyPhoneNumberField;
+    assert.equal(typeof api.ReadOnlyPhoneNumberField, 'function');
+    for (const Component of [api.CompleteReadOnlyPhoneNumberField, api.ReadOnlyPhoneNumberField]) {
     const window = new Window();
     const keys = ['window', 'document', 'navigator', 'HTMLElement',
         'HTMLAnchorElement', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
@@ -183,6 +191,7 @@ for (const api of [esm, cjs]) {
         }
     }
 }
+}
 console.log(JSON.stringify({ react: React.version, groups, cleanup: 'completed' }));
 `;
 
@@ -257,7 +266,7 @@ export function checkCompleteReadOnlyPhoneReactMatrix({
                 )
             );
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 2);
+            assert.equal(result.groups, 4);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);
             console.log(

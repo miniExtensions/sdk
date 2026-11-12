@@ -1727,9 +1727,11 @@ Simulated composition does not certify real OS input methods.
 ## React Phone Number presentation
 
 The optional `/react` entry exports `PhoneNumberField`, `PhoneNumberFieldProps`,
-`PhoneNumberFieldOptions` and `renderPhoneNumberField`. `PhoneNumberField`
-delegates to `TextField`; its props and options are aliases of `TextFieldProps`
-and `TextFieldOptions`. The existing `{ binding, render }` override replaces all
+`PhoneNumberFieldOptions` and `renderPhoneNumberField`. With `binding`,
+`PhoneNumberField` still delegates to `TextField`; its binding props and options
+retain `TextFieldProps` and `TextFieldOptions`. Controlled `value`/`onValueChange`
+props instead select the [complete editor](#complete-editable-phone-field),
+without accepting a binding or renderer override. The existing `{ binding, render }` override replaces all
 stock markup.
 
 ```tsx
@@ -1786,7 +1788,7 @@ it performs no SMS, OTP, verification, lookup or network request.
 
 Applications own their enclosing HTML form's submit policy: stopped key-event
 bubbling does not prevent native Enter submission. Clear is `type="button"`.
-There is no separate Phone Number stylesheet. Import the existing optional
+The binding presentation has no separate stylesheet. Import the existing optional
 `@miniextensions/sdk/react/text.css`, override its `mx-sdk-text*` classes or supply
 your own styles. JavaScript does not import CSS; `className` decorates the wrapper.
 Core and `/ui` remain React-free.
@@ -5287,21 +5289,23 @@ instead of assuming that the shared renderer-data type establishes equivalence.
 
 ## Complete editable Phone field
 
-`CompletePhoneNumberField` is the complete native-compatible Phone editor in
-`@miniextensions/sdk/react`. It owns plain literal input and the actual country
+`PhoneNumberField` with controlled `value` and `onValueChange` props is the complete
+native-compatible Phone editor in `@miniextensions/sdk/react`.
+`CompletePhoneNumberField` retains the same controlled implementation and props
+for existing callers. The natural API owns plain literal input and the actual country
 picker, international formatter, Unicode flags, mobile Clear and transient edit
 lifetime. Import `@miniextensions/sdk/react/complete-phone.css`; no application
 CSS, native renderer slot, client or second canonical store is required.
 
 ```tsx
 import { useState } from 'react';
-import { CompletePhoneNumberField } from '@miniextensions/sdk/react';
+import { PhoneNumberField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-phone.css';
 
 export function StandalonePhone() {
     const [phone, setPhone] = useState<string | undefined>('+233201234567');
     return (
-        <CompletePhoneNumberField
+        <PhoneNumberField
             value={phone}
             showCountryCodes
             defaultCountry="GH"
@@ -5339,13 +5343,23 @@ The private runtime freezes react-phone-number-input3.3.9,
 libphonenumber-js1.10.57 and input-format0.3.9, their metadata and license closure.
 Both module formats use that same private runtime; consumer parser overrides do
 not select different parsing code. No private vendor import is a customer API.
-The existing literal-draft `PhoneNumberField` contract remains unchanged.
+The existing `PhoneNumberField` binding contract remains unchanged. Its controlled
+and binding props are mutually exclusive. `PhoneEditOwner` and `PhoneCommit`
+provide the natural type names; their existing `Complete*` type names remain
+compatible. `PhoneNumberFieldProps` remains the legacy `TextFieldProps` alias,
+including assignability and contextual renderer typing. Controlled callers may
+use `ControlledPhoneNumberFieldProps` without changing the component name.
+Deferred controlled edits still require the actual host owner, and
+the host still owns any `undefined` to `null` persistence adapter. Plain Clear
+remains `''`; country callbacks retain the real vendor's string/undefined values
+and blur-before-Clear ordering. Neither API form performs an implicit Save.
 
 ## Complete read-only Phone presentation
 
 The optional `@miniextensions/sdk/react` entry exports
-`CompleteReadOnlyPhoneNumberField` and
-`CompleteReadOnlyPhoneNumberFieldProps`. This complete presentation renders an
+`ReadOnlyPhoneNumberField` and `ReadOnlyPhoneNumberFieldProps`, with
+`CompleteReadOnlyPhoneNumberField` and `CompleteReadOnlyPhoneNumberFieldProps`
+retained as compatible names. This complete presentation renders an
 existing saved telephone string as native link text and an unchanged `tel:`
 href, with `target="_blank"`, `rel="noreferrer"` and stopped parent click
 propagation. It does not parse, normalize, validate or resolve the value. The
@@ -5353,10 +5367,10 @@ host supplies the localized empty message for null, undefined and empty string.
 Whitespace-only and malformed saved strings remain literal nonempty values.
 
 ```tsx
-import { CompleteReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
+import { ReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-phone.css';
 
-<CompleteReadOnlyPhoneNumberField
+<ReadOnlyPhoneNumberField
     value="+233 20 123 4567"
     emptyLabel="No saved phone"
 />;
@@ -5372,7 +5386,7 @@ application aliases, injected native controls or another package dependency.
 The component owns no client, store, writer or network operation. It is SSR-safe;
 the browser or operating system owns the eventual telephone action.
 
-This export is separate from the existing literal-draft `PhoneNumberField`.
+This export is separate from the binding and controlled editable `PhoneNumberField`.
 It adds no country picker, phone formatting, editing, Clear or deferred commit
 behavior, and does not change those legacy APIs. Native Form/Grid ownership and
 backend persistence remain separate application responsibilities.

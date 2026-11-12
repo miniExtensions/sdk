@@ -400,6 +400,17 @@ controlled props cannot be mixed; the existing `Complete*` exports remain availa
 `PhoneNumberFieldProps` retains its binding-based type contract;
 `ControlledPhoneNumberFieldProps` names the complete controlled contract.
 
+`NumberField` also accepts an explicit `mode: 'controlled'` with a canonical
+`field` whose `physicalKind` is `'number'`, plus optional `options`. This branch
+reuses `CompleteLocalizedNumericField` for localized input and display; import
+`@miniextensions/sdk/react/localized-numeric.css`. Set
+`options.presentation: 'display'` for readonly output. The host retains the
+canonical number/null writer, current-owner guard and explicit Save action.
+`ControlledNumberFieldProps` names this contract; `NumberFieldProps` keeps the
+existing binding API and raw scalar drafts. Percent, Currency, Duration and
+Rating binding callers retain their existing units and grammar. The
+`CompleteLocalizedNumericField` exports remain available.
+
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the
 owner's date model for manual `YYYY-MM-DD` input, retained partial drafts and

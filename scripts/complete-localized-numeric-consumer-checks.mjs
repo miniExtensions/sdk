@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const completeLocalizedNumericTypedConsumer = `
 import {createElement,createRef} from 'react';
-import {CompleteLocalizedNumericField,renderCompleteLocalizedNumericField,type CompleteLocalizedNumericFieldOptions,type CompleteLocalizedNumericRendererProps} from '@miniextensions/sdk/react';
+import {NumberField,type NumberFieldProps,type ControlledNumberFieldProps,CompleteLocalizedNumericField,renderCompleteLocalizedNumericField,type CompleteLocalizedNumericFieldOptions,type CompleteLocalizedNumericRendererProps} from '@miniextensions/sdk/react';
 const controlledNumeric:CompleteLocalizedNumericRendererProps={
  physicalKind:'number',presentation:{type:'physical',config:{type:'number',options:{precision:2}}},
  fieldId:'native-number',title:'Amount',field:{id:'native-number',name:'Amount',description:null,isComputed:false,isPrimaryField:false,config:{type:'number',options:{precision:2}}},
@@ -16,6 +16,17 @@ const controlledNumeric:CompleteLocalizedNumericRendererProps={
  capability:{type:'editable',setValue(value){const canonical:number|null=value;void canonical;return{accepted:true};}},
 };
 createElement(CompleteLocalizedNumericField,{field:controlledNumeric});
+const numberProps:ControlledNumberFieldProps={mode:'controlled',field:controlledNumeric,options:{presentation:'display'}};
+createElement(NumberField,numberProps);
+function bindingNumber(props:NumberFieldProps){createElement(NumberField,props);}
+// @ts-expect-error controlled semantics always require the explicit discriminator
+createElement(NumberField,{field:controlledNumeric});
+// @ts-expect-error controlled mode cannot borrow a binding or whole-field renderer
+const mixed:ControlledNumberFieldProps={...numberProps,binding:{} as NumberFieldProps['binding']};
+// @ts-expect-error Percent remains a separately tracked controlled facade
+const percentNumber:ControlledNumberFieldProps={mode:'controlled',field:{...controlledNumeric,physicalKind:'percent'}};
+void bindingNumber;void mixed;void percentNumber;
+
 function numeric(props:CompleteLocalizedNumericRendererProps){
  const options:CompleteLocalizedNumericFieldOptions={owner:{token:{},isCurrent:()=>true},commit:'deferred',showLabel:false,inputRef:createRef<HTMLInputElement>(),input:{id:'existing-field',form:'existing-native-form','aria-describedby':'existing-help'},clearLabel:'Clear',emptyLabel:'No value'};
  createElement(CompleteLocalizedNumericField,{field:props,options});
@@ -60,20 +71,30 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
         'IS_REACT_ACT_ENVIRONMENT',
     ];
     let groups = 0;
-    for (const api of [esm, cjs]) {
-        const state = { value: 0.425, readonly: false, scope: {} };
+    for (const [api, kind] of [esm, cjs].flatMap((api) =>
+        ['percent', 'number'].map((kind) => [api, kind])
+    )) {
+        const Component =
+            kind === 'number'
+                ? api.NumberField
+                : api.CompleteLocalizedNumericField;
+        const state = {
+            value: kind === 'number' ? 42.5 : 0.425,
+            readonly: false,
+            scope: {},
+        };
         const writes = [];
         let mounted = false,
             root;
         const properties = () => {
             const scope = state.scope;
             const field = {
-                physicalKind: 'percent',
+                physicalKind: kind,
                 fieldId: 'installed-percent',
                 title: 'Progress',
                 presentation: {
                     type: 'physical',
-                    config: { type: 'percent', options: { precision: 2 } },
+                    config: { type: kind, options: { precision: 2 } },
                 },
                 field: {
                     id: 'installed-percent',
@@ -81,7 +102,7 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                     description: null,
                     isComputed: false,
                     isPrimaryField: false,
-                    config: { type: 'percent', options: { precision: 2 } },
+                    config: { type: kind, options: { precision: 2 } },
                 },
                 displayConfig: {
                     numberSeparator: 'period-comma',
@@ -109,8 +130,9 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                     },
                 },
             };
-            assert(field?.physicalKind === 'percent');
+            assert.equal(field.physicalKind, kind);
             return {
+                ...(kind === 'number' ? { mode: 'controlled' } : {}),
                 field,
                 options: {
                     owner: {
@@ -124,10 +146,10 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
         // Actual installed render, not an import-only SSR claim.
         assert.equal(typeof globalThis.window, 'undefined');
         const html = renderToString(
-            React.createElement(api.CompleteLocalizedNumericField, properties())
+            React.createElement(Component, properties())
         );
         assert(html.includes('value="42,50"'));
-        assert(html.includes('42.5%'));
+        if (kind === 'percent') assert(html.includes('42.5%'));
         assert.deepEqual(writes, []);
 
         const window = new Window();
@@ -155,7 +177,7 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                 React.createElement(
                     React.StrictMode,
                     null,
-                    React.createElement(api.CompleteLocalizedNumericField, {
+                    React.createElement(Component, {
                         ...supplied,
                         options: { ...supplied.options, inputRef: ref },
                     })
@@ -169,10 +191,7 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             await React.act(async () => {
                 root = hydrateRoot(
                     container,
-                    React.createElement(
-                        api.CompleteLocalizedNumericField,
-                        properties()
-                    ),
+                    React.createElement(Component, properties()),
                     {
                         onRecoverableError: (error) =>
                             hydrationErrors.push(error),
@@ -204,15 +223,15 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                     new window.Event('input', { bubbles: true })
                 );
             });
-            assert.deepEqual(writes, [0.7525]);
+            assert.deepEqual(writes, [kind === 'number' ? 75.25 : 0.7525]);
             input.setSelectionRange(2, 2);
-            state.value = 0.1;
+            state.value = kind === 'number' ? 10 : 0.1;
             await React.act(async () => publish());
             assert.equal(input.value, '75,25');
             assert.equal(input.selectionStart, 2);
             await React.act(async () => input.blur());
             assert.equal(input.value, '10,00');
-            assert.deepEqual(writes, [0.7525]);
+            assert.deepEqual(writes, [kind === 'number' ? 75.25 : 0.7525]);
             state.readonly = true;
             await React.act(async () => publish());
             assert.equal(input.disabled, true);
@@ -273,15 +292,20 @@ export function checkCompleteLocalizedNumericReactMatrix({
                 `@types/react@${version.types}`,
                 `@types/react-dom@${version.domTypes}`,
             ]);
-            for (const extension of ['mts', 'cts']) {
+            for (const extension of ['mts', 'cts', 'tsx']) {
                 const name = `complete-localized-numeric.${extension}`;
                 writeFileSync(
                     join(directory, name),
-                    completeLocalizedNumericTypedConsumer
+                    completeLocalizedNumericTypedConsumer +
+                        (extension === 'tsx'
+                            ? '\nconst jsx = <NumberField mode="controlled" field={controlledNumeric} />; void jsx;\n'
+                            : '')
                 );
                 run(process.execPath, [
                     typescriptBin,
                     '--noEmit',
+                    '--jsx',
+                    'react-jsx',
                     '--strict',
                     '--skipLibCheck',
                     'false',
@@ -306,10 +330,10 @@ export function checkCompleteLocalizedNumericReactMatrix({
             );
             const result = JSON.parse(bytes);
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 2);
+            assert.equal(result.groups, 4);
             versions.push(result);
             console.log(
-                `Installed complete localized numeric React${result.react}: 2 ESM/CommonJS groups, SSR/hydration, strict declarations and styles passed.`
+                `Installed complete localized numeric React${result.react}: 4 ESM/CommonJS complete-family/canonical-Number groups, SSR/hydration, strict declarations and styles passed.`
             );
         }
         return { versions, cleanup: 'completed' };

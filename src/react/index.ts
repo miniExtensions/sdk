@@ -1,4 +1,9 @@
 import {
+    CompleteLocalizedNumericField,
+    type CompleteLocalizedNumericRendererProps,
+    type CompleteLocalizedNumericFieldOptions,
+} from './CompleteLocalizedNumericField.js';
+import {
     ControlledCheckboxField,
     type ControlledCheckboxFieldProps,
 } from './ControlledCheckboxField.js';
@@ -1355,6 +1360,38 @@ export function EmailField(props: EmailComponentProps): ReactNode {
         ? createElement(ControlledEmailField, props)
         : createElement(TextField, props);
 }
+/** The controlled Number facade uses the existing localized numeric engine.
+ * Binding callers retain their raw scalar grammar and native units. */
+export type ControlledNumberFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'number' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundNumberComponentProps = NumberFieldProps &
+    DurationFieldOptions &
+    CurrencyFieldOptions & {
+        mode?: never;
+        field?: never;
+        options?: never;
+    };
+type NumberComponentProps =
+    | BoundNumberComponentProps
+    | ControlledNumberFieldProps;
+export function NumberField(props: BoundNumberComponentProps): ReactNode;
+export function NumberField(props: ControlledNumberFieldProps): ReactNode;
+export function NumberField(props: NumberComponentProps): ReactNode;
+export function NumberField(props: NumberComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'number'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
+    return createElement(BoundNumberField, props);
+}
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
 export type RatingFieldProps = NumberFieldProps & RatingFieldOptions;
@@ -1421,7 +1458,7 @@ function BoundIconRatingField({
 export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
-export function NumberField({
+function BoundNumberField({
     binding,
     render,
     className,

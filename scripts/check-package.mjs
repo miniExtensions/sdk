@@ -575,6 +575,7 @@ try {
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
                 path === 'docs/field-bindings.md' ||
+                path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
@@ -614,6 +615,7 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'docs/count.md',
         'docs/complete-record-comments.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',

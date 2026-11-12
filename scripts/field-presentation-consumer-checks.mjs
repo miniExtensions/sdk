@@ -520,6 +520,8 @@ root=createRoot(document.getElementById('root'));void publish();
 export async function prepareFieldPresentationBrowserFixtures({
     temporary,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     installed,
     allowed,
     report,
@@ -566,10 +568,7 @@ export async function prepareFieldPresentationBrowserFixtures({
         if (path.startsWith(installed + '/')) {
             const member =
                 'package/' + relative(installed, path).replaceAll('\\', '/');
-            assert.deepEqual(
-                bytes,
-                execFileSync('tar', ['-xOf', archive, member])
-            );
+            assert.deepEqual(bytes, readArchiveMember(member));
             item.archiveMember = member;
         }
         proofInputs.push(item);
@@ -590,7 +589,7 @@ export async function prepareFieldPresentationBrowserFixtures({
         const bytes = regular(path);
         const member =
             'package/' + relative(installed, path).replaceAll('\\', '/');
-        assert.deepEqual(bytes, execFileSync('tar', ['-xOf', archive, member]));
+        assert.deepEqual(bytes, readArchiveMember(member));
         cssMembers.push({ member, sha256: hash(bytes) });
         const route = '/field-presentation-' + name + '.css';
         allowed.set(route, bytes);

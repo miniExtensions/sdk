@@ -1,6 +1,6 @@
 # Complete Collaborator fields
 
-`CompleteSingleCollaboratorField` and `CompleteMultipleCollaboratorsField` own
+`CompleteSingleCollaboratorField` and controlled `MultipleCollaboratorsField` own
 the searchable picker, option rows, selected badges, images, keyboard and
 pointer interaction, focus handoff, readonly presentation and styles. They use
 the same public UI in an independent site and in a native application adapter.
@@ -44,6 +44,29 @@ function Assignee(props: {
 }
 ```
 
+Use the natural public name for a complete controlled multiple field:
+
+```tsx
+import {
+    MultipleCollaboratorsField,
+    type ControlledMultipleCollaboratorsFieldProps,
+} from '@miniextensions/sdk/react';
+
+function Reviewers(
+    props: Omit<ControlledMultipleCollaboratorsFieldProps, 'mode'>
+) {
+    return <MultipleCollaboratorsField {...props} mode="controlled" />;
+}
+```
+
+The explicit discriminator keeps existing `<MultipleCollaboratorsField binding={binding}
+render={...} />` calls and `MultipleCollaboratorsFieldProps` compatible. The same
+binding contract is available as `BindingMultipleCollaboratorsField` and
+`BindingMultipleCollaboratorsFieldProps`; `renderMultipleCollaboratorsField`
+remains display-only. `ControlledMultipleCollaboratorsFieldProps<Person>` names
+the controlled contract. `CompleteMultipleCollaboratorsField` remains a
+compatible alias for the complete picker without a discriminator.
+
 Multiple uses `value: readonly Person[]` and proposes `Person[]`; Single
 proposes the original offered object or `null`. Entries are never converted
 to IDs, reconstructed from labels, resolved by email or cloned. Removing an ID
@@ -65,6 +88,11 @@ value. The component never privately commits selection. A refusal or thrown
 writer cannot leave a selected value behind. A focus request belongs only to
 that attempted action and is consumed at its first reconciliation; a later
 external value cannot fulfill an earlier refused request.
+
+Pointer selection uses the same canonical proposal and focus receipt as removal.
+It does not queue the picker's separate deferred refocus. After an accepted or
+refused selection, moving to an adjacent field cannot be undone by a later
+animation frame. Keyboard selection still uses the actual combobox actions.
 
 `owner.token` identifies the actual current field/session/record/configuration
 generation. `owner.isCurrent()` must read current caller authority when an
@@ -115,7 +143,10 @@ can override `--mx-sdk-collaborator-accent`, `--mx-sdk-collaborator-tint`,
 `--mx-sdk-collaborator-focus` and `--mx-sdk-collaborator-active` on that root
 without supplying a renderer or a global utility stylesheet.
 
-The older `SingleCollaboratorField`, `MultipleCollaboratorsField` and their
-renderer-slot helpers remain deliberately display-only, including their
-mask-before-read and no-action contracts. These complete controls are an
-explicit additional API.
+The natural `SingleCollaboratorField` and `MultipleCollaboratorsField` names
+accept these complete picker contracts with an explicit `mode="controlled"`.
+Their original binding calls (with no mode), explicit `Binding` exports and
+renderer-slot helpers remain display-only, including their mask-before-read
+and no-action contracts. `SingleCollaboratorFieldProps` retains its original
+binding shape; `ControlledSingleCollaboratorFieldProps<T>` names the controlled
+single contract. The `Complete` exports remain compatible.

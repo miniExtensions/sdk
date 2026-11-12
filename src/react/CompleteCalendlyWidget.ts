@@ -114,7 +114,12 @@ function BookingDialog({
                 event.preventDefault();
                 cancel();
             },
-            onKeyDown: containTab,
+            onKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => {
+                // Keep ancestor Form/modal Escape handlers out of this dialog;
+                // the browser still owns its native cancel default action.
+                if (event.key === 'Escape') event.stopPropagation();
+                containTab(event);
+            },
             onPointerDown: beginPointer,
             onPointerCancel: () => {
                 outsidePress.current = false;

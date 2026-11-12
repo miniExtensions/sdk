@@ -1,5 +1,10 @@
 import { LiteralText } from './LiteralText.js';
 import {
+    CompleteSingleCollaboratorField,
+    type CompleteCollaborator,
+    type CompleteSingleCollaboratorFieldProps,
+} from './CompleteCollaboratorField.js';
+import {
     createElement,
     useId,
     type ReactNode,
@@ -13,8 +18,17 @@ import { useFieldBinding, type FieldProps } from './index.js';
 import { textConfiguration } from './TextField.js';
 
 export type SingleCollaboratorFieldOptions = { className?: string };
-export type SingleCollaboratorFieldProps = FieldProps &
-    SingleCollaboratorFieldOptions;
+export type BindingSingleCollaboratorFieldProps = FieldProps &
+    SingleCollaboratorFieldOptions & { mode?: never };
+/** Preserve the original named binding contract for existing consumers. */
+export type SingleCollaboratorFieldProps = BindingSingleCollaboratorFieldProps;
+export type ControlledSingleCollaboratorFieldProps<
+    T extends CompleteCollaborator = CompleteCollaborator,
+> = CompleteSingleCollaboratorFieldProps<T> & {
+    mode: 'controlled';
+    binding?: never;
+    render?: never;
+};
 
 /** Only the supplied name is presented; the owner retains the native collaborator object. */
 function singleCollaboratorName(value: unknown): string | null {
@@ -97,11 +111,11 @@ export function renderSingleCollaboratorField(
 }
 
 /** Subscribe to accepted native answers without borrowing binding write actions. */
-export function SingleCollaboratorField({
+export function BindingSingleCollaboratorField({
     binding,
     render,
     className,
-}: SingleCollaboratorFieldProps): ReactNode {
+}: BindingSingleCollaboratorFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -131,4 +145,21 @@ export function SingleCollaboratorField({
             snapshot.error ??
             snapshot.validation.map((item) => item.errorMessage).join('\n'),
     });
+}
+
+/** Complete controlled picker; unchanged binding calls retain display-only behavior. */
+export function SingleCollaboratorField<T extends CompleteCollaborator>(
+    props: ControlledSingleCollaboratorFieldProps<T>
+): ReactNode;
+export function SingleCollaboratorField(
+    props: SingleCollaboratorFieldProps
+): ReactNode;
+export function SingleCollaboratorField<T extends CompleteCollaborator>(
+    props:
+        | SingleCollaboratorFieldProps
+        | ControlledSingleCollaboratorFieldProps<T>
+): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(CompleteSingleCollaboratorField<T>, props)
+        : createElement(BindingSingleCollaboratorField, props);
 }

@@ -720,3 +720,45 @@ it('isolates two complete widget instances and retires both message admissions o
     await f.send(second);
     assert.deepEqual(writes, ['A']);
 });
+
+it('contains parent-document Escape while leaving native cancellation and ancestor ownership intact', async (t) => {
+    let ancestorKeys = 0;
+    let windowKeys = 0;
+    const f = await fixture(t, {}, (widget) =>
+        h('div', { onKeyDown: () => ancestorKeys++ }, widget)
+    );
+    const onWindowKey = () => windowKeys++;
+    f.window.addEventListener('keydown', onWindowKey);
+    try {
+        await f.click('Schedule');
+        const sender = f.source();
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Escape',
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => f.button('Close').dispatchEvent(event));
+        assert.equal(
+            ancestorKeys,
+            0,
+            'Escape must not close a containing native Form/modal'
+        );
+        assert.equal(
+            windowKeys,
+            0,
+            'Escape must not reach a parent window modal listener'
+        );
+        assert.equal(
+            event.defaultPrevented,
+            false,
+            'The browser must still dispatch native dialog cancellation'
+        );
+        const cancel = new f.window.Event('cancel', { cancelable: true });
+        await act(async () => f.dialog().dispatchEvent(cancel));
+        assert.equal(f.container.querySelector('dialog,iframe'), null);
+        await f.send(sender);
+        assert.deepEqual(f.writes, []);
+    } finally {
+        f.window.removeEventListener('keydown', onWindowKey);
+    }
+});

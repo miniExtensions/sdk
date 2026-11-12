@@ -47,6 +47,8 @@ function recordInputs({
     candidate,
     reference,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     regular,
     hash,
 }) {
@@ -77,10 +79,7 @@ function recordInputs({
             );
             const member =
                 'package/' + relative(candidate, path).replaceAll('\\', '/');
-            assert.deepEqual(
-                bytes,
-                execFileSync('tar', ['-xOf', archive, member])
-            );
+            assert.deepEqual(bytes, readArchiveMember(member));
             item.archiveMember = member;
             candidateInputs++;
         }
@@ -109,6 +108,8 @@ export async function prepareHTMLDescriptionNativeFixtures({
     temporary,
     output,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     installed,
     allowed,
     report,
@@ -128,7 +129,7 @@ export async function prepareHTMLDescriptionNativeFixtures({
     const css = regular(cssPath);
     const cssMember =
         'package/' + relative(installed, cssPath).replaceAll('\\', '/');
-    assert.deepEqual(css, execFileSync('tar', ['-xOf', archive, cssMember]));
+    assert.deepEqual(css, readArchiveMember(cssMember));
     const entry = join(temporary, 'html-description.mjs');
     writeFileSync(entry, htmlDescriptionBrowserSource);
     const bundle = await build({
@@ -150,6 +151,7 @@ export async function prepareHTMLDescriptionNativeFixtures({
         directory: temporary,
         candidate: installed,
         archive,
+        readArchiveMember,
         regular,
         hash,
     });
@@ -245,6 +247,7 @@ export async function prepareHTMLDescriptionNativeFixtures({
             candidate,
             reference,
             archive,
+            readArchiveMember,
             regular,
             hash,
         });

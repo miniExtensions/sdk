@@ -1151,3 +1151,70 @@ The private Radix Popover closure is built from pinned 1.1.14 and supported
 dependencies. Its exact per-format input hashes and full MIT/ISC/0BSD notices are
 recorded in `vendor/date-popover` and distributed beside the built runtime as
 `complete-date.provenance.json` and `complete-date.LICENSES.txt`.
+
+## papaparse
+
+PapaParse 5.7.1 parses literal CSV document thumbnails.
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2015 Matthew Holt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## utif2
+
+UTIF2 4.1.0 decodes first-directory TIFF document thumbnails.
+
+```text
+MIT License
+
+Copyright (c) 2017 Photopea
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## PDF.js (`pdfjs-dist` 6.5.438)
+
+The SDK bundles a private browser-only PDF engine and distributes the matching
+legacy module worker, CMaps, standard fonts and WASM. Its verified upstream
+`isNodeJS` environment binding is specialized to `false` during the browser build;
+Node-only factories are removed. Its global API/testing registrations become local
+bindings; the SDK consumes named exports without replacing other PDF libraries.
+Upstream runtime source and distributed asset
+bytes are pinned and checked. The complete Apache 2.0 license is included at
+`dist/vendor/document-preview/pdfjs-6.5.438/LICENSE`; upstream license notices
+remain in the bundled engine, worker and assets.

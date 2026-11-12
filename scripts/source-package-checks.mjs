@@ -35,6 +35,7 @@ export function assertSourcePackageBuild(root) {
         mkdirSync(nested, { recursive: true });
         for (const entry of [
             'src',
+            'types',
             'scripts',
             'vendor',
             'package.json',

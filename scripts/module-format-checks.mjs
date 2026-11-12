@@ -5,6 +5,12 @@ import Module, { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { Script } from 'node:vm';
 import ts from 'typescript';
+import { assertDocumentPDFBundle } from './document-pdf-bundle.mjs';
+import {
+    assertDocumentAssets,
+    documentAssetExport,
+    documentAssetMapping,
+} from './document-preview-assets.mjs';
 
 export const moduleFormatReceiptPath = 'dist/cjs/module-format-receipt.json';
 
@@ -157,6 +163,7 @@ export function assertModuleFormats(root) {
     assert.equal(manifest.name, '@miniextensions/sdk');
     assert.equal(manifest.type, 'module');
     assert(record(manifest.exports));
+    if (manifest.devDependencies?.['pdfjs-dist']) assertDocumentPDFBundle(root);
     assert(lstatSync(join(root, 'dist/cjs')).isDirectory());
     assert(lstatSync(join(root, 'dist/esm')).isDirectory());
     assert.equal(
@@ -168,6 +175,11 @@ export function assertModuleFormats(root) {
     const entries = [];
     const require = createRequire(join(root, 'package.json'));
     for (const [subpath, mapping] of Object.entries(manifest.exports).sort()) {
+        if (subpath === documentAssetExport) {
+            assert.equal(mapping, documentAssetMapping);
+            entries.push({ subpath, asset: assertDocumentAssets(root) });
+            continue;
+        }
         // Opt-in stylesheets are assets, never JavaScript modules.
         if (
             [

@@ -1591,8 +1591,9 @@ every platform input method or screen reader. The example contacts no backend.
 ## React Email presentation
 
 The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
-`EmailFieldOptions` and `renderEmailField`. `EmailField` delegates to `TextField`;
-its props and options are aliases of `TextFieldProps` and `TextFieldOptions`.
+`EmailFieldOptions`, `ControlledEmailFieldProps`, `EmailEditOwner` and
+`renderEmailField`. Binding-mode `EmailField` delegates to `TextField`;
+its legacy props and options remain aliases of `TextFieldProps` and `TextFieldOptions`.
 The existing `{ binding, render }` override replaces all stock markup.
 
 ```tsx
@@ -1651,6 +1652,63 @@ After building, `node examples/react-email/dev.mjs` serves the synthetic public
 API example at `http://127.0.0.1:4183`. `node scripts/check-email-browser.mjs`
 checks native entry, clearing, remounts and surrounding-form Enter behavior.
 Simulated composition checks do not certify real OS input methods.
+
+For complete native email presentation, use the same natural public component
+with the explicit controlled contract:
+
+```tsx
+import { EmailField, type EmailEditOwner } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/text.css';
+
+export function NativeEmail({
+    value,
+    onChange,
+    owner,
+}: {
+    value: string | null;
+    onChange(value: string): void;
+    owner: EmailEditOwner;
+}) {
+    return (
+        <EmailField
+            mode="controlled"
+            value={value}
+            onChange={onChange}
+            language="en"
+            enableInlineEdit
+            owner={owner}
+            id="contact-email"
+            form="contact-form"
+            placeholder="Work email"
+            initialMobile={false}
+        />
+    );
+}
+```
+
+This branch supplies the actual `type="email"` input, envelope, Clear and
+opt-in `enableQRCodeScannerForFormField` scanner through the existing shared
+engines. The same optional `text.css` includes its scoped styling and scanner,
+Clear and readonly dependencies. No host renderer or Tailwind compiler is needed.
+`initialMobile` is captured per mount; use the same value during SSR and hydration.
+`inputRef`, `id`, `form`, `describedBy`, `labelledBy` and `invalid` carry the
+host's existing associations. Validation and Save remain with the page/server.
+
+Controlled changes and Clear write strings, including `''`; `null` only displays
+as an empty input. The browser's email-input sanitization remains native.
+Immediate mode retains native form Enter behavior, so the enclosing page owns
+its submit policy. Deferred mode (`enableInlineEdit`) requires an owner with a
+captured generation `token` and `isCurrent()` authority check. Non-IME Enter
+blurs without submitting; dirty blur can write before a later Clear click.
+Genuine dirty unmount settles once through the original mounted writer if that
+owner remains current. A replacement, retired owner or missing deferred owner
+cannot adopt that pending value. Renew the token when field/record/edit policy
+is replaced, including A-to-B-to-A transitions; a raw value is not authority.
+
+`readOnly` and `disabled` render a disabled editor. `displayOnly` instead reuses
+the existing readonly text/link presentation with the supplied language and
+never invokes the writer. A caller cannot mix controlled props with `binding`
+or `render`. The binding/slot examples and semantics above remain unchanged.
 
 ## React URL presentation
 
@@ -2628,10 +2686,106 @@ for source, package and native browser verification.
 
 ## React Created Time presentation
 
-The optional `/react` entry exports `CreatedTimeField`, `CreatedTimeFieldProps`,
-`CreatedTimeFieldOptions` and `renderCreatedTimeField`. The binding component
-accepts `{ binding, render }` plus `className` and `clearLabel`; a supplied `render`
-replaces its stock markup. The options alias `DateTimeFieldOptions`.
+The optional `/react` entry exports the natural `CreatedTimeField` for controlled
+display or existing binding consumers. `ControlledCreatedTimeFieldProps` requires
+the supplied `value`, `dateConfig` and `language`. It formats through the shared
+date engine and readonly text primitive; it never creates a timestamp or setter.
+The application supplies the accepted date/dateTime result configuration explicitly.
+Optional `dateLanguage` selects the date text's locale separately from the localized
+empty-value `language`; it defaults to `language`. For example, a host preserving
+English named-month dates with French empty text supplies `language="fr"` and
+`dateLanguage="en"`. The override uses the same supported language codes, preserves
+the configured timezone, and does not change the legacy binding's raw timestamp.
+
+```tsx
+import { CreatedTimeField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+import '@miniextensions/sdk/react/button.css';
+
+export function CreatedDisplay({ value }: { value: string | null }) {
+    return (
+        <CreatedTimeField
+            value={value}
+            language="en"
+            dateConfig={{
+                type: 'dateTime',
+                options: {
+                    dateFormat: { format: 'YYYY-MM-DD' },
+                    timeFormat: { format: 'HH:mm' },
+                    timeZone: 'America/New_York',
+                },
+            }}
+        />
+    );
+}
+```
+
+Readonly `displayAsAttachments` selects one accepted HTTP(S) resource before
+`displayAsButton`; a button admits the existing safe link policy, including mailto.
+The computed `displayContext="editable"` path ignores both flags and keeps date
+formatting. Null/missing values use localized empty text; malformed runtime shapes
+use `invalidValueLabel` without coercion. `masked` prevents value/config inspection.
+`presentation` composes the existing shell's label, help, error and form association.
+The shell remains the single owner of that chrome.
+
+`owner` optionally supplies `{token, isCurrent()}` and `identity` distinguishes
+source lifetimes. A false/throwing owner omits the display; current-owner checks
+also guard retained resource actions, URL replacement, A→B→A and cleanup. `inert`
+prevents resource activation/loading for preview or authority projection. No source
+fetch, Save, provider action, editor, upload or field writer is acquired.
+
+Attachment options project grid/icon/thumbnail layout, size/fit, name visibility
+and independent Open/Download permissions. Images use the shared recoverable image;
+thumbnail loading follows visibility, while icon mode matches native immediate
+image display. A current explicit action opens the native dialog. URL-only image
+and exact lowercase `.pdf` modal classification matches native dispatch. `labels`
+supplies localized resource actions/retry/error text. Download is explicit,
+cancelable and owner scoped.
+
+`attachmentOptions.documentPreview` explicitly admits generic document content.
+Omitting it preserves URI-only behavior without speculative document requests.
+Its `source` is either `{kind: 'uri', mimeType?, revision?}` or
+`{kind: 'bytes', bytes: Uint8Array, mimeType, revision}`. Owned bytes are copied;
+replace the byte view or revision when content changes. URI mode uses credential-free
+HEAD discovery only when MIME is absent, then a cancelable GET for admitted types.
+This resource load never fetches a field/source model or changes its canonical URL.
+Unknown/octet-stream, Office, archive and provider formats remain unavailable.
+
+One SDK content leaf renders literal TXT, quoted CSV tables, sanitized HTML,
+PNG/BMP/JPEG/GIF, first-directory TIFF (including native uncompressed/PackBits),
+and PDF. Malformed CSV is unavailable. HTML cannot load embedded resources,
+navigate, submit controls or install styles/global IDs. Form thumbnails exclude
+exact lowercase `.pdf` URLs and hide PDF controls; grid thumbnails retain PDF
+page, zoom/reset and single/all-page controls. Grid PDF Download uses admitted
+bytes and respects `disableDownloadFiles`. MIME discovered for an opaque thumbnail
+stays private and cannot reclassify its modal.
+
+PDF requires both `pdfWorkerUrl` and `pdfResourceBaseUrl`. Deploy the exported
+`@miniextensions/sdk/react/document-preview/pdfjs-6.5.438/*` assets unchanged at
+one same-origin base ending in `/`; set the worker URL to its `pdf.worker.mjs`.
+The package carries a version-matched module worker, CMaps, fonts and WASM with an
+integrity manifest. The application supplies asset URLs explicitly; there is no
+CDN, guessed worker location, global worker setting or external provider.
+
+`documentPreview` also enables an SDK canvas viewer for canonically known
+lowercase `.pdf` modals, including HTTP resources admitted by the URL policy.
+This uses credential-free bytes and a local worker, not an HTTP iframe exception.
+Without this option, existing HTTPS-only sanitized PDF frame behavior remains.
+Each worker, reader, canvas and object URL belongs to the visible current
+owner/token/identity/content revision and is retired on replacement, concealment
+or unmount. Startup errors show localized unavailable feedback and terminate the
+owned worker. No native React renderer or provider callback is accepted.
+
+The private browser PDF engine is bundled at build time; consumers retain the
+SDK's Node >=22 engine contract and optional React18/19 peers. Importing or
+server-rendering the public field creates no worker or document request.
+
+`CreatedTimeFieldProps` deliberately retains the original required `binding` shape.
+`BindingCreatedTimeField` and `BindingCreatedTimeFieldProps` name the compatibility
+contract explicitly. It accepts `{ binding, render }` plus `className` and
+`clearLabel`; a supplied `render` replaces its stock markup. Controlled inputs
+cannot be mixed with binding/renderer inputs. `CreatedTimeFieldOptions` still aliases
+`DateTimeFieldOptions`, and `renderCreatedTimeField` keeps the typed physical slot.
 
 ```tsx
 import { CreatedTimeField } from '@miniextensions/sdk/react';
@@ -2660,11 +2814,11 @@ export const createdTimeRenderers: FieldRendererSlots<ReactNode> = {
 };
 ```
 
-The control presents the supplied native timestamp string without parsing,
+The binding control presents the supplied native timestamp string without parsing,
 formatting, validation or timezone conversion. It retains offset spelling,
 fractional seconds, whitespace, naive timestamps and invalid strings accepted by
 the owner. Nested `date` or `dateTime` result metadata is not interpreted, and
-metadata changes do not normalize the native answer. Use a custom renderer for
+metadata changes do not normalize the native answer. Use controlled props for
 formatted dates. The single-line input sanitizes CR/LF in its displayed value;
 rendering does not write that DOM representation back to the owner.
 
@@ -2690,8 +2844,10 @@ detail hosts without fabricating computed inline editing bindings. Data loading
 and form submission remain explicit application operations. Editable DateTime and
 Text controls keep their existing behavior.
 
-Styles reuse optional `@miniextensions/sdk/react/datetime.css` and the
-`mx-sdk-datetime*` classes; no Created Time stylesheet is added. The synthetic
+Binding styles reuse optional `@miniextensions/sdk/react/datetime.css` and the
+`mx-sdk-datetime*` classes. Controlled display reuses readonly-text, button,
+HTML-description and field-presentation styles as applicable; no Created Time
+stylesheet is added. The synthetic
 `examples/react-created-time` fixture uses public exports. See [Created Time
 presentation checks](testing.md#created-time-presentation-checks) for package and
 local browser verification.
@@ -3314,6 +3470,46 @@ Form/Grid/List displays and run the page's interaction, remount and retirement
 checks. Fixture generation records browser verification as pending; injected DOM
 checks do not replace native pointer, keyboard, text-selection or layout inspection.
 
+## React Single Collaborator controlled field
+
+`SingleCollaboratorField` from `@miniextensions/sdk/react` accepts the complete
+picker contract with `mode="controlled"`. It owns search, choice rows,
+badges, avatar DOM, keyboard/pointer interaction and focus; the caller retains
+canonical object/null values and current write authority. No renderer injection,
+SDK client or implicit Save is required.
+
+```tsx
+import {
+    SingleCollaboratorField,
+    type ControlledSingleCollaboratorFieldProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-collaborators.css';
+
+export function AssigneeField(
+    props: Omit<ControlledSingleCollaboratorFieldProps, 'mode'>
+) {
+    return (
+        <SingleCollaboratorField
+            {...props}
+            mode="controlled"
+            title="Assignee"
+            inputId="assignee"
+            formId="record-form"
+            describedBy="assignee-help assignee-error"
+        />
+    );
+}
+```
+
+`ControlledSingleCollaboratorFieldProps<T>` preserves extra native object
+metadata and exact supplied references. See [Complete Collaborator fields](complete-collaborators.md)
+for choice, owner, avatar, localization and readonly contracts. The existing
+`CompleteSingleCollaboratorField` remains compatible. Calls using `binding`
+(with no `mode`) and the original named `SingleCollaboratorFieldProps`, options
+and render helper retain their display-only behavior; the explicit
+`BindingSingleCollaboratorField` export is equivalent to those binding calls.
+Controlled calls cannot supply `binding` or `render`.
+
 ## React Single Collaborator presentation
 
 The optional `/react` entry exports `SingleCollaboratorField`,
@@ -3383,6 +3579,21 @@ retirement checks. Fixture generation leaves browser verification pending; nativ
 browser interaction and layout inspection are separate from its injected DOM checks.
 
 ## React Multiple Collaborators presentation
+
+For a complete searchable picker, import `MultipleCollaboratorsField` with
+`mode="controlled"`, authoritative `choices`, ordered native `value`, current
+`owner` and `onValueChange`. `ControlledMultipleCollaboratorsFieldProps<T>`
+preserves the caller's native object subtype. Import
+`@miniextensions/sdk/react/complete-collaborators.css` for the complete UI.
+See [Complete Collaborator fields](complete-collaborators.md) for the controlled
+contract, ownership, images and accessible associations.
+
+The existing binding contract below remains display-only. It is also explicitly
+exported as `BindingMultipleCollaboratorsField` and
+`BindingMultipleCollaboratorsFieldProps`. The original named
+`MultipleCollaboratorsFieldProps`, unchanged binding JSX and custom `render`
+contextual typing remain compatible. `CompleteMultipleCollaboratorsField`
+continues to provide the complete picker without the controlled discriminator.
 
 The optional `/react` entry exports `MultipleCollaboratorsField`,
 `MultipleCollaboratorsFieldProps`, `MultipleCollaboratorsFieldOptions` and
@@ -5939,3 +6150,18 @@ it does not create CSS inheritance across a portal. DOM-only styles (including
 raw tokens supplied only via `style`) are deliberately not discovered, read
 with computed styles, or promised propagation. No generic portal engine,
 script/style injection or global theme store is installed.
+
+### Complete controlled Checkbox
+
+`CheckboxField` from `@miniextensions/sdk/react` accepts either the existing
+`{ binding, render?, className? }` contract or controlled `{ value, onChange }`
+props. Controlled props provide the native checkbox, toggle, button and readonly
+modes, standalone title/feedback or shell `presentation` associations. Import
+`@miniextensions/sdk/react/checkbox.css` for all modes and configured scheduling.
+
+Pass `calendly` with explicit `configuredUrl`, resolved `email`/`name`,
+`embedDomain`, stable current `ownerKey` and `onScheduled` admission. The SDK
+composes its qualified widget; there is no native renderer slot. Scheduling
+completion uses only `onScheduled`, ordinary edits only `onChange`; neither
+implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
+value). Existing `CompleteCheckboxField` remains compatible.

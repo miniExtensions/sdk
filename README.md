@@ -233,6 +233,10 @@ attachment-display and explicit masking modes require a custom renderer.
 `EmailFieldProps`, `EmailFieldOptions` and the typed `renderEmailField` slot. It
 reuses the Text control and optional `@miniextensions/sdk/react/text.css` for native
 single-line text drafts; page and server validation remain authoritative.
+The same natural `EmailField` also accepts `mode="controlled"` with
+`ControlledEmailFieldProps` for the complete email input, icon, Clear and optional
+scanner. Legacy binding props remain unchanged. Deferred editing requires an
+explicit current `EmailEditOwner`; the host still owns Save and persistence.
 
 [URL presentation](docs/ui.md#react-url-presentation) exports `UrlField`,
 `UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses
@@ -248,10 +252,13 @@ has `options.isValid === true`, using the disabled DateTime control and optional
 modification times or change native values.
 
 [Created Time presentation](docs/ui.md#react-created-time-presentation) exports
-`CreatedTimeField`, `CreatedTimeFieldProps`, `CreatedTimeFieldOptions` and the typed
-`renderCreatedTimeField` slot. It presents supplied raw timestamp strings through
-the disabled DateTime control and optional `@miniextensions/sdk/react/datetime.css`,
-without parsing, formatting, timezone conversion or writes.
+the natural `CreatedTimeField` controlled display with explicit date configuration,
+locale and readonly text/link/attachment dispatch. Existing binding consumers keep
+their raw timestamp behavior and `CreatedTimeFieldProps`; `BindingCreatedTimeField`
+names that compatibility path explicitly. The typed `renderCreatedTimeField` slot
+also retains its disabled DateTime control. Explicit document admission adds shared
+TXT/CSV/sanitized HTML/image/TIFF/PDF thumbnails and local versioned PDF workers;
+known PDF modals use the same canvas leaf. Neither contract grants write authority.
 
 [Last Modified By presentation](docs/ui.md#react-last-modified-by-presentation) exports
 `LastModifiedByField`, `LastModifiedByFieldProps`, `LastModifiedByFieldOptions` and the typed

@@ -8,8 +8,9 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 export const createdTimeReactTypedConsumer = `
 import type { ReactNode } from 'react';
 import {
-    CreatedTimeField, renderCreatedTimeField, AirtableForm, AirtableGrid, AirtableList,
+    CreatedTimeField, BindingCreatedTimeField, renderCreatedTimeField, AirtableForm, AirtableGrid, AirtableList,
     type CreatedTimeFieldProps, type CreatedTimeFieldOptions, type DateTimeFieldOptions,
+    type BindingCreatedTimeFieldProps, type ControlledCreatedTimeFieldProps,
 } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/datetime.css';
@@ -28,7 +29,33 @@ export const renderers: FieldRendererSlots<ReactNode> = {
     renderCreatedTimeField: props => renderCreatedTimeField(props, aliasOptions),
 };
 export function BoundCreatedTime(props: CreatedTimeFieldProps) {
+    const stillRequired = props.binding;
+    const alias: BindingCreatedTimeFieldProps = props;
+    void stillRequired; void alias;
     return <CreatedTimeField {...props} {...options} />;
+}
+export function ExplicitBinding(props: BindingCreatedTimeFieldProps) {
+    return <BindingCreatedTimeField {...props} />;
+}
+const controlled: ControlledCreatedTimeFieldProps = {
+    value: '2026-11-12T12:30:00Z', language: 'en',
+    dateConfig: {type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}},
+};
+export const controlledDisplay = <CreatedTimeField {...controlled} />;
+export const separateDateLanguage = <CreatedTimeField {...controlled} dateLanguage="en" />;
+// @ts-expect-error A date locale override does not widen the supported languages.
+export const unsupportedDateLanguage = <CreatedTimeField {...controlled} dateLanguage="unsupported" />;
+// @ts-expect-error Controlled display cannot inject a host renderer.
+export const injectedDisplay = <CreatedTimeField {...controlled} render={() => null} />;
+// @ts-expect-error Computed controlled display has no setter.
+export const writableDisplay = <CreatedTimeField {...controlled} setValue={() => {}} />;
+export function MixedBinding(props: CreatedTimeFieldProps) {
+    // @ts-expect-error Binding and controlled inputs are distinct contracts.
+    return <CreatedTimeField {...controlled} binding={props.binding} />;
+}
+export function BindingDateLanguage(props: CreatedTimeFieldProps) {
+    // @ts-expect-error A date locale override belongs only to controlled display.
+    return <CreatedTimeField {...props} dateLanguage="en" />;
 }
 export function Override(props: CreatedTimeFieldProps) {
     return <CreatedTimeField {...props} render={({ snapshot }) => <span>{String(snapshot.value == null)}</span>} />;
@@ -128,6 +155,7 @@ export async function checkCreatedTimeConsumer({
                 ['ui', 'forms', 'portals', 'react'].map(load)
             );
             assert.equal(typeof react.CreatedTimeField, 'function');
+            assert.equal(typeof react.BindingCreatedTimeField, 'function');
             assert.equal(typeof react.renderCreatedTimeField, 'function');
             assert.equal(ui.renderCreatedTimeField, undefined);
             const nativeTimestamp = '2024-11-03T01:30:00.120-07:00';
@@ -314,6 +342,14 @@ export async function checkCreatedTimeConsumer({
                     fields.controller.getState().draftRevision,
                     before
                 );
+                assert.equal(writes, 0);
+                await act(async () =>
+                    root.render(h(react.BindingCreatedTimeField, { binding }))
+                );
+                assert.equal(input().value, nativeTimestamp);
+                assert.equal(input().disabled, true);
+                assert.equal(clear().disabled, true);
+                assert.equal(binding.getSnapshot().value, nativeTimestamp);
                 assert.equal(writes, 0);
                 checks++;
 
@@ -1023,6 +1059,10 @@ export async function checkCreatedTimeConsumer({
                 assert.equal(capabilityReads, 0);
                 assert.equal(capabilityActions, 0);
                 assert.equal(requests, 0);
+                await act(async () =>
+                    root.render(h(react.BindingCreatedTimeField, { binding }))
+                );
+                assert.equal(input(), null);
                 checks++;
             } finally {
                 await act(async () => root.unmount());

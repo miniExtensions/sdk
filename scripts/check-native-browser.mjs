@@ -1,4 +1,6 @@
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
+import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
+import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
@@ -41,7 +43,10 @@ import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
-import { assertBrowserInputs } from './package-checks.mjs';
+import {
+    assertBrowserInputs,
+    createArchiveMemberReader,
+} from './package-checks.mjs';
 import {
     completeReadOnlyTextBrowserSource,
     completeReadOnlyTextBrowserStyle,
@@ -1484,6 +1489,11 @@ try {
     assert.equal(tgzs.length, 1);
     const archive = join(packageDirectory, tgzs[0]);
     assert.equal(hash(regular(archive)), manifest.package.sha256);
+    const readArchiveMember = createArchiveMemberReader({
+        archivePath: archive,
+        expectedSha256: manifest.package.sha256,
+    });
+    const preparationStarted = performance.now();
     assert.deepEqual(receipt.source, manifest.source);
     const allowed = new Map();
     for (const entry of manifest.outputs) {
@@ -1531,6 +1541,7 @@ try {
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
+            'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -1728,7 +1739,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                const original = execFileSync('tar', ['-xOf', archive, member]);
+                const original = readArchiveMember(member);
                 assert.deepEqual(
                     bytes,
                     original,
@@ -1786,10 +1797,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, member])
-                );
+                assert.deepEqual(bytes, readArchiveMember(member));
                 item.archiveMember = member;
             }
             readOnlyTextProofInputs.push(item);
@@ -1807,7 +1815,7 @@ try {
             relative(installed, readOnlyTextCssPath).replaceAll('\\', '/');
         assert.deepEqual(
             readOnlyTextCss,
-            execFileSync('tar', ['-xOf', archive, readOnlyTextCssMember])
+            readArchiveMember(readOnlyTextCssMember)
         );
         const readOnlyTextCode = readOnlyTextBundle.outputFiles[0].contents;
         report.completeReadOnlyText = {
@@ -1870,10 +1878,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, member])
-                );
+                assert.deepEqual(bytes, readArchiveMember(member));
                 item.archiveMember = member;
             }
             clearableInputProofInputs.push(item);
@@ -1893,7 +1898,7 @@ try {
             relative(installed, clearableInputCssPath).replaceAll('\\', '/');
         assert.deepEqual(
             clearableInputCss,
-            execFileSync('tar', ['-xOf', archive, clearableInputCssMember])
+            readArchiveMember(clearableInputCssMember)
         );
         const clearableInputCode = clearableInputBundle.outputFiles[0].contents;
         report.completeClearableInput = {
@@ -1921,6 +1926,7 @@ try {
                 temporary,
                 output,
                 archive,
+                readArchiveMember,
                 installed,
                 allowed,
                 report,
@@ -1933,6 +1939,7 @@ try {
         const portalChartFixtures = await prepareCompletePortalChartFixtures({
             temporary,
             archive,
+            readArchiveMember,
             installed,
             allowed,
             report,
@@ -1944,6 +1951,7 @@ try {
         const collaboratorFixtures = await prepareCompleteCollaboratorFixtures({
             temporary,
             archive,
+            readArchiveMember,
             installed,
             allowed,
             report,
@@ -1955,6 +1963,7 @@ try {
         await prepareFieldPresentationBrowserFixtures({
             temporary,
             archive,
+            readArchiveMember,
             installed,
             allowed,
             report,
@@ -1998,10 +2007,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, member])
-                );
+                assert.deepEqual(bytes, readArchiveMember(member));
                 item.archiveMember = member;
             }
             multilineProofInputs.push(item);
@@ -2019,10 +2025,7 @@ try {
         const multilineCssMember =
             'package/' +
             relative(installed, multilineCssPath).replaceAll('\\', '/');
-        assert.deepEqual(
-            multilineCss,
-            execFileSync('tar', ['-xOf', archive, multilineCssMember])
-        );
+        assert.deepEqual(multilineCss, readArchiveMember(multilineCssMember));
         const multilineCode = multilineBundle.outputFiles[0].contents;
         report.completeMultiline = {
             sourceSha256: hash(completeMultilineBrowserSource),
@@ -2070,6 +2073,15 @@ try {
             )
         );
 
+        report.archiveMemberReads = readArchiveMember.stats();
+        report.preparationDurationMs = performance.now() - preparationStarted;
+        console.log(
+            'Archive-bound browser preparation: ' +
+                JSON.stringify({
+                    durationMs: report.preparationDurationMs,
+                    ...report.archiveMemberReads,
+                })
+        );
         server = createServer((request, response) => {
             const url = new URL(request.url, 'http://127.0.0.1');
             const bytes = allowed.get(url.pathname);
@@ -2148,6 +2160,20 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeDate,
+            output,
+        });
+        report.createdTime = {};
+        await checkCreatedTimeControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.createdTime,
+            output,
+        });
+        report.createdTimeDocuments = {};
+        await checkDocumentThumbnailBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.createdTimeDocuments,
             output,
         });
         report.completeDuration = {};

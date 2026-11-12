@@ -12,6 +12,15 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+// Document navigation changes the key as well as the modifier on macOS.
+// Meta+End stayed at the start in the retained Mac comparison; Meta+ArrowDown
+// reached the same native/model document-end assertion without a selection write.
+export function richTextDocumentNavigationKeys(platform) {
+    return platform.startsWith('Mac')
+        ? { start: 'Meta+ArrowUp', end: 'Meta+ArrowDown' }
+        : { start: 'Control+Home', end: 'Control+End' };
+}
+
 // The preserved zoom listener is armed after its opening transition. A fresh,
 // window-targeted synthetic Tab only exercises its preventDefault branch: it
 // cannot traverse the editor or perform native focus navigation. This predicate
@@ -399,6 +408,9 @@ window.completeRichTextProbe={
 
         evidence.phase = 'formatted-editable-metadata';
         await page.goto(origin);
+        const documentKeys = richTextDocumentNavigationKeys(
+            await page.evaluate(() => navigator.platform)
+        );
         await waitEditor();
         const editor = page.locator('.ProseMirror');
         const focusEditor = async () => {
@@ -419,7 +431,7 @@ window.completeRichTextProbe={
         );
         assert.deepEqual(state.writes, []);
         await focusEditor();
-        await page.keyboard.press('ControlOrMeta+End');
+        await page.keyboard.press(documentKeys.end);
         await page.waitForFunction(() => {
             const state = window.completeRichTextProbe.snapshot();
             return (
@@ -482,7 +494,7 @@ window.completeRichTextProbe={
         evidence.phase = 'keyboard-and-toolbar';
         await reset('Alpha word');
         await focusEditor();
-        await page.keyboard.press('ControlOrMeta+Home');
+        await page.keyboard.press(documentKeys.start);
         for (let index = 0; index < 5; index++)
             await page.keyboard.press('Shift+ArrowRight');
         // Native selection is the command precondition. Do not wait for the
@@ -653,7 +665,7 @@ window.completeRichTextProbe={
                 target: event.target,
             })),
         };
-        await page.keyboard.press('ControlOrMeta+End');
+        await page.keyboard.press(documentKeys.end);
         await page.keyboard.type('Denied readonly edit');
         assert.equal((await snapshot()).writes.length, beforeReadonly);
         assert.equal((await snapshot()).state.value, state.state.value);

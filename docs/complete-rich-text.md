@@ -1,15 +1,15 @@
-# Complete Rich Text editor
+# Rich Text field and complete editor
 
-`CompleteRichTextEditor` owns its Markdown engine, formatting toolbar, paste
+The controlled `RichTextField` owns its Markdown engine, formatting toolbar, paste
 handling, checkbox node views, formatted read-only presentation and styles. It
 requires React and React DOM 18.3.1 or 19, and does not require Tailwind or a
 caller-supplied editor.
 
 ```tsx
-import { CompleteRichTextEditor } from '@miniextensions/sdk/react';
+import { RichTextField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
 
-<CompleteRichTextEditor
+<RichTextField
     value={storedMarkdown}
     onValueChange={setStoredMarkdown}
     identity={`${recordId}:${fieldId}`}
@@ -35,8 +35,16 @@ React error boundary.
 
 The component has no backend, upload provider, raw HTML expansion or Save
 operation. The host retains permissions, canonical draft state and persistence.
-The existing `NativeRichTextEditor` editor-slot API and the literal `RichTextField`
-display API retain their separate contracts.
+Supply both `value` and `onValueChange` for the controlled editor contract. The
+public `ControlledRichTextFieldProps` and `BindingRichTextFieldProps` types make
+these two modes explicit and reject mixed controlled/binding props. The historical
+`RichTextFieldProps` type retains its binding shape. Supplying
+`binding` retains the existing escaped literal display, privacy rules and optional
+`render` override; it does not acquire editor, write or Save behavior. The physical
+`renderRichTextField` renderer also retains its literal display contract.
+
+`CompleteRichTextEditor` remains compatible with its existing controlled props and
+editor handle ref. `NativeRichTextEditor` retains its separate editor-slot API.
 
 The private engine is adapted from the immutable revision recorded in the
 distributed vendor `UPSTREAM.json`; original licenses and per-file source hashes

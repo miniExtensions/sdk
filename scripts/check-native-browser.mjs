@@ -35,6 +35,7 @@ import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
+import { checkCanonicalRichTextBrowser } from './canonical-rich-text-browser-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
 import { checkThemeBrowser } from './theme-browser-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
@@ -2138,6 +2139,12 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.canonicalRichText = {};
+        await checkCanonicalRichTextBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.canonicalRichText,
+        });
         report.completeRichText = {};
         await checkCompleteRichTextBrowser({
             browser,

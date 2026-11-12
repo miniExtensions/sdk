@@ -13,6 +13,10 @@ import {
     CompleteRichTextEditor,
     type CompleteRichTextEditorProps,
 } from '../src/react/CompleteRichTextEditor.js';
+import {
+    RichTextField,
+    type ControlledRichTextFieldProps,
+} from '../src/react/index.js';
 import type { NativeRichTextEditorHandle } from '../src/react/NativeRichTextEditor.js';
 import type { Editor } from '../vendor/rich-markdown-editor/sdk-runtime.js';
 
@@ -71,6 +75,26 @@ export function ControlledCompleteEditor({
     return h(CompleteRichTextEditor, {
         ...props,
         ref: editorRef,
+        value,
+        onValueChange: (stored) => {
+            writes.push(stored);
+            setValue(stored);
+        },
+    });
+}
+
+/** Ordinary canonical consumption; the public field requires no editor ref or slot. */
+export function ControlledCanonicalRichTextField({
+    initial = null,
+    writes,
+    ...props
+}: Omit<ControlledRichTextFieldProps, 'value' | 'onValueChange'> & {
+    initial?: string | null;
+    writes: string[];
+}) {
+    const [value, setValue] = useState(initial);
+    return h(RichTextField, {
+        ...props,
         value,
         onValueChange: (stored) => {
             writes.push(stored);

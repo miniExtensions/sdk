@@ -210,6 +210,8 @@ export {
     RichTextField,
     renderRichTextField,
     type RichTextFieldProps,
+    type BindingRichTextFieldProps,
+    type ControlledRichTextFieldProps,
     type RichTextFieldOptions,
 } from './RichTextField.js';
 export {

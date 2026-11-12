@@ -5,6 +5,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     NumberField,
+    type DurationFieldProps,
     DurationField,
     FieldRenderer,
     renderDurationField,
@@ -781,7 +782,11 @@ it('retired or incompatible duration scalars remove binding controls without alt
 it('DurationField and NumberField preserve non-duration numeric behavior and custom rendering', async (t) => {
     const f = await fixture(t);
     const binding = f.owner.field('number');
-    for (const Component of [DurationField, NumberField]) {
+    const bindingComponents: Array<(props: DurationFieldProps) => ReactNode> = [
+        DurationField,
+        NumberField,
+    ];
+    for (const Component of bindingComponents) {
         await f.render(h(Component, { binding }));
         assert.equal(f.input().inputMode, 'decimal');
         assert.equal(f.input().value, '1.25');

@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     NumberField,
+    type CurrencyFieldProps,
     CurrencyField,
     FieldRenderer,
     renderCurrencyField,
@@ -624,7 +625,11 @@ it('incompatible and retired borrowed scalars do not expose currency binding con
 it('NumberField and CurrencyField preserve non-currency numeric behavior and custom binding rendering', async (t) => {
     const f = await fixture(t);
     const binding = f.owner.field('number');
-    for (const Component of [NumberField, CurrencyField]) {
+    const bindingComponents: Array<(props: CurrencyFieldProps) => ReactNode> = [
+        NumberField,
+        CurrencyField,
+    ];
+    for (const Component of bindingComponents) {
         await f.render(h(Component, { binding }));
         assert.equal(f.input().value, '1.25');
         assert.equal(f.input().inputMode, 'decimal');

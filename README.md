@@ -319,18 +319,20 @@ replace the display-only collaborator APIs above.
 
 [Rich Text presentation](docs/ui.md#react-rich-text-presentation) exports
 `RichTextField`, `RichTextFieldProps`, `RichTextFieldOptions` and
-`renderRichTextField` for the existing physical slot. It displays supplied Markdown
+`renderRichTextField` for the existing physical slot. Binding and slot calls display supplied Markdown
 literally as escaped text, preserving whitespace, line breaks and the native
-string. Masking precedes value access. This is a safe plain-text display stage;
-formatted Rich Text parity, parsing, links, resource loading and editing are not
-included.
+string. Masking precedes value access. These binding and slot calls retain their
+literal display contract.
 
 [Complete Rich Text editor](docs/complete-rich-text.md) exports
-`CompleteRichTextEditor` for formatted editing and read-only Markdown, with its
+`RichTextField` with controlled `value` and `onValueChange` props for formatted
+editing and read-only Markdown, with its
 owned engine, toolbar, paste handling, checkbox serialization and opt-in CSS.
 The host supplies stored values, semantic document identity and the canonical
-write callback. The existing literal display and native editor-slot APIs retain
-their contracts.
+write callback. `ControlledRichTextFieldProps` describes this editor contract;
+the historical `RichTextFieldProps` binding type and literal display behavior
+remain unchanged. `CompleteRichTextEditor` retains its existing props and ref,
+and the native editor-slot API remains available.
 
 [AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
 `AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing

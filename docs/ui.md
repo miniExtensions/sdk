@@ -3481,7 +3481,8 @@ export const richTextRenderers: FieldRendererSlots<ReactNode> = {
 // <RichTextField binding={richTextBinding} className="rich-text-answer" />
 ```
 
-The owner retains the native `string | null | undefined` value. Supplied Markdown,
+With binding props or the physical renderer, the owner retains the native
+`string | null | undefined` value. Supplied Markdown,
 HTML and URLs appear literally as escaped text: `**Hello**` displays `**Hello**`,
 and `[label](https://example.invalid)` remains that string. Whitespace, Unicode,
 line breaks and original line endings, including CRLF, remain unchanged. The
@@ -3512,14 +3513,23 @@ region. Click, auxiliary click, double click, pointer-down, key-down and key-up
 events are contained without cancelling native defaults for text selection or
 copy.
 
-This is a safe plain-text display stage, not completed formatted Rich Text parity.
-There is no Markdown parser, formatting removal, HTML interpretation, resource
+Binding and slot rendering provide literal display. They do not run a Markdown parser, formatting removal, HTML interpretation, resource
 loading, link creation, navigation, normalization or editing. The renderer does not
 use write or save actions even when the existing headless slot supplies an
 editable capability. Plain Multiline Text retains its separate slot and editor.
 `RichTextFieldOptions` contains only optional `className`, which decorates
-`mx-sdk-rich-text-field`; no CSS import or package subpath is added. Core and `/ui`
+`mx-sdk-rich-text-field`; literal display needs no CSS import. Core and `/ui`
 remain React-free.
+
+For the complete editor, supply controlled `value: string | null` and
+`onValueChange(value: string)` props to the same public `RichTextField`. Import
+`@miniextensions/sdk/react/rich-text.css` for the owned toolbar, formatted Markdown,
+checkbox node views and paste behavior. Use `ControlledRichTextFieldProps` for
+this contract; `RichTextFieldProps` retains its historical binding shape, with
+`BindingRichTextFieldProps` available explicitly. Overloads reject combining
+binding/render props with controlled props. The host supplies canonical state,
+current document `identity` and the writer. See the [complete Rich Text guide](complete-rich-text.md)
+for readonly, empty presentation, accessibility, theme and compatibility details.
 
 `test/reactRichText.test.ts` covers the source component, and `check:package` runs
 the installed ESM/CommonJS public-export runtime and declaration checks, including

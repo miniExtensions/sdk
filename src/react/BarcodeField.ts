@@ -10,9 +10,17 @@ import {
 } from '../ui/rendererRegistry.js';
 import { useFieldBinding, type FieldProps } from './index.js';
 import { textConfiguration } from './TextField.js';
+import {
+    ControlledBarcodeField,
+    type ControlledBarcodeFieldProps,
+} from './ControlledBarcodeField.js';
+export type { ControlledBarcodeFieldProps } from './ControlledBarcodeField.js';
 
 export type BarcodeFieldOptions = { className?: string };
-export type BarcodeFieldProps = FieldProps & BarcodeFieldOptions;
+export type BindingBarcodeFieldProps = FieldProps & BarcodeFieldOptions;
+export type BarcodeFieldProps =
+    | BindingBarcodeFieldProps
+    | ControlledBarcodeFieldProps;
 
 /** Only the supplied text is presented; the owner retains the native object/type. */
 function barcodeText(value: unknown): string | null {
@@ -99,11 +107,11 @@ export function renderBarcodeField(
 }
 
 /** Subscribe to accepted native answers without borrowing binding write actions. */
-export function BarcodeField({
+export function BindingBarcodeField({
     binding,
     render,
     className,
-}: BarcodeFieldProps): ReactNode {
+}: BindingBarcodeFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -131,4 +139,11 @@ export function BarcodeField({
             snapshot.error ??
             snapshot.validation.map((item) => item.errorMessage).join('\n'),
     });
+}
+
+/** Canonical editor with an explicit controlled contract; binding calls stay display-only. */
+export function BarcodeField(props: BarcodeFieldProps): ReactNode {
+    return 'mode' in props && props.mode === 'controlled'
+        ? createElement(ControlledBarcodeField, props)
+        : createElement(BindingBarcodeField, props);
 }

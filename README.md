@@ -233,6 +233,10 @@ attachment-display and explicit masking modes require a custom renderer.
 `EmailFieldProps`, `EmailFieldOptions` and the typed `renderEmailField` slot. It
 reuses the Text control and optional `@miniextensions/sdk/react/text.css` for native
 single-line text drafts; page and server validation remain authoritative.
+The same natural `EmailField` also accepts `mode="controlled"` with
+`ControlledEmailFieldProps` for the complete email input, icon, Clear and optional
+scanner. Legacy binding props remain unchanged. Deferred editing requires an
+explicit current `EmailEditOwner`; the host still owns Save and persistence.
 
 [URL presentation](docs/ui.md#react-url-presentation) exports `UrlField`,
 `UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses

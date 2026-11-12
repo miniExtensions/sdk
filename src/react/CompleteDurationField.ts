@@ -58,11 +58,13 @@ export function CompleteDurationField(props: CompleteDurationFieldProps) {
     // A new owner resets text and retires callbacks without inventing a blur.
     // SSR has no node and never reads a browser global.
     const node = input.current;
+    const focusRoot = node?.getRootNode();
     const focused =
         !props.readOnly &&
         isDurationFormat(props.format) &&
-        node != null &&
-        node.ownerDocument.activeElement === node;
+        focusRoot != null &&
+        'activeElement' in focusRoot &&
+        focusRoot.activeElement === node;
     const identity = useMemo(
         () => ({}),
         [props.fieldId, props.sessionId, props.owner.token]

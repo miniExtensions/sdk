@@ -77,7 +77,13 @@ function App(){
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>update({active:false})},'Retire owner'),
   h('button',{type:'button',onClick:()=>update({mounted:false})},'Remove input'));
 }
-createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
+let mount=document.querySelector('main');
+if(mode==='shadow'){
+ const shadow=mount.attachShadow({mode:'open'});
+ const css=document.createElement('link');css.rel='stylesheet';css.href='/duration.css';shadow.append(css);
+ mount=document.createElement('div');shadow.append(mount);
+}
+createRoot(mount).render(h(React.StrictMode,null,h(App)));
 window.durationProof={snapshot:()=>({reactVersion:React.version,writes:[...writes],inputs:[...inputs],submits,focuses,value:observed.value,formatted:observed.value===null?'':getFormattedDuration(String(observed.value),observed.format,true)})};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
@@ -361,7 +367,9 @@ window.durationProof={snapshot:()=>({reactVersion:React.version,writes:[...write
         assert.equal((await snapshot()).writes.length, beforeReplacement + 2);
         await replace(input, '6');
         assert.equal(await input.inputValue(), '6');
-        assert.equal((await snapshot()).focuses, retainedFocusCount + 2);
+        // Only the input is inside the form's focus-capture boundary. The
+        // external button blurs it; refocusing the input emits one new focus.
+        assert.equal((await snapshot()).focuses, retainedFocusCount + 1);
         assert.equal((await snapshot()).writes.length, beforeReplacement + 3);
         const beforeRefusal = (await snapshot()).writes.length;
         await page
@@ -387,6 +395,47 @@ window.durationProof={snapshot:()=>({reactVersion:React.version,writes:[...write
         assert.equal((await snapshot()).writes.length, beforeRefusal);
         await finish('owner-readonly-unmount');
 
+        input = await open('shadow');
+        assert.deepEqual(
+            await input.evaluate((node) => ({
+                rootFocused: node.getRootNode().activeElement === node,
+                documentFocused: node.ownerDocument.activeElement === node,
+            })),
+            { rootFocused: false, documentFocused: false }
+        );
+        await replace(input, '7');
+        assert.equal(await input.inputValue(), '7');
+        assert.deepEqual((await snapshot()).writes, [
+            { value: 7, writer: 'initial' },
+        ]);
+        assert.deepEqual(
+            await input.evaluate((node) => ({
+                rootFocused: node.getRootNode().activeElement === node,
+                documentFocused: node.ownerDocument.activeElement === node,
+            })),
+            { rootFocused: true, documentFocused: false }
+        );
+        const shadowFocusCount = (await snapshot()).focuses;
+        await page
+            .getByRole('button', { name: 'Replace owner', exact: true })
+            .click();
+        assert.equal(await input.inputValue(), '1:30.000');
+        assert.equal((await snapshot()).writes.length, 1);
+        await replace(input, '8');
+        assert.equal(await input.inputValue(), '8');
+        assert.equal(await input.evaluate((node) => node.selectionStart), 1);
+        assert.equal((await snapshot()).focuses, shadowFocusCount);
+        assert.deepEqual((await snapshot()).writes, [
+            { value: 7, writer: 'initial' },
+            { value: 8, writer: 'initial' },
+        ]);
+        await page
+            .getByRole('button', { name: 'Make readonly', exact: true })
+            .focus();
+        assert.equal(await input.inputValue(), '0:08.000');
+        assert.equal((await snapshot()).writes.length, 2);
+        await finish('shadow-retained-owner-focus');
+
         input = await open('clear', true);
         const clear = page.getByRole('button', {
             name: 'Clear synthetic duration',
@@ -410,7 +459,7 @@ window.durationProof={snapshot:()=>({reactVersion:React.version,writes:[...write
         assert.equal(await input.inputValue(), '');
         await page.emulateMedia({ forcedColors: 'active' });
         await finish('optional-clear-mobile-keyboard');
-        assert.equal(evidence.results.length, 4);
+        assert.equal(evidence.results.length, 5);
         evidence.scope =
             'Installed complete Duration with trusted input; no native Form/backend/clipboard/live-device claim.';
         evidence.status = 'passed';

@@ -44,7 +44,7 @@ it('server-renders the complete clock without a DOM, effects, CSS import or cano
     assert.equal(typeof document, 'undefined');
 });
 
-async function dom(t: TestContext) {
+async function dom(t: TestContext, inShadow = false) {
     const window = new Window();
     const keys = [
         'window',
@@ -69,7 +69,11 @@ async function dom(t: TestContext) {
     const { createRoot } = await import('react-dom/client');
     const container = window.document.createElement('form');
     container.id = 'form-duration-session';
-    window.document.body.append(container);
+    if (inShadow) {
+        const host = window.document.createElement('div');
+        window.document.body.append(host);
+        host.attachShadow({ mode: 'open' }).append(container);
+    } else window.document.body.append(container);
     const root = createRoot(container as unknown as HTMLElement);
     let mounted = true;
     let submits = 0;
@@ -101,8 +105,12 @@ async function dom(t: TestContext) {
     };
 }
 
-async function fixture(t: TestContext, initial: Partial<DurationProps> = {}) {
-    const d = await dom(t);
+async function fixture(
+    t: TestContext,
+    initial: Partial<DurationProps> = {},
+    inShadow = false
+) {
+    const d = await dom(t, inShadow);
     const writes: (number | null)[] = [];
     let current = true;
     let props: DurationProps = {
@@ -720,4 +728,30 @@ it('keeps object and callback input refs current across ref replacement and unmo
     assert.equal(object.current, node);
     await f.unmount();
     assert.equal(object.current, null);
+});
+
+it('uses the actual focus root for a shadow-hosted clock and retained owner replacement', async (t) => {
+    const f = await fixture(t, {}, true);
+    const node = f.input();
+    await f.focus();
+    const focusRoot = node.getRootNode();
+    assert.ok('activeElement' in focusRoot);
+    assert.equal(focusRoot.activeElement, node);
+    assert.notEqual(f.window.document.activeElement, node);
+    await f.edit('7');
+    assert.equal(node.value, '7');
+    assert.deepEqual(f.writes, [7]);
+    await f.update({ value: 80, owner: { token: {}, isCurrent: () => true } });
+    assert.equal(f.input(), node);
+    assert.equal(focusRoot.activeElement, node);
+    assert.equal(node.value, '1:20.000');
+    await f.edit('8');
+    assert.equal(node.value, '8');
+    node.setSelectionRange(0, 1);
+    await f.update({ value: 8 });
+    assert.equal(node.selectionStart, 0);
+    assert.equal(node.selectionEnd, 1);
+    await f.blur();
+    assert.equal(node.value, '0:08.000');
+    assert.deepEqual(f.writes, [7, 8]);
 });

@@ -3368,6 +3368,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(createdTimeMatrix.versions.length, 2);
     assert.equal(createdTimeMatrix.cleanup, 'completed');
+    const modifiedTimeMatrix = await checkCreatedTimeReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        field: 'lastModifiedTime',
+    });
+    assert.equal(modifiedTimeMatrix.versions.length, 2);
+    assert.equal(modifiedTimeMatrix.cleanup, 'completed');
     const dateMatrix = await checkCompleteDateReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

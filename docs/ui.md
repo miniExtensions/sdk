@@ -2596,6 +2596,62 @@ does not certify every platform's input method or screen reader.
 
 ## React Last Modified Time presentation
 
+The natural `LastModifiedTimeField` also accepts complete controlled display
+props, with `ControlledLastModifiedTimeFieldProps` and `LastModifiedTimeFieldConfig`
+exported from `/react`. Supply the physical computed wrapper as `fieldConfig`;
+its `options.isValid` gates text formatting and its `options.result` supplies the
+accepted date or datetime configuration. Invalid configuration produces localized
+empty text without inspecting the nested result. Native string/null values stay
+with the caller; malformed runtime shapes show `invalidValueLabel` without coercion.
+
+```tsx
+import { LastModifiedTimeField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+import '@miniextensions/sdk/react/button.css';
+
+export function ModifiedDisplay({ value }: { value: string | null }) {
+    return (
+        <LastModifiedTimeField
+            value={value}
+            language="fr"
+            fieldConfig={{
+                type: 'lastModifiedTime',
+                options: {
+                    isValid: true,
+                    result: {
+                        type: 'dateTime',
+                        options: {
+                            dateFormat: { format: 'D MMMM YYYY' },
+                            timeFormat: { format: 'HH:mm' },
+                            timeZone: 'America/New_York',
+                        },
+                    },
+                },
+            }}
+        />
+    );
+}
+```
+
+Date text defaults to English, matching the native last-modified wrapper's
+recursive formatting, while `language` localizes empty UI labels. An explicit
+`dateLanguage` opts into another supported date locale without changing global
+locale or configured timezone. Created-time's existing default remains unchanged.
+
+This complete branch reuses the same [Created-time display/resource engine](#react-created-time-presentation),
+styles, owner/token/identity retirement, label/help/error association, preview,
+document rendering and cleanup. Readonly safe HTTP(S) attachments take precedence
+before button mode and before result metadata; button labels are trimmed. Readable
+text is the fallback. `displayContext="editable"` keeps computed text and ignores
+both resource flags. `inert` disables resource loading and activation. The field
+has no editor, setter, Save, source-model fetch or provider authority.
+
+`LastModifiedTimeFieldProps` retains its historical required `binding` shape.
+`BindingLastModifiedTimeField` and `BindingLastModifiedTimeFieldProps` explicitly
+name that compatibility contract. Controlled inputs and binding/render inputs are
+mutually exclusive. The original binding component and physical renderer below
+continue to display validity-gated raw timestamps rather than formatted text.
+
 The optional `/react` entry exports `LastModifiedTimeField`,
 `LastModifiedTimeFieldProps`, `LastModifiedTimeFieldOptions` and
 `renderLastModifiedTimeField`. The binding component accepts `{ binding, render }`
@@ -2652,8 +2708,8 @@ not parse or validate timestamp text, format nested `date`/`dateTime` results, o
 convert timezones. It does not interpret `referencedFieldIds`, inspect record
 changes or generate a modification timestamp. Changing validity can change whether
 the string is shown; changing nested result or referenced-field metadata does not
-reinterpret it. None of these changes normalizes the native answer. Use a custom
-renderer for formatted dates. The single-line input sanitizes CR/LF in its displayed
+reinterpret it. None of these changes normalizes the native answer. Use the
+controlled contract above for formatted dates. The single-line input sanitizes CR/LF in its displayed
 value; those native bytes remain unchanged in the owner.
 
 The DateTime input and its existing Clear button are always disabled. `clearLabel`

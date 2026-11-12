@@ -28,11 +28,13 @@ const fixtures = JSON.parse(
 const assetPrefix = `/pdf-assets/pdfjs-${documentPDFVersion}/`;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
-function hostSource(format) {
+function hostSource(format, field = 'createdTime') {
+    const component =
+        field === 'createdTime' ? 'CreatedTimeField' : 'LastModifiedTimeField';
     return `
 import React,{createElement as h,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-${format === 'cjs' ? "const {CreatedTimeField}=require('@miniextensions/sdk/react');" : "import {CreatedTimeField} from '@miniextensions/sdk/react';"}
+${format === 'cjs' ? `const {${component}:CreatedTimeField}=require('@miniextensions/sdk/react');` : `import {${component} as CreatedTimeField} from '@miniextensions/sdk/react';`}
 const data=${JSON.stringify(fixtures)};
 const decode=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
 const initialPromiseTry=Promise.try;
@@ -50,7 +52,7 @@ function App(){
  const bytes=useMemo(()=>['tiff','image','pdf'].includes(kind)?decode(data[kind==='image'?'png':kind]):new TextEncoder().encode(state.revision?'Successor document':data[kind]??'unsupported'),[kind,state.revision]);
  const source=state.uri?{kind:'uri',revision:state.revision}:{kind:'bytes',mimeType:mime,bytes,revision:state.revision};
  const value=location.origin+'/documents/'+(state.type==='modal'?'known.pdf':state.type);
- const props={value,language:'en',dateConfig:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}},displayAsAttachments:true,owner,identity:'owned-document',inert:state.inert,attachmentOptions:{isInGrid:state.grid,disableOpenFiles:state.disableOpen,disableDownloadFiles:state.disableDownload,documentPreview:{source,pdfWorkerUrl:location.origin+(state.badWorker?'/missing-worker.mjs':'${assetPrefix}pdf.worker.mjs'),pdfResourceBaseUrl:location.origin+'${assetPrefix}'}},presentation:{association:{kind:'group',controlId:'document-display',labelId:'document-title',descriptionId:'document-help',formId:'document-form'},chromeOwner:'shell'}};
+ const props={value,language:'en',${field === 'createdTime' ? "dateConfig:{type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'UTC'}}" : "fieldConfig:{type:'lastModifiedTime',options:{isValid:false,result:{type:'date',options:{dateFormat:{format:'YYYY-MM-DD'}}}}}"},displayAsAttachments:true,owner,identity:'owned-document',inert:state.inert,attachmentOptions:{isInGrid:state.grid,disableOpenFiles:state.disableOpen,disableDownloadFiles:state.disableDownload,documentPreview:{source,pdfWorkerUrl:location.origin+(state.badWorker?'/missing-worker.mjs':'${assetPrefix}pdf.worker.mjs'),pdfResourceBaseUrl:location.origin+'${assetPrefix}'}},presentation:{association:{kind:'group',controlId:'document-display',labelId:'document-title',descriptionId:'document-help',formId:'document-form'},chromeOwner:'shell'}};
  const action=(name,patch)=>h('button',{type:'button',onClick:()=>change(patch)},name);
  return h('form',{id:'document-form',onSubmit:event=>{event.preventDefault();submits++;}},h('nav',null,
   action('Text',{type:'text',uri:false,grid:false,revision:0,far:false}),action('CSV',{type:'csv',uri:false,grid:false,far:false}),action('HTML',{type:'html',uri:false,grid:false,far:false}),action('TIFF',{type:'tiff',uri:false,grid:false,far:false}),action('Image',{type:'image',uri:false,grid:false,far:false}),action('Grid PDF',{type:'pdf',uri:false,grid:true,disableOpen:true,far:false}),action('Form PDF',{type:'pdf',uri:false,grid:false,disableOpen:true,far:false}),action('URI CSV',{type:'csv',uri:true,grid:false,far:false}),action('URI octet',{type:'octet',uri:true,grid:false,far:false}),action('Offscreen URI',{type:'deferred',uri:true,grid:false,far:true}),action('HTTP PDF modal',{type:'modal',uri:true,grid:false,disableOpen:false,far:false}),action('Allow Open',{disableOpen:false}),action('Refuse Download',{disableDownload:true}),action('New revision',{revision:1}),action('Inert',{inert:true}),action('Retire',{current:false}),action('Remove',{mounted:false})),
@@ -62,12 +64,16 @@ window.documentFixture={snapshot:()=>({react:React.version,submits,state:observe
 `;
 }
 
-export async function prepareDocumentThumbnailBrowser(consumer, format) {
+export async function prepareDocumentThumbnailBrowser(
+    consumer,
+    format,
+    field = 'createdTime'
+) {
     const root = realpathSync(consumer);
     const temporary = mkdtempSync(join(root, '.document-thumbnail-browser-'));
     try {
         const entry = join(temporary, 'host.mjs');
-        writeFileSync(entry, hostSource(format));
+        writeFileSync(entry, hostSource(format, field));
         const bundled = await build({
             absWorkingDir: root,
             entryPoints: [entry],
@@ -80,7 +86,10 @@ export async function prepareDocumentThumbnailBrowser(consumer, format) {
         await assertBrowserInputs(bundled.metafile, root);
         const paths = Object.keys(bundled.metafile.inputs);
         for (const name of [
-            'CreatedTimeField.js',
+            field === 'createdTime'
+                ? 'CreatedTimeField.js'
+                : 'LastModifiedTimeField.js',
+            'ComputedTimeDisplay.js',
             'CreatedTimeResource.js',
             'document-preview/DocumentThumbnail.js',
             'document-preview/DocumentPDF.js',
@@ -163,6 +172,7 @@ export async function checkDocumentThumbnailBrowser({
     consumer,
     evidence,
     output,
+    field = 'createdTime',
 }) {
     Object.assign(evidence, { status: 'running', profiles: [], cleanup: {} });
     let failure;
@@ -182,7 +192,8 @@ export async function checkDocumentThumbnailBrowser({
         try {
             const prepared = await prepareDocumentThumbnailBrowser(
                 consumer,
-                format
+                format,
+                field
             );
             profile.package = prepared.receipt;
             const documentTypes = {
@@ -500,7 +511,7 @@ export async function checkDocumentThumbnailBrowser({
                 'actual-pdf-worker-canvas-controls-and-guarded-download'
             );
             await page.screenshot({
-                path: join(output, `document-pdf-${format}.png`),
+                path: join(output, `${field}-document-pdf-${format}.png`),
             });
             await click('Form PDF');
             await display().locator('[data-rendered-page="1"]').waitFor();

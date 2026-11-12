@@ -3,7 +3,10 @@
 On macOS, run package/module-format checks with a canonical `TMPDIR` (for
 example `/private/tmp`). Native Node resolution returns real paths; a fixture
 created under the `/var` alias otherwise fails the unchanged exact-path
-comparison against `/private/var`. Keep those comparisons intact. Use the
+comparison against `/private/var`. Retained artifact directories must also use
+canonical parents: set `SDK_CHECKED_ARTIFACT_DIR` and
+`SDK_BROWSER_PROOF_ARTIFACT_DIR` beneath `/private/tmp`, not the `/tmp` symlink.
+Keep those comparisons intact. Use the
 project's pinned pnpm through Corepack when the global pnpm version differs.
 
 ## Git source preparation
@@ -1027,3 +1030,21 @@ placement, narrow collision geometry, close/reopen and unmount. Installed
 inputs, vendor/CSS bytes, no-network policy and cleanup remain guarded.
 These synthetic proofs do not establish OS IME, a screen-reader pass, native
 Form/Portal authorization, provider persistence or hosted acceptance.
+
+## Controlled Last Modified Time checks
+
+The complete Last-modified API runs both computed-time variants through the
+maintained resource suite in `test/reactCreatedTimeResources.test.ts`, including
+current-owner, opaque-token/ABA, download, preview and document cleanup cases.
+`test/reactLastModifiedTimeControlled.test.ts` adds physical wrapper validity,
+result/date/timezone/DST/value transitions, native English date text versus
+localized UI labels, mode precedence, type exclusivity and sibling isolation.
+The existing raw binding/physical renderer suite and explicit binding compatibility
+export remain covered separately.
+
+The normal package check parameterizes the existing packed React18/19 ESM/CJS,
+strict declaration/JSX, CSS, SSR/hydration and mounted document/resource consumers
+for both fields. The normal native Chromium harness likewise registers both
+canonical components and both ESM/CJS document profiles. These are synthetic SDK
+consumers. Their execution does not establish native direct-switch adoption,
+backend persistence, hosted acceptance or a new SDK pin in the monorepo.

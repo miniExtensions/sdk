@@ -250,6 +250,9 @@ It presents supplied raw timestamp strings only when Last Modified Time metadata
 has `options.isValid === true`, using the disabled DateTime control and optional
 `@miniextensions/sdk/react/datetime.css`. It does not format dates, calculate
 modification times or change native values.
+The same natural name accepts complete controlled `value`/`fieldConfig` display
+props, reusing the Created-time formatting/resource engine. Explicit
+`BindingLastModifiedTimeField` preserves the raw binding contract.
 
 [Created Time presentation](docs/ui.md#react-created-time-presentation) exports
 the natural `CreatedTimeField` controlled display with explicit date configuration,

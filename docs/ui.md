@@ -3201,7 +3201,9 @@ the existing controls. `className` decorates `mx-sdk-lookup-field`; no CSS impor
 package subpath, editor, Clear, Save or lookup action is added. Core and `/ui`
 remain React-free.
 
-## Canonical Barcode editor and compatible binding presentation
+## React Barcode presentation
+
+### Canonical editor and compatible binding presentation
 
 `BarcodeField` from `@miniextensions/sdk/react` accepts an explicit controlled
 contract for the complete native-compatible editor. Import its scoped CSS:

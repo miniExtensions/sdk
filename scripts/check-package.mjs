@@ -656,6 +656,8 @@ try {
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
         ...completionStarterFiles,
+        'dist/esm/react/barcode.css',
+        'dist/cjs/react/barcode.css',
         'dist/esm/react/complete-barcode-scanner.css',
         'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',

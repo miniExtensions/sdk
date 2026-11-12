@@ -3199,7 +3199,55 @@ the existing controls. `className` decorates `mx-sdk-lookup-field`; no CSS impor
 package subpath, editor, Clear, Save or lookup action is added. Core and `/ui`
 remain React-free.
 
-## React Barcode presentation
+## Canonical Barcode editor and compatible binding presentation
+
+`BarcodeField` from `@miniextensions/sdk/react` accepts an explicit controlled
+contract for the complete native-compatible editor. Import its scoped CSS:
+
+```tsx
+import { useState } from 'react';
+import { BarcodeField } from '@miniextensions/sdk/react';
+import type { AirtableBarcodeValue } from '@miniextensions/sdk';
+import '@miniextensions/sdk/react/barcode.css';
+
+export function BarcodeAnswer() {
+    const [value, setValue] = useState<AirtableBarcodeValue | null>(null);
+    return (
+        <BarcodeField
+            mode="controlled"
+            value={value}
+            onChange={setValue}
+            language="en"
+            title="Barcode"
+            id="barcode"
+            form="answers"
+            clearLabel="Clear barcode"
+            initialMobile={false}
+        />
+    );
+}
+```
+
+Controlled edits, Clear and accepted scans replace only `text`; current `type`
+and enumerable metadata are retained. Null/type-only values display blank.
+`displayOnly` selects the native read-only text/empty presentation. `readOnly`
+disables editing and scanning. The scanner is offered by default but does not
+allocate a camera until opened; explicit `autoStartCamera` retains the existing
+scanner policy. The component creates no client, provider operation or Save.
+
+`enableInlineEdit` reuses the native deferred-input lifecycle: typing remains a
+draft until blur or non-composing Enter. A dirty genuine unmount settles once
+against its current owner. Hosts can supply `owner: {token, isCurrent}`; replace
+`token` on actual owner/configuration replacement and deny stale authority in
+`isCurrent`. Committed owner/configuration A/B/A transitions retire old input
+and scanner work; ordinary value echoes and callback refreshes keep focused
+drafts. DOM IDs and form association never grant write authority.
+
+Existing `<BarcodeField binding={...}>` calls and `renderBarcodeField` remain
+display-only, including visibility, masking and retirement behavior. The explicit
+`BindingBarcodeField`/`BindingBarcodeFieldProps` exports name that compatibility
+contract. `ControlledBarcodeFieldProps` names the controlled branch;
+`BarcodeFieldProps` is their discriminated union.
 
 The optional `/react` entry exports `BarcodeField`, `BarcodeFieldProps`,
 `BarcodeFieldOptions` and `renderBarcodeField`. Install the renderer in the existing
@@ -5748,7 +5796,8 @@ policy remain independent APIs.
 
 `CompleteBarcodeScanner` owns the dialog, focus management, camera preview,
 decoding, failure/retry/manual-entry controls and cleanup. Import its stylesheet.
-`BarcodeField` retains its existing display-only contract and never opens a camera.
+The binding form of `BarcodeField` retains its display-only contract. Its explicit
+controlled form composes this same scanner with the complete text editor.
 
 ```tsx
 import { useBarcodeScannerButtonInField } from '@miniextensions/sdk/react';

@@ -124,6 +124,7 @@
         "./react/complete-address.css": "./dist/esm/react/complete-address.css",
         "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
         "./react/form-completion.css": "./dist/esm/react/form-completion.css",
+        "./react/barcode.css": "./dist/esm/react/barcode.css",
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css",
         "./react/theme.css": "./dist/esm/react/theme.css",
         "./react/form-header.css": "./dist/esm/react/form-header.css",

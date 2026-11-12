@@ -163,8 +163,10 @@ export const CompleteDeferredClearableTextInput = forwardRef<
 
     useEffect(() => {
         return () => {
-            if (shouldCleanup.current)
+            if (shouldCleanup.current) {
+                shouldCleanup.current = false;
                 (onUnmountChange ?? onChange)(latestLocalValueRef.current);
+            }
         };
         // The original mounted writer is intentional. Ordinary blur below uses
         // the current callback; cleanup must never adopt a successor writer.

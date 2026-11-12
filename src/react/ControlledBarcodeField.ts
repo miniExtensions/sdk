@@ -7,8 +7,10 @@ import {
     useRef,
     type ReactNode,
 } from 'react';
-import type { AirtableBarcodeValue } from '../runtime/types.js';
-import type { RuntimeLanguage } from '../runtime/types.js';
+import type {
+    AirtableBarcodeValue,
+    RuntimeLanguage,
+} from '../runtime/types.js';
 import { CompleteClearableTextInput } from './CompleteClearableTextInput.js';
 import { CompleteReadOnlyTextField } from './CompleteReadOnlyTextField.js';
 import { useBarcodeScannerButtonInField } from './useBarcodeScannerButton.js';
@@ -49,8 +51,9 @@ export function ControlledBarcodeField(
 ): ReactNode {
     const generatedId = useId();
     const id = props.id ?? generatedId;
+    const generation = useRef(0);
     const lease = useMemo(
-        () => ({ mounted: false }),
+        () => ({ mounted: false, key: ++generation.current }),
         [
             id,
             props.form,
@@ -83,6 +86,9 @@ export function ControlledBarcodeField(
         )
             return;
         // Read current metadata at admission; only text is replaced.
+        // The authority callback may synchronously replace the owner. Recheck
+        // the committed generation before invoking the writer.
+        if (live.current !== active) return;
         active.props.onChange({ ...active.props.value, text });
     };
     const scanner = useBarcodeScannerButtonInField({
@@ -117,7 +123,7 @@ export function ControlledBarcodeField(
             'div',
             { className: 'mx-sdk-barcode-editor-control relative flex' },
             h(CompleteClearableTextInput, {
-                key: id + String(props.enableInlineEdit === true),
+                key: lease.key,
                 id,
                 form: props.form,
                 type: 'text',
@@ -135,7 +141,10 @@ export function ControlledBarcodeField(
                     props.showLabel === false ? props.title : undefined,
                 'aria-describedby': props.describedBy,
                 'aria-invalid': props.invalid,
-                className: ['mx-sdk-barcode-editor-input', props.inputClassName]
+                className: [
+                    'mx-sdk-barcode-editor-input block w-full truncate rounded-l-md border-gray-300 transition-colors duration-100 focus:border-theme-500 focus:ring-inset focus:ring-theme-500 disabled:bg-gray-100 disabled:text-gray-600 sm:text-sm',
+                    props.inputClassName,
+                ]
                     .filter(Boolean)
                     .join(' '),
             }),

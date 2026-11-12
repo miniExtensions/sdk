@@ -1,0 +1,26 @@
+@import './complete-clearable-text-input.css';
+@import './complete-barcode-scanner.css';
+@import './complete-readonly-text.css';
+
+:where(.mx-sdk-barcode-editor-control) {
+    display: flex;
+    position: relative;
+}
+:where(.mx-sdk-barcode-editor-input) {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem 0 0 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font: inherit;
+    text-overflow: ellipsis;
+}
+:where(.mx-sdk-barcode-editor-input:disabled) {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+:where(.mx-sdk-barcode-editor-input:focus) {
+    outline: 2px solid rgb(var(--theme-500, 99 102 241));
+    outline-offset: -2px;
+}

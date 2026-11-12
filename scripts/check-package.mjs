@@ -2896,9 +2896,10 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(emailProof.checks, 12);
+    // Preserve the twelve legacy groups plus three controlled groups per format.
+    assert.equal(emailProof.checks, 18);
     console.log(
-        `Installed Email renderer, binding, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+        `Installed Email renderer, binding, controlled input, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const numberProof = await checkNumberConsumer({
         consumerDirectory: temporaryDirectory,

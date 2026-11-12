@@ -1591,8 +1591,9 @@ every platform input method or screen reader. The example contacts no backend.
 ## React Email presentation
 
 The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
-`EmailFieldOptions` and `renderEmailField`. `EmailField` delegates to `TextField`;
-its props and options are aliases of `TextFieldProps` and `TextFieldOptions`.
+`EmailFieldOptions`, `ControlledEmailFieldProps`, `EmailEditOwner` and
+`renderEmailField`. Binding-mode `EmailField` delegates to `TextField`;
+its legacy props and options remain aliases of `TextFieldProps` and `TextFieldOptions`.
 The existing `{ binding, render }` override replaces all stock markup.
 
 ```tsx
@@ -1651,6 +1652,63 @@ After building, `node examples/react-email/dev.mjs` serves the synthetic public
 API example at `http://127.0.0.1:4183`. `node scripts/check-email-browser.mjs`
 checks native entry, clearing, remounts and surrounding-form Enter behavior.
 Simulated composition checks do not certify real OS input methods.
+
+For complete native email presentation, use the same natural public component
+with the explicit controlled contract:
+
+```tsx
+import { EmailField, type EmailEditOwner } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/text.css';
+
+export function NativeEmail({
+    value,
+    onChange,
+    owner,
+}: {
+    value: string | null;
+    onChange(value: string): void;
+    owner: EmailEditOwner;
+}) {
+    return (
+        <EmailField
+            mode="controlled"
+            value={value}
+            onChange={onChange}
+            language="en"
+            enableInlineEdit
+            owner={owner}
+            id="contact-email"
+            form="contact-form"
+            placeholder="Work email"
+            initialMobile={false}
+        />
+    );
+}
+```
+
+This branch supplies the actual `type="email"` input, envelope, Clear and
+opt-in `enableQRCodeScannerForFormField` scanner through the existing shared
+engines. The same optional `text.css` includes its scoped styling and scanner,
+Clear and readonly dependencies. No host renderer or Tailwind compiler is needed.
+`initialMobile` is captured per mount; use the same value during SSR and hydration.
+`inputRef`, `id`, `form`, `describedBy`, `labelledBy` and `invalid` carry the
+host's existing associations. Validation and Save remain with the page/server.
+
+Controlled changes and Clear write strings, including `''`; `null` only displays
+as an empty input. The browser's email-input sanitization remains native.
+Immediate mode retains native form Enter behavior, so the enclosing page owns
+its submit policy. Deferred mode (`enableInlineEdit`) requires an owner with a
+captured generation `token` and `isCurrent()` authority check. Non-IME Enter
+blurs without submitting; dirty blur can write before a later Clear click.
+Genuine dirty unmount settles once through the original mounted writer if that
+owner remains current. A replacement, retired owner or missing deferred owner
+cannot adopt that pending value. Renew the token when field/record/edit policy
+is replaced, including A-to-B-to-A transitions; a raw value is not authority.
+
+`readOnly` and `disabled` render a disabled editor. `displayOnly` instead reuses
+the existing readonly text/link presentation with the supplied language and
+never invokes the writer. A caller cannot mix controlled props with `binding`
+or `render`. The binding/slot examples and semantics above remain unchanged.
 
 ## React URL presentation
 

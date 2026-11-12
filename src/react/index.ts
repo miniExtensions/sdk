@@ -23,6 +23,14 @@ import {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
 } from './CompletePhoneNumberField.js';
+import {
+    ControlledEmailField,
+    type ControlledEmailFieldProps,
+} from './ControlledEmailField.js';
+export type {
+    ControlledEmailFieldProps,
+    EmailEditOwner,
+} from './ControlledEmailField.js';
 export {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
@@ -1215,10 +1223,28 @@ export type UrlFieldProps = TextFieldProps;
 export function UrlField(props: UrlFieldProps): ReactNode {
     return createElement(TextField, props);
 }
-/** Email preserves exact text; surrounding page and server owners validate it. */
+/** Binding callers retain their literal text contract. Controlled callers use
+ * the complete email input; page/server owners still validate and save. */
 export type EmailFieldProps = TextFieldProps;
-export function EmailField(props: EmailFieldProps): ReactNode {
-    return createElement(TextField, props);
+type LegacyEmailComponentProps = EmailFieldProps & {
+    mode?: never;
+    value?: never;
+    onChange?: never;
+};
+type ControlledEmailComponentProps = ControlledEmailFieldProps & {
+    binding?: never;
+    render?: never;
+};
+type EmailComponentProps =
+    | LegacyEmailComponentProps
+    | ControlledEmailComponentProps;
+export function EmailField(props: LegacyEmailComponentProps): ReactNode;
+export function EmailField(props: ControlledEmailComponentProps): ReactNode;
+export function EmailField(props: EmailComponentProps): ReactNode;
+export function EmailField(props: EmailComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledEmailField, props)
+        : createElement(TextField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;

@@ -2077,8 +2077,11 @@ export function DateField({
         clear: () => binding.date?.clear(),
     });
 }
-/** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
-export const DateTimeField = DateField;
+/** Explicit legacy binding API; complete date/time pickers use /react/date. */
+export const BindingDateTimeField = DateField;
+export type BindingDateTimeFieldProps = DateTimeFieldProps;
+/** Legacy binding name retained unchanged. Controlled DateTimeField uses /react/date. */
+export const DateTimeField = BindingDateTimeField;
 /** Explicit legacy ISO/binding API. Complete calendar dates use /react/date. */
 export const BindingDateField = DateField;
 export type BindingDateFieldProps = DateFieldProps;

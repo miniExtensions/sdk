@@ -2701,9 +2701,10 @@ local browser verification.
 The optional `/react` entry exports `DateTimeField`, `DateTimeFieldProps`,
 `DateTimeFieldOptions` and `renderDateTimeField` for explicit-offset timestamps.
 The binding component keeps its `{ binding, render }` API; supplying `render`
-still replaces all markup. `DateTimeField` remains an alias of `DateField`; the
-shared binding component selects the calendar or timestamp control from the
-accepted model kind.
+still replaces all markup. `BindingDateTimeField` explicitly names this legacy
+contract; the existing `DateTimeField` binding name remains compatible. The
+complete controlled `DateTimeField` uses the opt-in `/react/date` entry below.
+The binding component selects its control from the accepted model kind.
 
 ```tsx
 import { DateTimeField } from '@miniextensions/sdk/react';
@@ -4590,8 +4591,12 @@ the disabled-input presentation. Both retain loaded Date bytes. Native switches
 may map configuration, associations and current-owner authority directly into
 these props; no native calendar or renderer callback is needed.
 
-`CompleteDateField` and `CompleteDateFieldProps` from the opt-in
-`@miniextensions/sdk/react/date` entry include the full calendar/time picker,
+`DateTimeField` and `DateTimeFieldProps` from the opt-in
+`@miniextensions/sdk/react/date` entry provide the complete date/time field.
+`ControlledDateTimeFieldProps` names the same controlled contract. Use
+`/react/datetime.css` for its picker, readonly text and legacy styles.
+`CompleteDateField` remains a compatibility export for existing consumers.
+Both natural components reuse the full calendar/time picker,
 localized native input grammar, drafts, blur recovery, range policy and popup.
 Import `@miniextensions/sdk/react/complete-date.css` for portable default styles;
 Tailwind and a host picker/render slot are unnecessary. Moment locale assets
@@ -4600,13 +4605,13 @@ Install matching supported React and ReactDOM versions; both remain SDK peers.
 
 ```tsx
 import { useState } from 'react';
-import { CompleteDateField } from '@miniextensions/sdk/react/date';
-import '@miniextensions/sdk/react/complete-date.css';
+import { DateTimeField } from '@miniextensions/sdk/react/date';
+import '@miniextensions/sdk/react/datetime.css';
 
 export function Appointment() {
     const [value, setValue] = useState<string | null>(null);
     return (
-        <CompleteDateField
+        <DateTimeField
             id="appointment"
             title="Appointment"
             language="en"
@@ -4628,7 +4633,8 @@ export function Appointment() {
 Date writes retain `YYYY-MM-DD`; DateTime picker/typed commits use the existing
 native timezone/range helpers and UTC minute precision. An untouched loaded
 value is not rewritten by rendering. The existing binding-based `DateField`,
-`BindingDateField`, `DateTimeField` and strict models retain their separate explicit-offset contract,
+`BindingDateField`, `BindingDateTimeField`, `/react` `DateTimeField` and strict
+models retain their separate explicit-offset contract,
 including original seconds, fractions and offset bytes.
 
 Equivalent metadata and cosmetic props preserve unfinished text and caret.

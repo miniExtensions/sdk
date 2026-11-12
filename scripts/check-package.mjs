@@ -201,6 +201,7 @@ import {
 } from './lookup-consumer-checks.mjs';
 import {
     checkRollupConsumer,
+    checkRollupReactMatrix,
     rollupReactTypedConsumer,
 } from './rollup-consumer-checks.mjs';
 import {
@@ -2926,7 +2927,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(rollupProof.checks, 26);
+    assert.equal(rollupProof.checks, 40);
+    const rollupMatrix = checkRollupReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(rollupMatrix.versions.length, 2);
     console.log(
         `Installed Rollup presentation: ${rollupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );

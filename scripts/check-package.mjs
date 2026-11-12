@@ -3353,7 +3353,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(themeMatrix.versions.length, 2);
     assert.equal(themeMatrix.cleanup, 'completed');
-    const dateMatrix = checkCompleteDateReactMatrix({
+    const dateMatrix = await checkCompleteDateReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),

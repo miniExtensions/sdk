@@ -88,8 +88,8 @@ async function fixture(
                       : window[key as keyof Window],
         });
     const { createRoot } = await import('react-dom/client');
-    const { CompleteDateField } = await import(
-        '../src/react/CompleteDateField.js'
+    const { DateField, CompleteDateField } = await import(
+        '../src/react/date/index.js'
     );
     const form = window.document.createElement('form');
     form.id = 'native-form';
@@ -123,7 +123,18 @@ async function fixture(
     });
     const publish = () => {
         if (mounted)
-            root.render(h(StrictMode, null, h(CompleteDateField, props)));
+            root.render(
+                h(
+                    StrictMode,
+                    null,
+                    props.airtableDateConfig.type === 'date'
+                        ? h(DateField, {
+                              ...props,
+                              airtableDateConfig: props.airtableDateConfig,
+                          })
+                        : h(CompleteDateField, props)
+                )
+            );
     };
     const render = async (patch: Partial<CompleteDateFieldProps> = {}) => {
         props = { ...props, ...patch };
@@ -210,6 +221,22 @@ async function fixture(
         render,
         replace,
         writes,
+        async display(value: string | null) {
+            await act(async () =>
+                root.render(
+                    h(DateField, {
+                        mode: 'readOnly',
+                        id: props.id,
+                        airtableDateConfig: iso,
+                        value,
+                        language: 'fr',
+                        title: 'Deadline',
+                        description: 'Calendar help',
+                        error: 'Calendar error',
+                    })
+                )
+            );
+        },
         retire() {
             active = false;
         },
@@ -529,3 +556,22 @@ for (const identity of ['field', 'session', 'kind', 'owner'] as const)
         await f.key('Enter');
         assert.deepEqual(f.writes, ['2024-02-29']);
     });
+
+it('renders canonical readonly Date text and localized empty state without an editable control or write', async (t) => {
+    const f = await fixture(t);
+    await f.open();
+    await f.display('2024-02-29');
+    assert.equal(f.form.querySelector('input'), null);
+    assert.equal(f.window.document.querySelector('[role=dialog]'), null);
+    assert.match(
+        f.form.textContent ?? '',
+        /Deadline.*2024-02-29.*Calendar help.*Calendar error/s
+    );
+    assert.equal(
+        f.form.querySelector('#date')?.getAttribute('aria-describedby'),
+        'date-description date-error'
+    );
+    await f.display(null);
+    assert.match(f.form.textContent ?? '', /Pas de Valeur/);
+    assert.deepEqual(f.writes, []);
+});

@@ -8,5 +8,5 @@
         "inlineSources": true,
         "types": ["node", "moment-duration-format"]
     },
-    "include": ["src/**/*.ts", "test/**/*.ts"]
+    "include": ["src/**/*.ts", "test/**/*.ts", "types/**/*.d.ts"]
 }

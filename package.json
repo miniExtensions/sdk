@@ -140,7 +140,8 @@
             }
         },
         "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
-        "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css"
+        "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css",
+        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*"
     },
     "files": [
         "dist/esm",
@@ -201,7 +202,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/address-combobox-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node --test scripts/address-combobox-bundle.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",
@@ -233,6 +234,7 @@
         "moment": "2.31.0",
         "moment-duration-format": "2.3.2",
         "moment-timezone": "0.5.45",
+        "papaparse": "5.7.1",
         "prop-types": "15.8.1",
         "prosemirror-commands": "1.5.2",
         "prosemirror-dropcursor": "1.8.1",
@@ -254,7 +256,8 @@
         "shallowequal": "1.1.0",
         "slugify": "1.6.6",
         "smooth-scroll-into-view-if-needed": "1.1.33",
-        "ua-parser-js": "1.0.39"
+        "ua-parser-js": "1.0.39",
+        "utif2": "4.1.0"
     },
     "devDependencies": {
         "@headlessui/react": "2.2.9",
@@ -271,6 +274,7 @@
         "happy-dom": "20.0.11",
         "headlessui-address-source": "npm:@headlessui/react@1.7.2",
         "linkify-react": "3.0.4",
+        "pdfjs-dist": "6.5.438",
         "playwright": "1.64.0",
         "prettier": "3.6.2",
         "react": "18.3.1",

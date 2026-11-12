@@ -284,11 +284,20 @@ export {
     type LastModifiedTimeFieldOptions,
 } from './LastModifiedTimeField.js';
 import {
+    ControlledCreatedTimeField,
     createdTimeInput,
+    type ControlledCreatedTimeFieldProps,
     type CreatedTimeFieldOptions,
 } from './CreatedTimeField.js';
 export {
     renderCreatedTimeField,
+    type ControlledCreatedTimeFieldProps,
+    type CreatedTimeAttachmentOptions,
+    type CreatedTimeDisplayOwner,
+    type CreatedTimeResourceLabels,
+    type DocumentThumbnailOptions,
+    type DocumentThumbnailSource,
+    type DocumentThumbnailLabels,
     type CreatedTimeFieldOptions,
 } from './CreatedTimeField.js';
 import {
@@ -809,8 +818,37 @@ export function LastModifiedTimeField({
     });
 }
 export type CreatedTimeFieldProps = FieldProps & CreatedTimeFieldOptions;
+export type BindingCreatedTimeFieldProps = CreatedTimeFieldProps;
+type BindingCreatedTimeComponentProps = CreatedTimeFieldProps & {
+    dateLanguage?: never;
+    value?: never;
+    dateConfig?: never;
+    owner?: never;
+    displayContext?: never;
+    displayAsAttachments?: never;
+    displayAsButton?: never;
+};
+type CreatedTimeComponentProps =
+    | BindingCreatedTimeComponentProps
+    | ControlledCreatedTimeFieldProps;
+
+/** Controlled display or the explicitly retained raw-string binding adapter. */
+export function CreatedTimeField(
+    props: BindingCreatedTimeComponentProps
+): ReactNode;
+export function CreatedTimeField(
+    props: ControlledCreatedTimeFieldProps
+): ReactNode;
+// The overloads retain JSX callback inference; the union also supports createElement.
+export function CreatedTimeField(props: CreatedTimeComponentProps): ReactNode;
+export function CreatedTimeField(props: CreatedTimeComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingCreatedTimeField, props)
+        : createElement(ControlledCreatedTimeField, props);
+}
+
 /** The supplied creation timestamp stays readonly regardless of result metadata. */
-export function CreatedTimeField({
+export function BindingCreatedTimeField({
     binding,
     render,
     className,

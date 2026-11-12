@@ -18,6 +18,7 @@ import {
     assertBrowserInputs,
     assertInstalledArchive,
     assertPackedDocLinks,
+    createArchiveMemberReader,
 } from './package-checks.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
@@ -50,6 +51,133 @@ async function write(root, path, content) {
     await mkdir(join(target, '..'), { recursive: true });
     await writeFile(target, content);
 }
+
+async function archiveFixture(
+    t,
+    values = { 'a.txt': 'alpha', 'b.txt': 'bravo' }
+) {
+    const root = await temporaryRoot(t);
+    const archive = join(root, 'sdk.tgz');
+    for (const [name, bytes] of Object.entries(values))
+        await write(root, 'package/' + name, bytes);
+    const pack = () =>
+        execFileSync('tar', ['-czf', archive, '-C', root, 'package']);
+    pack();
+    const expectedSha256 = createHash('sha256')
+        .update(await readFile(archive))
+        .digest('hex');
+    return {
+        root,
+        archive,
+        pack,
+        reader: () =>
+            createArchiveMemberReader({ archivePath: archive, expectedSha256 }),
+    };
+}
+
+test('archive reader reuses admitted members without exposing mutable cached bytes', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    read('package/a.txt').fill(0);
+    assert.equal(read('package/a.txt').toString(), 'alpha');
+    assert.equal(read('package/b.txt').toString(), 'bravo');
+    assert.deepEqual(read.stats(), { requests: 3, captures: 2, entries: 2 });
+    assert(Object.isFrozen(read.stats()));
+});
+
+test('warm archive reads still reject changed installed bytes and archive replacements', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    const installed = join(fixture.root, 'installed.txt');
+    await writeFile(installed, 'alpha');
+    assert.deepEqual(await readFile(installed), read('package/a.txt'));
+    await writeFile(installed, 'other');
+    const changed = await readFile(installed);
+    assert.throws(() => assert.deepEqual(changed, read('package/a.txt')));
+    await write(fixture.root, 'package/a.txt', 'omega');
+    fixture.pack();
+    assert.throws(
+        () => read('package/a.txt'),
+        /Admitted archive bytes changed/
+    );
+});
+
+test('archive readers isolate their admitted archives and exact package paths', async (t) => {
+    const a = (await archiveFixture(t)).reader();
+    const b = (await archiveFixture(t, { 'a.txt': 'omega' })).reader();
+    assert.equal(a('package/a.txt').toString(), 'alpha');
+    assert.equal(b('package/a.txt').toString(), 'omega');
+    for (const member of [
+        '/package/a.txt',
+        'package/',
+        'package/directory/',
+        'package/*.txt',
+        'package/a?.txt',
+        'package/[ab].txt',
+        'package/../a.txt',
+        'package/./a.txt',
+        'package/a\\b',
+        'package/a\0b',
+    ])
+        assert.throws(() => a(member), /exact package path/);
+});
+
+test('warm archive reads reject symlink substitution and redirected parent paths', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    read('package/a.txt');
+    const saved = join(fixture.root, 'saved.tgz');
+    await writeFile(saved, await readFile(fixture.archive));
+    await rm(fixture.archive);
+    await symlink(saved, fixture.archive);
+    assert.throws(() => read('package/a.txt'), /regular file/);
+    const redirected = join(fixture.root, 'redirected');
+    await symlink(fixture.root, redirected);
+    const throughParent = createArchiveMemberReader({
+        archivePath: join(redirected, 'saved.tgz'),
+        expectedSha256: createHash('sha256')
+            .update(await readFile(saved))
+            .digest('hex'),
+    });
+    assert.throws(() => throughParent('package/a.txt'), /not be redirected/);
+});
+
+test('archive reader preserves the default capture guard and does not cache failures', async (t) => {
+    const fixture = await archiveFixture(t, {
+        'large.bin': Buffer.alloc(1024 * 1024 + 1, 65),
+    });
+    const read = fixture.reader();
+    for (let attempt = 0; attempt < 2; attempt++)
+        assert.throws(
+            () => read('package/large.bin'),
+            (error) => error.code === 'ENOBUFS'
+        );
+    assert.deepEqual(read.stats(), { requests: 2, captures: 2, entries: 0 });
+    assert.throws(() => read('package/missing.txt'));
+    assert.equal(read.stats().entries, 0);
+});
+
+test('archive reader rejects an incorrect admitted digest before extraction', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = createArchiveMemberReader({
+        archivePath: fixture.archive,
+        expectedSha256: '0'.repeat(64),
+    });
+    assert.throws(
+        () => read('package/a.txt'),
+        /Admitted archive bytes changed/
+    );
+    assert.deepEqual(read.stats(), { requests: 0, captures: 0, entries: 0 });
+});
+
+test('warm archive reads reject replacement by a directory', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    read('package/a.txt');
+    await rm(fixture.archive);
+    await mkdir(fixture.archive);
+    assert.throws(() => read('package/a.txt'), /regular file/);
+});
 
 test('collaborator native fixture emits valid ESM and CommonJS browser JavaScript', () => {
     // The React page is generated inside a raw string, beyond this module's

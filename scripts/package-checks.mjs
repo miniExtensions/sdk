@@ -1,10 +1,68 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const sdkPath = 'node_modules/@miniextensions/sdk';
+
+// One reader belongs to one admitted archive and one preparation run. Recheck
+// its actual bytes on every request, including cache hits; file metadata alone
+// cannot establish that an archive is unchanged. Installed inputs are still
+// read and compared by each caller, never cached here.
+export function createArchiveMemberReader({ archivePath, expectedSha256 }) {
+    assert.match(expectedSha256, /^[a-f0-9]{64}$/);
+    const archive = resolve(archivePath);
+    const members = new Map();
+    let requests = 0;
+    let captures = 0;
+    const read = (member) => {
+        assert.equal(typeof member, 'string');
+        assert(
+            member.startsWith('package/') &&
+                !member.endsWith('/') &&
+                !isAbsolute(member) &&
+                !member.includes('\\') &&
+                !member.includes('\0') &&
+                !/[*?\[\]]/.test(member) &&
+                !member.split('/').includes('..') &&
+                posix.normalize(member) === member,
+            'Archive member must be an exact package path'
+        );
+        assert(
+            lstatSync(archive).isFile(),
+            'Archive must remain a regular file'
+        );
+        assert.equal(
+            realpathSync(archive),
+            archive,
+            'Archive must not be redirected'
+        );
+        const snapshot = readFileSync(archive);
+        assert.equal(
+            createHash('sha256').update(snapshot).digest('hex'),
+            expectedSha256,
+            'Admitted archive bytes changed'
+        );
+        requests++;
+        if (!members.has(member)) {
+            captures++;
+            // Extract precisely the bytes just admitted, rather than reopen a
+            // pathname that could have changed. Keep Node's default capture
+            // limit and propagate tar failures without caching partial output.
+            const bytes = execFileSync('tar', ['-xzOf', '-', member], {
+                input: snapshot,
+            });
+            members.set(member, Buffer.from(bytes));
+        }
+        return Buffer.from(members.get(member));
+    };
+    read.stats = () =>
+        Object.freeze({ requests, captures, entries: members.size });
+    return read;
+}
 
 function isWithin(root, path) {
     const difference = relative(root, path);

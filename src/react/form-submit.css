@@ -12,15 +12,22 @@
     line-height: 1.25rem;
     font-weight: 600;
     color: #fff;
-    background-color: var(--mx-sdk-form-submit-background, rgb(var(--theme-600, 37 99 235)));
+    background-color: var(
+        --mx-sdk-form-submit-background,
+        rgb(var(--theme-600, 37 99 235))
+    );
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     cursor: pointer;
 }
 .mx-sdk-form-submit:hover {
-    background-color: var(--mx-sdk-form-submit-hover, rgb(var(--theme-500, 59 130 246)));
+    background-color: var(
+        --mx-sdk-form-submit-hover,
+        rgb(var(--theme-500, 59 130 246))
+    );
 }
 .mx-sdk-form-submit:focus-visible {
-    outline: 2px solid var(--mx-sdk-form-submit-background, rgb(var(--theme-600, 37 99 235)));
+    outline: 2px solid
+        var(--mx-sdk-form-submit-background, rgb(var(--theme-600, 37 99 235)));
     outline-offset: 2px;
 }
 .mx-sdk-form-submit[data-mode='compute'] {

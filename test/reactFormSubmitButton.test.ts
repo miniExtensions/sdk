@@ -8,7 +8,10 @@ import {
     type ReactNode,
     type FormEvent,
 } from 'react';
-import { FormSubmitButton, type FormSubmitButtonProps } from '../src/react/index.js';
+import {
+    FormSubmitButton,
+    type FormSubmitButtonProps,
+} from '../src/react/index.js';
 
 async function fixture(t: TestContext) {
     const window = new Window();
@@ -60,14 +63,18 @@ it('uses the associated host form exactly once without dispatching during render
         h(
             'div',
             null,
-            h('form', {
-                id: 'terminal-form',
-                noValidate: true,
-                onSubmit: (event: FormEvent<HTMLFormElement>) => {
-                    event.preventDefault();
-                    submits++;
+            h(
+                'form',
+                {
+                    id: 'terminal-form',
+                    noValidate: true,
+                    onSubmit: (event: FormEvent<HTMLFormElement>) => {
+                        event.preventDefault();
+                        submits++;
+                    },
                 },
-            }, h('input', { name: 'required', required: true })),
+                h('input', { name: 'required', required: true })
+            ),
             h(FormSubmitButton, {
                 formId: 'terminal-form',
                 label: 'Save <literal>',
@@ -93,21 +100,27 @@ it('updates labels and modes, refuses saving/non-admitted activation and allows 
     const f = await fixture(t);
     let submits = 0;
     const render = (props: Partial<FormSubmitButtonProps> = {}) =>
-        f.render(h('form', {
-            id: 'terminal-form',
-            noValidate: true,
-            onSubmit: (event: FormEvent<HTMLFormElement>) => {
-                event.preventDefault();
-                submits++;
-            },
-        }, h(FormSubmitButton, {
-            formId: 'terminal-form',
-            label: 'Save',
-            mode: 'save',
-            saving: false,
-            canSubmit: true,
-            ...props,
-        })));
+        f.render(
+            h(
+                'form',
+                {
+                    id: 'terminal-form',
+                    noValidate: true,
+                    onSubmit: (event: FormEvent<HTMLFormElement>) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                h(FormSubmitButton, {
+                    formId: 'terminal-form',
+                    label: 'Save',
+                    mode: 'save',
+                    saving: false,
+                    canSubmit: true,
+                    ...props,
+                })
+            )
+        );
     await render();
     const button = f.container.querySelector('button');
     assert(button);

@@ -2790,4 +2790,7 @@ export {
     type CompleteCheckboxFieldProps,
 } from './CompleteCheckboxField.js';
 
-export { FormSubmitButton, type FormSubmitButtonProps } from './FormSubmitButton.js';
+export {
+    FormSubmitButton,
+    type FormSubmitButtonProps,
+} from './FormSubmitButton.js';

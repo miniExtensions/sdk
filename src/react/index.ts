@@ -407,12 +407,15 @@ export {
     type PercentFieldOptions,
 } from './PercentField.js';
 import {
+    ControlledCurrencyField,
     CurrencyControl,
     currencyConfiguration,
+    type ControlledCurrencyFieldProps,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
 export {
     renderCurrencyField,
+    type ControlledCurrencyFieldProps,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
 import {
@@ -1696,9 +1699,20 @@ function BoundNumberField({
 export function PercentField(props: PercentFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
-/** Currency adornment shares the existing numeric owner and raw native units. */
-export function CurrencyField(props: CurrencyFieldProps): ReactNode {
-    return createElement(NumberField, props);
+type BoundCurrencyComponentProps = CurrencyFieldProps & {
+    physicalKind?: never;
+};
+type CurrencyComponentProps =
+    | BoundCurrencyComponentProps
+    | ControlledCurrencyFieldProps;
+/** Explicit controlled localization or the compatible raw binding contract. */
+export function CurrencyField(props: BoundCurrencyComponentProps): ReactNode;
+export function CurrencyField(props: ControlledCurrencyFieldProps): ReactNode;
+export function CurrencyField(props: CurrencyComponentProps): ReactNode;
+export function CurrencyField(props: CurrencyComponentProps): ReactNode {
+    return props.physicalKind === 'currency'
+        ? createElement(ControlledCurrencyField, props)
+        : createElement(NumberField, props);
 }
 /** Complete controlled clock or compatible binding; the caller retains canonical writes and Save. */
 export function DurationField(props: BindingDurationFieldProps): ReactNode;

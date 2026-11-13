@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const completeLocalizedNumericTypedConsumer = `
 import {createElement,createRef} from 'react';
 import {NumberField,type NumberFieldProps,type ControlledNumberFieldProps,CompleteLocalizedNumericField,renderCompleteLocalizedNumericField,type CompleteLocalizedNumericFieldOptions,type CompleteLocalizedNumericRendererProps} from '@miniextensions/sdk/react';
+import {CurrencyField,type ControlledCurrencyFieldProps,type CurrencyFieldProps} from '@miniextensions/sdk/react';
 const controlledNumeric:CompleteLocalizedNumericRendererProps={
  physicalKind:'number',presentation:{type:'physical',config:{type:'number',options:{precision:2}}},
  fieldId:'native-number',title:'Amount',field:{id:'native-number',name:'Amount',description:null,isComputed:false,isPrimaryField:false,config:{type:'number',options:{precision:2}}},
@@ -26,6 +27,24 @@ const mixed:ControlledNumberFieldProps={...numberProps,binding:{} as NumberField
 // @ts-expect-error Percent remains a separately tracked controlled facade
 const percentNumber:ControlledNumberFieldProps={mode:'controlled',field:{...controlledNumeric,physicalKind:'percent'}};
 void bindingNumber;void mixed;void percentNumber;
+
+function currency(field:Extract<CompleteLocalizedNumericRendererProps,{physicalKind:'currency'}>,binding:CurrencyFieldProps['binding']){
+ const props:ControlledCurrencyFieldProps={...field,options:{presentation:'display'}};
+ createElement(CurrencyField,props);
+ // @ts-expect-error controlled currency cannot borrow a binding
+ const mixedCurrency:ControlledCurrencyFieldProps={...props,binding};
+ const namedMixedCurrency={...props,binding};
+ // @ts-expect-error structural legacy overloads must not admit mixed named objects
+ CurrencyField(namedMixedCurrency);
+ // @ts-expect-error createElement must preserve the same exclusive contract
+ createElement(CurrencyField,namedMixedCurrency);
+ // @ts-expect-error controlled currency requires the currency physical discriminator
+ createElement(CurrencyField,{...controlledNumeric});
+ // @ts-expect-error canonical currency values are never localized strings
+ const localizedCurrency:ControlledCurrencyFieldProps={...props,value:'1.234,57'};
+ void mixedCurrency;void localizedCurrency;
+}
+void currency;
 
 function numeric(props:CompleteLocalizedNumericRendererProps){
  const options:CompleteLocalizedNumericFieldOptions={owner:{token:{},isCurrent:()=>true},commit:'deferred',showLabel:false,inputRef:createRef<HTMLInputElement>(),input:{id:'existing-field',form:'existing-native-form','aria-describedby':'existing-help'},clearLabel:'Clear',emptyLabel:'No value'};
@@ -72,14 +91,16 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
     ];
     let groups = 0;
     for (const [api, kind] of [esm, cjs].flatMap((api) =>
-        ['percent', 'number'].map((kind) => [api, kind])
+        ['percent', 'number', 'currency'].map((kind) => [api, kind])
     )) {
         const Component =
             kind === 'number'
                 ? api.NumberField
-                : api.CompleteLocalizedNumericField;
+                : kind === 'currency'
+                  ? api.CurrencyField
+                  : api.CompleteLocalizedNumericField;
         const state = {
-            value: kind === 'number' ? 42.5 : 0.425,
+            value: kind === 'percent' ? 0.425 : 42.5,
             readonly: false,
             scope: {},
         };
@@ -88,13 +109,19 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             root;
         const properties = () => {
             const scope = state.scope;
+            const numericOptions = {
+                precision: 2,
+                ...(kind === 'currency'
+                    ? { symbol: '<img src=x> CHF & ' }
+                    : {}),
+            };
             const field = {
                 physicalKind: kind,
                 fieldId: 'installed-percent',
                 title: 'Progress',
                 presentation: {
                     type: 'physical',
-                    config: { type: kind, options: { precision: 2 } },
+                    config: { type: kind, options: numericOptions },
                 },
                 field: {
                     id: 'installed-percent',
@@ -102,10 +129,11 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                     description: null,
                     isComputed: false,
                     isPrimaryField: false,
-                    config: { type: kind, options: { precision: 2 } },
+                    config: { type: kind, options: numericOptions },
                 },
                 displayConfig: {
                     numberSeparator: 'period-comma',
+                    showThousandsSeparator: kind === 'currency',
                     showAsProgressBar: true,
                     readOnly: state.readonly,
                 },
@@ -131,17 +159,20 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                 },
             };
             assert.equal(field.physicalKind, kind);
-            return {
-                ...(kind === 'number' ? { mode: 'controlled' } : {}),
-                field,
-                options: {
-                    owner: {
-                        token: state.scope,
-                        isCurrent: () => !state.readonly,
-                    },
-                    input: { id: 'installed-input', form: 'native-owner' },
+            const options = {
+                owner: {
+                    token: state.scope,
+                    isCurrent: () => !state.readonly,
                 },
+                input: { id: 'installed-input', form: 'native-owner' },
             };
+            return kind === 'currency'
+                ? { ...field, options }
+                : {
+                      ...(kind === 'number' ? { mode: 'controlled' } : {}),
+                      field,
+                      options,
+                  };
         };
         // Actual installed render, not an import-only SSR claim.
         assert.equal(typeof globalThis.window, 'undefined');
@@ -150,6 +181,20 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
         );
         assert(html.includes('value="42,50"'));
         if (kind === 'percent') assert(html.includes('42.5%'));
+        if (kind === 'currency')
+            assert(html.includes('&lt;img src=x&gt; CHF &amp; '));
+        if (kind === 'currency') {
+            const supplied = properties();
+            const display = renderToString(
+                React.createElement(Component, {
+                    ...supplied,
+                    value: -1234.56789,
+                    capability: { type: 'readonly' },
+                    options: { ...supplied.options, presentation: 'display' },
+                })
+            );
+            assert(display.includes('-&lt;img src=x&gt; CHF &amp; 1.234,57'));
+        }
         assert.deepEqual(writes, []);
 
         const window = new Window();
@@ -223,15 +268,15 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
                     new window.Event('input', { bubbles: true })
                 );
             });
-            assert.deepEqual(writes, [kind === 'number' ? 75.25 : 0.7525]);
+            assert.deepEqual(writes, [kind === 'percent' ? 0.7525 : 75.25]);
             input.setSelectionRange(2, 2);
-            state.value = kind === 'number' ? 10 : 0.1;
+            state.value = kind === 'percent' ? 0.1 : 10;
             await React.act(async () => publish());
             assert.equal(input.value, '75,25');
             assert.equal(input.selectionStart, 2);
             await React.act(async () => input.blur());
             assert.equal(input.value, '10,00');
-            assert.deepEqual(writes, [kind === 'number' ? 75.25 : 0.7525]);
+            assert.deepEqual(writes, [kind === 'percent' ? 0.7525 : 75.25]);
             state.readonly = true;
             await React.act(async () => publish());
             assert.equal(input.disabled, true);
@@ -298,7 +343,17 @@ export function checkCompleteLocalizedNumericReactMatrix({
                     join(directory, name),
                     completeLocalizedNumericTypedConsumer +
                         (extension === 'tsx'
-                            ? '\nconst jsx = <NumberField mode="controlled" field={controlledNumeric} />; void jsx;\n'
+                            ? `
+const jsx = <NumberField mode="controlled" field={controlledNumeric} />; void jsx;
+const currencyJSX = (props:ControlledCurrencyFieldProps) => <CurrencyField {...props} />; void currencyJSX;
+function mixedCurrencyJSX(props:ControlledCurrencyFieldProps,binding:CurrencyFieldProps['binding']) {
+ const mixed={...props,binding};
+ // @ts-expect-error JSX spreads cannot combine controlled and binding contracts
+ const bad=<CurrencyField {...mixed}/>;
+ return bad;
+}
+void mixedCurrencyJSX;
+`
                             : '')
                 );
                 run(process.execPath, [
@@ -330,10 +385,10 @@ export function checkCompleteLocalizedNumericReactMatrix({
             );
             const result = JSON.parse(bytes);
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 4);
+            assert.equal(result.groups, 6);
             versions.push(result);
             console.log(
-                `Installed complete localized numeric React${result.react}: 4 ESM/CommonJS complete-family/canonical-Number groups, SSR/hydration, strict declarations and styles passed.`
+                `Installed complete localized numeric React${result.react}: 6 ESM/CommonJS complete-family/canonical-Number/Currency groups, SSR/hydration, strict declarations and styles passed.`
             );
         }
         return { versions, cleanup: 'completed' };

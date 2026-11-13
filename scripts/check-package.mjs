@@ -1,3 +1,4 @@
+import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -586,6 +587,7 @@ try {
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
+                path === 'docs/signature.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
@@ -624,6 +626,7 @@ try {
         'docs/browser-lifecycle.md',
         'docs/testing.md',
         'docs/complete-record-comments.md',
+        'docs/signature.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/date/index.js',
@@ -687,6 +690,8 @@ try {
         'dist/cjs/react/AddressField.d.ts',
         'dist/esm/react/address-field.css',
         'dist/cjs/react/address-field.css',
+        'dist/esm/react/signature.css',
+        'dist/cjs/react/signature.css',
         'dist/esm/react/complete-address.css',
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
@@ -3441,6 +3446,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(calendlyWidgetMatrix.versions.length, 2);
     assert.equal(calendlyWidgetMatrix.cleanup, 'completed');
+    const signatureMatrix = checkSignatureReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(signatureMatrix.versions.length, 2);
+    assert.equal(signatureMatrix.cleanup, 'completed');
     const addressMatrix = checkCompleteAddressReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

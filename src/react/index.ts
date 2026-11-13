@@ -13,6 +13,10 @@ export type {
     ControlledMultipleSelectsFieldProps,
 } from './ControlledSelectField.js';
 import {
+    CompleteDurationField,
+    type CompleteDurationFieldProps,
+} from './CompleteDurationField.js';
+import {
     CompleteLocalizedNumericField,
     type CompleteLocalizedNumericRendererProps,
     type CompleteLocalizedNumericFieldOptions,
@@ -147,6 +151,10 @@ export {
     CompleteDurationField,
     type CompleteDurationFieldProps,
 } from './CompleteDurationField.js';
+export {
+    ReadOnlyDurationField,
+    type ReadOnlyDurationFieldProps,
+} from './ReadOnlyDurationField.js';
 export {
     useDurationInputAdapter,
     type DurationInputAdapterProps,
@@ -1507,7 +1515,20 @@ function BoundIconRatingField({
 }
 export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
+/** Compatible legacy binding props; controlled callers use ControlledDurationFieldProps. */
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
+export type BindingDurationFieldProps = DurationFieldProps & {
+    value?: never;
+    onChange?: never;
+    owner?: never;
+};
+export type ControlledDurationFieldProps = CompleteDurationFieldProps & {
+    binding?: never;
+    render?: never;
+};
+export type DurationFieldComponentProps =
+    | BindingDurationFieldProps
+    | ControlledDurationFieldProps;
 function BoundNumberField({
     binding,
     render,
@@ -1679,9 +1700,14 @@ export function PercentField(props: PercentFieldProps): ReactNode {
 export function CurrencyField(props: CurrencyFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
-/** Clock editing shares the existing scalar owner; render may replace all markup. */
-export function DurationField(props: DurationFieldProps): ReactNode {
-    return createElement(NumberField, props);
+/** Complete controlled clock or compatible binding; the caller retains canonical writes and Save. */
+export function DurationField(props: BindingDurationFieldProps): ReactNode;
+export function DurationField(props: ControlledDurationFieldProps): ReactNode;
+export function DurationField(props: DurationFieldComponentProps): ReactNode;
+export function DurationField(props: DurationFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(NumberField, props)
+        : createElement(CompleteDurationField, props);
 }
 export type BoundCheckboxFieldProps = FieldProps &
     CheckboxFieldOptions & {
@@ -2829,3 +2855,25 @@ export {
     CompleteCheckboxField,
     type CompleteCheckboxFieldProps,
 } from './CompleteCheckboxField.js';
+
+export {
+    SignatureField,
+    type SignatureFieldProps,
+    type SignatureMessages,
+} from './SignatureField.js';
+export {
+    SignatureCanvas,
+    type SignatureCanvasHandle,
+    type SignatureCanvasProps,
+} from './SignatureCanvas.js';
+export {
+    SignatureStorageError,
+    type SignatureAuthority,
+    type SignatureMethod,
+    type SignatureReceiptState,
+    type SignatureReleaseResult,
+    type SignatureStorage,
+    type SignatureAppend,
+    type SignatureRecovery,
+    type TemporarySignature,
+} from './signatureReceipt.js';

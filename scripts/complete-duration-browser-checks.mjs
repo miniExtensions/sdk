@@ -52,7 +52,7 @@ export async function checkCompleteDurationBrowser({
         const source = `
 import React,{createElement as h,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {CompleteDurationField} from '@miniextensions/sdk/react';
+import {DurationField,ReadOnlyDurationField} from '@miniextensions/sdk/react';
 import {getFormattedDuration} from '@miniextensions/sdk/formulas';
 const mode=new URLSearchParams(location.search).get('mode')||'minutes';
 let writes=[],inputs=[],focuses=0,submits=0,observed;
@@ -65,8 +65,9 @@ function App(){
  return h(React.Fragment,null,
   h('form',{id:'native-form',onSubmit:event=>{event.preventDefault();submits++;},onFocusCapture:()=>{focuses++;},onInputCapture:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.target.value})},
    h('label',{htmlFor:'native-duration'},'Synthetic duration'),h('p',{id:'external-help'},'External timing help'),
-   state.mounted?h(CompleteDurationField,{fieldId:'duration',sessionId:'duration-session',format:state.format,value:state.value,readOnly:state.readonly,owner:{token:scope,isCurrent:()=>latest.current.active&&latest.current.owner===scope},onChange(value){if(!latest.current.active||latest.current.readonly||latest.current.owner!==scope)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},inputId:'native-duration',formId:'native-form',title:'Synthetic duration',showLabel:false,description:'Synthetic timing note',error:'Synthetic duration error',describedBy:'external-help',clearLabel:mode==='clear'?'Clear synthetic duration':undefined}):null),
+   state.mounted?h(DurationField,{fieldId:'duration',sessionId:'duration-session',format:state.format,value:state.value,readOnly:state.readonly,owner:{token:scope,isCurrent:()=>latest.current.active&&latest.current.owner===scope},onChange(value){if(!latest.current.active||latest.current.readonly||latest.current.owner!==scope)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},inputId:'native-duration',formId:'native-form',title:'Synthetic duration',showLabel:false,description:'Synthetic timing note',error:'Synthetic duration error',describedBy:'external-help',clearLabel:mode==='clear'?'Clear synthetic duration':undefined}):null),
   h('output',{'aria-label':'Canonical seconds'},JSON.stringify(state.value)),
+  h('div',{'data-duration-readonly':''},h(ReadOnlyDurationField,{value:state.value,format:state.format,language:'en'})),
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>update({value:120})},'Echo canonical value'),
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>update({writer:'current'})},'Replace writer'),
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>update({format:'h:mm:ss.SSS'})},'Change format'),
@@ -84,7 +85,7 @@ if(mode==='shadow'){
  mount=document.createElement('div');shadow.append(mount);
 }
 createRoot(mount).render(h(React.StrictMode,null,h(App)));
-window.durationProof={snapshot:()=>({reactVersion:React.version,writes:[...writes],inputs:[...inputs],submits,focuses,value:observed.value,formatted:observed.value===null?'':getFormattedDuration(String(observed.value),observed.format,true)})};
+window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-duration-readonly]')?.textContent,reactVersion:React.version,writes:[...writes],inputs:[...inputs],submits,focuses,value:observed.value,formatted:observed.value===null?'':getFormattedDuration(String(observed.value),observed.format,true)})};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
         const bundle = await build({
@@ -196,6 +197,10 @@ window.durationProof={snapshot:()=>({reactVersion:React.version,writes:[...write
             page.evaluate(() => window.durationProof.snapshot());
         const finish = async (name) => {
             const state = await snapshot();
+            assert.equal(
+                state.readonlyText,
+                state.value === null ? 'No Value' : state.formatted
+            );
             assert.equal(state.submits, 0);
             assert(state.inputs.length > 0);
             assert(state.inputs.every((item) => item.trusted));

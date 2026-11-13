@@ -1,5 +1,37 @@
 # Source test coverage
 
+## Calendar surfaces
+
+`test/calendarDateProjection.test.ts` compares the distinct computed DATE
+policies directly, plus range clipping, DST endpoints, viewer versus field zones,
+invalid pairs, repair and ordered multi-value days. `test/calendarController.test.ts`
+covers separate clocks, read ordering, R30, native admission and captured-frame
+retirement. `test/reactCalendarMonthGrid.test.ts` uses the real selected package
+graph for fixed/variable weeks, native keyboard differences, selection, focus,
+responsive retention, SSR, hydration and StrictMode.
+
+`test/reactCalendarRecordPicker.test.ts`, `test/reactPortalCalendar.test.ts` and
+`test/calendarComposition.test.ts` add the complete structured surfaces: actual
+listbox selection/rich details, error-before-loading and paging, current native
+admission, clock-object changes without recentering, explicit focus refusal,
+stable query control versus exact card authority, and synchronous display
+publication during an ordered month/read operation. Directly held callbacks
+exercise ABA and unmount retirement independently of detached DOM behavior.
+
+The normal package check calls `scripts/calendar-consumer-checks.mjs` for actual
+installed React 18/19 ESM/CJS/declarations/CSS/SSR/hydration checks. These are
+SDK evidence only; actual native thin adapters, team-device browser and hosted
+acceptance require their own execution evidence. The complete style aggregate
+uses the existing shared rich-leaf styles without rewriting their owners.
+See [the composition boundary](calendar.md).
+
+`scripts/calendar-browser-checks.mjs` joins the existing packed native-browser
+runner. It checks trusted day/keyboard controls, responsive selection retention,
+and twelve Portal event dots inside a compact 270px field at a 375px viewport.
+The dot geometry reproduces overlap with inline text wrapping and overflow with
+excess horizontal padding. Its fixtures construct no accepted owner or client;
+this is grid proof, not complete card/native/hosted acceptance.
+
 On macOS, run package/module-format checks with a canonical `TMPDIR` (for
 example `/private/tmp`). Native Node resolution returns real paths; a fixture
 created under the `/var` alias otherwise fails the unchanged exact-path
@@ -10,6 +42,13 @@ Keep those comparisons intact. Use the
 project's pinned pnpm through Corepack when the global pnpm version differs.
 
 ## Git source preparation
+
+The normal package command first builds clean emitted files before its guard
+tests. The general React bootstrap guard imports the actual ESM/CommonJS
+entries and verifies that neither initializes ReactDOM without a DOM. A warm
+local `dist` directory must not be required for that guard to work in fresh CI.
+Artifact qualification then retains its own clean build and source-preparation
+comparison; the bootstrap guard does not replace either compiler or that proof.
 
 The mandatory package check builds the actual source beneath `node_modules`
 using the checkout's resolved dependencies, then compares every ESM/CommonJS

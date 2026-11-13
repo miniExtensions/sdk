@@ -3032,6 +3032,29 @@ export {
     type CSVExportButtonProps,
     type CSVExportLabels,
 } from './CSVExportButton.js';
+export {
+    NativeLinkedFinderCascade,
+    type NativeLinkedFinderCascadeProps,
+    type NativeLinkedFinderCascadeDescriptor,
+    type NativeLinkedFinderCascadeLabels,
+} from './NativeLinkedFinderCascade.js';
+export { LinkedFinderCard, LinkedFinderRichLeaf } from './LinkedFinderCard.js';
+export {
+    CompleteLinkedFinder,
+    CompleteLinkedFinderView,
+} from './CompleteLinkedFinder.js';
+export type {
+    CompleteLinkedFinderProps,
+    CompleteLinkedFinderLabels,
+    CompleteLinkedFinderCandidate,
+    CompleteLinkedFinderViewProps,
+} from './CompleteLinkedFinder.js';
+export type {
+    LinkedFinderCardProjection,
+    LinkedFinderCardField,
+    LinkedFinderCardLeaf,
+    LinkedFinderPill,
+} from './LinkedFinderCard.js';
 
 export {
     AttachmentPreview,

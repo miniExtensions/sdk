@@ -409,6 +409,8 @@ try {
                 );
                 await page.emulateMedia({ forcedColors: 'active' });
                 await button('Open navigation').focus();
+                await page.keyboard.press('Tab');
+                await page.keyboard.press('Shift+Tab');
                 assert.equal(
                     await button('Open navigation').evaluate(
                         (node) => getComputedStyle(node).outlineStyle
@@ -436,6 +438,7 @@ try {
                 );
                 const lateMenu = await context.newPage();
                 try {
+                    await lateMenu.setViewportSize({ width: 390, height: 844 });
                     await lateMenu.addInitScript(() => {
                         window.startEmpty = true;
                     });

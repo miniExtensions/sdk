@@ -173,6 +173,7 @@ for (const format of ['esm', 'cjs']) {
 
 for (const format of ['esm', 'cjs']) {
     for (const name of [
+        'signature',
         'theme',
         'button',
         'checkbox',
@@ -180,6 +181,7 @@ for (const format of ['esm', 'cjs']) {
         'number',
         'localized-numeric',
         'form-tracking',
+        'form-group',
         'form-completion',
         'form-header',
         'form-validation-summary',
@@ -198,6 +200,7 @@ for (const format of ['esm', 'cjs']) {
         'barcode',
         'complete-portal-chart',
         'complete-address',
+        'address-field',
         'complete-collaborators',
         'complete-date',
         'date',
@@ -207,6 +210,7 @@ for (const format of ['esm', 'cjs']) {
         'multiple-select',
         'linked-records',
         'single-select',
+        'controlled-select',
         'rich-text',
     ]) {
         copyFileSync(

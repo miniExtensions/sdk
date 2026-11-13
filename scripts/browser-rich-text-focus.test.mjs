@@ -1,7 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Window } from 'happy-dom';
-import { installCompleteRichTextFocusObserver } from './browser-complete-rich-text-checks.mjs';
+import {
+    installCompleteRichTextFocusObserver,
+    richTextDocumentNavigationKeys,
+} from './browser-complete-rich-text-checks.mjs';
+
+// CI can run on Linux while the qualified browser runs on a team Mac. Route
+// using that browser's platform, rather than the Node runner's operating system.
+// These routing controls do not certify trusted native caret movement.
+test('Rich Text document navigation uses the browser platform for both boundaries', () => {
+    for (const platform of ['MacIntel', 'MacPPC'])
+        assert.deepEqual(richTextDocumentNavigationKeys(platform), {
+            start: 'Meta+ArrowUp',
+            end: 'Meta+ArrowDown',
+        });
+    for (const platform of ['Win32', 'Linux x86_64', ''])
+        assert.deepEqual(richTextDocumentNavigationKeys(platform), {
+            start: 'Control+Home',
+            end: 'Control+End',
+        });
+});
 
 // Exact consumer observer, actual HTMLElement focus/focusin ordering and a
 // controlled clock. These tests qualify fixture ordering/retirement, not native

@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     NumberField,
+    type NumberFieldProps,
     PercentField,
     FieldRenderer,
     renderPercentField,
@@ -154,7 +155,11 @@ it('PercentField and NumberField keep native fractions and precision without sca
         },
         0.25
     );
-    for (const Component of [PercentField, NumberField]) {
+    const bindingComponents: Array<(props: NumberFieldProps) => ReactNode> = [
+        PercentField,
+        NumberField,
+    ];
+    for (const Component of bindingComponents) {
         await f.render(
             h(Component, { binding: f.binding, className: 'fraction' })
         );

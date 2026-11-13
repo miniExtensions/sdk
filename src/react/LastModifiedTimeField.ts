@@ -1,3 +1,6 @@
+import { ComputedTimeDisplay } from './ComputedTimeDisplay.js';
+import type { ControlledCreatedTimeFieldProps } from './CreatedTimeField.js';
+import type { LastModifiedTimeFieldConfig } from '../formulas/types.js';
 import { createElement, type ReactNode } from 'react';
 import type {
     FieldMetadata,
@@ -10,6 +13,28 @@ import {
 } from './DateTimeField.js';
 
 export type LastModifiedTimeFieldOptions = DateTimeFieldOptions;
+
+/** Complete controlled display; no binding, renderer, setter or Save authority. */
+export type ControlledLastModifiedTimeFieldProps = Omit<
+    ControlledCreatedTimeFieldProps,
+    'dateConfig'
+> & {
+    /** Preserve the computed wrapper: invalid configuration produces empty text. */
+    fieldConfig: LastModifiedTimeFieldConfig;
+    dateConfig?: never;
+};
+export type { LastModifiedTimeFieldConfig } from '../formulas/types.js';
+
+export function ControlledLastModifiedTimeField(
+    props: ControlledLastModifiedTimeFieldProps
+): ReactNode {
+    return createElement(ComputedTimeDisplay, {
+        ...props,
+        dateConfig: props.fieldConfig,
+        // Native recursive last-modified formatting does not forward UI language.
+        dateLanguage: props.dateLanguage ?? 'en',
+    });
+}
 
 /** Invalid result metadata stays blank; valid timestamps retain their native text. */
 export function lastModifiedTimeInput(

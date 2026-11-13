@@ -502,6 +502,44 @@ try {
     await noReadonlyActions();
     await assertMasks(page);
     await inert();
+    const controlled = page.locator('#controlled-count-preview');
+    assert.equal(
+        await controlled.locator('.read-only-text').textContent(),
+        '0'
+    );
+    const controlledGroup = controlled.getByRole('group', {
+        name: 'Related records',
+    });
+    assert.equal(await controlledGroup.count(), 1);
+    assert.equal(
+        await controlledGroup.locator('input,button,textarea,select').count(),
+        0
+    );
+    const controlledWrites = await counter('writes');
+    for (const expected of [
+        'No Value',
+        '<b>Count source error</b> https://example.invalid/count',
+        '0',
+    ]) {
+        await controlled
+            .getByRole('button', {
+                name: 'Replace controlled Count',
+                exact: true,
+            })
+            .click();
+        assert.equal(await controlledGroup.textContent(), expected);
+        assert.equal(
+            await controlledGroup.locator('b,img,script,iframe').count(),
+            0
+        );
+        assert.equal(await neighbor.inputValue(), '7');
+        assert.equal(await counter('writes'), controlledWrites);
+        assert.equal(await counter('count-writes'), 0);
+    }
+    assert.equal(await controlledGroup.locator('a').count(), 0);
+    await noReadonlyActions();
+    await inert();
+    await controlled.screenshot({ path: join(output, 'count-controlled.png') });
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     writeFileSync(
@@ -523,6 +561,7 @@ try {
                 fetchOrXhrRequests: 0,
                 readonlyValues: expectedValues,
                 checks: [
+                    'controlled Count directly reuses complete readonly text, localized empty presentation and external field chrome without writes',
                     'public Count slot and binding use readonly disabled NumberControl and number.css',
                     'real Form owner exposes readonly computed Count with no scalar',
                     'real Portal grid/list owners provide accepted readonly detail projections, without computed cell bindings',
@@ -548,6 +587,7 @@ try {
                     'zero external requests, popup, navigation, fetch, XHR, and connected Save',
                 ],
                 screenshots: [
+                    'count-controlled.png',
                     'count-idle.png',
                     'count-neighbor-focus.png',
                     'count-forced-colors.png',

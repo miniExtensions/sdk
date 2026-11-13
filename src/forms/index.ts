@@ -254,6 +254,14 @@ export {
 } from './completion.js';
 
 export {
+    groupFormFieldsBySections,
+    type FormSectionHeader,
+    type FormSectionField,
+    type FormFieldsGroup,
+    type FormFieldSection,
+} from './formSections.js';
+
+export {
     shouldRenderFormCover,
     projectFormHeader,
     resolveFormFooterDescription,
@@ -265,3 +273,15 @@ export {
     type FormDisplayField,
     type FormPresentationIdentity,
 } from './header.js';
+
+export {
+    compileSelectConditions,
+    type SelectConditionCompilation,
+} from './selectConditions.js';
+export {
+    validateOrdinaryFormField,
+    type ValidateOrdinaryFormFieldInput,
+    type OrdinaryFormFieldDiagnostic,
+    type OrdinaryFormFieldFallbackReason,
+    type OrdinaryFormFieldValidationResult,
+} from './ordinaryValidation.js';

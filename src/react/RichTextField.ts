@@ -1,5 +1,9 @@
 import { LiteralText } from './LiteralText.js';
 import {
+    CompleteRichTextEditor,
+    type CompleteRichTextEditorProps,
+} from './CompleteRichTextEditor.js';
+import {
     createElement,
     useId,
     type ReactNode,
@@ -14,6 +18,21 @@ import { textConfiguration } from './TextField.js';
 
 export type RichTextFieldOptions = { className?: string };
 export type RichTextFieldProps = FieldProps & RichTextFieldOptions;
+/** Accepted binding snapshots retain their literal display-only contract. */
+export type BindingRichTextFieldProps = RichTextFieldProps & {
+    value?: never;
+    onValueChange?: never;
+};
+
+/** Complete controlled Markdown editor; the caller owns drafts and persistence. */
+export type ControlledRichTextFieldProps = CompleteRichTextEditorProps & {
+    binding?: never;
+    render?: never;
+};
+
+type RichTextFieldComponentProps =
+    | BindingRichTextFieldProps
+    | ControlledRichTextFieldProps;
 
 /** Preserve the supplied Markdown string, including whitespace and line endings. */
 function literalText(value: unknown): string | null {
@@ -86,11 +105,11 @@ export function renderRichTextField(
 }
 
 /** Observe accepted owner snapshots without borrowing any editing or save actions. */
-export function RichTextField({
+function BindingRichTextField({
     binding,
     render,
     className,
-}: RichTextFieldProps): ReactNode {
+}: BindingRichTextFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -118,4 +137,20 @@ export function RichTextField({
             snapshot.error ??
             snapshot.validation.map((item) => item.errorMessage).join('\n'),
     });
+}
+
+/**
+ * Render the complete controlled editor when value and onValueChange are supplied.
+ * Binding props keep the existing escaped literal display and render override.
+ */
+export function RichTextField(props: BindingRichTextFieldProps): ReactNode;
+export function RichTextField(props: ControlledRichTextFieldProps): ReactNode;
+export function RichTextField(props: RichTextFieldComponentProps): ReactNode;
+export function RichTextField(props: RichTextFieldComponentProps): ReactNode {
+    if ('binding' in props && props.binding !== undefined)
+        return createElement(BindingRichTextField, props);
+    return createElement(
+        CompleteRichTextEditor,
+        props as ControlledRichTextFieldProps
+    );
 }

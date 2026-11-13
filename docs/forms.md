@@ -3166,6 +3166,33 @@ pretransport authority guards are unchanged. The host retains coalescing, queued
 request rereads, original request settlement and authority. Never pass a mutable
 current-config getter in place of the captured policy.
 
+### Ordinary frontend validation
+
+`validateOrdinaryFormField` is a pure single-field facet from
+`@miniextensions/sdk/forms`. Pass the physical `fieldType`,
+`airtableFieldConfig`, `miniExtConfig`, current `value`, `storedValue`,
+`isConditionallyHidden`, and `isComputeMode` explicitly. The supported result
+contains `diagnostic: null` or a finite diagnostic code. `character-limit`
+also carries the original numeric `limit`, including zero. Hosts retain
+localization and field identity/order.
+
+A `native-fallback` result carries a reason. Call the existing native helper
+with its original arguments and preserve its result or exception. Fallback
+is not a validation error or a successful validation result.
+
+Required precedes visible linked minimum, then the physical kind's ordinary
+rule. Compute waives Required only. Ordinary readonly means
+`miniExtConfig.readOnly === true`; physical computed kinds waive Required.
+Hiding waives Required, text limits and linked minimum, while email, URL,
+negative-number, selection and linked maximum rules retain native behavior.
+Select values use offered or stored canonical names, collaborators use IDs,
+and only literal `true` enables the URL syntax bypass.
+
+This facet does not evaluate conditional predicates, page date ranges,
+linked-open Review debt, or selection/Save authority. Those policies remain
+with their existing owners. The public page adapter retains its separate
+conservative shape and page-policy behavior.
+
 ## Form validation summary
 
 ```tsx

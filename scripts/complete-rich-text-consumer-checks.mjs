@@ -9,7 +9,8 @@ import { build } from 'esbuild';
 
 export const completeRichTextTypedConsumer = `
 import {createElement,createRef} from 'react';
-import {CompleteRichTextEditor,type CompleteRichTextEditorProps,type NativeRichTextEditorHandle} from '@miniextensions/sdk/react';
+import {RichTextField,type RichTextFieldProps,type BindingRichTextFieldProps,type ControlledRichTextFieldProps,CompleteRichTextEditor,type CompleteRichTextEditorProps,type NativeRichTextEditorHandle} from '@miniextensions/sdk/react';
+import type {FormFieldBinding} from '@miniextensions/sdk/forms';
 const props:CompleteRichTextEditorProps={value:'**Formatted**',onValueChange(value){const stored:string=value;void stored;},readOnly:false,placeholder:'Write',id:'rich-editor',ariaLabelledBy:'label',ariaDescribedBy:'help',ariaInvalid:false,identity:'record:field',accentColor:'#6366f1',linkColor:'#4338ca',linkHoverColor:'#6366f1'};
 createElement(CompleteRichTextEditor,{...props,ref:createRef<NativeRichTextEditorHandle>()});
 createElement(CompleteRichTextEditor,{...props,ref(instance){if(instance){const dom:HTMLElement|undefined=instance.view?.dom;void dom;return()=>void instance;}}});
@@ -19,7 +20,31 @@ const numberValue:CompleteRichTextEditorProps={...props,value:42};
 const editorSlot:CompleteRichTextEditorProps={...props,renderEditor:()=>createElement('textarea')};
 // @ts-expect-error writes persist stored strings, never synthetic input events
 const eventWriter:CompleteRichTextEditorProps={...props,onValueChange(event:Event){void event;}};
-void numberValue;void editorSlot;void eventWriter;
+const canonical:ControlledRichTextFieldProps={...props};
+createElement(RichTextField,canonical);
+declare const binding:FormFieldBinding;
+const literal:RichTextFieldProps={binding,className:'literal',render({snapshot,binding:owner}){void owner;return createElement('output',null,String(snapshot.value));}};
+createElement(RichTextField,literal);
+type AcceptedRichTextProps=BindingRichTextFieldProps|ControlledRichTextFieldProps;
+// @ts-expect-error controlled and binding contracts cannot be mixed
+const mixed:AcceptedRichTextProps={...props,binding};
+// @ts-expect-error component overloads reject mixing binding and controlled props
+createElement(RichTextField,{...props,binding});
+// @ts-expect-error component overloads require the controlled writer
+createElement(RichTextField,{value:null});
+// @ts-expect-error controlled values require their stored-string writer
+const missingWriter:ControlledRichTextFieldProps={value:null};
+// @ts-expect-error a writer without a controlled value is not a complete field
+const missingValue:ControlledRichTextFieldProps={onValueChange(value:string){void value;}};
+// @ts-expect-error controlled fields own their editor and do not borrow a renderer
+const canonicalSlot:ControlledRichTextFieldProps={...props,renderEditor:()=>createElement('textarea')};
+// @ts-expect-error binding custom render cannot be combined with controlled props
+const mixedRender:ControlledRichTextFieldProps={...props,render:()=>null};
+// @ts-expect-error controlled values remain nullable strings
+const invalidCanonicalValue:ControlledRichTextFieldProps={...props,value:42};
+// @ts-expect-error controlled writes are strings rather than input events
+const invalidCanonicalWriter:ControlledRichTextFieldProps={...props,onValueChange(event:Event){void event;}};
+void numberValue;void editorSlot;void eventWriter;void mixed;void missingWriter;void missingValue;void canonicalSlot;void mixedRender;void invalidCanonicalValue;void invalidCanonicalWriter;
 `;
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -368,6 +393,238 @@ async function exerciseEngine({
     }
 }
 
+// Exercise the canonical function through ordinary props and DOM events. No ref,
+// runtime slot, provider or synthetic replacement editor is supplied by this host.
+async function exerciseCanonicalField({
+    api,
+    React,
+    createRoot,
+    renderCommit,
+    window,
+}) {
+    const container = window.document.createElement('div');
+    window.document.body.append(container);
+    const root = createRoot(container);
+    const writes = [];
+    const literal = '  **literal** <b>escaped</b>\r\n';
+    const snapshot = {
+        field: {
+            fieldId: 'rich',
+            title: 'Stored notes',
+            fieldType: 'richText',
+            isComputed: false,
+            readOnly: false,
+            schema: {
+                fieldType: 'richText',
+                miniExtConfig: {},
+                airtableField: {
+                    id: 'rich',
+                    name: 'Stored notes',
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: { type: 'richText', options: null },
+                },
+            },
+        },
+        value: literal,
+        dirty: false,
+        revision: 0,
+        visibility: { type: 'visible', diagnostics: [] },
+        readOnly: false,
+        canEdit: true,
+        pending: false,
+        error: null,
+        validation: [],
+        selection: null,
+        retired: false,
+    };
+    let subscribers = 0;
+    const binding = {
+        getSnapshot: () => snapshot,
+        subscribe() {
+            subscribers++;
+            return () => {
+                subscribers--;
+            };
+        },
+    };
+    for (const name of ['setValue', 'scalar', 'selection', 'date', 'save'])
+        Object.defineProperty(binding, name, {
+            get() {
+                throw Error(`Literal field cannot borrow ${name}`);
+            },
+        });
+    let stored = '**Bold** and _italic_\n\n[ ] task';
+    const input = () => container.querySelector('.ProseMirror[role="textbox"]');
+    const render = async (overrides = {}) => {
+        await renderCommit(() =>
+            root.render(
+                React.createElement(
+                    'form',
+                    {
+                        id: 'canonical-form',
+                        onSubmit: (event) => {
+                            event.preventDefault();
+                            throw Error('Editing must not submit');
+                        },
+                    },
+                    React.createElement(
+                        'label',
+                        { id: 'canonical-label', htmlFor: 'canonical-notes' },
+                        'Canonical notes'
+                    ),
+                    React.createElement(
+                        'p',
+                        { id: 'canonical-help' },
+                        'Describe the request.'
+                    ),
+                    React.createElement(api.RichTextField, {
+                        value: stored,
+                        onValueChange(value) {
+                            writes.push(value);
+                            stored = value;
+                        },
+                        identity: 'canonical-one',
+                        id: 'canonical-notes',
+                        ariaLabelledBy: 'canonical-label',
+                        ariaDescribedBy: 'canonical-help',
+                        emptyContent: React.createElement(
+                            'i',
+                            null,
+                            'No notes'
+                        ),
+                        ...overrides,
+                    }),
+                    React.createElement('input', {
+                        name: 'sibling',
+                        defaultValue: 'untouched',
+                    })
+                )
+            )
+        );
+        const expectsEditor = !(
+            overrides.readOnly &&
+            Object.hasOwn(overrides, 'value') &&
+            overrides.value === null
+        );
+        for (let turn = 0; expectsEditor && !input() && turn < 100; turn++)
+            await renderCommit(tick);
+    };
+    const paste = async (target, text) => {
+        const event = new window.Event('paste', {
+            bubbles: true,
+            cancelable: true,
+        });
+        Object.defineProperty(event, 'clipboardData', {
+            value: {
+                types: ['text/plain'],
+                files: [],
+                items: [],
+                getData: (type) => (type === 'text/plain' ? text : ''),
+            },
+        });
+        await renderCommit(() => target.dispatchEvent(event));
+    };
+    try {
+        await renderCommit(() =>
+            root.render(React.createElement(api.RichTextField, { binding }))
+        );
+        assert.equal(container.querySelector('output')?.textContent, literal);
+        assert.equal(
+            container.querySelector('strong,b,[contenteditable]'),
+            null
+        );
+        assert.equal(subscribers, 1);
+        await render();
+        assert.equal(
+            subscribers,
+            0,
+            'Controlled props retire the prior binding subscription'
+        );
+        const first = input();
+        assert(first, 'Canonical RichTextField loads the actual editor');
+        assert.equal(first.querySelector('strong')?.textContent, 'Bold');
+        assert.equal(first.querySelector('em')?.textContent, 'italic');
+        assert(first.querySelector('input[type="checkbox"]'));
+        assert.equal(first.getAttribute('aria-labelledby'), 'canonical-label');
+        assert.equal(first.getAttribute('aria-describedby'), 'canonical-help');
+        assert.deepEqual(writes, []);
+        await paste(first, 'Canonical paste ');
+        assert.equal(writes.length, 1);
+        assert.match(writes[0], /Canonical paste/);
+        assert.match(writes[0], /\*\*[^*]*Bold\*\*/);
+        assert.match(writes[0], /\[ \] task/);
+        await render({
+            id: 'canonical-updated',
+            ariaDescribedBy: 'canonical-help error',
+            ariaInvalid: true,
+        });
+        assert.equal(
+            input(),
+            first,
+            'Echo and metadata retain the actual DOM editor'
+        );
+        assert.equal(first.getAttribute('id'), 'canonical-updated');
+        assert.equal(first.getAttribute('aria-invalid'), 'true');
+        assert.equal(
+            container.querySelector('input[name="sibling"]').value,
+            'untouched'
+        );
+        await render({ readOnly: true });
+        assert.equal(input(), first);
+        assert.equal(first.getAttribute('contenteditable'), 'false');
+        const readonlyText = first.textContent;
+        await paste(first, 'Refused');
+        assert.equal(first.textContent, readonlyText);
+        assert.equal(writes.length, 1);
+        await render({ identity: 'canonical-two' });
+        const successor = input();
+        assert(successor);
+        assert.notEqual(
+            successor,
+            first,
+            'Equal-valued new owner replaces the editor'
+        );
+        assert.equal(first.isConnected, false);
+        await paste(first, 'Late retired edit');
+        assert.equal(writes.length, 1);
+        await render({
+            identity: 'canonical-two',
+            value: null,
+            readOnly: true,
+        });
+        assert.equal(input(), null);
+        assert.equal(container.querySelector('i')?.textContent, 'No notes');
+        await render({ identity: 'canonical-three', value: null });
+        assert(input());
+        assert.equal(input().textContent, '');
+        await renderCommit(() =>
+            root.render(React.createElement(api.RichTextField, { binding }))
+        );
+        assert.equal(subscribers, 1);
+        assert.equal(container.querySelector('output')?.textContent, literal);
+        assert.equal(input(), null);
+        assert.equal(writes.length, 1);
+        return {
+            canonical: true,
+            bindingCompatibility: true,
+            modeReplacement: true,
+            formatted: true,
+            paste: true,
+            readOnly: true,
+            metadata: true,
+            sibling: true,
+            ownerRetirement: true,
+            empty: true,
+        };
+    } finally {
+        await renderCommit(() => root.unmount());
+        assert.equal(subscribers, 0);
+        container.remove();
+    }
+}
+
 async function withSyntheticBrowser(happyDomModulePath, run) {
     const { Window } = createRequire(import.meta.url)(happyDomModulePath);
     const window = new Window({ url: 'http://localhost/' });
@@ -469,7 +726,17 @@ async function checkInstalledCompleteEditor(
                     }),
                 window,
             });
-            receipts.push({ format, ...receipt });
+            const canonical = await exerciseCanonicalField({
+                api,
+                React,
+                createRoot,
+                renderCommit: (callback) =>
+                    React.act(async () => {
+                        await callback();
+                    }),
+                window,
+            });
+            receipts.push({ format, ...receipt, canonical });
         }
         return {
             react: React.version,
@@ -536,6 +803,16 @@ async function checkProductionBundle(consumerDirectory, happyDomModulePath) {
             return {
                 react: React.version,
                 format: 'production-browser-bundle',
+                canonical: await exerciseCanonicalField({
+                    api,
+                    React,
+                    createRoot,
+                    window,
+                    renderCommit: async (callback) => {
+                        flushSync(() => callback());
+                        await tick();
+                    },
+                }),
                 javascriptBytes: javascript.contents.length,
                 cssBytes: css.contents.length,
                 ...receipt,
@@ -624,6 +901,37 @@ export function checkCompleteRichTextReactMatrix({
                     name,
                 ]);
             }
+            const jsxName = 'canonical-rich-text.tsx';
+            writeFileSync(
+                join(directory, jsxName),
+                `
+import {RichTextField,type RichTextFieldProps} from '@miniextensions/sdk/react';
+import type {FormFieldBinding} from '@miniextensions/sdk/forms';
+declare const binding:FormFieldBinding;
+export const Controlled=()=> <RichTextField value={null} onValueChange={value=>{const stored:string=value;void stored;}}/>;
+export function Binding(props:RichTextFieldProps){return <RichTextField {...props} render={({snapshot})=><span>{String(snapshot.value)}</span>}/>;}
+// @ts-expect-error JSX cannot mix binding and controlled contracts
+export const Mixed=()=> <RichTextField binding={binding} value={null} onValueChange={()=>{}}/>;
+// @ts-expect-error controlled JSX requires its writer
+export const Incomplete=()=> <RichTextField value={null}/>;
+`
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--target',
+                'ES2022',
+                '--module',
+                'NodeNext',
+                '--moduleResolution',
+                'NodeNext',
+                '--jsx',
+                'react-jsx',
+                jsxName,
+            ]);
             // Separate processes keep both React versions and production/development caches honest.
             const receipts = [];
             for (const mode of ['--run-consumer', '--run-production']) {

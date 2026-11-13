@@ -274,9 +274,10 @@ function CollaboratorControl<T extends CompleteCollaborator>(
     const propose = (next: T[], live: ControlProps<T>) => {
         if (current() !== live) return;
         clearReadyFocus();
-        focusRequest.current = live.single
-            ? { proposal: next, target: next.length ? 'remove' : 'selector' }
-            : null;
+        focusRequest.current = {
+            proposal: next,
+            target: live.single && next.length ? 'remove' : 'selector',
+        };
         try {
             // Canonical selection is never stored here, even on refusal/throw.
             live.onValueChange(next);

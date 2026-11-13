@@ -184,6 +184,10 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
+The optional [customer-chat lifecycle](docs/customer-chat.md) has dedicated
+`customer-chat`, `customer-chat/react` and `customer-chat/intercom` imports.
+The host supplies one broker across all roots and explicitly enables its driver.
+
 | Import                         | Included behavior                                                                                                                                                                      | Guide                                                                        |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                                        | [Runtime](docs/runtime.md)                                                   |
@@ -214,6 +218,11 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Count presentation](docs/count.md) preserves the binding-based `CountField`
+contract and adds controlled, host-converted text through the same public
+component. The controlled mode reuses complete readonly text and its CSS;
+the surrounding field shell retains title, help, feedback and form association.
 
 [Single Select presentation](docs/ui.md#react-single-select-presentation) exports
 `SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
@@ -250,6 +259,9 @@ It presents supplied raw timestamp strings only when Last Modified Time metadata
 has `options.isValid === true`, using the disabled DateTime control and optional
 `@miniextensions/sdk/react/datetime.css`. It does not format dates, calculate
 modification times or change native values.
+The same natural name accepts complete controlled `value`/`fieldConfig` display
+props, reusing the Created-time formatting/resource engine. Explicit
+`BindingLastModifiedTimeField` preserves the raw binding contract.
 
 [Created Time presentation](docs/ui.md#react-created-time-presentation) exports
 the natural `CreatedTimeField` controlled display with explicit date configuration,
@@ -286,9 +298,12 @@ No CSS import is required. Lookup remains a separate presentation.
 
 [Rollup presentation](docs/ui.md#react-rollup-presentation) exports
 `RollupField`, `RollupFieldProps`, `RollupFieldOptions` and the typed
-`renderRollupField` slot. It displays supplied aggregate results as inert text
-using existing native formatting, without evaluating the aggregation or reading
-linked records. No CSS import is required. Lookup keeps its separate contract.
+`renderRollupField` slot. An explicit controlled branch accepts current validity
+and already-converted text for complete readonly presentation, using
+`complete-readonly-text.css`. Existing bindings display supplied aggregate results
+as inert text using existing native formatting, without evaluating the aggregation
+or reading linked records. Binding rendering requires no CSS import. Lookup keeps
+its separate contract.
 
 [Lookup presentation](docs/ui.md#react-lookup-presentation) exports `LookupField`,
 `LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing
@@ -326,18 +341,20 @@ replace the display-only collaborator APIs above.
 
 [Rich Text presentation](docs/ui.md#react-rich-text-presentation) exports
 `RichTextField`, `RichTextFieldProps`, `RichTextFieldOptions` and
-`renderRichTextField` for the existing physical slot. It displays supplied Markdown
+`renderRichTextField` for the existing physical slot. Binding and slot calls display supplied Markdown
 literally as escaped text, preserving whitespace, line breaks and the native
-string. Masking precedes value access. This is a safe plain-text display stage;
-formatted Rich Text parity, parsing, links, resource loading and editing are not
-included.
+string. Masking precedes value access. These binding and slot calls retain their
+literal display contract.
 
 [Complete Rich Text editor](docs/complete-rich-text.md) exports
-`CompleteRichTextEditor` for formatted editing and read-only Markdown, with its
+`RichTextField` with controlled `value` and `onValueChange` props for formatted
+editing and read-only Markdown, with its
 owned engine, toolbar, paste handling, checkbox serialization and opt-in CSS.
 The host supplies stored values, semantic document identity and the canonical
-write callback. The existing literal display and native editor-slot APIs retain
-their contracts.
+write callback. `ControlledRichTextFieldProps` describes this editor contract;
+the historical `RichTextFieldProps` binding type and literal display behavior
+remain unchanged. `CompleteRichTextEditor` retains its existing props and ref,
+and the native editor-slot API remains available.
 
 [AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
 `AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing
@@ -396,6 +413,17 @@ edit ownership and optional `@miniextensions/sdk/react/complete-phone.css`.
 controlled props cannot be mixed; the existing `Complete*` exports remain available.
 `PhoneNumberFieldProps` retains its binding-based type contract;
 `ControlledPhoneNumberFieldProps` names the complete controlled contract.
+
+`NumberField` also accepts an explicit `mode: 'controlled'` with a canonical
+`field` whose `physicalKind` is `'number'`, plus optional `options`. This branch
+reuses `CompleteLocalizedNumericField` for localized input and display; import
+`@miniextensions/sdk/react/localized-numeric.css`. Set
+`options.presentation: 'display'` for readonly output. The host retains the
+canonical number/null writer, current-owner guard and explicit Save action.
+`ControlledNumberFieldProps` names this contract; `NumberFieldProps` keeps the
+existing binding API and raw scalar drafts. Percent, Currency, Duration and
+Rating binding callers retain their existing units and grammar. The
+`CompleteLocalizedNumericField` exports remain available.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

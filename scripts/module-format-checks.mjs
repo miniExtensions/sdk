@@ -193,13 +193,16 @@ export function assertModuleFormats(root) {
                 './react/complete-readonly-text.css',
                 './react/complete-clearable-text-input.css',
                 './react/complete-multiline.css',
+                './react/signature.css',
                 './react/complete-address.css',
+                './react/address-field.css',
                 './react/html-description.css',
                 './react/complete-duration.css',
                 './react/search-gate.css',
                 './react/complete-calendly.css',
                 './react/complete-record-comments.css',
                 './react/form-tracking.css',
+                './react/form-group.css',
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/form-validation-summary.css',
@@ -218,6 +221,7 @@ export function assertModuleFormats(root) {
                 './react/multiple-select.css',
                 './react/linked-records.css',
                 './react/single-select.css',
+                './react/controlled-select.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
@@ -246,7 +250,9 @@ export function assertModuleFormats(root) {
             subpath === '.' ||
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
-                subpath === './react/date'
+                subpath === './react/date' ||
+                subpath === './customer-chat/react' ||
+                subpath === './customer-chat/intercom'
         );
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

@@ -13,7 +13,7 @@ import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
-function fixtureSource() {
+function fixtureSource(field = 'createdTime') {
     const loaded = portalRecipeFixtures.makeForm({
         childExtensionInfo: { accessType: { type: 'create' } },
     });
@@ -56,10 +56,16 @@ function fixtureSource() {
         },
         miniExtConfig: {},
     };
+    if (field === 'lastModifiedTime') {
+        const schema = loaded.payload.fieldIdsToSchemas.created;
+        schema.fieldType = 'lastModifiedTime';
+        schema.airtableField.config.type = 'lastModifiedTime';
+        schema.airtableField.config.options.isValid = true;
+    }
     return `
 import React,{createElement as h,useLayoutEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {CreatedTimeField,BindingCreatedTimeField,TextField} from '@miniextensions/sdk/react';
+import {${field === 'createdTime' ? 'CreatedTimeField,BindingCreatedTimeField' : 'LastModifiedTimeField as CreatedTimeField,BindingLastModifiedTimeField as BindingCreatedTimeField'},TextField} from '@miniextensions/sdk/react';
 import {createFormFieldBindings} from '@miniextensions/sdk/forms';
 let requests=0,writes=0,submits=0,change,observed;
 const downloadIntents=[];
@@ -75,7 +81,7 @@ function App(){
  const owner={token,isCurrent:()=>state.current&&latest.current.current};
  const action=(label,patch)=>h('button',{type:'button',onClick:()=>change(patch)},label);
  const options={disableDownloadFiles:false,displayMode:state.mode==='icon'?'icon':'thumbnail'};
- const props={value:state.value,dateConfig:state.dateConfig??dateConfig,language:state.language??'en',dateLanguage:state.dateLanguage,owner,identity:state.identity,displayContext:state.mode==='editable'?'editable':'readonly',displayAsAttachments:['attachment','icon','inert'].includes(state.mode),displayAsButton:['attachment','button','editable'].includes(state.mode),buttonLabel:'Open supplied URL',inert:state.mode==='inert',attachmentOptions:options,presentation:{association:{kind:'group',controlId:'created-display',labelId:'created-title',descriptionId:'created-help',errorId:'created-error',formId:'native-form'},chromeOwner:'shell'}};
+ const props={value:state.value,${field === 'createdTime' ? 'dateConfig:state.dateConfig??dateConfig' : "fieldConfig:{type:'lastModifiedTime',options:{isValid:state.isValid??true,result:state.dateConfig??dateConfig}}"},language:state.language??'en',dateLanguage:state.dateLanguage,owner,identity:state.identity,displayContext:state.mode==='editable'?'editable':'readonly',displayAsAttachments:['attachment','icon','inert'].includes(state.mode),displayAsButton:['attachment','button','editable'].includes(state.mode),buttonLabel:'Open supplied URL',inert:state.mode==='inert',attachmentOptions:options,presentation:{association:{kind:'group',controlId:'created-display',labelId:'created-title',descriptionId:'created-help',errorId:'created-error',formId:'native-form'},chromeOwner:'shell'}};
  return h('form',{id:'native-form',onSubmit:e=>{e.preventDefault();submits++;}},
   h('nav',{'aria-label':'Fixture controls'},action('Text',{mode:'text',value:'2026-11-12T12:30:00Z',far:false}),action('Attachment',{mode:'attachment',value:location.origin+'/image.jpg',far:false}),action('Offscreen attachment',{mode:'attachment',value:location.origin+'/offscreen.jpg',far:true}),action('Icon',{mode:'icon',value:location.origin+'/image.jpg',far:false}),action('Retry image',{mode:'attachment',value:location.origin+'/retry.jpg',far:false}),action('HTTP PDF',{mode:'attachment',value:location.origin+'/fixture.pdf',far:false}),action('URL button',{mode:'button',value:location.origin+'/a',far:false}),action('Replace URL',{value:location.origin+'/b',identity:'b'}),action('Restore URL',{mode:'button',value:location.origin+'/a',identity:'a'}),action('Inert',{mode:'inert',value:location.origin+'/image.jpg',far:false}),action('Retire',{current:false}),action('Remove',{mounted:false})),
   h('section',{className:'binding-natural'},h(CreatedTimeField,{binding})),h('section',{className:'binding-explicit'},h(BindingCreatedTimeField,{binding})),h(TextField,{binding:neighbor}),
@@ -87,12 +93,15 @@ window.createdBrowser={snapshot:()=>({react:React.version,requests,writes,submit
 `;
 }
 
-export async function prepareCreatedTimeBrowser(consumer) {
+export async function prepareCreatedTimeBrowser(
+    consumer,
+    field = 'createdTime'
+) {
     const root = realpathSync(consumer);
     const temporary = mkdtempSync(join(root, '.created-time-browser-'));
     try {
         const entry = join(temporary, 'host.mjs');
-        writeFileSync(entry, fixtureSource());
+        writeFileSync(entry, fixtureSource(field));
         const result = await build({
             absWorkingDir: root,
             entryPoints: [entry],
@@ -103,7 +112,13 @@ export async function prepareCreatedTimeBrowser(consumer) {
             metafile: true,
         });
         await assertBrowserInputs(result.metafile, root);
-        for (const name of ['CreatedTimeField.js', 'CreatedTimeResource.js'])
+        for (const name of [
+            field === 'createdTime'
+                ? 'CreatedTimeField.js'
+                : 'LastModifiedTimeField.js',
+            'ComputedTimeDisplay.js',
+            'CreatedTimeResource.js',
+        ])
             assert(
                 Object.keys(result.metafile.inputs).some((path) =>
                     path.endsWith('/react/' + name)
@@ -206,6 +221,7 @@ export async function checkCreatedTimeControlledBrowser({
     consumer,
     evidence,
     output,
+    field = 'createdTime',
 }) {
     Object.assign(evidence, {
         status: 'running',
@@ -217,7 +233,7 @@ export async function checkCreatedTimeControlledBrowser({
     });
     let server, context, page, failure;
     try {
-        const prepared = await prepareCreatedTimeBrowser(consumer);
+        const prepared = await prepareCreatedTimeBrowser(consumer, field);
         evidence.package = prepared.receipt;
         let retries = 0;
         const image = Buffer.from(
@@ -327,6 +343,34 @@ export async function checkCreatedTimeControlledBrowser({
             .getByRole('textbox', { name: 'Neighbor', exact: true })
             .fill('Independent neighbor');
         assert.equal((await snapshot()).neighbor, 'Independent neighbor');
+        if (field === 'lastModifiedTime') {
+            await page.evaluate(() =>
+                window.createdBrowser.change({ isValid: false })
+            );
+            await page.waitForFunction(() =>
+                document
+                    .querySelector('#created-display')
+                    ?.textContent.includes('No Value')
+            );
+            await page.evaluate(() =>
+                window.createdBrowser.change({
+                    isValid: true,
+                    dateConfig: {
+                        type: 'date',
+                        options: { dateFormat: { format: 'YYYY-MM-DD' } },
+                    },
+                    value: '2026-11-13',
+                })
+            );
+            await page.waitForFunction(() =>
+                document
+                    .querySelector('#created-display')
+                    ?.textContent.includes('2026-11-13')
+            );
+            await page.evaluate(() =>
+                window.createdBrowser.change({ value: '2026-11-12T12:30:00Z' })
+            );
+        }
         const localeProps = {
             language: 'fr',
             dateLanguage: 'en',
@@ -362,10 +406,14 @@ export async function checkCreatedTimeControlledBrowser({
                 dateLanguage: undefined,
             })
         );
-        await page.waitForFunction(() =>
-            document
-                .querySelector('#created-display')
-                ?.textContent.includes('jeudi 12 novembre 2026 07:30')
+        await page.waitForFunction(
+            (expected) =>
+                document
+                    .querySelector('#created-display')
+                    ?.textContent.includes(expected),
+            field === 'createdTime'
+                ? 'jeudi 12 novembre 2026 07:30'
+                : 'Thursday 12 November 2026 07:30'
         );
         await page.evaluate(() =>
             window.createdBrowser.change({ dateLanguage: 'en' })
@@ -403,7 +451,7 @@ export async function checkCreatedTimeControlledBrowser({
         );
         assert(evidence.resources.some((r) => r.path === '/offscreen.jpg'));
         await page.screenshot({
-            path: join(output, 'created-time-visible.png'),
+            path: join(output, `${field}-visible.png`),
         });
         await finish('native-visibility-gated-image');
         const overlay = display().getByRole('button', {
@@ -512,7 +560,7 @@ export async function checkCreatedTimeControlledBrowser({
             )
         );
         await page.screenshot({
-            path: join(output, 'created-time-narrow.png'),
+            path: join(output, `${field}-narrow.png`),
             fullPage: true,
         });
         await finish('narrow-layout-and-no-submit');
@@ -535,7 +583,7 @@ export async function checkCreatedTimeControlledBrowser({
         if (page)
             try {
                 await page.screenshot({
-                    path: join(output, 'created-time-failure.png'),
+                    path: join(output, `${field}-failure.png`),
                     fullPage: true,
                 });
             } catch (capture) {

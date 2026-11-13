@@ -87,6 +87,7 @@
             }
         },
         "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
+        "./react/form-group.css": "./dist/esm/react/form-group.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
@@ -103,6 +104,7 @@
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
+        "./react/controlled-select.css": "./dist/esm/react/controlled-select.css",
         "./react/single-select.css": "./dist/esm/react/single-select.css",
         "./react/rich-text.css": "./dist/esm/react/rich-text.css",
         "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css",
@@ -122,6 +124,7 @@
         "./react/html-description.css": "./dist/esm/react/html-description.css",
         "./react/complete-portal-chart.css": "./dist/esm/react/complete-portal-chart.css",
         "./react/complete-address.css": "./dist/esm/react/complete-address.css",
+        "./react/address-field.css": "./dist/esm/react/address-field.css",
         "./react/complete-collaborators.css": "./dist/esm/react/complete-collaborators.css",
         "./react/form-completion.css": "./dist/esm/react/form-completion.css",
         "./react/barcode.css": "./dist/esm/react/barcode.css",
@@ -142,7 +145,38 @@
         },
         "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
         "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css",
-        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*"
+        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*",
+        "./react/signature.css": "./dist/esm/react/signature.css",
+        "./customer-chat": {
+            "import": {
+                "types": "./dist/esm/customer-chat/index.d.ts",
+                "default": "./dist/esm/customer-chat/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/index.d.ts",
+                "default": "./dist/cjs/customer-chat/index.js"
+            }
+        },
+        "./customer-chat/react": {
+            "import": {
+                "types": "./dist/esm/customer-chat/react.d.ts",
+                "default": "./dist/esm/customer-chat/react.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/react.d.ts",
+                "default": "./dist/cjs/customer-chat/react.js"
+            }
+        },
+        "./customer-chat/intercom": {
+            "import": {
+                "types": "./dist/esm/customer-chat/intercom.d.ts",
+                "default": "./dist/esm/customer-chat/intercom.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/intercom.d.ts",
+                "default": "./dist/cjs/customer-chat/intercom.js"
+            }
+        }
     },
     "files": [
         "dist/esm",
@@ -153,6 +187,7 @@
         "docs/ui.md",
         "docs/forms.md",
         "docs/field-bindings.md",
+        "docs/count.md",
         "docs/portals.md",
         "docs/auth.md",
         "docs/browser-lifecycle.md",
@@ -172,6 +207,7 @@
         "docs/complete-rich-text.md",
         "docs/complete-record-comments.md",
         "docs/complete-collaborators.md",
+        "docs/controlled-select.md",
         "docs/form-completion.md",
         "examples/react-form-completion/README.md",
         "examples/react-form-completion/main.ts",
@@ -181,6 +217,7 @@
         "examples/react-form-completion/build.mjs",
         "examples/react-form-completion/tsconfig.json",
         "docs/form-header.md",
+        "docs/form-groups.md",
         "docs/field-presentation.md",
         "examples/react-form-header/README.md",
         "examples/react-form-header/main.ts",
@@ -188,7 +225,9 @@
         "examples/react-form-header/styles.css",
         "examples/react-form-header/build.mjs",
         "examples/react-form-header/dev.mjs",
-        "examples/react-form-header/tsconfig.json"
+        "examples/react-form-header/tsconfig.json",
+        "docs/signature.md",
+        "docs/customer-chat.md"
     ],
     "engines": {
         "node": ">=22"
@@ -255,6 +294,7 @@
         "refractor": "3.6.0",
         "resize-observer-polyfill": "1.5.1",
         "shallowequal": "1.1.0",
+        "signature_pad": "4.1.7",
         "slugify": "1.6.6",
         "smooth-scroll-into-view-if-needed": "1.1.33",
         "ua-parser-js": "1.0.39",

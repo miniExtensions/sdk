@@ -10,6 +10,7 @@ import {
 } from 'react';
 import {
     LastModifiedTimeField,
+    BindingLastModifiedTimeField,
     FieldRenderer,
     DateTimeField,
     type LastModifiedTimeFieldOptions,
@@ -1474,3 +1475,19 @@ for (const layout of ['grid', 'list'] as const)
         assert.equal(api.calls.length, 3);
         assert.equal(api.mutations, 0);
     });
+
+it('keeps the explicit binding compatibility export identical through validity and retirement', async (t) => {
+    const f = await fixture(t, {}, '2024-11-03T01:30:00.120-07:00');
+    for (const Component of [
+        LastModifiedTimeField,
+        BindingLastModifiedTimeField,
+    ]) {
+        await f.render(h(Component, { binding: f.binding }));
+        assert.equal(f.input().value, '2024-11-03T01:30:00.120-07:00');
+        assert.equal(f.input().disabled, true);
+        assert.equal(f.writes(), 0);
+    }
+    f.owner.destroy();
+    await f.render(h(BindingLastModifiedTimeField, { binding: f.binding }));
+    assert.equal(f.container.textContent, '');
+});

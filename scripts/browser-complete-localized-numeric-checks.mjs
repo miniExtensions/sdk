@@ -52,7 +52,7 @@ export async function checkCompleteLocalizedNumericBrowser({
         const source = `
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {CompleteLocalizedNumericField} from '@miniextensions/sdk/react';
+import {NumberField,CurrencyField,CompleteLocalizedNumericField} from '@miniextensions/sdk/react';
 const mode=new URLSearchParams(location.search).get('mode')||'number';
 let writes=[],inputs=[],submits=0;
 const defaults={number:1234.5,percent:0.425,currency:-1234.5,deferred:0.25,mobile:12.5};
@@ -62,9 +62,11 @@ function App(){
  const scope=state.owner;
  const metadata={type:kind,options:{precision:2,...(kind==='currency'?{symbol:'<img src=x> literal '}: {})}};
  const field={physicalKind:kind,presentation:{type:'physical',config:metadata},fieldId:'numeric',title:'Synthetic amount',field:{id:'numeric',name:'Synthetic amount',description:null,isComputed:false,isPrimaryField:false,config:metadata},displayConfig:{numberSeparator:'period-comma',showThousandsSeparator:true,allowNegativeNumbers:true,showAsProgressBar:kind==='percent',readOnly:state.readonly},value:state.value,context:'form',computed:false,dirty:false,pending:false,error:null,validation:[],capability:{type:'editable',setValue(value){if(scope!==state.owner||state.readonly)return{accepted:false,reason:'retired'};writes.push(value);setState(old=>({...old,value}));return{accepted:true};}}};
+ const Component=kind==='currency'?CurrencyField:kind==='number'?NumberField:CompleteLocalizedNumericField;
+ const props=kind==='currency'?field:{...(kind==='number'?{mode:'controlled'}:{}),field};
  return h(React.Fragment,null,
   h('form',{id:'native-form',onSubmit:event=>{event.preventDefault();submits++;}},
-   state.mounted?h(CompleteLocalizedNumericField,{field,options:{owner:{token:scope,isCurrent:()=>!state.readonly},commit:mode==='deferred'?'deferred':'immediate',presentation:state.display?'display':'editor',input:{id:'native-number',form:'native-form',onInput:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.currentTarget.value})},clearLabel:'Clear synthetic amount'}}):null),
+   state.mounted?h(Component,{...props,options:{owner:{token:scope,isCurrent:()=>!state.readonly},commit:mode==='deferred'?'deferred':'immediate',presentation:state.display?'display':'editor',input:{id:'native-number',form:'native-form',onInput:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.currentTarget.value})},clearLabel:'Clear synthetic amount'}}):null),
   h('output',{'aria-label':'Canonical value'},JSON.stringify(state.value)),
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>setState(old=>({...old,value:0.1}))},'Echo canonical value'),
   h('button',{type:'button',onClick:()=>setState(old=>({...old,value:12.345,display:true}))},'Show large readonly value'),

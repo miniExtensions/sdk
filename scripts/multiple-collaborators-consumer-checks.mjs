@@ -81,7 +81,7 @@ export function multipleCollaboratorsLoadedFixture() {
 /** Public declarations without JSX, for strict NodeNext .mts/.cts checks. */
 export const multipleCollaboratorsNodeTypedConsumer = `
 import {createElement,type ReactNode} from 'react';
-import {MultipleCollaboratorsField,renderMultipleCollaboratorsField,type MultipleCollaboratorsFieldProps,type MultipleCollaboratorsFieldOptions} from '@miniextensions/sdk/react';
+import {MultipleCollaboratorsField,BindingMultipleCollaboratorsField,renderMultipleCollaboratorsField,type BindingMultipleCollaboratorsFieldProps,type ControlledMultipleCollaboratorsFieldProps,type MultipleCollaboratorsFieldProps,type MultipleCollaboratorsFieldOptions} from '@miniextensions/sdk/react';
 import type {FieldRendererProps,FieldRendererSlots} from '@miniextensions/sdk/ui';
 const options:MultipleCollaboratorsFieldOptions={className:'collaborators'};
 // @ts-expect-error Display options grant no setter.
@@ -107,6 +107,9 @@ import {MultipleCollaboratorsControl} from '@miniextensions/sdk/react';
 // @ts-expect-error Internal files are not package export paths.
 import {MultipleCollaboratorsField as privateField} from '@miniextensions/sdk/react/MultipleCollaboratorsField';
 export const renderers:FieldRendererSlots<ReactNode>={renderMultipleCollaboratorsField:props=>renderMultipleCollaboratorsField(props,options)};
+export function ExplicitBound(props:BindingMultipleCollaboratorsFieldProps):ReactNode {
+ return createElement(BindingMultipleCollaboratorsField,props);
+}
 export function Bound(props:MultipleCollaboratorsFieldProps):ReactNode {
  return createElement(MultipleCollaboratorsField,{...props,...options});
 }
@@ -157,6 +160,10 @@ import {AirtableForm,AirtableGrid,AirtableList} from '@miniextensions/sdk/react'
 import type {FormRenderScope,PortalRenderScope} from '@miniextensions/sdk/ui';
 export function JSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} className="native-names"/>;}
 export function CustomJSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} render={({snapshot})=><span>{String(snapshot.retired)}</span>}/>;}
+export function ExplicitBindingJSX(props:BindingMultipleCollaboratorsFieldProps) {return <BindingMultipleCollaboratorsField {...props} render={({snapshot})=><span>{String(snapshot.retired)}</span>}/>;}
+export function ControlledJSX() {return <MultipleCollaboratorsField mode="controlled" choices={[{id:'a',name:'Alpha',email:'a@example.invalid',metadata:123}]} value={[]} owner={{token:{},isCurrent:()=>true}} onValueChange={value=>{const metadata:number|undefined=value[0]?.metadata; void metadata;}}/>;}
+// @ts-expect-error binding/custom rendering cannot enter controlled mode
+export function MixedJSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} mode="controlled" choices={[]} value={[]} owner={{token:{},isCurrent:()=>true}} onValueChange={()=>{}}/>;}
 // @ts-expect-error JSX accepts no picker callback.
 export function InvalidJSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} onSelect={()=>{}}/>;}
 export function Compositions({form,portal}:{form:FormRenderScope;portal:PortalRenderScope}) {return <>

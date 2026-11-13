@@ -1,3 +1,9 @@
+import {
+    checkOrdinaryValidationConsumer,
+    ordinaryValidationTypedConsumer,
+} from './ordinary-validation-consumer-checks.mjs';
+import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
+import { checkCustomerChatMatrix } from './customer-chat-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -6,6 +12,7 @@ import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
+import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
 import { checkFieldPresentationReactMatrix } from './field-presentation-consumer-checks.mjs';
 import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
@@ -201,6 +208,7 @@ import {
 } from './lookup-consumer-checks.mjs';
 import {
     checkRollupConsumer,
+    checkRollupReactMatrix,
     rollupReactTypedConsumer,
 } from './rollup-consumer-checks.mjs';
 import {
@@ -261,7 +269,7 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
-    checkCountConsumer,
+    checkCountReactMatrix,
     countReactTypedConsumer,
 } from './count-consumer-checks.mjs';
 import {
@@ -578,16 +586,21 @@ try {
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
                 path === 'docs/field-bindings.md' ||
+                path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
+                path === 'docs/signature.md' ||
+                path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
+                path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
                 path === 'docs/field-presentation.md' ||
+                path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
@@ -619,7 +632,10 @@ try {
         ...documentFiles,
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'docs/count.md',
         'docs/complete-record-comments.md',
+        'docs/signature.md',
+        'docs/customer-chat.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/date/index.js',
@@ -632,6 +648,9 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/single-select.css',
         'dist/cjs/react/single-select.css',
+        'dist/esm/react/controlled-select.css',
+        'dist/cjs/react/controlled-select.css',
+        'docs/controlled-select.md',
         'dist/esm/react/rich-text.css',
         'dist/cjs/react/rich-text.css',
         'dist/esm/react/text.css',
@@ -657,6 +676,9 @@ try {
         'docs/form-completion.md',
         'docs/form-header.md',
         'docs/field-presentation.md',
+        'docs/form-groups.md',
+        'dist/esm/react/form-group.css',
+        'dist/cjs/react/form-group.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -671,6 +693,14 @@ try {
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
         'dist/cjs/react/complete-clearable-text-input.css',
+        'dist/esm/react/AddressField.js',
+        'dist/esm/react/AddressField.d.ts',
+        'dist/cjs/react/AddressField.js',
+        'dist/cjs/react/AddressField.d.ts',
+        'dist/esm/react/address-field.css',
+        'dist/cjs/react/address-field.css',
+        'dist/esm/react/signature.css',
+        'dist/cjs/react/signature.css',
         'dist/esm/react/complete-address.css',
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
@@ -1624,6 +1654,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
+                ordinaryValidationTypedConsumer +
                 borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
@@ -2783,6 +2814,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const customerChatProof = checkCustomerChatMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(customerChatProof.versions.length, 2);
+    assert.equal(customerChatProof.cleanup, 'completed');
     const buttonProof = await checkButtonConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -2926,7 +2964,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(rollupProof.checks, 26);
+    assert.equal(rollupProof.checks, 40);
+    const rollupMatrix = checkRollupReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(rollupMatrix.versions.length, 2);
     console.log(
         `Installed Rollup presentation: ${rollupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
@@ -3017,13 +3061,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed read-only attachment presentation: ${readonlyAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
-    const countProof = await checkCountConsumer({
-        consumerDirectory: temporaryDirectory,
+    const countProof = checkCountReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(countProof.checks, 20);
+    assert.equal(countProof.versions.length, 2);
+    assert.equal(countProof.cleanup, 'completed');
     console.log(
-        `Installed Count renderer, readonly native display, shared Number CSS and local example: ${countProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        'Installed Count React18/19: packed ESM/CJS, strict NodeNext/Bundler declarations, public CSS and 20 regression groups per version passed.'
     );
     const autoNumberProof = await checkAutoNumberConsumer({
         consumerDirectory: temporaryDirectory,
@@ -3317,6 +3363,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const formGroupMatrix = checkFormGroupReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(formGroupMatrix.versions.length, 2);
+    assert.equal(formGroupMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3368,6 +3422,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(createdTimeMatrix.versions.length, 2);
     assert.equal(createdTimeMatrix.cleanup, 'completed');
+    const modifiedTimeMatrix = await checkCreatedTimeReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        field: 'lastModifiedTime',
+    });
+    assert.equal(modifiedTimeMatrix.versions.length, 2);
+    assert.equal(modifiedTimeMatrix.cleanup, 'completed');
     const dateMatrix = await checkCompleteDateReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3403,6 +3465,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(calendlyWidgetMatrix.versions.length, 2);
     assert.equal(calendlyWidgetMatrix.cleanup, 'completed');
+    const signatureMatrix = checkSignatureReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(signatureMatrix.versions.length, 2);
+    assert.equal(signatureMatrix.cleanup, 'completed');
     const addressMatrix = checkCompleteAddressReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3493,6 +3562,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         2
+    );
+    assert.equal(
+        checkOrdinaryValidationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        854
     );
     assert.equal(
         await checkNativeFormProgressConsumer({

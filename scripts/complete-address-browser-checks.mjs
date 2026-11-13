@@ -19,10 +19,17 @@ export async function checkCompleteAddressBrowser({
     evidence,
     output,
     format = 'esm',
+    control = 'complete',
 }) {
     assert(['esm', 'cjs'].includes(format));
+    assert(['complete', 'natural'].includes(control));
+    const componentName =
+        control === 'natural' ? 'AddressField' : 'CompleteAddressAutocomplete';
+    const artifactPrefix =
+        control === 'natural' ? 'address-field' : 'complete-address';
     Object.assign(evidence, {
         format,
+        control,
         status: 'running',
         results: [],
         pageErrors: [],
@@ -56,15 +63,16 @@ export async function checkCompleteAddressBrowser({
                 ? `import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {CompleteAddressAutocomplete} from '@miniextensions/sdk/react';
+import {${componentName} as AddressControl} from '@miniextensions/sdk/react';
 `
                 : `const React=require('react'),{createElement:h,useState}=React;
 const {createRoot}=require('react-dom/client');
 const {flushSync}=require('react-dom');
-const {CompleteAddressAutocomplete}=require('@miniextensions/sdk/react');
+const {${componentName}:AddressControl}=require('@miniextensions/sdk/react');
 `;
         const source =
             imports +
+            `const natural=${control === 'natural'};\n` +
             String.raw`
 const mode=new URLSearchParams(location.search).get('mode')||'normal';
 const en={clear:'Clear',loadingPredictions:'Loading address suggestions',loadingDetails:'Loading selected address',failed:'Address suggestions could not be loaded. Keep typing or retry.',retry:'Try again'};
@@ -72,10 +80,10 @@ const es={clear:'Borrar',loadingPredictions:'Cargando sugerencias de direcciones
 const ja={clear:'クリア',loadingPredictions:'住所の候補を読み込み中',loadingDetails:'選択した住所を読み込み中',failed:'住所の候補を読み込めませんでした。',retry:'もう一度試す'};
 const labels=mode==='es'?es:mode==='ja'?ja:en;
 const stats={queries:[],details:[],writes:[],submits:0,signals:[],trusted:[]};let patch,heldPrediction,heldDetail,lastRef,refStable=true;
-function App(){const [state,setState]=useState({value:'',readScope:'A',mounted:true});patch=next=>flushSync(()=>setState(old=>({...old,...next})));
+function App(){const [state,setState]=useState({value:'',readScope:'A',mounted:true,fieldMode:mode==='manual'?'manual':'autocomplete'});patch=next=>flushSync(()=>setState(old=>({...old,...next})));
 return h('form',{id:'proof-form',onSubmit:e=>{e.preventDefault();stats.submits++;},onInputCapture:e=>stats.trusted.push(e.nativeEvent.isTrusted)},
 h('label',{htmlFor:'proof-address'},'Synthetic Address'),h('p',{id:'proof-help'},'Synthetic address help'),
-state.mounted?h(CompleteAddressAutocomplete,{identity:{session:'s',field:'f',readScope:state.readScope},value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},reads:{async listPredictions(query,{signal}){stats.queries.push(query);stats.signals.push(signal);if(mode==='predictions'&&stats.queries.length===1)throw Error('Private provider failure');if(mode==='loading')await new Promise(resolve=>heldPrediction=resolve);return [{placeId:'p',description:'Selected address'},{placeId:'p2',description:'Second address'}];},async getFormattedAddress(placeId,{signal}){stats.details.push({placeId,prior:[...stats.writes]});stats.signals.push(signal);if(mode==='retry'||mode==='es'||mode==='ja'){if(stats.details.length===1)throw Error('Private detail failure');return 'Canonical address';}return new Promise(resolve=>heldDetail=resolve);}},labels,initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}},theme:{activeBackground:'#dbeafe',activeText:'#1e3a8a'}}):null,
+state.mounted?(natural&&state.fieldMode==='readonly'?h(AddressControl,{mode:'readonly',value:state.value,language:'ja'}):natural&&state.fieldMode==='manual'?h(AddressControl,{mode:'manual',value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},labels:{clear:labels.clear},explanation:'Suggestions are disabled in this preview',initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}}}):h(AddressControl,{identity:{session:'s',field:'f',readScope:state.readScope},value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},reads:{async listPredictions(query,{signal}){stats.queries.push(query);stats.signals.push(signal);if(mode==='predictions'&&stats.queries.length===1)throw Error('Private provider failure');if(mode==='loading')await new Promise(resolve=>heldPrediction=resolve);return [{placeId:'p',description:'Selected address'},{placeId:'p2',description:'Second address'}];},async getFormattedAddress(placeId,{signal}){stats.details.push({placeId,prior:[...stats.writes]});stats.signals.push(signal);if(mode==='retry'||mode==='es'||mode==='ja'){if(stats.details.length===1)throw Error('Private detail failure');return 'Canonical address';}return new Promise(resolve=>heldDetail=resolve);}},labels,initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}},theme:{activeBackground:'#dbeafe',activeText:'#1e3a8a'}})):null,
 h('input',{'aria-label':'Adjacent draft',defaultValue:'Unchanged adjacent draft'}));}
 const root=createRoot(document.querySelector('main'));root.render(h(React.StrictMode,null,h(App)));
 window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.queries],details:[...stats.details],writes:[...stats.writes],submits:stats.submits,aborted:stats.signals.map(s=>s.aborted),trusted:[...stats.trusted],refStable}),patch,update:next=>patch(next),resolveDetail:value=>heldDetail(value),resolvePredictions:()=>heldPrediction(),destroy:()=>root.unmount()};
@@ -103,18 +111,32 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         );
         assert(
             inputs.some((path) =>
-                path.endsWith(
-                    `/dist/${format}/react/CompleteAddressAutocomplete.js`
-                )
+                path.endsWith(`/dist/${format}/react/${componentName}.js`)
             )
         );
         for (const input of inputs)
             assert(
                 realpathSync(resolve(root, input)).startsWith(installed + '/')
             );
-        const css = readFileSync(
-            join(installed, 'dist/esm/react/complete-address.css')
-        );
+        let css;
+        if (control === 'natural') {
+            const style = await build({
+                absWorkingDir: root,
+                entryPoints: [
+                    join(installed, 'dist/esm/react/address-field.css'),
+                ],
+                bundle: true,
+                write: false,
+                metafile: true,
+            });
+            await assertBrowserInputs(style.metafile, root);
+            css = style.outputFiles[0].contents;
+            evidence.cssInputs = Object.keys(style.metafile.inputs);
+        } else {
+            css = readFileSync(
+                join(installed, 'dist/esm/react/complete-address.css')
+            );
+        }
         Object.assign(evidence, {
             sdkInputs: inputs,
             hostSha256: hash(source),
@@ -153,6 +175,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
                 })
         );
         const origin = `http://127.0.0.1:${server.address().port}`;
+        evidence.origin = origin;
         const snapshot = () =>
             page.evaluate(() => window.addressProof.snapshot());
         const selectFirstPrediction = async (input) => {
@@ -208,8 +231,12 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
                 return route.abort();
             });
             await page.goto(origin + '?mode=' + mode);
-            await page.getByRole('combobox').waitFor();
-            return page.getByRole('combobox');
+            const input =
+                control === 'natural' && mode === 'manual'
+                    ? page.getByRole('textbox', { name: 'Synthetic Address' })
+                    : page.getByRole('combobox');
+            await input.waitFor();
+            return input;
         };
         const finish = async (name) => {
             const state = await snapshot();
@@ -294,7 +321,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         assert.equal(await input.inputValue(), 'Manual correction');
         assert((await snapshot()).aborted.some(Boolean));
         await page.screenshot({
-            path: join(output, `complete-address-${format}-mobile.png`),
+            path: join(output, `${artifactPrefix}-${format}-mobile.png`),
         });
         await finish('narrow mobile manual edit retires pending detail');
         input = await open('normal');
@@ -365,6 +392,66 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         await page.evaluate(() => window.addressProof.resolvePredictions());
         await page.getByRole('option').first().waitFor();
         await finish('localized prediction loading with synthetic read');
+        if (control === 'natural') {
+            input = await open('manual', true);
+            await input.fill('Manual address');
+            assert.equal(await input.inputValue(), 'Manual address');
+            assert.equal(await page.getByRole('combobox').count(), 0);
+            assert.equal(
+                await page
+                    .locator('.mx-sdk-address-field-counter')
+                    .textContent(),
+                '14/60'
+            );
+            assert.equal(
+                await page
+                    .locator('.mx-sdk-address-field-counter')
+                    .evaluate((node) => getComputedStyle(node).fontSize),
+                '12px'
+            );
+            assert(
+                (await input.getAttribute('aria-describedby')).includes(
+                    'proof-address-address-preview'
+                )
+            );
+            await page.getByRole('button', { name: 'Clear' }).click();
+            assert.equal(await input.inputValue(), '');
+            assert.equal(
+                await input.evaluate((node) => node === document.activeElement),
+                true
+            );
+            assert.deepEqual((await snapshot()).queries, []);
+            await finish(
+                'natural manual preview, counter, associations and non-submit Clear'
+            );
+
+            input = await open('normal');
+            await input.fill('Retired query');
+            await selectFirstPrediction(input);
+            await page.getByRole('status').waitFor();
+            const writes = (await snapshot()).writes;
+            await page.evaluate(() =>
+                window.addressProof.update({
+                    fieldMode: 'readonly',
+                    value: 'Accepted readonly address',
+                })
+            );
+            await page
+                .getByText('Accepted readonly address', { exact: true })
+                .waitFor();
+            assert.equal(await page.locator('#proof-address').count(), 0);
+            await page.evaluate(() =>
+                window.addressProof.resolveDetail('Late readonly detail')
+            );
+            assert((await snapshot()).aborted.some(Boolean));
+            assert.deepEqual((await snapshot()).writes, writes);
+            await page
+                .getByText('Accepted readonly address', { exact: true })
+                .waitFor();
+            await finish(
+                'natural readonly transition retires detail without a write'
+            );
+        }
         evidence.status = 'passed';
     } catch (error) {
         failure = error;
@@ -388,7 +475,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
                 await page.screenshot({
                     path: join(
                         output,
-                        `complete-address-${format}-failure.png`
+                        `${artifactPrefix}-${format}-failure.png`
                     ),
                 });
             } catch {}

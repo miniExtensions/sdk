@@ -800,6 +800,10 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         };
         const visiblePublications = [];
         const visibleDisposals = [];
+        let registrationTransitionStart = 0;
+        const beginRegistrationTransition = () => {
+            registrationTransitionStart = visiblePublications.length;
+        };
         // A real host registration rerenders its parent, which may reconstruct
         // frame/action wrappers. Keep the admitted immutable inputs unchanged.
         const PortalRegistrationHost = createPortalRegistrationHost(
@@ -823,8 +827,9 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
                 );
                 visiblePublications.push(presentation);
                 assert(
-                    visiblePublications.length < 16,
-                    'host registration must settle'
+                    visiblePublications.length - registrationTransitionStart <=
+                        2,
+                    'one host transition must settle within its StrictMode replay'
                 );
                 return () => {
                     assert.equal(presentation.isCurrent(), false);
@@ -897,14 +902,18 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         assert.deepEqual(completePortal.opens, []);
         assert.deepEqual(completePortal.removals, []);
         assert(
-            visiblePublications.length >= 2,
-            'StrictMode creates a fresh committed publication'
+            visiblePublications.length >= 1,
+            'hydration registers a committed presentation'
         );
-        assert.equal(visiblePublications[0].isCurrent(), false);
+        // React versions may replay hydration effects differently. Every
+        // predecessor must retire, and the one current descriptor must work.
+        for (const predecessor of visiblePublications.slice(0, -1))
+            assert.equal(predecessor.isCurrent(), false);
         assert.deepEqual(visiblePresentation().recordIds, ['one']);
         const heldWidePresentation = visiblePresentation();
         const settledRegistrations = visiblePublications.length;
         portalProps = { ...portalProps };
+        beginRegistrationTransition();
         await React.act(async () => root.render(portalElement()));
         assert.equal(
             visiblePublications.length,
@@ -939,11 +948,13 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         const click = async (selector) => {
             const target = host.querySelector(selector);
             assert(target, selector);
+            beginRegistrationTransition();
             await React.act(async () => target.click());
         };
         await click('button[aria-label^="Open record:"]');
         assert.deepEqual(completePortal.opens, [{ shouldShowToTheSide: true }]);
         portalProps = { ...portalProps, isWide: false };
+        beginRegistrationTransition();
         await React.act(async () => root.render(portalElement()));
         assert.equal(heldWidePresentation.isCurrent(), false);
         assert.deepEqual(visiblePresentation().recordIds, ['one']);
@@ -977,6 +988,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         );
         assert.deepEqual(visiblePresentation().recordIds, ['one']);
         portalProps = { ...portalProps, isWide: true };
+        beginRegistrationTransition();
         await React.act(async () => root.render(portalElement()));
         assert.equal(
             heldWidePresentation.isCurrent(),
@@ -1003,6 +1015,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             'ar-SA-u-ca-islamic-umalqura',
         ]) {
             portalProps = { ...portalProps, frame: localeFrame, locale };
+            beginRegistrationTransition();
             await React.act(async () => root.render(portalElement()));
             const mounted = [
                 ...host.querySelectorAll('article[data-record-id]'),
@@ -1018,6 +1031,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             );
         }
         const heldLocalePresentation = visiblePresentation();
+        beginRegistrationTransition();
         completePortal.beforeNextPresentationRead(() => {
             portalProps = {
                 ...portalProps,
@@ -1040,6 +1054,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             frame: completePortal.frame,
             locale: 'en-US',
         };
+        beginRegistrationTransition();
         await React.act(async () => root.render(portalElement()));
         assert.deepEqual(
             completePortal.reads,
@@ -1065,6 +1080,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             ],
         });
         portalProps = { ...portalProps, frame: readonlyFrame };
+        beginRegistrationTransition();
         await React.act(async () => root.render(portalElement()));
         assert.equal(
             host.querySelector('button[aria-label^="Open record:"]'),

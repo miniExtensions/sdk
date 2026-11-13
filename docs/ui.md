@@ -1194,15 +1194,30 @@ empty value. The host supplies current data and a guarded callback; it retains
 request allocation, settlement, alerts and retry policy:
 
 ```tsx
-<ButtonField
-    mode="controlled"
-    id="configured-action"
-    value={{ label: '', url: 'HTTPS://example.com/action' }}
-    config={{ openLinkType: 'triggerWebhookPOST', buttonColor: 'red' }}
-    busy={hostPending}
-    disabled={!currentSourceReady}
-    onTriggerWebhook={triggerCurrentHostAction}
-/>
+import { ButtonField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/button.css';
+
+export function HostedButton({
+    hostPending,
+    currentSourceReady,
+    triggerCurrentHostAction,
+}: {
+    hostPending: boolean;
+    currentSourceReady: boolean;
+    triggerCurrentHostAction: () => unknown;
+}) {
+    return (
+        <ButtonField
+            mode="controlled"
+            id="configured-action"
+            value={{ label: '', url: 'HTTPS://example.com/action' }}
+            config={{ openLinkType: 'triggerWebhookPOST', buttonColor: 'red' }}
+            busy={hostPending}
+            disabled={!currentSourceReady}
+            onTriggerWebhook={triggerCurrentHostAction}
+        />
+    );
+}
 ```
 
 Controlled mode preserves blank labels and URL protocol casing. A missing URL

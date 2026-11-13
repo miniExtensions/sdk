@@ -4058,6 +4058,7 @@ action. `AiTextFieldProps` retains its historical binding shape, also named
 import { AiTextField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-readonly-text.css';
 
+const convertedText = 'Host-converted AI text';
 <AiTextField
     mode="controlled"
     value={convertedText}

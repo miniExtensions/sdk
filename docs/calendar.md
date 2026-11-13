@@ -32,6 +32,37 @@ capabilities. Wide Open forwards the configured side policy; narrow Open forces
 modal presentation. Child readonly/custom-view admission stays inside the
 captured native opener, and absence of one action never grants another.
 
+Portal's optional `registerVisibleRecords` callback receives a
+`PortalCalendarVisibleRecords` descriptor after the SDK presentation commits.
+Its frozen `recordIds` contains unique IDs of cards actually rendered: the
+selected day's cards in narrow mode, or the displayed month's cards in wide
+mode. Invalid-date and off-month wide records are absent, even when they remain
+in the accepted native result. This membership is separate from canonical
+record selection. Registration never runs during render or server rendering.
+
+Keep the registration callback stable, for example with `useCallback`, and keep
+accepted immutable records and schema stable across registration-driven parent
+renders. Recreated frame, presentation-owner wrapper and action-array wrappers
+do not republish membership. Real control/owner, presentation token, record,
+schema, date-policy, status, day, width or displayed-month changes retire the
+held descriptor. Retirement happens before its disposer and replacement
+registration, including StrictMode cleanup and unmount. A failed `isCurrent()`
+observation is permanent; data or presentation A → B → A cannot revive an old
+descriptor. Currentness refreshes only against the latest committed equivalent
+frame, and a synchronous successor publication cannot be borrowed by its
+predecessor.
+
+A native adapter can register the descriptor and mount its own existing child
+owners only for its current IDs. This restores the native narrow selected-day
+mount boundary: an off-day URL target must not mount and claim auto-open merely
+because its record belongs to the accepted month. The descriptor grants only
+SDK presentation membership. Native accepted-record ownership, route/open
+claims, readonly/custom-view admission, child/write/save lifetimes and disposal
+remain native checks; combine those with `isCurrent()` before a presentation
+action. Replacing this descriptor does not cancel an already-authorized native
+save or confer a native read/write capability. No native renderer, JSX slot,
+copied day state or second Calendar controller is introduced.
+
 Both surfaces retain their controller across ordinary display publications and
 retire captured actions on owner/config/view replacement, ABA and unmount.
 Portal record actions additionally retire on day/width presentation transitions.

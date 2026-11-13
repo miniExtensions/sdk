@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { JSDOM } from 'jsdom';
-import { act, createElement as h, StrictMode } from 'react';
+import {
+    act,
+    createElement as h,
+    StrictMode,
+    useCallback,
+    useState,
+} from 'react';
 import { renderToString } from 'react-dom/server';
 import type { Root } from 'react-dom/client';
 import type { RuntimeAirtableField } from '../src/runtime/types.js';
@@ -12,6 +18,7 @@ import {
     type PortalCalendarAcceptedFrame,
     type PortalCalendarProps,
     type PortalCalendarRecord,
+    type PortalCalendarVisibleRecords,
 } from '../src/react/PortalCalendar.js';
 
 // Synthetic host ports prove public component lifetimes only. They establish no
@@ -125,12 +132,17 @@ function host() {
 it('Portal SSR uses literal compact records, local retained-month day and zero read/action ports', () => {
     assert.equal(typeof document, 'undefined');
     const native = host();
+    let registrations = 0;
     const html = renderToString(
         h(PortalCalendar, {
             frame: native.frame(),
             isWide: false,
             clock,
             locale: 'en-US',
+            registerVisibleRecords() {
+                registrations += 1;
+                return () => assert.fail('SSR has no visibility disposal');
+            },
         })
     );
     assert.match(html, /&lt;b&gt;Literal first&lt;\/b&gt;/);
@@ -140,6 +152,7 @@ it('Portal SSR uses literal compact records, local retained-month day and zero r
     assert.equal((html.match(/data-record-id="first"/g) ?? []).length, 1);
     assert.doesNotMatch(html, /data-record-id="second"/);
     assert.deepEqual(native.state.events, []);
+    assert.equal(registrations, 0);
     const repeated = renderToString(
         h(PortalCalendar, {
             frame: native.frame({ records: [records[0], records[0]] }),
@@ -155,7 +168,8 @@ it('Portal SSR uses literal compact records, local retained-month day and zero r
 async function fixture(
     t: TestContext,
     propsPatch: Partial<PortalCalendarProps> = {},
-    hydrate = false
+    hydrate = false,
+    Component: typeof PortalCalendar = PortalCalendar
 ) {
     // Happy DOM 20 only decodes quote/amp entities in parsed attributes. The
     // hydration case must retain the real literal primary in title/ARIA names,
@@ -236,7 +250,7 @@ async function fixture(
         locale: 'en-US',
         ...propsPatch,
     };
-    const view = () => h(StrictMode, null, h(PortalCalendar, props));
+    const view = () => h(StrictMode, null, h(Component, props));
     const container = window.document.createElement('div');
     window.document.body.append(container);
     const errors: unknown[] = [];
@@ -562,4 +576,214 @@ it('pending or removed paging capability never dispatches a retained More contro
         null
     );
     assert.deepEqual(f.native.state.events, []);
+});
+
+it('committed visible membership survives registration-driven wrapper renders and retires across narrow day and width ABA', async (t) => {
+    const native = host();
+    const admittedRecords = [
+        ...records,
+        records[0],
+        {
+            ...records[0],
+            id: 'outside-month',
+            fields: { date: '2026-01-31' },
+        },
+        { ...records[0], id: 'invalid-date', fields: { date: 'not-a-date' } },
+    ];
+    const frame = native.frame({ records: admittedRecords });
+    const publications: PortalCalendarVisibleRecords[] = [];
+    const disposals: PortalCalendarVisibleRecords[] = [];
+    function Host(props: PortalCalendarProps) {
+        const [visible, setVisible] =
+            useState<PortalCalendarVisibleRecords | null>(null);
+        const registerVisibleRecords = useCallback(
+            (presentation: PortalCalendarVisibleRecords) => {
+                assert.equal(presentation.isCurrent(), true);
+                assert.equal(Object.isFrozen(presentation), true);
+                assert.equal(Object.isFrozen(presentation.recordIds), true);
+                assert.deepEqual(presentation.recordIds, [
+                    ...new Set(
+                        [...document.querySelectorAll('[data-record-id]')].map(
+                            (node) => node.getAttribute('data-record-id')
+                        )
+                    ),
+                ]);
+                publications.push(presentation);
+                assert.ok(publications.length < 12, 'registration must settle');
+                setVisible(presentation);
+                return () => {
+                    assert.equal(presentation.isCurrent(), false);
+                    disposals.push(presentation);
+                    setVisible((current) =>
+                        current === presentation ? null : current
+                    );
+                };
+            },
+            []
+        );
+        return h(
+            'div',
+            { 'data-visible-records': visible?.recordIds.join(',') ?? '' },
+            h(PortalCalendar, {
+                ...props,
+                frame: {
+                    ...props.frame,
+                    presentationOwner: { ...props.frame.presentationOwner },
+                    recordActions: props.frame.recordActions.map((actions) => ({
+                        ...actions,
+                    })),
+                },
+                registerVisibleRecords,
+            })
+        );
+    }
+    const f = await fixture(t, { frame }, false, Host);
+    const latest = () => publications[publications.length - 1]!;
+    assert.ok(
+        publications.length >= 2,
+        'StrictMode creates fresh publications'
+    );
+    assert.equal(publications[0]!.isCurrent(), false);
+    assert.deepEqual(latest().recordIds, ['first']);
+    const first = latest();
+    const settled = publications.length;
+    await f.update({
+        frame: { ...frame, recordActions: [...frame.recordActions] },
+    });
+    assert.equal(publications.length, settled);
+    assert.equal(first.isCurrent(), true);
+    const day = (value: string) => {
+        const node = f.container.querySelector(
+            `[data-date="${value}"] .mx-sdk-calendar__day`
+        );
+        assert.ok(node);
+        return node;
+    };
+    await f.click(day('2026-02-13'));
+    assert.equal(first.isCurrent(), false);
+    assert.deepEqual(latest().recordIds, ['second']);
+    const second = latest();
+    await f.click(day('2026-02-12'));
+    assert.equal(second.isCurrent(), false);
+    assert.equal(first.isCurrent(), false);
+    assert.deepEqual(latest().recordIds, ['first']);
+    const narrow = latest();
+    await f.update({ isWide: true });
+    assert.equal(narrow.isCurrent(), false);
+    assert.deepEqual(latest().recordIds, ['first', 'second']);
+    assert.equal(
+        f.container.querySelector('[data-record-id="outside-month"]'),
+        null
+    );
+    assert.equal(
+        f.container.querySelector('[data-record-id="invalid-date"]'),
+        null
+    );
+    const wide = latest();
+    await f.update({ isWide: false });
+    assert.equal(wide.isCurrent(), false);
+    assert.equal(narrow.isCurrent(), false);
+    assert.deepEqual(latest().recordIds, ['first']);
+    assert.deepEqual(native.state.events, []);
+    await f.unmount();
+    assert.equal(
+        publications.every((value) => !value.isCurrent()),
+        true
+    );
+    assert.deepEqual(disposals, publications);
+});
+
+it('visible descriptors permanently retire for committed data, schema, status, control and presentation replacement', async (t) => {
+    const native = host();
+    const frame = native.frame();
+    const publications: PortalCalendarVisibleRecords[] = [];
+    const disposed: PortalCalendarVisibleRecords[] = [];
+    const registerVisibleRecords = (value: PortalCalendarVisibleRecords) => {
+        publications.push(value);
+        return () => {
+            assert.equal(value.isCurrent(), false);
+            disposed.push(value);
+        };
+    };
+    const f = await fixture(t, { frame, registerVisibleRecords });
+    const latest = () => publications[publications.length - 1]!;
+    const replace = async (next: PortalCalendarAcceptedFrame) => {
+        const held = latest();
+        await f.update({ frame: next });
+        assert.equal(held.isCurrent(), false);
+        assert.ok(disposed.includes(held));
+        assert.notEqual(latest(), held);
+        assert.equal(latest().isCurrent(), true);
+        return held;
+    };
+    const initial = latest();
+    await replace({ ...frame, status: 'loading' });
+    assert.deepEqual(
+        latest().recordIds,
+        ['first'],
+        'retained cards remain visible'
+    );
+    await replace(frame);
+    assert.equal(
+        initial.isCurrent(),
+        false,
+        'status ABA cannot revive a lease'
+    );
+    await replace({ ...frame, dateField: null });
+    assert.deepEqual(latest().recordIds, []);
+    await replace(frame);
+    await replace({ ...frame, dateField: { ...field } });
+    await replace(frame);
+    const changedRecords = records.map((record) => ({
+        ...record,
+        display: { status: 'present', primary: 'Replacement' } as const,
+    }));
+    await replace({ ...frame, records: changedRecords });
+    assert.match(f.container.textContent ?? '', /Replacement/);
+    await replace(frame);
+    const beforeControl = latest();
+    await replace({ ...frame, control: { ...frame.control } });
+    await replace(frame);
+    assert.equal(beforeControl.isCurrent(), false, 'control ABA cannot revive');
+    const newPresentation = native.frame();
+    await replace(newPresentation);
+    const observed = latest();
+    native.state.current = false;
+    assert.equal(observed.isCurrent(), false);
+    native.state.current = true;
+    assert.equal(observed.isCurrent(), false, 'a failed guard is permanent');
+    await f.update({ frame: { ...newPresentation } });
+    assert.notEqual(latest(), observed);
+    assert.equal(latest().isCurrent(), true);
+    const removed = latest();
+    await f.update({ registerVisibleRecords: undefined });
+    assert.equal(removed.isCurrent(), false);
+    assert.ok(disposed.includes(removed));
+    assert.deepEqual(native.state.events, []);
+});
+
+it('a visibility currentness read rejects a synchronous replacement and never borrows its successor membership', async (t) => {
+    const native = host();
+    const publications: PortalCalendarVisibleRecords[] = [];
+    const f = await fixture(t, {
+        frame: native.frame(),
+        registerVisibleRecords(value) {
+            publications.push(value);
+            return () => assert.equal(value.isCurrent(), false);
+        },
+    });
+    const held = publications[publications.length - 1]!;
+    native.state.beforePresentationRead = () => {
+        native.state.beforePresentationRead = undefined;
+        f.updateSync({
+            frame: native.frame({ records: [], recordActions: [] }),
+        });
+    };
+    await act(async () => assert.equal(held.isCurrent(), false));
+    const successor = publications[publications.length - 1]!;
+    assert.notEqual(successor, held);
+    assert.deepEqual(successor.recordIds, []);
+    assert.equal(successor.isCurrent(), true);
+    assert.equal(held.isCurrent(), false);
+    assert.deepEqual(native.state.events, []);
 });

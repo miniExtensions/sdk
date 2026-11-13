@@ -20,4 +20,5 @@ export {
     type PortalCalendarRecord,
     type PortalCalendarRecordDisplay,
     type PortalCalendarRecordActions,
+    type PortalCalendarVisibleRecords,
 } from '../PortalCalendar.js';

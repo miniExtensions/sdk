@@ -95,6 +95,14 @@ export type PortalCalendarLabels = {
     loadMore: string;
 };
 
+/** Committed SDK card membership only; never a native child or action grant. */
+export type PortalCalendarVisibleRecords = Readonly<{
+    /** Unique IDs of cards actually rendered in this day/width/month presentation. */
+    recordIds: readonly string[];
+    /** Permanently false after this committed presentation is retired. */
+    isCurrent(): boolean;
+}>;
+
 export type PortalCalendarProps = {
     frame: PortalCalendarAcceptedFrame;
     /** Actual host >=1024 breakpoint snapshot, independent of query and local day. */
@@ -103,6 +111,13 @@ export type PortalCalendarProps = {
     locale?: string;
     labels?: Partial<PortalCalendarLabels>;
     className?: string;
+    /**
+     * Stable host registration, called after commit. Its disposer runs after
+     * retirement, before replacement or unmount. Native ownership stays native.
+     */
+    registerVisibleRecords?(
+        presentation: PortalCalendarVisibleRecords
+    ): () => void;
 };
 
 const defaults: PortalCalendarLabels = {
@@ -357,6 +372,133 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
             );
     }
     const selectedRecords = days.get(snapshot.selectedDay) ?? [];
+    const visibleMonth = composition.focusedDay.slice(0, 7);
+    const visibleRecords = mode
+        ? [...days]
+              .filter(([day]) => day.slice(0, 7) === visibleMonth)
+              .flatMap(([, values]) => values)
+        : selectedRecords;
+    // Frame/action wrappers may change when registration itself rerenders the
+    // host. Immutable data, schema and real owner/presentation changes must
+    // instead allocate a fresh lease, including a committed A -> B -> A.
+    const visibilityLease = useMemo(
+        () => ({}),
+        [
+            frame.control,
+            frame.control.owner,
+            presentationToken,
+            frame.records,
+            frame.dateField,
+            frame.clientTimeZone,
+            frame.fallbackClientUtcOffset,
+            frame.retainedMonth,
+            frame.status,
+            frame.errorMessage,
+            frame.isReloading,
+            frame.shouldShowToTheSide,
+            mode,
+            snapshot.selectedDay,
+            visibleMonth,
+            props.locale,
+        ]
+    );
+    type VisibilityContext = { lease: object; current(): boolean };
+    type VisibilityPublication = {
+        lease: object;
+        register: NonNullable<PortalCalendarProps['registerVisibleRecords']>;
+        active: boolean;
+        descriptor: PortalCalendarVisibleRecords;
+        dispose?: () => void;
+    };
+    const committedVisibility = useRef<VisibilityContext | null>(null);
+    const visibilityPublication = useRef<VisibilityPublication | null>(null);
+    const retireVisibility = (publication: VisibilityPublication | null) => {
+        if (!publication) return;
+        publication.active = false;
+        if (visibilityPublication.current === publication)
+            visibilityPublication.current = null;
+        const dispose = publication.dispose;
+        publication.dispose = undefined;
+        dispose?.();
+    };
+    useCommittedEffect(
+        () => () => {
+            committedVisibility.current = null;
+            retireVisibility(visibilityPublication.current);
+        },
+        []
+    );
+    useCommittedEffect(() => {
+        const context: VisibilityContext = {
+            lease: visibilityLease,
+            current: () =>
+                composition.current() &&
+                committedPresentation.current === presentationLease &&
+                displayCurrent() &&
+                composition.current() &&
+                committedPresentation.current === presentationLease,
+        };
+        committedVisibility.current = context;
+        const register = props.registerVisibleRecords;
+        const previous = visibilityPublication.current;
+        if (
+            previous?.active &&
+            previous.lease === visibilityLease &&
+            previous.register === register &&
+            previous.descriptor.isCurrent()
+        )
+            return;
+        // A currentness check or disposer can synchronously commit a successor.
+        if (committedVisibility.current !== context) return;
+        retireVisibility(previous);
+        if (
+            committedVisibility.current !== context ||
+            !register ||
+            !context.current() ||
+            committedVisibility.current !== context
+        )
+            return;
+        let publication: VisibilityPublication;
+        const descriptor: PortalCalendarVisibleRecords = Object.freeze({
+            recordIds: Object.freeze([
+                ...new Set(visibleRecords.map((record) => record.id)),
+            ]),
+            isCurrent() {
+                const latest = committedVisibility.current;
+                const committed = () =>
+                    publication.active &&
+                    visibilityPublication.current === publication &&
+                    latest !== null &&
+                    latest.lease === publication.lease &&
+                    committedVisibility.current === latest;
+                if (committed() && latest!.current() && committed())
+                    return true;
+                // A failed observation can never revive through a later guard
+                // refresh, even if the host reuses an old data/owner identity.
+                publication.active = false;
+                return false;
+            },
+        });
+        publication = {
+            lease: visibilityLease,
+            register,
+            active: true,
+            descriptor,
+        };
+        visibilityPublication.current = publication;
+        try {
+            const dispose = register(descriptor);
+            if (
+                publication.active &&
+                visibilityPublication.current === publication
+            )
+                publication.dispose = dispose;
+            else dispose();
+        } catch (error) {
+            retireVisibility(publication);
+            throw error;
+        }
+    });
     const capturedLoadMore = frame.loadMore;
     const moreCapabilityCurrent = () =>
         frame.hasMore === true &&

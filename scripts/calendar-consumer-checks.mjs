@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const calendarTypedConsumer = `
 import {createElement,type ComponentProps} from 'react';
-import {CalendarMonthGrid,CalendarRecordPicker,PortalCalendar} from '@miniextensions/sdk/react/calendar';
+import {CalendarMonthGrid,CalendarRecordPicker,PortalCalendar,type PortalCalendarVisibleRecords} from '@miniextensions/sdk/react/calendar';
 import {createCalendarRecordPickerController,createPortalCalendarController,parseCalendarFieldDate,getPortalCalendarDateKeys,type CalendarClock} from '@miniextensions/sdk/ui';
 const clock:CalendarClock={utcDay:()=> '2026-09-01',localDay:()=> '2026-08-31',localMonth:()=> '2026-08',localToday:()=> '2026-08-31',clientUtcOffset:()=> -480};
 const picker=createCalendarRecordPickerController({owner:{},isCurrent:()=>true,selectedRecordIds:['other'],visibleDay:'2026-09-01',visibleDayRecordIds:['one'],scheduleRead(request){const reset:boolean=request.resetOffset;void reset;return {type:'admitted'};},toggleRecord(id){const native:string=id;void native;return {type:'admitted'};}},clock);
@@ -38,6 +38,16 @@ declare const pickerFrame:ComponentProps<typeof CalendarRecordPicker>['frame'];
 declare const portalFrame:ComponentProps<typeof PortalCalendar>['frame'];
 createElement(CalendarRecordPicker,{frame:pickerFrame,clock,locale:'en-US'});
 createElement(PortalCalendar,{frame:portalFrame,clock,locale:'en-US',isWide:true});
+createElement(PortalCalendar,{frame:portalFrame,isWide:false,registerVisibleRecords(presentation){const ids:readonly string[]=presentation.recordIds;const current:boolean=presentation.isCurrent();return ()=>{void ids;void current;};}});
+declare const visiblePresentation:PortalCalendarVisibleRecords;
+// @ts-expect-error committed membership is a readonly array
+visiblePresentation.recordIds.push('native-child');
+// @ts-expect-error a committed descriptor cannot replace its membership
+visiblePresentation.recordIds=[];
+// @ts-expect-error registration must return its synchronous disposer
+createElement(PortalCalendar,{frame:portalFrame,isWide:false,registerVisibleRecords:()=>{}});
+// @ts-expect-error currentness is a synchronous boolean observation
+const invalidVisiblePresentation:PortalCalendarVisibleRecords={recordIds:[],isCurrent:async()=>true};
 // @ts-expect-error full surfaces do not accept a native JSX card renderer
 createElement(CalendarRecordPicker,{frame:pickerFrame,renderRecord:()=>null});
 // @ts-expect-error responsive mode is an explicit host snapshot
@@ -45,7 +55,7 @@ createElement(PortalCalendar,{frame:portalFrame});
 const {presentationOwner,...withoutDisplayOwner}=portalFrame;
 // @ts-expect-error stable control ownership does not replace accepted display-frame ownership
 createElement(PortalCalendar,{frame:withoutDisplayOwner,isWide:true});
-void day;void days;void presentationOwner;
+void day;void days;void presentationOwner;void invalidVisiblePresentation;
 `;
 
 async function load(consumer, entry, format) {
@@ -306,11 +316,46 @@ function pickerFixture() {
     };
 }
 
+function createPortalRegistrationHost(React, PortalCalendar, register) {
+    return function PortalRegistrationHost(options) {
+        const [, refresh] = React.useState(0);
+        const registerVisibleRecords = React.useCallback((presentation) => {
+            const dispose = register(presentation);
+            refresh((revision) => revision + 1);
+            return () => {
+                dispose();
+                refresh((revision) => revision + 1);
+            };
+        }, []);
+        return React.createElement(PortalCalendar, {
+            ...options,
+            frame: {
+                ...options.frame,
+                presentationOwner: { ...options.frame.presentationOwner },
+                recordActions: options.frame.recordActions.map((actions) => ({
+                    ...actions,
+                })),
+            },
+            registerVisibleRecords,
+        });
+    };
+}
+
 async function server(directory, format, surface = 'grid') {
     const consumer = createRequire(join(directory, 'package.json'));
     const React = consumer('react');
     const api = await load(consumer, 'react/calendar', format);
     let actions = 0;
+    let visibilityRegistrations = 0;
+    let visibilityDisposals = 0;
+    const PortalRegistrationHost = createPortalRegistrationHost(
+        React,
+        api.PortalCalendar,
+        () => {
+            visibilityRegistrations++;
+            return () => visibilityDisposals++;
+        }
+    );
     assert.equal(typeof document, 'undefined');
     const fixture =
         surface === 'portal'
@@ -320,7 +365,7 @@ async function server(directory, format, surface = 'grid') {
               : null;
     const content =
         surface === 'portal'
-            ? React.createElement(api.PortalCalendar, {
+            ? React.createElement(PortalRegistrationHost, {
                   frame: fixture.frame,
                   clock: fixture.clock,
                   locale: 'en-US',
@@ -351,6 +396,8 @@ async function server(directory, format, surface = 'grid') {
         assert.deepEqual(fixture.reads, []);
         assert.deepEqual(fixture.opens, []);
         assert.deepEqual(fixture.removals, []);
+        assert.equal(visibilityRegistrations, 0);
+        assert.equal(visibilityDisposals, 0);
     } else if (surface === 'picker') {
         assert(html.includes('Rich appointment'));
         assert(html.includes('https://example.test/calendar'));
@@ -363,7 +410,12 @@ async function server(directory, format, surface = 'grid') {
         assert(html.includes('Appointments'));
     }
     assert.equal(typeof document, 'undefined');
-    return { html, react: React.version };
+    return {
+        html,
+        react: React.version,
+        visibilityRegistrations,
+        visibilityDisposals,
+    };
 }
 
 async function installed(directory, format, happyDomModulePath, archivePath) {
@@ -737,11 +789,41 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             locale: 'en-US',
             isWide: true,
         };
+        const visiblePublications = [];
+        const visibleDisposals = [];
+        // A real host registration rerenders its parent, which may reconstruct
+        // frame/action wrappers. Keep the admitted immutable inputs unchanged.
+        const PortalRegistrationHost = createPortalRegistrationHost(
+            React,
+            api.PortalCalendar,
+            (presentation) => {
+                assert.equal(presentation.isCurrent(), true);
+                assert(Object.isFrozen(presentation));
+                assert(Object.isFrozen(presentation.recordIds));
+                assert.deepEqual(presentation.recordIds, [
+                    ...new Set(
+                        [
+                            ...host.querySelectorAll('article[data-record-id]'),
+                        ].map((node) => node.getAttribute('data-record-id'))
+                    ),
+                ]);
+                visiblePublications.push(presentation);
+                assert(
+                    visiblePublications.length < 16,
+                    'host registration must settle'
+                );
+                return () => {
+                    assert.equal(presentation.isCurrent(), false);
+                    visibleDisposals.push(presentation);
+                };
+            }
+        );
+        const visiblePresentation = () => visiblePublications.at(-1);
         const portalElement = () =>
             React.createElement(
                 React.StrictMode,
                 null,
-                React.createElement(api.PortalCalendar, portalProps)
+                React.createElement(PortalRegistrationHost, portalProps)
             );
         const portalServer = JSON.parse(
             execFileSync(
@@ -755,6 +837,16 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
                 ],
                 { encoding: 'utf8' }
             )
+        );
+        assert.equal(
+            portalServer.visibilityRegistrations,
+            0,
+            'cold SSR must not register child membership'
+        );
+        assert.equal(
+            portalServer.visibilityDisposals,
+            0,
+            'cold SSR has no child membership disposer'
         );
         host.innerHTML = portalServer.html;
         const originalPortalTable = host.querySelector('table');
@@ -790,6 +882,22 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         assert.deepEqual(completePortal.reads, []);
         assert.deepEqual(completePortal.opens, []);
         assert.deepEqual(completePortal.removals, []);
+        assert(
+            visiblePublications.length >= 2,
+            'StrictMode creates a fresh committed publication'
+        );
+        assert.equal(visiblePublications[0].isCurrent(), false);
+        assert.deepEqual(visiblePresentation().recordIds, ['one']);
+        const heldWidePresentation = visiblePresentation();
+        const settledRegistrations = visiblePublications.length;
+        portalProps = { ...portalProps };
+        await React.act(async () => root.render(portalElement()));
+        assert.equal(
+            visiblePublications.length,
+            settledRegistrations,
+            'equivalent host wrappers must not republish or loop'
+        );
+        assert.equal(heldWidePresentation.isCurrent(), true);
         assert.equal(
             host.querySelectorAll('article[data-record-id="one"]').length,
             1
@@ -809,6 +917,8 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         assert.deepEqual(completePortal.opens, [{ shouldShowToTheSide: true }]);
         portalProps = { ...portalProps, isWide: false };
         await React.act(async () => root.render(portalElement()));
+        assert.equal(heldWidePresentation.isCurrent(), false);
+        assert.deepEqual(visiblePresentation().recordIds, ['one']);
         assert.equal(
             host.querySelector(
                 '[data-date="2026-02-15"] [data-selected=true]'
@@ -820,8 +930,31 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             { shouldShowToTheSide: true },
             { shouldShowToTheSide: false },
         ]);
+        const heldNarrowPresentation = visiblePresentation();
+        await click('[data-date="2026-02-16"] .mx-sdk-calendar__day');
+        assert.equal(heldNarrowPresentation.isCurrent(), false);
+        assert.deepEqual(visiblePresentation().recordIds, []);
+        assert.equal(
+            host.querySelector('article[data-record-id="one"]'),
+            null,
+            'off-day native children have no visible membership'
+        );
+        const emptyDayPresentation = visiblePresentation();
+        await click('[data-date="2026-02-15"] .mx-sdk-calendar__day');
+        assert.equal(emptyDayPresentation.isCurrent(), false);
+        assert.equal(
+            heldNarrowPresentation.isCurrent(),
+            false,
+            'day ABA cannot revive the old registration'
+        );
+        assert.deepEqual(visiblePresentation().recordIds, ['one']);
         portalProps = { ...portalProps, isWide: true };
         await React.act(async () => root.render(portalElement()));
+        assert.equal(
+            heldWidePresentation.isCurrent(),
+            false,
+            'width ABA cannot revive the old registration'
+        );
         assert.deepEqual(
             completePortal.reads,
             [],
@@ -874,6 +1007,16 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         );
         await React.act(async () => root.unmount());
         root = undefined;
+        assert(
+            visiblePublications.every(
+                (presentation) => !presentation.isCurrent()
+            )
+        );
+        assert.deepEqual(
+            visibleDisposals,
+            visiblePublications,
+            'all committed registrations dispose after retirement'
+        );
         const completePicker = pickerFixture();
         let pickerProps = {
             frame: completePicker.initialFrame,
@@ -1053,6 +1196,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             groups: 5,
             completeStyleInputs: completeStyles.inputs.length,
             hydration: true,
+            visibleRecordRegistration: true,
             scope: 'Installed complete Calendar picker/Portal composition and shared rich leaves; synthetic host ports only, no native or hosted acceptance.',
         };
     } finally {
@@ -1151,6 +1295,7 @@ export function checkCalendarReactMatrix({
                 );
                 assert.equal(result.react, version.react);
                 assert.equal(result.groups, 5);
+                assert.equal(result.visibleRecordRegistration, true);
                 profiles.push(result);
             }
             versions.push({ react: version.react, profiles });

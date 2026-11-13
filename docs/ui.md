@@ -2156,6 +2156,41 @@ open `http://127.0.0.1:4191`. `node scripts/check-external-sync-source-browser.m
 checks disabled controls, native strings, masking, owner replacement and layout.
 These fixtures contact no backend and do not synchronize records.
 
+### Controlled External Sync Source text
+
+Native hosts can use the same natural public component with an explicit
+controlled contract. `ExternalSyncSourceFieldProps` and its
+`BindingExternalSyncSourceFieldProps` alias retain the binding contract above.
+`ControlledExternalSyncSourceFieldProps` supplies already-converted text:
+
+```tsx
+import { ExternalSyncSourceField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+
+<ExternalSyncSourceField
+    mode="controlled"
+    value="Native source Ω"
+    language="en"
+    textSize="small"
+/>;
+```
+
+The host retains value conversion, masking, visibility and field-shell
+associations. Pass a string, null or undefined with the accepted language and
+optional `textSize`, `layout` and `className`. Null, undefined and empty text use
+the complete localized empty display. Whitespace stays nonempty. Text remains
+literal and uses the maintained readonly component's native automatic links;
+ordinary text clicks reach the host row, while link clicks stop propagation
+and retain their normal navigation behavior. Value or language replacement
+updates the same mounted display. Source choices do not remap its text.
+
+This mode has no binding, render override, setter, source selector or network
+operation. Preserve the native converter's rejection of unsupported raw values
+before rendering; do not extract a label from arbitrary source objects. The
+binding mode continues to display its disabled input and Clear button with its
+original masking, visibility and retirement behavior. Keep the two ownership
+contracts separate.
+
 ## React Number presentation
 
 The optional `/react` entry exports `NumberField`, `NumberFieldProps`,

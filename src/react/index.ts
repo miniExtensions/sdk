@@ -314,7 +314,11 @@ export {
     type SingleLineTextAddressOptions,
     type SingleLineTextEditOwner,
 } from './SingleLineTextField.js';
-import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+import {
+    ControlledExternalSyncSourceField,
+    type ControlledExternalSyncSourceFieldProps,
+    type ExternalSyncSourceFieldOptions,
+} from './ExternalSyncSourceField.js';
 import {
     lastModifiedByName,
     type LastModifiedByFieldOptions,
@@ -326,6 +330,7 @@ export {
 export {
     renderExternalSyncSourceField,
     type ExternalSyncSourceFieldOptions,
+    type ControlledExternalSyncSourceFieldProps,
 } from './ExternalSyncSourceField.js';
 import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
 export {
@@ -1067,13 +1072,41 @@ export function CreatedByField({
 }
 export type ExternalSyncSourceFieldProps = FieldProps &
     ExternalSyncSourceFieldOptions;
+export type BindingExternalSyncSourceFieldProps = ExternalSyncSourceFieldProps;
+type BoundExternalSyncSourceComponentProps = ExternalSyncSourceFieldProps & {
+    [Key in Exclude<
+        keyof ControlledExternalSyncSourceFieldProps,
+        keyof ExternalSyncSourceFieldProps
+    >]?: never;
+};
+type ExternalSyncSourceComponentProps =
+    | BoundExternalSyncSourceComponentProps
+    | ControlledExternalSyncSourceFieldProps;
+
+/** Complete native-compatible display or the unchanged readonly binding contract. */
+export function ExternalSyncSourceField(
+    props: BoundExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ControlledExternalSyncSourceFieldProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledExternalSyncSourceField, props)
+        : createElement(BoundExternalSyncSourceField, props);
+}
 /** The supplied source name stays readonly regardless of forged editing state. */
-export function ExternalSyncSourceField({
+function BoundExternalSyncSourceField({
     binding,
     render,
     className,
     clearLabel,
-}: ExternalSyncSourceFieldProps): ReactNode {
+}: BoundExternalSyncSourceComponentProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;

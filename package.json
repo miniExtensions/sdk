@@ -245,7 +245,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/address-combobox-bundle.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node --test scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",

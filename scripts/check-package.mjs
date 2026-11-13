@@ -597,6 +597,7 @@ try {
                 path === 'docs/csv-export.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
+                path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
                 path === 'docs/field-presentation.md' ||
@@ -647,6 +648,9 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/single-select.css',
         'dist/cjs/react/single-select.css',
+        'dist/esm/react/controlled-select.css',
+        'dist/cjs/react/controlled-select.css',
+        'docs/controlled-select.md',
         'dist/esm/react/rich-text.css',
         'dist/cjs/react/rich-text.css',
         'dist/esm/react/text.css',

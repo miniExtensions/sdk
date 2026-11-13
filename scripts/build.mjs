@@ -210,6 +210,7 @@ for (const format of ['esm', 'cjs']) {
         'multiple-select',
         'linked-records',
         'single-select',
+        'controlled-select',
         'rich-text',
     ]) {
         copyFileSync(

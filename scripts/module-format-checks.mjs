@@ -221,6 +221,7 @@ export function assertModuleFormats(root) {
                 './react/multiple-select.css',
                 './react/linked-records.css',
                 './react/single-select.css',
+                './react/controlled-select.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {

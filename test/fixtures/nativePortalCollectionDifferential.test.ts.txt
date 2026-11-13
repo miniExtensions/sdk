@@ -1,0 +1,1094 @@
+/** @jest-environment jsdom */
+/**
+ * PREPARED, UNRUN. Place beside the real native thunk tests only after the
+ * native owner releases the existing execution hold and installs the packed SDK.
+ * This file imports native owners unchanged. It is deliberately not an SDK test.
+ * See docs/native-portal-differential.md for provenance and known failing cases.
+ */
+import axios from 'axios';
+import { act, renderHook } from '@testing-library/react';
+import { createNativePortalCollectionKernel } from '@miniextensions/sdk/portals';
+import type {
+    AirtableField,
+    AirtableRecord,
+} from '@type-system/airtable/types';
+import type { LinkedRecordDetailField } from '@type-system/airtable/linked-record-detail-fields-types';
+import type { FetchRecordsForLinkedTableOnPortalOutput } from '@type-system/api/types/fetchRecordsForLinkedTableOnPortal';
+import { ExtensionScreen } from '@type-system/api/types/loadExtension';
+import { ExtensionType } from '@type-system/constants/extensionType';
+import {
+    currentExtensionsVersionIndex,
+    type SharableExtension,
+} from '@type-system/generated/extension-versions/current/extension';
+import { getPublicFieldsFromExtension } from '@type-system/generated/extension-versions/current/PublicFields';
+import {
+    test_generateLinkedRecordsField,
+    test_generateSingleLineTextField,
+} from '@type-system/helpers/testFieldsGenerators';
+import { DEFAULT_THEME_COLOR } from '@type-system/helpers/getThemeStyles';
+import { DEFAULT_LANGUAGE } from '@type-system/i18n/strings';
+import { useToast } from '@/components/ui/use-toast';
+import { createNativePortalPresentation } from '../../Portal/createNativePortalPresentation';
+import publicExtensionReducer, {
+    publicExtensionActions,
+} from '../publicExtensionReducer';
+import { portalPresentationBinding } from '../acceptedPortalFrame';
+import { fetchRecordsForLinkedTableOnPortalThunk } from '../thunks/fetchRecordsForLinkedTableOnPortalThunk';
+import type { ScreenState } from '../types';
+import {
+    createInitialPublicExtensionState,
+    createTestStore,
+} from './publicExtensionSelectors.test-helpers';
+import { makeFieldIdsToSchemas } from './makeFieldIdsToSchemas';
+
+// Only the external HTTP boundary is doubled. Reducer, thunk, selectors,
+// response-frame constructor, presentation, and toast implementation are real.
+jest.mock('axios');
+const http = axios as jest.MockedFunction<typeof axios>;
+const sessionId = 'sess_collection';
+const fieldId = 'fld00000000000001';
+const tableId = 'tbl00000000000001';
+const primary = test_generateSingleLineTextField({
+    fieldId: 'fld00000000000002',
+    fieldName: 'Title',
+    isPrimaryField: true,
+});
+const linked = test_generateLinkedRecordsField({
+    fieldId,
+    fieldName: 'Projects',
+    options: {
+        linkedTableId: tableId,
+        isReversed: false,
+        prefersSingleRecordLink: false,
+    },
+});
+const detail: LinkedRecordDetailField = {
+    fieldId: primary.id,
+    fieldName: primary.name,
+    titleOverride: '',
+    isHidden: true,
+    miniExtConfig: {},
+    fieldIsInEditingChildForm: false,
+    childFormField: null,
+};
+type PortalScreen = Extract<
+    ScreenState,
+    { extensionScreen: ExtensionScreen.PORTAL_LOADED }
+>;
+type Response = FetchRecordsForLinkedTableOnPortalOutput;
+
+function screenFixture(token = 'token_A'): PortalScreen {
+    const extension: SharableExtension = {
+        id: 'ext_collection',
+        shareId: 'shr_collection',
+        description: null,
+        updatedTime: 1700000000000,
+        createdTime: 1700000000000,
+        lastEditorUID: 'usr_collection',
+        version: currentExtensionsVersionIndex,
+        baseId: 'app_collection',
+        name: 'Collection fixture',
+        type: ExtensionType.PORTAL,
+        userUID: 'usr_collection',
+        state: { tableId },
+    };
+    const publicFields = getPublicFieldsFromExtension({ extension });
+    if (publicFields.type !== ExtensionType.PORTAL)
+        throw new Error('Invalid Portal fixture');
+    const fieldNamesToSchemas = {
+        Projects: {
+            airtableField: structuredClone(linked),
+            fieldType: linked.config.type,
+            miniExtConfig: {
+                allowEditingRecords: true,
+                extensionIdForEditing: 'ext_collection_child',
+            },
+        },
+    };
+    return {
+        extensionId: extension.id,
+        language: DEFAULT_LANGUAGE,
+        enableCommentsOnChildForms: false,
+        googleAnalyticsMeasurementId: null,
+        themeColor: DEFAULT_THEME_COLOR,
+        workspaceId: 'wsp_collection',
+        faviconUrl: null,
+        isStarterExtension: false,
+        extensionScreen: ExtensionScreen.PORTAL_LOADED,
+        result: {
+            type: 'success',
+            data: {
+                extensionType: ExtensionType.PORTAL,
+                extensionName: extension.name,
+                extensionAccessToken: token,
+                viewIdsToAirtableViews: {},
+                publicFields,
+                formRecord: {
+                    type: 'edit',
+                    recordId: 'rec00000000000001',
+                    tableId,
+                    data: {},
+                },
+                fieldNamesToSchemas,
+                fieldIdsToSchemas: makeFieldIdsToSchemas(fieldNamesToSchemas),
+                linkedRecordFieldIdToDetailFields: {
+                    [fieldId]: [structuredClone(detail)],
+                },
+                linkedRecordFieldIdToFieldsTitles: {},
+                cookieKeyForLoginToken: 'cookie_collection',
+                fieldIdsInPortal: [fieldId],
+                baseId: extension.baseId,
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: false,
+                trialExpiresAtUnixEpoch: null,
+                usersTableFields: [structuredClone(linked)],
+                initialLinkedTableStates: {},
+                portalFieldIdToSearchPageField: {},
+            },
+        },
+    };
+}
+
+function response(ids: string[], nextOffset: string | null = null): Response {
+    return {
+        recordIds: ids,
+        airtableOffset: nextOffset,
+        tableIdsToLinkedTableStates: {
+            [tableId]: {
+                airtableFields: [primary],
+                recordIdsToAirtableRecords: Object.fromEntries(
+                    ids.map((id) => [
+                        id,
+                        {
+                            id,
+                            fields: { [primary.id]: id },
+                        },
+                    ])
+                ),
+            },
+        },
+        customViewDetailFields: { [fieldId]: [detail] },
+    };
+}
+
+function httpValue(data: unknown): Awaited<ReturnType<typeof axios>> {
+    return {
+        status: 200,
+        statusText: 'OK',
+        data,
+        headers: {},
+        config: { headers: {} },
+    };
+}
+async function flush() {
+    for (let n = 0; n < 5; n++)
+        await act(async () => {
+            await Promise.resolve();
+        });
+}
+
+function harness() {
+    const initial = createInitialPublicExtensionState();
+    initial.sessionIdsToScreenStates[sessionId] = {
+        type: 'loaded',
+        data: screenFixture(),
+    };
+    initial.fieldIdsToPortalFieldsTabsStates[fieldId] = {
+        sortFields: [],
+        filters: null,
+        searchTerm: 'query_A',
+        selectedCell: null,
+        monthInView: null,
+        selectedCustomView: {
+            id: 'view_A',
+            label: 'Default',
+            showRecordsNotLinkedToUser: false,
+            hideEditButton: false,
+            showBadge: false,
+            visibleFieldIds: null,
+            customViewLayout: 'grid',
+            viewLayout: 'grid',
+        },
+    };
+    const store = createTestStore(initial);
+    const kernel = createNativePortalCollectionKernel<
+        AirtableRecord,
+        AirtableField,
+        LinkedRecordDetailField,
+        Response
+    >();
+    const native = () => store.getState().publicExtension;
+    const scope = () => {
+        const screen = native().sessionIdsToScreenStates[sessionId];
+        if (
+            screen?.type !== 'loaded' ||
+            screen.data.extensionScreen !== ExtensionScreen.PORTAL_LOADED ||
+            screen.data.result?.type !== 'success'
+        ) {
+            throw new Error('Expected loaded fixture');
+        }
+        return {
+            sessionId,
+            fieldId,
+            linkedTableId: tableId,
+            bindingKey: portalPresentationBinding(native(), sessionId, fieldId),
+            fetchOwnerKey: JSON.stringify([
+                sessionId,
+                screen.data.result.data.extensionAccessToken,
+            ]),
+            // Host cache-owner epoch, deliberately independent of cache enrichment.
+            cacheOwnerEpoch: 0,
+        };
+    };
+    let sdk = kernel.createState(scope());
+    type Receipt = NonNullable<ReturnType<typeof kernel.begin>>['receipt'];
+    type Pending = {
+        receipt: Receipt | null;
+        done: Promise<unknown>;
+        resolve: ((value: Awaited<ReturnType<typeof axios>>) => void) | null;
+    };
+    const requests: {
+        resolve: (value: Awaited<ReturnType<typeof axios>>) => void;
+        body: unknown;
+    }[] = [];
+    http.mockImplementation(
+        (config) =>
+            new Promise((resolve) => {
+                // Receipt must already be committed at the external I/O boundary.
+                const owner = native().portalPresentationOwners?.[fieldId];
+                const records = native().fieldIdsToPortalRecordStates[fieldId];
+                expect(owner?.active).toBeTruthy();
+                expect(records?.activeRequestId).toBe(owner?.active?.requestId);
+                requests.push({
+                    resolve,
+                    body: typeof config === 'string' ? null : config.data,
+                });
+            })
+    );
+    const frame = () =>
+        native().portalPresentationOwners?.[fieldId]?.frame ?? null;
+    const observe = (idsOnly = false) => {
+        const records = native().fieldIdsToPortalRecordStates[fieldId];
+        const paging =
+            records?.type === 'loaded'
+                ? {
+                      type: 'loaded' as const,
+                      recordIds: records.data.recordIds,
+                      nextOffset: records.data.airtableOffsetForNextPage,
+                      isPaginating: Boolean(records.isPaginating),
+                      isReloading: Boolean(records.isReloading),
+                      ...(records.errorMessage === undefined
+                          ? {}
+                          : { errorMessage: records.errorMessage }),
+                      ...(records.acceptedFetchOwner
+                          ? {
+                                acceptedFetchOwnerKey: JSON.stringify([
+                                    records.acceptedFetchOwner
+                                        .extensionSessionId,
+                                    records.acceptedFetchOwner
+                                        .extensionAccessToken,
+                                ]),
+                            }
+                          : {}),
+                  }
+                : {
+                      type: records?.type ?? 'notLoaded',
+                      recordIds: [],
+                      nextOffset: null,
+                      isPaginating: false,
+                      isReloading: false,
+                      ...(records?.type === 'failed'
+                          ? { errorMessage: records.errorMessage }
+                          : {}),
+                  };
+        sdk = kernel.observe(
+            sdk,
+            scope(),
+            idsOnly ? { idsOnly: true, paging } : {}
+        );
+    };
+    const mutate = (
+        action: Parameters<typeof store.dispatch>[0],
+        idsOnly = false
+    ) => {
+        store.dispatch(action);
+        observe(idsOnly);
+    };
+    const read = (
+        mode: 'first' | 'next' | 'reload' = 'first',
+        options: { cached?: boolean; retain?: boolean } = {}
+    ): Pending => {
+        observe();
+        const before = requests.length;
+        const done = store.dispatch(
+            fetchRecordsForLinkedTableOnPortalThunk({
+                extensionSessionId: sessionId,
+                portalFieldId: fieldId,
+                mode:
+                    mode === 'first'
+                        ? {
+                              type: 'firstPage',
+                              onlyFetchIfNotAlreadyFetched:
+                                  options.cached ?? false,
+                          }
+                        : mode === 'next'
+                          ? {
+                                type: 'nextPage',
+                                ...(options.retain
+                                    ? {
+                                          retainLoadedRecordsOnFailure:
+                                              true as const,
+                                      }
+                                    : {}),
+                            }
+                          : { type: 'reload' },
+            })
+        );
+        const admission = native().portalPresentationOwners?.[fieldId]?.active;
+        const actual = requests.length === before ? null : requests[before]!;
+        const next = kernel.begin(sdk, {
+            requestId:
+                actual && admission
+                    ? admission.requestId
+                    : `rejected_${before}`,
+            mode,
+            onlyIfNotFetched: options.cached ?? false,
+            retainNextOnFailure: options.retain ?? false,
+        });
+        expect(next != null).toBe(actual != null);
+        if (next) sdk = next.state;
+        return {
+            receipt: next?.receipt ?? null,
+            done,
+            resolve: actual?.resolve ?? null,
+        };
+    };
+    function qualified(data: Response) {
+        const table = data.tableIdsToLinkedTableStates[tableId];
+        const fields = data.customViewDetailFields?.[fieldId];
+        const schemas = table?.airtableFields ?? [];
+        const primaries = schemas.filter((field) => field.isPrimaryField);
+        const primarySchema = primaries.length === 1 ? primaries[0]! : null;
+        const overrides =
+            fields?.filter((field) => field.fieldId === primarySchema?.id) ??
+            [];
+        return {
+            linkedTableId: tableId,
+            recordIds: data.recordIds,
+            recordsById: table?.recordIdsToAirtableRecords ?? {},
+            schema: table ? schemas : null,
+            details: {
+                presence:
+                    data.customViewDetailFields == null
+                        ? ('null' as const)
+                        : fields === undefined
+                          ? ('missing' as const)
+                          : ('present' as const),
+                fields: fields ?? [],
+            },
+            primary:
+                !primarySchema || overrides.length > 1
+                    ? null
+                    : (overrides[0] ?? {
+                          fieldId: primarySchema.id,
+                          fieldName: primarySchema.name,
+                          titleOverride: null,
+                          isHidden: false,
+                          miniExtConfig: {},
+                          fieldIsInEditingChildForm: false,
+                          childFormField: null,
+                      }),
+            nextOffset: data.airtableOffset,
+            projection: data,
+            scopeAfter: scope(),
+        };
+    }
+    const success = async (pending: Pending, data: Response) => {
+        if (!pending.resolve || !pending.receipt)
+            throw new Error('Expected admitted read');
+        // Equal response bytes, distinct transport object: native Immer may freeze
+        // its response while SDK input-mutation assertions retain a mutable input.
+        pending.resolve(httpValue(structuredClone(data)));
+        await pending.done;
+        const result = kernel.succeed(sdk, pending.receipt, qualified(data));
+        if (result) sdk = result.state;
+        return result;
+    };
+    const failure = async (
+        pending: Pending,
+        message = 'Selected view unavailable'
+    ) => {
+        if (!pending.resolve || !pending.receipt)
+            throw new Error('Expected admitted read');
+        pending.resolve(httpValue({ error: true, message }));
+        await pending.done;
+        const result = kernel.fail(sdk, pending.receipt, message);
+        if (result) sdk = result.state;
+        return result;
+    };
+    const equal = () => {
+        const actual = native().fieldIdsToPortalRecordStates[fieldId];
+        expect(sdk.paging.type).toBe(actual?.type ?? 'notLoaded');
+        if (actual?.type === 'loaded') {
+            expect(sdk.paging.recordIds).toEqual(actual.data.recordIds);
+            expect(sdk.paging.nextOffset).toBe(
+                actual.data.airtableOffsetForNextPage
+            );
+            expect(Boolean(sdk.paging.isPaginating)).toBe(
+                Boolean(actual.isPaginating)
+            );
+            expect(Boolean(sdk.paging.isReloading)).toBe(
+                Boolean(actual.isReloading)
+            );
+        }
+        if (actual?.type === 'failed' || actual?.type === 'loaded')
+            expect(sdk.paging.errorMessage).toBe(actual.errorMessage);
+        const accepted = frame();
+        expect(
+            sdk.frame && {
+                id: sdk.frame.id,
+                recordIds: sdk.frame.recordIds,
+                records: sdk.frame.records,
+                schema: sdk.frame.schema,
+                details: sdk.frame.details,
+                primary: sdk.frame.primary,
+                nextOffset: sdk.frame.nextOffset,
+            }
+        ).toEqual(
+            accepted && {
+                id: accepted.frameId,
+                recordIds: accepted.recordIds,
+                records: accepted.records,
+                schema: accepted.schema,
+                details: accepted.details,
+                primary: accepted.primary,
+                nextOffset: accepted.nextOffset,
+            }
+        );
+    };
+    const load = async (data = response(['rec00000000000001'], 'cursor_B')) => {
+        await success(read(), data);
+        equal();
+    };
+    return {
+        store,
+        native,
+        kernel,
+        scope,
+        read,
+        success,
+        failure,
+        equal,
+        load,
+        mutate,
+        observe,
+        requests,
+        frame,
+        qualified,
+        sdk: () => sdk,
+        setSdk: (next: typeof sdk) => {
+            sdk = next;
+        },
+    };
+}
+
+describe('prepared actual-native canonical collection differential A-H', () => {
+    beforeEach(() => {
+        http.mockReset();
+        window.history.replaceState({}, '', '/portal');
+        localStorage.clear();
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it.each([true, false])(
+        'A: forced replacement wins, old success first=%s; duplicate cached intent sends nothing',
+        async (oldFirst) => {
+            const h = harness();
+            await h.load();
+            const old = h.read('reload');
+            const current = h.read();
+            const duplicate = h.read('first', { cached: true });
+            await duplicate.done;
+            expect(duplicate.receipt).toBeNull();
+            expect(h.requests).toHaveLength(3);
+            if (oldFirst) {
+                expect(await h.success(old, response(['rec_old']))).toBeNull();
+                h.equal();
+            }
+            await h.success(current, response(['rec_current']));
+            h.equal();
+            if (!oldFirst) {
+                expect(await h.success(old, response(['rec_old']))).toBeNull();
+                h.equal();
+            }
+            expect(h.sdk().frame?.recordIds).toEqual(['rec_current']);
+        }
+    );
+
+    it('B: Next and reload retain rows while pending; ordinary failure has the native failed state', async () => {
+        const h = harness();
+        await h.load();
+        const presentation = createNativePortalPresentation(h.store, {
+            extensionSessionId: sessionId,
+            portalFieldId: fieldId,
+        });
+        expect(presentation.getChild()?.extensionId).toBe(
+            'ext_collection_child'
+        );
+        const next = h.read('next');
+        h.equal();
+        expect(presentation.getChild()?.frameId).toBe(h.sdk().frame?.id);
+        expect(h.sdk().paging.recordIds).toEqual(['rec00000000000001']);
+        expect(h.sdk().paging.isPaginating).toBe(true);
+        await h.success(next, response(['rec_B'], 'cursor_C'));
+        h.equal();
+        const reload = h.read('reload');
+        h.equal();
+        expect(presentation.getChild()?.frameId).toBe(h.sdk().frame?.id);
+        expect(h.sdk().paging.isReloading).toBe(true);
+        await h.failure(reload);
+        h.equal();
+        expect(h.sdk().paging.type).toBe('failed');
+        expect(presentation.getChild()).toBeNull();
+        await h.success(
+            h.read('first', { cached: true }),
+            response(['rec_recovered'])
+        );
+        h.equal();
+        expect(presentation.getChild()?.extensionId).toBe(
+            'ext_collection_child'
+        );
+        presentation.destroy();
+    });
+
+    it('B: explicit retained Next failure preserves exact cursor and admitted retry', async () => {
+        const h = harness();
+        await h.load();
+        const presentation = createNativePortalPresentation(h.store, {
+            extensionSessionId: sessionId,
+            portalFieldId: fieldId,
+        });
+        const accepted = h.sdk().frame;
+        await h.failure(h.read('next', { retain: true }), 'Page unavailable');
+        h.equal();
+        expect(h.sdk().frame).toBe(accepted);
+        expect(h.sdk().paging.nextOffset).toBe('cursor_B');
+        expect(h.sdk().paging.errorMessage).toBe('Page unavailable');
+        expect(presentation.getChild()?.frameId).toBe(accepted?.id);
+        const retry = h.read('next', { retain: true });
+        expect(h.requests.at(-1)?.body).toMatchObject({
+            airtableOffset: 'cursor_B',
+        });
+        await h.success(retry, response(['rec_B']));
+        h.equal();
+        presentation.destroy();
+    });
+
+    it.each(['query', 'token', 'schema'] as const)(
+        'C: observed %s A-B-A retires an old failure',
+        async (kind) => {
+            const h = harness();
+            await h.load();
+            const old = h.read('reload');
+            if (kind === 'query') {
+                for (const searchTerm of ['query_B', 'query_A'])
+                    h.mutate(
+                        publicExtensionActions.updateSearchTermForPortalField({
+                            fieldId,
+                            searchTerm,
+                        })
+                    );
+            } else {
+                for (const changed of [true, false]) {
+                    const screen = screenFixture(
+                        changed && kind === 'token' ? 'token_B' : 'token_A'
+                    );
+                    if (
+                        kind === 'schema' &&
+                        changed &&
+                        screen.result?.type === 'success'
+                    )
+                        screen.result.data.fieldIdsToSchemas[
+                            fieldId
+                        ]!.airtableField.name = 'Changed';
+                    h.mutate(
+                        publicExtensionActions.setLoadedScreenStateForSession({
+                            extensionSessionId: sessionId,
+                            screenState: screen,
+                        })
+                    );
+                }
+            }
+            const before = h.native();
+            expect(await h.failure(old)).toBeNull();
+            expect(h.native()).toBe(before);
+            expect(h.sdk().frame).toBeNull();
+            h.equal();
+            await h.success(
+                h.read('first', { cached: true }),
+                response(['rec_current'])
+            );
+            h.equal();
+        }
+    );
+
+    it('C/D: benign cache enrichment cannot retire a read or fill withheld response values', async () => {
+        const h = harness();
+        await h.load();
+        const pending = h.read('reload');
+        h.mutate(
+            publicExtensionActions.addMoreTableIdsToLinkedTableStates({
+                tableIdsToLinkedTableStates: response(['rec_decoy'])
+                    .tableIdsToLinkedTableStates,
+            })
+        );
+        expect(h.kernel.isCurrent(h.sdk(), pending.receipt!)).toBe(true);
+        const fresh = response(['rec00000000000001']);
+        fresh.tableIdsToLinkedTableStates[
+            tableId
+        ]!.recordIdsToAirtableRecords.rec00000000000001!.fields = {};
+        await h.success(pending, fresh);
+        h.equal();
+        expect(h.sdk().frame?.records[0]?.fields).toEqual({});
+    });
+
+    it.each([
+        'missing-row',
+        'missing-details',
+        'null-details',
+        'empty-details',
+    ] as const)(
+        'D: response-only provenance %s preserves separate legacy and frame projections',
+        async (kind) => {
+            const h = harness();
+            await h.load();
+            const incoming = response([
+                'rec00000000000001',
+                'rec00000000000001',
+            ]);
+            if (kind === 'missing-row')
+                incoming.tableIdsToLinkedTableStates[
+                    tableId
+                ]!.recordIdsToAirtableRecords = {};
+            if (kind === 'missing-details')
+                incoming.customViewDetailFields = {};
+            if (kind === 'null-details') incoming.customViewDetailFields = null;
+            if (kind === 'empty-details')
+                incoming.customViewDetailFields = { [fieldId]: [] };
+            const result = await h.success(h.read(), incoming);
+            h.equal();
+            expect(result?.compatibility?.recordIds).toEqual(
+                incoming.recordIds
+            );
+            if (kind === 'missing-row') expect(h.sdk().frame).toBeNull();
+            else {
+                expect(h.sdk().frame?.recordIds).toEqual(['rec00000000000001']);
+                expect(h.sdk().frame?.details.presence).toBe(
+                    kind === 'missing-details'
+                        ? 'missing'
+                        : kind === 'null-details'
+                          ? 'null'
+                          : 'present'
+                );
+            }
+        }
+    );
+
+    it('E: null cursor sends nothing, empty cursor is admitted, parent replacement retires pending append', async () => {
+        const h = harness();
+        await h.load(response(['rec_A'], ''));
+        const append = h.read('next');
+        expect(h.requests.at(-1)?.body).toMatchObject({ airtableOffset: '' });
+        await h.success(h.read('reload'), response(['rec_replaced']));
+        h.equal();
+        const before = h.native();
+        expect(await h.success(append, response(['rec_stale']))).toBeNull();
+        expect(h.native()).toBe(before);
+        h.equal();
+        const exhausted = h.read('next');
+        await exhausted.done;
+        expect(exhausted.receipt).toBeNull();
+    });
+
+    it.each(['replace', 'append', 'clear'] as const)(
+        'E: IDs-only %s publication retires accepted and pending frame',
+        async (kind) => {
+            const h = harness();
+            await h.load();
+            const pending = h.read('next');
+            const payload = {
+                fieldId,
+                portalRecordsState: {
+                    recordIds: ['rec_ids_only'],
+                    airtableOffsetForNextPage: null,
+                },
+            };
+            h.mutate(
+                kind === 'replace'
+                    ? publicExtensionActions.replacePortalRecordsStateForField(
+                          payload
+                      )
+                    : kind === 'append'
+                      ? publicExtensionActions.appendPortalRecordsStateForField(
+                            payload
+                        )
+                      : publicExtensionActions.clearPortalViewStateForField({
+                            extensionSessionId: sessionId,
+                            fieldId,
+                        }),
+                true
+            );
+            expect(h.sdk().frame).toBeNull();
+            h.equal();
+            const before = h.native();
+            expect(
+                await h.success(pending, response(['rec_stale']))
+            ).toBeNull();
+            expect(h.native()).toBe(before);
+        }
+    );
+
+    it.each(['add', 'remove'] as const)(
+        'E REQUIRED CUTOVER FAILURE: direct post-action %s retires frame and pending read',
+        async (kind) => {
+            const h = harness();
+            await h.load();
+            const pending = h.read('next');
+            h.mutate(
+                kind === 'add'
+                    ? publicExtensionActions.addRecordIdToLinkedRecordsCellForForm(
+                          {
+                              extensionSessionId: sessionId,
+                              fieldId,
+                              newRecordIdToAdd: 'rec_added',
+                              doNotUpdateHasUnsavedChange: true,
+                          }
+                      )
+                    : publicExtensionActions.removeRecordIdFromLinkedRecordsCellForExtension(
+                          {
+                              extensionSessionId: sessionId,
+                              fieldId,
+                              recordIdToRemove: 'rec00000000000001',
+                              doNotUpdateHasUnsavedChange: true,
+                          }
+                      ),
+                true
+            );
+            expect(h.sdk().frame).toBeNull();
+            // The old wrapper only recognizes replace/append/clear action names.
+            expect(h.frame()).toBeNull();
+            const before = h.native();
+            expect(
+                await h.success(pending, response(['rec_stale']))
+            ).toBeNull();
+            expect(h.native()).toBe(before);
+        }
+    );
+
+    it('F REQUIRED CUTOVER FAILURE: direct ordinary stale failure cannot overwrite a successor', async () => {
+        const h = harness();
+        await h.load();
+        const old = h.read('reload');
+        await h.success(h.read(), response(['rec_current']));
+        expect(
+            h.kernel.fail(h.sdk(), old.receipt!, 'Stale failure')
+        ).toBeNull();
+        const before = h.native();
+        // The cutover owner must extend this real action with its exact receipt.
+        // Existing unscoped ordinary failure is not an authority grant.
+        h.store.dispatch(
+            publicExtensionActions.failedToLoadRecordIdsForPortalField({
+                fieldId,
+                errorMessage: 'Stale failure',
+            })
+        );
+        expect(h.native()).toBe(before);
+    });
+
+    it('F: native subscribers observe one coherent success publication and immutable response snapshots', async () => {
+        const h = harness();
+        await h.load();
+        const seen: string[][] = [];
+        const stop = h.store.subscribe(() => {
+            const frame = h.frame();
+            if (!frame) return;
+            const records = h.native().fieldIdsToPortalRecordStates[fieldId];
+            expect(records?.type).toBe('loaded');
+            if (records?.type !== 'loaded')
+                throw new Error('Frame without legacy IDs');
+            expect(frame.recordIds).toEqual([
+                ...new Set(records.data.recordIds),
+            ]);
+            const cache = h.native().tableIdsToLinkedTableStates[tableId];
+            expect(cache?.type).toBe('loaded');
+            expect(frame.primary?.titleOverride).toBe('');
+            expect(frame.primary?.isHidden).toBe(true);
+            seen.push(frame.recordIds);
+        });
+        const incoming = response(['rec_B', 'rec_A']);
+        await h.success(h.read(), incoming);
+        stop();
+        h.equal();
+        incoming.recordIds.push('rec_mutated');
+        incoming.tableIdsToLinkedTableStates[
+            tableId
+        ]!.recordIdsToAirtableRecords.rec_B!.fields[primary.id] = 'mutated';
+        expect(h.sdk().frame?.recordIds).toEqual(['rec_B', 'rec_A']);
+        expect(h.sdk().frame?.records[0]?.fields[primary.id]).toBe('rec_B');
+        expect(seen).toContainEqual(['rec_B', 'rec_A']);
+    });
+
+    it('F REQUIRED CUTOVER FAILURE: a superseded reentrant begin sends no retired transport', async () => {
+        const h = harness();
+        let entered = false;
+        const stop = h.store.subscribe(() => {
+            if (
+                entered ||
+                !h.native().portalPresentationOwners?.[fieldId]?.active
+            )
+                return;
+            entered = true;
+            void h.store.dispatch(
+                fetchRecordsForLinkedTableOnPortalThunk({
+                    extensionSessionId: sessionId,
+                    portalFieldId: fieldId,
+                    mode: {
+                        type: 'firstPage',
+                        onlyFetchIfNotAlreadyFetched: false,
+                    },
+                })
+            );
+        });
+        void h.store.dispatch(
+            fetchRecordsForLinkedTableOnPortalThunk({
+                extensionSessionId: sessionId,
+                portalFieldId: fieldId,
+                mode: {
+                    type: 'firstPage',
+                    onlyFetchIfNotAlreadyFetched: false,
+                },
+            })
+        );
+        stop();
+        // Old native source sends two. Preserve this assertion until atomic cutover.
+        expect(h.requests).toHaveLength(1);
+    });
+
+    it('G: current cleanup corrects criteria before automatic forced First; sort has precedence', async () => {
+        jest.useFakeTimers();
+        const notices = renderHook(() => useToast());
+        act(() => notices.result.current.dismiss());
+        const h = harness();
+        const pending = h.read();
+        const cleaned: Response = {
+            recordIds: [],
+            airtableOffset: null,
+            tableIdsToLinkedTableStates: {},
+            customViewDetailFields: null,
+        };
+        cleaned.endUserSortCleanup = { sortFields: [] };
+        cleaned.endUserFilterCleanup = { filters: null };
+        pending.resolve!(httpValue(cleaned));
+        await flush();
+        const transition = h.kernel.cleanup(
+            h.sdk(),
+            pending.receipt!,
+            'sort',
+            [],
+            h.scope()
+        );
+        expect(transition?.cleanup?.kind).toBe('sort');
+        if (!transition?.cleanup) throw new Error('Expected current cleanup');
+        h.setSdk(transition.state);
+        expect(h.frame()).toBeNull();
+        expect(
+            h.native().fieldIdsToPortalFieldsTabsStates[fieldId]?.sortFields
+        ).toEqual([]);
+        const continuation = h.kernel.completeCleanup(
+            h.sdk(),
+            transition.cleanup.receipt
+        );
+        expect(continuation?.read).toEqual({
+            mode: 'first',
+            onlyIfNotFetched: false,
+        });
+        expect(h.requests).toHaveLength(2);
+        const active = h.native().portalPresentationOwners?.[fieldId]?.active;
+        if (!active || !continuation)
+            throw new Error('Expected automatic First');
+        h.setSdk(continuation.state);
+        const begin = h.kernel.begin(h.sdk(), {
+            requestId: active.requestId,
+            mode: 'first',
+            onlyIfNotFetched: false,
+        });
+        if (!begin) throw new Error('Expected kernel First');
+        h.setSdk(begin.state);
+        const fresh = response(['rec_current']);
+        h.requests[1]!.resolve(httpValue(fresh));
+        await pending.done;
+        const settled = h.kernel.succeed(
+            h.sdk(),
+            begin.receipt,
+            h.qualified(fresh)
+        );
+        if (!settled) throw new Error('Expected cleanup follow-up settlement');
+        h.setSdk(settled.state);
+        h.equal();
+        act(() => {
+            jest.advanceTimersByTime(0);
+        });
+        expect(
+            notices.result.current.toasts.some(
+                (toast) => toast.open && toast.description != null
+            )
+        ).toBe(true);
+        act(() => notices.result.current.dismiss());
+        notices.unmount();
+    });
+
+    it('G: stale cleanup has no correction, notice, or follow-up read', async () => {
+        jest.useFakeTimers();
+        const notices = renderHook(() => useToast());
+        act(() => notices.result.current.dismiss());
+        const h = harness();
+        const old = h.read();
+        const newest = h.read();
+        const cleanup: Response = {
+            recordIds: [],
+            airtableOffset: null,
+            tableIdsToLinkedTableStates: {},
+            customViewDetailFields: null,
+        };
+        cleanup.endUserSortCleanup = { sortFields: [] };
+        const before = h.native();
+        old.resolve!(httpValue(cleanup));
+        await old.done;
+        expect(h.kernel.cleanup(h.sdk(), old.receipt!, 'sort', [])).toBeNull();
+        expect(h.native()).toBe(before);
+        expect(h.requests).toHaveLength(2);
+        act(() => {
+            jest.advanceTimersByTime(0);
+        });
+        expect(
+            notices.result.current.toasts.every((toast) => !toast.open)
+        ).toBe(true);
+        await h.success(newest, response(['rec_current']));
+        h.equal();
+        notices.unmount();
+    });
+
+    it('G REQUIRED CUTOVER FAILURE: cleanup correction reentrancy retires notice and automatic First', async () => {
+        jest.useFakeTimers();
+        const notices = renderHook(() => useToast());
+        act(() => notices.result.current.dismiss());
+        const h = harness();
+        const pending = h.read();
+        const safeSort = [
+            {
+                idOrName: { type: 'id' as const, id: primary.id },
+                type: 'asc' as const,
+            },
+        ];
+        const correction =
+            publicExtensionActions.updateFieldIdsToPortalSortFields({
+                fieldId,
+                sortFields: safeSort,
+            });
+        const correctedScope = {
+            ...h.scope(),
+            bindingKey: portalPresentationBinding(
+                publicExtensionReducer(h.native(), correction),
+                sessionId,
+                fieldId
+            ),
+        };
+        let reentered = false;
+        const stop = h.store.subscribe(() => {
+            if (
+                reentered ||
+                h.native().fieldIdsToPortalFieldsTabsStates[fieldId]?.sortFields
+                    .length !== 1
+            )
+                return;
+            reentered = true;
+            h.store.dispatch(
+                publicExtensionActions.updateSearchTermForPortalField({
+                    fieldId,
+                    searchTerm: 'query_after_cleanup',
+                })
+            );
+        });
+        pending.resolve!(
+            httpValue({
+                recordIds: [],
+                airtableOffset: null,
+                tableIdsToLinkedTableStates: {},
+                customViewDetailFields: null,
+                endUserSortCleanup: { sortFields: safeSort },
+            } satisfies Response)
+        );
+        await flush();
+        stop();
+        const cleanup = h.kernel.cleanup(
+            h.sdk(),
+            pending.receipt!,
+            'sort',
+            safeSort,
+            correctedScope
+        );
+        if (!cleanup?.cleanup)
+            throw new Error('Expected SDK correction receipt');
+        h.setSdk(h.kernel.observe(cleanup.state, h.scope()));
+        expect(
+            h.kernel.completeCleanup(h.sdk(), cleanup.cleanup.receipt)
+        ).toBeNull();
+        // Current source still schedules a notice and issues the forced read.
+        expect(h.requests).toHaveLength(1);
+        act(() => {
+            jest.advanceTimersByTime(0);
+        });
+        expect(
+            notices.result.current.toasts.every((toast) => !toast.open)
+        ).toBe(true);
+        notices.unmount();
+    });
+
+    it('H: UI projection destroy/remount does not dispose a canonical pending read', async () => {
+        const h = harness();
+        await h.load();
+        const pending = h.read('reload');
+        const projection = createNativePortalPresentation(h.store, {
+            extensionSessionId: sessionId,
+            portalFieldId: fieldId,
+        });
+        projection.destroy();
+        expect(h.kernel.isCurrent(h.sdk(), pending.receipt!)).toBe(true);
+        await h.success(pending, response(['rec_after_remount']));
+        h.equal();
+        const remount = createNativePortalPresentation(h.store, {
+            extensionSessionId: sessionId,
+            portalFieldId: fieldId,
+        });
+        expect(
+            remount.scope.getSnapshot().rows.map((row) => row.recordId)
+        ).toEqual(['rec_after_remount']);
+        remount.destroy();
+        const retired = h.read('reload');
+        h.setSdk(h.kernel.retire(h.sdk()));
+        expect(h.kernel.isCurrent(h.sdk(), retired.receipt!)).toBe(false);
+        // Host lifetime retirement is a host action, never inferred from projection unmount.
+        h.store.dispatch(
+            publicExtensionActions.clearPortalViewStateForField({
+                extensionSessionId: sessionId,
+                fieldId,
+            })
+        );
+        const before = h.native();
+        expect(await h.success(retired, response(['rec_stale']))).toBeNull();
+        expect(h.native()).toBe(before);
+    });
+});

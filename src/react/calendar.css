@@ -163,7 +163,7 @@
     flex-wrap: wrap-reverse;
     gap: 0.125rem;
     margin-top: auto;
-    padding: 0.25rem;
+    padding: 0.25rem 0.125rem;
 }
 .mx-sdk-calendar__dot {
     background: #9ca3af;

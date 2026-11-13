@@ -386,8 +386,17 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
-import { countInput, type CountFieldOptions } from './CountField.js';
-export { renderCountField, type CountFieldOptions } from './CountField.js';
+import {
+    countInput,
+    ControlledCountField,
+    type ControlledCountFieldProps,
+    type CountFieldOptions,
+} from './CountField.js';
+export {
+    renderCountField,
+    type CountFieldOptions,
+    type ControlledCountFieldProps,
+} from './CountField.js';
 import {
     ControlledAutoNumberField,
     type AutoNumberControlledProps,
@@ -1201,9 +1210,26 @@ function BoundRollupField({
         className,
     });
 }
+/** Existing binding contract; its native numeric and metadata semantics are unchanged. */
 export type CountFieldProps = FieldProps & CountFieldOptions;
+type CountFieldComponentProps =
+    | (CountFieldProps & {
+          value?: never;
+          language?: never;
+          textSize?: never;
+          layout?: never;
+      })
+    | ControlledCountFieldProps;
+
+/** Binding-owned control or controlled, already converted native presentation. */
+export function CountField(props: CountFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingCountField, props)
+        : createElement(ControlledCountField, props);
+}
+
 /** Computed Count metadata and native values remain owned by the binding. */
-export function CountField({
+function BindingCountField({
     binding,
     render,
     className,

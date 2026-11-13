@@ -61,6 +61,9 @@ the wide-day aria-label, and forwards narrow-day button props. Narrow/wide
 changes preserve the supplied day and issue no query or record write. SDK
 composition seams accept already-rendered SDK content; these do not grant
 record actions or replace the required complete shared rich-card contract.
+Narrow event dots reserve the native top-six spacing for the day number and
+use reverse flex wrapping at the bottom; inline text line boxes can otherwise
+push dense dot clusters into the number on phone widths.
 
 Source tests and installed React 18/19 ESM/CJS/type/SSR/hydration checks cover
 these foundations. Real-browser, complete surface, native adapter and hosted

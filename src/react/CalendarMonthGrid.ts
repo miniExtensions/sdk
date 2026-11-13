@@ -278,7 +278,10 @@ function DayCell({
                   ),
                   h(
                       'span',
-                      { 'aria-hidden': true },
+                      {
+                          'aria-hidden': true,
+                          className: 'mx-sdk-calendar__dots',
+                      },
                       Array.from({ length: count }, (_, index) =>
                           h('span', {
                               key: index,

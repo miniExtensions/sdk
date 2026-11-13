@@ -183,6 +183,7 @@ for (const format of ['esm', 'cjs']) {
         'form-group',
         'form-completion',
         'form-header',
+        'form-submit',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

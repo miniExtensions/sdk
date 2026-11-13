@@ -143,7 +143,8 @@
         },
         "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
         "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css",
-        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*"
+        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*",
+        "./react/form-submit.css": "./dist/esm/react/form-submit.css"
     },
     "files": [
         "dist/esm",
@@ -190,7 +191,8 @@
         "examples/react-form-header/styles.css",
         "examples/react-form-header/build.mjs",
         "examples/react-form-header/dev.mjs",
-        "examples/react-form-header/tsconfig.json"
+        "examples/react-form-header/tsconfig.json",
+        "docs/form-submit.md"
     ],
     "engines": {
         "node": ">=22"

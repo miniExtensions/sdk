@@ -27,7 +27,7 @@ export interface ImageAnnotationMarkerArea {
     availableMarkerTypes: unknown[];
     renderAtNaturalSize: boolean;
     renderImageType: string;
-    renderImageQuality: number;
+    renderImageQuality?: number;
     targetRoot: HTMLElement;
     styles: { classNamePrefixBase: string; classNamePrefix: string };
     addEventListener<K extends keyof ImageAnnotationMarkerEvents>(type: K, listener: (event: ImageAnnotationMarkerEvents[K]) => void): void;
@@ -80,12 +80,14 @@ export async function openImageAnnotationMarkerEditor(input: {
         area.renderImageQuality = 1;
 
         let closed = false;
+        let rendered = false;
         const keyboardListeners: Array<() => void> = [];
         const removeKeyboard = () => {
             for (const remove of keyboardListeners.splice(0)) remove();
         };
         const onRender = (event: { dataUrl: string }) => {
-            if (!lease.isCurrent()) return;
+            if (!lease.isCurrent() || rendered) return;
+            rendered = true;
             try {
                 const blob = annotationPngFromDataUrl(event.dataUrl);
                 void lease.render(blob);

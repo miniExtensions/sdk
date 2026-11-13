@@ -14,8 +14,9 @@ const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACin
 
 function deferred<T>() {
     let resolve: (value: T) => void = () => { throw new Error('not initialized'); };
-    const promise = new Promise<T>((yes) => { resolve = yes; });
-    return { promise, resolve };
+    let reject: (error: unknown) => void = () => { throw new Error('not initialized'); };
+    const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
 }
 
 function fixture(t: TestContext, throwingClose = false) {
@@ -24,18 +25,13 @@ function fixture(t: TestContext, throwingClose = false) {
     Object.defineProperty(globalThis, 'HTMLButtonElement', {
         configurable: true, value: window.HTMLButtonElement,
     });
-    t.after(async () => {
-        if (descriptor) Object.defineProperty(globalThis, 'HTMLButtonElement', descriptor);
-        else Reflect.deleteProperty(globalThis, 'HTMLButtonElement');
-        await window.happyDOM.close();
-    });
     const areas: Area[] = [];
     class Area implements ImageAnnotationMarkerArea {
         settings = { displayMode: '' };
         availableMarkerTypes: unknown[] = [];
         renderAtNaturalSize = false;
         renderImageType = '';
-        renderImageQuality = 0;
+        renderImageQuality?: number;
         targetRoot = window.document.body as unknown as HTMLElement;
         styles = { classNamePrefixBase: 'annotation-base', classNamePrefix: 'annotation-test' };
         listeners = new Map<string, Set<unknown>>();
@@ -90,7 +86,13 @@ function fixture(t: TestContext, throwingClose = false) {
         onClose() { if (throwingClose) throw new Error('synthetic host close'); },
         onFailure(_phase, error) { errors.push(error); },
     });
-    t.after(() => { current = false; session.dispose(); });
+    t.after(async () => {
+        try { current = false; session.dispose(); } finally {
+            if (descriptor) Object.defineProperty(globalThis, 'HTMLButtonElement', descriptor);
+            else Reflect.deleteProperty(globalThis, 'HTMLButtonElement');
+            await window.happyDOM.close();
+        }
+    });
     const lease = session.beginSource({ url: 'blob:owned', filename: 'source.jpg', ownedObjectUrl: true });
     assert.ok(lease);
     const image = window.document.createElement('img') as unknown as HTMLImageElement;
@@ -143,9 +145,13 @@ it('actual driver render-then-close preserves upload continuation and removes st
     }, async () => f.vendor);
     const area = f.areas[0]; assert.ok(area);
     area.emit('render', { dataUrl });
+    area.emit('render', { dataUrl: 'invalid duplicate must be ignored' });
+    assert.deepEqual(f.errors, []);
     area.close();
     area.emit('render', { dataUrl });
     assert.equal(area.detached, true);
+    assert.equal(area.listeners.get('render')?.size ?? 0, 0);
+    assert.equal(area.listeners.get('close')?.size ?? 0, 0);
     assert.equal(f.counts().uploads, 1);
     assert.deepEqual(f.releases, ['blob:owned']);
     f.upload.resolve({});
@@ -177,7 +183,49 @@ it('preserves authored PNG bytes without asserting decoder/canvas acceptance', a
     assert.deepEqual([...new Uint8Array(await blob.arrayBuffer()).slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 });
 
-it('refuses malformed/non-PNG vendor render output before storage allocation', () => {
+it('actual driver refuses malformed vendor output before any storage stage', async (t) => {
     assert.throws(() => annotationPngFromDataUrl('data:image/jpeg;base64,AAAA'));
     assert.throws(() => annotationPngFromDataUrl('data:image/png;base64,aGVsbG8='));
+    const f = fixture(t);
+    await openImageAnnotationMarkerEditor({
+        image: f.image, lease: f.lease,
+        labels: { title: 'Annotation', moreTools: 'More tools' },
+    }, async () => f.vendor);
+    const area = f.areas[0]; assert.ok(area);
+    area.emit('render', { dataUrl: 'data:image/png;base64,aGVsbG8=' });
+    assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
+    assert.equal(f.errors.length, 1);
+    assert.equal(area.detached, true);
+    assert.deepEqual(f.releases, ['blob:owned']);
+});
+
+
+it('unmount disposal rejects a successfully settled lazy import without showing UI', async (t) => {
+    const f = fixture(t);
+    const loading = deferred<ImageAnnotationMarkerModule>();
+    const task = openImageAnnotationMarkerEditor({
+        image: f.image, lease: f.lease,
+        labels: { title: 'Annotation', moreTools: 'More tools' },
+    }, () => loading.promise);
+    f.session.dispose();
+    loading.resolve(f.vendor);
+    await task;
+    assert.equal(f.areas.length, 0);
+    assert.deepEqual(f.errors, []);
+    assert.deepEqual(f.releases, ['blob:owned']);
+});
+
+it('late lazy import rejection after unmount publishes no stale feedback', async (t) => {
+    const f = fixture(t);
+    const loading = deferred<ImageAnnotationMarkerModule>();
+    const task = openImageAnnotationMarkerEditor({
+        image: f.image, lease: f.lease,
+        labels: { title: 'Annotation', moreTools: 'More tools' },
+    }, () => loading.promise);
+    f.session.dispose();
+    loading.reject(new Error('synthetic late loader failure'));
+    await task;
+    assert.equal(f.areas.length, 0);
+    assert.deepEqual(f.errors, []);
+    assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
 });

@@ -687,6 +687,8 @@ try {
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
         'dist/cjs/react/complete-multiline.css',
+        'dist/esm/react/form-submit.css',
+        'dist/cjs/react/form-submit.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',

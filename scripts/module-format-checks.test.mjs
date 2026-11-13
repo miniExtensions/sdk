@@ -682,6 +682,7 @@ for (const name of [
     'complete-verification',
     'complete-barcode-scanner',
     'complete-portal-chart',
+    'attachment-preview',
     'signature',
     'complete-address',
     'address-field',

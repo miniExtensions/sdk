@@ -3028,3 +3028,10 @@ export {
     type CSVExportButtonProps,
     type CSVExportLabels,
 } from './CSVExportButton.js';
+
+export {
+    AttachmentPreview,
+    type AttachmentPreviewProps,
+    type AttachmentPreviewLabels,
+} from './AttachmentPreview.js';
+export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';

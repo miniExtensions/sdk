@@ -289,6 +289,10 @@ exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
 `ExternalSyncSourceFieldOptions` and the typed `renderExternalSyncSourceField` slot.
 It displays the supplied SDK string with the disabled Text control and optional
 `@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
+The same field accepts explicit `mode="controlled"` with converted text and
+`language`, reusing complete localized empty/link presentation through
+`@miniextensions/sdk/react/complete-readonly-text.css`. Existing binding props and
+render overrides retain their original disabled-input behavior.
 
 [Formula presentation](docs/ui.md#react-formula-presentation) exports
 `FormulaField`, `FormulaFieldProps`, `FormulaFieldOptions` and the typed

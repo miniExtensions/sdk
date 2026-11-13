@@ -1090,3 +1090,10 @@ standalone direct-Save, schema admission and `RecoveryJournal` policy remain in
 force; injecting a draft does not opt a host into those restrictions or grant a
 mutation capability. Existing hosts use the queue directly to preserve their
 supported field policies and native transport.
+
+## Native collection transitions
+
+The additive [native collection kernel](./native-portal-kernel.md) supports host-owned
+first/next/reload transitions. It keeps standalone Collection/ListOwner behavior intact.
+The [actual-native differential corpus](./native-portal-differential.md) records its
+separate execution and native cutover requirements.

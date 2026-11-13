@@ -176,6 +176,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         autoStartCamera: props.scanner?.autoStartCamera ?? false,
         hideButton: !props.scanner?.enabled || !enabled || !coordinator,
         ownerKey: owner,
+        isCurrent: () => owner !== null && enabled && currentOwner(),
         runInLoop: true,
         labels: props.scanner?.labels,
         style: props.scanner?.style,

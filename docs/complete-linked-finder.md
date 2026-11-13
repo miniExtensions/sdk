@@ -138,3 +138,19 @@ survivor with its explicit `previousFieldId`, even when that predecessor is
 outside the mounted descriptor list. It accepts the same host, canonical pairs,
 raw URL value and outer readonly policy. An optional descriptor `testId` retains
 the native field's existing automation identity without granting authority.
+
+`admitScheduledSearch(expectedOwner, request)` is a synchronous scheduling
+admission over the same queue and pagination cursor as `scheduleSearch`. It
+returns `{status: 'admitted', owner, nonce, isCurrent}` or `{status: 'refused'}`.
+The nonce identifies an intent; it does not promise transport allocation,
+publication or results. A later intent, owner replacement or disposal retires
+its `isCurrent()` predicate. Use this receipt before moving owner-bound local
+focus. `scheduleSearch` still returns `void`; `queryNow` still returns its exact
+accepted page or refusal/retirement/failure outcome.
+
+A captured read may provide `didAccept(exactPage)`. This one-time host
+presentation hook runs only after cache publication, identity projection and
+model publication pass their fences. Authenticated preview also receives it
+without creating a model or loading flash. The coordinator rechecks ownership
+and read identity after the callback. A callback failure is a failure outcome;
+it does not roll back already committed host/model data or the accepted cursor.

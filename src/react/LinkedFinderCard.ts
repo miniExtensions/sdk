@@ -48,6 +48,10 @@ import {
 import { ButtonField, type ButtonFieldProps } from './ButtonField.js';
 import { RatingInput } from './RatingInput.js';
 import { PersonBadge } from './PersonBadge.js';
+import {
+    SingleLineTextField,
+    type ReadOnlySingleLineTextFieldProps,
+} from './SingleLineTextField.js';
 import type { CollaboratorImageSource } from './CompleteCollaboratorField.js';
 import {
     CreatedTimeResource,
@@ -77,6 +81,10 @@ export type LinkedFinderCardLeaf =
     | {
           readonly kind: 'text';
           readonly display: CompleteReadOnlyTextFieldProps;
+      }
+    | {
+          readonly kind: 'singleLine';
+          readonly display: ReadOnlySingleLineTextFieldProps;
       }
     | { readonly kind: 'html'; readonly html: string; readonly height?: number }
     | { readonly kind: 'quill'; readonly html: string }
@@ -265,6 +273,8 @@ export function LinkedFinderRichLeaf({
             );
         case 'text':
             return h(CompleteReadOnlyTextField, leaf.display);
+        case 'singleLine':
+            return h(SingleLineTextField, leaf.display);
         case 'html':
             return h(
                 'div',

@@ -29,6 +29,8 @@ export type CompleteReadOnlyTextFieldProps = {
     /** Portable layout; omitted layout retains native ancestor compatibility hooks. */
     layout?: CompleteReadOnlyTextLayout;
     className?: string;
+    /** Host-localized empty presentation for admitted readonly compositions. */
+    emptyLabel?: string;
 };
 
 const emptyLabels: Record<CompleteReadOnlyTextLanguage, string> = {
@@ -52,11 +54,13 @@ const emptyLabels: Record<CompleteReadOnlyTextLanguage, string> = {
 function EmptyValue({
     language,
     className,
+    label: suppliedLabel,
 }: {
     language: CompleteReadOnlyTextLanguage;
     className?: string;
+    label?: string;
 }) {
-    const label = emptyLabels[language];
+    const label = suppliedLabel ?? emptyLabels[language];
     if (label === undefined) throw new Error(`Unexpected: ${String(language)}`);
     return createElement(
         'p',
@@ -101,6 +105,7 @@ export function CompleteReadOnlyTextField({
     textSize,
     layout,
     className,
+    emptyLabel,
 }: CompleteReadOnlyTextFieldProps): ReactElement {
     const layoutAttributes =
         layout === undefined ? {} : { 'data-layout': layout };
@@ -112,7 +117,11 @@ export function CompleteReadOnlyTextField({
             .filter(Boolean)
             .join(' '),
         preserveWhitespace: false,
-        empty: createElement(EmptyValue, { language, className }),
+        empty: createElement(EmptyValue, {
+            language,
+            className,
+            label: emptyLabel,
+        }),
         renderText: (text) => {
             // Component-local baseline options, with no shared-default mutation
             // or required transitive React peer for headless SDK consumers.

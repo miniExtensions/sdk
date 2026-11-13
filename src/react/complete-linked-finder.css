@@ -1,3 +1,11 @@
+@import './single-line-text.css';
+@import './localized-numeric.css';
+@import './rich-text.css';
+@import './complete-phone.css';
+@import './complete-checkbox.css';
+@import './complete-collaborators.css';
+@import './barcode.css';
+
 .mx-sdk-native-linked-cascade {
     position: relative;
     margin-bottom: 1.5rem;

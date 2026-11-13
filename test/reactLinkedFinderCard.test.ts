@@ -46,6 +46,95 @@ const present = (
     ...patch,
 });
 
+test('card composes the delivered readonly Single-line control and host-localized empty labels', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'singleLine',
+                display: {
+                    mode: 'readOnly',
+                    value: '••••••••',
+                    language: 'es',
+                    displayAsButton: false,
+                },
+            },
+        })
+    );
+    assert.equal(f.container.textContent, '••••••••');
+    assert.equal(f.container.querySelector('input,a,button'), null);
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'text',
+                display: {
+                    value: null,
+                    language: 'es',
+                    emptyLabel: 'Sin opciones',
+                },
+            },
+        })
+    );
+    assert.equal(
+        f.container.querySelector('[data-testid="no-value-test-id"]')
+            ?.textContent,
+        'Sin opciones'
+    );
+});
+
+test('borrowed controlled Button leaves retain captured host authority for stale anchors and webhook clicks', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    let current = true,
+        triggered = 0;
+    const owner = { isCurrent: () => current };
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'button',
+                accepted: {
+                    mode: 'controlled',
+                    value: {
+                        label: 'Native link',
+                        url: 'https://button.example.test',
+                    },
+                    owner,
+                },
+            },
+        })
+    );
+    const anchor = f.container.querySelector('a')!;
+    assert.equal(anchor.getAttribute('href'), 'https://button.example.test');
+    current = false;
+    await f.click(anchor);
+    assert.equal(anchor.getAttribute('href'), null);
+    current = true;
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'button',
+                accepted: {
+                    mode: 'controlled',
+                    value: {
+                        label: 'Native webhook',
+                        url: 'https://button.example.test',
+                    },
+                    config: { openLinkType: 'triggerWebhookPOST' },
+                    owner,
+                    onTriggerWebhook: () => {
+                        triggered++;
+                    },
+                },
+            },
+        })
+    );
+    const button = f.container.querySelector('button')!;
+    await f.click(button);
+    assert.equal(triggered, 1);
+    current = false;
+    await f.click(button);
+    assert.equal(triggered, 1);
+});
+
 test('rating uses the actual readonly presenter, nullable label and admitted native glyph geometry', async (t) => {
     const f = await htmlPresentationFixture(t);
     const leaf = {

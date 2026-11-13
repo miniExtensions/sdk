@@ -26,7 +26,19 @@ export type CompleteLinkedFinderRead<Row> = {
     isCurrent(phase: 'before-publication' | 'after-publication'): boolean;
     query(): Promise<CompleteLinkedFinderPage<Row>>;
     publish(page: CompleteLinkedFinderPage<Row>): CompleteLinkedFinderAdmission;
+    /** One-time host presentation receipt after accepted model/read publication. */
+    didAccept?(page: CompleteLinkedFinderPage<Row>): void;
 };
+
+export type CompleteLinkedFinderScheduleAdmission<Owner extends object> =
+    | {
+          readonly status: 'admitted';
+          readonly owner: Owner;
+          /** Opaque identity of this scheduled intent, never a page/result. */
+          readonly nonce: object;
+          isCurrent(): boolean;
+      }
+    | { readonly status: 'refused' };
 
 export type CompleteLinkedFinderSelection = {
     /** Exact canonical host membership; may contain hidden IDs and duplicates. */
@@ -97,6 +109,11 @@ export type CompleteLinkedFinderCoordinator<
     ): Promise<CompleteLinkedFinderQueryResult<Row, Owner>>;
     /** Scheduling is intentionally not a direct-query receipt. */
     scheduleSearch(request: CompleteLinkedFinderRequest<Filter>): void;
+    /** Synchronous intent admission using the same scheduler and offset cursor. */
+    admitScheduledSearch(
+        expectedOwner: Owner,
+        request: CompleteLinkedFinderRequest<Filter>
+    ): CompleteLinkedFinderScheduleAdmission<Owner>;
     toggle(
         expectedOwner: Owner,
         id: string
@@ -291,11 +308,14 @@ export function createCompleteLinkedFinderCoordinator<
 
     function prepare(
         request: CompleteLinkedFinderRequest<Filter>,
-        intent: number
+        intent: number,
+        requestedOwner?: Owner
     ): Ticket | Result {
         const expected = reconcileOwner();
         if (intent !== intentSequence) return { status: 'retired' };
         if (!expected) return { status: 'refused', reason: 'unavailable' };
+        if (requestedOwner !== undefined && requestedOwner !== expected)
+            return { status: 'refused', reason: 'unavailable' };
         try {
             const read = host.captureRead(expected, {
                 filter: request.filter,
@@ -444,6 +464,8 @@ export function createCompleteLinkedFinderCoordinator<
                 preview,
             };
             acceptedReads.set(result, ticket);
+            ticket.read.didAccept?.(page);
+            if (!current(ticket)) return { status: 'retired' };
             return result;
         } catch (cause) {
             let live = false;
@@ -480,19 +502,23 @@ export function createCompleteLinkedFinderCoordinator<
         return execute(ticket);
     }
 
-    function scheduleSearch(
-        request: CompleteLinkedFinderRequest<Filter>
-    ): void {
+    function schedule(
+        request: CompleteLinkedFinderRequest<Filter>,
+        requestedOwner?: Owner
+    ): Ticket | null {
+        const entryIntent = intentSequence;
+        if (requestedOwner !== undefined && !owns(requestedOwner)) return null;
+        if (entryIntent !== intentSequence) return null;
         const intent = nextIntent();
-        const ticket = prepare(request, intent);
+        const ticket = prepare(request, intent, requestedOwner);
         if ('status' in ticket) {
             if (intent === intentSequence) emit();
-            return;
+            return null;
         }
-        if (!start(ticket)) return;
+        if (!start(ticket)) return null;
         if (ticket.read.mode === 'authenticated-preview') {
             void execute(ticket);
-            return;
+            return current(ticket) ? ticket : null;
         }
         queued = setTimeout(
             () => {
@@ -501,6 +527,26 @@ export function createCompleteLinkedFinderCoordinator<
             },
             options.testing ? 10 : 800
         );
+        return current(ticket) ? ticket : null;
+    }
+    function scheduleSearch(
+        request: CompleteLinkedFinderRequest<Filter>
+    ): void {
+        schedule(request);
+    }
+    function admitScheduledSearch(
+        expectedOwner: Owner,
+        request: CompleteLinkedFinderRequest<Filter>
+    ): CompleteLinkedFinderScheduleAdmission<Owner> {
+        const ticket = schedule(request, expectedOwner);
+        return ticket
+            ? {
+                  status: 'admitted',
+                  owner: expectedOwner,
+                  nonce: Object.freeze({}),
+                  isCurrent: () => current(ticket),
+              }
+            : { status: 'refused' };
     }
 
     async function toggle(
@@ -576,6 +622,7 @@ export function createCompleteLinkedFinderCoordinator<
         },
         queryNow,
         scheduleSearch,
+        admitScheduledSearch,
         toggle,
         scan,
         destroy() {

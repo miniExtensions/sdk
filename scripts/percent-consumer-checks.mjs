@@ -494,17 +494,22 @@ export async function checkPercentConsumer({
                 // it must not change the raw binding assertions above.
                 const writes = [];
                 let value = 0.75;
+                const percentConfig = {
+                    type: 'percent',
+                    options: { precision: 2 },
+                };
                 const controlled = () =>
                     h(react.PercentField, {
                         mode: 'controlled',
-                        field: ui.createRendererProps({
+                        field: {
                             ...props,
+                            presentation: {
+                                type: 'physical',
+                                config: percentConfig,
+                            },
                             field: {
                                 ...props.field,
-                                config: {
-                                    type: 'percent',
-                                    options: { precision: 2 },
-                                },
+                                config: percentConfig,
                             },
                             displayConfig: {
                                 numberSeparator: 'period-comma',
@@ -519,7 +524,7 @@ export async function checkPercentConsumer({
                                     return { accepted: true };
                                 },
                             },
-                        }),
+                        },
                         options: { input: { id: 'controlled-percent' } },
                     });
                 await act(async () => root.render(controlled()));

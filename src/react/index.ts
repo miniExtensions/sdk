@@ -3083,3 +3083,9 @@ export {
     formProgressConflictHeading,
     formProgressConflictMessage,
 } from './FormProgressConflictAlert.js';
+export { CompletePortalShell } from './CompletePortalShell.js';
+export type {
+    CompletePortalShellProps,
+    PortalShellSnapshot,
+    PortalShellLabels,
+} from './CompletePortalShell.js';

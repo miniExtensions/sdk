@@ -1,6 +1,20 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
 export { getPortalLinkedRecordFieldConfig } from './helpers.js';
 export { evaluatePortalViewAvailability } from './viewAvailability.js';
+export {
+    resolvePortalShellSelection,
+    projectPortalShellMenu,
+    flattenPortalShellMenu,
+    isPortalShellUrl,
+    portalShellSelectionsEqual,
+} from './shell.js';
+export type {
+    PortalShellView,
+    PortalShellMenuItem,
+    PortalShellSelection,
+    PortalShellInitialSelection,
+    PortalShellIntent,
+} from './shell.js';
 export type {
     PortalAvailableCustomView,
     PortalViewAvailability,

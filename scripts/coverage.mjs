@@ -42,6 +42,11 @@ await rm(path.join(root, 'coverage', ...(mode === 'all' ? [] : [mode])), {
     force: true,
 });
 await rm(path.join(root, output), { recursive: true, force: true });
+await mkdir(path.join(root, output, 'scripts'), { recursive: true });
+await copyFile(
+    path.join(root, 'scripts/portal-shell-runtime.mjs'),
+    path.join(root, output, 'scripts/portal-shell-runtime.mjs')
+);
 run(require.resolve('typescript/bin/tsc'), [
     '--project',
     'tsconfig.test.json',

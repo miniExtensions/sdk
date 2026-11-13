@@ -3073,7 +3073,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(percentProof.checks, 16);
+    assert.equal(percentProof.checks, 18);
     console.log(
         `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );

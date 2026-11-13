@@ -2918,9 +2918,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(createdByProof.checks, 20);
+    assert.equal(createdByProof.checks, 28);
     console.log(
-        `Installed Created By renderer, readonly native names, shared Text CSS and local example: ${createdByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        `Installed Created By binding/helper and controlled readonly display: ${createdByProof.checks} ESM/CJS groups (20 legacy plus 8 controlled) passed; synthetic owners only.`
     );
     const externalSyncSourceProof = await checkExternalSyncSourceConsumer({
         consumerDirectory: temporaryDirectory,

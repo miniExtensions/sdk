@@ -446,7 +446,7 @@ Task IDs: 3815.
 ## Last Modified By presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
-They cover the supplied native collaborator name, empty/null/missing values,
+The legacy groups cover the supplied native collaborator name, empty/null/missing values,
 malformed direct helper values, privacy of email/ID/avatar data, metadata choice
 changes without identity resolution, and retained native objects. Forged editable
 capabilities and binding model access traps cannot grant edits. Disabled input and
@@ -470,7 +470,15 @@ resources.
 
 ## Created By presentation checks
 
-`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+`pnpm check:package` preserves 20 legacy installed ESM/CommonJS groups and adds
+eight controlled CreatedBy groups with synthetic owners. The complete
+collaborator matrix runs those 28 groups under React 18.3.1 and 19.2.0, with
+positive/negative declarations, cold SSR/hydration and production bundles.
+The mandatory packed browser profile adds an actual CreatedBy group to the
+existing 12 collaborator groups, recording field/format/version, forbidden
+capability reads, unchanged writes, locale/avatar/identity replacement, edited
+adjacent draft and one explicit Save after proving no implicit submission.
+This is synthetic SDK proof; native Form acceptance remains separate.
 They cover the supplied native collaborator name, empty/null/missing values,
 malformed direct helper values, privacy of email/ID/avatar data, metadata choice
 changes without identity resolution, and retained native objects. Forged editable

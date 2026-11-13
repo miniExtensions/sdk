@@ -400,7 +400,7 @@ function SelectControl(props: ControlProps): ReactNode {
                   ),
                   ...props.availableChoices.map((choice) => {
                       const checked = props.values.includes(choice.name);
-                      const optionId = `${id}-${key(choice)}`;
+                      const optionId = `${id}-${generatedId}-${key(choice)}`;
                       return h(
                           'div',
                           {

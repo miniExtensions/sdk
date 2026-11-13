@@ -142,3 +142,55 @@ it('real controlled list publishes exact ordered values, permits cap reduction, 
     await act(async () => retained.click());
     assert.deepEqual(writes, [['Pending'], []]);
 });
+
+it('same-field list instances retain unique option IDs and label targets', () => {
+    const html = renderToStaticMarkup(
+        h(
+            'div',
+            null,
+            ...[0, 1].map((instance) =>
+                h(SingleSelectField, {
+                    ...common,
+                    key: instance,
+                    value: null,
+                    onValueChange: () => {},
+                })
+            ),
+            ...[0, 1].map((instance) =>
+                h(MultipleSelectsField, {
+                    ...common,
+                    key: `multi-${instance}`,
+                    value: [],
+                    onValueChange: () => {},
+                })
+            )
+        )
+    );
+    const window = new Window();
+    try {
+        window.document.body.innerHTML = html;
+        const inputs = [...window.document.querySelectorAll('input')];
+        assert.equal(inputs.length, choices.length * 4);
+        assert.equal(
+            new Set(inputs.map((input) => input.id)).size,
+            inputs.length
+        );
+        for (const fieldset of window.document.querySelectorAll('fieldset')) {
+            const localInputs = [...fieldset.querySelectorAll('input')];
+            const labels = [...fieldset.querySelectorAll('label')];
+            assert.deepEqual(
+                labels.map((label) => label.htmlFor),
+                localInputs.map((input) => input.id)
+            );
+            for (const input of localInputs) {
+                assert.ok(window.document.getElementById(input.id) === input);
+            }
+        }
+        const radioNames = inputs
+            .filter((input) => input.type === 'radio')
+            .map((input) => input.name);
+        assert.equal(new Set(radioNames).size, 2);
+    } finally {
+        window.close();
+    }
+});

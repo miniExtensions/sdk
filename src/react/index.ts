@@ -1924,10 +1924,15 @@ export function BindingSingleSelectField({
 }
 
 /** Additive controlled API; existing bindings keep their original semantics. */
-export type SingleSelectFieldProps =
-    | BindingSingleSelectFieldProps
+// Preserve the published binding props contract, including indexed access to
+// `binding`; controlled callers use the separately named controlled props.
+export type SingleSelectFieldProps = BindingSingleSelectFieldProps;
+export type SingleSelectFieldInputProps =
+    | SingleSelectFieldProps
     | ControlledSingleSelectFieldProps;
-export function SingleSelectField(props: SingleSelectFieldProps): ReactNode {
+export function SingleSelectField(
+    props: SingleSelectFieldInputProps
+): ReactNode {
     return 'binding' in props
         ? createElement(BindingSingleSelectField, props)
         : createElement(ControlledSingleSelectField, props);

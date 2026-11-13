@@ -26,7 +26,19 @@ export type CompleteLinkedFinderRead<Row> = {
     isCurrent(phase: 'before-publication' | 'after-publication'): boolean;
     query(): Promise<CompleteLinkedFinderPage<Row>>;
     publish(page: CompleteLinkedFinderPage<Row>): CompleteLinkedFinderAdmission;
+    /** One-time host presentation receipt after accepted model/read publication. */
+    didAccept?(page: CompleteLinkedFinderPage<Row>): void;
 };
+
+export type CompleteLinkedFinderScheduleAdmission<Owner extends object> =
+    | {
+          readonly status: 'admitted';
+          readonly owner: Owner;
+          /** Opaque identity of this scheduled intent, never a page/result. */
+          readonly nonce: object;
+          isCurrent(): boolean;
+      }
+    | { readonly status: 'refused' };
 
 export type CompleteLinkedFinderSelection = {
     /** Exact canonical host membership; may contain hidden IDs and duplicates. */
@@ -73,6 +85,8 @@ export type CompleteLinkedFinderQueryResult<Row, Owner extends object> =
 
 export type CompleteLinkedFinderSnapshot<Row, Owner extends object> = {
     readonly owner: Owner | null;
+    /** Opaque latest-read identity for fencing retained presentation callbacks. */
+    readonly readIdentity: object | null;
     readonly phase: 'idle' | 'loading' | 'ready' | 'error' | 'retired';
     readonly loadingMore: boolean;
     /** Ordered accepted raw occurrences, never deduplicated for scan authority. */
@@ -97,9 +111,16 @@ export type CompleteLinkedFinderCoordinator<
     ): Promise<CompleteLinkedFinderQueryResult<Row, Owner>>;
     /** Scheduling is intentionally not a direct-query receipt. */
     scheduleSearch(request: CompleteLinkedFinderRequest<Filter>): void;
+    /** Synchronous intent admission using the same scheduler and offset cursor. */
+    admitScheduledSearch(
+        expectedOwner: Owner,
+        request: CompleteLinkedFinderRequest<Filter>
+    ): CompleteLinkedFinderScheduleAdmission<Owner>;
     toggle(
         expectedOwner: Owner,
-        id: string
+        id: string,
+        /** Single-link UI preference; close remains a separately fenced host action. */
+        behavior?: { readonly closeAfterAddition?: boolean }
     ): Promise<CompleteLinkedFinderAdmission>;
     scan(
         request: CompleteLinkedFinderRequest<Filter>
@@ -128,6 +149,7 @@ export function createCompleteLinkedFinderCoordinator<
     type Result = CompleteLinkedFinderQueryResult<Row, Owner>;
     type Ticket = {
         owner: Owner;
+        identity: object;
         read: CompleteLinkedFinderRead<Row>;
         append: boolean;
         resetOffset: boolean;
@@ -246,6 +268,7 @@ export function createCompleteLinkedFinderCoordinator<
         const currentOwner = expected && owns(expected) ? expected : null;
         return {
             owner: currentOwner,
+            readIdentity: latest?.identity ?? null,
             phase,
             loadingMore,
             rawRecords,
@@ -291,11 +314,14 @@ export function createCompleteLinkedFinderCoordinator<
 
     function prepare(
         request: CompleteLinkedFinderRequest<Filter>,
-        intent: number
+        intent: number,
+        requestedOwner?: Owner
     ): Ticket | Result {
         const expected = reconcileOwner();
         if (intent !== intentSequence) return { status: 'retired' };
         if (!expected) return { status: 'refused', reason: 'unavailable' };
+        if (requestedOwner !== undefined && requestedOwner !== expected)
+            return { status: 'refused', reason: 'unavailable' };
         try {
             const read = host.captureRead(expected, {
                 filter: request.filter,
@@ -309,6 +335,7 @@ export function createCompleteLinkedFinderCoordinator<
                 return { status: 'refused', reason: 'unavailable' };
             const ticket = {
                 owner: expected,
+                identity: Object.freeze({}),
                 read,
                 append: !request.resetOffset && readOffset !== null,
                 resetOffset: request.resetOffset,
@@ -444,6 +471,8 @@ export function createCompleteLinkedFinderCoordinator<
                 preview,
             };
             acceptedReads.set(result, ticket);
+            ticket.read.didAccept?.(page);
+            if (!current(ticket)) return { status: 'retired' };
             return result;
         } catch (cause) {
             let live = false;
@@ -480,19 +509,23 @@ export function createCompleteLinkedFinderCoordinator<
         return execute(ticket);
     }
 
-    function scheduleSearch(
-        request: CompleteLinkedFinderRequest<Filter>
-    ): void {
+    function schedule(
+        request: CompleteLinkedFinderRequest<Filter>,
+        requestedOwner?: Owner
+    ): Ticket | null {
+        const entryIntent = intentSequence;
+        if (requestedOwner !== undefined && !owns(requestedOwner)) return null;
+        if (entryIntent !== intentSequence) return null;
         const intent = nextIntent();
-        const ticket = prepare(request, intent);
+        const ticket = prepare(request, intent, requestedOwner);
         if ('status' in ticket) {
             if (intent === intentSequence) emit();
-            return;
+            return null;
         }
-        if (!start(ticket)) return;
+        if (!start(ticket)) return null;
         if (ticket.read.mode === 'authenticated-preview') {
             void execute(ticket);
-            return;
+            return current(ticket) ? ticket : null;
         }
         queued = setTimeout(
             () => {
@@ -501,15 +534,62 @@ export function createCompleteLinkedFinderCoordinator<
             },
             options.testing ? 10 : 800
         );
+        return current(ticket) ? ticket : null;
+    }
+    function scheduleSearch(
+        request: CompleteLinkedFinderRequest<Filter>
+    ): void {
+        schedule(request);
+    }
+    function admitScheduledSearch(
+        expectedOwner: Owner,
+        request: CompleteLinkedFinderRequest<Filter>
+    ): CompleteLinkedFinderScheduleAdmission<Owner> {
+        const ticket = schedule(request, expectedOwner);
+        return ticket
+            ? {
+                  status: 'admitted',
+                  owner: expectedOwner,
+                  nonce: Object.freeze({}),
+                  isCurrent: () => current(ticket),
+              }
+            : { status: 'refused' };
     }
 
     async function toggle(
         expected: Owner,
-        id: string
+        id: string,
+        behavior?: { readonly closeAfterAddition?: boolean }
     ): Promise<CompleteLinkedFinderAdmission> {
-        if (!owns(expected) || !selection(expected)?.enabled || !owns(expected))
-            return { status: 'refused' };
-        return host.toggle(expected, id);
+        const intent = intentSequence;
+        const selected = selection(expected);
+        if (!selected?.enabled || !owns(expected)) return { status: 'refused' };
+        const wasSelected = selected.ids.includes(id);
+        const result = await host.toggle(expected, id);
+        if (
+            result.status === 'admitted' &&
+            behavior?.closeAfterAddition &&
+            !wasSelected
+        ) {
+            const sameIntent = () =>
+                intent === intentSequence &&
+                owns(expected) &&
+                intent === intentSequence;
+            try {
+                // The admitted write can advance its read's selected-value
+                // stamp. Close instead retains the captured search intent and
+                // owner, including reentrant host selection/publication calls.
+                if (
+                    sameIntent() &&
+                    selection(expected)?.ids.includes(id) &&
+                    sameIntent()
+                )
+                    host.close(expected);
+            } catch {
+                // Close refusal/failure does not undo an admitted toggle.
+            }
+        }
+        return result;
     }
 
     async function scan(request: CompleteLinkedFinderRequest<Filter>) {
@@ -540,7 +620,9 @@ export function createCompleteLinkedFinderCoordinator<
             if (
                 toggled.status !== 'admitted' ||
                 latest !== ticket ||
-                !owns(expected)
+                !owns(expected) ||
+                latest !== ticket ||
+                ticket.intent !== intentSequence
             )
                 return { status: 'unchanged' } as const;
             const closed = host.close(expected);
@@ -576,6 +658,7 @@ export function createCompleteLinkedFinderCoordinator<
         },
         queryNow,
         scheduleSearch,
+        admitScheduledSearch,
         toggle,
         scan,
         destroy() {

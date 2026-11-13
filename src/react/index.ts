@@ -3026,18 +3026,19 @@ export {
     type SignatureRecovery,
     type TemporarySignature,
 } from './signatureReceipt.js';
-
-export {
-    CSVExportButton,
-    type CSVExportButtonProps,
-    type CSVExportLabels,
-} from './CSVExportButton.js';
 export {
     NativeLinkedFinderCascade,
+    NativeLinkedFinderCascadeDriverView,
+    type NativeLinkedFinderCascadeDriverViewProps,
     type NativeLinkedFinderCascadeProps,
     type NativeLinkedFinderCascadeDescriptor,
     type NativeLinkedFinderCascadeLabels,
 } from './NativeLinkedFinderCascade.js';
+export {
+    LinkedFinderAttachmentCollection,
+    type LinkedFinderAttachmentCollectionProps,
+    type LinkedFinderAttachmentRow,
+} from './LinkedFinderAttachmentCollection.js';
 export {
     CompleteLinkedFinder,
     CompleteLinkedFinderView,
@@ -3049,6 +3050,11 @@ export type {
     CompleteLinkedFinderViewProps,
 } from './CompleteLinkedFinder.js';
 
+export {
+    CSVExportButton,
+    type CSVExportButtonProps,
+    type CSVExportLabels,
+} from './CSVExportButton.js';
 export {
     LinkedFinderCard,
     LinkedFinderRichLeaf,

@@ -34,6 +34,8 @@ export type ControlledButtonFieldProps = {
     disabled?: boolean;
     /** Already guarded by the host's current-owner/action boundary. */
     onTriggerWebhook?: () => unknown;
+    /** Optional captured host authority for borrowed card actions. */
+    owner?: { isCurrent(): boolean };
     loadingLabel?: string;
     'aria-describedby'?: string;
 };
@@ -171,6 +173,20 @@ function controlledButton(
     props: ControlledButtonFieldProps,
     generatedId: string
 ): ReactNode {
+    const isCurrent = () => {
+        try {
+            return props.owner?.isCurrent() !== false;
+        } catch {
+            return false;
+        }
+    };
+    const validateLink = (event: SyntheticEvent<HTMLAnchorElement>) => {
+        event.stopPropagation();
+        if (!isCurrent()) {
+            event.preventDefault();
+            event.currentTarget.removeAttribute('href');
+        }
+    };
     if (props.value === null)
         return noValue(
             props.messages?.noValue ??
@@ -201,7 +217,7 @@ function controlledButton(
             {
                 ...common,
                 href:
-                    url == null
+                    url == null || !isCurrent()
                         ? undefined
                         : /^(https?:\/\/|mailto:|tel:)/i.test(url) ||
                             url.startsWith('/')
@@ -209,7 +225,9 @@ function controlledButton(
                           : `https://${url}`,
                 target: props.config?.openLinkType ?? '_blank',
                 rel: 'noreferrer',
-                onClick: stop,
+                onClick: validateLink,
+                onAuxClick: validateLink,
+                onContextMenu: validateLink,
             },
             label
         );
@@ -219,7 +237,11 @@ function controlledButton(
             ...common,
             form: props.form,
             busy: props.busy ?? false,
-            disabled: props.disabled || url == null || !props.onTriggerWebhook,
+            disabled:
+                props.disabled ||
+                url == null ||
+                !props.onTriggerWebhook ||
+                !isCurrent(),
             busyContent: createElement(
                 'span',
                 { className: 'mx-sdk-button-content' },
@@ -244,7 +266,7 @@ function controlledButton(
             ),
             onClick: (event) => {
                 event.stopPropagation();
-                void props.onTriggerWebhook?.();
+                if (isCurrent()) void props.onTriggerWebhook?.();
             },
         },
         label

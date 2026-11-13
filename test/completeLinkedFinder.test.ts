@@ -34,6 +34,217 @@ const turn = async () => {
     await Promise.resolve();
     await Promise.resolve();
 };
+
+test('single-link close follows an admitted addition and preserves removal and ordinary toggle behavior', async () => {
+    const f = fixture();
+    const owner = f.currentOwner();
+    assert.equal(
+        (await f.coordinator.toggle(owner, 'new', { closeAfterAddition: true }))
+            .status,
+        'admitted'
+    );
+    assert.deepEqual(f.closes, [owner]);
+    await f.coordinator.toggle(owner, 'new', { closeAfterAddition: true });
+    await f.coordinator.toggle(owner, 'ordinary');
+    assert.deepEqual(f.closes, [owner]);
+    assert.deepEqual(f.canonical, ['hidden', 'chosen', 'hidden', 'ordinary']);
+    f.coordinator.destroy();
+});
+
+for (const supersession of ['direct', 'scheduled', 'refused'] as const) {
+    test(`deferred admitted toggle cannot close a newer same-owner ${supersession} search`, async () => {
+        const f = fixture();
+        const completion = deferred<CompleteLinkedFinderAdmission>();
+        const toggle = f.host.toggle;
+        f.host.toggle = async (owner, id) => {
+            await completion.promise;
+            return toggle(owner, id);
+        };
+        const result = f.coordinator.toggle(f.currentOwner(), 'new', {
+            closeAfterAddition: true,
+        });
+        if (supersession === 'scheduled')
+            f.coordinator.scheduleSearch(request('newer'));
+        else {
+            if (supersession === 'refused') f.host.captureRead = () => null;
+            const pending = f.coordinator.queryNow(request('newer'));
+            if (supersession === 'direct')
+                f.allocated[0].resolve(page(['newer']));
+            assert.equal(
+                (await pending).status,
+                supersession === 'direct' ? 'accepted' : 'refused'
+            );
+        }
+        completion.resolve(admitted);
+        assert.equal((await result).status, 'admitted');
+        assert.equal(f.canonical.includes('new'), true);
+        assert.deepEqual(f.closes, []);
+        f.coordinator.destroy();
+    });
+}
+
+test('reentrant native toggle publication cannot close the newer search', async () => {
+    const f = fixture();
+    const toggle = f.host.toggle;
+    f.host.toggle = (owner, id) => {
+        const result = toggle(owner, id);
+        f.coordinator.scheduleSearch(request('reentrant'));
+        return result;
+    };
+    assert.equal(
+        (
+            await f.coordinator.toggle(f.currentOwner(), 'new', {
+                closeAfterAddition: true,
+            })
+        ).status,
+        'admitted'
+    );
+    assert.deepEqual(f.closes, []);
+    f.coordinator.destroy();
+});
+
+test('reentrant current-membership inspection cannot grant close for an older selection', async () => {
+    const f = fixture();
+    const selection = f.host.selection;
+    let calls = 0;
+    f.host.selection = (owner) => {
+        if (++calls === 2)
+            f.coordinator.scheduleSearch(request('membership-reentrant'));
+        return selection(owner);
+    };
+    await f.coordinator.toggle(f.currentOwner(), 'new', {
+        closeAfterAddition: true,
+    });
+    assert.equal(calls, 2);
+    assert.deepEqual(f.closes, []);
+    f.coordinator.destroy();
+});
+
+test('the final owner predicate cannot reentrantly grant close for an older selection', async () => {
+    const f = fixture();
+    const selection = f.host.selection;
+    const isOwnerCurrent = f.host.isOwnerCurrent;
+    let calls = 0;
+    let armed = false;
+    f.host.selection = (owner) => {
+        if (++calls === 2) armed = true;
+        return selection(owner);
+    };
+    f.host.isOwnerCurrent = (owner) => {
+        if (armed) {
+            armed = false;
+            f.coordinator.scheduleSearch(request('owner-reentrant'));
+        }
+        return isOwnerCurrent(owner);
+    };
+    await f.coordinator.toggle(f.currentOwner(), 'new', {
+        closeAfterAddition: true,
+    });
+    assert.equal(calls, 2);
+    assert.deepEqual(f.closes, []);
+    f.coordinator.destroy();
+});
+
+test('a removal followed by a reentrant canonical re-add does not become single-link addition intent', async () => {
+    const f = fixture();
+    const toggle = f.host.toggle;
+    f.host.toggle = (owner, id) => {
+        const result = toggle(owner, id);
+        f.canonical.push(id);
+        return result;
+    };
+    await f.coordinator.toggle(f.currentOwner(), 'chosen', {
+        closeAfterAddition: true,
+    });
+    assert.equal(f.canonical.includes('chosen'), true);
+    assert.deepEqual(f.closes, []);
+    f.coordinator.destroy();
+});
+
+test('single-link close survives its admitted own write stamp while a separate close failure preserves toggle admission', async () => {
+    const f = fixture();
+    const pending = f.coordinator.queryNow(request());
+    f.allocated[0].resolve(page(['new']));
+    await pending;
+    f.configure({
+        toggleHook: () => {
+            f.configure({ postCurrent: false });
+            return admitted;
+        },
+    });
+    assert.equal(
+        (
+            await f.coordinator.toggle(f.currentOwner(), 'new', {
+                closeAfterAddition: true,
+            })
+        ).status,
+        'admitted'
+    );
+    assert.equal(f.closes.length, 1);
+    f.host.close = () => {
+        throw new Error('Synthetic separate close refusal');
+    };
+    assert.equal(
+        (
+            await f.coordinator.toggle(f.currentOwner(), 'another', {
+                closeAfterAddition: true,
+            })
+        ).status,
+        'admitted'
+    );
+    f.coordinator.destroy();
+});
+
+for (const replacement of ['owner', 'ABA', 'dispose'] as const) {
+    test(`late admission after ${replacement} cannot close a retired selection`, async () => {
+        const f = fixture();
+        const owner = f.currentOwner();
+        const completion = deferred<void>();
+        const toggle = f.host.toggle;
+        f.host.toggle = async (expected, id) => {
+            const result = toggle(expected, id);
+            await completion.promise;
+            return result;
+        };
+        const result = f.coordinator.toggle(owner, 'new', {
+            closeAfterAddition: true,
+        });
+        assert.equal(f.canonical.includes('new'), true);
+        if (replacement === 'dispose') f.coordinator.destroy();
+        else {
+            f.replace();
+            if (replacement === 'ABA') f.replace(owner);
+        }
+        completion.resolve();
+        assert.equal((await result).status, 'admitted');
+        assert.deepEqual(f.closes, []);
+        f.coordinator.destroy();
+    });
+}
+
+test('read identity changes before refused preparation and never exposes host read ports', async () => {
+    const f = fixture();
+    assert.equal(f.coordinator.getSnapshot().readIdentity, null);
+    const pending = f.coordinator.queryNow(request('initial'));
+    const identity = f.coordinator.getSnapshot().readIdentity;
+    assert(identity);
+    assert.equal(Object.isFrozen(identity), true);
+    assert.deepEqual(Object.keys(identity), []);
+    f.allocated[0].resolve(page(['initial'], 'next'));
+    await pending;
+    assert.equal(f.coordinator.getSnapshot().readIdentity, identity);
+    f.host.captureRead = () => {
+        assert.equal(f.coordinator.getSnapshot().readIdentity, null);
+        return null;
+    };
+    assert.equal(
+        (await f.coordinator.queryNow(request('refused'))).status,
+        'refused'
+    );
+    assert.equal(f.coordinator.getSnapshot().readIdentity, null);
+    f.coordinator.destroy();
+});
+
 function fixture(testing = true) {
     let owner: Owner | null = { revision: 1 };
     let readRevision = 1;
@@ -45,6 +256,8 @@ function fixture(testing = true) {
     const toggles: { owner: Owner; id: string }[] = [];
     const closes: Owner[] = [];
     let publishHook = () => {};
+    let didAcceptHook = (_page: Page) => {};
+    const acceptedPages: Page[] = [];
     let toggleHook = (): CompleteLinkedFinderAdmission => admitted;
     let enabled = true;
     let auto = true;
@@ -77,6 +290,10 @@ function fixture(testing = true) {
                     publications.push(result);
                     publishHook();
                     return publishAdmitted ? admitted : refused;
+                },
+                didAccept(result) {
+                    acceptedPages.push(result);
+                    didAcceptHook(result);
                 },
             };
         },
@@ -115,6 +332,7 @@ function fixture(testing = true) {
         allocated,
         captures,
         publications,
+        acceptedPages,
         toggles,
         closes,
         currentOwner: () => owner!,
@@ -135,6 +353,7 @@ function fixture(testing = true) {
             publishAdmitted?: boolean;
             postCurrent?: boolean;
             publishHook?: () => void;
+            didAcceptHook?: (page: Page) => void;
             toggleHook?: () => CompleteLinkedFinderAdmission;
         }) {
             enabled = values.enabled ?? enabled;
@@ -143,6 +362,7 @@ function fixture(testing = true) {
             publishAdmitted = values.publishAdmitted ?? publishAdmitted;
             postCurrent = values.postCurrent ?? postCurrent;
             publishHook = values.publishHook ?? publishHook;
+            didAcceptHook = values.didAcceptHook ?? didAcceptHook;
             toggleHook = values.toggleHook ?? toggleHook;
         },
         listenerCount: () => listeners.size,
@@ -647,6 +867,35 @@ test('an admitted scan toggle may advance its consumed selection read stamp whil
     f.coordinator.destroy();
 });
 
+for (const next of ['scheduled', 'refused'] as const) {
+    test(`a scan cannot close a newer ${next} search started by the final owner predicate`, async () => {
+        const f = fixture();
+        const isOwnerCurrent = f.host.isOwnerCurrent;
+        let armed = false;
+        f.configure({
+            toggleHook: () => {
+                armed = true;
+                return admitted;
+            },
+        });
+        f.host.isOwnerCurrent = (owner) => {
+            if (armed) {
+                armed = false;
+                if (next === 'refused') f.host.captureRead = () => null;
+                f.coordinator.scheduleSearch(request('newer'));
+            }
+            return isOwnerCurrent(owner);
+        };
+        const result = f.coordinator.scan(request('scan'));
+        f.allocated[0].resolve(page(['only']));
+        assert.deepEqual(await result, { status: 'unchanged' });
+        assert.equal(f.toggles.length, 1);
+        assert.equal(f.canonical.includes('only'), true);
+        assert.equal(f.closes.length, 0);
+        f.coordinator.destroy();
+    });
+}
+
 test('throwing scan eligibility reports failure without toggle or close', async () => {
     const f = fixture();
     const cause = new Error('eligibility');
@@ -747,3 +996,179 @@ for (const completion of ['refused', 'throw'] as const) {
         f.coordinator.destroy();
     });
 }
+
+for (const preview of [false, true]) {
+    test(`post-accept receipt qualifies exact page after publication (${preview ? 'preview' : 'public'})`, async () => {
+        const f = fixture();
+        const exact = page(['a', 'a'], 'next');
+        let emissions = 0;
+        f.coordinator.subscribe(() => emissions++);
+        f.configure({
+            preview,
+            didAcceptHook(result) {
+                assert.equal(result, exact);
+                assert.equal(f.publications.at(-1), exact);
+                assert.deepEqual(
+                    f.coordinator.getSnapshot().rawRecords,
+                    preview ? [] : exact.records
+                );
+                assert.equal(
+                    f.coordinator.model.getState().options.length,
+                    preview ? 0 : 1
+                );
+            },
+        });
+        const pending = f.coordinator.queryNow(request());
+        f.allocated[0].resolve(exact);
+        assert.equal((await pending).status, 'accepted');
+        assert.deepEqual(f.acceptedPages, [exact]);
+        if (preview) assert.equal(emissions, 0);
+        f.configure({ didAcceptHook() {} });
+        const next = f.coordinator.queryNow(request('next', false));
+        assert.equal(f.captures.at(-1)?.offset, 'next');
+        f.allocated[1].resolve(page([]));
+        await next;
+        f.coordinator.destroy();
+    });
+}
+
+for (const mode of ['refused', 'retired', 'projection failure'] as const) {
+    test(`post-accept receipt is absent for ${mode}`, async () => {
+        const f = fixture();
+        if (mode === 'refused') f.configure({ publishAdmitted: false });
+        if (mode === 'retired') f.configure({ publishHook: () => f.replace() });
+        if (mode === 'projection failure')
+            f.host.recordId = () => {
+                throw new Error('bad ID');
+            };
+        const pending = f.coordinator.queryNow(request());
+        f.allocated[0].resolve(page(['a']));
+        assert.equal(
+            (await pending).status,
+            mode === 'refused'
+                ? 'refused'
+                : mode === 'retired'
+                  ? 'retired'
+                  : 'failure'
+        );
+        assert.deepEqual(f.acceptedPages, []);
+        f.coordinator.destroy();
+    });
+}
+
+for (const mode of [
+    'owner replacement',
+    'successor read',
+    'destroy',
+] as const) {
+    test(`post-accept callback rechecks ${mode}`, async () => {
+        const f = fixture();
+        let successor: ReturnType<typeof f.coordinator.queryNow> | undefined;
+        f.configure({
+            didAcceptHook() {
+                if (mode === 'owner replacement') f.replace();
+                else if (mode === 'destroy') f.coordinator.destroy();
+                else {
+                    f.configure({ didAcceptHook() {} });
+                    successor = f.coordinator.queryNow(request('successor'));
+                }
+            },
+        });
+        const pending = f.coordinator.queryNow(request());
+        f.allocated[0].resolve(page(['old']));
+        assert.equal((await pending).status, 'retired');
+        assert.equal(f.acceptedPages.length, 1);
+        if (successor) {
+            f.allocated[1].resolve(page(['new']));
+            assert.equal((await successor).status, 'accepted');
+            assert.equal(f.coordinator.getSnapshot().rawRecords[0].id, 'new');
+        }
+        f.coordinator.destroy();
+    });
+}
+
+test('post-accept callback failure does not roll back an already accepted cursor/model', async () => {
+    const f = fixture();
+    f.configure({
+        didAcceptHook() {
+            throw new Error('presentation failure');
+        },
+    });
+    const pending = f.coordinator.queryNow(request());
+    f.allocated[0].resolve(page(['a'], 'next'));
+    assert.equal((await pending).status, 'failure');
+    assert.equal(f.coordinator.getSnapshot().rawRecords[0].id, 'a');
+    f.configure({ didAcceptHook() {} });
+    const next = f.coordinator.queryNow(request('', false));
+    assert.equal(f.captures.at(-1)?.offset, 'next');
+    f.allocated[1].resolve(page(['b']));
+    await next;
+    f.coordinator.destroy();
+});
+
+for (const preview of [false, true]) {
+    test(`owner-bound scheduling receipt shares cursor, queue and latest intent (${preview ? 'preview' : 'public'})`, async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        const f = fixture();
+        f.configure({ preview });
+        const first = f.coordinator.queryNow(request());
+        f.allocated[0].resolve(page(['a'], 'next'));
+        await first;
+        const owner = f.currentOwner();
+        const receipt = f.coordinator.admitScheduledSearch(
+            owner,
+            request('scheduled', false)
+        );
+        assert.equal(receipt.status, 'admitted');
+        if (receipt.status !== 'admitted') throw new Error('Expected intent');
+        assert.equal(receipt.owner, owner);
+        assert.equal(typeof receipt.nonce, 'object');
+        assert.equal(receipt.isCurrent(), true);
+        assert.equal(f.captures.at(-1)?.offset, 'next');
+        if (!preview) {
+            assert.equal(f.coordinator.getSnapshot().loadingMore, true);
+            assert.equal(f.allocated.length, 1);
+            t.mock.timers.tick(10);
+        }
+        assert.equal(f.allocated.length, 2);
+        assert.equal(f.coordinator.scheduleSearch(request('new')), undefined);
+        assert.equal(receipt.isCurrent(), false);
+        f.allocated[1].resolve(page(['retired']));
+        if (!preview) t.mock.timers.tick(10);
+        f.allocated[2].resolve(page(['new']));
+        await turn();
+        assert.equal(f.publications.length, 2);
+        assert.equal(
+            f.coordinator.admitScheduledSearch({ revision: 999 }, request())
+                .status,
+            'refused'
+        );
+        assert.equal(f.captures.length, 3);
+        f.coordinator.destroy();
+    });
+}
+
+test('owner precheck reentrancy cannot let an older scheduling admission supersede a newer query', async () => {
+    const f = fixture();
+    const owner = f.currentOwner();
+    const original = f.host.isOwnerCurrent;
+    let entered = false;
+    let inner: ReturnType<typeof f.coordinator.queryNow> | undefined;
+    f.host.isOwnerCurrent = (expected) => {
+        if (!entered) {
+            entered = true;
+            inner = f.coordinator.queryNow(request('inner'));
+        }
+        return original(expected);
+    };
+    assert.equal(
+        f.coordinator.admitScheduledSearch(owner, request('outer')).status,
+        'refused'
+    );
+    assert.equal(f.allocated.length, 1);
+    assert.equal(f.captures[0].filter.search, 'inner');
+    f.allocated[0].resolve(page(['inner']));
+    assert.equal((await inner)?.status, 'accepted');
+    assert.equal(f.coordinator.getSnapshot().rawRecords[0].id, 'inner');
+    f.coordinator.destroy();
+});

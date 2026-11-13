@@ -47,6 +47,13 @@ export async function bundleDocumentPDF(root = process.cwd()) {
         'PDF engine source must match pinned immutable input'
     );
     const license = pinnedLicense(original);
+    const upstreamWorkerImport =
+        /import\(\s*\/\*webpackIgnore: true\*\/\s*\/\*@vite-ignore\*\/\s*this\.workerSrc\)/g;
+    assert.equal(
+        [...original.matchAll(upstreamWorkerImport)].length,
+        1,
+        'Pinned PDF worker loading must retain its upstream runtime-import intent'
+    );
     const environmentLine = /^const isNodeJS = [^\n]+;$/gm;
     assert.equal([...original.matchAll(environmentLine)].length, 1);
     // Specialize the one verified environment binding through esbuild's
@@ -126,7 +133,19 @@ export async function bundleDocumentPDF(root = process.cwd()) {
             ),
             'PDF adapter must have a closed two-file input set'
         );
-        const bytes = result.outputFiles[0].contents;
+        // esbuild drops even legal comments inside import expressions. Restore
+        // this one pinned upstream annotation in the emitted adapter so Next/
+        // Turbopack and webpack preserve the runtime worker URL, as upstream
+        // intended, instead of trying to resolve an unknown build-time module.
+        const emitted = result.outputFiles[0].text;
+        const workerImport = /\bimport\(this\.workerSrc\)/g;
+        assert.equal([...emitted.matchAll(workerImport)].length, 1);
+        const bytes = Buffer.from(
+            emitted.replace(
+                workerImport,
+                'import(/* webpackIgnore: true */ /* @vite-ignore */ this.workerSrc)'
+            )
+        );
         assert(
             bytes.length <= archiveCaptureBudget,
             'Private PDF module must fit the existing archive-proof capture budget'
@@ -173,6 +192,17 @@ export function assertDocumentPDFBundle(root) {
         assert.equal(entry.path, `dist/${format}/${child}`);
         const bytes = readFileSync(join(root, entry.path));
         pinnedLicense(bytes.toString('utf8'));
+        assert.equal(
+            (
+                bytes
+                    .toString('utf8')
+                    .match(
+                        /import\(\/\* webpackIgnore: true \*\/ \/\* @vite-ignore \*\/ this\.workerSrc\)/g
+                    ) ?? []
+            ).length,
+            1,
+            'Private PDF runtime worker import must preserve its upstream bundler annotations'
+        );
         assert(
             !/globalThis\.(?:pdfjsLib|_pdfjsTestingUtils)\s*=/.test(
                 bytes.toString('utf8')

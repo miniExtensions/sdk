@@ -1,10 +1,11 @@
+import { Window } from 'happy-dom';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { Window } from 'happy-dom';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
     NativeLinkedFinderCascade,
+    NativeLinkedFinderCascadeDriverView,
     type NativeLinkedFinderCascadeProps,
 } from '../src/react/index.js';
 import type {
@@ -26,7 +27,8 @@ const page = (
 async function fixture(
     t: TestContext,
     patch: Partial<NativeLinkedFinderCascadeProps<object>> = {},
-    strict = false
+    strict = false,
+    singlePredecessor?: string | null
 ) {
     const f = await scannerDom(t);
     assert(
@@ -92,7 +94,17 @@ async function fixture(
     };
     const render = async (next: Partial<typeof props> = {}) => {
         props = { ...props, ...next };
-        await f.render(h(NativeLinkedFinderCascade, props), strict);
+        const { drivers, ...shared } = props;
+        await f.render(
+            singlePredecessor === undefined
+                ? h(NativeLinkedFinderCascade, props)
+                : h(NativeLinkedFinderCascadeDriverView, {
+                      ...shared,
+                      driver: drivers[0],
+                      previousFieldId: singlePredecessor,
+                  }),
+            strict
+        );
     };
     await render();
     const settle = async () => {
@@ -153,6 +165,48 @@ test('cascade SSR renders escaped localized selector chrome without allocating r
     assert.match(html, /&lt;Driver&gt;/);
     assert.match(html, /role="combobox"/);
     assert.equal(reads, 0);
+});
+
+test('one native partial survivor retains its external predecessor, test identity and string-only scheduling', async (t) => {
+    const f = await fixture(
+        t,
+        {
+            values: { country: pair('country-A', 'Same') },
+            drivers: [
+                {
+                    fieldId: 'region',
+                    fieldName: 'Region',
+                    title: null,
+                    urlSearchValue: undefined,
+                    hidden: false,
+                    testId: 'native-region',
+                },
+            ],
+        },
+        false,
+        'country'
+    );
+    await f.settle();
+    assert.equal(
+        f.host
+            .querySelector('[data-testid="native-region"]')
+            ?.getAttribute('data-field-id'),
+        'region'
+    );
+    assert.deepEqual(f.requests[0].query.filterData, {
+        previousFilterFieldId: 'country',
+        previousFilterPrimaryValue: 'Same',
+    });
+    await f.render({ values: { country: pair('country-B', 'Same') } });
+    await f.settle();
+    assert.equal(f.requests.length, 1);
+    await f.render({ values: { country: pair('country-B', 'Different') } });
+    await f.settle();
+    assert.equal(f.requests.length, 2);
+    assert.equal(
+        f.requests[1].query.filterData?.previousFilterPrimaryValue,
+        'Different'
+    );
 });
 
 test('hidden partial survivors still run independent raw-array prefill and predecessor reads; Form readonly suppresses all', async (t) => {
@@ -291,3 +345,45 @@ test('StrictMode preserves allocated prefill transports while retiring old local
     );
     assert.equal(f.values.driver?.recordId, 'new-owner');
 });
+
+for (const selected of [null, pair('same', 'Same label')]) {
+    test(`prefill completion clears loading text without a canonical identity change (${selected ? 'same pair' : 'null'})`, async (t) => {
+        const values = { driver: selected };
+        const f = await fixture(
+            t,
+            {
+                values,
+                drivers: [
+                    {
+                        fieldId: 'driver',
+                        fieldName: 'Driver',
+                        title: null,
+                        hidden: false,
+                        urlSearchValue: 'Raw',
+                    },
+                ],
+            },
+            false,
+            null
+        );
+        const loadingInput = f.host.querySelector('input')!;
+        assert.equal(loadingInput.value, 'Chargement');
+        assert.equal(loadingInput.disabled, true);
+        const request = f.requests[0];
+        await act(async () => request.result.resolve(page([], selected)));
+        const input = f.host.querySelector('input')!;
+        assert.equal(input.value, selected?.stringValue ?? '');
+        assert.equal(input.disabled, false);
+        assert.equal(
+            f.host
+                .querySelector('[data-pending-requests]')
+                ?.getAttribute('data-pending-requests'),
+            '0'
+        );
+        assert.equal(values.driver, selected);
+        const requestCount = f.requests.length;
+        await f.render();
+        assert.equal(f.host.querySelector('input'), input);
+        assert.equal(f.requests.length, requestCount);
+    });
+}

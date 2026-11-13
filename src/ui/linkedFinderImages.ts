@@ -2,7 +2,7 @@
 export type LinkedFinderImage = {
     readonly id?: string;
     readonly url: string;
-    readonly filename: string;
+    readonly filename?: string;
     readonly largeUrl?: string | null;
 };
 

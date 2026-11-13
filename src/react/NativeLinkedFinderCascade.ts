@@ -28,6 +28,7 @@ export type NativeLinkedFinderCascadeDescriptor = {
     readonly title: string | null;
     readonly urlSearchValue: NativeLinkedFinderCascadeUrlValue;
     readonly hidden: boolean;
+    readonly testId?: string;
 };
 
 export type NativeLinkedFinderCascadeLabels = {
@@ -223,6 +224,7 @@ function CascadeDriver<Owner extends object>(
                 .join(' '),
             style: props.style,
             'data-field-id': driver.fieldId,
+            'data-testid': driver.testId,
             'data-pending-requests': state.pending.length,
         },
         h<{
@@ -257,6 +259,14 @@ function CascadeDriver<Owner extends object>(
                     'div',
                     { className: 'mx-sdk-finder-input-wrap' },
                     h(Combobox.Input<'input', NativeLinkedFinderCascadeValue>, {
+                        // The frozen combobox memoizes displayValue by selected
+                        // identity. Prefill can finish without changing that
+                        // identity (including null), so refresh this disabled
+                        // input boundary without remounting the driver/reads.
+                        key:
+                            state.status === 'fetching-prefill'
+                                ? 'prefill'
+                                : 'selection',
                         disabled,
                         className: 'mx-sdk-finder-input',
                         autoComplete: 'off',
@@ -297,6 +307,16 @@ function CascadeDriver<Owner extends object>(
             ),
         })
     );
+}
+
+export type NativeLinkedFinderCascadeDriverViewProps<Owner extends object> =
+    DriverProps<Owner> & { formReadOnly?: boolean };
+
+/** One native partial-metadata survivor, with its actual predecessor retained. */
+export function NativeLinkedFinderCascadeDriverView<Owner extends object>(
+    props: NativeLinkedFinderCascadeDriverViewProps<Owner>
+): ReactElement | null {
+    return props.formReadOnly ? null : h(CascadeDriver<Owner>, props);
 }
 
 /** Actual searchable native-compatible selectors, without a client or native JSX slots. */

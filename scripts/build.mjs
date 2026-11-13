@@ -213,6 +213,7 @@ for (const format of ['esm', 'cjs']) {
 
 for (const format of ['esm', 'cjs']) {
     for (const name of [
+        'portal-shell',
         'signature',
         'theme',
         'button',
@@ -226,6 +227,7 @@ for (const format of ['esm', 'cjs']) {
         'kanban',
         'form-completion',
         'form-header',
+        'form-submit',
         'form-validation-summary',
         'portal-summary-cards',
         'form-progress',

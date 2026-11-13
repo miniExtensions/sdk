@@ -145,6 +145,7 @@
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css",
         "./react/theme.css": "./dist/esm/react/theme.css",
         "./react/form-header.css": "./dist/esm/react/form-header.css",
+        "./react/form-submit.css": "./dist/esm/react/form-submit.css",
         "./react/form-progress.css": "./dist/esm/react/form-progress.css",
         "./react/form-validation-summary.css": "./dist/esm/react/form-validation-summary.css",
         "./react/portal-summary-cards.css": "./dist/esm/react/portal-summary-cards.css",
@@ -195,7 +196,8 @@
         },
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
-        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css"
+        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
+        "./react/portal-shell.css": "./dist/esm/react/portal-shell.css"
     },
     "files": [
         "dist/esm",
@@ -253,6 +255,7 @@
         "examples/react-form-completion/build.mjs",
         "examples/react-form-completion/tsconfig.json",
         "docs/form-header.md",
+        "docs/form-submit.md",
         "docs/form-groups.md",
         "docs/field-presentation.md",
         "examples/react-form-header/README.md",
@@ -266,7 +269,8 @@
         "docs/single-line-text.md",
         "docs/customer-chat.md",
         "docs/csv-export.md",
-        "docs/kanban.md"
+        "docs/kanban.md",
+        "docs/portal-shell.md"
     ],
     "engines": {
         "node": ">=22"

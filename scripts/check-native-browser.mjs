@@ -2,6 +2,7 @@ import {
     prepareKanbanBrowserFixtures,
     checkKanbanBrowser,
 } from './kanban-consumer-checks.mjs';
+import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
 import {
     prepareCSVExportBrowserFixtures,
     checkCSVExportBrowser,
@@ -2353,6 +2354,13 @@ try {
                 reference: nativeReactVersion === '18.3.1',
             });
         }
+        report.formSubmit = {};
+        await checkFormSubmitBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formSubmit,
+            output,
+        });
         report.formTracking = {};
         await checkFormTrackingBrowser({
             browser,

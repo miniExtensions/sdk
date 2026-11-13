@@ -7,6 +7,7 @@ import {
 } from './ordinary-validation-consumer-checks.mjs';
 import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
 import { checkCustomerChatMatrix } from './customer-chat-consumer-checks.mjs';
+import { checkCalendarReactMatrix } from './calendar-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -545,6 +546,15 @@ const headerStarterFiles = completionStarterFiles.map((path) =>
     path.replace('react-form-completion/', 'react-form-header/')
 );
 
+const linkedFinderStarterFiles = [
+    'README.md',
+    'main.ts',
+    'consumer.cts',
+    'index.html',
+    'dev.mjs',
+    'tsconfig.json',
+].map((path) => `examples/react-complete-linked-finder/${path}`);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -624,6 +634,8 @@ try {
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
+                path === 'docs/calendar.md' ||
+                path === 'docs/complete-linked-finder.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
@@ -638,6 +650,7 @@ try {
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
+                linkedFinderStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 documentFiles.has(path) ||
@@ -668,6 +681,9 @@ try {
         ...documentFiles,
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'docs/calendar.md',
+        'docs/complete-linked-finder.md',
+        ...linkedFinderStarterFiles,
         'docs/count.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
@@ -681,6 +697,18 @@ try {
         'docs/customer-chat.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
+        'dist/esm/react/calendar.css',
+        'dist/cjs/react/calendar.css',
+        'dist/esm/react/calendar-complete.css',
+        'dist/cjs/react/calendar-complete.css',
+        'dist/esm/react/CalendarRuntime.js',
+        'dist/cjs/react/CalendarRuntime.js',
+        'dist/esm/react/calendar/index.js',
+        'dist/cjs/react/calendar/index.js',
+        'dist/esm/react/calendar-vendor.json',
+        'dist/cjs/react/calendar-vendor.json',
+        'dist/esm/react/calendar.LICENSES.txt',
+        'dist/cjs/react/calendar.LICENSES.txt',
         'dist/esm/react/date/index.js',
         'dist/cjs/react/date/index.js',
         'dist/esm/react/theme.css',
@@ -730,8 +758,6 @@ try {
         'docs/kanban.md',
         'dist/esm/react/kanban.css',
         'dist/cjs/react/kanban.css',
-        'dist/esm/react/complete-linked-finder.css',
-        'dist/cjs/react/complete-linked-finder.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -776,6 +802,8 @@ try {
         'dist/cjs/react/multiple-select.css',
         'dist/esm/react/linked-records.css',
         'dist/cjs/react/linked-records.css',
+        'dist/esm/react/complete-linked-finder.css',
+        'dist/cjs/react/complete-linked-finder.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -2954,9 +2982,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(createdByProof.checks, 20);
+    assert.equal(createdByProof.checks, 28);
     console.log(
-        `Installed Created By renderer, readonly native names, shared Text CSS and local example: ${createdByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        `Installed Created By binding/helper and controlled readonly display: ${createdByProof.checks} ESM/CJS groups (20 legacy plus 8 controlled) passed; synthetic owners only.`
     );
     const externalSyncSourceProof = await checkExternalSyncSourceConsumer({
         consumerDirectory: temporaryDirectory,
@@ -3529,6 +3557,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(dateMatrix.versions.length, 2);
     assert.equal(dateMatrix.cleanup, 'completed');
+    const calendarMatrix = checkCalendarReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(calendarMatrix.versions.length, 2);
+    assert.equal(calendarMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3990,6 +4025,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     (path) =>
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
+                        linkedFinderStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
                             'README.md',

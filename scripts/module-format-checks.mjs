@@ -206,7 +206,6 @@ export function assertModuleFormats(root) {
                 './react/form-group.css',
                 './react/csv-export.css',
                 './react/kanban.css',
-                './react/complete-linked-finder.css',
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/form-validation-summary.css',
@@ -219,12 +218,15 @@ export function assertModuleFormats(root) {
                 './react/attachment-preview.css',
                 './react/complete-collaborators.css',
                 './react/date.css',
+                './react/calendar.css',
+                './react/calendar-complete.css',
                 './react/complete-date.css',
                 './react/datetime.css',
                 './react/duration.css',
                 './react/currency.css',
                 './react/multiple-select.css',
                 './react/linked-records.css',
+                './react/complete-linked-finder.css',
                 './react/single-select.css',
                 './react/controlled-select.css',
                 './react/rich-text.css',
@@ -256,6 +258,7 @@ export function assertModuleFormats(root) {
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
                 subpath === './react/date' ||
+                subpath === './react/calendar' ||
                 subpath === './customer-chat/react' ||
                 subpath === './customer-chat/intercom'
         );

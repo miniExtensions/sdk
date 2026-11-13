@@ -1,5 +1,37 @@
 export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
 export {
+    createNativeLinkedFinderCascadeDriver,
+    type NativeLinkedFinderCascadeValue,
+    type NativeLinkedFinderCascadeUrlValue,
+    type NativeLinkedFinderCascadeQuery,
+    type NativeLinkedFinderCascadePage,
+    type NativeLinkedFinderCascadeHost,
+    type NativeLinkedFinderCascadeSnapshot,
+    type NativeLinkedFinderCascadeResult,
+    type NativeLinkedFinderCascadeDriver,
+} from './nativeLinkedFinderCascade.js';
+export {
+    createCompleteLinkedFinderCoordinator,
+    type CompleteLinkedFinderPage,
+    type CompleteLinkedFinderRequest,
+    type CompleteLinkedFinderAdmission,
+    type CompleteLinkedFinderRead,
+    type CompleteLinkedFinderSelection,
+    type CompleteLinkedFinderHost,
+    type CompleteLinkedFinderQueryResult,
+    type CompleteLinkedFinderSnapshot,
+    type CompleteLinkedFinderCoordinator,
+} from './completeLinkedFinder.js';
+export {
+    linkedFinderListImageVector,
+    linkedFinderCarouselImages,
+    linkedFinderCarouselIndex,
+} from './linkedFinderImages.js';
+export type {
+    LinkedFinderImage,
+    LinkedFinderCarouselImage,
+} from './linkedFinderImages.js';
+export {
     createRecordCommentsController,
     presentRecordComment,
     type RecordComment,
@@ -327,12 +359,30 @@ export {
 } from './selectFormulaEvaluation.js';
 
 export {
-    linkedFinderListImageVector,
-    linkedFinderCarouselImages,
-    linkedFinderCarouselIndex,
-    type LinkedFinderImage,
-    type LinkedFinderCarouselImage,
-} from './linkedFinderImages.js';
+    getCalendarFieldResultConfig,
+    isCalendarDateField,
+    parseCalendarFieldDate,
+    getPortalCalendarDateKeys,
+    getCalendarFieldUtcOffset,
+    projectCalendarRecordPickerDays,
+    projectPortalCalendarDays,
+    type CalendarProjectionRecord,
+} from './calendarDateProjection.js';
+export {
+    nativeCalendarClock,
+    createCalendarRecordPickerController,
+    createPortalCalendarController,
+    type CalendarClock,
+    type CalendarActionResult,
+    type CalendarOwnerFrame,
+    type CalendarPickerRead,
+    type CalendarRecordPickerFrame,
+    type PortalCalendarFrame,
+    type CalendarSelection,
+    type CalendarDayActions,
+    type CalendarRecordPickerActions,
+} from './calendarController.js';
+
 export {
     classifyAttachmentPreview,
     isAttachmentPreviewImage,

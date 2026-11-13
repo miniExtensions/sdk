@@ -7,6 +7,7 @@ import { bundleDatePopover } from './date-popover-vendor.mjs';
 import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import assert from 'node:assert/strict';
 import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
+import { bundleCalendar } from './calendar-vendor-checks.mjs';
 import {
     bundleCollaboratorPicker,
     bundleScannerDialog,
@@ -145,6 +146,7 @@ copyFileSync(
 
 // Both compilers have finished; bundle only the Chart adapter closure.
 await bundlePortalChart();
+await bundleCalendar();
 await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
@@ -222,7 +224,6 @@ for (const format of ['esm', 'cjs']) {
         'form-group',
         'csv-export',
         'kanban',
-        'complete-linked-finder',
         'form-completion',
         'form-header',
         'form-validation-summary',
@@ -247,11 +248,14 @@ for (const format of ['esm', 'cjs']) {
         'complete-collaborators',
         'complete-date',
         'date',
+        'calendar',
+        'calendar-complete',
         'datetime',
         'duration',
         'currency',
         'multiple-select',
         'linked-records',
+        'complete-linked-finder',
         'single-select',
         'controlled-select',
         'rich-text',

@@ -183,6 +183,8 @@ for (const format of ['esm', 'cjs']) {
         'form-tracking',
         'form-group',
         'csv-export',
+        'kanban',
+        'complete-linked-finder',
         'form-completion',
         'form-header',
         'field-presentation',

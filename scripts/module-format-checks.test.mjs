@@ -636,6 +636,8 @@ for (const name of [
     'button',
     'form-group',
     'csv-export',
+    'kanban',
+    'complete-linked-finder',
     'checkbox',
     'text',
     'number',

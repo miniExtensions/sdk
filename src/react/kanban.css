@@ -1,0 +1,150 @@
+@import './complete-linked-finder.css';
+@import './complete-readonly-text.css';
+@import './html-description.css';
+@import './rich-text.css';
+@import './localized-numeric.css';
+@import './complete-date.css';
+@import './complete-phone.css';
+@import './duration.css';
+@import './complete-checkbox.css';
+@import './barcode.css';
+@import './button.css';
+.mx-sdk-kanban {
+    box-sizing: border-box;
+    font:
+        400 14px/20px system-ui,
+        sans-serif;
+    color: #1f2937;
+    max-width: 100%;
+}
+.mx-sdk-kanban *,
+.mx-sdk-kanban *::before,
+.mx-sdk-kanban *::after {
+    box-sizing: border-box;
+}
+.mx-sdk-kanban-board {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    max-width: 100%;
+    height: 100%;
+    padding: 8px 0;
+    margin-inline: auto;
+    align-items: stretch;
+}
+.mx-sdk-kanban-column {
+    flex: 0 0 300px;
+    width: 300px;
+    min-height: 160px;
+}
+.mx-sdk-kanban-column-label {
+    font-weight: 600;
+    padding: 12px 20px;
+    min-height: 54px;
+}
+.mx-sdk-kanban-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-height: 106px;
+}
+.mx-sdk-kanban-item {
+    list-style: none;
+    width: 100%;
+    margin: 0 0 8px;
+}
+.mx-sdk-kanban-draggable {
+    width: 100%;
+    outline-offset: 2px;
+}
+.mx-sdk-kanban-card {
+    position: relative;
+    width: 100%;
+}
+.mx-sdk-kanban-card-content {
+    height: 100%;
+    overflow: hidden;
+    border: 3px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    color: #1f2937;
+    box-shadow: 0 1px 3px #0002;
+}
+.mx-sdk-kanban-open {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border: 3px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+}
+.mx-sdk-kanban-open:hover,
+.mx-sdk-kanban-open:focus-visible {
+    border-color: rgb(var(--theme-500, 99 102 241));
+    outline: none;
+}
+.mx-sdk-kanban-card-content a,
+.mx-sdk-kanban-card-content button {
+    position: relative;
+    z-index: 2;
+}
+.mx-sdk-kanban-review {
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    z-index: 3;
+}
+.mx-sdk-kanban-unlink {
+    position: absolute;
+    right: -8px;
+    top: -8px;
+    z-index: 3;
+    border: 0;
+    border-radius: 50%;
+    padding: 2px;
+    width: 20px;
+    height: 20px;
+    background: #6b7280;
+    color: white;
+    cursor: pointer;
+    opacity: 0;
+}
+.mx-sdk-kanban-card:hover .mx-sdk-kanban-unlink,
+.mx-sdk-kanban-unlink:focus-visible,
+.mx-sdk-kanban-unlink[aria-busy='true'] {
+    opacity: 1;
+}
+.mx-sdk-kanban-unlink:disabled {
+    cursor: default;
+}
+.mx-sdk-kanban-spinner {
+    display: block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: mx-sdk-kanban-spin 0.8s linear infinite;
+}
+@keyframes mx-sdk-kanban-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mx-sdk-kanban-spinner {
+        animation: none;
+    }
+}
+
+/* Keep One's absolute arrow placement above the whole-card Open overlay. */
+.mx-sdk-kanban-card-content .mx-sdk-finder-carousel > button {
+    position: absolute;
+    z-index: 2;
+}

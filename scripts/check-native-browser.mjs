@@ -1,4 +1,8 @@
 import {
+    prepareKanbanBrowserFixtures,
+    checkKanbanBrowser,
+} from './kanban-consumer-checks.mjs';
+import {
     prepareCSVExportBrowserFixtures,
     checkCSVExportBrowser,
 } from './csv-export-consumer-checks.mjs';
@@ -1549,6 +1553,7 @@ try {
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
             'scripts/csv-export-consumer-checks.mjs',
+            'scripts/kanban-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
@@ -1974,6 +1979,18 @@ try {
             hash,
         });
         await prepareFieldPresentationBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareKanbanBrowserFixtures({
             temporary,
             archive,
             readArchiveMember,
@@ -2921,6 +2938,9 @@ try {
                 page,
                 evidence: report.fieldPresentation,
             });
+        });
+        await run('kanban', async (page, origin) => {
+            await checkKanbanBrowser({ page, origin, evidence: report.kanban });
         });
         await run('csv-export', async (page, origin) => {
             await page.goto(origin + '/csv-export.html');
@@ -3906,8 +3926,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, CSV export and one-page section groups.
-            27 +
+            // Include complete fields, CSV export, Kanban and one-page section groups.
+            28 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

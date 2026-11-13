@@ -325,3 +325,11 @@ export {
     type SelectFormulaEvaluationInput,
     type SelectConditionEvaluationInput,
 } from './selectFormulaEvaluation.js';
+
+export {
+    linkedFinderListImageVector,
+    linkedFinderCarouselImages,
+    linkedFinderCarouselIndex,
+    type LinkedFinderImage,
+    type LinkedFinderCarouselImage,
+} from './linkedFinderImages.js';

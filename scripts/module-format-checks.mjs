@@ -204,6 +204,8 @@ export function assertModuleFormats(root) {
                 './react/form-tracking.css',
                 './react/form-group.css',
                 './react/csv-export.css',
+                './react/kanban.css',
+                './react/complete-linked-finder.css',
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/field-presentation.css',

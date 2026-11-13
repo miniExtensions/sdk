@@ -354,3 +354,75 @@ it('cold SSR is document-free and missing admitted card data fails instead of fa
         env: process.env,
     });
 });
+
+it('card readonly Date and DateTime leaves match the existing date facade without importing its picker', async (t) => {
+    await fixture(t);
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { DateField, DateTimeField } = await import(
+        '../src/react/date/DateField.js'
+    );
+    const { LinkedFinderReadOnlyDate } = await import(
+        '../src/react/linkedFinderReadOnlyDate.js'
+    );
+    const moment = (await import('moment-timezone')).default;
+    const originalLocale = moment.locale();
+    moment.locale('fr');
+    t.after(() => {
+        moment.locale(originalLocale);
+    });
+    const configs = [
+        {
+            type: 'date',
+            options: { dateFormat: { name: 'iso', format: 'YYYY-MM-DD' } },
+        },
+        {
+            type: 'dateTime',
+            options: {
+                dateFormat: { name: 'iso', format: 'YYYY-MM-DD' },
+                timeFormat: { name: '24hour', format: 'HH:mm' },
+                timeZone: 'utc',
+            },
+        },
+        {
+            type: 'dateTime',
+            options: {
+                dateFormat: { name: 'iso', format: 'YYYY-MM-DD' },
+                timeFormat: { name: '12hour', format: 'h:mma' },
+                timeZone: 'client',
+            },
+        },
+    ] as const;
+    for (const config of configs)
+        for (const value of [
+            null,
+            '',
+            'not-a-date',
+            '2026-11-13',
+            '2026-11-13T12:45:00.000Z',
+            '2026-11-01T08:30:00.000Z',
+        ])
+            for (const language of ['en', 'es', 'de'] as const) {
+                const common = { id: 'readonly-date', value, language };
+                const expected =
+                    config.type === 'date'
+                        ? h(DateField, {
+                              ...common,
+                              mode: 'readOnly',
+                              airtableDateConfig: config,
+                          })
+                        : h(DateTimeField, {
+                              ...common,
+                              mode: 'readOnly',
+                              airtableDateConfig: config,
+                          });
+                assert.equal(
+                    renderToStaticMarkup(
+                        h(LinkedFinderReadOnlyDate, {
+                            ...common,
+                            airtableDateConfig: config,
+                        })
+                    ),
+                    renderToStaticMarkup(expected)
+                );
+            }
+});

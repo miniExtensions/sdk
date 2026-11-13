@@ -27,12 +27,11 @@ import {
     CompleteLocalizedNumericField,
     type CompleteLocalizedNumericRendererProps,
 } from './CompleteLocalizedNumericField.js';
-import {
-    DateField,
-    DateTimeField,
-    type ControlledDateFieldProps,
-    type ControlledDateTimeFieldProps,
+import type {
+    ControlledDateFieldProps,
+    ControlledDateTimeFieldProps,
 } from './date/DateField.js';
+import { LinkedFinderReadOnlyDate } from './linkedFinderReadOnlyDate.js';
 import {
     CompleteReadOnlyPhoneNumberField,
     type CompleteReadOnlyPhoneNumberFieldProps,
@@ -251,9 +250,9 @@ export function LinkedFinderRichLeaf({
                 },
             });
         case 'date':
-            return h(DateField, { ...leaf.display, id, mode: 'readOnly' });
+            return h(LinkedFinderReadOnlyDate, { ...leaf.display, id });
         case 'dateTime':
-            return h(DateTimeField, { ...leaf.display, id, mode: 'readOnly' });
+            return h(LinkedFinderReadOnlyDate, { ...leaf.display, id });
         case 'phone':
             return h(CompleteReadOnlyPhoneNumberField, leaf.display);
         case 'duration':

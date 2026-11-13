@@ -1,3 +1,4 @@
+import { Window } from 'happy-dom';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement as h } from 'react';
@@ -48,6 +49,10 @@ const present = (
 
 test('card composes the delivered readonly Single-line control and host-localized empty labels', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderRichLeaf, {
             leaf: {
@@ -84,6 +89,10 @@ test('card composes the delivered readonly Single-line control and host-localize
 
 test('borrowed controlled Button leaves retain captured host authority for stale anchors and webhook clicks', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     let current = true,
         triggered = 0;
     const owner = { isCurrent: () => current };
@@ -137,6 +146,10 @@ test('borrowed controlled Button leaves retain captured host authority for stale
 
 test('rating uses the actual readonly presenter, nullable label and admitted native glyph geometry', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     const leaf = {
         kind: 'rating',
         value: null,
@@ -173,6 +186,10 @@ test('rating uses the actual readonly presenter, nullable label and admitted nat
 
 test('people reuse the native SDK badge with already admitted avatar delivery properties and literal labels', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderRichLeaf, {
             leaf: {
@@ -211,6 +228,10 @@ test('people reuse the native SDK badge with already admitted avatar delivery pr
 
 test('admitted URL buttons reuse current-owner resource admission and localized invalid presentation without Button schema', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     let current = true;
     const owner = { token: {}, isCurrent: () => current };
     await f.render(
@@ -265,6 +286,10 @@ test('admitted URL buttons reuse current-owner resource admission and localized 
 
 test('lookup sequence spacing retains ordered duplicate leaves and per-field errors as escaped data', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderRichLeaf, {
             leaf: {
@@ -347,6 +372,10 @@ test('Gallery slices six before failures, separates ID/source, retains selected 
 
 test('actual List traverses all supplied original URLs, ignores equivalent references and resets on vector changes', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(h(LinkedFinderCard, { projection: present() }));
     for (let index = 0; index < images.length; index++) {
         const image = f.container.querySelector('img')!;
@@ -381,6 +410,10 @@ test('actual List traverses all supplied original URLs, ignores equivalent refer
 
 test('actual Gallery preserves identity reorder/removal, rejects stale source errors and never backfills seventh', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderCard, { projection: present({ layout: 'gallery' }) })
     );
@@ -443,6 +476,10 @@ test('actual Gallery preserves identity reorder/removal, rejects stale source er
 
 test('List position survives hiding/side/layout changes; carousel failures share Gallery/Kanban lifetime only', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(h(LinkedFinderCard, { projection: present() }));
     const old = f.container.querySelector('img')!;
     await f.imageEvent(old, 'error');
@@ -553,6 +590,10 @@ test('card loading/unavailable do not recover any present data; primary stays es
 
 test('rich leaves reuse sanitizing HTML, literal labels, duration, phone, checkbox and readonly barcode without actions', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderRichLeaf, {
             leaf: {
@@ -617,6 +658,10 @@ test('rich leaves reuse sanitizing HTML, literal labels, duration, phone, checkb
 
 test('admitted thumbnail enablement/location and detail grid survive List/Gallery transitions', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     const fields = [
         {
             key: 'detail',

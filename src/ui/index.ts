@@ -360,6 +360,31 @@ export {
 } from './selectFormulaEvaluation.js';
 
 export {
+    getCalendarFieldResultConfig,
+    isCalendarDateField,
+    parseCalendarFieldDate,
+    getPortalCalendarDateKeys,
+    getCalendarFieldUtcOffset,
+    projectCalendarRecordPickerDays,
+    projectPortalCalendarDays,
+    type CalendarProjectionRecord,
+} from './calendarDateProjection.js';
+export {
+    nativeCalendarClock,
+    createCalendarRecordPickerController,
+    createPortalCalendarController,
+    type CalendarClock,
+    type CalendarActionResult,
+    type CalendarOwnerFrame,
+    type CalendarPickerRead,
+    type CalendarRecordPickerFrame,
+    type PortalCalendarFrame,
+    type CalendarSelection,
+    type CalendarDayActions,
+    type CalendarRecordPickerActions,
+} from './calendarController.js';
+
+export {
     classifyAttachmentPreview,
     isAttachmentPreviewImage,
     type AttachmentPreviewSource,

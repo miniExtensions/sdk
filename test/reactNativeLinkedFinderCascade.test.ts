@@ -1,3 +1,4 @@
+import { Window } from 'happy-dom';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { act, createElement as h } from 'react';
@@ -30,6 +31,10 @@ async function fixture(
     singlePredecessor?: string | null
 ) {
     const f = await scannerDom(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     const owner = {};
     let current = owner;
     const requests: {

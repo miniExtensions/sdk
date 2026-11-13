@@ -72,11 +72,11 @@ export function completeCollaboratorBrowserSource(format) {
             ? `import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {SingleCollaboratorField,MultipleCollaboratorsField} from '@miniextensions/sdk/react';\n`
+import {SingleCollaboratorField,MultipleCollaboratorsField,CreatedByField} from '@miniextensions/sdk/react';\n`
             : `const React = require('react');
 const {createRoot} = require('react-dom/client');
 const {flushSync} = require('react-dom');
-const {SingleCollaboratorField,MultipleCollaboratorsField} = require('@miniextensions/sdk/react');\n`;
+const {SingleCollaboratorField,MultipleCollaboratorsField,CreatedByField} = require('@miniextensions/sdk/react');\n`;
     return (
         imports +
         `const format = ${JSON.stringify(format)};\n` +
@@ -90,7 +90,7 @@ const people = Object.freeze({
  Adup:Object.freeze({id:'usrAlpha',name:'Alpha second occurrence',email:'alpha-duplicate@example.invalid',extra:'original duplicate'}),
  literal:Object.freeze({id:'usrLiteral',name:'',email:'<img src=x onerror="identityLookup()">',extra:'literal label'}),
 });
-const state={errors:[],requests:0,submits:0,parentClicks:0,parentKeys:0,siblingActions:0,writes:[],mounts:0,cleanups:0,committed:0};
+const state={errors:[],requests:0,submits:0,parentClicks:0,parentKeys:0,siblingActions:0,writes:[],mounts:0,cleanups:0,committed:0,creatorForbiddenReads:0};
 window.addEventListener('error',event=>state.errors.push(String(event.error||event.message)));
 window.addEventListener('unhandledrejection',event=>state.errors.push(String(event.reason)));
 window.fetch=async()=>{state.requests++;throw Error('Collaborator fixture cannot fetch');};
@@ -146,13 +146,28 @@ function App({initial}){
    if(!current.refuseChanges)update(previous=>({...previous,value:next,revision:previous.revision+1}));
   }};
  const component=current.mode==='single'?SingleCollaboratorField:MultipleCollaboratorsField;
+ let field=null;
+ if(current.mounted){
+  if(current.mode==='createdBy'){
+   const forbidden=()=>{state.creatorForbiddenReads++;throw Error('Computed creator cannot inspect editing authority');};
+   const creatorLabels={empty:current.creatorEmpty??'No creator'};
+   Object.defineProperty(creatorLabels,'remove',{enumerable:true,get:forbidden});
+   const display={mode:'controlled',value:current.value,visible:current.visible,
+    inputId:'native-collaborator',formId:'collaborator-form',title:'Synthetic creator',
+    describedBy:common.describedBy,invalid:common.invalid,labels:creatorLabels,avatarPolicy:common.avatarPolicy};
+   for(const key of ['readOnly','owner','choices','onValueChange','onChange','binding','render'])
+    Object.defineProperty(display,key,{enumerable:true,get:forbidden});
+   // The public dispatcher projects before React copies caller-owned getters.
+   field=CreatedByField(display);
+  }else field=React.createElement(component,{...common,mode:'controlled',value:current.value});
+ }
  return React.createElement('form',{id:'collaborator-form',onSubmit(event){event.preventDefault();state.submits++;}},
   React.createElement('div',{className:'fixture-primary'},
    React.createElement('label',{htmlFor:'native-collaborator'},'Synthetic collaborator'),
    React.createElement('p',{id:current.helpId},'Supplied collaborator help'),
    React.createElement('p',{id:current.errorId},'Supplied collaborator error'),
    React.createElement('section',{id:'field',onClick:()=>state.parentClicks++,onKeyDown:()=>state.parentKeys++},
-    current.mounted?React.createElement(component,{...common,mode:'controlled',value:current.value}):null)),
+    field)),
   React.createElement('div',{className:'fixture-neighbors'},
    React.createElement('label',{htmlFor:'adjacent'},'Adjacent draft'),
    React.createElement('input',{id:'adjacent',defaultValue:'Keep adjacent dirty value'}),
@@ -303,6 +318,12 @@ export async function prepareCompleteCollaboratorFixtures({
                 `package/dist/${format}/react/CompleteCollaboratorField.js`
         );
         assert(child, 'Actual packed complete collaborator field missing');
+        const creator = inputs.find(
+            (item) =>
+                item.archiveMember ===
+                `package/dist/${format}/react/CreatedByField.js`
+        );
+        assert(creator, 'Actual packed CreatedBy field missing');
         const runtime = inputs.find(
             (item) =>
                 item.archiveMember ===
@@ -352,6 +373,8 @@ export async function prepareCompleteCollaboratorFixtures({
             packagedCssSha256: hash(css),
             packagedChildMember: child.archiveMember,
             packagedChildSha256: child.sha256,
+            packagedCreatedByMember: creator.archiveMember,
+            packagedCreatedBySha256: creator.sha256,
             packagedRuntimeMember: runtime.archiveMember,
             packagedRuntimeSha256: runtime.sha256,
             bundleSha256: hash(code),
@@ -396,6 +419,7 @@ export async function checkCompleteCollaboratorBrowser({
     const ready = async (value) => {
         if (value === undefined) value = await snapshot();
         if (
+            value.mode === 'createdBy' ||
             value.readOnly === true ||
             value.disabled === true ||
             value.visible === false ||
@@ -597,14 +621,17 @@ export async function checkCompleteCollaboratorBrowser({
     const groups = [];
     // Keep completed groups even when a later browser assertion fails.
     evidence.browserGroups = groups;
-    const record = async (name) => {
+    const record = async (
+        name,
+        expectedAdjacent = 'Keep adjacent dirty value'
+    ) => {
         const value = await snapshot();
         assert.deepEqual(value.errors, []);
         assert.equal(value.requests, 0);
         assert.equal(value.submits, 0);
         assert.equal(value.parentClicks, 0);
         assert.equal(value.parentKeys, 0);
-        assert.equal(value.adjacent, 'Keep adjacent dirty value');
+        assert.equal(value.adjacent, expectedAdjacent);
         assert.equal(value.reactVersion, evidence.reactVersion);
         assert.equal(value.format, format);
         assert(value.writes.every((write) => write.originalObjects));
@@ -1300,8 +1327,97 @@ export async function checkCompleteCollaboratorBrowser({
         await record(
             'whole-root StrictMode unmount/remount preserves caller values without reviving a retired action'
         );
-        assert.equal(groups.length, 12);
+        const creatorBaseline = await snapshot();
+        await adjacent.fill('Edited creator neighbor');
+        await configure({
+            mode: 'createdBy',
+            valueTags: 'literal',
+            readOnly: false,
+            active: true,
+            images: 'none',
+            visible: true,
+        });
+        assert.deepEqual((await snapshot()).badges, [
+            '<img src=x onerror="identityLookup()">',
+        ]);
+        assert.equal(
+            await page
+                .locator(
+                    '#field input,#field button,#field img,[role=combobox]'
+                )
+                .count(),
+            0
+        );
+        await page.locator('#field .mx-sdk-collaborator-name').click();
+        assert.equal(
+            (await snapshot()).parentClicks,
+            creatorBaseline.parentClicks
+        );
+        await configure({ valueTags: null, creatorEmpty: 'Aucun créateur' });
+        assert.equal(
+            await page
+                .locator('#field .mx-sdk-collaborator-empty')
+                .textContent(),
+            'Aucun créateur'
+        );
+        await configure({ valueTags: 'B', images: 'source' });
+        assert.deepEqual((await snapshot()).badges, ['Beta Person']);
+        const creatorImage = page.locator('#field img');
+        await creatorImage.waitFor();
+        assert.equal(
+            await creatorImage.getAttribute('src'),
+            '/complete-collaborator-avatar.svg'
+        );
+        await configure({ visible: false });
+        assert.equal(await page.locator('#field [role=group]').count(), 0);
+        await configure({ visible: true, valueTags: 'A', images: 'none' });
+        assert.deepEqual((await snapshot()).badges, ['Alpha Person']);
+        assert.equal(
+            await page.locator('#field input,#field button,#field img').count(),
+            0
+        );
+        assert.equal(await adjacent.inputValue(), 'Edited creator neighbor');
+        await page
+            .getByRole('button', { name: 'Adjacent action', exact: true })
+            .focus();
+        await page.keyboard.press('Shift+Tab');
+        assert(
+            await adjacent.evaluate((node) => node === document.activeElement)
+        );
+        value = await snapshot();
+        assert.equal(value.writes.length, creatorBaseline.writes.length);
+        assert.equal(value.creatorForbiddenReads, 0);
+        await record(
+            'CreatedBy is forced readonly with inert capabilities, literal identity, locale/avatar replacement and an edited adjacent draft',
+            'Edited creator neighbor'
+        );
+        assert.equal(groups.length, 13);
         evidence.browserGroups = groups;
+        const creatorScreenshot = `controlled-created-by-${format}.png`;
+        await page.screenshot({
+            path: join(output, creatorScreenshot),
+            fullPage: true,
+        });
+        await page
+            .getByRole('button', { name: 'Explicit Save', exact: true })
+            .click();
+        value = await snapshot();
+        assert.equal(value.submits, 1);
+        assert.equal(value.writes.length, creatorBaseline.writes.length);
+        evidence.createdByControlled = {
+            field: 'createdBy',
+            react: value.reactVersion,
+            format,
+            forbiddenReads: value.creatorForbiddenReads,
+            noImplicitSubmit: true,
+            explicitSubmits: value.submits,
+            writesUnchanged: true,
+            locale: 'Aucun créateur',
+            identityReplacement: true,
+            avatarPolicy: true,
+            adjacent: value.adjacent,
+            screenshot: creatorScreenshot,
+        };
     } catch (error) {
         failure = error;
         evidence.failure = {

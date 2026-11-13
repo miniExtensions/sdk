@@ -95,6 +95,18 @@
         "./react/single-line-text.css": "./dist/esm/react/single-line-text.css",
         "./react/number.css": "./dist/esm/react/number.css",
         "./react/date.css": "./dist/esm/react/date.css",
+        "./react/calendar.css": "./dist/esm/react/calendar.css",
+        "./react/calendar-complete.css": "./dist/esm/react/calendar-complete.css",
+        "./react/calendar": {
+            "import": {
+                "types": "./dist/esm/react/calendar/index.d.ts",
+                "default": "./dist/esm/react/calendar/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/calendar/index.d.ts",
+                "default": "./dist/cjs/react/calendar/index.js"
+            }
+        },
         "./react/datetime.css": "./dist/esm/react/datetime.css",
         "./react/duration.css": "./dist/esm/react/duration.css",
         "./react/complete-duration.css": "./dist/esm/react/complete-duration.css",
@@ -203,6 +215,7 @@
         "docs/auth.md",
         "docs/browser-lifecycle.md",
         "docs/testing.md",
+        "docs/calendar.md",
         "examples/browser/README.md",
         "examples/browser/package.json",
         "examples/browser/package-lock.json",
@@ -255,7 +268,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/date-popover-vendor.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node scripts/build.mjs && node --test scripts/calendar-vendor-checks.test.mjs scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/date-popover-vendor.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",
@@ -318,6 +331,7 @@
     },
     "devDependencies": {
         "@headlessui/react": "2.2.9",
+        "@internationalized/date": "3.12.4",
         "@radix-ui/react-popover": "1.1.14",
         "@types/dompurify": "2.4.0",
         "@types/jsdom": "20.0.1",
@@ -327,6 +341,7 @@
         "@types/react-dom": "18.3.1",
         "@types/ua-parser-js": "0.7.39",
         "c8": "11.0.0",
+        "calendar-react-aria": "npm:react-aria@3.53.0",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
         "headlessui-address-source": "npm:@headlessui/react@1.7.2",
@@ -335,8 +350,10 @@
         "playwright": "1.64.0",
         "prettier": "3.6.2",
         "react": "18.3.1",
+        "react-aria": "3.53.1",
         "react-chartjs-2": "5.3.1",
         "react-dom": "18.3.1",
+        "react-stately": "3.51.0",
         "typescript": "5.9.3"
     },
     "peerDependencies": {

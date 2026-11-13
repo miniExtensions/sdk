@@ -3,6 +3,7 @@ import {
     ordinaryValidationTypedConsumer,
 } from './ordinary-validation-consumer-checks.mjs';
 import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
+import { checkCustomerChatMatrix } from './customer-chat-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -2805,6 +2806,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const customerChatProof = checkCustomerChatMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(customerChatProof.versions.length, 2);
+    assert.equal(customerChatProof.cleanup, 'completed');
     const buttonProof = await checkButtonConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),

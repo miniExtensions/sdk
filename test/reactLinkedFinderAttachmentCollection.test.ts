@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Window } from 'happy-dom';
 import test from 'node:test';
 import { act, createElement as h, type FormEvent } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -54,6 +55,10 @@ test('List grid presentation retains occurrences and suppresses form captions an
 for (const strict of [false, true]) {
     test(`captured collection opening and retry do not select or submit the containing option (${strict ? 'StrictMode' : 'ordinary'})`, async (t) => {
         const f = await scannerDom(t);
+        assert(
+            f.window instanceof Window,
+            'Mount the collection in its owned DOM realm'
+        );
         let admitted = true;
         const opened: number[] = [];
         let selected = 0;

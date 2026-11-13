@@ -529,6 +529,40 @@ export async function assertSavedProgressConsumer({
         assert(removal.container.querySelector('[role=alert]'));
         await removal.unmount();
 
+        // Conflict during a held write revokes I/O and suppresses the rest of that queue.
+        const heldConflict = await fixture({ held: true });
+        await heldConflict.publish({ first: true });
+        await heldConflict.publish({ second: true });
+        await heldConflict.event(
+            'form-progress-synthetic',
+            envelope('foreign')
+        );
+        const conflictIo = heldConflict.io.length;
+        await heldConflict.release();
+        assert.equal(heldConflict.io.length, conflictIo);
+        assert.equal(heldConflict.locks.length, 0);
+        assert.equal(heldConflict.records.length, 1);
+        assert.equal(heldConflict.snapshot(), undefined);
+        assert(heldConflict.container.querySelector('[role=alert]'));
+        await heldConflict.publish({ later: true });
+        assert.equal(heldConflict.records.length, 1);
+        await heldConflict.unmount();
+        // Fresh storage compare-and-set also conflicts without an event notification.
+        const casConflict = await fixture({ held: true });
+        await casConflict.publish({ edited: true });
+        const newerBytes = envelope('foreign', 9);
+        casConflict.data.set('form-progress-synthetic', newerBytes);
+        await casConflict.release();
+        assert(casConflict.container.querySelector('[role=alert]'));
+        assert.equal(
+            casConflict.data.get('form-progress-synthetic'),
+            newerBytes
+        );
+        await casConflict.publish({ later: true });
+        assert.equal(casConflict.records.length, 1);
+        assert.equal(casConflict.locks.length, 0);
+        await casConflict.unmount();
+
         // Save owns guarded removal, including preservation of a competing writer.
         const save = await fixture({ held: true });
         await save.publish({ queued: true });

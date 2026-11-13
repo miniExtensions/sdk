@@ -182,20 +182,15 @@ describe('ordinary-only discriminators', () => {
             { status: 'supported', diagnostic: null }
         );
     });
-    it('uses the physical computed kind only to waive Required', () => {
+    it('waives Required for a physical formula while retaining writable number rules', () => {
         assert.deepEqual(validate('formula', null, { required: true }), {
             status: 'supported',
             diagnostic: null,
         });
-        assert.deepEqual(
-            validate(
-                'number',
-                -1,
-                {},
-                { airtableFieldConfig: { type: 'number', isComputed: true } }
-            ),
-            { status: 'supported', diagnostic: { code: 'negative-number' } }
-        );
+        assert.deepEqual(validate('number', -1), {
+            status: 'supported',
+            diagnostic: { code: 'negative-number' },
+        });
     });
     it('explicitly falls back for unsupported, mismatched, malformed and unproven inputs', () => {
         for (const input of [
@@ -208,6 +203,8 @@ describe('ordinary-only discriminators', () => {
             ),
             validate('singleLineText', 'x', { characterLimit: '0' }),
             validate('singleLineText', 12),
+            validate('singleLineText', [], { required: true }),
+            validate('singleCollaborator', [], { required: true }),
             validate('number', '12'),
             validate(
                 'singleSelect',

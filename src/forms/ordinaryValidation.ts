@@ -155,6 +155,79 @@ export const validateOrdinaryFormField = (
             (typeof config[key] !== 'number' || !Number.isFinite(config[key]))
         )
             return fallback('malformed-metadata');
+    if (typeof hidden !== 'boolean' || typeof input.isComputeMode !== 'boolean')
+        return fallback('malformed-metadata');
+    // Establish the bounded value shape before Required. A malformed value
+    // delegates to native even when native emptiness could mask that shape.
+    if (value != null && value !== '') {
+        if (
+            [
+                'singleLineText',
+                'multilineText',
+                'email',
+                'url',
+                'richText',
+                'phoneNumber',
+                'manualSort',
+                'date',
+                'dateTime',
+            ].includes(kind) &&
+            typeof value !== 'string'
+        )
+            return fallback('unproven-value');
+        if (
+            ['number', 'currency', 'percent', 'duration', 'rating'].includes(
+                kind
+            ) &&
+            (typeof value !== 'number' || !Number.isFinite(value))
+        )
+            return fallback('unproven-value');
+        if (kind === 'checkbox' && typeof value !== 'boolean')
+            return fallback('unproven-value');
+        if (
+            kind === 'barcode' &&
+            (!object(value) ||
+                (value.text != null && typeof value.text !== 'string'))
+        )
+            return fallback('unproven-value');
+        if (
+            kind === 'multipleAttachments' &&
+            (!Array.isArray(value) ||
+                !dense(value) ||
+                value.some((v) => v != null && !object(v)))
+        )
+            return fallback('unproven-value');
+    }
+    if (
+        (kind === 'singleCollaborator' || kind === 'multipleCollaborators') &&
+        (value === false ||
+            value === 0 ||
+            (Array.isArray(value) &&
+                (value.length === 0 ||
+                    (value.length === 1 && value[0] == null)))) &&
+        !(
+            kind === 'multipleCollaborators' &&
+            Array.isArray(value) &&
+            value.length === 0
+        )
+    )
+        return fallback('unproven-value');
+    if (
+        value != null &&
+        value !== '' &&
+        (kind === 'singleSelect' ||
+            kind === 'multipleSelects' ||
+            kind === 'multipleRecordLinks') &&
+        !(typeof value === 'string' && kind !== 'multipleRecordLinks') &&
+        !strings(value)
+    )
+        return fallback('unproven-value');
+    if (
+        kind === 'multipleRecordLinks' &&
+        Array.isArray(value) &&
+        value.some((id) => typeof id === 'string' && id.trim() === '')
+    )
+        return fallback('unproven-value');
     const readOnly = config.readOnly === true;
     // Physical computed kinds waive Required; a presentation/computed flag does not
     // waive ordinary rules for a writable physical kind.
@@ -180,23 +253,13 @@ export const validateOrdinaryFormField = (
     }
     if (value == null || value === '') return supported(null);
     if (kind === 'singleCollaborator' || kind === 'multipleCollaborators') {
-        // Native's loose nonempty gate skips these shapes; do not turn the page
-        // validator's strict refusal into a new native error.
+        // A canonical empty multiple selection needs no selectable-ID authority.
         if (
-            value === false ||
-            value === 0 ||
-            (Array.isArray(value) &&
-                (value.length === 0 ||
-                    (value.length === 1 && value[0] == null)))
-        ) {
-            if (
-                kind === 'multipleCollaborators' &&
-                Array.isArray(value) &&
-                value.length === 0
-            )
-                return supported(null);
-            return fallback('unproven-value');
-        }
+            kind === 'multipleCollaborators' &&
+            Array.isArray(value) &&
+            value.length === 0
+        )
+            return supported(null);
         const options = physical.options;
         if (!object(options) || !Array.isArray(options.choices))
             return fallback('malformed-metadata');
@@ -310,33 +373,6 @@ export const validateOrdinaryFormField = (
         if (typeof max === 'number' && value.length > max)
             return supported({ code: 'linked-maximum' });
     }
-    if (
-        ['richText', 'phoneNumber', 'manualSort', 'date', 'dateTime'].includes(
-            kind
-        ) &&
-        typeof value !== 'string'
-    )
-        return fallback('unproven-value');
-    if (
-        ['percent', 'duration', 'rating'].includes(kind) &&
-        (typeof value !== 'number' || !Number.isFinite(value))
-    )
-        return fallback('unproven-value');
-    if (kind === 'checkbox' && typeof value !== 'boolean')
-        return fallback('unproven-value');
-    if (
-        kind === 'barcode' &&
-        (!object(value) ||
-            (value.text != null && typeof value.text !== 'string'))
-    )
-        return fallback('unproven-value');
-    if (
-        kind === 'multipleAttachments' &&
-        (!Array.isArray(value) ||
-            !dense(value) ||
-            value.some((v) => v != null && !object(v)))
-    )
-        return fallback('unproven-value');
     // Known pass-through physical kinds have no ordinary kind rule. In
     // particular, date ranges and linked-open review belong to the page adapter.
     return supported(null);

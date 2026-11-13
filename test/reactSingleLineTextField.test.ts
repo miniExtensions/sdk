@@ -285,6 +285,38 @@ it('settles a genuine current-owner deferred unmount exactly once under StrictMo
     assert.deepEqual(f.writes, ['pending  ']);
 });
 
+it('retires deferred editing across the distinct read-only mode and admits its successor', async (t) => {
+    const f = await fixture(t);
+    const ref = createRef<HTMLInputElement>();
+    await f.render({ enableInlineEdit: true, ref });
+    const oldInput = f.input();
+    await f.edit('obsolete draft');
+    await act(async () =>
+        f.root.render(
+            h(
+                StrictMode,
+                null,
+                h(SingleLineTextField, {
+                    mode: 'readOnly',
+                    value: 'current display',
+                    language: 'en',
+                })
+            )
+        )
+    );
+    assert.equal(f.container.querySelector('input'), null);
+    assert.equal(ref.current, null);
+    assert.deepEqual(f.writes, []);
+    await f.render();
+    assert.notEqual(f.input(), oldInput);
+    await f.edit('current successor');
+    await act(async () => f.input().blur());
+    assert.deepEqual(f.writes, ['current successor']);
+    await f.edit('current unmount  ');
+    await f.unmount();
+    assert.deepEqual(f.writes, ['current successor', 'current unmount  ']);
+});
+
 for (const replacement of ['owner', 'disable', 'password'] as const)
     it(`retires a dirty deferred writer across ${replacement} A-B-A replacement`, async (t) => {
         const f = await fixture(t);

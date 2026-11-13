@@ -368,33 +368,45 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
     );
 }
 
-function EditingSingleLineText({
+function ConfiguredSingleLineText({
     props,
     inputRef,
 }: {
-    props: ControlledSingleLineTextFieldProps;
+    props: SingleLineTextFieldProps;
     inputRef: ForwardedRef<HTMLInputElement>;
 }): ReactNode {
     const generatedId = useId();
-    const id = props.id ?? generatedId;
-    const address = props.obscurePassword ? undefined : props.address;
-    const signature = [
-        id,
-        props.form,
-        props.owner?.token,
-        props.owner != null,
-        props.enableInlineEdit === true,
-        props.disabled === true,
-        props.readOnly === true,
-        props.obscurePassword === true,
-        props.readOnly ? undefined : props.characterLimit,
-        address?.mode,
-        address?.mode === 'autocomplete' ? address.identity.session : undefined,
-        address?.mode === 'autocomplete' ? address.identity.field : undefined,
-        address?.mode === 'autocomplete'
-            ? address.identity.readScope
-            : undefined,
-    ];
+    const id =
+        props.mode === 'controlled' ? (props.id ?? generatedId) : generatedId;
+    const address =
+        props.mode === 'controlled' && !props.obscurePassword
+            ? props.address
+            : undefined;
+    const signature =
+        props.mode === 'readOnly'
+            ? [props.mode]
+            : [
+                  props.mode,
+                  id,
+                  props.form,
+                  props.owner?.token,
+                  props.owner != null,
+                  props.enableInlineEdit === true,
+                  props.disabled === true,
+                  props.readOnly === true,
+                  props.obscurePassword === true,
+                  props.readOnly ? undefined : props.characterLimit,
+                  address?.mode,
+                  address?.mode === 'autocomplete'
+                      ? address.identity.session
+                      : undefined,
+                  address?.mode === 'autocomplete'
+                      ? address.identity.field
+                      : undefined,
+                  address?.mode === 'autocomplete'
+                      ? address.identity.readScope
+                      : undefined,
+              ];
     const [boundary, setBoundary] = useState<Boundary>(() => ({
         signature,
         generation: 0,
@@ -410,6 +422,9 @@ function EditingSingleLineText({
     ownerEffect(() => {
         committed.current = selected;
     }, [selected]);
+    // Keep this owner mounted across both public modes. A display replacement
+    // retires the editor; a genuine current-owner unmount may still settle it.
+    if (props.mode === 'readOnly') return h(ReadOnlySingleLineText, props);
     return h(SingleLineTextController, {
         ...props,
         key: selected.generation,
@@ -427,8 +442,6 @@ export const SingleLineTextField: React.ForwardRefExoticComponent<
         React.RefAttributes<HTMLInputElement>
 > = forwardRef<HTMLInputElement, SingleLineTextFieldProps>(
     function SingleLineTextField(props, ref) {
-        return props.mode === 'readOnly'
-            ? h(ReadOnlySingleLineText, props)
-            : h(EditingSingleLineText, { props, inputRef: ref });
+        return h(ConfiguredSingleLineText, { props, inputRef: ref });
     }
 );

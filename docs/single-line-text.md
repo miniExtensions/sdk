@@ -74,6 +74,8 @@ The opaque token follows the host's record, field and policy generation.
 `isCurrent()` must synchronously return true at admission. Replacement retires
 old unfinished work, including observed A-B-A and disable/re-enable. A genuine
 current-owner dirty unmount retains the deferred input's original writer.
+Switching to the distinct read-only mode retires the pending editor while the
+field remains mounted; returning to editing creates a fresh generation.
 Allocated host work keeps its existing settlement; the field neither cancels
 it nor replays it against a replacement. Scanner sessions and new Address reads
 are also checked before provider allocation. Scanner auto-start remains an

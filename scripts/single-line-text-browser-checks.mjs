@@ -34,7 +34,7 @@ import '@miniextensions/sdk/react/single-line-text.css';
 const stats={writes:[],queries:[],details:[],submits:0,fetches:0};let patch,current='A',release;
 globalThis.fetch=async()=>{stats.fetches++;throw Error('No live requests');};
 const labels={clear:'Clear',loadingPredictions:'Loading suggestions',loadingDetails:'Loading selected address',failed:'Unable to load',retry:'Try again'};
-function App(){const [state,setState]=useState({main:'seed',deferred:'seed',address:'',preview:'manual',password:'secret',source:'A',disabled:false});
+function App(){const [state,setState]=useState({main:'seed',deferred:'seed',address:'',preview:'manual',password:'secret',source:'A',disabled:false,displayOnly:false});
 patch=next=>{if(next.source)current=next.source;flushSync(()=>setState(old=>({...old,...next})));};
 const owner={token:state.source,isCurrent:()=>current===state.source};
 const change=key=>value=>{stats.writes.push([key,value]);setState(old=>({...old,[key]:value}));};
@@ -43,7 +43,7 @@ return h('main',null,h('h1',null,'Single-line public consumer'),h('p',null,'Synt
 h('form',{id:'proof-form',onSubmit:e=>{e.preventDefault();stats.submits++;}},
 h('p',{id:'main-help'},'Keep literal whitespace. Five UTF-16 units.'),
 h(SingleLineTextField,{mode:'controlled',id:'main',title:'Immediate text',form:'proof-form',value:state.main,onChange:change('main'),language:'en',characterLimit:5,initialMobile:true,describedBy:'main-help',owner,disabled:state.disabled}),
-h(SingleLineTextField,{mode:'controlled',id:'deferred',title:'Deferred text',form:'proof-form',value:state.deferred,onChange:change('deferred'),language:'en',characterLimit:4,initialMobile:true,enableInlineEdit:true,owner,disabled:state.disabled}),
+h(SingleLineTextField,state.displayOnly?{mode:'readOnly',value:state.deferred,language:'en'}:{mode:'controlled',id:'deferred',title:'Deferred text',form:'proof-form',value:state.deferred,onChange:change('deferred'),language:'en',characterLimit:4,initialMobile:true,enableInlineEdit:true,owner,disabled:state.disabled}),
 h(SingleLineTextField,{mode:'controlled',id:'address',title:'Address text',form:'proof-form',value:state.address,onChange:change('address'),language:'en',characterLimit:5,initialMobile:true,owner,address}),
 h(SingleLineTextField,{mode:'controlled',id:'preview',title:'Preview text',value:state.preview,onChange:change('preview'),language:'en',initialMobile:true,address:{mode:'preview',explanation:'Suggestions require the standalone form'}}),
 h(SingleLineTextField,{mode:'controlled',id:'password',title:'Password text',value:state.password,onChange:change('password'),language:'en',initialMobile:true,obscurePassword:true,address}),
@@ -163,6 +163,26 @@ window.singleLineProof={patch,stats,replace(next){patch(next);},release(value){r
         );
         assert.equal((await snapshot()).writes.length, old);
         evidence.cases.push('disable/re-enable never settles retired draft');
+        await deferred.fill('gone');
+        await page.evaluate(() =>
+            window.singleLineProof.replace({ displayOnly: true })
+        );
+        assert.equal(await deferred.count(), 0);
+        assert.equal((await snapshot()).writes.length, old);
+        await page.evaluate(() =>
+            window.singleLineProof.replace({ displayOnly: false })
+        );
+        assert.equal(await deferred.inputValue(), 'work');
+        assert.equal((await snapshot()).writes.length, old);
+        await deferred.fill('live');
+        await deferred.press('Enter');
+        assert.deepEqual((await snapshot()).writes.at(-1), [
+            'deferred',
+            'live',
+        ]);
+        evidence.cases.push(
+            'distinct read-only mode retires dirty editor and admits its successor'
+        );
         const address = page.getByRole('combobox', { name: 'Address text' });
         await address.fill('q');
         await page.getByRole('option').waitFor();

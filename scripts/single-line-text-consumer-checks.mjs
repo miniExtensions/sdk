@@ -178,7 +178,8 @@ export async function checkSingleLineTextConsumer({
             writes = [];
         const a = { token: {}, isCurrent: () => true },
             b = { token: {}, isCurrent: () => true };
-        let mounted = true;
+        let mounted = true,
+            displayOnly = false;
         let props = {
             mode: 'controlled',
             value: 'seed',
@@ -210,7 +211,15 @@ export async function checkSingleLineTextConsumer({
                             submits++;
                         },
                     },
-                    mounted ? h(api.SingleLineTextField, props) : null,
+                    mounted
+                        ? displayOnly
+                            ? h(api.SingleLineTextField, {
+                                  mode: 'readOnly',
+                                  value: 'current display',
+                                  language: 'en',
+                              })
+                            : h(api.SingleLineTextField, props)
+                        : null,
                     h('input', {
                         'aria-label': 'Sibling draft',
                         defaultValue: 'keep sibling',
@@ -315,6 +324,16 @@ export async function checkSingleLineTextConsumer({
                 enableInlineEdit: true,
             });
             writes.length = 0;
+            await edit('obsolete mode draft');
+            displayOnly = true;
+            await act(async () => root.render(view()));
+            assert.deepEqual(writes, []);
+            assert.equal(ref.current, null);
+            displayOnly = false;
+            await act(async () => root.render(view()));
+            assert.deepEqual(writes, []);
+            assert.equal(ref.current, input());
+            checks++;
             await edit('current  ');
             mounted = false;
             await act(async () => root.render(view()));
@@ -408,7 +427,7 @@ export function checkSingleLineTextReactMatrix({
                     .at(-1)
             );
             assert.equal(result.react, version.react);
-            assert.equal(result.checks, 36);
+            assert.equal(result.checks, 38);
             assert.ok(result.bindingChecks.checks > 0);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);

@@ -1,4 +1,5 @@
 import { createElement as h, Fragment, useEffect, useRef } from 'react';
+import type * as React from 'react';
 import { renderAsync } from 'docx-preview/dist/docx-preview.mjs';
 import {
     classifyAttachmentPreview,
@@ -20,7 +21,7 @@ export type AttachmentPreviewProps = {
 export function AttachmentPreview({
     attachment,
     labels,
-}: AttachmentPreviewProps) {
+}: AttachmentPreviewProps): React.ReactElement {
     const docContainerRef = useRef<HTMLDivElement>(null);
     const { isImage, isHEIC, isVideo, isAudio, isWordDocument, isPdf } =
         classifyAttachmentPreview(attachment);

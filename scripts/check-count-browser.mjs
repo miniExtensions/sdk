@@ -537,6 +537,8 @@ try {
         assert.equal(await counter('count-writes'), 0);
     }
     assert.equal(await controlledGroup.locator('a').count(), 0);
+    await noReadonlyActions();
+    await inert();
     await controlled.screenshot({ path: join(output, 'count-controlled.png') });
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);

@@ -1,5 +1,21 @@
 # Source test coverage
 
+## Calendar foundations
+
+`test/calendarDateProjection.test.ts` compares the distinct computed DATE
+policies directly, plus range clipping, DST endpoints, viewer versus field zones,
+invalid pairs, repair and ordered multi-value days. `test/calendarController.test.ts`
+covers separate clocks, read ordering, R30, native admission and captured-frame
+retirement. `test/reactCalendarMonthGrid.test.ts` uses the real selected package
+graph for fixed/variable weeks, native keyboard differences, selection, focus,
+responsive retention, SSR, hydration and StrictMode.
+
+The normal package check calls `scripts/calendar-consumer-checks.mjs` for actual
+installed React 18/19 ESM/CJS/declarations/CSS/SSR/hydration checks. These are
+Calendar foundations only; complete rich cards, actual native thin adapters,
+team-device browser and hosted acceptance require their own execution evidence.
+See [the composition boundary](calendar.md).
+
 On macOS, run package/module-format checks with a canonical `TMPDIR` (for
 example `/private/tmp`). Native Node resolution returns real paths; a fixture
 created under the `/var` alias otherwise fails the unchanged exact-path

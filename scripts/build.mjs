@@ -203,6 +203,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-collaborators',
         'complete-date',
         'date',
+        'calendar',
         'datetime',
         'duration',
         'currency',

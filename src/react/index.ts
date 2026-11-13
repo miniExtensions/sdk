@@ -308,6 +308,14 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export {
+    SingleLineTextField,
+    type SingleLineTextFieldProps,
+    type ControlledSingleLineTextFieldProps,
+    type ReadOnlySingleLineTextFieldProps,
+    type SingleLineTextAddressOptions,
+    type SingleLineTextEditOwner,
+} from './SingleLineTextField.js';
 import {
     ControlledExternalSyncSourceField,
     type ControlledExternalSyncSourceFieldProps,

@@ -202,6 +202,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-portal-chart',
         'complete-address',
         'address-field',
+        'single-line-text',
         'complete-collaborators',
         'complete-date',
         'date',

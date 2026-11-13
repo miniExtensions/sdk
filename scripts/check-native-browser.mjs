@@ -13,6 +13,7 @@ import { checkCreatedTimeControlledBrowser } from './created-time-controlled-bro
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
+import { checkSingleLineTextBrowser } from './single-line-text-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -2331,6 +2332,18 @@ try {
             output,
         });
         report.completeBarcode = {};
+        report.singleLineText = [];
+        for (const format of ['esm', 'cjs']) {
+            const evidence = {};
+            report.singleLineText.push(evidence);
+            await checkSingleLineTextBrowser({
+                browser,
+                consumer: temporary,
+                evidence,
+                output,
+                format,
+            });
+        }
         await checkCompleteBarcodeBrowser({
             browser,
             consumer: temporary,

@@ -187,6 +187,7 @@
         "docs/ui.md",
         "docs/forms.md",
         "docs/field-bindings.md",
+        "docs/count.md",
         "docs/portals.md",
         "docs/auth.md",
         "docs/browser-lifecycle.md",

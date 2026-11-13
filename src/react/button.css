@@ -44,8 +44,32 @@
     align-items: center;
     gap: 6px;
 }
+.mx-sdk-button-controlled {
+    --mx-sdk-button-background: rgb(var(--theme-600, 37 99 235));
+    --mx-sdk-button-hover: rgb(var(--theme-700, 29 78 216));
+    --mx-sdk-button-focus: rgb(var(--theme-500, 59 130 246));
+}
+.mx-sdk-button-controlled:disabled {
+    opacity: 1;
+}
+.mx-sdk-button-controlled.cursor-not-allowed {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.mx-sdk-button-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
 .mx-sdk-button-spinner {
     box-sizing: border-box;
+    display: inline-block;
     flex: 0 0 12px;
     width: 12px;
     height: 12px;

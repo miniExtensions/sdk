@@ -394,8 +394,17 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
-import { countInput, type CountFieldOptions } from './CountField.js';
-export { renderCountField, type CountFieldOptions } from './CountField.js';
+import {
+    countInput,
+    ControlledCountField,
+    type ControlledCountFieldProps,
+    type CountFieldOptions,
+} from './CountField.js';
+export {
+    renderCountField,
+    type CountFieldOptions,
+    type ControlledCountFieldProps,
+} from './CountField.js';
 import {
     ControlledAutoNumberField,
     type AutoNumberControlledProps,
@@ -1209,9 +1218,26 @@ function BoundRollupField({
         className,
     });
 }
+/** Existing binding contract; its native numeric and metadata semantics are unchanged. */
 export type CountFieldProps = FieldProps & CountFieldOptions;
+type CountFieldComponentProps =
+    | (CountFieldProps & {
+          value?: never;
+          language?: never;
+          textSize?: never;
+          layout?: never;
+      })
+    | ControlledCountFieldProps;
+
+/** Binding-owned control or controlled, already converted native presentation. */
+export function CountField(props: CountFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingCountField, props)
+        : createElement(ControlledCountField, props);
+}
+
 /** Computed Count metadata and native values remain owned by the binding. */
-export function CountField({
+function BindingCountField({
     binding,
     render,
     className,
@@ -1525,6 +1551,25 @@ function BoundIconRatingField({
     });
 }
 export type PercentFieldProps = NumberFieldProps;
+/** Explicit physical-percent display units; the binding API remains raw fractions. */
+export type ControlledPercentFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'percent' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundPercentComponentProps = PercentFieldProps & {
+    mode?: never;
+    field?: never;
+    options?: never;
+};
+type PercentComponentProps =
+    | BoundPercentComponentProps
+    | ControlledPercentFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 /** Compatible legacy binding props; controlled callers use ControlledDurationFieldProps. */
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
@@ -1703,8 +1748,15 @@ function BoundNumberField({
         status(snapshot)
     );
 }
-/** Percent input preserves native fractions without display conversion. */
-export function PercentField(props: PercentFieldProps): ReactNode {
+/** Controlled display units or the compatible raw-fraction binding contract. */
+export function PercentField(props: BoundPercentComponentProps): ReactNode;
+export function PercentField(props: ControlledPercentFieldProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'percent'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
     return createElement(NumberField, props);
 }
 type BoundCurrencyComponentProps = CurrencyFieldProps & {
@@ -2785,7 +2837,12 @@ export {
     type CompleteRecordCommentsDialogProps,
 } from './CompleteRecordComments.js';
 export { ButtonField, renderButtonField } from './ButtonField.js';
-export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+export type {
+    ButtonFieldProps,
+    ModelButtonFieldProps,
+    ControlledButtonFieldProps,
+    ButtonFieldMessages,
+} from './ButtonField.js';
 
 export {
     useFileSelection,

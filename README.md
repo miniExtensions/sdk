@@ -219,6 +219,11 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+[Count presentation](docs/count.md) preserves the binding-based `CountField`
+contract and adds controlled, host-converted text through the same public
+component. The controlled mode reuses complete readonly text and its CSS;
+the surrounding field shell retains title, help, feedback and form association.
+
 [Single Select presentation](docs/ui.md#react-single-select-presentation) exports
 `SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
 `renderSingleSelectField` slot. It uses a native dropdown with optional

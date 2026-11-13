@@ -2,20 +2,44 @@ import { ActionButton } from './ActionButton.js';
 import {
     createElement,
     useId,
+    type CSSProperties,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
 import type { ButtonFieldRenderProps } from '../ui/buttonModel.js';
 import type { FieldRendererProps } from '../ui/rendererRegistry.js';
 import type { RuntimeLanguage } from '../runtime/types.js';
+import type { ButtonMiniExtConfig } from '../runtime/rendererTypes.js';
+import { getThemeStyles, type ThemeTokens } from '../ui/theme.js';
 import { buttonMessages, type ButtonFieldMessages } from './buttonMessages.js';
 
 export type { ButtonFieldMessages } from './buttonMessages.js';
-export type ButtonFieldProps = ButtonFieldRenderProps & {
+export type ModelButtonFieldProps = ButtonFieldRenderProps & {
+    mode?: 'model';
     /** Optional presentation overrides; configured feedback still wins. */
     messages?: Partial<ButtonFieldMessages>;
     className?: string;
 };
+/** Presentation only. The host owns current authority, singleflight and feedback. */
+export type ControlledButtonFieldProps = {
+    mode: 'controlled';
+    id?: string;
+    form?: string;
+    value: { label: string; url?: string | null } | null;
+    config?: ButtonMiniExtConfig;
+    language?: RuntimeLanguage;
+    messages?: Partial<ButtonFieldMessages>;
+    className?: string;
+    busy?: boolean;
+    disabled?: boolean;
+    /** Already guarded by the host's current-owner/action boundary. */
+    onTriggerWebhook?: () => unknown;
+    loadingLabel?: string;
+    'aria-describedby'?: string;
+};
+export type ButtonFieldProps =
+    | ModelButtonFieldProps
+    | ControlledButtonFieldProps;
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 const noValue = (text: string, className?: string) =>
     createElement(
@@ -32,6 +56,7 @@ const noValue = (text: string, className?: string) =>
 /** Pure presentation of an accepted model snapshot. No model lifetime or effects. */
 export function ButtonField(props: ButtonFieldProps): ReactNode {
     const id = useId();
+    if (props.mode === 'controlled') return controlledButton(props, id);
     if (props.phase === 'retired' || props.field === null) return null;
     const messages = {
         ...buttonMessages[props.language ?? 'en'],
@@ -139,6 +164,90 @@ export function ButtonField(props: ButtonFieldProps): ReactNode {
             },
             feedback
         )
+    );
+}
+
+function controlledButton(
+    props: ControlledButtonFieldProps,
+    generatedId: string
+): ReactNode {
+    if (props.value === null)
+        return noValue(
+            props.messages?.noValue ??
+                buttonMessages[props.language ?? 'en'].noValue,
+            props.className
+        );
+    const { label, url } = props.value;
+    const webhook = props.config?.openLinkType?.includes('Webhook') === true;
+    const style: CSSProperties & Partial<ThemeTokens> =
+        props.config?.buttonColor == null
+            ? {}
+            : getThemeStyles(props.config.buttonColor);
+    const common = {
+        id: props.id ?? generatedId,
+        className: [
+            'mx-sdk-button mx-sdk-button-controlled button-field',
+            url == null ? 'cursor-not-allowed opacity-50' : '',
+            props.className,
+        ]
+            .filter(Boolean)
+            .join(' '),
+        style,
+        'aria-describedby': props['aria-describedby'],
+    };
+    if (!webhook)
+        return createElement(
+            'a',
+            {
+                ...common,
+                href:
+                    url == null
+                        ? undefined
+                        : /^(https?:\/\/|mailto:|tel:)/i.test(url) ||
+                            url.startsWith('/')
+                          ? url
+                          : `https://${url}`,
+                target: props.config?.openLinkType ?? '_blank',
+                rel: 'noreferrer',
+                onClick: stop,
+            },
+            label
+        );
+    return createElement(
+        ActionButton,
+        {
+            ...common,
+            form: props.form,
+            busy: props.busy ?? false,
+            disabled: props.disabled || url == null || !props.onTriggerWebhook,
+            busyContent: createElement(
+                'span',
+                { className: 'mx-sdk-button-content' },
+                createElement(
+                    'span',
+                    { className: 'mx-sdk-button-sr-only' },
+                    label
+                ),
+                createElement(
+                    'span',
+                    { 'aria-hidden': Boolean(label.trim()) },
+                    createElement(
+                        'span',
+                        { className: 'mx-sdk-button-sr-only' },
+                        props.loadingLabel ?? 'Loading...'
+                    ),
+                    createElement('span', {
+                        className: 'mx-sdk-button-spinner',
+                        'aria-hidden': true,
+                    })
+                )
+            ),
+            onClick: (event) => {
+                event.stopPropagation();
+                void props.onTriggerWebhook?.();
+            },
+        },
+        label
     );
 }
 

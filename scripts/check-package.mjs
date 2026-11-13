@@ -270,7 +270,7 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
-    checkCountConsumer,
+    checkCountReactMatrix,
     countReactTypedConsumer,
 } from './count-consumer-checks.mjs';
 import {
@@ -344,7 +344,7 @@ import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-drive
 import { checkMultipleSelectFormDriverRecipe } from './multi-select-form-driver-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
-    checkButtonConsumer,
+    checkButtonReactMatrix,
     buttonTypedConsumer,
     buttonReactTypedConsumer,
 } from './button-consumer-checks.mjs';
@@ -587,6 +587,7 @@ try {
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
                 path === 'docs/field-bindings.md' ||
+                path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
@@ -633,6 +634,7 @@ try {
         ...documentFiles,
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'docs/count.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
         'docs/single-line-text.md',
@@ -2838,14 +2840,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(customerChatProof.versions.length, 2);
     assert.equal(customerChatProof.cleanup, 'completed');
-    const buttonProof = await checkButtonConsumer({
-        consumerDirectory: temporaryDirectory,
+    const buttonProof = checkButtonReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
     });
-    assert.equal(buttonProof.checks, 67);
-    console.log(
-        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
-    );
+    assert.equal(buttonProof.versions.length, 2);
+    assert.equal(buttonProof.cleanup, 'completed');
     const checkboxProof = checkCheckboxReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3078,13 +3080,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed read-only attachment presentation: ${readonlyAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
-    const countProof = await checkCountConsumer({
-        consumerDirectory: temporaryDirectory,
+    const countProof = checkCountReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(countProof.checks, 20);
+    assert.equal(countProof.versions.length, 2);
+    assert.equal(countProof.cleanup, 'completed');
     console.log(
-        `Installed Count renderer, readonly native display, shared Number CSS and local example: ${countProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        'Installed Count React18/19: packed ESM/CJS, strict NodeNext/Bundler declarations, public CSS and 20 regression groups per version passed.'
     );
     const autoNumberProof = await checkAutoNumberConsumer({
         consumerDirectory: temporaryDirectory,
@@ -3106,7 +3110,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(percentProof.checks, 16);
+    assert.equal(percentProof.checks, 18);
     console.log(
         `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );

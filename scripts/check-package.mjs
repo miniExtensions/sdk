@@ -1,3 +1,4 @@
+import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import {
     checkOrdinaryValidationConsumer,
@@ -672,6 +673,8 @@ try {
         'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/complete-duration.css',
         'dist/cjs/react/complete-duration.css',
+        'dist/esm/react/attachment-preview.css',
+        'dist/cjs/react/attachment-preview.css',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
@@ -3410,6 +3413,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(formGroupMatrix.versions.length, 2);
     assert.equal(formGroupMatrix.cleanup, 'completed');
+    const attachmentPreviewMatrix = checkAttachmentPreviewReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(attachmentPreviewMatrix.profiles.length, 4);
+    assert.equal(attachmentPreviewMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

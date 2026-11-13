@@ -325,3 +325,9 @@ export {
     type SelectFormulaEvaluationInput,
     type SelectConditionEvaluationInput,
 } from './selectFormulaEvaluation.js';
+
+export {
+    classifyAttachmentPreview,
+    isAttachmentPreviewImage,
+    type AttachmentPreviewSource,
+} from './attachmentPreview.js';

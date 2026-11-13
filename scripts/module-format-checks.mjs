@@ -214,6 +214,7 @@ export function assertModuleFormats(root) {
                 './react/complete-barcode-scanner.css',
                 './react/barcode.css',
                 './react/complete-portal-chart.css',
+                './react/attachment-preview.css',
                 './react/complete-collaborators.css',
                 './react/date.css',
                 './react/complete-date.css',

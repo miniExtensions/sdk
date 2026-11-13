@@ -6494,3 +6494,28 @@ composes its qualified widget; there is no native renderer slot. Scheduling
 completion uses only `onScheduled`, ordinary edits only `onChange`; neither
 implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
 value). Existing `CompleteCheckboxField` remains compatible.
+
+### Explicit attachment media preview
+
+`AttachmentPreview` from `@miniextensions/sdk/react` renders the complete media
+preview from an explicitly supplied `attachment: { url, filename?, type?,
+thumbnails?: { full?: { url } } }`. Import
+`@miniextensions/sdk/react/attachment-preview.css` once in the consuming app.
+It owns image/HEIC, native audio/video controls, PDF frames, Word rendering and
+unsupported guidance. Optional `labels.attachments` and
+`labels.previewNotAvailable` accept localized strings and default to English.
+The exported `AttachmentPreviewSource`, `AttachmentPreviewProps` and
+`AttachmentPreviewLabels` describe these portable inputs. The reusable
+`isAttachmentPreviewImage` and `classifyAttachmentPreview` helpers are exported
+from `@miniextensions/sdk/ui`.
+
+This explicit URL API is separate from the existing label-only
+`ReadonlyAttachmentsField`. It never recovers a URL from a label or performs
+upload, deletion, navigation, persistence or form submission. The consumer owns
+source authorization and supplies only URLs it intends to display/fetch.
+Preview classification preserves native MIME and suffix distinctions; upload
+admission remains a separate policy. Word uses `docx-preview@0.3.0` and
+`jszip@3.10.1` with existing best-effort rendering. Retired Word lifetimes write
+only to detached targets; a fulfilled vendor render does not promise that
+every image/font decoded successfully. PDF is the supplied URL followed by
+`#toolbar=0`, with the nonblank filename or localized Attachments title.

@@ -178,7 +178,8 @@
                 "default": "./dist/cjs/customer-chat/intercom.js"
             }
         },
-        "./react/csv-export.css": "./dist/esm/react/csv-export.css"
+        "./react/csv-export.css": "./dist/esm/react/csv-export.css",
+        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css"
     },
     "files": [
         "dist/esm",
@@ -264,6 +265,7 @@
         "chart.js": "4.4.2",
         "copy-to-clipboard": "3.3.3",
         "csv-stringify": "6.4.6",
+        "docx-preview": "0.3.0",
         "dompurify": "2.4.7",
         "email-validator": "2.0.4",
         "fuse.js": "6.6.2",
@@ -271,6 +273,7 @@
         "gemoji": "6.1.0",
         "hoist-non-react-statics": "3.3.2",
         "jsdom": "20.0.3",
+        "jszip": "3.10.1",
         "linkifyjs": "3.0.5",
         "lodash": "4.17.21",
         "markdown-it": "12.3.2",

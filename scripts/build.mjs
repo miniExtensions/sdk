@@ -182,6 +182,7 @@ for (const format of ['esm', 'cjs']) {
         'localized-numeric',
         'form-tracking',
         'form-group',
+        'csv-export',
         'form-completion',
         'form-header',
         'field-presentation',

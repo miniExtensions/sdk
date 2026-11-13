@@ -1,3 +1,4 @@
+import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import {
     checkOrdinaryValidationConsumer,
     ordinaryValidationTypedConsumer,
@@ -596,6 +597,7 @@ try {
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
                 path === 'docs/single-line-text.md' ||
+                path === 'docs/csv-export.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
@@ -688,6 +690,9 @@ try {
         'docs/form-groups.md',
         'dist/esm/react/form-group.css',
         'dist/cjs/react/form-group.css',
+        'docs/csv-export.md',
+        'dist/esm/react/csv-export.css',
+        'dist/cjs/react/csv-export.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -3389,6 +3394,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const csvExportMatrix = checkCSVExportReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(csvExportMatrix.versions.length, 2);
+    assert.equal(csvExportMatrix.cleanup, 'completed');
     const formGroupMatrix = checkFormGroupReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

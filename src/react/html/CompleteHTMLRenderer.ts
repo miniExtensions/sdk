@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { createElement, forwardRef, useMemo, type HTMLProps } from 'react';
 import { sanitizeHTML } from './sanitizeHTML.js';
 

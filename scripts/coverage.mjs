@@ -1,3 +1,5 @@
+import { assertDateVendor } from './date-vendor-checks.mjs';
+import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { readdir, readFile, rm, mkdir, copyFile, cp } from 'node:fs/promises';
@@ -14,6 +16,8 @@ import {
 } from './phone-vendor-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+await assertAddressCombobox();
+assertDateVendor(root);
 const require = createRequire(import.meta.url);
 const output = 'dist/coverage-test';
 const mode = process.argv[2] ?? 'all';
@@ -44,6 +48,11 @@ run(require.resolve('typescript/bin/tsc'), [
     '--outDir',
     output,
 ]);
+await cp(
+    path.join(root, 'vendor/headlessui-address'),
+    path.join(root, output, 'vendor/headlessui-address'),
+    { recursive: true }
+);
 // Match both source-relative private closures without broadening either filter.
 await cp(
     path.join(root, 'vendor/rich-markdown-editor'),
@@ -54,6 +63,11 @@ await cp(
     path.join(root, 'vendor/phone-number-input'),
     path.join(root, output, 'vendor/phone-number-input'),
     { recursive: true, filter: phoneRuntimeFilter }
+);
+await cp(
+    path.join(root, 'vendor/date-time'),
+    path.join(root, output, 'vendor/date-time'),
+    { recursive: true }
 );
 const groups = { unit: [], component: [] };
 async function tests(directory, prefix = '') {

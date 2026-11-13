@@ -1,4 +1,12 @@
 export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
+export {
+    createRecordCommentsController,
+    presentRecordComment,
+    type RecordComment,
+    type RecordCommentsController,
+    type RecordCommentsControllerOptions,
+    type RecordCommentsSnapshot,
+} from './recordComments.js';
 export type {
     BorrowedButtonContext,
     BorrowedButtonIntent,
@@ -296,6 +304,27 @@ export type {
     BorrowedFormRenderPort,
     BorrowedFormRenderScope,
 } from './borrowedFormRenderScope.js';
+
+export {
+    colorsToCssVars,
+    DEFAULT_THEME_COLOR,
+    ALL_THEME_COLORS,
+    getThemeStyles,
+    type ThemeColor,
+    type ThemeTokens,
+} from './theme.js';
+
+export {
+    publishDeferredSelectChoice,
+    type PendingSelectChoice,
+    type DeferredSelectChoiceResult,
+} from './selectDeferredChoice.js';
+export {
+    createSelectFormulaEvaluation,
+    createSelectConditionEvaluation,
+    type SelectFormulaEvaluationInput,
+    type SelectConditionEvaluationInput,
+} from './selectFormulaEvaluation.js';
 
 export {
     classifyAttachmentPreview,

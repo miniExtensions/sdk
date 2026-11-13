@@ -1074,6 +1074,216 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
+## Headless UI React 1.7.2
+
+The complete Address control bundles the unchanged Combobox/Transition closure
+from `@headlessui/react` 1.7.2. React and ReactDOM remain consumer peers.
+Source: https://github.com/tailwindlabs/headlessui
+
+MIT License
+
+Copyright (c) 2020 Tailwind Labs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Complete collaborator picker
+
+`CompleteSingleCollaboratorField` and `CompleteMultipleCollaboratorsField`
+load an SDK-owned client picker runtime containing the dependency closure of
+`@headlessui/react` 2.2.9 (MIT). The public field shell and read-only badges do
+not eagerly import the picker or React DOM. The ESM build adapts only bare
+CommonJS React/ReactDOM peer requires to explicit external ESM namespaces;
+it adds no global require, Node polyfill or consumer-side patch.
+React and React DOM remain external optional peers; native application picker
+packages are not required by installed SDK consumers. Fuzzy search uses the
+declared production dependency `fuse.js` 6.6.2 (Apache-2.0), without identity
+services or backend requests.
+
+The distributed `dist/esm/react/complete-collaborators.LICENSES.txt` and
+`dist/cjs/react/complete-collaborators.LICENSES.txt` retain the full original
+license and copyright texts for the reviewed closure, including Apache-2.0,
+MIT and tslib's 0BSD notices. The corresponding
+`complete-collaborators.provenance.json` records the actual bundled package
+versions, registry integrity values, source URLs and individual input hashes.
+The build checks those inputs against the reviewed version/license inventory;
+it does not broaden the consumer's React, image-source or identity authority.
+
+### Barcode / QR decoding
+
+The complete scanner uses the declared `@zxing/library` 0.20.0 dependency
+(MIT, https://github.com/zxing-js/library/tree/v0.20.0). Its published package
+retains the upstream license. Scanner-specific attachment retirement and UI
+are SDK-owned; the decoder is not upgraded during this extraction.
+
+The scanner dialog bundles the pinned Headless UI 2.2.9 closure using the SDK's
+existing verified input and license policy. React and React DOM remain optional
+external peers. Each format ships complete-barcode-scanner.provenance.json and
+complete-barcode-scanner.LICENSES.txt beside the private dialog runtime.
+
+## Complete Date picker
+
+The complete native-compatible Date picker includes the unchanged compiled
+miniExtensions/react-datetime 3.1.0 fork at
+`6fb5a547de6328f4103b4c5928c79a05473aea85` (MIT, Javier Marquez).
+Its artifact preserves the fork's year/month-before-day correction and
+moment-timezone adaptation. The private export bridge changes no picker code.
+See `vendor/date-time/UPSTREAM.json` and the distributed `dist/vendor/date-time`
+for frozen hashes, original metadata, stylesheet and license. React and ReactDOM
+are resolved from the consumer, matching the SDK's optional peer contract.
+
+The private Radix Popover closure is built from pinned 1.1.14 and supported
+dependencies. Its exact per-format input hashes and full MIT/ISC/0BSD notices are
+recorded in `vendor/date-popover` and distributed beside the built runtime as
+`complete-date.provenance.json` and `complete-date.LICENSES.txt`.
+
+## papaparse
+
+PapaParse 5.7.1 parses literal CSV document thumbnails.
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2015 Matthew Holt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## utif2
+
+UTIF2 4.1.0 decodes first-directory TIFF document thumbnails.
+
+```text
+MIT License
+
+Copyright (c) 2017 Photopea
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## PDF.js (`pdfjs-dist` 6.5.438)
+
+The SDK bundles a private browser-only PDF engine and distributes the matching
+legacy module worker, CMaps, standard fonts and WASM. Its verified upstream
+`isNodeJS` environment binding is specialized to `false` during the browser build;
+Node-only factories are removed. Its global API/testing registrations become local
+bindings; the SDK consumes named exports without replacing other PDF libraries.
+Upstream runtime source and distributed asset
+bytes are pinned and checked. The complete Apache 2.0 license is included at
+`dist/vendor/document-preview/pdfjs-6.5.438/LICENSE`; upstream license notices
+remain in the bundled engine, worker and assets.
+
+## signature_pad
+
+MIT License
+
+Copyright (c) 2018 Szymon Nowak
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## react-signature-pad-wrapper
+
+MIT License
+
+Copyright (c) 2023 Michael Dzjaparidze
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## intercom-next 1.3.5
+
+The optional customer-chat driver accepts the host-supplied pinned 1.3.5 loader.
+An unmodified installed distribution is retained only as a synthetic test fixture.
+Its package metadata declares ISC; its actual delivered LICENSE is the following
+MIT notice. Both facts are retained; no successor package is substituted.
+
+The MIT LICENSE (MIT)
+
+Copyright (c) A11yWatch LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## Attachment media preview
 
 Word previews use the declared, unmodified `docx-preview` 0.3.0 dependency

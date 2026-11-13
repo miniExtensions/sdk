@@ -13,20 +13,27 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { transformSync } from 'esbuild';
 import {
     assertBrowserInputs,
     assertInstalledArchive,
     assertPackedDocLinks,
+    createArchiveMemberReader,
 } from './package-checks.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
+import {
+    assertCollaboratorNeighborTarget,
+    completeCollaboratorBrowserSource,
+} from './complete-collaborator-browser-checks.mjs';
 import { createProcessGroupObserver } from './process-group-observer.mjs';
 import './process-group-observer.test.mjs';
 import './attachment-phase-receipts.test.mjs';
 import './browser-rich-text-zoom.test.mjs';
 import './browser-rich-text-focus.test.mjs';
 import './portal-chart-inputs.test.mjs';
+import './collaborator-inputs.test.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,
@@ -44,6 +51,228 @@ async function write(root, path, content) {
     await mkdir(join(target, '..'), { recursive: true });
     await writeFile(target, content);
 }
+
+async function archiveFixture(
+    t,
+    values = { 'a.txt': 'alpha', 'b.txt': 'bravo' }
+) {
+    const root = await temporaryRoot(t);
+    const archive = join(root, 'sdk.tgz');
+    for (const [name, bytes] of Object.entries(values))
+        await write(root, 'package/' + name, bytes);
+    const pack = () =>
+        execFileSync('tar', ['-czf', archive, '-C', root, 'package']);
+    pack();
+    const expectedSha256 = createHash('sha256')
+        .update(await readFile(archive))
+        .digest('hex');
+    return {
+        root,
+        archive,
+        pack,
+        reader: () =>
+            createArchiveMemberReader({ archivePath: archive, expectedSha256 }),
+    };
+}
+
+test('archive reader reuses admitted members without exposing mutable cached bytes', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    read('package/a.txt').fill(0);
+    assert.equal(read('package/a.txt').toString(), 'alpha');
+    assert.equal(read('package/b.txt').toString(), 'bravo');
+    assert.deepEqual(read.stats(), { requests: 3, captures: 2, entries: 2 });
+    assert(Object.isFrozen(read.stats()));
+});
+
+test('warm archive reads still reject changed installed bytes and archive replacements', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    const installed = join(fixture.root, 'installed.txt');
+    await writeFile(installed, 'alpha');
+    assert.deepEqual(await readFile(installed), read('package/a.txt'));
+    await writeFile(installed, 'other');
+    const changed = await readFile(installed);
+    assert.throws(() => assert.deepEqual(changed, read('package/a.txt')));
+    await write(fixture.root, 'package/a.txt', 'omega');
+    fixture.pack();
+    assert.throws(
+        () => read('package/a.txt'),
+        /Admitted archive bytes changed/
+    );
+});
+
+test('archive readers isolate their admitted archives and exact package paths', async (t) => {
+    const a = (await archiveFixture(t)).reader();
+    const b = (await archiveFixture(t, { 'a.txt': 'omega' })).reader();
+    assert.equal(a('package/a.txt').toString(), 'alpha');
+    assert.equal(b('package/a.txt').toString(), 'omega');
+    for (const member of [
+        '/package/a.txt',
+        'package/',
+        'package/directory/',
+        'package/*.txt',
+        'package/a?.txt',
+        'package/[ab].txt',
+        'package/../a.txt',
+        'package/./a.txt',
+        'package/a\\b',
+        'package/a\0b',
+    ])
+        assert.throws(() => a(member), /exact package path/);
+});
+
+test('warm archive reads reject symlink substitution and redirected parent paths', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    read('package/a.txt');
+    const saved = join(fixture.root, 'saved.tgz');
+    await writeFile(saved, await readFile(fixture.archive));
+    await rm(fixture.archive);
+    await symlink(saved, fixture.archive);
+    assert.throws(() => read('package/a.txt'), /regular file/);
+    const redirected = join(fixture.root, 'redirected');
+    await symlink(fixture.root, redirected);
+    const throughParent = createArchiveMemberReader({
+        archivePath: join(redirected, 'saved.tgz'),
+        expectedSha256: createHash('sha256')
+            .update(await readFile(saved))
+            .digest('hex'),
+    });
+    assert.throws(() => throughParent('package/a.txt'), /not be redirected/);
+});
+
+test('archive reader preserves the default capture guard and does not cache failures', async (t) => {
+    const fixture = await archiveFixture(t, {
+        'large.bin': Buffer.alloc(1024 * 1024 + 1, 65),
+    });
+    const read = fixture.reader();
+    for (let attempt = 0; attempt < 2; attempt++)
+        assert.throws(
+            () => read('package/large.bin'),
+            (error) => error.code === 'ENOBUFS'
+        );
+    assert.deepEqual(read.stats(), { requests: 2, captures: 2, entries: 0 });
+    assert.throws(() => read('package/missing.txt'));
+    assert.equal(read.stats().entries, 0);
+});
+
+test('archive reader rejects an incorrect admitted digest before extraction', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = createArchiveMemberReader({
+        archivePath: fixture.archive,
+        expectedSha256: '0'.repeat(64),
+    });
+    assert.throws(
+        () => read('package/a.txt'),
+        /Admitted archive bytes changed/
+    );
+    assert.deepEqual(read.stats(), { requests: 0, captures: 0, entries: 0 });
+});
+
+test('warm archive reads reject replacement by a directory', async (t) => {
+    const fixture = await archiveFixture(t);
+    const read = fixture.reader();
+    read('package/a.txt');
+    await rm(fixture.archive);
+    await mkdir(fixture.archive);
+    assert.throws(() => read('package/a.txt'), /regular file/);
+});
+
+test('collaborator native fixture emits valid ESM and CommonJS browser JavaScript', () => {
+    // The React page is generated inside a raw string, beyond this module's
+    // own syntax check. Parse both real outputs without launching a browser.
+    for (const format of ['esm', 'cjs'])
+        assert.doesNotThrow(() =>
+            transformSync(completeCollaboratorBrowserSource(format), {
+                loader: 'js',
+                format: 'esm',
+                target: 'es2022',
+            })
+        );
+});
+
+test('collaborator native neighbor geometry distinguishes overlap, modality and occlusion', async (t) => {
+    // Measured in the retained React 19.2.0 native failure receipt. The
+    // negative control below puts a synthetic target inside that real popup;
+    // the native fixture separately measures its original-layout target.
+    const popupRect = { left: 17, right: 495, top: 159, bottom: 249 };
+    const clearTarget = {
+        targetRect: { left: 520, right: 690, top: 190, bottom: 214 },
+        popupRect,
+        visible: true,
+        disabled: false,
+        inert: false,
+        ariaHidden: false,
+        hitTarget: true,
+        hitPopup: false,
+    };
+    await t.test(
+        'rejects a target covered by the retained popup bounds',
+        () => {
+            assert.throws(
+                () =>
+                    assertCollaboratorNeighborTarget({
+                        ...clearTarget,
+                        targetRect: {
+                            left: 16,
+                            right: 150,
+                            top: 210,
+                            bottom: 234,
+                        },
+                        hitTarget: false,
+                        hitPopup: true,
+                    }),
+                /popup/i
+            );
+        }
+    );
+    await t.test('accepts an independently reachable sibling control', () => {
+        assert.doesNotThrow(() =>
+            assertCollaboratorNeighborTarget(clearTarget)
+        );
+    });
+    await t.test(
+        'rejects inert or hidden siblings even outside the popup',
+        () => {
+            for (const policy of [{ inert: true }, { ariaHidden: true }])
+                assert.throws(
+                    () =>
+                        assertCollaboratorNeighborTarget({
+                            ...clearTarget,
+                            ...policy,
+                        }),
+                    /inert|hidden/i
+                );
+        }
+    );
+    await t.test(
+        'rejects a separate overlay at an otherwise clear point',
+        () => {
+            assert.throws(
+                () =>
+                    assertCollaboratorNeighborTarget({
+                        ...clearTarget,
+                        hitTarget: false,
+                    }),
+                /hit|occlu|pointer/i
+            );
+        }
+    );
+    await t.test('rejects absent or invalid geometry', () => {
+        for (const targetRect of [
+            null,
+            { left: 520, right: 520, top: 190, bottom: 214 },
+            { left: NaN, right: 690, top: 190, bottom: 214 },
+        ])
+            assert.throws(() =>
+                assertCollaboratorNeighborTarget({
+                    ...clearTarget,
+                    targetRect,
+                })
+            );
+    });
+});
 
 test('documented source starter install refreshes a same-version archive lock', async (t) => {
     const root = await temporaryRoot(t);

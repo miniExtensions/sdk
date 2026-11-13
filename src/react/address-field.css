@@ -1,0 +1,31 @@
+@import './complete-address.css';
+@import './complete-clearable-text-input.css';
+@import './complete-readonly-text.css';
+@import './barcode.css';
+
+.mx-sdk-address-field-editor {
+    display: flex;
+}
+.mx-sdk-address-field-editor > :first-child {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+.mx-sdk-address-field-editor > button {
+    align-self: flex-start;
+    min-height: 2.625rem;
+}
+
+.mx-sdk-address-field-counter {
+    margin: 0.25rem 0 0 auto;
+    width: fit-content;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+.mx-sdk-address-field-counter[data-at-limit='true'] {
+    color: #ef4444;
+}
+.mx-sdk-address-field-explanation {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: #4b5563;
+}

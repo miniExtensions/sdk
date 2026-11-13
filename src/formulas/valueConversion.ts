@@ -22,6 +22,8 @@ const AirtableFieldType: {
 export type GetReadableStringSource = {
     type: 'airtableMock';
     linkedTableStates: TableIdsToLinkedTableLoadingStates;
+    /** Optional bounded display facts; absent labels retain existing lookup behavior. */
+    linkedRecordLabels?: Readonly<Record<string, string | null>>;
     /** UTC preserves formula behavior; local matches browser readable dates. */
     dateParsing?: 'local' | 'utc';
     doNotReturnRecordIdsForLinkedRecords?: boolean;
@@ -458,6 +460,19 @@ export const convertAirtableValueToPrimitive = (args: {
             return validValue
                 .map((idOrPrimaryValue): string | null => {
                     if (isRecordId(idOrPrimaryValue)) {
+                        if (
+                            args.source.linkedRecordLabels != null &&
+                            Object.hasOwn(
+                                args.source.linkedRecordLabels,
+                                idOrPrimaryValue
+                            )
+                        ) {
+                            return (
+                                args.source.linkedRecordLabels[
+                                    idOrPrimaryValue
+                                ] ?? null
+                            );
+                        }
                         const record =
                             linkedTableState?.state.recordIdsToAirtableRecords[
                                 idOrPrimaryValue

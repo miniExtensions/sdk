@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import {
@@ -37,6 +38,20 @@ it('SSR imports/renders escaped complete markup without CSS, DOM or URL/navigati
     assert.match(html, /placeholder="Enter customer name"/);
     assert.match(html, /type="submit" disabled=""/);
     assert.doesNotMatch(html, /type="button"/);
+    const hosted = renderToString(
+        h(PortalSearchGate, {
+            ...initial,
+            renderDialog: ({ children, ariaLabel }) =>
+                h(
+                    'section',
+                    { role: 'dialog', 'aria-label': ariaLabel },
+                    children
+                ),
+        })
+    );
+    assert.doesNotMatch(hosted, /<dialog/);
+    assert.match(hosted, /<form/);
+    assert.match(hosted, /role="dialog"/);
     assert.equal(typeof document, 'undefined');
 });
 
@@ -539,4 +554,156 @@ it('uses unique generated associations for simultaneous instances without shared
     assert.equal(secondWrites, 0);
     await f.unmount();
     assert.equal(f.container.querySelector('dialog'), null);
+});
+
+it('delegates only the shell while retaining the real SDK prompt, draft, error and URL policy', async (t) => {
+    let shows = 0;
+    let closes = 0;
+    const shell: NonNullable<Props['renderDialog']> = ({
+        children,
+        ariaLabel,
+        descriptionId,
+        initialFocus,
+    }) =>
+        h(
+            'div',
+            {
+                role: 'dialog',
+                'aria-modal': true,
+                'aria-label': ariaLabel,
+                'aria-describedby': descriptionId,
+                ref: (node: HTMLDivElement | null): void => {
+                    if (node) initialFocus.current?.focus();
+                },
+            },
+            children
+        );
+    const f = await fixture(
+        t,
+        {
+            renderDialog: shell,
+            hasNoResults: true,
+            accentColor: '#123456',
+        },
+        (window) => {
+            const prototype = window.HTMLDialogElement.prototype;
+            const show = prototype.showModal;
+            const close = prototype.close;
+            prototype.showModal = function (...args: Parameters<typeof show>) {
+                shows++;
+                return show.apply(this, args);
+            };
+            prototype.close = function (
+                this: typeof prototype,
+                ...args: Parameters<typeof close>
+            ) {
+                closes++;
+                return close.apply(this, args);
+            };
+            return () => {
+                prototype.showModal = show;
+                prototype.close = close;
+            };
+        }
+    );
+    const dialog = f.container.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.equal(f.container.querySelector('dialog'), null);
+    assert.equal(f.container.querySelectorAll('form').length, 1);
+    assert.equal(f.container.querySelectorAll('input').length, 1);
+    assert.equal(f.window.document.activeElement, f.input());
+    assert.equal(dialog.getAttribute('aria-label'), 'Search');
+    assert.equal(
+        dialog.getAttribute('aria-describedby'),
+        f.input().getAttribute('aria-describedby')?.split(' ')[0]
+    );
+    assert.equal(
+        f.container
+            .querySelector('section')
+            ?.style.getPropertyValue('--mx-sdk-search-accent'),
+        '#123456'
+    );
+    assert.ok(f.container.querySelector('.mx-sdk-search-gate-error'));
+    await f.submit();
+    assert.equal(f.reads, 0);
+    await f.edit('  Alice & 東京  ');
+    await f.update({ title: 'New title', description: 'Find {fieldName}' });
+    assert.equal(f.input().value, '  Alice & 東京  ');
+    assert.ok(f.container.querySelector('.mx-sdk-search-gate-error'));
+    await f.submit();
+    assert.equal(f.reads, 1);
+    assert.equal(f.navigations.length, 1);
+    const url = new URL(f.navigations[0]);
+    assert.equal(url.searchParams.get('search_Customer Name'), 'Alice & 東京');
+    assert.equal(url.searchParams.has('search_fld_Name'), false);
+    assert.equal(url.searchParams.get('keep'), 'yes');
+    assert.equal(url.hash, '#fragment');
+    assert.equal(f.container.querySelector('.mx-sdk-search-gate-error'), null);
+    const clear = [...f.container.querySelectorAll('button')].find(
+        (node) => node.type === 'button'
+    );
+    assert.ok(clear);
+    await act(async () => clear.click());
+    assert.equal(f.input().value, '');
+    assert.equal(f.clears, 1);
+    await f.unmount();
+    assert.equal(shows, 0);
+    assert.equal(closes, 0);
+    assert.equal(f.reads, 1);
+    assert.equal(f.navigations.length, 1);
+});
+
+it('changes modal shells without resetting the SDK draft or allocating effects', async (t) => {
+    const f = await fixture(t);
+    await f.edit('retained draft');
+    await f.update({
+        renderDialog: ({ children, ariaLabel }) =>
+            h('div', { role: 'dialog', 'aria-label': ariaLabel }, children),
+    });
+    assert.equal(f.container.querySelector('dialog'), null);
+    assert.equal(f.input().value, 'retained draft');
+    await f.update({ renderDialog: undefined });
+    assert.equal(f.container.querySelector('dialog')?.open, true);
+    assert.equal(f.input().value, 'retained draft');
+    assert.equal(f.window.document.activeElement, f.input());
+    assert.equal(f.reads, 0);
+    assert.equal(f.clears, 0);
+    assert.deepEqual(f.navigations, []);
+});
+
+it('keeps complete form spacing in default and framework shells', async (t) => {
+    const f = await fixture(
+        t,
+        {
+            renderDialog: ({ children, ariaLabel }) =>
+                h(
+                    'section',
+                    { role: 'dialog', 'aria-label': ariaLabel },
+                    children
+                ),
+        },
+        (window) => {
+            window.document.documentElement.style.fontSize = '16px';
+            const stylesheet = window.document.createElement('style');
+            stylesheet.textContent = readFileSync(
+                'src/react/search-gate.css',
+                'utf8'
+            );
+            window.document.head.append(stylesheet);
+            return () => stylesheet.remove();
+        }
+    );
+    const expectSpacing = () => {
+        const actions = f.container.querySelector(
+            '.mx-sdk-search-gate-actions'
+        );
+        assert.ok(actions);
+        assert.equal(f.window.getComputedStyle(actions).marginTop, '16px');
+    };
+    expectSpacing();
+    await f.update({ renderDialog: undefined });
+    expectSpacing();
+    assert.equal(f.reads, 0);
+    assert.equal(f.clears, 0);
+    assert.deepEqual(f.navigations, []);
 });

@@ -4,9 +4,11 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     NumberField,
+    type NumberFieldProps,
     PercentField,
     FieldRenderer,
     renderPercentField,
+    type CompleteLocalizedNumericFieldOptions,
 } from '../src/react/index.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { createFormFieldRendererHost } from '../src/ui/rendererHosts.js';
@@ -144,6 +146,158 @@ async function fixture(
     };
 }
 
+function controlledTree(
+    f: Awaited<ReturnType<typeof fixture>>,
+    options?: CompleteLocalizedNumericFieldOptions
+) {
+    return h(FieldRenderer, {
+        host: f.host,
+        renderers: {
+            renderPercentField: (field) =>
+                h(PercentField, { mode: 'controlled', field, options }),
+        },
+        fallback: () => null,
+    });
+}
+
+it('controlled Percent displays localized percentage units and writes native fractions through the real Form owner', async (t) => {
+    const f = await fixture(
+        t,
+        { numberSeparator: 'period-comma', showThousandsSeparator: true },
+        0.75
+    );
+    await f.render(
+        controlledTree(f, {
+            input: { id: 'public-percent', form: 'owner-form' },
+        })
+    );
+    assert.equal(f.input().value, '75,00');
+    assert.equal(f.input().id, 'public-percent');
+    assert.equal(f.input().getAttribute('form'), 'owner-form');
+    assert.equal(f.binding.getSnapshot().dirty, false);
+    await act(async () => f.input().focus());
+    await f.edit('125,755');
+    assert.equal(f.binding.getSnapshot().value, 125.755 / 100);
+    assert.equal(f.input().value, '125,755');
+    await f.edit('');
+    assert.equal(f.binding.getSnapshot().value, null);
+    await f.edit('0');
+    assert.equal(f.binding.getSnapshot().value, 0);
+});
+
+it('controlled Percent preserves negative fractional precision and refuses nonfinite, grouped and exponent edits', async (t) => {
+    const f = await fixture(
+        t,
+        {
+            numberSeparator: 'period-comma',
+            showThousandsSeparator: true,
+            allowNegativeNumbers: true,
+        },
+        12.3456
+    );
+    await f.render(controlledTree(f));
+    assert.equal(f.input().value, '1.234,56');
+    await act(async () => f.input().focus());
+    assert.equal(f.input().value, '1234,56');
+    await f.edit('-42,755');
+    assert.equal(f.binding.getSnapshot().value, -42.755 / 100);
+    const node = f.input();
+    node.setSelectionRange(2, 2);
+    await f.render(controlledTree(f));
+    assert.equal(f.input(), node);
+    assert.equal(node.value, '-42,755');
+    assert.equal(node.selectionStart, 2);
+    for (const denied of ['NaN', 'Infinity', '1e3', '1.234,56']) {
+        await f.edit(denied);
+        assert.equal(f.binding.getSnapshot().value, -42.755 / 100);
+        assert.equal(f.input().value, '-42,755');
+    }
+});
+
+for (const [value, label, width] of [
+    [null, 'No fraction', null],
+    [0, '0.00%', '0%'],
+    [0.75, '75.00%', '75%'],
+    [-0.125, '-12.50%', '0%'],
+    [2.5, '250.00%', '100%'],
+] as const)
+    it(`controlled Percent display preserves ${value} with numeric progress and no editor`, async (t) => {
+        const f = await fixture(t, { showAsProgressBar: true }, value);
+        const before = f.binding.getSnapshot();
+        await f.render(
+            h(PercentField, {
+                mode: 'controlled',
+                field: { ...f.props(), capability: { type: 'readonly' } },
+                options: { presentation: 'display', emptyLabel: 'No fraction' },
+            })
+        );
+        assert.equal(f.container.querySelector('input,button'), null);
+        assert.ok(f.container.textContent?.includes(label));
+        const fill = f.container.querySelector(
+            '.mx-sdk-localized-numeric-fill'
+        );
+        if (width === null) assert.equal(fill, null);
+        else
+            assert.equal(
+                fill?.getAttribute('style')?.replace(/\s/g, ''),
+                `width:${width};`
+            );
+        assert.equal(f.binding.getSnapshot().value, value);
+        assert.equal(f.binding.getSnapshot().revision, before.revision);
+        assert.equal(f.binding.getSnapshot().dirty, false);
+    });
+
+it('controlled Percent keeps deferred intent with its original owner and drops it across committed ABA', async (t) => {
+    const f = await fixture(t, {}, 0.75);
+    const first = {};
+    const options: CompleteLocalizedNumericFieldOptions = {
+        commit: 'deferred',
+        owner: { token: first, isCurrent: () => f.scope.current },
+    };
+    await f.render(controlledTree(f, options));
+    await act(async () => f.input().focus());
+    await f.edit('80.5');
+    assert.equal(f.binding.getSnapshot().value, 0.75);
+    options.owner = { token: {}, isCurrent: () => f.scope.current };
+    await f.render(controlledTree(f, options));
+    options.owner = { token: first, isCurrent: () => f.scope.current };
+    await f.render(controlledTree(f, options));
+    assert.equal(f.binding.getSnapshot().value, 0.75);
+    assert.equal(f.input().value, '75.00');
+    await act(async () => f.input().focus());
+    await f.edit('40');
+    await act(async () => f.input().blur());
+    assert.equal(f.binding.getSnapshot().value, 0.4);
+    await act(async () => f.input().focus());
+    await f.edit('55');
+    f.scope.current = false;
+    await f.render(null);
+    assert.equal(f.binding.getSnapshot().value, 0.4);
+});
+
+it('controlled Percent readonly, pending and computed props never grant a native write', async (t) => {
+    const f = await fixture(t, {}, 0.75);
+    const props = f.props();
+    for (const field of [
+        { ...props, pending: true },
+        { ...props, computed: true },
+        { ...props, displayConfig: { readOnly: true } },
+        { ...props, capability: { type: 'readonly' as const } },
+    ]) {
+        await f.render(h(PercentField, { mode: 'controlled', field }));
+        assert.equal(f.input().disabled, true);
+        await f.edit('90');
+        assert.equal(f.binding.getSnapshot().value, 0.75);
+    }
+    assert.equal(
+        Reflect.apply(PercentField, undefined, [
+            { mode: 'controlled', field: { ...props, physicalKind: 'number' } },
+        ]),
+        null,
+        'type-erased callers cannot turn another physical kind into Percent'
+    );
+});
+
 it('PercentField and NumberField keep native fractions and precision without scaling, suffixes or range limits', async (t) => {
     const f = await fixture(
         t,
@@ -154,7 +308,11 @@ it('PercentField and NumberField keep native fractions and precision without sca
         },
         0.25
     );
-    for (const Component of [PercentField, NumberField]) {
+    const bindingComponents: Array<(props: NumberFieldProps) => ReactNode> = [
+        PercentField,
+        NumberField,
+    ];
+    for (const Component of bindingComponents) {
         await f.render(
             h(Component, { binding: f.binding, className: 'fraction' })
         );

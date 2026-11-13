@@ -83,15 +83,15 @@ availability. See [the scalar projection boundary](forms.md#one-page-conditional
 
 Use the existing field-specific instructions instead of duplicating policy:
 
-| Field behavior                                        | Existing authority and rendering path                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Text, checkbox, numbers, currency, percent and rating | [Bindings](#create-an-owner-then-mount-renderers) and [scalar input models](#checkbox-and-numeric-inputs); keep unfinished input separate from the last native value.                                                                                                                                                                                  |
-| Date/dateTime and duration                            | [Date models](#calendar-dates-and-explicit-offset-datetimes) and [five-format duration editing](#duration-clock-input); do not normalize native values through display text.                                                                                                                                                                           |
-| Choices                                               | [Select policy and explicit Add Choice](#selects-linked-reads-and-reload); IDs identify options, native choice names are saved, and ineligible selected values remain data.                                                                                                                                                                            |
-| Linked records                                        | [Form rich state and Portal pill labels](#rich-linked-record-presentation); explicit authorized reads only, exact native ID occurrences, generic unresolved presentation and field-specific metadata.                                                                                                                                                  |
-| Attachments                                           | [Existing values, admission and pending files](#existing-attachment-values), [attachment policy](forms.md#attachment-presentation-and-file-admission) and [React cancellation](#optional-react-components); Form hosts need `attachmentRecovery` for upload actions. Preserve complete native metadata and apply privacy before display.               |
-| Buttons                                               | [Configured Button actions](#configured-button-actions); Form hosts/scopes need `button` options. Portal hosts and Grid/List scopes borrow `buttonRecovery` and use returned detail action policy.                                                                                                                                                     |
-| Collaborators                                         | Use the correlated `renderSingleCollaboratorField`/`renderMultipleCollaboratorsField` slots and native objects. [Page validation](forms.md#bounded-multipage-ownership) uses exact loaded choice IDs plus original stored IDs, without account lookup. The app supplies the picker; Portal object cells require the configured child Form for editing. |
+| Field behavior                                        | Existing authority and rendering path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Text, checkbox, numbers, currency, percent and rating | [Bindings](#create-an-owner-then-mount-renderers) and [scalar input models](#checkbox-and-numeric-inputs); keep unfinished input separate from the last native value.                                                                                                                                                                                                                                                                                                                                                                    |
+| Date/dateTime and duration                            | [Date models](#calendar-dates-and-explicit-offset-datetimes) and [five-format duration editing](#duration-clock-input); do not normalize native values through display text.                                                                                                                                                                                                                                                                                                                                                             |
+| Choices                                               | [Select policy and explicit Add Choice](#selects-linked-reads-and-reload); IDs identify options, native choice names are saved, and ineligible selected values remain data.                                                                                                                                                                                                                                                                                                                                                              |
+| Linked records                                        | [Form rich state and Portal pill labels](#rich-linked-record-presentation); explicit authorized reads only, exact native ID occurrences, generic unresolved presentation and field-specific metadata.                                                                                                                                                                                                                                                                                                                                    |
+| Attachments                                           | [Existing values, admission and pending files](#existing-attachment-values), [attachment policy](forms.md#attachment-presentation-and-file-admission) and [React cancellation](#optional-react-components); Form hosts need `attachmentRecovery` for upload actions. Preserve complete native metadata and apply privacy before display.                                                                                                                                                                                                 |
+| Buttons                                               | [Configured Button actions](#configured-button-actions); Form hosts/scopes need `button` options. Portal hosts and Grid/List scopes borrow `buttonRecovery` and use returned detail action policy.                                                                                                                                                                                                                                                                                                                                       |
+| Collaborators                                         | The correlated `renderSingleCollaboratorField`/`renderMultipleCollaboratorsField` slots remain display-only. [Complete Collaborator fields](complete-collaborators.md) provide a separate controlled native-object picker with authoritative offered choices, explicit current action ownership and canonical writer. [Page validation](forms.md#bounded-multipage-ownership) uses exact loaded choice IDs plus original stored IDs, without account lookup. Portal object bindings retain their configured child-Form editing contract. |
 
 Check compatibility before building the UI. The accepted page-owner composition
 refuses configured prepared Review, compute and automatic submission, as well as
@@ -409,6 +409,17 @@ to recognize currency bindings. Import `@miniextensions/sdk/react/currency.css`
 for optional defaults. See [React Currency presentation](ui.md#react-currency-presentation)
 for the bounded input contract, readonly fallback and Form/Grid/List usage.
 
+For host-controlled localized presentation, pass the accepted
+`FieldRendererProps<'currency'>` directly to `CurrencyField`. Its explicit
+`physicalKind: 'currency'` discriminator selects the existing
+`CompleteLocalizedNumericField` engine. `ControlledCurrencyFieldProps` accepts
+that field contract plus `options` for current-owner admission, deferred commits,
+input/form associations and localized Clear/empty labels. Import
+`@miniextensions/sdk/react/localized-numeric.css` for this presentation. Display
+precision and grouping do not write or round the canonical value on mount, focus
+or untouched blur. The binding and `renderCurrencyField` contracts above retain
+their raw numeric grammar.
+
 ## Duration clock input
 
 Duration uses the existing `binding.scalar` owner and native numeric seconds or
@@ -562,8 +573,8 @@ calendar days. DateTime editing accepts only
 required. Naive/local timestamps, week/ordinal dates, space separators, `24:00`,
 leap seconds and the conservative unknown-local-offset `-00:00` are refused.
 An explicit offset defines the instant; the SDK never guesses an ambiguous or
-nonexistent local time from DST rules. Natural-language and date-picker behavior
-remain outside this slice.
+nonexistent local time from DST rules. This binding contract remains separate from the controlled complete `DateField`
+calendar API; see [the complete picker](ui.md#complete-native-compatible-date-and-datetime-picker).
 
 Accepted native strings are preserved byte-for-byte. `setInput` retains partial
 or invalid text separately from the last accepted native answer. An editable
@@ -1515,3 +1526,24 @@ Only loaded `viewType: 'chart'` values contribute, in input order. Duplicate lab
 The canvas is `aria-hidden`; corresponding `dt`/`dd` pairs provide its textual data. Chart.js owns actual canvas painting and responsive observers through the verified official adapter. Updates retain the mounted Chart instance; unmount destroys only its owned instance. Native React development StrictMode remounts are covered by the packed-browser check. Import/server rendering does not initialize a canvas.
 
 Distribution keeps exact Chart.js 4.4.2 as a runtime dependency. The MIT `react-chartjs-2` 5.3.1 adapter, whose peer contract includes React18/19, is verified and bundled into this component's two emitted modules after TypeScript compilation. React and Chart.js remain external; the SDK's React peer remains optional for headless consumers. No adapter dev dependency or native alias is required by a packed customer. The adapter's notice ships in `THIRD_PARTY_NOTICES.md`.
+
+## Natural Duration controls
+
+`DurationField` accepts the complete controlled native-seconds contract as well
+as the existing binding props. Use `ControlledDurationFieldProps` for controlled
+hosts; `DurationFieldProps` retains its legacy binding type. Supplying a binding
+and a controlled writer together is rejected. `CompleteDurationField` and
+`renderDurationField` remain compatible entry points.
+
+A controlled host supplies the real field/session identity, owner generation,
+action-time currentness and canonical writer. The component retains focused raw
+clock drafts and caret through cosmetic/value echoes. It does not create a Form,
+a canonical store or Save authority. Native callers without that authority keep
+their existing fallback.
+
+`ReadOnlyDurationField` accepts canonical seconds, a supported Duration format
+and the existing readonly text presentation options (`language`, size, layout and
+class). It formats seconds even for `h:mm`, distinguishes zero from empty values,
+and needs no editing owner or writer. Both natural entry points are exported by
+`@miniextensions/sdk/react`. Existing `complete-duration.css` and readonly text
+styles remain optional; no new stylesheet or dependency is introduced.

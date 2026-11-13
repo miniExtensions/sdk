@@ -163,6 +163,71 @@ it('server imports and renders explicit image, audio, video, PDF and localized u
     );
 });
 
+// Retained pre-extraction native characterization, exercised through the public
+// SDK export so package composition cannot broaden MIME/suffix inference.
+for (const [name, attachment, tag] of [
+    [
+        'empty filename suppresses URL inference',
+        { url: '/photo.jpg', filename: '' },
+        null,
+    ],
+    [
+        'image MIME remains case sensitive',
+        { url: '/photo.jpg', type: 'IMAGE/JPEG' },
+        null,
+    ],
+    [
+        'custom image MIME is accepted',
+        { url: '/file', type: 'image/custom' },
+        'img',
+    ],
+    [
+        'PDF fragment does not match the suffix fallback',
+        { url: '/file.pdf#page=2' },
+        null,
+    ],
+    [
+        'exact PDF MIME needs no filename',
+        { url: '/file', type: 'application/pdf' },
+        'iframe',
+    ],
+    [
+        'PDF MIME remains case sensitive',
+        { url: '/file', type: 'Application/PDF' },
+        null,
+    ],
+    ['video filename does not replace MIME', { url: '/file.mp4' }, null],
+    ['audio filename does not replace MIME', { url: '/file.mp3' }, null],
+    ['Word filename does not replace MIME', { url: '/file.docx' }, null],
+    [
+        'PDF suffix precedes Word MIME',
+        { url: '/file.pdf', type: word },
+        'iframe',
+    ],
+] satisfies [string, AttachmentPreviewSource, string | null][]) {
+    it(`preserves native classification: ${name}`, () => {
+        const markup = renderToStaticMarkup(
+            h(AttachmentPreview, { attachment })
+        );
+        if (tag) assert.match(markup, new RegExp(`<${tag}(?:\\s|>)`));
+        else assert.match(markup, /Preview Not Available/);
+    });
+}
+
+it('uses the full HEIF thumbnail before the original image URL', () => {
+    const markup = renderToStaticMarkup(
+        h(AttachmentPreview, {
+            attachment: {
+                url: '/photo.heif',
+                type: 'image/heif',
+                thumbnails: { full: { url: '/full-heif.jpg' } },
+            },
+        })
+    );
+    assert.match(markup, /src="\/full-heif.jpg"/);
+    assert.doesNotMatch(markup, /src="\/photo.heif"/);
+});
+
 it('renders actual controlled DOCX text, embedded image and font with the unmocked 0.3.0 vendor; stable rerenders retain DOM', async (t) => {
     const f = await fixture(t);
     const fetch = t.mock.method(globalThis, 'fetch', async () =>

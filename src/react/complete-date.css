@@ -1,0 +1,304 @@
+.mx-sdk-complete-date-popup .rdt {
+    position: relative;
+}
+.mx-sdk-complete-date-popup .rdtPicker {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    min-width: 250px;
+    padding: 8px;
+    margin-top: 1px;
+    z-index: 99999 !important;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgb(209, 213, 219);
+    margin-top: 8px;
+    border-radius: 0.375rem;
+    transition: opacity 0.1s;
+}
+.mx-sdk-complete-date-popup .rdtOpen .rdtPicker {
+    opacity: 1;
+    pointer-events: all;
+}
+.mx-sdk-complete-date-popup .rdtStatic .rdtPicker {
+    box-shadow: none;
+    position: static;
+}
+.mx-sdk-complete-date-popup .rdtPicker .rdtTimeToggle {
+    text-align: center;
+}
+.mx-sdk-complete-date-popup .rdtPicker table {
+    width: 100%;
+    margin: 0;
+}
+.mx-sdk-complete-date-popup .rdtPicker td,
+.mx-sdk-complete-date-popup .rdtPicker th {
+    text-align: center;
+    height: 28px;
+    border-radius: 6px;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtDay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    transition: background-color 75ms;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    color: #4a5568;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtDay:hover {
+    background-color: #eee;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtDay.rdtActive {
+    background-color: var(--mx-sdk-accent, rgb(var(--theme-500, 59 130 246)));
+    color: #ffffff;
+}
+.mx-sdk-complete-date-popup .rdtPicker td.rdtHour:hover,
+.mx-sdk-complete-date-popup .rdtPicker td.rdtMinute:hover,
+.mx-sdk-complete-date-popup .rdtPicker td.rdtSecond:hover,
+.mx-sdk-complete-date-popup .rdtPicker .rdtTimeToggle:hover {
+    background: #eeeeee;
+    cursor: pointer;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtOld,
+.mx-sdk-complete-date-popup .rdtPicker td .rdtNew {
+    color: #999999;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtToday {
+    position: relative;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtToday:before {
+    content: '';
+    position: absolute;
+    bottom: 1px;
+    right: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 100%;
+    background-color: var(--mx-sdk-accent, rgb(var(--theme-500, 59 130 246)));
+    transform: translateX(50%);
+}
+.mx-sdk-complete-date-popup .rdtPicker td.rdtActive,
+.mx-sdk-complete-date-popup .rdtPicker td.rdtActive:hover {
+    background-color: var(--mx-sdk-accent, rgb(var(--theme-500, 59 130 246)));
+    color: #fff;
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtActive.rdtToday:before {
+    background-color: #ffffff;
+}
+.mx-sdk-complete-date-popup .rdtPicker td .rdtDisabled,
+.mx-sdk-complete-date-popup .rdtPicker td .rdtDisabled:hover,
+.mx-sdk-complete-date-popup .rdtPicker td span.rdtDisabled,
+.mx-sdk-complete-date-popup .rdtPicker td span.rdtDisabled:hover,
+.mx-sdk-complete-date-popup .rdtPicker th.rdtDisabled,
+.mx-sdk-complete-date-popup .rdtPicker th.rdtDisabled:hover {
+    background: none !important;
+    color: #999999 !important;
+    cursor: not-allowed;
+}
+.mx-sdk-complete-date-popup .rdtPicker td span.rdtOld {
+    color: #999999;
+}
+.mx-sdk-complete-date-popup .rdtPicker th {
+    border-bottom: 1px solid #f9f9f9;
+}
+.mx-sdk-complete-date-popup .rdtPicker .dow {
+    width: 14.2857%;
+    border-bottom: none;
+    cursor: default;
+    font-weight: 500;
+    color: #4b4b4b;
+}
+.mx-sdk-complete-date-popup .rdtPicker .rdtSwitch {
+    font-weight: 500;
+    color: #4b4b4b;
+    width: 100px;
+    transition: background-color 0.1s;
+    cursor: pointer;
+}
+.mx-sdk-complete-date-popup .rdtPicker .rdtSwitch:hover {
+    background-color: #eee;
+}
+.mx-sdk-complete-date-popup .rdtPicker th.rdtNext,
+.mx-sdk-complete-date-popup .rdtPicker th.rdtPrev {
+    font-size: 32px;
+    font-weight: 300;
+    color: #5c5c5c;
+    vertical-align: top;
+}
+.mx-sdk-complete-date-popup .rdtPrev span,
+.mx-sdk-complete-date-popup .rdtNext span {
+    display: block;
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Chrome/Safari/Opera */
+    -khtml-user-select: none; /* Konqueror */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
+    transition: background-color 0.1s;
+    border-radius: 6px;
+}
+.mx-sdk-complete-date-popup .rdtPrev span:hover,
+.mx-sdk-complete-date-popup .rdtNext span:hover {
+    background-color: #eee;
+}
+.mx-sdk-complete-date-popup .rdtPicker thead tr:first-of-type th {
+    cursor: pointer;
+}
+.mx-sdk-complete-date-popup .rdtPicker tfoot {
+    border-top: 1px solid #f9f9f9;
+}
+.mx-sdk-complete-date-popup .rdtPicker button {
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+.mx-sdk-complete-date-popup .rdtPicker button:hover {
+    background-color: #eee;
+}
+.mx-sdk-complete-date-popup .rdtPicker thead button {
+    width: 100%;
+    height: 100%;
+}
+.mx-sdk-complete-date-popup td.rdtMonth,
+.mx-sdk-complete-date-popup td.rdtYear {
+    height: 50px;
+    width: 25%;
+    cursor: pointer;
+}
+.mx-sdk-complete-date-popup td.rdtMonth:hover,
+.mx-sdk-complete-date-popup td.rdtYear:hover {
+    background: #eee;
+}
+.mx-sdk-complete-date-popup .rdtCounters {
+    display: inline-block;
+}
+.mx-sdk-complete-date-popup .rdtCounters > div {
+    float: left;
+}
+.mx-sdk-complete-date-popup .rdtCounter {
+    height: 100px;
+}
+.mx-sdk-complete-date-popup .rdtCounter {
+    width: 40px;
+}
+.mx-sdk-complete-date-popup .rdtCounterSeparator {
+    line-height: 100px;
+}
+.mx-sdk-complete-date-popup .rdtCounter .rdtBtn {
+    height: 40%;
+    line-height: 40px;
+    cursor: pointer;
+    display: block;
+    border-radius: 6px;
+    transition: background-color 0.1s;
+
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Chrome/Safari/Opera */
+    -khtml-user-select: none; /* Konqueror */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
+}
+.mx-sdk-complete-date-popup .rdtCounter .rdtBtn:hover {
+    background-color: #eee;
+}
+.mx-sdk-complete-date-popup .rdtCounter .rdtCount {
+    font-size: 1.2em;
+}
+.mx-sdk-complete-date-popup .rdtMilli {
+    vertical-align: middle;
+    padding-left: 8px;
+    width: 48px;
+}
+.mx-sdk-complete-date-popup .rdtMilli input {
+    width: 100%;
+    font-size: 1.2em;
+    margin-top: 37px;
+}
+.mx-sdk-complete-date-popup .rdtTime td {
+    cursor: default;
+}
+.mx-sdk-complete-date {
+    width: 100%;
+    min-width: 0;
+    font: inherit;
+}
+.mx-sdk-complete-date-control {
+    width: 100%;
+    position: relative;
+    color: #9ca3af;
+}
+.mx-sdk-complete-date-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    pointer-events: none;
+}
+.mx-sdk-complete-date-control:focus-within {
+    color: var(--mx-sdk-accent, rgb(var(--theme-500, 59 130 246)));
+}
+.mx-sdk-complete-date-input {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 8px 8px 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #000;
+    background: #fff;
+    box-shadow: 0 1px 2px #0000000d;
+    font: inherit;
+    font-size: 14px;
+    line-height: 20px;
+}
+.mx-sdk-complete-date-input:focus {
+    outline: 2px solid var(--mx-sdk-accent, rgb(var(--theme-500, 59 130 246)));
+    outline-offset: -1px;
+}
+.mx-sdk-complete-date-input:disabled {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+.mx-sdk-complete-date-input[aria-invalid='true'] {
+    border-color: #b91c1c;
+}
+.mx-sdk-complete-date-popup {
+    z-index: 100;
+    box-sizing: border-box;
+    width: 266px;
+    max-width: calc(100vw - 16px);
+    max-height: var(--radix-popover-content-available-height);
+    overflow: auto;
+    padding: 8px;
+    background: #fff;
+    color: #111827;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px #0000001a;
+    font-family: system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+}
+.mx-sdk-complete-date-popup .rdtPicker {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+}
+.mx-sdk-complete-date-popup table {
+    border-collapse: collapse;
+}

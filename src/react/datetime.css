@@ -1,3 +1,6 @@
+@import './complete-date.css';
+@import './complete-readonly-text.css';
+
 /* Optional scoped defaults; native input behavior is independent of this file. */
 .mx-sdk-datetime-field {
     display: inline-flex;

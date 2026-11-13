@@ -1,0 +1,30 @@
+.mx-sdk-form-tracking {
+    box-sizing: border-box;
+    width: 100%;
+    border-radius: 6px;
+    padding: 16px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    text-align: inherit;
+    font-size: 14px;
+    line-height: 20px;
+}
+.mx-sdk-form-tracking-row {
+    display: flex;
+}
+.mx-sdk-form-tracking-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    color: #60a5fa;
+}
+.mx-sdk-form-tracking-message {
+    margin-left: 12px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+@media (forced-colors: active) {
+    .mx-sdk-form-tracking {
+        border: 1px solid CanvasText;
+    }
+}

@@ -10,10 +10,25 @@ import {
 } from '../ui/rendererRegistry.js';
 import { useFieldBinding, type FieldProps } from './index.js';
 import { textConfiguration } from './TextField.js';
+import {
+    CompleteMultipleCollaboratorsField,
+    type CompleteCollaborator,
+    type CompleteMultipleCollaboratorsFieldProps,
+} from './CompleteCollaboratorField.js';
 
 export type MultipleCollaboratorsFieldOptions = { className?: string };
-export type MultipleCollaboratorsFieldProps = FieldProps &
-    MultipleCollaboratorsFieldOptions;
+export type BindingMultipleCollaboratorsFieldProps = FieldProps &
+    MultipleCollaboratorsFieldOptions & { mode?: never };
+/** Preserve the original named binding contract for existing consumers. */
+export type MultipleCollaboratorsFieldProps =
+    BindingMultipleCollaboratorsFieldProps;
+export type ControlledMultipleCollaboratorsFieldProps<
+    T extends CompleteCollaborator = CompleteCollaborator,
+> = CompleteMultipleCollaboratorsFieldProps<T> & {
+    mode: 'controlled';
+    binding?: never;
+    render?: never;
+};
 
 /** Preserve every supplied name and occurrence; the owner retains native objects. */
 function collaboratorNames(value: unknown): string | null {
@@ -104,11 +119,11 @@ export function renderMultipleCollaboratorsField(
 }
 
 /** Subscribe to accepted native arrays without borrowing binding write actions. */
-export function MultipleCollaboratorsField({
+export function BindingMultipleCollaboratorsField({
     binding,
     render,
     className,
-}: MultipleCollaboratorsFieldProps): ReactNode {
+}: BindingMultipleCollaboratorsFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -136,4 +151,21 @@ export function MultipleCollaboratorsField({
             snapshot.error ??
             snapshot.validation.map((item) => item.errorMessage).join('\n'),
     });
+}
+
+/** Complete controlled picker; unchanged binding calls retain display-only behavior. */
+export function MultipleCollaboratorsField<T extends CompleteCollaborator>(
+    props: ControlledMultipleCollaboratorsFieldProps<T>
+): ReactNode;
+export function MultipleCollaboratorsField(
+    props: MultipleCollaboratorsFieldProps
+): ReactNode;
+export function MultipleCollaboratorsField<T extends CompleteCollaborator>(
+    props:
+        | MultipleCollaboratorsFieldProps
+        | ControlledMultipleCollaboratorsFieldProps<T>
+): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(CompleteMultipleCollaboratorsField<T>, props)
+        : createElement(BindingMultipleCollaboratorsField, props);
 }

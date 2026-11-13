@@ -247,6 +247,8 @@ export function recordPortalChartInputs({
     temporary,
     installed,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     format,
     regular,
     hash,
@@ -268,8 +270,10 @@ export function recordPortalChartInputs({
         };
         if (within(installed, path)) {
             // The ordinary React barrel also reaches the existing private
-            // Phone and Rich Text closures, shared by ESM/CJS. Bind those
-            // exact shipped subtrees too; no other vendor or format is allowed.
+            // Phone, Rich Text, and Address closures, shared by ESM/CJS.
+            // Bind their shipped bytes too. Address admits only its three
+            // runtime files, never another vendor, source alias, or format.
+            const packagePath = relative(installed, path).replaceAll('\\', '/');
             assert(
                 within(join(installed, 'dist', format), path) ||
                     within(
@@ -279,15 +283,16 @@ export function recordPortalChartInputs({
                     within(
                         join(installed, 'dist/vendor/rich-markdown-editor'),
                         path
-                    ),
-                'Chart browser imported a source alias or wrong SDK format'
+                    ) ||
+                    [
+                        'dist/vendor/headlessui-address/combobox.js',
+                        'dist/vendor/headlessui-address/react-peer.js',
+                        'dist/vendor/headlessui-address/sdk-runtime.js',
+                    ].includes(packagePath),
+                `Chart browser imported a source alias or wrong SDK format: ${packagePath}`
             );
-            const member =
-                'package/' + relative(installed, path).replaceAll('\\', '/');
-            assert.deepEqual(
-                bytes,
-                execFileSync('tar', ['-xOf', archive, member])
-            );
+            const member = 'package/' + packagePath;
+            assert.deepEqual(bytes, readArchiveMember(member));
             item.archiveMember = member;
         }
         if (within(chartRoot, path))
@@ -337,6 +342,8 @@ export function recordPortalChartInputs({
 export async function prepareCompletePortalChartFixtures({
     temporary,
     archive,
+    readArchiveMember = (member) =>
+        execFileSync('tar', ['-xOf', archive, member]),
     installed,
     allowed,
     report,
@@ -379,7 +386,7 @@ export async function prepareCompletePortalChartFixtures({
     const css = regular(cssPath);
     const cssMember =
         'package/' + relative(installed, cssPath).replaceAll('\\', '/');
-    assert.deepEqual(css, execFileSync('tar', ['-xOf', archive, cssMember]));
+    assert.deepEqual(css, readArchiveMember(cssMember));
     allowed.set('/complete-portal-chart.css', css);
     allowed.set(
         '/complete-portal-chart-fixture.css',
@@ -413,6 +420,7 @@ export async function prepareCompletePortalChartFixtures({
             temporary,
             installed,
             archive,
+            readArchiveMember,
             format,
             regular,
             hash,

@@ -3,10 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { phoneNumberReactTypedConsumer } from './phone-number-consumer-checks.mjs';
 
 export const completePhoneTypedConsumer = String.raw`import { createElement } from 'react';
 import { CompletePhoneNumberField, type CompletePhoneNumberFieldProps,
-    type CompletePhoneEditOwner, type CompletePhoneCommit } from '@miniextensions/sdk/react';
+    type CompletePhoneEditOwner, type CompletePhoneCommit,
+    PhoneNumberField, type PhoneNumberFieldProps, type ControlledPhoneNumberFieldProps, type TextFieldProps,
+    type PhoneEditOwner, type PhoneCommit } from '@miniextensions/sdk/react';
 const owner: CompletePhoneEditOwner = { token: {}, isCurrent: () => true };
 const props: CompletePhoneNumberFieldProps = {
     value: '+233201234567', showCountryCodes: true, defaultCountry: 'GH',
@@ -18,6 +21,23 @@ const props: CompletePhoneNumberFieldProps = {
 };
 createElement(CompletePhoneNumberField, props);
 createElement(CompletePhoneNumberField, { value: '', onValueChange() {} });
+const canonical: ControlledPhoneNumberFieldProps = props;
+const canonicalOwner: PhoneEditOwner = owner;
+const canonicalCommit = (commit: PhoneCommit) => commit.reason;
+declare const bindingProps: TextFieldProps;
+const legacy: PhoneNumberFieldProps = bindingProps;
+const legacyText: TextFieldProps = legacy;
+createElement(PhoneNumberField, bindingProps);
+createElement(PhoneNumberField, canonical);
+createElement(PhoneNumberField, { value: null, onValueChange() {} });
+// @ts-expect-error a caller must select binding or controlled props, never both
+const mixed: ControlledPhoneNumberFieldProps = { ...props, binding: bindingProps.binding };
+// @ts-expect-error a controlled field cannot inject the binding renderer
+const injected: ControlledPhoneNumberFieldProps = { ...props, render() { return null; } };
+// @ts-expect-error controlled-only options cannot silently configure a binding field
+const ambiguous: Parameters<typeof PhoneNumberField>[0] = { ...bindingProps, showCountryCodes: true };
+// @ts-expect-error the canonical deferred contract retains its owner requirement
+const canonicalUnowned: ControlledPhoneNumberFieldProps = { value: '', commit: 'deferred', onValueChange() {} };
 // @ts-expect-error deferred edits require an actual host owner
 const unowned: CompletePhoneNumberFieldProps = { value: '', commit: 'deferred', onValueChange() {} };
 // @ts-expect-error telephone data is not a numeric value
@@ -26,7 +46,9 @@ const numeric: CompletePhoneNumberFieldProps = { ...props, value: 233 };
 createElement(CompletePhoneNumberField, { ...props, input: { onChange() {} } });
 // @ts-expect-error complete Phone is React-only
 import { CompletePhoneNumberField as CorePhone } from '@miniextensions/sdk';
-void unowned; void numeric; void CorePhone;
+void unowned; void numeric; void CorePhone; void mixed; void injected; void ambiguous;
+void canonicalUnowned; void canonicalOwner; void canonicalCommit;
+void legacyText;
 `;
 
 const runtime = String.raw`import assert from 'node:assert/strict';
@@ -57,8 +79,9 @@ for (const api of [esm, cjs]) {
     assert.equal(typeof api.CompletePhoneNumberField, 'function');
     assert.equal(typeof api.CompleteReadOnlyPhoneNumberField, 'function');
     assert.equal(typeof api.PhoneNumberField, 'function', 'legacy public component remains exported');
+    assert.equal(typeof api.ReadOnlyPhoneNumberField, 'function');
     assert.equal(typeof globalThis.document, 'undefined');
-    const Component = api.CompletePhoneNumberField;
+    for (const Component of [api.CompletePhoneNumberField, api.PhoneNumberField]) {
     let value = '+14155552671';
     let deferred = false;
     let hint = 'Enter phone';
@@ -239,6 +262,7 @@ for (const api of [esm, cjs]) {
         }
     }
 }
+}
 console.log(JSON.stringify({ react: React.version, groups, cleanup: 'completed' }));
 `;
 
@@ -302,6 +326,29 @@ export function checkCompletePhoneReactMatrix({
                     path,
                 ]);
             }
+            // Keep the original public binding JSX consumer intact: its props
+            // alias and contextual render callback must survive the new API.
+            const legacyPath = 'phone-number-react-consumer.tsx';
+            writeFileSync(
+                join(directory, legacyPath),
+                phoneNumberReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--target',
+                'ES2022',
+                '--module',
+                'ESNext',
+                '--moduleResolution',
+                'Bundler',
+                '--jsx',
+                'react-jsx',
+                legacyPath,
+            ]);
             const result = JSON.parse(
                 execFileSync(
                     process.execPath,
@@ -313,7 +360,7 @@ export function checkCompletePhoneReactMatrix({
                 )
             );
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 2);
+            assert.equal(result.groups, 4);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);
             console.log(

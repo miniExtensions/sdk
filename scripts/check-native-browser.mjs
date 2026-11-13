@@ -1,3 +1,16 @@
+import {
+    prepareCSVExportBrowserFixtures,
+    checkCSVExportBrowser,
+} from './csv-export-consumer-checks.mjs';
+import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
+import { checkExternalSyncSourceControlledBrowser } from './external-sync-source-controlled-browser-checks.mjs';
+import { checkSignatureBrowser } from './signature-browser-checks.mjs';
+import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
+import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
+import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
+import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
+import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
+import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -29,12 +42,18 @@ import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
+import { checkCanonicalRichTextBrowser } from './canonical-rich-text-browser-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
+import { checkThemeBrowser } from './theme-browser-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
+import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
-import { assertBrowserInputs } from './package-checks.mjs';
+import {
+    assertBrowserInputs,
+    createArchiveMemberReader,
+} from './package-checks.mjs';
 import {
     completeReadOnlyTextBrowserSource,
     completeReadOnlyTextBrowserStyle,
@@ -52,6 +71,14 @@ import {
     checkCompleteMultilineBrowser,
 } from './complete-multiline-consumer-checks.mjs';
 import {
+    prepareFieldPresentationBrowserFixtures,
+    checkFieldPresentationBrowser,
+} from './field-presentation-consumer-checks.mjs';
+import {
+    prepareFormGroupBrowserFixtures,
+    checkFormGroupBrowser,
+} from './form-group-consumer-checks.mjs';
+import {
     checkHTMLDescriptionBrowser,
     checkHTMLDescriptionEditorStyleCoexistence,
 } from './html-description-consumer-checks.mjs';
@@ -60,6 +87,10 @@ import {
     prepareCompletePortalChartFixtures,
     checkCompletePortalChartBrowser,
 } from './complete-portal-chart-browser-checks.mjs';
+import {
+    prepareCompleteCollaboratorFixtures,
+    checkCompleteCollaboratorBrowser,
+} from './complete-collaborator-browser-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1469,6 +1500,11 @@ try {
     assert.equal(tgzs.length, 1);
     const archive = join(packageDirectory, tgzs[0]);
     assert.equal(hash(regular(archive)), manifest.package.sha256);
+    const readArchiveMember = createArchiveMemberReader({
+        archivePath: archive,
+        expectedSha256: manifest.package.sha256,
+    });
+    const preparationStarted = performance.now();
     assert.deepEqual(receipt.source, manifest.source);
     const allowed = new Map();
     for (const entry of manifest.outputs) {
@@ -1511,9 +1547,17 @@ try {
             'scripts/complete-readonly-text-consumer-checks.mjs',
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
+            'scripts/field-presentation-consumer-checks.mjs',
+            'scripts/form-group-consumer-checks.mjs',
+            'scripts/csv-export-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
+            'scripts/signature-browser-checks.mjs',
+            'scripts/complete-date-browser-checks.mjs',
+            'scripts/created-time-controlled-browser-checks.mjs',
+            'scripts/external-sync-source-controlled-browser-checks.mjs',
+            'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1710,7 +1754,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                const original = execFileSync('tar', ['-xOf', archive, member]);
+                const original = readArchiveMember(member);
                 assert.deepEqual(
                     bytes,
                     original,
@@ -1768,10 +1812,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, member])
-                );
+                assert.deepEqual(bytes, readArchiveMember(member));
                 item.archiveMember = member;
             }
             readOnlyTextProofInputs.push(item);
@@ -1789,7 +1830,7 @@ try {
             relative(installed, readOnlyTextCssPath).replaceAll('\\', '/');
         assert.deepEqual(
             readOnlyTextCss,
-            execFileSync('tar', ['-xOf', archive, readOnlyTextCssMember])
+            readArchiveMember(readOnlyTextCssMember)
         );
         const readOnlyTextCode = readOnlyTextBundle.outputFiles[0].contents;
         report.completeReadOnlyText = {
@@ -1852,10 +1893,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, member])
-                );
+                assert.deepEqual(bytes, readArchiveMember(member));
                 item.archiveMember = member;
             }
             clearableInputProofInputs.push(item);
@@ -1875,7 +1913,7 @@ try {
             relative(installed, clearableInputCssPath).replaceAll('\\', '/');
         assert.deepEqual(
             clearableInputCss,
-            execFileSync('tar', ['-xOf', archive, clearableInputCssMember])
+            readArchiveMember(clearableInputCssMember)
         );
         const clearableInputCode = clearableInputBundle.outputFiles[0].contents;
         report.completeClearableInput = {
@@ -1903,6 +1941,7 @@ try {
                 temporary,
                 output,
                 archive,
+                readArchiveMember,
                 installed,
                 allowed,
                 report,
@@ -1915,6 +1954,55 @@ try {
         const portalChartFixtures = await prepareCompletePortalChartFixtures({
             temporary,
             archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        const collaboratorFixtures = await prepareCompleteCollaboratorFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareFieldPresentationBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareCSVExportBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareFormGroupBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
             installed,
             allowed,
             report,
@@ -1958,10 +2046,7 @@ try {
                 const member =
                     'package/' +
                     relative(installed, path).replaceAll('\\', '/');
-                assert.deepEqual(
-                    bytes,
-                    execFileSync('tar', ['-xOf', archive, member])
-                );
+                assert.deepEqual(bytes, readArchiveMember(member));
                 item.archiveMember = member;
             }
             multilineProofInputs.push(item);
@@ -1979,10 +2064,7 @@ try {
         const multilineCssMember =
             'package/' +
             relative(installed, multilineCssPath).replaceAll('\\', '/');
-        assert.deepEqual(
-            multilineCss,
-            execFileSync('tar', ['-xOf', archive, multilineCssMember])
-        );
+        assert.deepEqual(multilineCss, readArchiveMember(multilineCssMember));
         const multilineCode = multilineBundle.outputFiles[0].contents;
         report.completeMultiline = {
             sourceSha256: hash(completeMultilineBrowserSource),
@@ -2030,6 +2112,15 @@ try {
             )
         );
 
+        report.archiveMemberReads = readArchiveMember.stats();
+        report.preparationDurationMs = performance.now() - preparationStarted;
+        console.log(
+            'Archive-bound browser preparation: ' +
+                JSON.stringify({
+                    durationMs: report.preparationDurationMs,
+                    ...report.archiveMemberReads,
+                })
+        );
         server = createServer((request, response) => {
             const url = new URL(request.url, 'http://127.0.0.1');
             const bytes = allowed.get(url.pathname);
@@ -2070,6 +2161,12 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.canonicalRichText = {};
+        await checkCanonicalRichTextBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.canonicalRichText,
+        });
         report.completeRichText = {};
         await checkCompleteRichTextBrowser({
             browser,
@@ -2097,11 +2194,69 @@ try {
             evidence: report.completeLocalizedNumeric,
             output,
         });
+        report.completeDate = {};
+        await checkCompleteDateBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeDate,
+            output,
+        });
+        report.createdTime = {};
+        await checkCreatedTimeControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.createdTime,
+            output,
+        });
+        report.lastModifiedTime = {};
+        await checkCreatedTimeControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.lastModifiedTime,
+            output,
+            field: 'lastModifiedTime',
+        });
+        report.lastModifiedTimeDocuments = {};
+        await checkDocumentThumbnailBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.lastModifiedTimeDocuments,
+            output,
+            field: 'lastModifiedTime',
+        });
+        report.createdTimeDocuments = {};
+        await checkDocumentThumbnailBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.createdTimeDocuments,
+            output,
+        });
+        report.controlledSelect = {};
+        await checkControlledSelectBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.controlledSelect,
+            output,
+        });
+        report.externalSyncSourceControlled = {};
+        await checkExternalSyncSourceControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.externalSyncSourceControlled,
+            output,
+        });
         report.completeDuration = {};
         await checkCompleteDurationBrowser({
             browser,
             consumer: temporary,
             evidence: report.completeDuration,
+            output,
+        });
+        report.theme = {};
+        await checkThemeBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.theme,
             output,
         });
         report.searchGate = {};
@@ -2111,11 +2266,65 @@ try {
             evidence: report.searchGate,
             output,
         });
+        report.recordComments = {};
+        await checkRecordCommentsBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.recordComments,
+            output,
+        });
         report.completeCalendly = {};
         await checkCompleteCalendlyBrowser({
             browser,
             consumer: temporary,
             evidence: report.completeCalendly,
+            output,
+        });
+        for (const control of ['complete', 'natural']) {
+            for (const format of ['esm', 'cjs']) {
+                const key =
+                    control === 'natural'
+                        ? format === 'esm'
+                            ? 'addressField'
+                            : 'addressFieldCommonJS'
+                        : format === 'esm'
+                          ? 'completeAddress'
+                          : 'completeAddressCommonJS';
+                report[key] = {};
+                await checkCompleteAddressBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report[key],
+                    output,
+                    format,
+                    control,
+                });
+            }
+        }
+        for (const format of ['esm', 'cjs']) {
+            const key = 'signature' + format;
+            report[key] = {};
+            await checkSignatureBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report[key],
+                output,
+                format,
+                reference: nativeReactVersion === '18.3.1',
+            });
+        }
+        report.formTracking = {};
+        await checkFormTrackingBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formTracking,
+            output,
+        });
+        report.completeBarcode = {};
+        await checkCompleteBarcodeBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeBarcode,
             output,
         });
         report.completeVerification = {};
@@ -2715,6 +2924,21 @@ try {
                 evidence: report.completeMultiline,
             });
         });
+        await run('field-presentation', async (page, origin) => {
+            await page.goto(origin + '/field-presentation.html');
+            await checkFieldPresentationBrowser({
+                page,
+                evidence: report.fieldPresentation,
+            });
+        });
+        await run('csv-export', async (page, origin) => {
+            await page.goto(origin + '/csv-export.html');
+            await checkCSVExportBrowser({ page, evidence: report.csvExport });
+        });
+        await run('form-group', async (page, origin) => {
+            await page.goto(origin + '/form-group.html');
+            await checkFormGroupBrowser({ page, evidence: report.formGroup });
+        });
         for (const format of portalChartFixtures.formats) {
             await run(
                 'complete-portal-chart-' + format,
@@ -2726,6 +2950,22 @@ try {
                         page,
                         evidence: report.completePortalChart[format],
                         format,
+                    });
+                }
+            );
+        }
+        for (const format of collaboratorFixtures.formats) {
+            await run(
+                'complete-collaborators-' + format,
+                async (page, origin) => {
+                    await page.goto(
+                        origin + collaboratorFixtures.routes[format]
+                    );
+                    await checkCompleteCollaboratorBrowser({
+                        page,
+                        evidence: report.completeCollaborators[format],
+                        format,
+                        output,
                     });
                 }
             );
@@ -3675,8 +3915,10 @@ try {
             });
         assert.equal(
             results.length,
-            24 +
+            // Include complete fields, CSV export and one-page section groups.
+            27 +
                 portalChartFixtures.formats.length +
+                collaboratorFixtures.formats.length +
                 storageEventCases.length +
                 Number(htmlDescriptionNative.referenceEnabled)
         );

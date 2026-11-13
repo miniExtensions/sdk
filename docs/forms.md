@@ -24,6 +24,59 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+## Native-compatible Save coordination
+
+`createFormSaveCoordinator<Key, Snapshot>({ isEqual })` coordinates explicit
+Save invocations without a Form client, Redux, React or browser globals. Reuse
+one instance for callers sharing session keys; different instances and keys are
+independent. Existing FormController and borrowed Submit contracts are separate.
+
+```ts
+import { createFormSaveCoordinator } from '@miniextensions/sdk/forms';
+
+type MySnapshot = { record: Record<string, unknown>; dirty: readonly string[] };
+// Supplied by the host that owns the canonical draft and actual Save operation.
+declare const sessionKey: string;
+declare function equalWholeSnapshot(
+    a: MySnapshot | null,
+    b: MySnapshot | null
+): boolean;
+declare function readCurrentSnapshot(): MySnapshot | null;
+declare function guardedNativeSave(): Promise<unknown>;
+
+const saves = createFormSaveCoordinator<string, MySnapshot | null>({
+    isEqual: equalWholeSnapshot,
+});
+await saves.run({
+    sessionKey,
+    readSnapshot: readCurrentSnapshot,
+    allocate: guardedNativeSave,
+});
+```
+
+The host supplies its exact equality (including whole record and ordered dirty
+IDs), current snapshot reader and original guarded allocation callback returning
+its operation Promise. Snapshots are retained without cloning; the host must
+preserve the snapshot values it returns. Null is an ordinary snapshot value.
+Allocation runs synchronously before active-entry registration. Synchronous
+throws reject the invocation without registering an entry; returned rejected
+Promises are registered and cleaned up using their exact identity.
+
+An equal pending invocation fulfills immediately with `void`, without joining
+the original success or failure. A changed explicit invocation waits for the
+active operation, even if it rejects, then rereads current state and reevaluates.
+Several waiters can coalesce to one latest-state allocation; captured edits are
+not a FIFO queue. The original caller retains its escaped error. No automatic
+retry occurs without an explicit invocation.
+
+The host's final allocation gate runs after waiting and may fulfill without
+allocating. Fulfilled `void` therefore is not evidence of stored success: it can
+also mean duplicate suppression, gate refusal or a normalized host failure.
+The host retains validation, error normalization, actual transport and allocated
+settlement. Retirement cannot cancel, roll back, replay or veto allocated work;
+the coordinator exposes no reset or cancellation policy. Compute scheduling and
+no-Save paths remain outside this coordinator.
+
 ## URL syntax validation
 
 `checkIfFormUrlIsValid(value: string): boolean` exposes the existing Form URL
@@ -3084,3 +3137,58 @@ The package check executes this exact shipped fence with synthetic host ports.
 It establishes composition behavior, not real host adoption, browser acceptance
 or live persistence. Lead-owned native integration must implement and qualify
 these ports against its existing store, queue and request snapshot boundary.
+
+## Optional tracking in an allocated final Save
+
+`getEffectiveFormTracking` shares the native enabled/destination policy with
+`CompleteFormTrackingDisclosure` from `/react`. Supply localized `ipAddress` and
+`location` labels, and the actual `isLastPage`, `readOnly` and `preview` gates.
+Import optional `@miniextensions/sdk/react/form-tracking.css` for portable styling.
+Importing, rendering and evaluating policy never reads location. IP remains
+backend-owned; this API supplies no IP address and changes no tracking defaults.
+
+Inside an existing host's genuinely allocated final Save, synchronously capture
+its draft, record, owner/session/token, destinations and
+`captureFormTrackingPolicy(config)`. Only then await
+`prepareAllocatedFormTracking({policy, readLocation, onError})`. An explicitly
+authorized browser host may supply `() => readBrowserFormLocation(onError)`.
+The lazy browser reader requests once with the native 15000ms timeout. Denial,
+reader errors and diagnostic errors fall back to an empty coordinate result.
+Zero coordinates and separately configured axes are preserved. The SDK does not
+log/cache coordinates, retry, cancel, own transport or move a result to a successor.
+Disabled and IP-only policies never invoke the supplied reader. Compute and
+non-final actions must retain their existing host paths without invoking it.
+
+This is explicit host-allocated preparation, **not automatic FormController
+tracking**. Do not read location before `controller.save()` or pass an async
+function to its synchronous lifecycle callback. Its existing revision and
+pretransport authority guards are unchanged. The host retains coalescing, queued
+request rereads, original request settlement and authority. Never pass a mutable
+current-config getter in place of the captured policy.
+
+### Ordinary frontend validation
+
+`validateOrdinaryFormField` is a pure single-field facet from
+`@miniextensions/sdk/forms`. Pass the physical `fieldType`,
+`airtableFieldConfig`, `miniExtConfig`, current `value`, `storedValue`,
+`isConditionallyHidden`, and `isComputeMode` explicitly. The supported result
+contains `diagnostic: null` or a finite diagnostic code. `character-limit`
+also carries the original numeric `limit`, including zero. Hosts retain
+localization and field identity/order.
+
+A `native-fallback` result carries a reason. Call the existing native helper
+with its original arguments and preserve its result or exception. Fallback
+is not a validation error or a successful validation result.
+
+Required precedes visible linked minimum, then the physical kind's ordinary
+rule. Compute waives Required only. Ordinary readonly means
+`miniExtConfig.readOnly === true`; physical computed kinds waive Required.
+Hiding waives Required, text limits and linked minimum, while email, URL,
+negative-number, selection and linked maximum rules retain native behavior.
+Select values use offered or stored canonical names, collaborators use IDs,
+and only literal `true` enables the URL syntax bypass.
+
+This facet does not evaluate conditional predicates, page date ranges,
+linked-open Review debt, or selection/Save authority. Those policies remain
+with their existing owners. The public page adapter retains its separate
+conservative shape and page-policy behavior.

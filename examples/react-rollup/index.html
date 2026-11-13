@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Controlled Rollup localhost</title>
+        <link rel="stylesheet" href="/main.css" />
+        <style>
+            body {
+                font: 16px system-ui;
+                margin: 3rem auto;
+                max-width: 760px;
+                padding: 0 1rem;
+                color: #172033;
+            }
+            nav {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                margin: 2rem 0;
+            }
+            button,
+            input {
+                font: inherit;
+                padding: 0.6rem;
+            }
+            .mx-sdk-complete-readonly-text,
+            section[aria-label] {
+                margin: 1.5rem 0;
+            }
+            label {
+                display: grid;
+                gap: 0.5rem;
+            }
+            input {
+                max-width: 22rem;
+                border: 1px solid #aaa;
+                border-radius: 6px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script type="module" src="/main.js"></script>
+    </body>
+</html>

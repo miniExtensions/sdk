@@ -1,5 +1,34 @@
 # Source test coverage
 
+On macOS, run package/module-format checks with a canonical `TMPDIR` (for
+example `/private/tmp`). Native Node resolution returns real paths; a fixture
+created under the `/var` alias otherwise fails the unchanged exact-path
+comparison against `/private/var`. Retained artifact directories must also use
+canonical parents: set `SDK_CHECKED_ARTIFACT_DIR` and
+`SDK_BROWSER_PROOF_ARTIFACT_DIR` beneath `/private/tmp`, not the `/tmp` symlink.
+Keep those comparisons intact. Use the
+project's pinned pnpm through Corepack when the global pnpm version differs.
+
+## Git source preparation
+
+The mandatory package check builds the actual source beneath `node_modules`
+using the checkout's resolved dependencies, then compares every ESM/CommonJS
+emitted declaration byte for byte with the normal checkout build. Both builds
+retain declaration, module-format and vendor guards; this check makes no install
+or network request.
+Type-only React and DOMPurify namespaces and explicit React element returns keep
+declarations nameable in this preparation context without widening public
+signatures or emitting code. Private popup wrappers need this boundary too;
+an inferred transitive React/Radix return can pass a checkout build but fail Git
+preparation beneath `node_modules` with TS2742.
+
+## Standalone starter delivery
+
+Register a shipped starter in the package manifest, required packed paths and
+customer-kit copy list. The kit validates relative documentation links against
+its copied files, separately from validating the complete TGZ. A starter present
+in the TGZ can still be missing from the delivered customer kit.
+
 ## Complete Calendly widget
 
 `test/reactCompleteCalendlyWidget.test.ts` uses the actual widget, unchanged hook
@@ -29,13 +58,20 @@ fixture or hosted acceptance is established by these synthetic checks.
 Normal CI is the validation route while a local execution hold applies. Authored
 tests/source review are not executed proof; report exact heads/runs and results.
 
+Parent-document Escape stays inside the native scheduling dialog without
+preventing the browser's cancel action. Preserve real host Modal nesting:
+scheduling cancellation keeps the outer Form/draft and restores its trigger;
+a subsequent Escape may dismiss that outer Form normally.
+
 ## Complete Portal search gate
 
 The additive Search gate source is covered by `test/portalSearchGate.test.ts`
 and `test/reactPortalSearchGate.test.ts`: exact name/ID URL aliases, encoding and
 fragments; empty/custom/default copy; raw drafts; no-results/error transitions;
 valid and refused submit; non-submit Clear; metadata replacement; unique
-associations; StrictMode, SSR and unmount. They use the real public helpers,
+associations; StrictMode, SSR and unmount. The framework-shell cases retain the
+real SDK panel/state/URL policy and assert zero native-dialog lifecycle calls;
+switching shells retains the raw draft. They use the real public helpers,
 component and TextInput, not mocked SDK output. Happy-dom cancellation/DOM checks
 do not prove browser focus trapping or native maker composition.
 
@@ -357,6 +393,33 @@ Task IDs: 3815.
 
 ## Created Time presentation checks
 
+The mandatory package harness also runs
+`scripts/created-time-controlled-consumer-checks.mjs` with React18.3.1 and19.2.0.
+Each installed archive consumer retains the20 binding groups below, checks the
+natural controlled API and explicit binding alias through strict ESM/CommonJS
+declarations and JSX, resolves shared CSS exports, and runs cold SSR, hydration
+and DOM cases. Controlled cases cover timezone output, named-month date language
+independent of localized empty text, locale transitions, null/invalid shapes,
+associated feedback, readonly/editable dispatch precedence, inert resources and
+retained owner, token and A→B→A negatives with zero implicit requests or form
+submissions. Synthetic DOM lifecycle tests do not establish native browser focus
+or native canvas/worker behavior. Registration alone is not execution proof.
+
+The installed matrix also exercises literal preloaded TXT, quoted CSV, sanitized
+HTML, inert URI admission and revision retirement through each public module
+format. Strict declarations/JSX reject missing byte MIME/revision, unpaired PDF
+assets and native renderer injection. The normal browser harness additionally
+runs `scripts/document-thumbnail-browser-checks.mjs` on both React versions and
+both installed module formats with owned localhost fixtures: real PDF module
+workers/canvas/page/zoom/all-page/download controls, HTTP known-PDF modals, TIFF
+pixels, resource visibility and credential-free requests, sanitized HTML and
+owner/content disposal. External provider/tracker traffic is blocked before
+contact; contexts, servers, workers and object URLs are task owned and closed.
+Source tests include actual PDF.js worker threads and canvas, separately from
+Chromium evidence. Pinned worker/assets/private-browser bundle content guards
+run in the mandatory package umbrella. No hosted/native application acceptance
+is implied by these synthetic consumers.
+
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
 They cover raw timestamp strings, offsets and fractional seconds, naive and
 invalid strings, null/missing/nonstring values, and single-line CR/LF sanitization
@@ -432,7 +495,18 @@ resources.
 
 ## External Sync Source presentation checks
 
-`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+The explicit controlled public mode additionally reuses the maintained complete
+readonly text component. `reactExternalSyncSource.test.ts` checks localized empty
+and literal/link output, size/layout propagation, same-mount ownership-mode
+switching and zero borrowed binding actions. The existing packed consumer adds
+ESM/CJS declarations, readonly/mixed-mode type refusals, CSS resolution, SSR,
+hydration and replacement on React 18/19. The mandatory packed Chromium harness
+registers `external-sync-source-controlled-browser-checks.mjs` for trusted Tab,
+link Enter to an owned loopback popup, row propagation, empty/replacement and
+adjacent draft preservation. Its contexts/server/source directory are cleaned
+and receipts distinguish these synthetic checks from native adoption.
+
+`pnpm check:package` runs 24 installed ESM/CommonJS groups with synthetic owners.
 They cover canonical computed Form bindings, literal SDK strings and unknown
 labels, empty/null/missing values, metadata choice changes on the same owner,
 forged editable capabilities and model access traps. Defensive direct helper
@@ -731,6 +805,20 @@ These synthetic checks do not establish Android/OS IME, telephone navigation,
 visual layout, hosted authorization or native Form/Grid persistence. Android's
 existing formatter caret timer remains part of the private baseline.
 
+The natural `PhoneNumberField` API retains the existing binding path and also
+accepts mutually exclusive complete controlled props. The Phone source suites
+exercise controlled null/plain Clear, deferred owner A→B→A and actual vendor
+blur→Clear ordering through that public name, while retaining all legacy binding
+and `Complete*` cases. Readonly literal presentation is also checked through
+`ReadOnlyPhoneNumberField`. Both installed Phone matrices exercise natural and
+compatibility names in each module format and retain strict mixed-prop rejection,
+React 18/19, CSS, SSR/hydration and cleanup. Native Form switches, real host
+authority and explicit Save remain separate adoption evidence.
+The original Phone consumer matrix also keeps `PhoneNumberFieldProps` assignable
+to `TextFieldProps` and preserves contextual binding-render callbacks. The new
+controlled contract uses `ControlledPhoneNumberFieldProps`; widening the old
+alias would break those existing typed consumers even when runtime cases pass.
+
 Complete readonly-text qualification includes real `linkify-react` 3.0.4
 differential source tests against the SDK-owned `linkifyjs` 3.0.5 renderer,
 React 18/19 packed ESM/CommonJS/type/SSR/DOM consumers and standalone Chromium
@@ -873,3 +961,101 @@ These authored proofs are not executed evidence until exact-head CI passes. No r
 credential, OTP, provider, account, storage/session installation or native Form/Portal
 acceptance is part of these SDK proofs. Native thin-wrapper request/continuation,
 full existing host tests and supported composition/host acceptance remain later work.
+
+## Complete Address qualification
+
+`reactCompleteAddressAutocomplete.test.ts` exercises the real component and
+public lifecycle hook: raw debounce, exact/forged/stale options, selection/detail
+order, committed writers and capped unchanged echoes, external replacement,
+session/field/read-scope A→B→A, stale Retry, cancellation, StrictMode/unmount, synchronous abort-listener owner/unmount/edit reentrancy,
+discarded render callbacks, disabled/readOnly retirement,
+controlled null/text, actual refs, keyboard selection, mobile Clear, ARIA/form,
+portable attribution and supplied Spanish/Japanese status/retry labels. The
+existing request engine and DOM control suites retain their independent policy.
+
+In these unselected fixtures, native Headless UI 1.7.2 activates the first
+available suggestion when typing opens the list. With two suggestions, ArrowDown advances to the second;
+ArrowUp returns to the first before Enter. Source, packed and trusted browser
+proofs keep two choices so a single-option fixture cannot hide this distinction.
+The native browser owner executes both ESM and CommonJS Address consumers for
+each configured React version; successful fixture preparation alone is not a
+keyboard or browser acceptance result.
+
+The prediction Retry button completes a read outside the native popup's focus
+boundary. The browser proof explicitly reopens those results with ArrowDown
+and asserts that this keyboard intent allocates no additional read or Save.
+
+The mandatory package check registers `complete-address-consumer-checks.mjs`
+for cold installed React 18/19 ESM/CommonJS, strict positive/negative types,
+SSR/hydration, DOM editing, read cancellation, Clear/ref and stylesheet exports.
+The native Chromium owner registers `complete-address-browser-checks.mjs` for
+trusted keyboard/Tab/Clear, standalone option/attribution geometry, narrow
+editing, owner replacement and explicit prediction/detail retries with localized
+UI. It records installed input/bundle/CSS hashes and owned cleanup. All reads
+are synthetic callback adapters; external network is refused. These registered
+assertions do not themselves claim executed proof or native Form/Save/provider
+persistence, fixture acceptance, OS IME or a screen-reader pass.
+
+Chart and Collaborator browser fixtures import the ordinary React barrel, so
+their input receipts also include Address's frozen `combobox.js`, `react-peer.js`
+and `sdk-runtime.js`. Each exact runtime file stays bound to the packed archive;
+neighboring vendor paths, unlisted Address files and opposite formats remain
+refused. A successful fixture build is separate from executed Chromium proof.
+
+Headless UI 1.7.2 is a build-only dependency under the `headlessui-address-source`
+alias, separate from Collaborator's Headless UI 2.2.9 build. The Address source
+guard still verifies the original package identity, all source hashes and exact
+regenerated output; both picker versions remain absent from runtime dependencies.
+The frozen private Combobox and
+Transition closure uses the same consumer-React binding as the existing Phone
+vendor. The build/source gate regenerates its unchanged upstream closure and
+permits only the documented React-peer substitution; it never imports the
+unrelated Portal/ReactDOM initialization graph into generic React source tests.
+The full license and Google attribution policy remain in third-party notices.
+
+The Address vendor reproduction compares whitespace-only compiler output, with
+identifiers and code retained, so esbuild's dependency-path comments cannot tie
+a package to pnpm's symlink layout. A flat Git-prepare layout regression checks
+identical output and retains rejection of a modified upstream source file.
+
+## Complete Date picker qualification
+
+`reactCompleteDate.test.ts` exercises the actual pinned picker and native
+compatibility helpers. It covers native date/instant commits, invalid/partial
+draft recovery, semantic versus cosmetic metadata, caret, readonly/range,
+current writers, Enter/IME containment and mounted previous-month January 31
+selection in 2024 and 2025. Cold server rendering runs in a separate process;
+client libraries initialize only after the test browser realm exists.
+
+The normal package check registers `complete-date-consumer-checks.mjs` with
+independent React/ReactDOM 18.3.1 and 19.2.0 installs, both module formats,
+positive/negative declarations, CSS resolution, cold SSR/hydration, real
+mount/update/unmount, outside-pointer dismissal, original loaded instant bytes
+and one consumer React/ReactDOM instance. Its mounted fork checks exercise the
+actual click-outside ref path, including React 19 without `findDOMNode`.
+
+The existing packed Chromium owner registers `complete-date-browser-checks.mjs`
+for trusted keyboard/pointer, boundary selection, metadata/blur recovery,
+DateTime Enter and one explicit Save with adjacent text, dialog-container
+placement, narrow collision geometry, close/reopen and unmount. Installed
+inputs, vendor/CSS bytes, no-network policy and cleanup remain guarded.
+These synthetic proofs do not establish OS IME, a screen-reader pass, native
+Form/Portal authorization, provider persistence or hosted acceptance.
+
+## Controlled Last Modified Time checks
+
+The complete Last-modified API runs both computed-time variants through the
+maintained resource suite in `test/reactCreatedTimeResources.test.ts`, including
+current-owner, opaque-token/ABA, download, preview and document cleanup cases.
+`test/reactLastModifiedTimeControlled.test.ts` adds physical wrapper validity,
+result/date/timezone/DST/value transitions, native English date text versus
+localized UI labels, mode precedence, type exclusivity and sibling isolation.
+The existing raw binding/physical renderer suite and explicit binding compatibility
+export remain covered separately.
+
+The normal package check parameterizes the existing packed React18/19 ESM/CJS,
+strict declaration/JSX, CSS, SSR/hydration and mounted document/resource consumers
+for both fields. The normal native Chromium harness likewise registers both
+canonical components and both ESM/CJS document profiles. These are synthetic SDK
+consumers. Their execution does not establish native direct-switch adoption,
+backend persistence, hosted acceptance or a new SDK pin in the monorepo.

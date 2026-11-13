@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { act, createElement as h, createRef, StrictMode } from 'react';
 import {
     CompletePhoneNumberField,
+    PhoneNumberField,
     type CompletePhoneNumberFieldProps,
     type CompletePhoneCommit,
 } from '../src/react/index.js';
@@ -13,9 +14,10 @@ import {
 async function fixture(
     t: TestContext,
     args: {
+        api?: 'complete' | 'canonical';
         country?: boolean;
         deferred?: boolean;
-        value?: string;
+        value?: string | null;
         mobile?: boolean;
         defaultCountry?: string;
     } = {}
@@ -73,7 +75,7 @@ async function fixture(
         submits++;
     });
     const state = {
-        value: args.value as string | undefined,
+        value: args.value as string | null | undefined,
         country: args.country ?? false,
         deferred: args.deferred ?? false,
         defaultCountry: args.defaultCountry,
@@ -153,7 +155,15 @@ async function fixture(
         const props: CompletePhoneNumberFieldProps = state.deferred
             ? { ...common, commit: 'deferred', owner: ownerOption }
             : { ...common, commit: 'immediate', owner: ownerOption };
-        root.render(h(StrictMode, null, h(CompletePhoneNumberField, props)));
+        root.render(
+            h(
+                StrictMode,
+                null,
+                args.api === 'canonical'
+                    ? h(PhoneNumberField, props)
+                    : h(CompletePhoneNumberField, props)
+            )
+        );
     };
     const render = async () => {
         await act(async () => publish());
@@ -781,6 +791,86 @@ it('queued deferred typing→blur→Clear retains both native canonical actions 
     // A changed formatted vendor value may reconcile presentation, as in the
     // native value effect. This case proves action/value attribution, not a new
     // persistent-blank policy for a simultaneous canonical value replacement.
+    await f.unmount();
+    assert.equal(f.writes.length, 2);
+});
+
+it('natural PhoneNumberField preserves controlled null, literal input and empty-string Clear without implicit writes', async (t) => {
+    const f = await fixture(t, { api: 'canonical', value: null, mobile: true });
+    assert.equal(f.input().type, 'tel');
+    assert.equal(f.input().value, '');
+    assert.equal(f.input().getAttribute('form'), f.form.id);
+    assert.equal(f.input().getAttribute('aria-describedby'), 'phone-help');
+    assert.equal(f.inputRef.current, f.input());
+    assert.equal(f.invocationCount(), 0);
+    f.state.value = undefined;
+    await f.render();
+    assert.equal(f.invocationCount(), 0);
+    await f.edit('  malformed telephone  ');
+    assert.equal(f.writes.at(-1)?.value, '  malformed telephone  ');
+    const clear = f.container.querySelector('button');
+    assert.ok(clear);
+    await act(async () => clear.click());
+    assert.equal(f.writes.at(-1)?.value, '');
+    assert.equal(f.writes.at(-1)?.commit.reason, 'clear');
+    await f.unmount();
+    assert.equal(f.writes.length, 2);
+});
+
+it('natural PhoneNumberField retires deferred A→B→A drafts and accepts only the fresh owner input', async (t) => {
+    const f = await fixture(t, {
+        api: 'canonical',
+        deferred: true,
+        value: 'Original A',
+    });
+    const originalOwner = f.state.owner;
+    const originalTarget = f.state.target;
+    await f.focus();
+    await f.edit('Retired A draft');
+    f.state.owner = {};
+    f.state.target = 'session-B/field-phone/record-B/table-B';
+    f.state.value = 'Stored B';
+    await f.render();
+    f.state.owner = originalOwner;
+    f.state.target = originalTarget;
+    f.state.value = 'Restored A';
+    await f.render();
+    await f.blur();
+    assert.equal(f.invocationCount(), 0);
+    assert.equal(f.input().value, 'Restored A');
+    await f.focus();
+    await f.edit('Fresh A');
+    await f.key('Enter');
+    assert.equal(f.writes.length, 1);
+    assert.equal(f.writes[0]!.value, 'Fresh A');
+    assert.equal(f.writes[0]!.commit.reason, 'enter');
+    assert.equal(f.writes[0]!.target, originalTarget);
+});
+
+it('natural PhoneNumberField retains both real country blur→Clear callbacks in native order', async (t) => {
+    const f = await fixture(t, {
+        api: 'canonical',
+        country: true,
+        deferred: true,
+        mobile: true,
+        value: '+14155552671',
+    });
+    await f.focus();
+    await f.edit('+44 (20) 7946-0958');
+    assert.equal(f.invocationCount(), 0);
+    const clear = f.container.querySelector('button');
+    assert.ok(clear);
+    await act(async () => {
+        clear.focus();
+        clear.click();
+    });
+    assert.deepEqual(
+        f.writes.map(({ value, commit }) => ({ value, reason: commit.reason })),
+        [
+            { value: '+442079460958', reason: 'blur' },
+            { value: '+442079460958', reason: 'clear' },
+        ]
+    );
     await f.unmount();
     assert.equal(f.writes.length, 2);
 });

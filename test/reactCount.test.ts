@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     CountField,
+    CompleteFormFieldPresentation,
     FieldRenderer,
     NumberField,
     renderCountField,
@@ -722,3 +723,143 @@ for (const layout of ['grid', 'list'] as const)
         assert.equal(api.calls.length, 1);
         assert.equal(api.mutations, 0);
     });
+
+it('controlled Count reuses complete readonly text for supplied zero, empty and source-specific text', async (t) => {
+    const f = await fixture(t, {}, 42);
+    for (const [value, expected] of [
+        ['0', '0'],
+        ['-0.125', '-0.125'],
+        ['NaN', 'NaN'],
+        ['Infinity', 'Infinity'],
+        ['-Infinity', '-Infinity'],
+        ['', 'No Value'],
+        [null, 'No Value'],
+        [undefined, 'No Value'],
+    ] as const) {
+        await f.render(h(CountField, { value, language: 'en' }));
+        assert.equal(f.container.textContent, expected);
+        assert.equal(
+            f.container.querySelector('input,button,textarea,select'),
+            null
+        );
+        assert.equal(f.binding.getSnapshot().value, 42);
+        assert.equal(f.binding.getSnapshot().dirty, false);
+    }
+    const value = '<b>Count error</b> https://example.invalid/count?x=1&y=2';
+    let rowClicks = 0;
+    await f.render(
+        h(
+            'div',
+            { onClick: () => rowClicks++ },
+            h(CountField, {
+                value,
+                language: 'en',
+                textSize: 'large',
+                layout: 'cell-short',
+                className: 'controlled-count',
+            })
+        )
+    );
+    assert.equal(f.container.textContent, value);
+    assert.equal(f.container.querySelector('b,img,script,iframe'), null);
+    const display = f.container.querySelector(
+        '.mx-sdk-complete-readonly-text.controlled-count'
+    )!;
+    assert.equal(display.getAttribute('data-layout'), 'cell-short');
+    assert.ok(display.querySelector('.read-only-text.text-lg'));
+    const link = display.querySelector('a')!;
+    assert.equal(
+        link.getAttribute('href'),
+        'https://example.invalid/count?x=1&y=2'
+    );
+    assert.equal(link.getAttribute('target'), '_blank');
+    await act(async () => {
+        const event = new f.window.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+        });
+        event.preventDefault();
+        link.dispatchEvent(event);
+    });
+    assert.equal(rowClicks, 0);
+});
+
+it('switches between controlled and binding Count without retaining subscriptions or changing binding semantics', async (t) => {
+    const f = await fixture(t, {}, 7);
+    const pure = snapshotBinding(f.binding.getSnapshot());
+    await f.render(h(CountField, { binding: pure.binding }));
+    assert.equal(f.input().value, '7');
+    await f.render(h(CountField, { value: '0', language: 'en' }));
+    await act(async () =>
+        pure.update({ ...pure.binding.getSnapshot(), value: 19 })
+    );
+    assert.equal(f.container.textContent, '0');
+    assert.equal(f.container.querySelector('input'), null);
+    await f.render(h(CountField, { binding: pure.binding }));
+    assert.equal(f.input().value, '19');
+    assert.equal(f.input().disabled, true);
+    await f.edit('999');
+    assert.equal(f.input().value, '19');
+    assert.equal(pure.writes, 0);
+});
+
+it('keeps controlled Count chrome and associations with its shell in readonly and preview alongside an editable sibling', async (t) => {
+    const f = await fixture(t, {}, 42);
+    const number = f.owner.field('number');
+    for (const preview of [false, true]) {
+        await f.render(
+            h(
+                'div',
+                null,
+                ...['First Count', 'Second Count'].map((title) =>
+                    h(CompleteFormFieldPresentation, {
+                        key: title,
+                        title,
+                        fieldName: 'Count',
+                        associationKind: 'non-labelable',
+                        formId: 'count-form',
+                        description: '<p>Count help</p>',
+                        error: '<b>Plain error</b>',
+                        preview,
+                        children: ({ association }) => {
+                            assert.equal(association.formId, 'count-form');
+                            return h(CountField, {
+                                value: '0',
+                                language: 'en',
+                            });
+                        },
+                    })
+                ),
+                h(NumberField, { binding: number })
+            )
+        );
+        const groups = f.container.querySelectorAll('[role=group]');
+        assert.equal(groups.length, 2);
+        assert.notEqual(groups[0].id, groups[1].id);
+        for (const [index, group] of Array.from(groups).entries()) {
+            const label = f.window.document.getElementById(
+                group.getAttribute('aria-labelledby')!
+            )!;
+            assert.equal(
+                label.textContent,
+                index === 0 ? 'First Count' : 'Second Count'
+            );
+            const descriptions = group
+                .getAttribute('aria-describedby')!
+                .split(' ')
+                .map((id) => f.window.document.getElementById(id)!.textContent);
+            assert.deepEqual(descriptions, [
+                '<b>Plain error</b>',
+                'Count help',
+            ]);
+            assert.equal(group.getAttribute('aria-invalid'), 'true');
+            assert.equal(group.textContent, '0');
+            assert.equal(group.querySelector('input,button'), null);
+        }
+        assert.equal(f.container.querySelector('.mx-sdk-field-error b'), null);
+        const sibling = f.input();
+        await f.edit('3.125', sibling);
+        assert.equal(number.getSnapshot().value, 3.125);
+        assert.equal(f.binding.getSnapshot().value, 42);
+    }
+});

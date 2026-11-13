@@ -8,11 +8,20 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const completeDurationTypedConsumer = `
 import {createElement,createRef,type ComponentProps} from 'react';
-import {CompleteDurationField,useDurationInputAdapter} from '@miniextensions/sdk/react';
+import {DurationField,CompleteDurationField,ReadOnlyDurationField,useDurationInputAdapter,type DurationFieldProps,type ControlledDurationFieldProps} from '@miniextensions/sdk/react';
 import {createDurationInputAdapter} from '@miniextensions/sdk/ui';
 type DurationProps=ComponentProps<typeof CompleteDurationField>;
 const duration:DurationProps={fieldId:'duration',sessionId:'native',format:'h:mm',value:null,onChange(value){const seconds:number|null=value;void seconds;return true;},owner:{token:{},isCurrent:()=>true},inputId:'native-duration',formId:'native-form',inputRef:createRef<HTMLInputElement>(),description:'Timing note',error:'Synthetic error',invalid:true,describedBy:'external-help',clearLabel:'Clear duration'};
 createElement(CompleteDurationField,duration);
+const controlled:ControlledDurationFieldProps=duration;
+createElement(DurationField,controlled);
+declare const binding:DurationFieldProps['binding'];
+createElement(DurationField,{binding});
+createElement(ReadOnlyDurationField,{value:0,format:'h:mm',language:'en'});
+// @ts-expect-error binding and controlled authority must not be mixed
+createElement(DurationField,{...duration,binding});
+// @ts-expect-error readonly Duration never takes a native writer
+createElement(ReadOnlyDurationField,{value:0,format:'h:mm',language:'en',onChange(){}});
 function hook(){return useDurationInputAdapter(duration);}
 const adapter=createDurationInputAdapter({read:()=>({format:duration.format,value:duration.value,onChange:duration.onChange,readOnly:false}),isCurrent:()=>true});
 const accepted:boolean=adapter.setInput('7');
@@ -74,8 +83,27 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
         'IS_REACT_ACT_ENVIRONMENT',
     ];
     let groups = 0;
-    for (const api of [esm, cjs]) {
+    for (const [api, Component] of [esm, cjs].flatMap((api) =>
+        [api.DurationField, api.CompleteDurationField].map((Component) => [
+            api,
+            Component,
+        ])
+    )) {
         assert.equal(typeof api.useDurationInputAdapter, 'function');
+        assert.equal(typeof api.DurationField, 'function');
+        assert.equal(typeof api.ReadOnlyDurationField, 'function');
+        const readonly = (value) =>
+            renderToString(
+                React.createElement(api.ReadOnlyDurationField, {
+                    value,
+                    format: 'h:mm:ss.SSS',
+                    language: 'en',
+                })
+            );
+        assert.match(readonly(0), />0:00\.000<\/p>/);
+        assert.match(readonly(-1.25), />-0:01\.250<\/p>/);
+        assert.match(readonly(null), /No Value/);
+        assert.doesNotMatch(readonly(7), /<input|<button/);
         const state = {
             value: 60,
             format: 'h:mm',
@@ -127,7 +155,7 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             React.createElement(
                 React.StrictMode,
                 null,
-                React.createElement(api.CompleteDurationField, props)
+                React.createElement(Component, props)
             );
         assert.equal(typeof globalThis.window, 'undefined');
         const html = renderToString(element());
@@ -136,7 +164,7 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
         assert(html.includes('Synthetic duration error'));
         assert.deepEqual(writes, []);
         const defaultHtml = renderToString(
-            React.createElement(api.CompleteDurationField, {
+            React.createElement(Component, {
                 ...properties(),
                 inputId: undefined,
                 formId: undefined,
@@ -271,6 +299,55 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             await React.act(async () => clear.click());
             assert.deepEqual(writes.at(-1), { writer: 'current', value: null });
             assert.equal(input.value, '');
+            for (const boundary of ['row', 'parent']) {
+                await React.act(async () => input.focus());
+                const previousScope = state.scope;
+                state.scope = {};
+                state.writer = boundary + '-successor';
+                state.value = 90;
+                await React.act(async () => publish());
+                if (boundary === 'parent') {
+                    state.scope = previousScope;
+                    state.value = 60;
+                    await React.act(async () => publish());
+                }
+                assert.equal(ref.current, input);
+                assert.equal(window.document.activeElement, input);
+                let focusEvents = 0;
+                const countFocus = () => {
+                    focusEvents++;
+                };
+                input.addEventListener('focus', countFocus);
+                await React.act(async () => input.focus());
+                input.removeEventListener('focus', countFocus);
+                assert.equal(
+                    focusEvents,
+                    0,
+                    'retained input has no new focus event'
+                );
+                const beforeEdit = writes.length;
+                await setInput(input, '8');
+                assert.equal(input.value, '8');
+                assert.deepEqual(writes.at(-1), {
+                    writer: boundary + '-successor',
+                    value: 8,
+                });
+                assert.equal(writes.length, beforeEdit + 1);
+                input.setSelectionRange(0, 1);
+                await React.act(async () => publish());
+                assert.equal(input.selectionStart, 0);
+                assert.equal(input.selectionEnd, 1);
+                await React.act(async () => input.blur());
+                assert.equal(input.value, '0:08.000');
+                assert.equal(writes.length, beforeEdit + 1);
+                await React.act(async () => input.focus());
+                await setInput(input, '9');
+                assert.equal(input.value, '9');
+                assert.equal(writes.length, beforeEdit + 2);
+                await React.act(async () => input.blur());
+                assert.equal(input.value, '0:09.000');
+                assert.equal(writes.length, beforeEdit + 2);
+            }
             state.value = 90;
             state.scope = {};
             await React.act(async () => publish());
@@ -284,6 +361,29 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
             await React.act(async () => publish());
             await setInput(input, '9');
             assert.equal(writes.length, beforeRefusal);
+            let callbackNode = null;
+            let callbackCleanups = 0;
+            const callbackRef = (node) => {
+                callbackNode = node;
+                if (node && React.version.startsWith('19.'))
+                    return () => {
+                        callbackNode = null;
+                        callbackCleanups++;
+                    };
+            };
+            await React.act(async () =>
+                root.render(element({ ...properties(), inputRef: callbackRef }))
+            );
+            assert.equal(ref.current, null);
+            assert.equal(callbackNode, input);
+            await React.act(async () => publish());
+            assert.equal(callbackNode, null);
+            assert.equal(ref.current, input);
+            if (React.version.startsWith('19.'))
+                assert(
+                    callbackCleanups > 0,
+                    'React19 callback-ref cleanup is preserved'
+                );
             groups++;
         } finally {
             mounted = false;
@@ -301,7 +401,7 @@ async function checkInstalled(consumerDirectory, happyDomModulePath) {
     return {
         react: React.version,
         groups,
-        scope: 'Installed ESM/CommonJS complete Duration, actual SSR/hydration, native seconds, focus and associations; no native Form/backend claim.',
+        scope: 'Installed ESM/CommonJS natural and compatible complete Duration, readonly canonical seconds, actual SSR/hydration, focus and associations; no native Form/backend claim.',
     };
 }
 
@@ -372,10 +472,10 @@ export function checkCompleteDurationReactMatrix({
             );
             const result = JSON.parse(bytes);
             assert.equal(result.react, version.react);
-            assert.equal(result.groups, 2);
+            assert.equal(result.groups, 4);
             versions.push(result);
             console.log(
-                `Installed complete Duration React${result.react}: 2 ESM/CommonJS groups, actual SSR/hydration, canonical seconds, associations and styles passed.`
+                `Installed complete Duration React${result.react}: 4 natural/complete ESM/CommonJS groups, actual SSR/hydration, canonical seconds, associations and styles passed.`
             );
         }
         return { versions, cleanup: 'completed' };

@@ -1,3 +1,6 @@
+@import './complete-checkbox.css';
+@import './complete-calendly.css';
+
 /* Optional defaults. Native control semantics and app styles work without this file. */
 .mx-sdk-checkbox-field {
     display: inline-flex;

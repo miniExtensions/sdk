@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import {
     createElement,
     forwardRef,
@@ -8,6 +9,10 @@ import {
     type ChangeEvent,
 } from 'react';
 import { TextareaInput } from './TextareaInput.js';
+import {
+    fieldPresentationDescribedBy,
+    type FieldPresentationComposition,
+} from './fieldPresentation.js';
 
 export type CompleteMultilineTextFieldProps = {
     /** Literal canonical value; the consumer owns conversion and persistence. */
@@ -16,6 +21,8 @@ export type CompleteMultilineTextFieldProps = {
     onChange: (value: string) => void;
     id: string;
     form?: string;
+    /** Shared shell association; standalone ID/feedback defaults are unchanged. */
+    presentation?: FieldPresentationComposition;
     placeholder?: string;
     /** Native read-only presentation is disabled, with no editable limit. */
     readOnly?: boolean;
@@ -33,8 +40,9 @@ export const CompleteMultilineTextField = forwardRef<
     {
         value,
         onChange,
-        id,
-        form,
+        id: standaloneId,
+        form: standaloneForm,
+        presentation,
         placeholder,
         readOnly,
         characterLimit: configuredCharacterLimit,
@@ -43,6 +51,12 @@ export const CompleteMultilineTextField = forwardRef<
     },
     ref
 ) {
+    const id = presentation
+        ? presentation.association.kind === 'input'
+            ? presentation.association.controlId
+            : undefined
+        : standaloneId;
+    const form = presentation?.association.formId ?? standaloneForm;
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const [selectionStart, setSelectionStart] = useState<number | null>(null);
     const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
@@ -77,12 +91,14 @@ export const CompleteMultilineTextField = forwardRef<
         }
     }, [value, selectionStart, selectionEnd]);
 
-    const describedBy = [
-        hasErrorMessage && `${id}-error`,
-        hasDescription && `${id}-description`,
-    ]
-        .filter(Boolean)
-        .join(' ');
+    const describedBy = presentation
+        ? fieldPresentationDescribedBy(presentation.association)
+        : [
+              hasErrorMessage && `${id}-error`,
+              hasDescription && `${id}-description`,
+          ]
+              .filter(Boolean)
+              .join(' ');
 
     return createElement(
         'div',
@@ -107,7 +123,10 @@ export const CompleteMultilineTextField = forwardRef<
             placeholder,
             form,
             'aria-describedby': describedBy || undefined,
-            'aria-invalid': hasErrorMessage,
+            'aria-invalid': presentation
+                ? presentation.association.errorId != null
+                : hasErrorMessage,
+            'aria-labelledby': presentation?.association.labelId,
             maxLength: characterLimit,
         }),
         characterLimit != null

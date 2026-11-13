@@ -1,3 +1,52 @@
+import {
+    ControlledSingleSelectField,
+    ControlledMultipleSelectsField,
+    type ControlledSingleSelectFieldProps,
+    type ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+export type {
+    ControlledSelectChoice,
+    SelectEditOwner,
+    ControlledSelectLabels,
+    ControlledSelectCommonProps,
+    ControlledSingleSelectFieldProps,
+    ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+import {
+    CompleteDurationField,
+    type CompleteDurationFieldProps,
+} from './CompleteDurationField.js';
+import {
+    CompleteLocalizedNumericField,
+    type CompleteLocalizedNumericRendererProps,
+    type CompleteLocalizedNumericFieldOptions,
+} from './CompleteLocalizedNumericField.js';
+import {
+    ControlledCheckboxField,
+    type ControlledCheckboxFieldProps,
+} from './ControlledCheckboxField.js';
+export type {
+    ControlledCheckboxFieldProps,
+    CheckboxCalendlyOptions,
+} from './ControlledCheckboxField.js';
+export {
+    CompleteAddressAutocomplete,
+    type CompleteAddressAutocompleteProps,
+    type AddressAutocompleteLabels,
+} from './CompleteAddressAutocomplete.js';
+export { AddressField } from './AddressField.js';
+export type {
+    AddressFieldProps,
+    AutocompleteAddressFieldProps,
+    ManualAddressFieldProps,
+    ReadOnlyAddressFieldProps,
+    AddressFieldScannerOptions,
+} from './AddressField.js';
+export {
+    useAddressAutocomplete,
+    type AddressAutocompleteIdentity,
+    type AddressAutocompleteLifecycleProps,
+} from './useAddressAutocomplete.js';
 export {
     CompleteReadOnlyTextField,
     type CompleteReadOnlyTextFieldProps,
@@ -9,15 +58,31 @@ import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
 } from '../ui/borrowedPortalRenderScope.js';
+import {
+    CompletePhoneNumberField,
+    type CompletePhoneNumberFieldProps,
+} from './CompletePhoneNumberField.js';
+import {
+    ControlledEmailField,
+    type ControlledEmailFieldProps,
+} from './ControlledEmailField.js';
+export type {
+    ControlledEmailFieldProps,
+    EmailEditOwner,
+} from './ControlledEmailField.js';
 export {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
     type CompletePhoneEditOwner,
     type CompletePhoneCommit,
+    type CompletePhoneEditOwner as PhoneEditOwner,
+    type CompletePhoneCommit as PhoneCommit,
 } from './CompletePhoneNumberField.js';
 export {
     CompleteReadOnlyPhoneNumberField,
+    CompleteReadOnlyPhoneNumberField as ReadOnlyPhoneNumberField,
     type CompleteReadOnlyPhoneNumberFieldProps,
+    type CompleteReadOnlyPhoneNumberFieldProps as ReadOnlyPhoneNumberFieldProps,
 } from './CompleteReadOnlyPhoneNumberField.js';
 export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
@@ -87,6 +152,10 @@ export {
     type CompleteDurationFieldProps,
 } from './CompleteDurationField.js';
 export {
+    ReadOnlyDurationField,
+    type ReadOnlyDurationFieldProps,
+} from './ReadOnlyDurationField.js';
+export {
     useDurationInputAdapter,
     type DurationInputAdapterProps,
     type DurationInputOwnership,
@@ -119,18 +188,42 @@ import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
 export {
     BarcodeField,
+    BindingBarcodeField,
+    type BindingBarcodeFieldProps,
+    type ControlledBarcodeFieldProps,
     renderBarcodeField,
     type BarcodeFieldProps,
     type BarcodeFieldOptions,
 } from './BarcodeField.js';
 export {
     SingleCollaboratorField,
+    BindingSingleCollaboratorField,
+    type BindingSingleCollaboratorFieldProps,
+    type ControlledSingleCollaboratorFieldProps,
     renderSingleCollaboratorField,
     type SingleCollaboratorFieldProps,
     type SingleCollaboratorFieldOptions,
 } from './SingleCollaboratorField.js';
 export {
+    CompleteSingleCollaboratorField,
+    CompleteMultipleCollaboratorsField,
+    CollaboratorBadge,
+    CollaboratorAvatar,
+    type CompleteCollaborator,
+    type CompleteCollaboratorEditOwner,
+    type CompleteSingleCollaboratorFieldProps,
+    type CompleteMultipleCollaboratorsFieldProps,
+    type CompleteCollaboratorLabels,
+    type CollaboratorAvatarPolicy,
+    type CollaboratorImageSource,
+    type CollaboratorBadgeProps,
+    type CollaboratorAvatarProps,
+} from './CompleteCollaboratorField.js';
+export {
     MultipleCollaboratorsField,
+    BindingMultipleCollaboratorsField,
+    type BindingMultipleCollaboratorsFieldProps,
+    type ControlledMultipleCollaboratorsFieldProps,
     renderMultipleCollaboratorsField,
     type MultipleCollaboratorsFieldProps,
     type MultipleCollaboratorsFieldOptions,
@@ -139,6 +232,8 @@ export {
     RichTextField,
     renderRichTextField,
     type RichTextFieldProps,
+    type BindingRichTextFieldProps,
+    type ControlledRichTextFieldProps,
     type RichTextFieldOptions,
 } from './RichTextField.js';
 export {
@@ -171,7 +266,13 @@ export {
 } from './SingleSelectField.js';
 import { LookupControl, type LookupFieldOptions } from './LookupField.js';
 export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
-import { RollupControl, type RollupFieldOptions } from './RollupField.js';
+import {
+    RollupControl,
+    ControlledRollupField,
+    type ControlledRollupFieldProps,
+    type RollupFieldOptions,
+} from './RollupField.js';
+export type { ControlledRollupFieldProps } from './RollupField.js';
 export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
 import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
 export {
@@ -205,7 +306,11 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
-import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+import {
+    ControlledExternalSyncSourceField,
+    type ControlledExternalSyncSourceFieldProps,
+    type ExternalSyncSourceFieldOptions,
+} from './ExternalSyncSourceField.js';
 import {
     lastModifiedByName,
     type LastModifiedByFieldOptions,
@@ -217,6 +322,7 @@ export {
 export {
     renderExternalSyncSourceField,
     type ExternalSyncSourceFieldOptions,
+    type ControlledExternalSyncSourceFieldProps,
 } from './ExternalSyncSourceField.js';
 import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
 export {
@@ -224,19 +330,32 @@ export {
     type CreatedByFieldOptions,
 } from './CreatedByField.js';
 import {
+    ControlledLastModifiedTimeField,
+    type ControlledLastModifiedTimeFieldProps,
     lastModifiedTimeInput,
     type LastModifiedTimeFieldOptions,
 } from './LastModifiedTimeField.js';
 export {
     renderLastModifiedTimeField,
+    type ControlledLastModifiedTimeFieldProps,
+    type LastModifiedTimeFieldConfig,
     type LastModifiedTimeFieldOptions,
 } from './LastModifiedTimeField.js';
 import {
+    ControlledCreatedTimeField,
     createdTimeInput,
+    type ControlledCreatedTimeFieldProps,
     type CreatedTimeFieldOptions,
 } from './CreatedTimeField.js';
 export {
     renderCreatedTimeField,
+    type ControlledCreatedTimeFieldProps,
+    type CreatedTimeAttachmentOptions,
+    type CreatedTimeDisplayOwner,
+    type CreatedTimeResourceLabels,
+    type DocumentThumbnailOptions,
+    type DocumentThumbnailSource,
+    type DocumentThumbnailLabels,
     type CreatedTimeFieldOptions,
 } from './CreatedTimeField.js';
 import {
@@ -272,11 +391,25 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
-import { countInput, type CountFieldOptions } from './CountField.js';
-export { renderCountField, type CountFieldOptions } from './CountField.js';
+import {
+    countInput,
+    ControlledCountField,
+    type ControlledCountFieldProps,
+    type CountFieldOptions,
+} from './CountField.js';
+export {
+    renderCountField,
+    type CountFieldOptions,
+    type ControlledCountFieldProps,
+} from './CountField.js';
+import {
+    ControlledAutoNumberField,
+    type AutoNumberControlledProps,
+} from './AutoNumberField.js';
 export {
     renderAutoNumberField,
     type AutoNumberFieldOptions,
+    type AutoNumberControlledProps,
 } from './AutoNumberField.js';
 import {
     renderOwnedRatingInput,
@@ -288,12 +421,15 @@ export {
     type PercentFieldOptions,
 } from './PercentField.js';
 import {
+    ControlledCurrencyField,
     CurrencyControl,
     currencyConfiguration,
+    type ControlledCurrencyFieldProps,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
 export {
     renderCurrencyField,
+    type ControlledCurrencyFieldProps,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
 import {
@@ -328,6 +464,7 @@ import type {
 export {
     PortalSearchGate,
     type PortalSearchGateProps,
+    type PortalSearchGateDialogProps,
 } from './PortalSearchGate.js';
 export {
     usePortalSearchGate,
@@ -709,8 +846,37 @@ const status = (snapshot: FormFieldSnapshot) =>
     );
 export type LastModifiedTimeFieldProps = FieldProps &
     LastModifiedTimeFieldOptions;
+export type BindingLastModifiedTimeFieldProps = LastModifiedTimeFieldProps;
+type BindingLastModifiedTimeComponentProps = LastModifiedTimeFieldProps & {
+    [Key in Exclude<
+        keyof ControlledLastModifiedTimeFieldProps,
+        keyof LastModifiedTimeFieldProps
+    >]?: never;
+};
+type LastModifiedTimeComponentProps =
+    | BindingLastModifiedTimeComponentProps
+    | ControlledLastModifiedTimeFieldProps;
+
+/** Complete controlled display or the original readonly binding contract. */
+export function LastModifiedTimeField(
+    props: BindingLastModifiedTimeComponentProps
+): ReactNode;
+export function LastModifiedTimeField(
+    props: ControlledLastModifiedTimeFieldProps
+): ReactNode;
+export function LastModifiedTimeField(
+    props: LastModifiedTimeComponentProps
+): ReactNode;
+export function LastModifiedTimeField(
+    props: LastModifiedTimeComponentProps
+): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingLastModifiedTimeField, props)
+        : createElement(ControlledLastModifiedTimeField, props);
+}
+
 /** Valid supplied modification timestamps stay readonly without recomputation. */
-export function LastModifiedTimeField({
+export function BindingLastModifiedTimeField({
     binding,
     render,
     className,
@@ -751,8 +917,37 @@ export function LastModifiedTimeField({
     });
 }
 export type CreatedTimeFieldProps = FieldProps & CreatedTimeFieldOptions;
+export type BindingCreatedTimeFieldProps = CreatedTimeFieldProps;
+type BindingCreatedTimeComponentProps = CreatedTimeFieldProps & {
+    dateLanguage?: never;
+    value?: never;
+    dateConfig?: never;
+    owner?: never;
+    displayContext?: never;
+    displayAsAttachments?: never;
+    displayAsButton?: never;
+};
+type CreatedTimeComponentProps =
+    | BindingCreatedTimeComponentProps
+    | ControlledCreatedTimeFieldProps;
+
+/** Controlled display or the explicitly retained raw-string binding adapter. */
+export function CreatedTimeField(
+    props: BindingCreatedTimeComponentProps
+): ReactNode;
+export function CreatedTimeField(
+    props: ControlledCreatedTimeFieldProps
+): ReactNode;
+// The overloads retain JSX callback inference; the union also supports createElement.
+export function CreatedTimeField(props: CreatedTimeComponentProps): ReactNode;
+export function CreatedTimeField(props: CreatedTimeComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingCreatedTimeField, props)
+        : createElement(ControlledCreatedTimeField, props);
+}
+
 /** The supplied creation timestamp stays readonly regardless of result metadata. */
-export function CreatedTimeField({
+export function BindingCreatedTimeField({
     binding,
     render,
     className,
@@ -869,13 +1064,41 @@ export function CreatedByField({
 }
 export type ExternalSyncSourceFieldProps = FieldProps &
     ExternalSyncSourceFieldOptions;
+export type BindingExternalSyncSourceFieldProps = ExternalSyncSourceFieldProps;
+type BoundExternalSyncSourceComponentProps = ExternalSyncSourceFieldProps & {
+    [Key in Exclude<
+        keyof ControlledExternalSyncSourceFieldProps,
+        keyof ExternalSyncSourceFieldProps
+    >]?: never;
+};
+type ExternalSyncSourceComponentProps =
+    | BoundExternalSyncSourceComponentProps
+    | ControlledExternalSyncSourceFieldProps;
+
+/** Complete native-compatible display or the unchanged readonly binding contract. */
+export function ExternalSyncSourceField(
+    props: BoundExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ControlledExternalSyncSourceFieldProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledExternalSyncSourceField, props)
+        : createElement(BoundExternalSyncSourceField, props);
+}
 /** The supplied source name stays readonly regardless of forged editing state. */
-export function ExternalSyncSourceField({
+function BoundExternalSyncSourceField({
     binding,
     render,
     className,
     clearLabel,
-}: ExternalSyncSourceFieldProps): ReactNode {
+}: BoundExternalSyncSourceComponentProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -969,9 +1192,29 @@ export function LookupField({
         className,
     });
 }
+/** Compatibility binding props retain the inert computed-answer contract. */
 export type RollupFieldProps = FieldProps & RollupFieldOptions;
+type BoundRollupComponentProps = RollupFieldProps & {
+    mode?: never;
+    isValid?: never;
+    value?: never;
+    language?: never;
+    textSize?: never;
+    layout?: never;
+};
+type RollupComponentProps =
+    | BoundRollupComponentProps
+    | ControlledRollupFieldProps;
+export function RollupField(props: BoundRollupComponentProps): ReactNode;
+export function RollupField(props: ControlledRollupFieldProps): ReactNode;
+export function RollupField(props: RollupComponentProps): ReactNode;
+export function RollupField(props: RollupComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledRollupField, props)
+        : createElement(BoundRollupField, props);
+}
 /** Present the accepted computed answer without borrowing any binding actions. */
-export function RollupField({
+function BoundRollupField({
     binding,
     render,
     className,
@@ -1000,9 +1243,26 @@ export function RollupField({
         className,
     });
 }
+/** Existing binding contract; its native numeric and metadata semantics are unchanged. */
 export type CountFieldProps = FieldProps & CountFieldOptions;
+type CountFieldComponentProps =
+    | (CountFieldProps & {
+          value?: never;
+          language?: never;
+          textSize?: never;
+          layout?: never;
+      })
+    | ControlledCountFieldProps;
+
+/** Binding-owned control or controlled, already converted native presentation. */
+export function CountField(props: CountFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingCountField, props)
+        : createElement(ControlledCountField, props);
+}
+
 /** Computed Count metadata and native values remain owned by the binding. */
-export function CountField({
+function BindingCountField({
     binding,
     render,
     className,
@@ -1038,7 +1298,7 @@ export function CountField({
 }
 export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
 /** Computed native numbers have no local input model or write action. */
-export function AutoNumberField({
+export function BindingAutoNumberField({
     binding,
     render,
     className,
@@ -1071,6 +1331,25 @@ export function AutoNumberField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setInput: () => {},
     });
+}
+/** Explicit binding mode; the historical props alias remains unchanged. */
+export type AutoNumberBindingProps = AutoNumberFieldProps & {
+    mode?: 'binding';
+    value?: never;
+    language?: never;
+    textSize?: never;
+    layout?: never;
+};
+type AutoNumberProps = AutoNumberControlledProps | AutoNumberBindingProps;
+
+/** Complete controlled display or the original binding contract, selected explicitly. */
+export function AutoNumberField(props: AutoNumberControlledProps): ReactNode;
+export function AutoNumberField(props: AutoNumberBindingProps): ReactNode;
+export function AutoNumberField(props: AutoNumberProps): ReactNode;
+export function AutoNumberField(props: AutoNumberProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledAutoNumberField, props)
+        : createElement(BindingAutoNumberField, props);
 }
 export type TextFieldProps = FieldProps & TextFieldOptions;
 export function TextField({
@@ -1153,20 +1432,85 @@ export function MultilineTextField({
         setValue: (value) => binding.setValue(value).accepted,
     });
 }
-/** Phone drafts stay literal text without formatting or dialing actions. */
+/** Binding callers retain their literal text contract. Controlled callers use
+ * the complete editor with explicit host-owned value and edit authority. */
 export type PhoneNumberFieldProps = TextFieldProps;
-export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
-    return createElement(TextField, props);
+export type ControlledPhoneNumberFieldProps = CompletePhoneNumberFieldProps & {
+    binding?: never;
+    render?: never;
+};
+type PhoneNumberComponentProps =
+    | (TextFieldProps & {
+          value?: never;
+          onValueChange?: never;
+          commit?: never;
+          owner?: never;
+      })
+    | ControlledPhoneNumberFieldProps;
+export function PhoneNumberField(props: PhoneNumberComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(TextField, props)
+        : createElement(CompletePhoneNumberField, props);
 }
 /** URL drafts stay literal text and grant no navigation authority. */
 export type UrlFieldProps = TextFieldProps;
 export function UrlField(props: UrlFieldProps): ReactNode {
     return createElement(TextField, props);
 }
-/** Email preserves exact text; surrounding page and server owners validate it. */
+/** Binding callers retain their literal text contract. Controlled callers use
+ * the complete email input; page/server owners still validate and save. */
 export type EmailFieldProps = TextFieldProps;
-export function EmailField(props: EmailFieldProps): ReactNode {
-    return createElement(TextField, props);
+type LegacyEmailComponentProps = EmailFieldProps & {
+    mode?: never;
+    value?: never;
+    onChange?: never;
+};
+type ControlledEmailComponentProps = ControlledEmailFieldProps & {
+    binding?: never;
+    render?: never;
+};
+type EmailComponentProps =
+    | LegacyEmailComponentProps
+    | ControlledEmailComponentProps;
+export function EmailField(props: LegacyEmailComponentProps): ReactNode;
+export function EmailField(props: ControlledEmailComponentProps): ReactNode;
+export function EmailField(props: EmailComponentProps): ReactNode;
+export function EmailField(props: EmailComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledEmailField, props)
+        : createElement(TextField, props);
+}
+/** The controlled Number facade uses the existing localized numeric engine.
+ * Binding callers retain their raw scalar grammar and native units. */
+export type ControlledNumberFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'number' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundNumberComponentProps = NumberFieldProps &
+    DurationFieldOptions &
+    CurrencyFieldOptions & {
+        mode?: never;
+        field?: never;
+        options?: never;
+    };
+type NumberComponentProps =
+    | BoundNumberComponentProps
+    | ControlledNumberFieldProps;
+export function NumberField(props: BoundNumberComponentProps): ReactNode;
+export function NumberField(props: ControlledNumberFieldProps): ReactNode;
+export function NumberField(props: NumberComponentProps): ReactNode;
+export function NumberField(props: NumberComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'number'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
+    return createElement(BoundNumberField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
@@ -1232,9 +1576,41 @@ function BoundIconRatingField({
     });
 }
 export type PercentFieldProps = NumberFieldProps;
+/** Explicit physical-percent display units; the binding API remains raw fractions. */
+export type ControlledPercentFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'percent' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundPercentComponentProps = PercentFieldProps & {
+    mode?: never;
+    field?: never;
+    options?: never;
+};
+type PercentComponentProps =
+    | BoundPercentComponentProps
+    | ControlledPercentFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
+/** Compatible legacy binding props; controlled callers use ControlledDurationFieldProps. */
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
-export function NumberField({
+export type BindingDurationFieldProps = DurationFieldProps & {
+    value?: never;
+    onChange?: never;
+    owner?: never;
+};
+export type ControlledDurationFieldProps = CompleteDurationFieldProps & {
+    binding?: never;
+    render?: never;
+};
+export type DurationFieldComponentProps =
+    | BindingDurationFieldProps
+    | ControlledDurationFieldProps;
+function BoundNumberField({
     binding,
     render,
     className,
@@ -1397,24 +1773,61 @@ export function NumberField({
         status(snapshot)
     );
 }
-/** Percent input preserves native fractions without display conversion. */
-export function PercentField(props: PercentFieldProps): ReactNode {
+/** Controlled display units or the compatible raw-fraction binding contract. */
+export function PercentField(props: BoundPercentComponentProps): ReactNode;
+export function PercentField(props: ControlledPercentFieldProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'percent'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
     return createElement(NumberField, props);
 }
-/** Currency adornment shares the existing numeric owner and raw native units. */
-export function CurrencyField(props: CurrencyFieldProps): ReactNode {
-    return createElement(NumberField, props);
+type BoundCurrencyComponentProps = CurrencyFieldProps & {
+    physicalKind?: never;
+};
+type CurrencyComponentProps =
+    | BoundCurrencyComponentProps
+    | ControlledCurrencyFieldProps;
+/** Explicit controlled localization or the compatible raw binding contract. */
+export function CurrencyField(props: BoundCurrencyComponentProps): ReactNode;
+export function CurrencyField(props: ControlledCurrencyFieldProps): ReactNode;
+export function CurrencyField(props: CurrencyComponentProps): ReactNode;
+export function CurrencyField(props: CurrencyComponentProps): ReactNode {
+    return props.physicalKind === 'currency'
+        ? createElement(ControlledCurrencyField, props)
+        : createElement(NumberField, props);
 }
-/** Clock editing shares the existing scalar owner; render may replace all markup. */
-export function DurationField(props: DurationFieldProps): ReactNode {
-    return createElement(NumberField, props);
+/** Complete controlled clock or compatible binding; the caller retains canonical writes and Save. */
+export function DurationField(props: BindingDurationFieldProps): ReactNode;
+export function DurationField(props: ControlledDurationFieldProps): ReactNode;
+export function DurationField(props: DurationFieldComponentProps): ReactNode;
+export function DurationField(props: DurationFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(NumberField, props)
+        : createElement(CompleteDurationField, props);
 }
-export type CheckboxFieldProps = FieldProps & CheckboxFieldOptions;
-export function CheckboxField({
+export type BoundCheckboxFieldProps = FieldProps &
+    CheckboxFieldOptions & {
+        value?: never;
+        onChange?: never;
+        calendly?: never;
+    };
+export type CheckboxFieldProps =
+    | BoundCheckboxFieldProps
+    | ControlledCheckboxFieldProps;
+/** Complete controlled field or compatible borrowed binding; neither saves implicitly. */
+export function CheckboxField(props: CheckboxFieldProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BoundCheckboxField, props)
+        : createElement(ControlledCheckboxField, props);
+}
+function BoundCheckboxField({
     binding,
     render,
     className,
-}: CheckboxFieldProps): ReactNode {
+}: BoundCheckboxFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (
@@ -1537,7 +1950,7 @@ export function MultipleSelectField({
     );
 }
 
-export type SingleSelectFieldProps = FieldProps &
+export type BindingSingleSelectFieldProps = FieldProps &
     Omit<SingleSelectFieldOptions, 'source'>;
 
 function singleSelectBinding(
@@ -1625,14 +2038,40 @@ function singleSelectBinding(
 }
 
 /** Borrows the accepted binding; local choice text is scoped to its identity. */
-export function SingleSelectField({
+export function BindingSingleSelectField({
     binding,
     render,
     ...options
-}: SingleSelectFieldProps): ReactNode {
+}: BindingSingleSelectFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     return singleSelectBinding(binding, snapshot, options);
+}
+
+/** Additive controlled API; existing bindings keep their original semantics. */
+// Preserve the published binding props contract, including indexed access to
+// `binding`; controlled callers use the separately named controlled props.
+export type SingleSelectFieldProps = BindingSingleSelectFieldProps;
+export type SingleSelectFieldInputProps =
+    | SingleSelectFieldProps
+    | ControlledSingleSelectFieldProps;
+export function SingleSelectField(
+    props: SingleSelectFieldInputProps
+): ReactNode {
+    return 'binding' in props
+        ? createElement(BindingSingleSelectField, props)
+        : createElement(ControlledSingleSelectField, props);
+}
+export const BindingMultipleSelectsField = MultipleSelectField;
+export type MultipleSelectsFieldProps =
+    | MultipleSelectFieldProps
+    | ControlledMultipleSelectsFieldProps;
+export function MultipleSelectsField(
+    props: MultipleSelectsFieldProps
+): ReactNode {
+    return 'binding' in props
+        ? createElement(MultipleSelectField, props)
+        : createElement(ControlledMultipleSelectsField, props);
 }
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {
@@ -2025,8 +2464,14 @@ export function DateField({
         clear: () => binding.date?.clear(),
     });
 }
-/** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
-export const DateTimeField = DateField;
+/** Explicit legacy binding API; complete date/time pickers use /react/date. */
+export const BindingDateTimeField = DateField;
+export type BindingDateTimeFieldProps = DateTimeFieldProps;
+/** Legacy binding name retained unchanged. Controlled DateTimeField uses /react/date. */
+export const DateTimeField = BindingDateTimeField;
+/** Explicit legacy ISO/binding API. Complete calendar dates use /react/date. */
+export const BindingDateField = DateField;
+export type BindingDateFieldProps = DateFieldProps;
 
 import type {
     PortalSortEditorModel,
@@ -2408,8 +2853,21 @@ export function AirtableList<
     return createElement(AirtablePortal<S>, props);
 }
 
+export {
+    CompleteRecordComments,
+    CompleteRecordCommentsDialog,
+    recordCommentsLabels,
+    type RecordCommentsLabels,
+    type CompleteRecordCommentsProps,
+    type CompleteRecordCommentsDialogProps,
+} from './CompleteRecordComments.js';
 export { ButtonField, renderButtonField } from './ButtonField.js';
-export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+export type {
+    ButtonFieldProps,
+    ModelButtonFieldProps,
+    ControlledButtonFieldProps,
+    ButtonFieldMessages,
+} from './ButtonField.js';
 
 export {
     useFileSelection,
@@ -2422,6 +2880,113 @@ export {
     type PortalChartData,
     type PortalChartRow,
 } from './CompletePortalChart.js';
+
+export {
+    CompleteFormTrackingDisclosure,
+    type CompleteFormTrackingDisclosureProps,
+    type FormTrackingDisclosureLabels,
+} from './CompleteFormTrackingDisclosure.js';
+
+export {
+    FormGroup,
+    type FormGroupProps,
+    type FormGroupPreview,
+} from './FormGroup.js';
+
+export {
+    CompleteFormCompletion,
+    CompleteFormCompletionMessage,
+    useFormCompletionCountdown,
+    type CompleteFormCompletionProps,
+    type CompleteFormCompletionMessageProps,
+    type FormCompletionAction,
+} from './CompleteFormCompletion.js';
+
+export {
+    CompleteBarcodeScanner,
+    defaultBarcodeScannerLabels,
+} from './CompleteBarcodeScanner.js';
+export type {
+    CompleteBarcodeScannerProps,
+    BarcodeScannerLabels,
+    BarcodeScannerLayout,
+} from './CompleteBarcodeScanner.js';
+export {
+    useBarcodeScannerButton,
+    useBarcodeScannerButtonInField,
+    qrScannerButtonTestId,
+} from './useBarcodeScannerButton.js';
+export type {
+    BarcodeScannerButtonOptions,
+    BarcodeScannerFieldOptions,
+} from './useBarcodeScannerButton.js';
+
+export {
+    ThemeBoundary,
+    getThemePortalProps,
+    useThemeSnapshot,
+    type ThemeBoundaryProps,
+    type ThemeSnapshot,
+    type ThemePortalProps,
+    type ThemeStyle,
+} from './ThemeBoundary.js';
+
+export {
+    CompleteFormHeader,
+    CompleteFormFooterDescription,
+    CompleteFormCover,
+    formHeaderLabels,
+    type CompleteFormHeaderProps,
+    type CompleteFormFooterDescriptionProps,
+    type CompleteFormCoverProps,
+    type FormHeaderPreview,
+    type FormHeaderSettingsTarget,
+    type FormHeaderLabels,
+} from './CompleteFormHeader.js';
+
+export {
+    CompleteFormFieldPresentation,
+    type CompleteFormFieldPresentationProps,
+} from './CompleteFormFieldPresentation.js';
+export {
+    useFieldPresentationAssociation,
+    hasFieldDescription,
+    fieldPresentationDescribedBy,
+    type FieldPresentationAssociation,
+    type FieldPresentationComposition,
+} from './fieldPresentation.js';
+export {
+    CompleteCheckboxField,
+    type CompleteCheckboxFieldProps,
+} from './CompleteCheckboxField.js';
+
+export {
+    SignatureField,
+    type SignatureFieldProps,
+    type SignatureMessages,
+} from './SignatureField.js';
+export {
+    SignatureCanvas,
+    type SignatureCanvasHandle,
+    type SignatureCanvasProps,
+} from './SignatureCanvas.js';
+export {
+    SignatureStorageError,
+    type SignatureAuthority,
+    type SignatureMethod,
+    type SignatureReceiptState,
+    type SignatureReleaseResult,
+    type SignatureStorage,
+    type SignatureAppend,
+    type SignatureRecovery,
+    type TemporarySignature,
+} from './signatureReceipt.js';
+
+export {
+    CSVExportButton,
+    type CSVExportButtonProps,
+    type CSVExportLabels,
+} from './CSVExportButton.js';
 
 export {
     AttachmentPreview,

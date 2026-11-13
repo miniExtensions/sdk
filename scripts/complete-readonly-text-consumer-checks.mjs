@@ -3,15 +3,20 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { autoNumberPublicCompatibilityTypedConsumer } from './autonumber-public-contract-fixtures.mjs';
 
 export const completeReadOnlyTextTypedConsumer = String.raw`import { createElement } from 'react';
 import {
+    AutoNumberField,
+    type AutoNumberControlledProps,
     CompleteReadOnlyTextField,
     type CompleteReadOnlyTextFieldProps,
     type CompleteReadOnlyTextLanguage,
     type CompleteReadOnlyTextLayout,
     type CompleteReadOnlyTextSize,
 } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+declare const binding: FormFieldBinding;
 const language: CompleteReadOnlyTextLanguage = 'zh-Hans';
 const layout: CompleteReadOnlyTextLayout = 'cell-medium';
 const textSize: CompleteReadOnlyTextSize = 'very large';
@@ -22,6 +27,25 @@ const props: CompleteReadOnlyTextFieldProps = {
 createElement(CompleteReadOnlyTextField, props);
 createElement(CompleteReadOnlyTextField, { ...props, value: null });
 createElement(CompleteReadOnlyTextField, { ...props, value: undefined });
+const autoNumber: AutoNumberControlledProps = {
+    mode: 'controlled', value: '0', language, layout, textSize,
+    className: 'consumer-autonumber',
+};
+createElement(AutoNumberField, autoNumber);
+createElement(AutoNumberField, { ...autoNumber, value: null });
+createElement(AutoNumberField, { ...autoNumber, value: undefined });
+// @ts-expect-error native projection supplies text, never a raw number
+createElement(AutoNumberField, { ...autoNumber, value: 0 });
+// @ts-expect-error controlled presentation has no canonical setter
+createElement(AutoNumberField, { ...autoNumber, onValueChange() {} });
+// @ts-expect-error controlled presentation does not borrow a binding
+createElement(AutoNumberField, { ...autoNumber, binding });
+// @ts-expect-error the complete component supplies its own rendering
+createElement(AutoNumberField, { ...autoNumber, render: () => null });
+// @ts-expect-error controlled presentation requires explicit localization
+createElement(AutoNumberField, { mode: 'controlled', value: '0' });
+// @ts-expect-error controlled presentation requires an explicit discriminator
+createElement(AutoNumberField, { value: '0', language: 'en' });
 // @ts-expect-error canonical text is never a number
 const numeric: CompleteReadOnlyTextFieldProps = { ...props, value: 0 };
 // @ts-expect-error the complete display owns link rendering
@@ -54,6 +78,7 @@ const installed = join(directory, 'node_modules', '@miniextensions', 'sdk');
 assert(fileURLToPath(import.meta.resolve('@miniextensions/sdk/react')).startsWith(join(installed, 'dist', 'esm', 'react')));
 assert(require.resolve('@miniextensions/sdk/react').startsWith(join(installed, 'dist', 'cjs', 'react')));
 assert.equal('CompleteReadOnlyTextField' in require('@miniextensions/sdk'), false);
+assert.equal('AutoNumberField' in require('@miniextensions/sdk'), false);
 const cssPath = require.resolve('@miniextensions/sdk/react/complete-readonly-text.css');
 assert(cssPath.startsWith(join(installed, 'dist', 'esm', 'react')));
 const css = readFileSync(cssPath, 'utf8');
@@ -73,6 +98,7 @@ const layouts = ['default', 'linked-list', 'cell-short', 'cell-medium', 'cell-ta
 let groups = 0;
 for (const api of [esm, cjs]) {
     assert.equal(typeof api.CompleteReadOnlyTextField, 'function');
+    assert.equal(typeof api.AutoNumberField, 'function');
     assert.equal(typeof api.LiteralText, 'object');
     assert.equal(typeof globalThis.document, 'undefined');
     const Component = api.CompleteReadOnlyTextField;
@@ -80,6 +106,11 @@ for (const api of [esm, cjs]) {
     let language = 'en';
     let textSize;
     let layout;
+    let autoNumberValue = null;
+    let autoNumberLanguage = 'es';
+    let autoNumberTextSize;
+    let autoNumberLayout;
+    let autoNumberRowClicks = 0;
     let root;
     let requests = 0;
     let submits = 0;
@@ -93,6 +124,11 @@ for (const api of [esm, cjs]) {
         React.createElement('form', { onSubmit(event) { event.preventDefault(); submits++; } },
             React.createElement('section', { onClick() { parentClicks++; } },
                 React.createElement(Component, { value, language, textSize, layout, className: 'consumer-text' })),
+            React.createElement('section', { id: 'consumer-autonumber', onClick() { autoNumberRowClicks++; } },
+                React.createElement(api.AutoNumberField, {
+                    mode: 'controlled', value: autoNumberValue, language: autoNumberLanguage,
+                    textSize: autoNumberTextSize, layout: autoNumberLayout, className: 'consumer-autonumber',
+                })),
             React.createElement('input', { 'aria-label': 'Adjacent', defaultValue: 'Keep adjacent' })));
     const html = renderToString(node());
     assert(html.includes('&lt;b&gt;literal&lt;/b&gt;'));
@@ -109,6 +145,8 @@ for (const api of [esm, cjs]) {
     window.document.body.append(container);
     const originalParagraph = container.querySelector('.read-only-text');
     assert(originalParagraph);
+    const originalAutoNumber = container.querySelector('#consumer-autonumber p');
+    assert.equal(originalAutoNumber.textContent, 'Sin Valor');
     const keys = ['window', 'document', 'navigator', 'HTMLElement', 'HTMLAnchorElement',
         'HTMLInputElement', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
     const originals = keys.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
@@ -125,6 +163,7 @@ for (const api of [esm, cjs]) {
             });
         });
         assert.equal(container.querySelector('.read-only-text'), originalParagraph);
+        assert.equal(container.querySelector('#consumer-autonumber p'), originalAutoNumber);
         const adjacent = container.querySelector('input');
         adjacent.value = 'Retain neighboring draft';
         const publish = async () => {
@@ -207,6 +246,42 @@ for (const api of [esm, cjs]) {
                 assert.equal(section.querySelector('p').classList.contains('consumer-text'), true);
             }
         }
+        const autoNumberSection = () => container.querySelector('#consumer-autonumber');
+        for (const empty of [null, undefined, '']) {
+            autoNumberValue = empty;
+            autoNumberLanguage = 'fr';
+            await publish();
+            assert.equal(autoNumberSection().textContent, 'Pas de Valeur');
+            assert.equal(autoNumberSection().querySelector('input,textarea,select,button,a'), null);
+        }
+        autoNumberValue = '0';
+        autoNumberLanguage = 'en';
+        autoNumberTextSize = 'small';
+        autoNumberLayout = 'cell-medium';
+        await publish();
+        const autoNumberParagraph = autoNumberSection().querySelector('.read-only-text');
+        assert.equal(autoNumberParagraph.textContent, '0');
+        assert.equal(autoNumberParagraph.className, 'linkify read-only-text text-sm');
+        assert.equal(autoNumberParagraph.parentElement.getAttribute('data-layout'), 'cell-medium');
+        autoNumberValue = '  <b>literal</b>\nhttps://example.com/a?x=1&y=2  ';
+        autoNumberTextSize = 'large';
+        autoNumberLayout = 'default';
+        await publish();
+        assert.equal(autoNumberSection().querySelector('.read-only-text'), autoNumberParagraph);
+        assert.equal(autoNumberParagraph.textContent, autoNumberValue);
+        assert.equal(autoNumberParagraph.querySelector('b,img,script,iframe'), null);
+        assert.equal(autoNumberParagraph.className, 'linkify read-only-text text-lg');
+        const autoNumberLink = autoNumberParagraph.querySelector('a');
+        assert.equal(autoNumberLink.getAttribute('href'), 'https://example.com/a?x=1&y=2');
+        assert.equal(autoNumberLink.getAttribute('target'), '_blank');
+        await React.act(async () => autoNumberLink.dispatchEvent(
+            new window.MouseEvent('click', { bubbles: true, cancelable: true })));
+        assert.equal(autoNumberRowClicks, 0);
+        autoNumberValue = 'javascript:alert(1) <img src=x onerror=bad()> & "literal"';
+        await publish();
+        assert.equal(autoNumberParagraph.textContent, autoNumberValue);
+        assert.equal(autoNumberParagraph.querySelector('a,img,script,iframe'), null);
+        assert.equal(autoNumberSection().querySelector('input,textarea,select,button'), null);
         value = 'Fresh https://example.com';
         language = 'en';
         await publish();
@@ -278,9 +353,15 @@ export function checkCompleteReadOnlyTextReactMatrix({
             ]);
             for (const extension of ['mts', 'cts']) {
                 const name = 'complete-readonly-text.' + extension;
+                const compatibilityName =
+                    'autonumber-public-compatibility.' + extension;
                 writeFileSync(
                     join(directory, name),
                     completeReadOnlyTextTypedConsumer
+                );
+                writeFileSync(
+                    join(directory, compatibilityName),
+                    autoNumberPublicCompatibilityTypedConsumer
                 );
                 run(process.execPath, [
                     typescriptBin,
@@ -295,6 +376,7 @@ export function checkCompleteReadOnlyTextReactMatrix({
                     '--moduleResolution',
                     'NodeNext',
                     name,
+                    compatibilityName,
                 ]);
             }
             const result = JSON.parse(
@@ -408,15 +490,16 @@ export const completeReadOnlyTextBrowserStyle = [
 ].join('\n');
 
 export const completeReadOnlyTextBrowserSource =
-    String.raw`import React, { useLayoutEffect } from 'react';
+    String.raw`import React, { useLayoutEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CompleteReadOnlyTextField } from '@miniextensions/sdk/react';
+import { AutoNumberField, CompleteReadOnlyTextField } from '@miniextensions/sdk/react';
 
 const cases = ` +
     JSON.stringify(browserCases) +
     String.raw`;
 const state = { ready: false, errors: [], componentRequests: 0,
-    submits: 0, ordinaryClicks: 0, linkRowClicks: 0, trustedLinkClicks: 0 };
+    submits: 0, ordinaryClicks: 0, linkRowClicks: 0, trustedLinkClicks: 0,
+    autoNumberRowClicks: 0, autoNumberTrustedLinkClicks: 0 };
 window.__nativeProbe = { snapshot: () => ({ ...state, errors: [...state.errors], reactVersion: React.version }) };
 window.addEventListener('error', (event) => state.errors.push(String(event.error || event.message)));
 window.addEventListener('unhandledrejection', (event) => state.errors.push(String(event.reason)));
@@ -432,7 +515,12 @@ const lines = Array.from({ length: 10 }, (_, index) => 'Line ' + String(index + 
 const literal = '  <b>literal</b>\nA & "quoted" value  ';
 const target = window.location.origin + '/complete-readonly-text-target';
 function App() {
-    useLayoutEffect(() => { state.ready = true; return () => { state.ready = false; }; }, []);
+    const [autoNumber, setAutoNumber] = useState({ value: null, language: 'es' });
+    useLayoutEffect(() => {
+        state.ready = true;
+        window.__nativeProbe.setAutoNumber = setAutoNumber;
+        return () => { state.ready = false; delete window.__nativeProbe.setAutoNumber; };
+    }, []);
     return React.createElement('main', null,
         ...cases.map((item) => React.createElement('section', {
             key: item.id, id: 'case-' + item.id,
@@ -458,6 +546,13 @@ function App() {
                     if (event.target.closest('a') && event.isTrusted) state.trustedLinkClicks++;
                 },
             }, React.createElement(CompleteReadOnlyTextField, { value: target, language: 'en' })),
+            React.createElement('section', {
+                id: 'case-autonumber', className: 'readonly-case',
+                onClick() { state.autoNumberRowClicks++; },
+                onClickCapture(event) {
+                    if (event.target.closest('a') && event.isTrusted) state.autoNumberTrustedLinkClicks++;
+                },
+            }, React.createElement(AutoNumberField, { ...autoNumber, mode: 'controlled' })),
             React.createElement('input', { id: 'readonly-adjacent', defaultValue: 'Keep adjacent' })));
 }
 createRoot(document.getElementById('root')).render(
@@ -600,6 +695,114 @@ export async function checkCompleteReadOnlyTextBrowser({ page, evidence }) {
     } finally {
         if (popup) await popup.close();
     }
+    assert.equal(
+        await page.locator('#case-autonumber').textContent(),
+        'Sin Valor'
+    );
+    await page.evaluate(() => {
+        window.__nativeProbe.autoNumberAdjacent =
+            document.getElementById('readonly-adjacent');
+    });
+    const autoNumberSamples = [];
+    const publishAutoNumber = async (props, expected) => {
+        await page.evaluate(
+            (next) => window.__nativeProbe.setAutoNumber(next),
+            props
+        );
+        await page.waitForFunction(
+            (text) =>
+                document.getElementById('case-autonumber').textContent === text,
+            expected
+        );
+        const sample = await page.evaluate(() => {
+            const section = document.getElementById('case-autonumber');
+            const paragraph = section.querySelector('p');
+            const link = section.querySelector('a');
+            return {
+                text: section.textContent,
+                fontSize: getComputedStyle(paragraph).fontSize,
+                layout: section.firstElementChild.getAttribute('data-layout'),
+                controls: section.querySelectorAll(
+                    'input,textarea,select,button'
+                ).length,
+                injectedMarkup:
+                    section.querySelector('b,img,script,iframe') !== null,
+                linkHref: link?.getAttribute('href') ?? null,
+                linkTarget: link?.getAttribute('target') ?? null,
+                sameAdjacent:
+                    document.getElementById('readonly-adjacent') ===
+                    window.__nativeProbe.autoNumberAdjacent,
+                adjacent: document.getElementById('readonly-adjacent').value,
+            };
+        });
+        assert.equal(sample.text, expected);
+        assert.equal(sample.controls, 0);
+        assert.equal(sample.injectedMarkup, false);
+        assert.equal(sample.sameAdjacent, true);
+        assert.equal(sample.adjacent, 'Retain neighboring draft');
+        autoNumberSamples.push(sample);
+        return sample;
+    };
+    const zero = await publishAutoNumber(
+        {
+            value: '0',
+            language: 'en',
+            textSize: 'small',
+            layout: 'cell-medium',
+        },
+        '0'
+    );
+    assert.equal(zero.fontSize, '14px');
+    assert.equal(zero.layout, 'cell-medium');
+    const autoNumberLiteral = '  <b>literal</b>\n' + target.href + '  ';
+    const literalAutoNumber = await publishAutoNumber(
+        {
+            value: autoNumberLiteral,
+            language: 'en',
+            textSize: 'large',
+            layout: 'default',
+        },
+        autoNumberLiteral
+    );
+    assert.equal(literalAutoNumber.fontSize, '18px');
+    assert.equal(literalAutoNumber.layout, 'default');
+    assert.equal(literalAutoNumber.linkHref, target.href);
+    assert.equal(literalAutoNumber.linkTarget, '_blank');
+    for (const value of [null, undefined, '']) {
+        const emptyAutoNumber = await publishAutoNumber(
+            { value, language: 'fr' },
+            'Pas de Valeur'
+        );
+        assert.equal(emptyAutoNumber.linkHref, null);
+    }
+    const unsafeLiteral = 'javascript:alert(1) <img src=x onerror=bad()>';
+    const inertAutoNumber = await publishAutoNumber(
+        { value: unsafeLiteral, language: 'en' },
+        unsafeLiteral
+    );
+    assert.equal(inertAutoNumber.linkHref, null);
+    await publishAutoNumber(
+        { value: autoNumberLiteral, language: 'en' },
+        autoNumberLiteral
+    );
+    let autoNumberPopup;
+    try {
+        [autoNumberPopup] = await Promise.all([
+            page.waitForEvent('popup'),
+            page.locator('#case-autonumber a').click(),
+        ]);
+        await autoNumberPopup.waitForLoadState('domcontentloaded');
+        assert.equal(
+            new URL(autoNumberPopup.url()).pathname,
+            completeReadOnlyTextBrowserTargetPath
+        );
+        assert.equal(
+            await autoNumberPopup.title(),
+            'Readonly text synthetic target'
+        );
+    } finally {
+        if (autoNumberPopup) await autoNumberPopup.close();
+    }
     const final = await page.evaluate(() => ({
         ...window.__nativeProbe.snapshot(),
         adjacent: document.getElementById('readonly-adjacent').value,
@@ -608,12 +811,19 @@ export async function checkCompleteReadOnlyTextBrowser({ page, evidence }) {
     assert.equal(final.ordinaryClicks, 1);
     assert.equal(final.linkRowClicks, 0);
     assert.equal(final.trustedLinkClicks, 1);
+    assert.equal(final.autoNumberRowClicks, 0);
+    assert.equal(final.autoNumberTrustedLinkClicks, 1);
     assert.equal(final.submits, 0);
     assert.equal(final.componentRequests, 0);
     assert.equal(final.adjacent, 'Retain neighboring draft');
     Object.assign(evidence, {
         layouts: samples,
         visible,
+        autoNumber: {
+            samples: autoNumberSamples,
+            rowClicks: final.autoNumberRowClicks,
+            trustedLinkClicks: final.autoNumberTrustedLinkClicks,
+        },
         clicks: {
             ordinary: final.ordinaryClicks,
             linkRow: final.linkRowClicks,
@@ -623,7 +833,7 @@ export async function checkCompleteReadOnlyTextBrowser({ page, evidence }) {
         submits: final.submits,
         adjacent: final.adjacent,
         reactVersion: final.reactVersion,
-        scope: 'Installed public readonly text and its packaged CSS in standalone Chromium without Tailwind; measured layout and same-origin link behavior, not hosted Form/Portal acceptance.',
+        scope: 'Installed public readonly text and controlled AutoNumber with packaged readonly CSS in standalone Chromium without Tailwind; measured layout, literal/localized replacements, sibling isolation and same-origin link behavior, not hosted Form/Portal acceptance.',
         cleanup:
             'owned synthetic popup closed; page/context cleanup belongs to normal browser harness',
     });

@@ -1,6 +1,15 @@
 import { build as bundle } from 'esbuild';
+import { assertDateVendor } from './date-vendor-checks.mjs';
+import { copyDocumentAssets } from './document-preview-assets.mjs';
+import { bundleDocumentPDF } from './document-pdf-bundle.mjs';
+import { bundleDatePopover } from './date-popover-vendor.mjs';
+import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import assert from 'node:assert/strict';
 import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
+import {
+    bundleCollaboratorPicker,
+    bundleScannerDialog,
+} from './collaborator-picker-vendor-checks.mjs';
 import { createHash } from 'node:crypto';
 import {
     copyFileSync,
@@ -29,10 +38,12 @@ import {
     phoneRuntimeFilter,
 } from './phone-vendor-checks.mjs';
 
+await assertAddressCombobox();
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
 assertRichTextVendor();
 assertPhoneVendor();
+assertDateVendor();
 
 for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
     rmSync(directory, { recursive: true, force: true });
@@ -43,6 +54,11 @@ for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
 cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
     recursive: true,
     filter: richTextRuntimeFilter,
+});
+cpSync('vendor/date-time', 'dist/vendor/date-time', { recursive: true });
+copyDocumentAssets();
+cpSync('vendor/headlessui-address', 'dist/vendor/headlessui-address', {
+    recursive: true,
 });
 cpSync('vendor/phone-number-input', 'dist/vendor/phone-number-input', {
     recursive: true,
@@ -128,6 +144,12 @@ copyFileSync(
 
 // Both compilers have finished; bundle only the Chart adapter closure.
 await bundlePortalChart();
+await bundleDocumentPDF();
+await bundleCollaboratorPicker();
+await bundleScannerDialog();
+if (process.argv.includes('--capture-date-popover'))
+    await bundleDatePopover(process.cwd(), true);
+await bundleDatePopover();
 
 mkdirSync('dist/cjs', { recursive: true });
 writeFileSync('dist/cjs/package.json', '{"type":"commonjs"}\n');
@@ -187,11 +209,20 @@ for (const format of ['esm', 'cjs']) {
 
 for (const format of ['esm', 'cjs']) {
     for (const name of [
+        'signature',
+        'theme',
         'button',
         'checkbox',
         'text',
         'number',
         'localized-numeric',
+        'form-tracking',
+        'form-group',
+        'csv-export',
+        'form-completion',
+        'form-header',
+        'field-presentation',
+        'complete-checkbox',
         'complete-phone',
         'complete-readonly-text',
         'complete-clearable-text-input',
@@ -199,9 +230,16 @@ for (const format of ['esm', 'cjs']) {
         'complete-duration',
         'search-gate',
         'complete-calendly',
+        'complete-record-comments',
         'complete-verification',
+        'complete-barcode-scanner',
+        'barcode',
         'complete-portal-chart',
         'attachment-preview',
+        'complete-address',
+        'address-field',
+        'complete-collaborators',
+        'complete-date',
         'date',
         'datetime',
         'duration',
@@ -209,6 +247,7 @@ for (const format of ['esm', 'cjs']) {
         'multiple-select',
         'linked-records',
         'single-select',
+        'controlled-select',
         'rich-text',
     ]) {
         copyFileSync(

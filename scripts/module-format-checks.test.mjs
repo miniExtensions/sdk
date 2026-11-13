@@ -634,6 +634,8 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
 
 for (const name of [
     'button',
+    'form-group',
+    'csv-export',
     'checkbox',
     'text',
     'number',
@@ -643,9 +645,16 @@ for (const name of [
     'complete-duration',
     'search-gate',
     'complete-calendly',
+    'complete-record-comments',
     'complete-verification',
+    'complete-barcode-scanner',
     'complete-portal-chart',
     'attachment-preview',
+    'signature',
+    'complete-address',
+    'address-field',
+    'complete-collaborators',
+    'form-header',
     'date',
     'datetime',
     'duration',
@@ -653,6 +662,7 @@ for (const name of [
     'multiple-select',
     'linked-records',
     'single-select',
+    'controlled-select',
 ]) {
     test(`the exported ${name} stylesheet is hashed as an asset and checked on installation`, (t) => {
         const { root, manifest } = fixture(t);

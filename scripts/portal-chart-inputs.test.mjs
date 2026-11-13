@@ -38,6 +38,9 @@ function fixture(t, format) {
     sdkInput(`dist/${format}/react/CompletePortalChart.js`);
     sdkInput('dist/vendor/phone-number-input/index.cjs');
     const rich = sdkInput('dist/vendor/rich-markdown-editor/dist/index.js');
+    const address = ['combobox.js', 'react-peer.js', 'sdk-runtime.js'].map(
+        (name) => sdkInput(`dist/vendor/headlessui-address/${name}`)
+    );
     for (const path of [
         join(chartRoot, `dist/chart.${format === 'esm' ? 'js' : 'cjs'}`),
         join(temporary, 'node_modules/react/cjs/react.development.js'),
@@ -60,11 +63,11 @@ function fixture(t, format) {
             chartRoot,
         });
     pack();
-    return { record, sdkInput, pack, rich };
+    return { record, sdkInput, pack, rich, address };
 }
 
 for (const format of ['esm', 'cjs']) {
-    test(`${format} Chart provenance accepts both exact shared closures and binds their bytes to the archive`, (t) => {
+    test(`${format} Chart provenance accepts the shipped shared closures and binds their bytes to the archive`, (t) => {
         const { record, rich } = fixture(t, format);
         const receipt = record();
         assert.ok(
@@ -81,9 +84,34 @@ for (const format of ['esm', 'cjs']) {
                     'package/dist/vendor/phone-number-input/index.cjs'
             )
         );
+        for (const name of ['combobox.js', 'react-peer.js', 'sdk-runtime.js']) {
+            assert.ok(
+                receipt.some(
+                    (entry) =>
+                        entry.archiveMember ===
+                        `package/dist/vendor/headlessui-address/${name}`
+                )
+            );
+        }
         writeFileSync(rich, 'installed bytes differ from packed bytes');
         assert.throws(record, assert.AssertionError);
     });
+
+    for (const [index, name] of [
+        'combobox.js',
+        'react-peer.js',
+        'sdk-runtime.js',
+    ].entries()) {
+        test(`${format} Chart provenance rejects changed installed Address ${name}`, (t) => {
+            const { record, address } = fixture(t, format);
+            assert.doesNotThrow(record);
+            writeFileSync(
+                address[index],
+                'installed bytes differ from packed bytes'
+            );
+            assert.throws(record, assert.AssertionError);
+        });
+    }
 
     for (const member of [
         `dist/${format === 'esm' ? 'cjs' : 'esm'}/react/index.js`,
@@ -91,6 +119,8 @@ for (const format of ['esm', 'cjs']) {
         'dist/vendor/unrecognized/index.js',
         'dist/vendor/rich-markdown-editor-other/index.js',
         'dist/vendor/phone-number-input-other/index.js',
+        'dist/vendor/headlessui-address-other/combobox.js',
+        'dist/vendor/headlessui-address/unreviewed.js',
     ]) {
         test(`${format} Chart provenance rejects ${member} even when its archive bytes match`, (t) => {
             const { record, sdkInput, pack } = fixture(t, format);

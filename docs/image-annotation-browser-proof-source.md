@@ -57,7 +57,7 @@ scale; the 64×32 requirement applies to decoded PNG output.
 
 ## Authored assertions
 
-Each ESM/CommonJS profile authors these five groups:
+Each ESM/CommonJS profile authors these seven groups:
 
 1. Real eight-tool DOM/accessibility, trusted keyboard toolbar actions and pointer
    drawing, visible vendor and component attribution, unchanged editor through a
@@ -73,6 +73,13 @@ Each ESM/CommonJS profile authors these five groups:
    readonly and disabled picker refusal.
 5. Actual malformed PNG image decode refusal with localized public feedback,
    zero vendor editor/upload and exact local URL release.
+6. Real editor renders followed by deferred upload or URL rejection: localized
+   storage feedback hides the synthetic private error detail, saving clears,
+   no append occurs, and a fresh actual selection/editor succeeds exactly once.
+   No old transport is retried, cancelled, deleted or treated as record Save.
+7. Retired upload or URL rejection after committed owner ABA cannot emit
+   successor feedback or append; a retired upload starts no URL read. A fresh
+   actual editor still succeeds.
 
 Only storage upload/URL promises are deferred. The real vendor and browser handle
 the File input, image decoder, popup, keyboard/pointer, SVG and PNG. All requests
@@ -105,3 +112,13 @@ All format, types, unit/coverage, package, real browser/vendor, native and hoste
 checks for this successor are UNRUN. Prior source test counts are not credited
 to it. Held Map session23130/source binding/backups, Select session53446/canonical
 lock/source binding, Runner4 and all other owners remain untouched.
+
+The failure/retry source extension was prepared after the independent team-device
+route assessment found the only documented SDK execution root retained by the
+unresolved Map operation. No second currently owned root or process/dependency
+admission was established; no setup, resolver, browser or qualification command
+was attempted. Native Submit preparation inputs at master
+3126f499a4c2ad646c35b6569271efec01c0175b remained byte-identical, so that artifact
+was not rewritten. The live Ready/unassigned queue was empty. This successor
+changes proof source/checklist only and preserves the existing component and
+all prior assertions.

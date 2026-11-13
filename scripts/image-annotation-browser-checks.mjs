@@ -254,6 +254,80 @@ export async function checkImageAnnotationBrowser({ browser, consumer, evidence,
             assertReleasedUrls(rejected);
             assert.equal(rejected.submits, 0);
             cases.push('real-browser-invalid-image-decoder-and-private-error');
+
+            evidence.phase = format + ':storage-failure-feedback-and-fresh-retry';
+            for (const stage of ['upload', 'url']) {
+                await visit(format); await openLocal(); await render();
+                if (stage === 'url') await releaseUpload();
+                await page.evaluate(kind => {
+                    if (kind === 'upload') window.imageAnnotationProof.failUpload();
+                    else window.imageAnnotationProof.failUrl();
+                }, stage);
+                const alert = page.getByRole('alert');
+                await alert.waitFor({ state: 'visible' });
+                await page.waitForFunction(() => window.imageAnnotationProof.pending().tasks === 0);
+                assert.equal(await alert.textContent(), 'Synthetic storage failed');
+                assert.equal(await page.getByRole('status').count(), 0);
+                assert.equal(await page.getByLabel('Choose synthetic image', { exact: true }).isDisabled(), false);
+                assert.equal(await dialog().count(), 0);
+                assert(!(await page.locator('body').textContent()).includes('PRIVATE_ANNOTATION_'));
+                const failed = await snapshot();
+                assert.equal(failed.uploads.length, 1);
+                assert.equal(failed.uploadRejected, stage === 'upload' ? 1 : 0);
+                assert.equal(failed.urlRejected, stage === 'url' ? 1 : 0);
+                assert.deepEqual(failed.urlReads, stage === 'upload' ? [] : [1]);
+                assert.deepEqual(failed.appends, []);
+                assert.deepEqual(failed.errors, ['storage']);
+                assert.equal(failed.submits, 0);
+                assertReleasedUrls(failed);
+                // A retry is a fresh actual selection/editor/render. It never
+                // retries or cancels the already allocated first transport.
+                await openLocal();
+                assert.equal(await page.getByRole('alert').count(), 0);
+                await render(); await finishCurrent();
+                const recovered = await snapshot();
+                assert.equal(recovered.uploads.length, 2);
+                assert.deepEqual(recovered.urlReads, stage === 'upload' ? [2] : [1, 2]);
+                assert.equal(recovered.appends.length, 1);
+                assert.equal(recovered.appends[0].id, 2);
+                assert.equal(recovered.attachments.length, 1);
+                assert.equal(recovered.attachments[0].filename, 'camera.original-annotated.png');
+                assert.equal(recovered.submits, 0);
+                assert.deepEqual(recovered.errors, ['storage']);
+                assert.equal(await page.getByRole('alert').count(), 0);
+                assertReleasedUrls(recovered, 2);
+            }
+            cases.push('real-render-upload-and-URL-failures-private-feedback-fresh-editor-retry');
+
+            evidence.phase = format + ':retired-storage-failure-feedback';
+            for (const stage of ['upload', 'url']) {
+                await visit(format); await openLocal(); await render();
+                if (stage === 'url') await releaseUpload();
+                await page.evaluate(() => window.imageAnnotationProof.ownerABA());
+                await page.evaluate(kind => {
+                    if (kind === 'upload') window.imageAnnotationProof.failUpload();
+                    else window.imageAnnotationProof.failUrl();
+                }, stage);
+                await page.waitForFunction(() => window.imageAnnotationProof.pending().tasks === 0);
+                const staleFailure = await snapshot();
+                assert.equal(staleFailure.uploadRejected, stage === 'upload' ? 1 : 0);
+                assert.equal(staleFailure.urlRejected, stage === 'url' ? 1 : 0);
+                assert.deepEqual(staleFailure.urlReads, stage === 'upload' ? [] : [1]);
+                assert.deepEqual(staleFailure.appends, []);
+                assert.deepEqual(staleFailure.errors, []);
+                assert.equal(await page.getByRole('alert').count(), 0);
+                assert.equal(await page.getByRole('status').count(), 0);
+                assert(!(await page.locator('body').textContent()).includes('PRIVATE_ANNOTATION_'));
+                assertReleasedUrls(staleFailure);
+                await openLocal(); await render(); await finishCurrent();
+                const afterFailure = await snapshot();
+                assert.deepEqual(afterFailure.errors, []);
+                assert.deepEqual(afterFailure.urlReads, stage === 'upload' ? [2] : [1, 2]);
+                assert.equal(afterFailure.appends.length, 1);
+                assert.equal(afterFailure.appends[0].id, 2);
+                assertReleasedUrls(afterFailure, 2);
+            }
+            cases.push('retired-upload-and-URL-rejections-cannot-leak-feedback-to-fresh-successor');
             evidence.profiles.push({ format, react, cases, status: 'passed' });
         }
         assert.deepEqual(evidence.pageErrors, []);

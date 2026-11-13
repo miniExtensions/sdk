@@ -3089,3 +3089,8 @@ export type {
     PortalShellSnapshot,
     PortalShellLabels,
 } from './CompletePortalShell.js';
+
+export {
+    FormSubmitButton,
+    type FormSubmitButtonProps,
+} from './FormSubmitButton.js';

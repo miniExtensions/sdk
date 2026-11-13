@@ -227,6 +227,7 @@ for (const format of ['esm', 'cjs']) {
         'kanban',
         'form-completion',
         'form-header',
+        'form-submit',
         'form-validation-summary',
         'portal-summary-cards',
         'form-progress',

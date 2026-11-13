@@ -663,6 +663,7 @@ try {
                 path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
+                path === 'docs/form-submit.md' ||
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
@@ -771,6 +772,7 @@ try {
         'dist/cjs/react/form-completion.css',
         'docs/form-completion.md',
         'docs/form-header.md',
+        'docs/form-submit.md',
         'docs/field-presentation.md',
         'docs/form-groups.md',
         'dist/esm/react/form-group.css',
@@ -807,6 +809,8 @@ try {
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
         'dist/cjs/react/complete-multiline.css',
+        'dist/esm/react/form-submit.css',
+        'dist/cjs/react/form-submit.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',

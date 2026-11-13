@@ -209,6 +209,7 @@ export function assertModuleFormats(root) {
                 './react/kanban.css',
                 './react/form-completion.css',
                 './react/form-header.css',
+                './react/form-submit.css',
                 './react/form-validation-summary.css',
                 './react/portal-summary-cards.css',
                 './react/form-progress.css',

@@ -249,10 +249,19 @@ test('external view reuses native prefetch, preserves one coordinator through St
         (
             f.host.querySelectorAll(
                 '[role="option"]'
+            )[0] as unknown as HTMLElement
+        ).click()
+    );
+    assert.deepEqual(f.toggles, ['A']);
+    assert.equal(f.closeCount(), 0);
+    await act(async () =>
+        (
+            f.host.querySelectorAll(
+                '[role="option"]'
             )[1] as unknown as HTMLElement
         ).click()
     );
-    assert.deepEqual(f.toggles, ['B']);
+    assert.deepEqual(f.toggles, ['A', 'B']);
     assert.equal(f.closeCount(), 1);
     await f.unmount();
     assert.notEqual(f.coordinator!.getSnapshot().owner, null);

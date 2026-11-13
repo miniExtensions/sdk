@@ -304,11 +304,22 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                 if (changed != null)
                     void coordinator.toggle(owner, changed).then((result) => {
                         if (
-                            result.status === 'admitted' &&
-                            props.closeAfterToggle &&
-                            host.isOwnerCurrent(owner)
+                            result.status !== 'admitted' ||
+                            !props.closeAfterToggle
                         )
-                            host.close(owner);
+                            return;
+                        try {
+                            // Single-link selection closes after an addition;
+                            // a canonical removal remains available for repair.
+                            if (
+                                host.isOwnerCurrent(owner) &&
+                                host.selection(owner)?.ids.includes(changed) &&
+                                host.isOwnerCurrent(owner)
+                            )
+                                host.close(owner);
+                        } catch {
+                            // Unreadable current selection/owner cannot grant close.
+                        }
                     });
             },
             children: h(

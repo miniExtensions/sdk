@@ -89,6 +89,14 @@ checkbox, barcode and accepted button presenters. SDK-owned badges, linked
 labels, people, rating icons and admitted attachment images complete the card.
 No React renderer slot or unknown-type text fallback is accepted. A button needs
 an independently admitted button snapshot with captured capabilities.
+Configured URL buttons have a separate `urlButton` descriptor that composes the
+existing current-owner resource control, without inventing Button schema.
+Rating uses the shared readonly `RatingInput`, including nullable empty labels;
+hosts can supply the actual glyph path/viewBox/unfilled color as admitted data.
+People use the shared `PersonBadge` and preserve already admitted avatar
+`srcSet`, sizes, loading and decoding properties; import the existing
+`complete-collaborators.css` leaf styles. Field errors have an explicit variant,
+and lookup sequences can retain native wrapping/spacing without renderer slots.
 Numeric leaves explicitly carry the admitted localized empty label. Present
 cards require thumbnail enablement/location and fields-per-row settings, so a
 disabled thumbnail reserves no Gallery space and List can preserve either

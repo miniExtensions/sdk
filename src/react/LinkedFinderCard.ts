@@ -46,6 +46,13 @@ import {
     type ControlledBarcodeFieldProps,
 } from './ControlledBarcodeField.js';
 import { ButtonField, type ButtonFieldProps } from './ButtonField.js';
+import { RatingInput } from './RatingInput.js';
+import { PersonBadge } from './PersonBadge.js';
+import type { CollaboratorImageSource } from './CompleteCollaboratorField.js';
+import {
+    CreatedTimeResource,
+    type CreatedTimeResourceProps,
+} from './CreatedTimeResource.js';
 
 type ReadonlyNumeric = CompleteLocalizedNumericRendererProps & {
     capability: { type: 'readonly' };
@@ -66,6 +73,7 @@ export type LinkedFinderPill = {
 /** Exhaustive admitted presentation. Schema/config never select a leaf or grant an action. */
 export type LinkedFinderCardLeaf =
     | { readonly kind: 'literal'; readonly text: string }
+    | { readonly kind: 'error'; readonly message: string }
     | {
           readonly kind: 'text';
           readonly display: CompleteReadOnlyTextFieldProps;
@@ -107,6 +115,13 @@ export type LinkedFinderCardLeaf =
           >;
       }
     | { readonly kind: 'button'; readonly accepted: ButtonFieldProps }
+    | {
+          readonly kind: 'urlButton';
+          readonly display: Pick<
+              CreatedTimeResourceProps,
+              'href' | 'owner' | 'identity' | 'inert' | 'buttonLabel' | 'labels'
+          >;
+      }
     | { readonly kind: 'pills'; readonly items: readonly LinkedFinderPill[] }
     | { readonly kind: 'linkedPills'; readonly labels: readonly string[] }
     | {
@@ -114,15 +129,23 @@ export type LinkedFinderCardLeaf =
           readonly items: readonly {
               readonly label: string;
               readonly avatar?: LinkedFinderImage;
+              /** Resolved by the actual host optimizer/allow-list before projection. */
+              readonly avatarSource?: CollaboratorImageSource;
           }[];
       }
     | {
           readonly kind: 'rating';
-          readonly value: number;
+          readonly value: number | null;
           readonly max: number;
           readonly icon: 'star' | 'heart' | 'thumbsUp' | 'flag' | 'dot';
           readonly color: string;
           readonly label: string;
+          readonly emptyLabel?: string;
+          readonly glyph?: {
+              readonly path: string;
+              readonly viewBox: string;
+              readonly unfilledColor: string;
+          };
       }
     | {
           readonly kind: 'attachmentImages';
@@ -133,6 +156,7 @@ export type LinkedFinderCardLeaf =
     | {
           readonly kind: 'sequence';
           readonly leaves: readonly LinkedFinderCardLeaf[];
+          readonly layout?: 'wrap';
       };
 
 export type LinkedFinderCardField = {
@@ -186,29 +210,40 @@ function Rating({
         dot: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z',
     };
     return h(
-        'span',
+        'div',
         {
             className: 'mx-sdk-finder-rating',
             role: 'img',
             'aria-label': leaf.label,
         },
-        Array.from(
-            { length: Math.max(0, Math.min(100, Math.floor(leaf.max))) },
-            (_, index) =>
+        h(RatingInput, {
+            value: leaf.value,
+            max: Math.max(0, Math.min(100, Math.floor(leaf.max))),
+            onChange: noop,
+            disabled: true,
+            grid: true,
+            gridSummaryClassName: 'mx-sdk-finder-sr-only',
+            iconsClassName: 'mx-sdk-finder-rating-icons',
+            empty: leaf.emptyLabel ?? '',
+            renderIcon: ({ filled }) =>
                 h(
                     'svg',
                     {
-                        key: index,
-                        viewBox: '0 0 24 24',
+                        viewBox: leaf.glyph?.viewBox ?? '0 0 24 24',
                         'aria-hidden': true,
                         style: {
-                            color: index < leaf.value ? leaf.color : '#d1d5db',
+                            color: filled
+                                ? leaf.color
+                                : (leaf.glyph?.unfilledColor ?? '#d1d5db'),
                         },
                         fill: 'currentColor',
                     },
-                    h('path', { d: paths[leaf.icon] })
-                )
-        )
+                    h('path', {
+                        fillRule: 'evenodd',
+                        d: leaf.glyph?.path ?? paths[leaf.icon],
+                    })
+                ),
+        })
     );
 }
 
@@ -222,6 +257,12 @@ export function LinkedFinderRichLeaf({
     switch (leaf.kind) {
         case 'literal':
             return h('span', { className: 'mx-sdk-finder-literal' }, leaf.text);
+        case 'error':
+            return h(
+                'span',
+                { role: 'alert', className: 'mx-sdk-finder-field-error' },
+                leaf.message
+            );
         case 'text':
             return h(CompleteReadOnlyTextField, leaf.display);
         case 'html':
@@ -287,6 +328,8 @@ export function LinkedFinderRichLeaf({
             });
         case 'button':
             return h(ButtonField, leaf.accepted);
+        case 'urlButton':
+            return h(CreatedTimeResource, { ...leaf.display, mode: 'button' });
         case 'pills':
             return h(
                 'span',
@@ -324,22 +367,30 @@ export function LinkedFinderRichLeaf({
             );
         case 'people':
             return h(
-                'span',
-                { className: 'mx-sdk-finder-pills' },
-                leaf.items.map((item, index) =>
-                    h(
-                        'span',
-                        { key: index, className: 'mx-sdk-finder-person' },
-                        item.avatar
+                'ul',
+                { className: 'mx-sdk-collaborator-badges' },
+                leaf.items.map((item, index) => {
+                    const source =
+                        item.avatarSource ??
+                        (item.avatar ? { src: item.avatar.url } : null);
+                    return h(PersonBadge, {
+                        key: index,
+                        label: item.label,
+                        className: 'mx-sdk-collaborator-badge',
+                        avatarClassName: 'mx-sdk-collaborator-badge-avatar',
+                        bodyClassName: 'mx-sdk-collaborator-badge-body',
+                        labelClassName: 'mx-sdk-collaborator-name',
+                        avatar: source
                             ? h('img', {
-                                  src: item.avatar.url,
+                                  ...source,
                                   alt: '',
-                                  className: 'mx-sdk-finder-avatar',
+                                  width: 32,
+                                  height: 32,
+                                  className: 'mx-sdk-collaborator-avatar',
                               })
-                            : null,
-                        item.label
-                    )
-                )
+                            : undefined,
+                    });
+                })
             );
         case 'rating':
             return h(Rating, { leaf });
@@ -361,6 +412,21 @@ export function LinkedFinderRichLeaf({
                   ? h('span', null, leaf.emptyLabel)
                   : h('span');
         case 'sequence':
+            if (leaf.layout === 'wrap')
+                return h(
+                    'div',
+                    { className: 'mx-sdk-finder-sequence' },
+                    leaf.leaves.map((child, index) =>
+                        h(
+                            'div',
+                            {
+                                key: index,
+                                className: 'mx-sdk-finder-sequence-item',
+                            },
+                            h(LinkedFinderRichLeaf, { leaf: child })
+                        )
+                    )
+                );
             return h(
                 Fragment,
                 null,

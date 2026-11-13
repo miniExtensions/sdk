@@ -1,3 +1,7 @@
+.mx-sdk-calendar,
+.mx-sdk-calendar * {
+    box-sizing: border-box;
+}
 .mx-sdk-calendar {
     color: var(--mx-sdk-calendar-text, #111827);
     font: inherit;

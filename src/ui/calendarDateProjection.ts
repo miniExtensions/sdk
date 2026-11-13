@@ -6,7 +6,9 @@ import {
 } from './dateInputCompatibility.js';
 
 /** Match native one-level returned-result metadata; never evaluate a formula. */
-export const getCalendarFieldResultConfig = (field: RuntimeAirtableField) =>
+export const getCalendarFieldResultConfig = (
+    field: RuntimeAirtableField
+): RuntimeAirtableField['config'] =>
     field.config.options != null &&
     'result' in field.config.options &&
     field.config.options.result != null

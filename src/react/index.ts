@@ -3038,7 +3038,6 @@ export {
     type NativeLinkedFinderCascadeDescriptor,
     type NativeLinkedFinderCascadeLabels,
 } from './NativeLinkedFinderCascade.js';
-export { LinkedFinderCard, LinkedFinderRichLeaf } from './LinkedFinderCard.js';
 export {
     CompleteLinkedFinder,
     CompleteLinkedFinderView,
@@ -3049,13 +3048,16 @@ export type {
     CompleteLinkedFinderCandidate,
     CompleteLinkedFinderViewProps,
 } from './CompleteLinkedFinder.js';
-export type {
-    LinkedFinderCardProjection,
-    LinkedFinderCardField,
-    LinkedFinderCardLeaf,
-    LinkedFinderPill,
-} from './LinkedFinderCard.js';
 
+export {
+    LinkedFinderCard,
+    LinkedFinderRichLeaf,
+    type LinkedFinderCardProjection,
+    type LinkedFinderCardField,
+    type LinkedFinderCardLeaf,
+    type LinkedFinderPill,
+} from './LinkedFinderCard.js';
+export { Kanban, type KanbanProps, type KanbanCard } from './Kanban.js';
 export {
     AttachmentPreview,
     type AttachmentPreviewProps,

@@ -70,9 +70,14 @@ async function fixture(t: TestContext) {
             configurable: true,
             writable: true,
         });
+    const progressListeners = new Set<() => void>();
+    const notifyProgress = () => {
+        for (const listener of progressListeners) listener();
+    };
     const assets: unknown[] = [];
     t.mock.method(URL, 'createObjectURL', (blob: unknown) => {
         assets.push(blob);
+        notifyProgress();
         return `blob:controlled-${assets.length}`;
     });
     const { createRoot } = await import('react-dom/client');
@@ -85,11 +90,38 @@ async function fixture(t: TestContext) {
     window.document.body.append(host);
     root = createRoot(host as unknown as HTMLElement);
     const render = (node: ReactNode) => act(async () => root?.render(node));
-    const ready = async (text: string) => {
-        for (let i = 0; i < 100 && !host.textContent.includes(text); i++)
-            await act(async () => {
-                await new Promise(setImmediate);
+    // FileReader and the real ZIP decoder cross timer/I/O turns. A fixed
+    // number of setImmediate turns can expire before either advances. Await
+    // actual DOM/asset/diagnostic progress with a finite wall-clock deadline;
+    // callers retain their original exact assertions after this wait.
+    const waitUntil = async (ready: () => boolean) => {
+        if (ready()) return;
+        await act(async () => {
+            await new Promise<void>((resolve) => {
+                const observer = new window.MutationObserver(check);
+                const deadline = setTimeout(finish, 5_000);
+                function finish() {
+                    clearTimeout(deadline);
+                    observer.disconnect();
+                    progressListeners.delete(check);
+                    resolve();
+                }
+                function check() {
+                    if (ready()) finish();
+                }
+                observer.observe(host, {
+                    childList: true,
+                    subtree: true,
+                    characterData: true,
+                    attributes: true,
+                });
+                progressListeners.add(check);
+                check();
             });
+        });
+    };
+    const ready = async (text: string) => {
+        await waitUntil(() => host.textContent.includes(text));
         assert.ok(host.textContent.includes(text), host.innerHTML);
     };
     const response = (name: string) =>
@@ -101,6 +133,8 @@ async function fixture(t: TestContext) {
         host,
         render,
         ready,
+        waitUntil,
+        notifyProgress,
         response,
         assets,
         submits: () => submits,
@@ -235,10 +269,7 @@ it('renders actual controlled DOCX text, embedded image and font with the unmock
     );
     await f.render(h(AttachmentPreview, { attachment: source('B') }));
     await f.ready('Controlled attachment B');
-    for (let i = 0; i < 100 && f.assets.length < 2; i++)
-        await act(async () => {
-            await new Promise(setImmediate);
-        });
+    await f.waitUntil(() => f.assets.length >= 2);
     assert.equal(f.assets.length, 2);
     assert.match(f.host.querySelector('img')?.src ?? '', /^blob:controlled-/);
     assert.match(f.host.textContent, /@font-face/);
@@ -284,7 +315,9 @@ it('retires delayed A across A-B-A without overwriting the fresh actual Word ren
 
 it('contains active actual parser failure and suppresses retired transport rejection', async (t) => {
     const f = await fixture(t);
-    const diagnostics = t.mock.method(console, 'error', () => {});
+    const diagnostics = t.mock.method(console, 'error', () => {
+        queueMicrotask(f.notifyProgress);
+    });
     const retired = deferred<Response>();
     let calls = 0;
     t.mock.method(globalThis, 'fetch', async () =>
@@ -296,10 +329,7 @@ it('contains active actual parser failure and suppresses retired transport rejec
     );
     await f.render(h(AttachmentPreview, { attachment: source('A') }));
     await f.render(h(AttachmentPreview, { attachment: source('B') }));
-    for (let i = 0; i < 100 && diagnostics.mock.callCount() === 0; i++)
-        await act(async () => {
-            await new Promise(setImmediate);
-        });
+    await f.waitUntil(() => diagnostics.mock.callCount() > 0);
     assert.equal(diagnostics.mock.callCount(), 1);
     await act(async () => retired.reject(new Error('retired transport')));
     assert.equal(diagnostics.mock.callCount(), 1);

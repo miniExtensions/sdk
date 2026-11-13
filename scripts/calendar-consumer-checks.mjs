@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
     mkdirSync,
@@ -88,23 +89,39 @@ async function server(directory, format) {
 
 async function installed(directory, format, happyDomModulePath) {
     const consumer = createRequire(join(directory, 'package.json'));
-    assert.equal(
-        consumer('calendar-react-aria/package.json').version,
-        '3.53.0'
+    const calendarEntry = consumer
+        .resolve('@miniextensions/sdk/react/calendar')
+        .replace('/cjs/', `/${format}/`);
+    const calendarDirectory = dirname(dirname(calendarEntry));
+    const vendor = JSON.parse(
+        readFileSync(join(calendarDirectory, 'calendar-vendor.json'), 'utf8')
     );
-    assert.equal(consumer('react-aria/package.json').version, '3.53.1');
-    assert.equal(consumer('react-stately/package.json').version, '3.51.0');
-    const datePackage = JSON.parse(
-        readFileSync(
-            join(
-                dirname(dirname(consumer.resolve('@internationalized/date'))),
-                'package.json'
-            ),
-            'utf8'
+    const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+    assert.equal(
+        sha256(readFileSync(join(calendarDirectory, 'CalendarMonthGrid.js'))),
+        vendor.sha256
+    );
+    assert.equal(
+        sha256(readFileSync(join(calendarDirectory, 'calendar.LICENSES.txt'))),
+        vendor.licensesSha256
+    );
+    for (const [name, version] of [
+        ['react-aria', '3.53.0'],
+        ['react-stately', '3.51.0'],
+        ['@internationalized/date', '3.12.4'],
+    ])
+        assert.equal(
+            vendor.packages.find((value) => value.name === name)?.version,
+            version
+        );
+    assert(
+        vendor.packages.every(
+            (value) => !['react', 'react-dom'].includes(value.name)
         )
     );
-    assert.equal(datePackage.name, '@internationalized/date');
-    assert.equal(datePackage.version, '3.12.4');
+    assert.throws(() => consumer.resolve('calendar-react-aria'), {
+        code: 'MODULE_NOT_FOUND',
+    });
     const policy = await load(consumer, 'ui', format);
     const field = {
         id: 'date',

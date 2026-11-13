@@ -17,9 +17,6 @@ importers:
       '@emotion/unitless':
         specifier: 0.7.5
         version: 0.7.5
-      '@internationalized/date':
-        specifier: 3.12.4
-        version: 3.12.4
       '@trpc/client':
         specifier: 11.0.0-rc.382
         version: 11.0.0-rc.382(@trpc/server@11.0.0-rc.382)
@@ -29,9 +26,6 @@ importers:
       '@zxing/library':
         specifier: 0.20.0
         version: 0.20.0
-      calendar-react-aria:
-        specifier: npm:react-aria@3.53.0
-        version: react-aria@3.53.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       chart.js:
         specifier: 4.4.2
         version: 4.4.2
@@ -131,15 +125,9 @@ importers:
       punycode:
         specifier: 2.3.1
         version: 2.3.1
-      react-aria:
-        specifier: 3.53.1
-        version: 3.53.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-is:
         specifier: 16.13.1
         version: 16.13.1
-      react-stately:
-        specifier: 3.51.0
-        version: 3.51.0(react@18.3.1)
       refractor:
         specifier: 3.6.0
         version: 3.6.0
@@ -168,6 +156,9 @@ importers:
       '@headlessui/react':
         specifier: 2.2.9
         version: 2.2.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@internationalized/date':
+        specifier: 3.12.4
+        version: 3.12.4
       '@radix-ui/react-popover':
         specifier: 1.1.14
         version: 1.1.14(@types/react-dom@18.3.1)(@types/react@18.3.12)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -195,6 +186,9 @@ importers:
       c8:
         specifier: 11.0.0
         version: 11.0.0
+      calendar-react-aria:
+        specifier: npm:react-aria@3.53.0
+        version: react-aria@3.53.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       esbuild:
         specifier: 0.25.10
         version: 0.25.10
@@ -219,12 +213,18 @@ importers:
       react:
         specifier: 18.3.1
         version: 18.3.1
+      react-aria:
+        specifier: 3.53.1
+        version: 3.53.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-chartjs-2:
         specifier: 5.3.1
         version: 5.3.1(chart.js@4.4.2)(react@18.3.1)
       react-dom:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
+      react-stately:
+        specifier: 3.51.0
+        version: 3.51.0(react@18.3.1)
       typescript:
         specifier: 5.9.3
         version: 5.9.3

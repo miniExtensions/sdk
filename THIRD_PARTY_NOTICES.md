@@ -1286,9 +1286,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## Adobe React Spectrum Calendar dependencies
 
-react-aria 3.53.0, react-stately 3.51.0, and @internationalized/date 3.12.4
-are distributed as normal dependencies under Apache-2.0. The following license
-is retained from their installed distributions.
+The Calendar build contains the selected react-aria 3.53.0, react-stately 3.51.0
+and @internationalized/date 3.12.4 closure. React and React DOM remain external
+optional peers. The following Apache-2.0 license is retained from the selected
+distributions; the emitted Calendar license aggregate retains complete original
+notices for every bundled dependency.
 
                                  Apache License
                            Version 2.0, January 2004

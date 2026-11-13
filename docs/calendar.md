@@ -12,8 +12,10 @@ ReactDOM, which would change earlier DOM feature detection for unrelated fields.
 `CalendarMonthGrid` uses react-aria 3.53.0, react-stately 3.51.0 and
 @internationalized/date 3.12.4 together. Its optional locale provider localizes
 dates and weekdays; labels supply localized navigation and event wording.
-Calendar imports the exact 3.53.0 distribution through the `calendar-react-aria`
-npm alias. The existing collaborator/scanner closure retains its separately
+The Calendar build imports the exact 3.53.0 distribution through the
+`calendar-react-aria` npm alias and bundles the selected hooks/date closure.
+React and React DOM remain external optional peers, so a core-only SDK install
+does not install React. The existing collaborator/scanner closure retains its separately
 guarded react-aria 3.53.1 distribution. Do not relax that closure's version or
 license guard to deduplicate these distinct consumers.
 The source references the standard ES2023 Intl declarations required by that

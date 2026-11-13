@@ -1,0 +1,161 @@
+{
+    "schemaVersion": 1,
+    "upstream": {
+        "name": "Calendar native-compatible dependency graph",
+        "versions": {
+            "react-aria": "3.53.0",
+            "react-stately": "3.51.0",
+            "@internationalized/date": "3.12.4"
+        },
+        "aliases": {
+            "react-aria": "calendar-react-aria"
+        },
+        "adaptation": "Bundle only the compiled CalendarMonthGrid dependency closure into ESM/CommonJS. React and React DOM stay external optional SDK peers. Bare CommonJS React peer calls in ESM use explicit namespace facades; no global require or Node polyfill. Upstream code and licenses are unmodified; each bundled input and output hash is recorded."
+    },
+    "rootEntrySha256": {
+        "react-aria": {
+            "dist/exports/index.mjs": "fdc73655cefdb742fb11ec6e4d042cc2ce3c3d51f196a6466915316160f94f0a",
+            "dist/exports/index.cjs": "3c522bfca79ba54b8c9e8cb322c8c1eb110b965bf1afc9bb2d67c811b595bbdf",
+            "dist/exports/useCalendar.mjs": "521500aaca4a1c2c519f9b8d1a99350c46fb6867ebd5e1d1d6c31f1856eb84ac",
+            "dist/exports/useCalendar.cjs": "71ab437eef4bdd02afb62645b654e583fe87b639d199490bf13dcf623c788d67",
+            "dist/exports/useButton.mjs": "274ae9c7cb7c691c54b3d2c296b8d1a3fadf0e481565def82d284adfa04fb9e0",
+            "dist/exports/useButton.cjs": "430174ee0b5ec9f35a860f403e1e9ba9c30014d5c7624b3da9e9d2ad1a65ded3",
+            "dist/exports/useFocusRing.mjs": "9e3f46d680c2492b2a26f70fc5cf977697707b56335f848d19460cac6102f68c",
+            "dist/exports/useFocusRing.cjs": "374659a515f6388fabdbd41ba30e019aa284605d9fc09f21d33ef9d8942198db",
+            "dist/exports/mergeProps.mjs": "a9c391f6748f9469c0eb68e86bd2413d2f2224d0404271433bba0f1e84020155",
+            "dist/exports/mergeProps.cjs": "b468622de8abcf876c42ba3a2a1043866efa7a246490a3a411a52e2025ef8646",
+            "dist/exports/I18nProvider.mjs": "20dd4caf3f0261d1f6c87e88a96209f2369d8211ccd3d9576e592d765e056148",
+            "dist/exports/I18nProvider.cjs": "2df25f8d50fcf78c1fe33c938817560b874cd28a2e97c42ca29d620baa8c3602",
+            "dist/private/calendar/useCalendarCell.mjs": "2032354cc237c40f24489939753fd5f7d1c9928297b85d1cd3586c560b5037ba",
+            "dist/private/calendar/useCalendarCell.cjs": "c532aa7d8fece75f4479006f3e5610296d42d2dfc812c972ea052e7851a4a16e",
+            "dist/private/calendar/useCalendarGrid.mjs": "0c512768b1b88f0db76b9df6e8bcf629fe07069d164f38f6f2bd620ec1b6d67a",
+            "dist/private/calendar/useCalendarGrid.cjs": "0ce93e19a3851f3fb0806345b79e0905063271e43fe7227655067735ae3faa9b",
+            "dist/private/i18n/I18nProvider.mjs": "d280532a19497c5b241376d8a4d8be98d9b9b5e1dff58cac6c415ec2b54ab784",
+            "dist/private/i18n/I18nProvider.cjs": "af18eb76424bd644271c36e5d01b1a90dc74a35a89eed118cb68cf87087b22fe"
+        },
+        "react-stately": {
+            "dist/exports/index.mjs": "e2327fb945111258413c24385fd24aa0e1824343d18da22a995a5255cdd1956e",
+            "dist/exports/index.cjs": "b1755272cf0ec81e12056aab8a45c334dc6f5639d2e015a2cf73ac6afe070956",
+            "dist/exports/useCalendarState.mjs": "c3220b2479bcbb9eb8a13d5b9b5cf9937c1bf6ff04e895336026b03d1da3bfd0",
+            "dist/exports/useCalendarState.cjs": "18a29e92f7085af788f0108c4b80e64c0273c556dc2d57ec4c0edfb79213b91a"
+        },
+        "@internationalized/date": {
+            "dist/index.mjs": "ab2b1b2a3b0976495b43e0f26b2e5484b3f284c63bfdbaf22d2234daff79146d",
+            "dist/index.cjs": "f969d73f49f199950e8dca8b5d5572ea3fd6de544b22bf8f283fa9ac1191990f"
+        }
+    },
+    "allowedPackages": {
+        "react-aria": {
+            "version": "3.53.0",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "7dfe6526888bac51759c99f9a51262ba2711a8c12a067f2181609dd9a4066b84"
+            },
+            "integrity": "sha512-xnr61tc2ZZ0MBPn52AiUSnO89Q2zwvBFFghipxuRM5H5n4cfPt3D0rB6OQoKCwNyD/ozm9BTFoNainzafd/RkQ==",
+            "archiveUrl": "https://registry.npmjs.org/react-aria/-/react-aria-3.53.0.tgz",
+            "sourceUrl": "https://github.com/adobe/react-spectrum"
+        },
+        "react-stately": {
+            "version": "3.51.0",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "7dfe6526888bac51759c99f9a51262ba2711a8c12a067f2181609dd9a4066b84"
+            },
+            "integrity": "sha512-YJcmkAXu2XOQP97hO/qz/cC3qv9kni3oVhwBlxWr358BHePJUpY15XwL3YSRMKxYt4EkslPqAz11JRirMfANGw==",
+            "archiveUrl": "https://registry.npmjs.org/react-stately/-/react-stately-3.51.0.tgz",
+            "sourceUrl": "https://github.com/adobe/react-spectrum"
+        },
+        "@internationalized/date": {
+            "version": "3.12.4",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "7dfe6526888bac51759c99f9a51262ba2711a8c12a067f2181609dd9a4066b84"
+            },
+            "integrity": "sha512-M1dEn4c1U1HsSlaVR8upZtSqvXrTkHDfv18H01uCSJyjVLDxnBR38v/fMxecmlwXKR4i9HeZcmgQAPE6A+aGJQ==",
+            "archiveUrl": "https://registry.npmjs.org/@internationalized/date/-/date-3.12.4.tgz",
+            "sourceUrl": "https://github.com/adobe/react-spectrum/tree/main/packages/@internationalized/date"
+        },
+        "@internationalized/number": {
+            "version": "3.6.9",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "7dfe6526888bac51759c99f9a51262ba2711a8c12a067f2181609dd9a4066b84"
+            },
+            "integrity": "sha512-GgWy2caO/+hV9sT/oCTWGHvbjmJMPT9kkXzoKRLnkEq7adghhR7UprhvY9sXrKfrp3NcDfhF6QQHXR1KfQbB8g==",
+            "archiveUrl": "https://registry.npmjs.org/@internationalized/number/-/number-3.6.9.tgz",
+            "sourceUrl": "https://github.com/adobe/react-spectrum"
+        },
+        "@internationalized/string": {
+            "version": "3.2.10",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "7dfe6526888bac51759c99f9a51262ba2711a8c12a067f2181609dd9a4066b84"
+            },
+            "integrity": "sha512-PDx6//vHSpRnHfxqMqto11zQvhsaU74O3mKv2F/0eicGZcl9NLjQmGlbHz/LsJh5tLKp4A4L7ZVTzN1/MmMTvA==",
+            "archiveUrl": "https://registry.npmjs.org/@internationalized/string/-/string-3.2.10.tgz",
+            "sourceUrl": "https://github.com/adobe/react-spectrum"
+        },
+        "@react-types/shared": {
+            "version": "3.37.0",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "7dfe6526888bac51759c99f9a51262ba2711a8c12a067f2181609dd9a4066b84"
+            },
+            "integrity": "sha512-VNlZuifu4tHdxWPfHvoMfKsHA9kVTCGkduv5vKVTdinm8wHFJNhyVB5RzIMiRFj0q3RKoCbP68u2zaoBSiFueg==",
+            "archiveUrl": "https://registry.npmjs.org/@react-types/shared/-/shared-3.37.0.tgz",
+            "sourceUrl": "https://github.com/adobe/react-spectrum"
+        },
+        "@swc/helpers": {
+            "version": "0.5.24",
+            "license": "Apache-2.0",
+            "licenseFiles": {
+                "LICENSE": "d96eba1f1881334d50ffc144276dfa98e147a415e7c591ecdfcb81680361dc91"
+            },
+            "integrity": "sha512-6tcXo4kA8HgGO7AVmawB57RYi/piBPYVHVcO6dXjX+SZw8GoHmi262sp4v2Ha2kNP9Cx84qei27yT+fjS1lxgg==",
+            "archiveUrl": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.24.tgz",
+            "sourceUrl": "https://github.com/swc-project/swc.git"
+        },
+        "aria-hidden": {
+            "version": "1.2.6",
+            "license": "MIT",
+            "licenseFiles": {
+                "LICENSE": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9"
+            },
+            "integrity": "sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==",
+            "archiveUrl": "https://registry.npmjs.org/aria-hidden/-/aria-hidden-1.2.6.tgz",
+            "sourceUrl": "https://github.com/theKashey/aria-hidden.git"
+        },
+        "clsx": {
+            "version": "2.1.1",
+            "license": "MIT",
+            "licenseFiles": {
+                "license": "9a9edad7baae52622bddf3c15b2ef8a33d2c89f2d25408ad13e8a7481c6b0c97"
+            },
+            "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
+            "archiveUrl": "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz",
+            "sourceUrl": "lukeed/clsx"
+        },
+        "use-sync-external-store": {
+            "version": "1.7.0",
+            "license": "MIT",
+            "licenseFiles": {
+                "LICENSE": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+            },
+            "integrity": "sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==",
+            "archiveUrl": "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.7.0.tgz",
+            "sourceUrl": "https://github.com/react/react.git"
+        },
+        "tslib": {
+            "version": "2.9.1",
+            "license": "0BSD",
+            "licenseFiles": {
+                "LICENSE.txt": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
+                "CopyrightNotice.txt": "da16ddb65f8ca390998fb99223d0112498b56b45784d00afd77ff8ce1ac4de8b"
+            },
+            "integrity": "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==",
+            "archiveUrl": "https://registry.npmjs.org/tslib/-/tslib-2.9.1.tgz",
+            "sourceUrl": "https://github.com/Microsoft/tslib.git"
+        }
+    },
+    "licensesSha256": "cfe545eec3a85f1bea8297d4b0f6b64f321e907bfbbbb153fc05792fa0288433"
+}

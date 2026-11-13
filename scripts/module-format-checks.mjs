@@ -213,6 +213,7 @@ export function assertModuleFormats(root) {
                 './react/complete-portal-chart.css',
                 './react/complete-collaborators.css',
                 './react/date.css',
+                './react/calendar.css',
                 './react/complete-date.css',
                 './react/datetime.css',
                 './react/duration.css',
@@ -250,6 +251,7 @@ export function assertModuleFormats(root) {
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
                 subpath === './react/date' ||
+                subpath === './react/calendar' ||
                 subpath === './customer-chat/react' ||
                 subpath === './customer-chat/intercom'
         );

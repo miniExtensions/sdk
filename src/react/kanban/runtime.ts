@@ -34,4 +34,3 @@ export {
     type SortingStrategy,
 } from '@dnd-kit/sortable';
 export { CSS } from '@dnd-kit/utilities';
-export { useStateWithDeps } from 'use-state-with-deps';

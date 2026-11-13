@@ -16,7 +16,8 @@ import {
     LinkedFinderCard,
     type LinkedFinderCardProjection,
 } from './LinkedFinderCard.js';
-import { MultipleContainers, type KanbanItems } from './kanban/Board.js';
+import type { KanbanItems } from './kanban/Board.js';
+import { KanbanBoard } from './kanban/BoardLoader.js';
 import { useStateWithDeps } from './kanban/projectionState.js';
 
 export type KanbanCard = Readonly<{
@@ -162,7 +163,7 @@ function KanbanSurface<OriginalRecord, LoggedInRecord>(
                 .join(' '),
             'aria-label': props.label,
         },
-        h(MultipleContainers, {
+        h(KanbanBoard, {
             items,
             setItems,
             isCurrent: props.isCurrent,

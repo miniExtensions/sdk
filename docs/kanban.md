@@ -64,8 +64,10 @@ live race. Backend category validation and native source authority are unchanged
 
 ## Presentation lifecycle
 
-The overlay target mounts only after the client commits, so cold SSR and initial
-hydration require no `document`. Overlay typography and explicit ThemeBoundary
+Cold SSR and initial hydration render the complete column/card frame without
+loading DnD or ReactDOM. After a client commit, the private DnD frame replaces
+that static presentation; no category gesture is admitted before it is ready.
+The overlay target also mounts only after the client commits. Overlay typography and explicit ThemeBoundary
 palette tokens are carried to the detached wrapper using the shared theme
 portal contract. Arbitrary ancestor-only CSS is not discovered or copied.
 Cursor claims compose across overlays and restore the prior cursor only while

@@ -32,7 +32,7 @@ export async function bundleKanban(root = process.cwd()) {
     const upstream = json(join(root, 'vendor/kanban-dnd/UPSTREAM.json'));
     const receipts = [];
     for (const format of ['esm', 'cjs']) {
-        for (const entry of ['runtime']) {
+        for (const entry of ['runtime', 'projectionState']) {
             const path = join(root, `dist/${format}/react/kanban/${entry}.js`);
             const facade = (name) =>
                 `export * from ${JSON.stringify(name)};\nimport * as peer from ${JSON.stringify(name)};\nexport default peer;\n`;
@@ -141,14 +141,16 @@ export async function bundleKanban(root = process.cwd()) {
                     sha256: hash(readFileSync(actual)),
                 });
             }
-            assert(packages.has('use-state-with-deps'));
-            for (const name of [
-                '@dnd-kit/core',
-                '@dnd-kit/sortable',
-                '@dnd-kit/utilities',
-                '@dnd-kit/accessibility',
-            ])
-                assert(packages.has(name));
+            if (entry === 'projectionState')
+                assert(packages.has('use-state-with-deps'));
+            if (entry === 'runtime')
+                for (const name of [
+                    '@dnd-kit/core',
+                    '@dnd-kit/sortable',
+                    '@dnd-kit/utilities',
+                    '@dnd-kit/accessibility',
+                ])
+                    assert(packages.has(name));
             for (const output of Object.values(result.metafile.outputs))
                 assert(
                     output.imports.every(

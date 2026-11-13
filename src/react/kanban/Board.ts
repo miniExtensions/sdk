@@ -116,7 +116,7 @@ const findColumnById = (
 ): KanbanColumn | undefined => items.find((column) => column.id === id);
 const isColumnId = (items: KanbanItems, id: UniqueIdentifier): boolean =>
     findColumnById(items, id) != null;
-interface Props {
+export interface KanbanBoardProps {
     adjustScale?: boolean;
     cancelDrop?: CancelDrop;
     columns?: number;
@@ -172,7 +172,7 @@ export function MultipleContainers({
     isCurrent,
     modalOpen = false,
     overlayClassName,
-}: Props) {
+}: KanbanBoardProps): React.ReactElement {
     const contextId = useId();
     const live = useRef(true);
     useEffect(() => {
@@ -592,7 +592,7 @@ interface SortableItemProps {
     index: number;
     handle: boolean;
     disabled?: boolean;
-    style: NonNullable<Props['getItemStyles']>;
+    style: NonNullable<KanbanBoardProps['getItemStyles']>;
     getIndex(id: UniqueIdentifier): number;
     renderItem: RenderItemFunc;
     wrapperStyle({ index }: { index: number }): React.CSSProperties;

@@ -81,6 +81,7 @@ const errors=[],recoverable=[];const oldError=console.error;console.error=(...ar
 try{
  const container=window.document.createElement('div');window.document.body.append(container);container.innerHTML=markup;const{hydrateRoot}=await import('react-dom/client');
  await act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>recoverable.push(error.name)});});
+ await act(async()=>{const deadline=Date.now()+5000;while(!container.querySelector('[data-kanban-ready="true"]')){if(Date.now()>deadline)assert.fail('Real Kanban sensor frame did not become ready');await new Promise(resolve=>setTimeout(resolve,5));}});
  const button=[...container.querySelectorAll('button')].find(button=>button.getAttribute('aria-label')==='Open a');assert(button);assert.equal(button.type,'button');await act(async()=>button.click());assert.equal(opens,1);
  const unlink=[...container.querySelectorAll('button')].find(button=>button.getAttribute('aria-label')==='Unlink a');assert(unlink);await act(async()=>unlink.click());assert.equal(unlinks,1);
  props={...props,cards:props.cards.map(card=>({...card,projection:{status:'unavailable',label:'Current unavailable'}}))};await act(async()=>root.render(element()));assert(container.textContent.includes('Current unavailable'));assert.equal(mutations,0);
@@ -386,6 +387,9 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         output.push(result);
         await page.goto(origin + '/kanban-' + format + '.html');
         await page.waitForFunction(() => Boolean(window.__kanbanProbe));
+        await page
+            .locator('section [data-kanban-ready="true"]')
+            .waitFor({ state: 'attached' });
         const state = () =>
             page.evaluate(() => window.__kanbanProbe.snapshot());
         const replace = (patch) =>
@@ -393,7 +397,12 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 (patch) => window.__kanbanProbe.replace(patch),
                 patch
             );
-        const reset = () => page.evaluate(() => window.__kanbanProbe.reset());
+        const reset = async () => {
+            await page.evaluate(() => window.__kanbanProbe.reset());
+            await page
+                .locator('section [data-kanban-ready="true"]')
+                .waitFor({ state: 'attached' });
+        };
         const keyboardReady = (id) =>
             page.waitForFunction(
                 (id) =>
@@ -452,6 +461,9 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             result.groups.push(name);
         };
         const startMouse = async (id) => {
+            await page
+                .locator('section [data-kanban-ready="true"]')
+                .waitFor({ state: 'attached' });
             await source(id).scrollIntoViewIfNeeded();
             const box = await source(id).boundingBox();
             assert(box);

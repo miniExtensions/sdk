@@ -1,2 +1,2 @@
-// Preserve native synchronous ref-backed state replacement and updater timing.
-export { useStateWithDeps } from './runtime.js';
+// Exact native hook, bundled separately without initializing DnD/ReactDOM.
+export { useStateWithDeps } from 'use-state-with-deps';

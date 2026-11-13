@@ -111,6 +111,8 @@ async function fixture(t: TestContext) {
             else Reflect.deleteProperty(globalThis, key);
         }
     });
+    // The real private sensor frame loads only after this fixture installs its DOM.
+    await import('../src/react/kanban/Board.js');
     return f;
 }
 it('composes ordered columns, actual rich card content and explicitly admitted action chrome', async (t) => {

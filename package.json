@@ -175,7 +175,8 @@
                 "types": "./dist/cjs/customer-chat/intercom.d.ts",
                 "default": "./dist/cjs/customer-chat/intercom.js"
             }
-        }
+        },
+        "./react/csv-export.css": "./dist/esm/react/csv-export.css"
     },
     "files": [
         "dist/esm",
@@ -226,7 +227,8 @@
         "examples/react-form-header/dev.mjs",
         "examples/react-form-header/tsconfig.json",
         "docs/signature.md",
-        "docs/customer-chat.md"
+        "docs/customer-chat.md",
+        "docs/csv-export.md"
     ],
     "engines": {
         "node": ">=22"
@@ -258,6 +260,7 @@
         "@zxing/library": "0.20.0",
         "chart.js": "4.4.2",
         "copy-to-clipboard": "3.3.3",
+        "csv-stringify": "6.4.6",
         "dompurify": "2.4.7",
         "email-validator": "2.0.4",
         "fuse.js": "6.6.2",
@@ -338,6 +341,7 @@
         "./dist/esm/react/html/htmlPurifier.js": "./dist/esm/react/html/htmlPurifier.browser.js",
         "./dist/cjs/react/html/htmlPurifier.js": "./dist/cjs/react/html/htmlPurifier.browser.js",
         "./src/react/html/htmlPurifier.js": "./src/react/html/htmlPurifier.browser.ts",
-        "./src/react/html/htmlPurifier.ts": "./src/react/html/htmlPurifier.browser.ts"
+        "./src/react/html/htmlPurifier.ts": "./src/react/html/htmlPurifier.browser.ts",
+        "csv-stringify": "csv-stringify/browser/esm"
     }
 }

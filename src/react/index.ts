@@ -3002,11 +3002,15 @@ export {
     type NativeLinkedFinderCascadeLabels,
 } from './NativeLinkedFinderCascade.js';
 export { LinkedFinderCard, LinkedFinderRichLeaf } from './LinkedFinderCard.js';
-export { CompleteLinkedFinder } from './CompleteLinkedFinder.js';
+export {
+    CompleteLinkedFinder,
+    CompleteLinkedFinderView,
+} from './CompleteLinkedFinder.js';
 export type {
     CompleteLinkedFinderProps,
     CompleteLinkedFinderLabels,
     CompleteLinkedFinderCandidate,
+    CompleteLinkedFinderViewProps,
 } from './CompleteLinkedFinder.js';
 export type {
     LinkedFinderCardProjection,

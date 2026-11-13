@@ -4,9 +4,13 @@ import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
     CompleteLinkedFinder,
+    CompleteLinkedFinderView,
     type CompleteLinkedFinderProps,
+    type CompleteLinkedFinderViewProps,
 } from '../src/react/index.js';
-import type {
+import {
+    createCompleteLinkedFinderCoordinator,
+    type CompleteLinkedFinderCoordinator,
     CompleteLinkedFinderHost,
     CompleteLinkedFinderPage,
 } from '../src/ui/index.js';
@@ -19,7 +23,11 @@ const labels = {
     unavailable: 'No disponible',
     loadMore: 'Más',
 };
-async function fixture(t: TestContext, strict = false) {
+async function fixture(
+    t: TestContext,
+    strict = false,
+    options: { external?: boolean; preview?: boolean } = {}
+) {
     const f = await scannerDom(t);
     let owner = {};
     const canonical = ['hidden', 'A', 'A'];
@@ -31,6 +39,7 @@ async function fixture(t: TestContext, strict = false) {
     }[] = [];
     const toggles: string[] = [];
     const published: CompleteLinkedFinderPage<Row>[] = [];
+    let closes = 0;
     const observers: {
         callback: IntersectionObserverCallback;
         options?: IntersectionObserverInit;
@@ -78,7 +87,7 @@ async function fixture(t: TestContext, strict = false) {
         },
         captureRead(expected, request) {
             return {
-                mode: 'public',
+                mode: options.preview ? 'authenticated-preview' : 'public',
                 isCurrent: () => expected === owner,
                 query() {
                     const result = deferred<CompleteLinkedFinderPage<Row>>();
@@ -108,10 +117,19 @@ async function fixture(t: TestContext, strict = false) {
             notify();
             return { status: 'admitted' };
         },
-        close: () => ({ status: 'admitted' }),
+        close: () => {
+            closes++;
+            return { status: 'admitted' };
+        },
         errorMessage: () => 'Query unavailable',
     };
-    let props: CompleteLinkedFinderProps<Row, string, object> = {
+    const external = options.external
+        ? createCompleteLinkedFinderCoordinator(host, { testing: true })
+        : null;
+    t.after(() => external?.destroy());
+    let props: CompleteLinkedFinderViewProps<Row, string, object> = {
+        coordinator: external,
+        queryOnMount: !options.external,
         host,
         filter: '',
         queryKey: 'context',
@@ -148,7 +166,9 @@ async function fixture(t: TestContext, strict = false) {
     const render = async (patch: Partial<typeof props> = {}) => {
         props = { ...props, ...patch };
         await f.render(
-            h(CompleteLinkedFinder<Row, string, object>, props),
+            options.external
+                ? h(CompleteLinkedFinderView<Row, string, object>, props)
+                : h(CompleteLinkedFinder<Row, string, object>, props),
             strict
         );
     };
@@ -175,6 +195,12 @@ async function fixture(t: TestContext, strict = false) {
         reads,
         toggles,
         published,
+        coordinator: external as CompleteLinkedFinderCoordinator<
+            Row,
+            string,
+            object
+        > | null,
+        closeCount: () => closes,
         observers,
         render,
         settle,
@@ -200,6 +226,73 @@ test('finder SSR exposes localized search text without client/transport allocati
     );
     assert.match(html, /aria-label="Buscar"/);
     assert.match(html, /value="Initial scan"/);
+});
+
+test('external view reuses native prefetch, preserves one coordinator through StrictMode and leaves its lifetime with the host', async (t) => {
+    const f = await fixture(t, true, { external: true });
+    await f.settle();
+    assert.equal(f.reads.length, 0);
+    let pending!: ReturnType<NonNullable<typeof f.coordinator>['queryNow']>;
+    await act(async () => {
+        pending = f.coordinator!.queryNow({
+            filter: 'native-prefetch',
+            resetOffset: true,
+        });
+    });
+    await f.resolve(['A', 'B']);
+    assert.equal((await pending).status, 'accepted');
+    await f.render({ queryKey: 'native-open' });
+    assert.equal(f.reads.length, 1);
+    assert.equal(f.host.querySelectorAll('[role="option"]').length, 2);
+    await f.render({ closeAfterToggle: true });
+    await act(async () =>
+        (
+            f.host.querySelectorAll(
+                '[role="option"]'
+            )[1] as unknown as HTMLElement
+        ).click()
+    );
+    assert.deepEqual(f.toggles, ['B']);
+    assert.equal(f.closeCount(), 1);
+    await f.unmount();
+    assert.notEqual(f.coordinator!.getSnapshot().owner, null);
+    assert.equal(f.coordinator!.model.getState().options.length, 2);
+});
+
+test('owner-bound authenticated preview renders native cards and paging without a candidate model or loading presentation', async (t) => {
+    const f = await fixture(t, false, { external: true, preview: true });
+    const coordinator = f.coordinator!;
+    let pending!: ReturnType<typeof coordinator.queryNow>;
+    await act(async () => {
+        pending = coordinator.queryNow({
+            filter: 'preview',
+            resetOffset: true,
+        });
+    });
+    assert.equal(f.host.querySelector('[role="status"]'), null);
+    await f.resolve(['A', 'B'], 'native-next');
+    const result = await pending;
+    assert.equal(result.status, 'accepted');
+    if (result.status !== 'accepted')
+        throw new Error('Expected preview receipt');
+    assert.equal(result.preview, true);
+    await f.render({
+        previewPresentation: {
+            expectedOwner: result.owner,
+            candidateIds: ['A', 'private', 'B', 'A'],
+            offset: 'native-next',
+            error: null,
+        },
+    });
+    assert.equal(f.host.querySelectorAll('[role="option"]').length, 2);
+    assert.equal(f.host.querySelector('[role="status"]'), null);
+    assert.deepEqual(coordinator.model.getState().options, []);
+    assert.deepEqual(coordinator.getSnapshot().rawRecords, []);
+    assert.equal(f.observers.length, 1);
+    await act(async () => f.replace());
+    assert.equal(f.host.querySelectorAll('[role="option"]').length, 0);
+    assert.equal(f.observers[0].disconnected, true);
+    assert.equal(f.reads.length, 1);
 });
 
 test('real multi-combobox shows admitted rows, preserves hidden canonical duplicates and toggles one duplicate ID', async (t) => {

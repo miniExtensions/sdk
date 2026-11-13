@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
+import { Window } from 'happy-dom';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
@@ -28,6 +29,10 @@ async function fixture(
     strict = false
 ) {
     const f = await scannerDom(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     const owner = {};
     let current = owner;
     const requests: {

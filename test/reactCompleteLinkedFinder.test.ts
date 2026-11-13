@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
+import { Window } from 'happy-dom';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
@@ -29,6 +30,10 @@ async function fixture(
     options: { external?: boolean; preview?: boolean } = {}
 ) {
     const f = await scannerDom(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     let owner = {};
     const canonical = ['hidden', 'A', 'A'];
     const listeners = new Set<() => void>();

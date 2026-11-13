@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Window } from 'happy-dom';
 import { createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
@@ -100,6 +101,10 @@ test('Gallery slices six before failures, separates ID/source, retains selected 
 
 test('actual List traverses all supplied original URLs, ignores equivalent references and resets on vector changes', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(h(LinkedFinderCard, { projection: present() }));
     for (let index = 0; index < images.length; index++) {
         const image = f.container.querySelector('img')!;
@@ -134,6 +139,10 @@ test('actual List traverses all supplied original URLs, ignores equivalent refer
 
 test('actual Gallery preserves identity reorder/removal, rejects stale source errors and never backfills seventh', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderCard, { projection: present({ layout: 'gallery' }) })
     );
@@ -196,6 +205,10 @@ test('actual Gallery preserves identity reorder/removal, rejects stale source er
 
 test('List position survives hiding/side/layout changes; carousel failures share Gallery/Kanban lifetime only', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(h(LinkedFinderCard, { projection: present() }));
     const old = f.container.querySelector('img')!;
     await f.imageEvent(old, 'error');
@@ -306,6 +319,10 @@ test('card loading/unavailable do not recover any present data; primary stays es
 
 test('rich leaves reuse sanitizing HTML, literal labels, duration, phone, checkbox and readonly barcode without actions', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     await f.render(
         h(LinkedFinderRichLeaf, {
             leaf: {
@@ -370,6 +387,10 @@ test('rich leaves reuse sanitizing HTML, literal labels, duration, phone, checkb
 
 test('admitted thumbnail enablement/location and detail grid survive List/Gallery transitions', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert(
+        f.window instanceof Window,
+        'Use the real owned happy-dom fixture realm'
+    );
     const fields = [
         {
             key: 'detail',

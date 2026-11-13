@@ -1,3 +1,4 @@
+import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
@@ -2265,6 +2266,13 @@ try {
                 });
             }
         }
+        report.formSubmit = {};
+        await checkFormSubmitBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formSubmit,
+            output,
+        });
         report.formTracking = {};
         await checkFormTrackingBrowser({
             browser,

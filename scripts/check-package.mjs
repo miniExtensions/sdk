@@ -1,4 +1,8 @@
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
+import {
+    checkCanonicalFormConsumer,
+    canonicalFormTypedConsumer,
+} from './canonical-form-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
@@ -1751,6 +1755,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
                 ordinaryValidationTypedConsumer +
+                canonicalFormTypedConsumer +
                 borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
@@ -3746,6 +3751,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         854
+    );
+    assert.equal(
+        await checkCanonicalFormConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
     );
     assert.equal(
         await checkNativeFormProgressConsumer({

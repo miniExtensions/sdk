@@ -212,6 +212,7 @@
         "examples/react-complete-linked-finder/dev.mjs",
         "examples/react-complete-linked-finder/tsconfig.json",
         "docs/forms.md",
+        "docs/canonical-form-frame.md",
         "docs/saved-progress.md",
         "docs/field-bindings.md",
         "docs/count.md",

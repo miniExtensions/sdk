@@ -24,6 +24,10 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+For an application-owned immutable state kernel with native host admission,
+validation and allocation, see [canonical Form frames](canonical-form-frame.md).
+It is an additive SDK-first API; native integration remains a separate milestone.
+
 ## Native-compatible progress storage
 
 `createNativeFormProgressStorage` preserves the native browser-local revision

@@ -224,6 +224,7 @@ for (const format of ['esm', 'cjs']) {
         'form-completion',
         'form-header',
         'form-validation-summary',
+        'form-progress',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

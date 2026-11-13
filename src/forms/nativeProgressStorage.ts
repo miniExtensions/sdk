@@ -96,7 +96,7 @@ const isEnvelope = (value: unknown): value is Envelope => {
     );
 };
 
-/** Native storage-event parsing only; the host owns its conflict latch. */
+/** Pure storage-event parsing; useNativeFormProgress owns the conflict latch. */
 export const parseNativeFormProgressValue = (
     storedValue: string | null
 ): NativeFormProgressSnapshot | undefined => {
@@ -121,7 +121,8 @@ export const parseNativeFormProgressValue = (
  * Compatibility extraction of native Form progress storage at monorepo
  * 25f5efdefaf482dea07af05d54fbeea8e3d92635. Rich JSON values and the native
  * revision protocol are preserved, including operation without Web Locks.
- * The host retains writer-ID generation, conflict state, Restore and Save.
+ * The host retains writer-ID generation, Restore and Save. The optional
+ * useNativeFormProgress hook owns the portable writer/conflict lifecycle.
  * Construction performs no storage I/O and installs no event listener.
  */
 export const createNativeFormProgressStorage = (

@@ -308,6 +308,14 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export {
+    SingleLineTextField,
+    type SingleLineTextFieldProps,
+    type ControlledSingleLineTextFieldProps,
+    type ReadOnlySingleLineTextFieldProps,
+    type SingleLineTextAddressOptions,
+    type SingleLineTextEditOwner,
+} from './SingleLineTextField.js';
 import {
     ControlledExternalSyncSourceField,
     type ControlledExternalSyncSourceFieldProps,
@@ -3018,3 +3026,10 @@ export type {
     LinkedFinderCardLeaf,
     LinkedFinderPill,
 } from './LinkedFinderCard.js';
+
+export {
+    AttachmentPreview,
+    type AttachmentPreviewProps,
+    type AttachmentPreviewLabels,
+} from './AttachmentPreview.js';
+export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';

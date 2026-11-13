@@ -382,3 +382,9 @@ export {
     type CalendarDayActions,
     type CalendarRecordPickerActions,
 } from './calendarController.js';
+
+export {
+    classifyAttachmentPreview,
+    isAttachmentPreviewImage,
+    type AttachmentPreviewSource,
+} from './attachmentPreview.js';

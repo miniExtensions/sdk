@@ -173,6 +173,7 @@ for (const format of ['esm', 'cjs']) {
 
 for (const format of ['esm', 'cjs']) {
     for (const name of [
+        'signature',
         'theme',
         'button',
         'checkbox',

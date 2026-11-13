@@ -2789,3 +2789,25 @@ export {
     CompleteCheckboxField,
     type CompleteCheckboxFieldProps,
 } from './CompleteCheckboxField.js';
+
+export {
+    SignatureField,
+    type SignatureFieldProps,
+    type SignatureMessages,
+} from './SignatureField.js';
+export {
+    SignatureCanvas,
+    type SignatureCanvasHandle,
+    type SignatureCanvasProps,
+} from './SignatureCanvas.js';
+export {
+    SignatureStorageError,
+    type SignatureAuthority,
+    type SignatureMethod,
+    type SignatureReceiptState,
+    type SignatureReleaseResult,
+    type SignatureStorage,
+    type SignatureAppend,
+    type SignatureRecovery,
+    type TemporarySignature,
+} from './signatureReceipt.js';

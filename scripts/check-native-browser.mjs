@@ -45,6 +45,7 @@ import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
+import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -2306,6 +2307,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeVerification,
+            output,
+        });
+        report.imageAnnotation = {};
+        await checkImageAnnotationBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.imageAnnotation,
             output,
         });
         report.radioInput = {};

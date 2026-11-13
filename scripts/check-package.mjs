@@ -3,6 +3,7 @@ import {
     ordinaryValidationTypedConsumer,
 } from './ordinary-validation-consumer-checks.mjs';
 import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
+import { checkCustomerChatMatrix } from './customer-chat-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -592,6 +593,7 @@ try {
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
+                path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
@@ -630,6 +632,7 @@ try {
         'docs/testing.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
+        'docs/customer-chat.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/date/index.js',
@@ -2805,6 +2808,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const customerChatProof = checkCustomerChatMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(customerChatProof.versions.length, 2);
+    assert.equal(customerChatProof.cleanup, 'completed');
     const buttonProof = checkButtonReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

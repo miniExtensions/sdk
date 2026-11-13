@@ -597,6 +597,7 @@ try {
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
                 path === 'docs/csv-export.md' ||
+                path === 'docs/kanban.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||

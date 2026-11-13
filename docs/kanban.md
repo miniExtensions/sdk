@@ -8,7 +8,9 @@ ReactDOM remain optional peers for headless consumers.
 
 The host supplies an immutable `KanbanProjectionInput`, explicitly projected
 `KanbanCard` data and current named Open/Unlink actions. Card data never grants
-an action. `readOnly` controls category dragging; admitted card actions are
+an action. Every projected record ID needs an admitted card descriptor, including
+loading/unavailable states. Replace source and card data together; missing card
+data fails explicitly rather than fabricating a presentation. `readOnly` controls category dragging; admitted card actions are
 separate capabilities. `modalOpen` must reflect native all-session modal state.
 There is no native whole-card renderer, SDK record client, store or provider read.
 

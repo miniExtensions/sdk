@@ -162,7 +162,7 @@ export function checkKanbanReactMatrix({
             run(process.execPath, [
                 '--input-type=module',
                 '-e',
-                "import{createRequire}from'node:module';import assert from'node:assert/strict';const require=createRequire(import.meta.url),{buildSync}=require(process.argv[1]);for(const format of ['esm','cjs']){const source=format==='esm'?\"import{Kanban}from'@miniextensions/sdk/react';console.log(Kanban);\":\"console.log(require('@miniextensions/sdk/react').Kanban);\";const result=buildSync({stdin:{contents:source,resolveDir:process.cwd()},bundle:true,platform:'browser',format:'iife',write:false,metafile:true,logLevel:'silent'});const inputs=Object.keys(result.metafile.inputs);assert(inputs.some(path=>path.includes('@dnd-kit/core')));assert(inputs.some(path=>path.endsWith('/react/Kanban.js')));for(const output of Object.values(result.metafile.outputs))assert(output.imports.every(item=>!item.external));}",
+                "import{createRequire}from'node:module';import assert from'node:assert/strict';const require=createRequire(import.meta.url),{buildSync}=require(process.argv[1]);for(const format of ['esm','cjs']){const source=format==='esm'?\"import{Kanban}from'@miniextensions/sdk/react';console.log(Kanban);\":\"console.log(require('@miniextensions/sdk/react').Kanban);\";const result=buildSync({stdin:{contents:source,resolveDir:process.cwd()},bundle:true,platform:'browser',format:'iife',write:false,metafile:true,logLevel:'silent'});const inputs=Object.keys(result.metafile.inputs);assert(inputs.some(path=>path.endsWith('/kanban/runtime.js')));assert(inputs.some(path=>path.endsWith('/react/Kanban.js')));for(const output of Object.values(result.metafile.outputs))assert(output.imports.every(item=>!item.external));}",
                 esbuildModulePath,
             ]);
             const require = createRequire(join(directory, 'package.json'));
@@ -286,7 +286,7 @@ export async function prepareKanbanBrowserFixtures({
             }
             return item;
         });
-        assert(inputs.some((item) => item.path.includes('@dnd-kit/core')));
+        assert(inputs.some((item) => item.path.endsWith('/kanban/runtime.js')));
         const outputs = [];
         for (const output of bundle.outputFiles) {
             const name = '/' + output.path.split('/').pop();
@@ -355,13 +355,11 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             );
         const overlay = () => page.locator('.mx-sdk-kanban-item-overlay');
         const column = (label) =>
-            page
-                .locator('section.mx-sdk-kanban .mx-sdk-kanban-column')
-                .filter({
-                    has: page
-                        .locator('.mx-sdk-kanban-column-label')
-                        .filter({ hasText: new RegExp('^' + label + '$') }),
-                });
+            page.locator('section.mx-sdk-kanban .mx-sdk-kanban-column').filter({
+                has: page
+                    .locator('.mx-sdk-kanban-column-label')
+                    .filter({ hasText: new RegExp('^' + label + '$') }),
+            });
         const order = (label) =>
             column(label)
                 .locator('[data-kanban-record]')
@@ -456,12 +454,14 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         });
         await previous.focus();
         await page.keyboard.press('Enter');
-        await page.waitForFunction(() =>
-            document
-                .querySelector(
-                    'section [data-kanban-record="a"] .mx-sdk-finder-carousel-track'
-                )
-                ?.style.transform.includes('translateX(-0%')
+        await page.waitForFunction(
+            () =>
+                document
+                    .querySelector(
+                        'section [data-kanban-record="a"] .mx-sdk-finder-carousel-track'
+                    )
+                    ?.querySelector('[data-visible="true"]')
+                    ?.getAttribute('alt') === 'Image one.svg'
         );
         await arrow.focus();
         await page.keyboard.press('Space');

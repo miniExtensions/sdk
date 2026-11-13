@@ -6,7 +6,7 @@ import {
     KeyboardCode,
     DroppableContainer,
     KeyboardCoordinateGetter,
-} from '@dnd-kit/core';
+} from './runtime.js';
 
 const directions: string[] = [
     KeyboardCode.Down,

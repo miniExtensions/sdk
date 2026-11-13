@@ -1,3 +1,4 @@
+import { bundleKanban } from './kanban-bundle.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
 import { copyDocumentAssets } from './document-preview-assets.mjs';
 import { bundleDocumentPDF } from './document-pdf-bundle.mjs';
@@ -111,6 +112,7 @@ await bundlePortalChart();
 await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
+await bundleKanban();
 if (process.argv.includes('--capture-date-popover'))
     await bundleDatePopover(process.cwd(), true);
 await bundleDatePopover();

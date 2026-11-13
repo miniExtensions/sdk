@@ -21,7 +21,7 @@ import {
     MeasuringStrategy,
     KeyboardCoordinateGetter,
     defaultDropAnimationSideEffects,
-} from '@dnd-kit/core';
+} from './runtime.js';
 import {
     AnimateLayoutChanges,
     SortableContext,
@@ -31,8 +31,8 @@ import {
     verticalListSortingStrategy,
     SortingStrategy,
     horizontalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+} from './runtime.js';
+import { CSS } from './runtime.js';
 import { coordinateGetter as multipleContainersCoordinateGetter } from './keyboardCoordinates.js';
 import { Container, ContainerProps } from './Container.js';
 import { Item } from './Item.js';

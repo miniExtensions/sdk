@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { JSDOM } from 'jsdom';
-import { act, createElement as h, type ReactNode } from 'react';
+import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Root } from 'react-dom/client';
 import {
@@ -368,3 +368,58 @@ it('keeps video controls and disposes only the retained video on teardown', asyn
     assert.deepEqual(events, ['pause', 'src', 'load']);
     assert.equal(f.submits(), 0);
 });
+
+for (const strict of [false, true]) {
+    for (const [kind, extension] of [
+        ['video', 'mp4'],
+        ['audio', 'mp3'],
+    ] as const) {
+        it(`retains ${kind} source on ${strict ? 'StrictMode replay' : 'ordinary mount'} and subsequent updates`, async (t) => {
+            const f = await fixture(t);
+            t.mock.method(globalThis, 'fetch', async () =>
+                assert.fail('Non-Word preview fetched')
+            );
+            const render = (url: string, key = 'first') => {
+                const preview = h(AttachmentPreview, {
+                    key,
+                    attachment: { url, type: `${kind}/${extension}` },
+                });
+                return f.render(
+                    strict ? h(StrictMode, null, preview) : preview
+                );
+            };
+            await render(`/a.${extension}`);
+            const media = f.host.querySelector(kind);
+            assert.ok(media);
+            assert.equal(media.controls, true);
+            assert.equal(media.getAttribute('src'), `/a.${extension}`);
+            const events: string[] = [];
+            t.mock.method(media, 'pause', () => events.push('pause'));
+            t.mock.method(media, 'load', () => events.push('load'));
+            await render(`/a.${extension}`);
+            assert.equal(f.host.querySelector(kind), media);
+            assert.equal(media.getAttribute('src'), `/a.${extension}`);
+            await render(`/b.${extension}`);
+            assert.equal(f.host.querySelector(kind), media);
+            assert.equal(media.getAttribute('src'), `/b.${extension}`);
+            assert.deepEqual(events, []);
+            await render(`/c.${extension}`, 'successor');
+            const successor = f.host.querySelector(kind);
+            assert.ok(successor);
+            assert.notEqual(successor, media);
+            assert.equal(successor.getAttribute('src'), `/c.${extension}`);
+            if (kind === 'video') {
+                assert.deepEqual(events, ['pause', 'load']);
+                assert.equal(media.getAttribute('src'), null);
+                const cleanup: string[] = [];
+                t.mock.method(successor, 'pause', () => cleanup.push('pause'));
+                t.mock.method(successor, 'load', () => cleanup.push('load'));
+                await f.render(null);
+                assert.deepEqual(cleanup, ['pause', 'load']);
+                assert.equal(successor.getAttribute('src'), null);
+            } else await f.render(null);
+            assert.equal(f.host.querySelector(kind), null);
+            assert.equal(f.submits(), 0);
+        });
+    }
+}

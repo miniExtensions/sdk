@@ -6502,7 +6502,9 @@ preview from an explicitly supplied `attachment: { url, filename?, type?,
 thumbnails?: { full?: { url } } }`. Import
 `@miniextensions/sdk/react/attachment-preview.css` once in the consuming app.
 It owns image/HEIC, native audio/video controls, PDF frames, Word rendering and
-unsupported guidance. Optional `labels.attachments` and
+unsupported guidance. Video retains its source through React StrictMode effect
+replay; ordinary rerenders/source changes preserve the element, and retirement
+still pauses, clears the source and releases the resource. Optional `labels.attachments` and
 `labels.previewNotAvailable` accept localized strings and default to English.
 The exported `AttachmentPreviewSource`, `AttachmentPreviewProps` and
 `AttachmentPreviewLabels` describe these portable inputs. The reusable

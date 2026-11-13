@@ -143,6 +143,9 @@ export function createCompleteLinkedFinderCoordinator<
     let loadingMore = false;
     let rawRecords: readonly Row[] = [];
     let offset: string | null = null;
+    // Request metadata only. Preview can page without creating a candidate
+    // model, exposing raw records or emitting a loading transition.
+    let readOffset: string | null = null;
     let error: string | null = null;
     let latest: Ticket | null = null;
     let queued: ReturnType<typeof setTimeout> | null = null;
@@ -161,6 +164,7 @@ export function createCompleteLinkedFinderCoordinator<
         clearQueued();
         rawRecords = [];
         offset = null;
+        readOffset = null;
         phase = nextPhase;
         loadingMore = false;
         error = null;
@@ -295,7 +299,7 @@ export function createCompleteLinkedFinderCoordinator<
         try {
             const read = host.captureRead(expected, {
                 filter: request.filter,
-                offset: request.resetOffset ? null : offset,
+                offset: request.resetOffset ? null : readOffset,
             });
             if (intent !== intentSequence) return { status: 'retired' };
             if (!read) return { status: 'refused', reason: 'unavailable' };
@@ -306,7 +310,7 @@ export function createCompleteLinkedFinderCoordinator<
             const ticket = {
                 owner: expected,
                 read,
-                append: !request.resetOffset && offset !== null,
+                append: !request.resetOffset && readOffset !== null,
                 resetOffset: request.resetOffset,
                 published: false,
                 intent,
@@ -402,6 +406,9 @@ export function createCompleteLinkedFinderCoordinator<
                     : { status: 'retired' };
             }
             const preview = ticket.read.mode === 'authenticated-preview';
+            const pageOffset = page.offset;
+            if (!current(ticket)) return { status: 'retired' };
+            if (preview) readOffset = pageOffset;
             if (!preview) {
                 const next = ticket.append
                     ? [...rawRecords, ...page.records]
@@ -414,7 +421,8 @@ export function createCompleteLinkedFinderCoordinator<
                 }));
                 if (!current(ticket)) return { status: 'retired' };
                 rawRecords = next;
-                offset = page.offset;
+                offset = pageOffset;
+                readOffset = pageOffset;
                 phase = 'ready';
                 loadingMore = false;
                 error = null;

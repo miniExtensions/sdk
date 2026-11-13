@@ -30,6 +30,8 @@ Public nonreset reads retain the one-second allocation throttle. Authenticated
 preview uses the captured host transport/publication path directly and leaves
 the candidate model and loading presentation untouched. Unavailable preview
 must be refused by the host, without constructing a public-token transport.
+An admitted preview page advances only a private request cursor, allowing the
+next direct read to retain pagination without publishing a candidate model.
 
 Accepted raw occurrences preserve order and duplicates. A separate readonly
 `SelectionModel` deduplicates candidate identities with empty labels; it does
@@ -68,6 +70,14 @@ empty label; pagination keeps the rows and displays its own loading indicator.
 The observer uses the actual scrolling element and a `400px` root margin.
 Selection can be disabled while retaining searchable presentation. Scanner
 configuration composes the existing scanner hook and never grants selection.
+`CompleteLinkedFinderView` composes an existing committed coordinator without
+creating or destroying a second one. Set `queryOnMount={false}` when native
+prefetch/open owns that first read. Its optional owner-bound
+`previewPresentation` supplies independently admitted preview candidate IDs,
+cursor and error without creating model options or a loading transition.
+Search callbacks receive the manual or barcode source. `closeAfterToggle`
+implements the main Form's single-link preference only after toggle admission;
+close still uses the captured owner and its separate native fence.
 
 Cards have explicit `loading`, `unavailable` and `present` variants. The host
 chooses each exhaustive leaf variant after schema/config filtering, conversion,

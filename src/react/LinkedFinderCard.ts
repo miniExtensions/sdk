@@ -27,12 +27,11 @@ import {
     CompleteLocalizedNumericField,
     type CompleteLocalizedNumericRendererProps,
 } from './CompleteLocalizedNumericField.js';
-import {
-    DateField,
-    DateTimeField,
-    type ControlledDateFieldProps,
-    type ControlledDateTimeFieldProps,
+import type {
+    ControlledDateFieldProps,
+    ControlledDateTimeFieldProps,
 } from './date/DateField.js';
+import { formatDateInputValue } from '../ui/dateInputCompatibility.js';
 import {
     CompleteReadOnlyPhoneNumberField,
     type CompleteReadOnlyPhoneNumberFieldProps,
@@ -251,9 +250,21 @@ export function LinkedFinderRichLeaf({
                 },
             });
         case 'date':
-            return h(DateField, { ...leaf.display, id, mode: 'readOnly' });
         case 'dateTime':
-            return h(DateTimeField, { ...leaf.display, id, mode: 'readOnly' });
+            // Use the same readonly presenter/formatter as /react/date without
+            // importing the interactive picker and initializing ReactDOM during
+            // a general-entry import before a browser/DOM has been installed.
+            return h(
+                'div',
+                { id },
+                h(CompleteReadOnlyTextField, {
+                    value: formatDateInputValue({
+                        airtableValue: leaf.display.value,
+                        airtableFieldConfig: leaf.display.airtableDateConfig,
+                    }),
+                    language: leaf.display.language,
+                })
+            );
         case 'phone':
             return h(CompleteReadOnlyPhoneNumberField, leaf.display);
         case 'duration':

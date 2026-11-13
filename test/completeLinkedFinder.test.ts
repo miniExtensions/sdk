@@ -306,6 +306,67 @@ test('unavailable preview has no transport or loading flash', async () => {
     f.coordinator.destroy();
 });
 
+test('authenticated preview retains only paging metadata, without candidate/model/loading publication', async () => {
+    const f = fixture();
+    f.configure({ preview: true });
+    let emissions = 0;
+    f.coordinator.subscribe(() => emissions++);
+    const first = f.coordinator.queryNow(request('preview'));
+    f.allocated[0].resolve(page(['first'], 'preview-next'));
+    assert.equal((await first).status, 'accepted');
+    const next = f.coordinator.queryNow(request('preview', false));
+    assert.equal(f.captures[1].offset, 'preview-next');
+    f.allocated[1].resolve(page(['second']));
+    assert.equal((await next).status, 'accepted');
+    assert.equal(emissions, 0);
+    assert.equal(f.coordinator.getSnapshot().offset, null);
+    assert.deepEqual(f.coordinator.getSnapshot().rawRecords, []);
+    assert.deepEqual(f.coordinator.model.getState().options, []);
+    f.coordinator.destroy();
+});
+
+test('failed public candidate projection does not advance the next request beyond its published candidate offset', async () => {
+    const f = fixture();
+    const first = f.coordinator.queryNow(request());
+    f.allocated[0].resolve(page(['first'], 'accepted-next'));
+    await first;
+    f.host.recordId = (row) => {
+        if (row.id === 'bad') throw new TypeError('Invalid admitted row');
+        return row.id;
+    };
+    const failed = f.coordinator.queryNow(request('bad'));
+    f.allocated[1].resolve(page(['bad'], 'unaccepted-next'));
+    assert.equal((await failed).status, 'failure');
+    const next = f.coordinator.queryNow(request('', false));
+    assert.equal(f.captures[2].offset, 'accepted-next');
+    f.allocated[2].resolve(page(['valid']));
+    assert.equal((await next).status, 'accepted');
+    f.coordinator.destroy();
+});
+
+for (const preview of [false, true])
+    test(`captured paging metadata cannot cross a reentrant post-publication owner replacement (preview=${preview})`, async () => {
+        const f = fixture();
+        f.configure({ preview });
+        let reads = 0;
+        const pending = f.coordinator.queryNow(request('retired'));
+        f.allocated[0].resolve({
+            records: page(['old']).records,
+            get offset() {
+                reads++;
+                f.replace();
+                return 'obsolete-cursor';
+            },
+        });
+        assert.equal((await pending).status, 'retired');
+        assert.equal(reads, 1);
+        const current = f.coordinator.queryNow(request('current', false));
+        assert.equal(f.captures[1].offset, null);
+        f.allocated[1].resolve(page(['current']));
+        assert.equal((await current).status, 'accepted');
+        f.coordinator.destroy();
+    });
+
 for (const boundary of [
     'before',
     'publication',

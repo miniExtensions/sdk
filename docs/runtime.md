@@ -6,6 +6,9 @@ client: your app renders the interface while the existing handlers enforce
 the Form/Portal's visitor, record, field, and action permissions. Public tRPC
 requests use the official `@trpc/client` HTTP link and its plain JSON protocol.
 
+See [publication and maker-preview guidance](../README.md#obtain-the-actual-runtime-configuration)
+before choosing a runtime integration path.
+
 For a complete browser application, start with the shipped
 [browser lifecycle guide](browser-lifecycle.md). It explains how to copy the
 packaged Form and Portal starter into your own project, install the exact

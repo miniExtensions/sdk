@@ -587,6 +587,7 @@ try {
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/complete-collaborators.md' ||
+                path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
                 path === 'docs/field-presentation.md' ||

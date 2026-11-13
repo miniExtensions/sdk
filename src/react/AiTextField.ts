@@ -8,9 +8,30 @@ import {
 import type { FieldRendererProps } from '../ui/rendererRegistry.js';
 import { useFieldBinding, type FieldProps } from './index.js';
 import { textConfiguration } from './TextField.js';
+import {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+} from './CompleteReadOnlyTextField.js';
 
 export type AiTextFieldOptions = { className?: string };
 export type AiTextFieldProps = FieldProps & AiTextFieldOptions;
+export type BindingAiTextFieldProps = AiTextFieldProps;
+
+/** The native host retains conversion, visibility and field-shell policy. */
+export type ControlledAiTextFieldProps = CompleteReadOnlyTextFieldProps & {
+    mode: 'controlled';
+    binding?: never;
+    render?: never;
+};
+type BoundAiTextComponentProps = AiTextFieldProps & {
+    [Key in Exclude<
+        keyof ControlledAiTextFieldProps,
+        keyof AiTextFieldProps
+    >]?: never;
+};
+type AiTextComponentProps =
+    | BoundAiTextComponentProps
+    | ControlledAiTextFieldProps;
 
 /** Validate the runtime native object without coercing or interpreting its state. */
 function suppliedText(readValue: () => unknown): string | null {
@@ -104,12 +125,28 @@ export function renderAiTextField(
     });
 }
 
+/** Complete controlled native display or the unchanged strict binding contract. */
+export function AiTextField(props: BoundAiTextComponentProps): ReactNode;
+export function AiTextField(props: ControlledAiTextFieldProps): ReactNode;
+export function AiTextField(props: AiTextComponentProps): ReactNode;
+export function AiTextField(props: AiTextComponentProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(CompleteReadOnlyTextField, {
+              value: props.value,
+              language: props.language,
+              textSize: props.textSize,
+              layout: props.layout,
+              className: props.className,
+          })
+        : createElement(BoundAiTextField, props);
+}
+
 /** Observe accepted owner snapshots without borrowing write or save actions. */
-export function AiTextField({
+function BoundAiTextField({
     binding,
     render,
     className,
-}: AiTextFieldProps): ReactNode {
+}: BoundAiTextComponentProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;

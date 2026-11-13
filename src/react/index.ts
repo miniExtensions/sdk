@@ -240,6 +240,8 @@ export {
     AiTextField,
     renderAiTextField,
     type AiTextFieldProps,
+    type BindingAiTextFieldProps,
+    type ControlledAiTextFieldProps,
     type AiTextFieldOptions,
 } from './AiTextField.js';
 export {

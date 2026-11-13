@@ -36,13 +36,19 @@ export async function checkExternalSyncSourceControlledBrowser({
     consumer,
     evidence,
     output,
+    field = 'externalSyncSource',
 }) {
+    assert(['externalSyncSource', 'aiText'].includes(field));
+    const component =
+        field === 'aiText' ? 'AiTextField' : 'ExternalSyncSourceField';
+    const prefix = field === 'aiText' ? 'ai-text' : 'external-source';
     const root = realpathSync(consumer);
     const installed = realpathSync(
         join(root, 'node_modules/@miniextensions/sdk')
     );
-    const directory = mkdtempSync(join(root, '.external-source-proof-'));
+    const directory = mkdtempSync(join(root, '.' + prefix + '-proof-'));
     let server, context;
+    evidence.field = field;
     evidence.results = [];
     evidence.inputs = {};
     evidence.pageErrors = [];
@@ -59,8 +65,8 @@ export async function checkExternalSyncSourceControlledBrowser({
         for (const format of ['esm', 'cjs']) {
             const imports =
                 format === 'esm'
-                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {ExternalSyncSourceField} from '@miniextensions/sdk/react';"
-                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {ExternalSyncSourceField}=require('@miniextensions/sdk/react');";
+                    ? `import React from 'react';import {createRoot} from 'react-dom/client';import {${component}} from '@miniextensions/sdk/react';`
+                    : `const React=require('react');const {createRoot}=require('react-dom/client');const {${component}}=require('@miniextensions/sdk/react');`;
             const source =
                 imports +
                 `
@@ -69,7 +75,7 @@ let rowClicks=0,submits=0;
 function App(){const [value,setValue]=useState('Native Ω '+location.origin+'/link-target');
 return h('form',{onSubmit:e=>{e.preventDefault();submits++;},style:{maxWidth:320}},
 h('button',{type:'button',onClick:()=>setValue(null)},'Empty source'),
-h('div',{onClick:()=>rowClicks++,'data-source':''},h(ExternalSyncSourceField,{mode:'controlled',value,language:'fr',textSize:'small',layout:'cell-fit-content'})),
+h('div',{onClick:()=>rowClicks++,'data-source':''},h(${component},{mode:'controlled',value,language:'fr',textSize:'small',layout:'cell-fit-content'})),
 h('button',{type:'button',onClick:()=>setValue('Replacement Ω plain source')},'Replace source'),
 h('label',null,'Adjacent draft',h('input',{defaultValue:'Keep draft'})),h('button',{type:'submit'},'Explicit Save'));}
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
@@ -94,7 +100,7 @@ window.sourceProof=()=>({react:React.version,rowClicks,submits});`;
             );
             assert(
                 inputs.some((path) =>
-                    path.endsWith('/react/ExternalSyncSourceField.js')
+                    path.endsWith('/react/' + component + '.js')
                 )
             );
             for (const input of inputs)
@@ -242,7 +248,7 @@ window.sourceProof=()=>({react:React.version,rowClicks,submits});`;
                 1
             );
             await page.screenshot({
-                path: join(output, 'external-source-' + format + '.png'),
+                path: join(output, prefix + '-' + format + '.png'),
                 fullPage: true,
             });
             evidence.results.push({
@@ -299,4 +305,11 @@ window.sourceProof=()=>({react:React.version,rowClicks,submits});`;
                 'External source proof cleanup failed'
             );
     }
+}
+
+export function checkAiTextControlledBrowser(options) {
+    return checkExternalSyncSourceControlledBrowser({
+        ...options,
+        field: 'aiText',
+    });
 }

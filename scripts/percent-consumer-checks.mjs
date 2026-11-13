@@ -9,12 +9,13 @@ export const percentReactTypedConsumer = `
 import type { ReactNode } from 'react';
 import {
     PercentField, NumberField, renderPercentField, AirtableForm, AirtableGrid, AirtableList,
-    type PercentFieldProps, type PercentFieldOptions, type NumberFieldProps, type NumberFieldOptions,
+    type PercentFieldProps, type ControlledPercentFieldProps, type PercentFieldOptions, type NumberFieldProps, type NumberFieldOptions,
 } from '@miniextensions/sdk/react';
 import type {
     FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope,
 } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/number.css';
+import '@miniextensions/sdk/react/localized-numeric.css';
 
 const options: PercentFieldOptions = { className: 'percent-consumer' };
 const numberOptions: NumberFieldOptions = options;
@@ -30,12 +31,26 @@ export function BoundPercent(props: PercentFieldProps) {
 export function PercentOverride(props: PercentFieldProps) {
     return <PercentField {...props} render={({ snapshot }) => <span>{snapshot.scalar?.input}</span>} />;
 }
+export function ControlledPercent(props: ControlledPercentFieldProps) {
+    return <PercentField {...props} />;
+}
 export function checkPercentKinds(percent: FieldRendererProps<'percent'>, number: FieldRendererProps<'number'>, currency: FieldRendererProps<'currency'>) {
+    <PercentField mode="controlled" field={percent} options={{ presentation: 'display', emptyLabel: 'No fraction' }} />;
+    // @ts-expect-error Controlled Percent cannot reinterpret physical Number metadata.
+    <PercentField mode="controlled" field={number} />;
+    // @ts-expect-error Controlled Percent cannot reinterpret physical Currency metadata.
+    <PercentField mode="controlled" field={currency} />;
     renderPercentField(percent);
     // @ts-expect-error A numeric slot is not the percent slot.
     renderPercentField(number);
     // @ts-expect-error Currency metadata does not authorize a percent slot.
     renderPercentField(currency);
+}
+export function mixedPercent(props: PercentFieldProps, percent: FieldRendererProps<'percent'>) {
+    // @ts-expect-error Binding and controlled ownership cannot be combined.
+    <PercentField mode="controlled" field={percent} binding={props.binding} />;
+    // @ts-expect-error The binding render callback is not a controlled numeric renderer.
+    <PercentField mode="controlled" field={percent} render={props.render} />;
 }
 export function Compositions({ form, portal }: { form: FormRenderScope; portal: PortalRenderScope }) {
     return <>
@@ -472,6 +487,61 @@ export async function checkPercentConsumer({
                 await act(async () => root.render(null));
                 assert.equal(scalar.getState().revision, finalRevision);
                 assert.equal(scalar.getState().retired, false);
+                assert.equal(requests, 0);
+                checks++;
+
+                // The new public controlled arm delegates the existing engine;
+                // it must not change the raw binding assertions above.
+                const writes = [];
+                let value = 0.75;
+                const controlled = () =>
+                    h(react.PercentField, {
+                        mode: 'controlled',
+                        field: ui.createRendererProps({
+                            ...props,
+                            field: {
+                                ...props.field,
+                                config: {
+                                    type: 'percent',
+                                    options: { precision: 2 },
+                                },
+                            },
+                            displayConfig: {
+                                numberSeparator: 'period-comma',
+                                showThousandsSeparator: true,
+                            },
+                            value,
+                            capability: {
+                                type: 'editable',
+                                setValue(next) {
+                                    value = next;
+                                    writes.push(next);
+                                    return { accepted: true };
+                                },
+                            },
+                        }),
+                        options: { input: { id: 'controlled-percent' } },
+                    });
+                await act(async () => root.render(controlled()));
+                assert.equal(input().value, '75,00');
+                assert.equal(input().id, 'controlled-percent');
+                assert.deepEqual(writes, []);
+                await act(async () => input().focus());
+                await edit('125,755');
+                assert.equal(value, 125.755 / 100);
+                assert.deepEqual(writes, [125.755 / 100]);
+                await act(async () => root.render(controlled()));
+                assert.equal(input().value, '125,755');
+                await edit('');
+                assert.equal(value, null);
+                assert.deepEqual(writes, [125.755 / 100, null]);
+                assert.equal(binding.getSnapshot().value, 0.7654321);
+                assert.equal(fields.field('number').getSnapshot().value, 7.125);
+                assert.equal(fields.field('currency').getSnapshot().value, 7.5);
+                assert.equal(
+                    fields.field('duration').getSnapshot().value,
+                    3723
+                );
                 assert.equal(requests, 0);
                 checks++;
             } finally {

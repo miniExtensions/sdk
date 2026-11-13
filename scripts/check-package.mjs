@@ -1,3 +1,4 @@
+import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
@@ -628,6 +629,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/saved-progress.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
@@ -2929,6 +2931,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const savedProgressProof = checkSavedProgressReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(savedProgressProof.versions.length, 2);
+    assert.equal(savedProgressProof.cleanup, 'completed');
     const customerChatProof = checkCustomerChatMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

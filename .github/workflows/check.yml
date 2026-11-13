@@ -125,6 +125,12 @@ jobs:
               env:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed saved-progress Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-saved-progress-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/saved-progress"
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
             - name: Retain native Chromium receipt and failure evidence
               if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

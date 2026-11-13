@@ -3265,3 +3265,11 @@ The CSS is independent of Tailwind and carries the native red error palette,
 scrolling/flex layout, zero corner radius, list spacing and underlined links.
 Native consumer validation and browser/manual parity must be verified at the
 final integration pin; SDK component tests alone do not verify FormLoaded.
+
+### Complete native-compatible saved progress
+
+Use [`useNativeFormProgress` and `FormProgressConflictAlert`](saved-progress.md)
+for the native revision/writer protocol, committed writer queue, retry and
+reload-required conflict presentation. The host retains its canonical unfiltered
+draft, Restore/load witness and Submit cleanup; this is separate from
+`createProgress` and its public token/value protocol.

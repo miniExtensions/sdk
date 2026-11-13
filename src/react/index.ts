@@ -3064,3 +3064,16 @@ export {
     type AttachmentPreviewLabels,
 } from './AttachmentPreview.js';
 export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
+
+export {
+    useNativeFormProgress,
+    type NativeFormProgressOptions,
+    type NativeFormProgressPorts,
+    type NativeFormProgressRead,
+    type NativeFormProgressStorageEvent,
+} from './useNativeFormProgress.js';
+export {
+    FormProgressConflictAlert,
+    formProgressConflictHeading,
+    formProgressConflictMessage,
+} from './FormProgressConflictAlert.js';

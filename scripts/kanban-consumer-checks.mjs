@@ -620,6 +620,18 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             1
         );
         assert.equal(await leaf('People').locator('img').count(), 1);
+        assert.equal(
+            await leaf('People')
+                .locator('.mx-sdk-collaborator-badges')
+                .evaluate((node) => getComputedStyle(node).display),
+            'flex'
+        );
+        assert.equal(
+            await leaf('People')
+                .locator('img')
+                .evaluate((node) => getComputedStyle(node).borderRadius),
+            '50%'
+        );
 
         const action = source('a').getByRole('button', {
             name: 'Rich action',

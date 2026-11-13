@@ -91,3 +91,16 @@ export type {
     CSVExportController,
     CSVExportFailureReason,
 } from './csvExport.js';
+
+export {
+    projectKanbanColumns,
+    getKanbanColumnAirtableValue,
+    createKanbanCategoryOperation,
+    uncategorizedKanbanColumnId,
+} from './kanban.js';
+export type {
+    KanbanColumn,
+    KanbanProjectionInput,
+    KanbanMutationResult,
+    KanbanCategoryInvocation,
+} from './kanban.js';

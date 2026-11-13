@@ -669,6 +669,7 @@ for (const name of [
     'button',
     'form-group',
     'csv-export',
+    'kanban',
     'checkbox',
     'text',
     'number',

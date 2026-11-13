@@ -1,4 +1,4 @@
-import { createElement as h, useId, useLayoutEffect, useEffect, useMemo, useRef, useState } from 'react';
+import { createElement as h, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
     createImageAnnotationSession,
     type ImageAnnotationAppend,
@@ -86,14 +86,18 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
     const [sourceKey, setSourceKey] = useState(0);
     const [source, setSource] = useState<ImageAnnotationSourceLease | null>(null);
     const [saving, setSaving] = useState(false);
+    const [pickerKey, setPickerKey] = useState(0);
     const [failure, setFailure] = useState<ImageAnnotationFailure | null>(null);
+    const disabled = props.disabled === true;
+    const readOnly = props.readOnly === true;
+    const eventSession = installed.current;
     const lifetime = useMemo(
         () => ({
             token: props.owner.token,
-            disabled: props.disabled === true,
-            readOnly: props.readOnly === true,
+            disabled,
+            readOnly,
         }),
-        [props.owner.token, props.disabled, props.readOnly]
+        [props.owner.token, disabled, readOnly]
     );
 
     useLayoutEffect(() => {
@@ -121,6 +125,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
             },
         });
         installed.current = session;
+        setPickerKey((key) => key + 1);
         sourceRef.current = null;
         lastRemote.current = null;
         setSource(null);
@@ -136,9 +141,9 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
         };
     }, [lifetime]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const session = installed.current;
-        if (!session) return;
+        if (!session || !session.isCurrent()) return;
         const request = props.remoteSource ?? null;
         if (!request) {
             // Parent clears its selection on normal close. The rendered upload
@@ -187,7 +192,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
     saving ? h('p', { role: 'status', 'aria-live': 'polite', className: 'mx-sdk-image-annotation-saving' }, labels.saving) : null,
     h('div', { className: 'mx-sdk-image-annotation-picker' },
         h('input', {
-            ref: input, id, type: 'file', accept: 'image/*',
+            key: pickerKey, ref: input, id, type: 'file', accept: 'image/*',
             name: props.name, form: props.form,
             disabled: lifetime.disabled || lifetime.readOnly || saving,
             'aria-label': props.ariaLabel ?? labels.selectImage,
@@ -197,7 +202,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
                 if (!file || !file.type.startsWith('image/')) return;
                 if (lifetime.disabled || lifetime.readOnly || saving) return;
                 const session = installed.current;
-                if (!session) return;
+                if (!session || session !== eventSession || !session.isCurrent()) return;
                 setFailure(null);
                 try {
                     const lease = session.beginSource({

@@ -18,6 +18,27 @@ export type ImageAnnotationEditorLabels = {
     actions?: Readonly<Record<string, string>>;
 };
 
+
+export type ImageAnnotationMarkerEvents = { render: { dataUrl: string }; close: unknown };
+
+/** Internal vendor shape/test seam, never accepted as a public field prop. */
+export interface ImageAnnotationMarkerArea {
+    settings: { displayMode: string };
+    availableMarkerTypes: unknown[];
+    renderAtNaturalSize: boolean;
+    renderImageType: string;
+    renderImageQuality: number;
+    targetRoot: HTMLElement;
+    styles: { classNamePrefixBase: string; classNamePrefix: string };
+    addEventListener<K extends keyof ImageAnnotationMarkerEvents>(type: K, listener: (event: ImageAnnotationMarkerEvents[K]) => void): void;
+    removeEventListener<K extends keyof ImageAnnotationMarkerEvents>(type: K, listener: (event: ImageAnnotationMarkerEvents[K]) => void): void;
+    show(): void;
+    close(): void;
+}
+export type ImageAnnotationMarkerModule = {
+    MarkerArea: new (image: HTMLImageElement) => ImageAnnotationMarkerArea;
+} & Record<ImageAnnotationTool, unknown>;
+
 /** Converts only the vendor's selected PNG output. No URL/network fetch is used. */
 export function annotationPngFromDataUrl(dataUrl: string): Blob {
     const prefix = 'data:image/png;base64,';
@@ -36,11 +57,11 @@ export async function openImageAnnotationMarkerEditor(input: {
     image: HTMLImageElement;
     lease: ImageAnnotationSourceLease;
     labels: ImageAnnotationEditorLabels;
-}) {
+}, loadVendor: () => Promise<ImageAnnotationMarkerModule> = () => import('markerjs2')) {
     const { image, lease, labels } = input;
     if (!lease.isCurrent()) return;
     try {
-        const markerjs2 = await import('markerjs2');
+        const markerjs2 = await loadVendor();
         if (!lease.isCurrent()) return;
         const area = new markerjs2.MarkerArea(image);
         area.settings.displayMode = 'popup';
@@ -63,16 +84,7 @@ export async function openImageAnnotationMarkerEditor(input: {
         const removeKeyboard = () => {
             for (const remove of keyboardListeners.splice(0)) remove();
         };
-        const dispose = () => {
-            if (closed) return;
-            closed = true;
-            try {
-                area.close();
-            } finally {
-                removeKeyboard();
-            }
-        };
-        area.addEventListener('render', (event) => {
+        const onRender = (event: { dataUrl: string }) => {
             if (!lease.isCurrent()) return;
             try {
                 const blob = annotationPngFromDataUrl(event.dataUrl);
@@ -80,12 +92,28 @@ export async function openImageAnnotationMarkerEditor(input: {
             } catch (error) {
                 lease.fail('render', error);
             }
-        });
-        area.addEventListener('close', () => {
-            closed = true;
+        };
+        const removeListeners = () => {
+            area.removeEventListener('render', onRender);
+            area.removeEventListener('close', onClose);
             removeKeyboard();
+        };
+        const onClose = () => {
+            closed = true;
+            removeListeners();
             lease.close();
-        });
+        };
+        const dispose = () => {
+            if (closed) return;
+            closed = true;
+            try {
+                area.close();
+            } finally {
+                removeListeners();
+            }
+        };
+        area.addEventListener('render', onRender);
+        area.addEventListener('close', onClose);
         if (!lease.installEditor(dispose)) {
             dispose();
             return;

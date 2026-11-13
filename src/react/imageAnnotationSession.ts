@@ -126,6 +126,7 @@ export function createImageAnnotationSession<Upload>(ports: {
             try {
                 retire(active);
             } catch (error) {
+                disposed = true;
                 if (source.ownedObjectUrl) ports.releaseObjectUrl(source.url);
                 ports.onFailure?.('editor', error);
                 return null;
@@ -151,7 +152,14 @@ export function createImageAnnotationSession<Upload>(ports: {
             state.closed = true;
             state.closeEditor = null;
             release(state);
-            if (notify) ports.onClose?.(state.token);
+            if (notify) {
+                try {
+                    ports.onClose?.(state.token);
+                } catch (error) {
+                    // Never interrupt the vendor's close/detach control flow.
+                    try { ports.onFailure?.('editor', error); } catch { /* observer contract is nonthrowing */ }
+                }
+            }
         };
 
         return {
@@ -214,6 +222,7 @@ export function createImageAnnotationSession<Upload>(ports: {
     };
 
     return {
+        isCurrent: () => !disposed && ownerIsCurrent(),
         beginSource,
         clearSource() {
             if (active) retire(active);

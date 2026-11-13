@@ -1557,6 +1557,7 @@ try {
             'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
             'scripts/calendar-browser-checks.mjs',
+            'scripts/calendar-complete-style-assets.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/external-sync-source-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',

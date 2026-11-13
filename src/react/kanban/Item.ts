@@ -55,9 +55,10 @@ export const Item = React.memo(
         const variables: React.CSSProperties &
             Record<string, string | number | undefined> = {
             ...wrapperStyle,
-            transition: [transition, wrapperStyle?.transition]
-                .filter(Boolean)
-                .join(', '),
+            transition:
+                [transition, wrapperStyle?.transition]
+                    .filter(Boolean)
+                    .join(', ') || undefined,
             '--translate-x': transform
                 ? `${Math.round(transform.x)}px`
                 : undefined,

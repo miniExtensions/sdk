@@ -15,14 +15,13 @@ separate capabilities. `modalOpen` must reflect native all-session modal state.
 There is no native whole-card renderer, SDK record client, store or provider read.
 
 The board delegates rich content to One's published `LinkedFinderCard` contract,
-including explicit rich leaves and its first-six image carousel. The card, image helper and CSS are sourced from commit
-`908f226748f0d2c0ed2fa6c7fd1c9af3617e85ba`. The card has one integration
-adaptation: its admitted readonly Date/DateTime subset uses the existing pure
-formatter and readonly SDK presenter, avoiding eager picker/ReactDOM loading.
-Parity checks compare that exact subset with the existing readonly date branch.
-The image helper, CSS and original card suite remain unchanged; the finder coordinator, cascade and
-native implementation remain with their existing owner. Their earlier source
-checks are not qualification of this composition.
+including explicit rich leaves and its first-six image carousel. The exact card,
+image helper and CSS are sourced from commit
+`11e6db5e0346adaa507fda9b62674fdfea9c52ea`. Its readonly date leaf uses the same
+formatter and readonly presenter as the Date facade without eagerly loading its
+interactive picker. Exact output comparisons cover the admitted readonly subset.
+The finder coordinator, cascade and native implementation remain with their
+existing owner. Earlier source checks do not qualify this composition.
 
 ## Projection and local state
 

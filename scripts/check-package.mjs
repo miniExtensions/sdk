@@ -559,6 +559,35 @@ function run(command, args, cwd = temporaryDirectory) {
 try {
     // check:package also works alone; never pack leftover build output.
     run(process.execPath, ['scripts/build.mjs'], process.cwd());
+    // Run One's cold-entry assertion on this fresh build, never leftover dist.
+    for (const format of ['esm', 'cjs']) {
+        const entry = new URL(
+            `../dist/${format}/react/index.js`,
+            import.meta.url
+        ).href;
+        run(
+            process.execPath,
+            [
+                '--input-type=module',
+                '-e',
+                `
+            import assert from 'node:assert/strict';
+            import { createRequire } from 'node:module';
+            import { fileURLToPath } from 'node:url';
+            const require = createRequire(import.meta.url);
+            assert.equal(typeof document, 'undefined');
+            ${format === 'esm' ? `await import(${JSON.stringify(entry)});` : `require(fileURLToPath(${JSON.stringify(entry)}));`}
+            const loaded = Object.keys(require.cache).filter(path => /[\\/]react-dom[\\/]/.test(path));
+            assert.deepEqual(loaded, [], 'General React import initialized a DOM-dependent runtime');
+            assert.equal(typeof document, 'undefined');
+        `,
+            ],
+            process.cwd()
+        );
+    }
+    console.log(
+        'Fresh general React entries preserve consumer DOM bootstrap in ESM and CJS'
+    );
     const sourcePackage = assertSourcePackageBuild(process.cwd());
     console.log(
         `SDK source preparation matches checkout: ${sourcePackage.declarations} declarations in ${sourcePackage.formats} formats`

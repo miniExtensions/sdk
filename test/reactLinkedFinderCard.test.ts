@@ -46,6 +46,164 @@ const present = (
     ...patch,
 });
 
+test('rating uses the actual readonly presenter, nullable label and admitted native glyph geometry', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const leaf = {
+        kind: 'rating',
+        value: null,
+        max: 3,
+        icon: 'star',
+        color: '#123456',
+        label: 'Sin valoración',
+        emptyLabel: 'Sin valoración',
+        glyph: {
+            path: 'M0 0h18v18H0Z',
+            viewBox: '0 0 18 18',
+            unfilledColor: '#e5e7eb',
+        },
+    } as const;
+    await f.render(h(LinkedFinderRichLeaf, { leaf }));
+    assert.match(f.container.textContent, /Sin valoración/);
+    assert.equal(f.container.querySelector('svg'), null);
+    assert.equal(f.container.querySelector('input,button'), null);
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: { ...leaf, value: 1, label: '1 de 3' },
+        })
+    );
+    const icons = [...f.container.querySelectorAll('svg')];
+    assert.equal(icons.length, 3);
+    assert.equal(icons[0].getAttribute('viewBox'), '0 0 18 18');
+    assert.equal(
+        icons[0].querySelector('path')?.getAttribute('d'),
+        leaf.glyph.path
+    );
+    assert.equal(icons[0].style.color, '#123456');
+    assert.equal(icons[1].style.color, '#e5e7eb');
+});
+
+test('people reuse the native SDK badge with already admitted avatar delivery properties and literal labels', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'people',
+                items: [
+                    {
+                        label: '<person@example.test>',
+                        avatarSource: {
+                            src: '/avatar-32',
+                            srcSet: '/avatar-32 1x, /avatar-64 2x',
+                            sizes: '32px',
+                            loading: 'lazy',
+                            decoding: 'async',
+                        },
+                    },
+                    { label: 'Second person' },
+                ],
+            },
+        })
+    );
+    assert.equal(
+        f.container.querySelectorAll('ul > li.mx-sdk-collaborator-badge')
+            .length,
+        2
+    );
+    const image = f.container.querySelector('img')!;
+    assert.equal(image.getAttribute('src'), '/avatar-32');
+    assert.equal(image.getAttribute('srcset'), '/avatar-32 1x, /avatar-64 2x');
+    assert.equal(image.getAttribute('sizes'), '32px');
+    assert.equal(image.getAttribute('loading'), 'lazy');
+    assert.equal(image.getAttribute('decoding'), 'async');
+    assert.equal(image.getAttribute('width'), '32');
+    assert.match(f.container.textContent, /<person@example.test>/);
+    assert.equal(f.container.querySelector('button,a'), null);
+});
+
+test('admitted URL buttons reuse current-owner resource admission and localized invalid presentation without Button schema', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    let current = true;
+    const owner = { token: {}, isCurrent: () => current };
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'urlButton',
+                display: {
+                    href: 'https://resource.example.test/admitted',
+                    owner,
+                    buttonLabel: '  Abrir  ',
+                },
+            },
+        })
+    );
+    const anchor = f.container.querySelector('a')!;
+    assert.equal(anchor.textContent, 'Abrir');
+    assert.equal(anchor.getAttribute('target'), '_blank');
+    assert.equal(anchor.getAttribute('rel'), 'noreferrer');
+    current = false;
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'urlButton',
+                display: {
+                    href: 'https://resource.example.test/admitted',
+                    owner,
+                    buttonLabel: 'Abrir',
+                },
+            },
+        })
+    );
+    assert.equal(f.container.textContent, '');
+    assert.equal(anchor.getAttribute('href'), null);
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'urlButton',
+                display: {
+                    href: null,
+                    labels: { invalidLink: 'Enlace no válido' },
+                },
+            },
+        })
+    );
+    assert.equal(
+        f.container.querySelector('button')?.textContent,
+        'Enlace no válido'
+    );
+    assert.equal(f.container.querySelector('button')?.disabled, true);
+    assert.equal(f.container.querySelector('a,img,iframe'), null);
+});
+
+test('lookup sequence spacing retains ordered duplicate leaves and per-field errors as escaped data', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    await f.render(
+        h(LinkedFinderRichLeaf, {
+            leaf: {
+                kind: 'sequence',
+                layout: 'wrap',
+                leaves: [
+                    { kind: 'literal', text: 'Repeated' },
+                    { kind: 'error', message: '<invalid result>' },
+                    { kind: 'literal', text: 'Repeated' },
+                ],
+            },
+        })
+    );
+    assert.deepEqual(
+        [
+            ...f.container.querySelectorAll(
+                '.mx-sdk-finder-sequence > .mx-sdk-finder-sequence-item'
+            ),
+        ].map((item) => item.textContent),
+        ['Repeated', '<invalid result>', 'Repeated']
+    );
+    assert.equal(
+        f.container.querySelector('[role="alert"]')?.textContent,
+        '<invalid result>'
+    );
+    assert.equal(f.container.querySelector('invalid,script'), null);
+});
+
 test('List vector tracks complete ordered id/url/filename data, independently of thumbnail URL and references', () => {
     assert.equal(
         linkedFinderListImageVector(images),

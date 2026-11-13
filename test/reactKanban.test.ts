@@ -361,8 +361,8 @@ it('card readonly Date and DateTime leaves match the existing date facade withou
     const { DateField, DateTimeField } = await import(
         '../src/react/date/DateField.js'
     );
-    const { LinkedFinderReadOnlyDate } = await import(
-        '../src/react/linkedFinderReadOnlyDate.js'
+    const { LinkedFinderRichLeaf } = await import(
+        '../src/react/LinkedFinderCard.js'
     );
     const moment = (await import('moment-timezone')).default;
     const originalLocale = moment.locale();
@@ -402,7 +402,34 @@ it('card readonly Date and DateTime leaves match the existing date facade withou
             '2026-11-01T08:30:00.000Z',
         ])
             for (const language of ['en', 'es', 'de'] as const) {
-                const common = { id: 'readonly-date', value, language };
+                const actual = renderToStaticMarkup(
+                    h(LinkedFinderRichLeaf, {
+                        leaf:
+                            config.type === 'date'
+                                ? {
+                                      kind: 'date',
+                                      display: {
+                                          airtableDateConfig: config,
+                                          value,
+                                          language,
+                                      },
+                                  }
+                                : {
+                                      kind: 'dateTime',
+                                      display: {
+                                          airtableDateConfig: config,
+                                          value,
+                                          language,
+                                      },
+                                  },
+                    })
+                );
+                const id = actual.match(/^<div id="([^"]+)">/)?.[1];
+                assert.ok(
+                    id,
+                    'Card supplies a nonblank generated date identity'
+                );
+                const common = { id, value, language };
                 const expected =
                     config.type === 'date'
                         ? h(DateField, {
@@ -415,14 +442,582 @@ it('card readonly Date and DateTime leaves match the existing date facade withou
                               mode: 'readOnly',
                               airtableDateConfig: config,
                           });
-                assert.equal(
-                    renderToStaticMarkup(
-                        h(LinkedFinderReadOnlyDate, {
-                            ...common,
-                            airtableDateConfig: config,
-                        })
-                    ),
-                    renderToStaticMarkup(expected)
-                );
+                assert.equal(actual, renderToStaticMarkup(expected));
             }
+});
+
+it('composes actual rich Card leaves and image lifetimes inside the public board without category effects', async (t) => {
+    const f = await fixture(t),
+        props = kanbanFixtureProps(),
+        card = props.cards[0];
+    assert(card?.projection.status === 'present');
+    const { LinkedFinderCard } = await import('../src/react/index.js');
+    const { createRendererProps } = await import(
+        '../src/ui/rendererRegistry.js'
+    );
+    const numeric = createRendererProps({
+        physicalKind: 'number',
+        fieldId: 'n',
+        title: 'Number',
+        field: {
+            id: 'n',
+            name: 'Number',
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: { type: 'number', options: { precision: 2 } },
+        },
+        displayConfig: null,
+        value: 12.5,
+        context: 'linked-detail',
+        computed: false,
+        dirty: false,
+        pending: false,
+        validation: [],
+        error: null,
+        capability: { type: 'readonly' },
+    });
+    assert(numeric?.physicalKind === 'number');
+    const images = Array.from({ length: 8 }, (_, index) => ({
+        id: String(index),
+        url:
+            'data:image/svg+xml,' +
+            encodeURIComponent(
+                `<svg xmlns="http://www.w3.org/2000/svg"><text>${index}</text></svg>`
+            ),
+        filename: 'Image ' + index,
+    }));
+    let actions = 0,
+        categories = 0;
+    const projection: Extract<KanbanCard['projection'], { status: 'present' }> =
+        {
+            ...card.projection,
+            shouldRenderThumbnail: true,
+            imageHeight: 100,
+            images,
+            fields: [
+                {
+                    key: 'literal',
+                    title: null,
+                    leaf: { kind: 'literal', text: 'Literal' },
+                },
+                {
+                    key: 'text',
+                    title: 'Text',
+                    leaf: {
+                        kind: 'text',
+                        display: { value: 'Text leaf', language: 'en' },
+                    },
+                },
+                {
+                    key: 'html',
+                    title: 'HTML',
+                    leaf: {
+                        kind: 'html',
+                        html: '<p><strong>HTML leaf</strong><script>forbidden()</script></p>',
+                    },
+                },
+                {
+                    key: 'quill',
+                    title: 'Quill',
+                    leaf: { kind: 'quill', html: '<p>Quill leaf</p>' },
+                },
+                {
+                    key: 'markdown',
+                    title: 'Markdown',
+                    leaf: {
+                        kind: 'markdown',
+                        value: null,
+                        identity: 'readonly-note',
+                        emptyLabel: 'Empty note',
+                    },
+                },
+                {
+                    key: 'number',
+                    title: 'Number',
+                    leaf: {
+                        kind: 'numeric',
+                        display: {
+                            ...numeric,
+                            capability: { type: 'readonly' },
+                        },
+                        emptyLabel: 'Empty number',
+                    },
+                },
+                {
+                    key: 'date',
+                    title: 'Date',
+                    leaf: {
+                        kind: 'date',
+                        display: {
+                            airtableDateConfig: {
+                                type: 'date',
+                                options: {
+                                    dateFormat: {
+                                        format: 'YYYY-MM-DD',
+                                    },
+                                },
+                            },
+                            value: '2026-11-13',
+                            language: 'en',
+                        },
+                    },
+                },
+                {
+                    key: 'time',
+                    title: 'Time',
+                    leaf: {
+                        kind: 'dateTime',
+                        display: {
+                            airtableDateConfig: {
+                                type: 'dateTime',
+                                options: {
+                                    dateFormat: {
+                                        format: 'YYYY-MM-DD',
+                                    },
+                                    timeFormat: {
+                                        format: 'HH:mm',
+                                    },
+                                    timeZone: 'utc',
+                                },
+                            },
+                            value: '2026-11-13T12:00:00Z',
+                            language: 'en',
+                        },
+                    },
+                },
+                {
+                    key: 'phone',
+                    title: 'Phone',
+                    leaf: {
+                        kind: 'phone',
+                        display: {
+                            value: '+15550000001',
+                            emptyLabel: 'No phone',
+                        },
+                    },
+                },
+                {
+                    key: 'duration',
+                    title: 'Duration',
+                    leaf: {
+                        kind: 'duration',
+                        display: {
+                            value: 3661,
+                            format: 'h:mm:ss',
+                            language: 'en',
+                        },
+                    },
+                },
+                {
+                    key: 'checkbox',
+                    title: 'Checkbox',
+                    leaf: {
+                        kind: 'checkbox',
+                        value: true,
+                        checkedLabel: 'Checked',
+                        uncheckedLabel: 'Unchecked',
+                    },
+                },
+                {
+                    key: 'barcode',
+                    title: 'Barcode',
+                    leaf: {
+                        kind: 'barcode',
+                        display: {
+                            value: {
+                                text: 'Synthetic barcode',
+                                type: 'code128',
+                            },
+                            language: 'en',
+                        },
+                    },
+                },
+                {
+                    key: 'button',
+                    title: 'Action',
+                    leaf: {
+                        kind: 'button',
+                        accepted: {
+                            mode: 'controlled',
+                            value: { label: 'Rich action', url: '/synthetic' },
+                            config: { openLinkType: 'triggerWebhookPOST' },
+                            onTriggerWebhook: () => {
+                                actions++;
+                            },
+                        },
+                    },
+                },
+                {
+                    key: 'people',
+                    title: 'People',
+                    leaf: {
+                        kind: 'people',
+                        items: [
+                            { label: 'Synthetic person', avatar: images[0]! },
+                        ],
+                    },
+                },
+                {
+                    key: 'attachment',
+                    title: 'Attachment',
+                    leaf: {
+                        kind: 'attachmentImages',
+                        images: [images[1]!],
+                        empty: 'none',
+                        emptyLabel: 'No images',
+                    },
+                },
+                {
+                    key: 'empty-attachment',
+                    title: 'Empty attachment',
+                    leaf: {
+                        kind: 'attachmentImages',
+                        images: [],
+                        empty: 'no-values',
+                        emptyLabel: 'No attachment values',
+                    },
+                },
+                {
+                    key: 'hidden-attachment',
+                    title: null,
+                    leaf: {
+                        kind: 'attachmentImages',
+                        images: [],
+                        empty: 'none',
+                        emptyLabel: 'Not displayed',
+                    },
+                },
+                {
+                    key: 'sequence',
+                    title: 'Details',
+                    leaf: {
+                        kind: 'sequence',
+                        leaves: [
+                            {
+                                kind: 'pills',
+                                items: [
+                                    {
+                                        label: 'Pill',
+                                        color: '#111',
+                                        backgroundColor: '#eee',
+                                    },
+                                ],
+                            },
+                            { kind: 'linkedPills', labels: ['Linked label'] },
+                            {
+                                kind: 'rating',
+                                value: 2,
+                                max: 3,
+                                icon: 'star',
+                                color: '#6366f1',
+                                label: 'Two stars',
+                            },
+                        ],
+                    },
+                },
+            ],
+        };
+    props.cards = [{ ...card, projection }, ...props.cards.slice(1)];
+    props.captureCategoryInvocation = () => {
+        categories++;
+        throw Error('Unexpected category operation');
+    };
+    await f.render(h(BoundKanban, props));
+    for (const text of [
+        'Text leaf',
+        'HTML leaf',
+        'Quill leaf',
+        'Empty note',
+        '12.5',
+        '2026-11-13',
+        '+15550000001',
+        '1:01:01',
+        'Synthetic barcode',
+        'Synthetic person',
+        'No attachment values',
+        'Pill',
+        'Linked label',
+    ])
+        assert(f.container.textContent.includes(text), text);
+    assert.equal(f.container.querySelectorAll('script').length, 0);
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-finder-carousel img').length,
+        6
+    );
+    const action = [...f.container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Rich action'
+    );
+    assert(action);
+    await f.click(action);
+    assert.equal(actions, 1);
+    assert.equal(categories, 0);
+    const next = f.container.querySelector('button[aria-label="Next image"]');
+    assert(next instanceof f.window.HTMLButtonElement);
+    await f.click(next);
+    assert.equal(
+        f.container
+            .querySelector('.mx-sdk-finder-carousel-track')
+            ?.getAttribute('style')
+            ?.includes('-100%'),
+        true
+    );
+    const dot = f.container.querySelector(
+        '.mx-sdk-finder-carousel button[aria-label="3"]'
+    );
+    assert(dot instanceof f.window.HTMLButtonElement);
+    await f.click(dot);
+    assert.equal(
+        f.container
+            .querySelector('.mx-sdk-finder-carousel-track')
+            ?.getAttribute('style')
+            ?.includes('-200%'),
+        true
+    );
+    for (let index = 0; index < 6; index++) {
+        const image = f.container.querySelector('.mx-sdk-finder-carousel img');
+        assert(image instanceof f.window.HTMLImageElement);
+        await f.imageEvent(image, 'error');
+    }
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-finder-carousel img').length,
+        0
+    );
+    assert(f.container.querySelector('[role="img"][aria-label="No image"]'));
+    assert.equal(categories, 0);
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: { ...projection, layout: 'gallery', fields: [] },
+        })
+    );
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-finder-carousel img').length,
+        6
+    );
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: {
+                ...projection,
+                layout: 'list',
+                fields: [],
+                thumbnailLocation: 'right',
+            },
+        })
+    );
+    assert(
+        f.container.firstElementChild?.lastElementChild?.classList.contains(
+            'mx-sdk-finder-list-image'
+        )
+    );
+    for (let index = 0; index < 8; index++) {
+        const image = f.container.querySelector('.mx-sdk-finder-list-image');
+        assert(image instanceof f.window.HTMLImageElement);
+        assert.equal(image.getAttribute('alt'), 'Image ' + index);
+        await f.imageEvent(image, 'error');
+    }
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-finder-list-image').length,
+        0
+    );
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: {
+                ...projection,
+                layout: 'list',
+                fields: [],
+                images: [{ ...images[0]!, url: images[0]!.url + '#new' }],
+            },
+        })
+    );
+    assert.equal(
+        f.container
+            .querySelector('.mx-sdk-finder-list-image')
+            ?.getAttribute('alt'),
+        'Image 0'
+    );
+    assert.equal(categories, 0);
+    f.unchangedEffects();
+});
+
+it('preserves native keyboard rectangle selection and empty-container offsets with immutable measured snapshots', async (t) => {
+    const f = await fixture(t),
+        { coordinateGetter } = await import(
+            '../src/react/kanban/keyboardCoordinates.js'
+        );
+    type Options = Parameters<typeof coordinateGetter>[1];
+    type Containers = Options['context']['droppableContainers'];
+    type Entry = NonNullable<ReturnType<Containers['get']>>;
+    type Id = Entry['id'];
+    class SnapshotContainers extends Map<Id, Entry> {
+        get(id: Id | null | undefined) {
+            return id == null ? undefined : super.get(id);
+        }
+        toArray() {
+            return [...this.values()];
+        }
+        getEnabled() {
+            return this.toArray().filter((entry) => !entry.disabled);
+        }
+        getNodeFor(id: Id | null | undefined) {
+            return this.get(id)?.node.current ?? undefined;
+        }
+    }
+    const rect = (left: number, top: number, width = 300, height = 98) =>
+        Object.freeze({
+            left,
+            top,
+            width,
+            height,
+            right: left + width,
+            bottom: top + height,
+        });
+    const original = rect(500, 500),
+        node = f.container as unknown as HTMLElement;
+    const entry = (
+        id: string,
+        box: ReturnType<typeof rect>,
+        data: Record<string, unknown> = {},
+        disabled = false
+    ): Entry => ({
+        id,
+        key: id,
+        data: { current: data },
+        disabled,
+        node: { current: node },
+        rect: { current: box },
+    });
+    const options = (entries: Entry[], activeType = 'item'): Options => ({
+        active: 'active',
+        currentCoordinates: { x: 500, y: 500 },
+        context: {
+            activatorEvent: null,
+            active: {
+                id: 'active',
+                data: { current: { type: activeType } },
+                rect: { current: { initial: original, translated: original } },
+            },
+            activeNode: node,
+            collisionRect: original,
+            collisions: null,
+            draggableNodes: new Map(),
+            draggingNode: node,
+            draggingNodeRect: original,
+            droppableRects: new Map(
+                entries.map((entry) => [entry.id, entry.rect.current!])
+            ),
+            droppableContainers: new SnapshotContainers(
+                entries.map((entry) => [entry.id, entry])
+            ),
+            over: null,
+            scrollableAncestors: [],
+            scrollAdjustedTranslate: null,
+        },
+    });
+    const key = (code: string) =>
+        new f.window.KeyboardEvent('keydown', { code, cancelable: true });
+    for (const [code, target] of [
+        ['ArrowDown', rect(500, 700)],
+        ['ArrowUp', rect(500, 100)],
+        ['ArrowRight', rect(900, 500)],
+        ['ArrowLeft', rect(100, 500)],
+    ] as const) {
+        const event = key(code),
+            snapshot = options([
+                entry('target', target),
+                entry('disabled', rect(500, 510), {}, true),
+            ]);
+        assert.deepEqual(
+            coordinateGetter(event as unknown as KeyboardEvent, snapshot),
+            { x: target.left, y: target.top }
+        );
+        assert.equal(event.defaultPrevented, true);
+        assert.equal(snapshot.context.collisionRect, original);
+    }
+    const empty = rect(900, 400),
+        container = entry('empty', empty, { type: 'container', children: [] });
+    assert.deepEqual(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            options([container])
+        ),
+        { x: 920, y: 474 }
+    );
+    const full = entry('full', empty, {
+        type: 'container',
+        children: ['child'],
+    });
+    assert.equal(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            options([full])
+        ),
+        undefined
+    );
+    assert.deepEqual(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            options([full], 'container')
+        ),
+        { x: 920, y: 474 }
+    );
+    const placeholder = entry('placeholder', rect(900, 400, 500, 300));
+    assert.deepEqual(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            options([placeholder])
+        ),
+        { x: 1000, y: 501 }
+    );
+    const missing = options([entry('missing', empty)]);
+    missing.context.droppableRects.clear();
+    assert.equal(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            missing
+        ),
+        undefined
+    );
+    const detached = entry('detached', empty);
+    detached.node.current = null;
+    assert.equal(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            options([detached])
+        ),
+        undefined
+    );
+    const unmeasured = entry('unmeasured', empty),
+        unmeasuredOptions = options([unmeasured]);
+    unmeasured.rect.current = null;
+    assert.equal(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            unmeasuredOptions
+        ),
+        undefined
+    );
+    const inactive = options([]);
+    inactive.context.active = null;
+    assert.equal(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            inactive
+        ),
+        undefined
+    );
+    inactive.context.active = options([]).context.active;
+    inactive.context.collisionRect = null;
+    assert.equal(
+        coordinateGetter(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            inactive
+        ),
+        undefined
+    );
+    const ignored = key('Escape');
+    assert.equal(
+        coordinateGetter(ignored as unknown as KeyboardEvent, options([])),
+        undefined
+    );
+    assert.equal(ignored.defaultPrevented, false);
 });

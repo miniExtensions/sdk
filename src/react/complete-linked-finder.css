@@ -376,6 +376,14 @@
 .mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-visual {
     height: 100%;
 }
+.mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-fallback svg {
+    width: 50%;
+    height: 50%;
+}
+.mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-document-fallback svg {
+    width: 100%;
+    height: 100%;
+}
 .mx-sdk-finder-attachment-item {
     position: relative;
     min-width: 0;

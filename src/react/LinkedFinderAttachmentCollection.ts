@@ -48,22 +48,30 @@ const current = (owner: LinkedFinderAttachmentCollectionProps['owner']) => {
 };
 const stop = (event: { stopPropagation(): void }) => event.stopPropagation();
 function Icon({ play }: { play: boolean }) {
+    // Native Heroicons solid Play/Document geometry; MIT, see THIRD_PARTY_NOTICES.
     return h(
         'svg',
         {
             viewBox: '0 0 24 24',
-            fill: 'none',
-            stroke: 'currentColor',
-            strokeWidth: 1.5,
+            fill: 'currentColor',
             'aria-hidden': true,
         },
-        h('path', {
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
-            d: play
-                ? 'M8 5v14l11-7L8 5Z'
-                : 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6',
-        })
+        play
+            ? h('path', {
+                  fillRule: 'evenodd',
+                  clipRule: 'evenodd',
+                  d: 'M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z',
+              })
+            : [
+                  h('path', {
+                      key: 'body',
+                      d: 'M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0 0 16.5 9h-1.875a1.875 1.875 0 0 1-1.875-1.875V5.25A3.75 3.75 0 0 0 9 1.5H5.625Z',
+                  }),
+                  h('path', {
+                      key: 'corner',
+                      d: 'M12.971 1.816A5.23 5.23 0 0 1 14.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 0 1 3.434 1.279 9.768 9.768 0 0 0-6.963-6.963Z',
+                  }),
+              ]
     );
 }
 function Thumbnail({
@@ -88,10 +96,16 @@ function Thumbnail({
         observer.observe(ref.current);
         return () => observer.disconnect();
     }, [view.layout, view.owner]);
-    const fallback = () =>
+    const fallback = (document = false) =>
         h(
             'div',
-            { className: 'mx-sdk-finder-attachment-fallback' },
+            {
+                className:
+                    'mx-sdk-finder-attachment-fallback' +
+                    (document
+                        ? ' mx-sdk-finder-attachment-document-fallback'
+                        : ''),
+            },
             h(Icon, { play: row.icon === 'play' })
         );
     return h(
@@ -148,7 +162,7 @@ function Thumbnail({
                           identity: row.key,
                           visible,
                           inGrid: view.layout === 'grid',
-                          unavailable: fallback(),
+                          unavailable: fallback(true),
                       })
                   )
                 : fallback()

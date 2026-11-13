@@ -1,4 +1,9 @@
+import {
+    prepareCSVExportBrowserFixtures,
+    checkCSVExportBrowser,
+} from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
+import { checkExternalSyncSourceControlledBrowser } from './external-sync-source-controlled-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCalendarBrowser } from './calendar-browser-checks.mjs';
@@ -1545,6 +1550,7 @@ try {
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
+            'scripts/csv-export-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
@@ -1552,6 +1558,7 @@ try {
             'scripts/complete-date-browser-checks.mjs',
             'scripts/calendar-browser-checks.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
+            'scripts/external-sync-source-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -1982,6 +1989,18 @@ try {
             regular,
             hash,
         });
+        await prepareCSVExportBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         await prepareFormGroupBrowserFixtures({
             temporary,
             archive,
@@ -2228,6 +2247,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.controlledSelect,
+            output,
+        });
+        report.externalSyncSourceControlled = {};
+        await checkExternalSyncSourceControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.externalSyncSourceControlled,
             output,
         });
         report.completeDuration = {};
@@ -2915,6 +2941,10 @@ try {
                 page,
                 evidence: report.fieldPresentation,
             });
+        });
+        await run('csv-export', async (page, origin) => {
+            await page.goto(origin + '/csv-export.html');
+            await checkCSVExportBrowser({ page, evidence: report.csvExport });
         });
         await run('form-group', async (page, origin) => {
             await page.goto(origin + '/form-group.html');
@@ -3896,8 +3926,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete field presentation and one-page section groups.
-            26 +
+            // Include complete fields, CSV export and one-page section groups.
+            27 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

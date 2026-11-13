@@ -1,3 +1,4 @@
+import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import {
     checkOrdinaryValidationConsumer,
     ordinaryValidationTypedConsumer,
@@ -344,7 +345,7 @@ import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-drive
 import { checkMultipleSelectFormDriverRecipe } from './multi-select-form-driver-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
-    checkButtonConsumer,
+    checkButtonReactMatrix,
     buttonTypedConsumer,
     buttonReactTypedConsumer,
 } from './button-consumer-checks.mjs';
@@ -596,6 +597,7 @@ try {
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
+                path === 'docs/csv-export.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
@@ -690,6 +692,9 @@ try {
         'docs/form-groups.md',
         'dist/esm/react/form-group.css',
         'dist/cjs/react/form-group.css',
+        'docs/csv-export.md',
+        'dist/esm/react/csv-export.css',
+        'dist/cjs/react/csv-export.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -2832,14 +2837,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(customerChatProof.versions.length, 2);
     assert.equal(customerChatProof.cleanup, 'completed');
-    const buttonProof = await checkButtonConsumer({
-        consumerDirectory: temporaryDirectory,
+    const buttonProof = checkButtonReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
     });
-    assert.equal(buttonProof.checks, 67);
-    console.log(
-        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
-    );
+    assert.equal(buttonProof.versions.length, 2);
+    assert.equal(buttonProof.cleanup, 'completed');
     const checkboxProof = checkCheckboxReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -2910,7 +2915,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(externalSyncSourceProof.checks, 20);
+    assert.equal(externalSyncSourceProof.checks, 24);
     console.log(
         `Installed External Sync Source renderer, readonly SDK strings, shared Text CSS and local example: ${externalSyncSourceProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
@@ -3102,7 +3107,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(percentProof.checks, 16);
+    assert.equal(percentProof.checks, 18);
     console.log(
         `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
@@ -3374,6 +3379,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const csvExportMatrix = checkCSVExportReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(csvExportMatrix.versions.length, 2);
+    assert.equal(csvExportMatrix.cleanup, 'completed');
     const formGroupMatrix = checkFormGroupReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

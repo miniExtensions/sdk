@@ -32,6 +32,9 @@ importers:
       copy-to-clipboard:
         specifier: 3.3.3
         version: 3.3.3
+      csv-stringify:
+        specifier: 6.4.6
+        version: 6.4.6
       dompurify:
         specifier: 2.4.7
         version: 2.4.7
@@ -970,6 +973,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  csv-stringify@6.4.6:
+    resolution: {integrity: sha512-h2V2XZ3uOTLilF5dPIptgUfN/o2ia/80Ie0Lly18LAnw5s8Eb7kt8rfxSUy24AztJZas9f6DPZpVlzDUtFt/ag==}
 
   data-urls@3.0.2:
     resolution: {integrity: sha512-Jy/tj3ldjZJo63sVAvg6LHt2mHvl4V6AgRAmNDtLdm7faqtsx+aJG42rsyCo9JCoRVKwPFzKlIPx3DIibwSIaQ==}
@@ -2318,6 +2324,8 @@ snapshots:
       cssom: 0.3.8
 
   csstype@3.2.3: {}
+
+  csv-stringify@6.4.6: {}
 
   data-urls@3.0.2:
     dependencies:

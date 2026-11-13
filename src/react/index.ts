@@ -306,7 +306,11 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
-import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+import {
+    ControlledExternalSyncSourceField,
+    type ControlledExternalSyncSourceFieldProps,
+    type ExternalSyncSourceFieldOptions,
+} from './ExternalSyncSourceField.js';
 import {
     lastModifiedByName,
     type LastModifiedByFieldOptions,
@@ -318,6 +322,7 @@ export {
 export {
     renderExternalSyncSourceField,
     type ExternalSyncSourceFieldOptions,
+    type ControlledExternalSyncSourceFieldProps,
 } from './ExternalSyncSourceField.js';
 import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
 export {
@@ -1059,13 +1064,41 @@ export function CreatedByField({
 }
 export type ExternalSyncSourceFieldProps = FieldProps &
     ExternalSyncSourceFieldOptions;
+export type BindingExternalSyncSourceFieldProps = ExternalSyncSourceFieldProps;
+type BoundExternalSyncSourceComponentProps = ExternalSyncSourceFieldProps & {
+    [Key in Exclude<
+        keyof ControlledExternalSyncSourceFieldProps,
+        keyof ExternalSyncSourceFieldProps
+    >]?: never;
+};
+type ExternalSyncSourceComponentProps =
+    | BoundExternalSyncSourceComponentProps
+    | ControlledExternalSyncSourceFieldProps;
+
+/** Complete native-compatible display or the unchanged readonly binding contract. */
+export function ExternalSyncSourceField(
+    props: BoundExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ControlledExternalSyncSourceFieldProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledExternalSyncSourceField, props)
+        : createElement(BoundExternalSyncSourceField, props);
+}
 /** The supplied source name stays readonly regardless of forged editing state. */
-export function ExternalSyncSourceField({
+function BoundExternalSyncSourceField({
     binding,
     render,
     className,
     clearLabel,
-}: ExternalSyncSourceFieldProps): ReactNode {
+}: BoundExternalSyncSourceComponentProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -1543,6 +1576,25 @@ function BoundIconRatingField({
     });
 }
 export type PercentFieldProps = NumberFieldProps;
+/** Explicit physical-percent display units; the binding API remains raw fractions. */
+export type ControlledPercentFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'percent' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundPercentComponentProps = PercentFieldProps & {
+    mode?: never;
+    field?: never;
+    options?: never;
+};
+type PercentComponentProps =
+    | BoundPercentComponentProps
+    | ControlledPercentFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 /** Compatible legacy binding props; controlled callers use ControlledDurationFieldProps. */
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
@@ -1721,8 +1773,15 @@ function BoundNumberField({
         status(snapshot)
     );
 }
-/** Percent input preserves native fractions without display conversion. */
-export function PercentField(props: PercentFieldProps): ReactNode {
+/** Controlled display units or the compatible raw-fraction binding contract. */
+export function PercentField(props: BoundPercentComponentProps): ReactNode;
+export function PercentField(props: ControlledPercentFieldProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'percent'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
     return createElement(NumberField, props);
 }
 type BoundCurrencyComponentProps = CurrencyFieldProps & {
@@ -2803,7 +2862,12 @@ export {
     type CompleteRecordCommentsDialogProps,
 } from './CompleteRecordComments.js';
 export { ButtonField, renderButtonField } from './ButtonField.js';
-export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+export type {
+    ButtonFieldProps,
+    ModelButtonFieldProps,
+    ControlledButtonFieldProps,
+    ButtonFieldMessages,
+} from './ButtonField.js';
 
 export {
     useFileSelection,
@@ -2917,3 +2981,9 @@ export {
     type SignatureRecovery,
     type TemporarySignature,
 } from './signatureReceipt.js';
+
+export {
+    CSVExportButton,
+    type CSVExportButtonProps,
+    type CSVExportLabels,
+} from './CSVExportButton.js';

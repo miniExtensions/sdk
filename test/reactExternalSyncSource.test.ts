@@ -8,6 +8,7 @@ import {
     TextField,
     renderExternalSyncSourceField,
 } from '../src/react/index.js';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
     createFormFieldBindings,
     type FormFieldBinding,
@@ -202,6 +203,141 @@ function snapshotBinding(initial: FormFieldSnapshot) {
         },
     };
 }
+
+it('controlled public source renders converted text, native links and localized emptiness without editing', async (t) => {
+    const f = await fixture(t);
+    let rowClicks = 0;
+    const display = (
+        value: string | null | undefined,
+        language: 'en' | 'fr' = 'en'
+    ) =>
+        h(
+            'div',
+            { onClick: () => rowClicks++ },
+            h(ExternalSyncSourceField, {
+                mode: 'controlled',
+                value,
+                language,
+                textSize: 'small',
+                layout: 'cell-short',
+                className: 'source-display',
+            })
+        );
+    const value = 'Unlisted Ω <img src=x> https://example.test/source';
+    await f.render(display(value));
+    assert.equal(
+        f.container.querySelector('p.read-only-text')?.textContent,
+        value
+    );
+    assert.equal(
+        f.container.querySelector('img,input,button,select,textarea'),
+        null
+    );
+    assert.ok(
+        f.container.querySelector(
+            '.source-display[data-layout="cell-short"] .text-sm'
+        )
+    );
+    const anchor = f.container.querySelector('a')!;
+    assert.equal(anchor.href, 'https://example.test/source');
+    assert.equal(anchor.target, '_blank');
+    let defaultWasPrevented: boolean | undefined;
+    f.container.addEventListener(
+        'click',
+        (event) => {
+            defaultWasPrevented = event.defaultPrevented;
+            event.preventDefault(); // The synthetic host owns navigation in this test.
+        },
+        { once: true }
+    );
+    const click = new f.window.MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => {
+        anchor.dispatchEvent(click);
+    });
+    assert.equal(defaultWasPrevented, false);
+    assert.equal(rowClicks, 0);
+    await act(async () => {
+        f.container
+            .querySelector('p.read-only-text')!
+            .dispatchEvent(new f.window.MouseEvent('click', { bubbles: true }));
+    });
+    assert.equal(rowClicks, 1);
+    for (const empty of [null, undefined, '']) {
+        await f.render(display(empty, 'fr'));
+        assert.equal(
+            f.container.querySelector('[data-testid="no-value-test-id"]')
+                ?.textContent,
+            'Pas de Valeur'
+        );
+        assert.equal(f.container.querySelector('a,input,button'), null);
+    }
+    await f.render(display('  '));
+    assert.equal(
+        f.container.querySelector('p.read-only-text')?.textContent,
+        '  '
+    );
+    assert.equal(
+        f.container.querySelector('[data-testid="no-value-test-id"]'),
+        null
+    );
+    assert.equal(f.writes(), 0);
+});
+
+it('switches between binding and controlled source modes on the same mount without borrowing authority', async (t) => {
+    const f = await fixture(t, {}, 'Legacy source');
+    await f.render(h(ExternalSyncSourceField, { binding: f.binding }));
+    assert.equal(f.input().value, 'Legacy source');
+    assert.equal(f.input().disabled, true);
+    let reads = 0;
+    const controlled = {
+        mode: 'controlled' as const,
+        value: 'Current source',
+        language: 'en' as const,
+        binding: new Proxy(
+            {},
+            {
+                get() {
+                    reads++;
+                    throw Error('Controlled mode must not borrow binding');
+                },
+            }
+        ) as never,
+        render: (() => {
+            reads++;
+            throw Error('Controlled mode must not borrow renderer');
+        }) as never,
+    };
+    await f.render(h(ExternalSyncSourceField, controlled));
+    assert.equal(
+        f.container.querySelector('p.read-only-text')?.textContent,
+        'Current source'
+    );
+    assert.equal(f.container.querySelector('input,button'), null);
+    assert.equal(reads, 0);
+    await f.render(h(ExternalSyncSourceField, { binding: f.binding }));
+    assert.equal(f.input().value, 'Legacy source');
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.writes(), 0);
+});
+
+it('server-renders controlled source markup literally and forwards presentation without requiring a binding', () => {
+    const html = renderToStaticMarkup(
+        h(ExternalSyncSourceField, {
+            mode: 'controlled',
+            value: '<script>literal</script> Ω',
+            language: 'en',
+            textSize: 'very large',
+            layout: 'linked-list',
+        })
+    );
+    assert.match(html, /&lt;script&gt;literal&lt;\/script&gt; Ω/);
+    assert.match(html, /text-xl/);
+    assert.match(html, /data-layout="linked-list"/);
+    assert.doesNotMatch(html, /<(?:input|button|script)\b/);
+});
 
 for (const initial of [
     undefined,

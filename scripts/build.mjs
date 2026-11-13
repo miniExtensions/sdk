@@ -208,6 +208,7 @@ for (const format of ['esm', 'cjs']) {
         'currency',
         'multiple-select',
         'linked-records',
+        'complete-linked-finder',
         'single-select',
         'rich-text',
     ]) {

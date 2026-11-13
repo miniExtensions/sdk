@@ -255,7 +255,12 @@ export function createCompleteLinkedFinderCoordinator<
     }
 
     function current(ticket: Ticket): boolean {
-        if (latest !== ticket || !owns(ticket.owner)) return false;
+        if (
+            latest !== ticket ||
+            ticket.intent !== intentSequence ||
+            !owns(ticket.owner)
+        )
+            return false;
         let valid = false;
         try {
             valid = ticket.read.isCurrent(
@@ -271,7 +276,13 @@ export function createCompleteLinkedFinderCoordinator<
                 emit();
             }
         }
-        return valid && latest === ticket && owns(ticket.owner);
+        return (
+            valid &&
+            latest === ticket &&
+            ticket.intent === intentSequence &&
+            owns(ticket.owner) &&
+            ticket.intent === intentSequence
+        );
     }
 
     function prepare(
@@ -286,7 +297,11 @@ export function createCompleteLinkedFinderCoordinator<
                 filter: request.filter,
                 offset: request.resetOffset ? null : offset,
             });
-            if (!read || !owns(expected))
+            if (intent !== intentSequence) return { status: 'retired' };
+            if (!read) return { status: 'refused', reason: 'unavailable' };
+            const ownerCurrent = owns(expected);
+            if (intent !== intentSequence) return { status: 'retired' };
+            if (!ownerCurrent)
                 return { status: 'refused', reason: 'unavailable' };
             const ticket = {
                 owner: expected,
@@ -296,15 +311,32 @@ export function createCompleteLinkedFinderCoordinator<
                 published: false,
                 intent,
             };
-            if (!read.isCurrent('before-publication') || !owns(expected))
-                return { status: 'refused', reason: 'unavailable' };
+            const valid =
+                read.isCurrent('before-publication') && owns(expected);
+            if (intent !== intentSequence) return { status: 'retired' };
+            if (!valid) return { status: 'refused', reason: 'unavailable' };
             if (intent !== intentSequence) return { status: 'retired' };
             return ticket;
         } catch (cause) {
-            return owns(expected)
+            return intent === intentSequence &&
+                owns(expected) &&
+                intent === intentSequence
                 ? { status: 'failure', error: cause }
                 : { status: 'retired' };
         }
+    }
+
+    function nextIntent() {
+        const intent = ++intentSequence;
+        // A newer attempted request retires the previous allocation/publication
+        // rights even if its own host preparation refuses or throws.
+        clearQueued();
+        latest = null;
+        if (phase === 'loading') {
+            phase = rawRecords.length ? 'ready' : 'idle';
+            loadingMore = false;
+        }
+        return intent;
     }
 
     function presentError(cause: unknown): string {
@@ -430,8 +462,12 @@ export function createCompleteLinkedFinderCoordinator<
     async function queryNow(
         request: CompleteLinkedFinderRequest<Filter>
     ): Promise<Result> {
-        const ticket = prepare(request, ++intentSequence);
-        if ('status' in ticket) return ticket;
+        const intent = nextIntent();
+        const ticket = prepare(request, intent);
+        if ('status' in ticket) {
+            if (intent === intentSequence) emit();
+            return ticket;
+        }
         if (!start(ticket)) return { status: 'retired' };
         return execute(ticket);
     }
@@ -439,8 +475,12 @@ export function createCompleteLinkedFinderCoordinator<
     function scheduleSearch(
         request: CompleteLinkedFinderRequest<Filter>
     ): void {
-        const ticket = prepare(request, ++intentSequence);
-        if ('status' in ticket) return;
+        const intent = nextIntent();
+        const ticket = prepare(request, intent);
+        if ('status' in ticket) {
+            if (intent === intentSequence) emit();
+            return;
+        }
         if (!start(ticket)) return;
         if (ticket.read.mode === 'authenticated-preview') {
             void execute(ticket);
@@ -485,7 +525,15 @@ export function createCompleteLinkedFinderCoordinator<
             )
                 return { status: 'unchanged' } as const;
             const toggled = await host.toggle(expected, id);
-            if (toggled.status !== 'admitted' || !current(ticket))
+            // An admitted canonical toggle can advance the selected-value
+            // stamp of the consumed read. Close has independent owner authority;
+            // preserve latest-search and owner fences without treating our own
+            // admitted write as a replacement finder context.
+            if (
+                toggled.status !== 'admitted' ||
+                latest !== ticket ||
+                !owns(expected)
+            )
                 return { status: 'unchanged' } as const;
             const closed = host.close(expected);
             return closed.status === 'admitted'

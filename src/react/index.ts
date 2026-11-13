@@ -2851,3 +2851,22 @@ export {
     type SignatureRecovery,
     type TemporarySignature,
 } from './signatureReceipt.js';
+export {
+    NativeLinkedFinderCascade,
+    type NativeLinkedFinderCascadeProps,
+    type NativeLinkedFinderCascadeDescriptor,
+    type NativeLinkedFinderCascadeLabels,
+} from './NativeLinkedFinderCascade.js';
+export { LinkedFinderCard, LinkedFinderRichLeaf } from './LinkedFinderCard.js';
+export { CompleteLinkedFinder } from './CompleteLinkedFinder.js';
+export type {
+    CompleteLinkedFinderProps,
+    CompleteLinkedFinderLabels,
+    CompleteLinkedFinderCandidate,
+} from './CompleteLinkedFinder.js';
+export type {
+    LinkedFinderCardProjection,
+    LinkedFinderCardField,
+    LinkedFinderCardLeaf,
+    LinkedFinderPill,
+} from './LinkedFinderCard.js';

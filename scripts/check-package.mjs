@@ -714,6 +714,8 @@ try {
         'dist/cjs/react/multiple-select.css',
         'dist/esm/react/linked-records.css',
         'dist/cjs/react/linked-records.css',
+        'dist/esm/react/complete-linked-finder.css',
+        'dist/cjs/react/complete-linked-finder.css',
         ...browserStarterFiles,
     ]) {
         assert(

@@ -219,6 +219,7 @@ export function assertModuleFormats(root) {
                 './react/currency.css',
                 './react/multiple-select.css',
                 './react/linked-records.css',
+                './react/complete-linked-finder.css',
                 './react/single-select.css',
                 './react/rich-text.css',
             ].includes(subpath)

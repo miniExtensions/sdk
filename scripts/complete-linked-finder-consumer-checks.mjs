@@ -7,8 +7,8 @@ import { join, resolve } from 'node:path';
 
 export const completeLinkedFinderTypedConsumer = String.raw`
 import {createElement} from 'react';
-import {CompleteLinkedFinderView, LinkedFinderAttachmentCollection, NativeLinkedFinderCascade, type CompleteLinkedFinderViewProps, type LinkedFinderAttachmentCollectionProps} from '@miniextensions/sdk/react';
-import {createCompleteLinkedFinderCoordinator, type CompleteLinkedFinderHost} from '@miniextensions/sdk/ui';
+import {CompleteLinkedFinderView, LinkedFinderAttachmentCollection, NativeLinkedFinderCascade, NativeLinkedFinderCascadeDriverView, type CompleteLinkedFinderViewProps, type LinkedFinderAttachmentCollectionProps, type NativeLinkedFinderCascadeProps} from '@miniextensions/sdk/react';
+import {createCompleteLinkedFinderCoordinator, type CompleteLinkedFinderHost, type NativeLinkedFinderCascadeHost} from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/complete-linked-finder.css';
 const owner={};
 const host:CompleteLinkedFinderHost<{id:string},string,object>={captureOwner:()=>owner,isOwnerCurrent:value=>value===owner,subscribe:()=>()=>{},captureRead:()=>({mode:'public',isCurrent:()=>true,query:async()=>({records:[],offset:null}),publish:()=>({status:'admitted'}),didAccept:page=>{const exact:readonly {id:string}[]=page.records;void exact;}}),selection:()=>({ids:['hidden','A','A'],enabled:true,autoSelectScannedRecord:true}),recordId:row=>row.id,isOptionEnabled:()=>true,toggle:()=>({status:'admitted'}),close:()=>({status:'admitted'}),errorMessage:()=>''};
@@ -25,13 +25,22 @@ const props:CompleteLinkedFinderViewProps<{id:string},string,object>={host,coord
 createElement(CompleteLinkedFinderView<{id:string},string,object>,props);
 const collection:LinkedFinderAttachmentCollectionProps={rows:[{key:'occurrence',label:'A',openLabel:'Abrir',imageSources:[],icon:'document'}],layout:'grid',columns:2,fit:'contain',showNames:false,owner:{isCurrent:()=>true},labels:{attachments:'Adjuntos',retry:'Reintentar',imageUnavailable:'No disponible'},onOpen:()=>({status:'admitted'})};
 createElement(LinkedFinderAttachmentCollection,collection);
+const rawUrl=['raw',''] as const;
+const cascadeHost:NativeLinkedFinderCascadeHost<object>={isCurrent:expected=>expected===owner,captureRead:expected=>({isCurrent:()=>expected===owner,query:async()=>({primaryValues:[{recordId:'A',stringValue:'Same label'},{recordId:'B',stringValue:'Same label'}],prefillValue:null})}),publish:()=>({status:'admitted'}),clear:()=>({status:'admitted'}),setPrefillLoading(){},reportOrdinaryError(){},errorMessage:()=>''};
+const cascade:NativeLinkedFinderCascadeProps<object>={owner,host:cascadeHost,drivers:[{fieldId:'country',fieldName:'Country',title:null,urlSearchValue:rawUrl,hidden:false}],values:{country:{recordId:'B',stringValue:'Same label'}},formReadOnly:false,labels:{loading:'Cargando',noMatches:'Ninguno'}};
+createElement(NativeLinkedFinderCascade<object>,cascade);
+createElement(NativeLinkedFinderCascadeDriverView<object>,{owner,host:cascadeHost,driver:{fieldId:'state',fieldName:'State',title:null,urlSearchValue:rawUrl,hidden:true},previousFieldId:'omitted-driver',values:{'omitted-driver':{recordId:'B',stringValue:'Same label'}},labels:cascade.labels,formReadOnly:false});
+// @ts-expect-error router values retain strings/arrays, never numeric normalization
+createElement(NativeLinkedFinderCascade<object>,{...cascade,drivers:[{...cascade.drivers[0],urlSearchValue:1}]});
+// @ts-expect-error no host-native selector renderer slot
+createElement(NativeLinkedFinderCascade<object>,{...cascade,renderSelector:()=>null});
 // @ts-expect-error no native rich-card renderer slot
 createElement(CompleteLinkedFinderView<{id:string},string,object>,{...props,renderCard:()=>null});
 // @ts-expect-error canonical IDs belong to the host, not the candidate model
 coordinator.model.setValue(['B']);
 // @ts-expect-error scheduling is void, not a query receipt
 const page:Promise<unknown>=coordinator.scheduleSearch({filter:'',resetOffset:true});
-void scheduled;void identity;void page;void NativeLinkedFinderCascade;
+void scheduled;void identity;void page;
 coordinator.destroy();
 `;
 

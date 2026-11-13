@@ -335,6 +335,66 @@ export async function assertPortalShellConsumer({
         root = createRoot(container);
         await render();
         assert.equal(container.querySelector('[role="dialog"]'), null);
+        await update({
+            welcome: {
+                id: 'welcome-keyboard',
+                title: 'Keyboard welcome',
+                messageHtml: '<p>Hello again</p>',
+                dismissed: false,
+            },
+        });
+        await key(find('button', 'Continue'), 'Escape');
+        await render();
+        assert.deepEqual(dismissals, ['welcome-user', 'welcome-keyboard']);
+        assert.equal(container.querySelector('[role="dialog"]'), null);
+        await React.act(async () => root.unmount());
+        root = createRoot(container);
+        await render();
+        assert.equal(
+            container.querySelector('[role="dialog"]'),
+            null,
+            'Keyboard welcome dismissal is accepted by the host and survives remount'
+        );
+        await update({
+            welcome: {
+                id: 'welcome-backdrop',
+                title: 'Backdrop welcome',
+                messageHtml: '<p>Dismiss once</p>',
+                dismissed: false,
+            },
+        });
+        await React.act(async () =>
+            container.querySelector('[role="dialog"] h2').click()
+        );
+        assert.equal(
+            container.querySelector('[role="dialog"] h2').textContent,
+            'Backdrop welcome',
+            'Clicking dialog content must not dismiss it'
+        );
+        assert.equal(dismissals.length, 2);
+        await React.act(async () =>
+            container.querySelector('.mx-sdk-portal-backdrop').click()
+        );
+        await render();
+        assert.deepEqual(dismissals, [
+            'welcome-user',
+            'welcome-keyboard',
+            'welcome-backdrop',
+        ]);
+        assert.equal(container.querySelector('[role="dialog"]'), null);
+        const beforeUserEscape = intents.length;
+        await React.act(async () => find('summary', '0').click());
+        await key(find('summary', '0'), 'Escape');
+        assert.equal(
+            find('summary', '0').parentElement.hasAttribute('open'),
+            false
+        );
+        assert.equal(window.document.activeElement, find('summary', '0'));
+        assert.equal(
+            intents.length,
+            beforeUserEscape,
+            'Closing the user disclosure emits no settings or auth intent'
+        );
         await React.act(async () => find('summary', '0').click());
         await click('User settings');
         assert.equal(intents.at(-1).type, 'user-settings');
@@ -355,6 +415,69 @@ export async function assertPortalShellConsumer({
         );
         await React.act(async () => find('summary', '0').click());
         await click('Log out');
+        assert.equal(window.document.activeElement, find('button', 'Cancel'));
+        const confirm = container.querySelector(
+            '[role="dialog"] button:last-child'
+        );
+        confirm.focus();
+        const forwardTab = new window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            bubbles: true,
+            cancelable: true,
+        });
+        await React.act(async () => confirm.dispatchEvent(forwardTab));
+        assert.equal(forwardTab.defaultPrevented, true);
+        assert.equal(
+            window.document.activeElement,
+            find('button', 'Cancel'),
+            'Tab from confirmation wraps to the first dialog control'
+        );
+        const reverseTab = new window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        await React.act(async () =>
+            find('button', 'Cancel').dispatchEvent(reverseTab)
+        );
+        assert.equal(reverseTab.defaultPrevented, true);
+        assert.equal(
+            window.document.activeElement,
+            confirm,
+            'Shift+Tab wraps back to confirmation'
+        );
+        await key(confirm, 'Escape');
+        await render();
+        assert.equal(container.querySelector('[role="dialog"]'), null);
+        assert.equal(window.document.activeElement, find('summary', '0'));
+        assert.equal(
+            intents.filter((intent) => intent.type === 'logout').length,
+            0,
+            'Escape cancels without invoking host auth'
+        );
+        await React.act(async () => find('summary', '0').click());
+        await click('Log out');
+        await React.act(async () =>
+            container.querySelector('[role="dialog"] h2').click()
+        );
+        assert(
+            container.querySelector('[role="dialog"]'),
+            'Clicking logout dialog content keeps the confirmation open'
+        );
+        await React.act(async () =>
+            container.querySelector('.mx-sdk-portal-backdrop').click()
+        );
+        await render();
+        assert.equal(container.querySelector('[role="dialog"]'), null);
+        assert.equal(window.document.activeElement, find('summary', '0'));
+        assert.equal(
+            intents.filter((intent) => intent.type === 'logout').length,
+            0,
+            'Backdrop dismissal cancels without host auth'
+        );
+        await React.act(async () => find('summary', '0').click());
+        await click('Log out');
         await React.act(async () =>
             container.querySelector('[role="dialog"] button:last-child').click()
         );
@@ -369,6 +492,25 @@ export async function assertPortalShellConsumer({
         assert.equal(
             intents.filter((intent) => intent.type === 'search-again').length,
             2
+        );
+        const beforeSkip = {
+            intents: intents.length,
+            writes: writes.length,
+            reads: reads.length,
+        };
+        await React.act(async () => find('a', 'Skip to content').click());
+        assert.equal(
+            window.document.activeElement,
+            container.querySelector('main')
+        );
+        assert.deepEqual(
+            {
+                intents: intents.length,
+                writes: writes.length,
+                reads: reads.length,
+            },
+            beforeSkip,
+            'Skip-to-content only moves focus; it does not navigate the host, persist selection or read records'
         );
         const pendingForever = new Promise(() => {});
         function SuspendedSibling() {
@@ -407,7 +549,7 @@ export async function assertPortalShellConsumer({
         assert.equal(window.sessionStorage.length, 0);
         assert.equal(networks, 0);
         assert.equal(
-            window.location.href,
+            window.location.href.split('#')[0],
             'https://consumer.invalid/portal?viewId=open'
         );
         return {

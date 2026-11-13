@@ -8,7 +8,7 @@ import { CompletePortalShell } from '../src/react/CompletePortalShell.js';
 import { resolvePortalShellSelection } from '../src/portals/shell.js';
 import { assertPortalShellConsumer } from '../scripts/portal-shell-runtime.mjs';
 
-it('controlled SDK-owned shell: SSR, selection/remount, menus, embed, welcome, settings/logout and host effects', async () => {
+it('controlled SDK-owned shell: SSR, selection/remount, menus, modal keyboard/backdrop cancellation, skip focus and host effects', async () => {
     const result = await assertPortalShellConsumer({
         React,
         ui: { CompletePortalShell },
@@ -21,7 +21,7 @@ it('controlled SDK-owned shell: SSR, selection/remount, menus, embed, welcome, s
         navigationIntents: 4,
         storageEffects: 4,
         customViewReads: 1,
-        dismissals: 1,
+        dismissals: 3,
         implicitNetworkRequests: 0,
         ssrEffects: 0,
     });

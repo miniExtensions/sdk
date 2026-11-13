@@ -201,12 +201,23 @@ async function installed(directory, format, happyDomModulePath) {
         'window',
         'document',
         'navigator',
+        'Window',
+        'Document',
+        'DocumentFragment',
         'HTMLElement',
+        'HTMLInputElement',
+        'HTMLSelectElement',
+        'HTMLTextAreaElement',
+        'HTMLAnchorElement',
         'HTMLButtonElement',
         'HTMLDivElement',
+        'SVGElement',
+        'ShadowRoot',
         'Element',
         'Node',
         'NodeFilter',
+        'Event',
+        'FocusEvent',
         'CustomEvent',
         'CSS',
         'MutationObserver',
@@ -226,13 +237,15 @@ async function installed(directory, format, happyDomModulePath) {
         const value =
             key === 'IS_REACT_ACT_ENVIRONMENT'
                 ? true
-                : [
-                        'getComputedStyle',
-                        'requestAnimationFrame',
-                        'cancelAnimationFrame',
-                    ].includes(key)
-                  ? window[key].bind(window)
-                  : window[key];
+                : key === 'Window'
+                  ? Window
+                  : [
+                          'getComputedStyle',
+                          'requestAnimationFrame',
+                          'cancelAnimationFrame',
+                      ].includes(key)
+                    ? window[key].bind(window)
+                    : window[key];
         Object.defineProperty(globalThis, key, {
             configurable: true,
             writable: true,

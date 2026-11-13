@@ -608,7 +608,12 @@ export async function checkCalendarBrowser({
         assert.equal((await completeSnapshot()).pickerReads.length, 2);
         assert.deepEqual((await completeSnapshot()).writes, ['one']);
         await page.locator('[data-complete-calendar="disable"]').click();
-        await option(1).click({ position: { x: 6, y: 6 } });
+        assert.equal(await option(1).getAttribute('aria-disabled'), 'true');
+        const disabledRow = await option(1).boundingBox();
+        assert(disabledRow, 'Disabled row remains visibly presented');
+        // A real pointer can reach an aria-disabled list option. Playwright's
+        // enabled-action wait cannot express this deliberate refusal probe.
+        await page.mouse.click(disabledRow.x + 6, disabledRow.y + 6);
         assert.deepEqual((await completeSnapshot()).attempts, ['one', 'two']);
         await page.locator('[data-complete-calendar="error-loading"]').click();
         assert.equal(

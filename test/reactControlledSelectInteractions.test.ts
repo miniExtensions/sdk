@@ -56,37 +56,46 @@ async function fixture(t: TestContext) {
     let receipt = false;
     const writes: (string | null)[] = [];
     const metadata: string[] = [];
+    const parentEvents: string[] = [];
     let publication: ((name: string) => boolean | void) | undefined;
     const render = () =>
         root.render(
             h(
                 StrictMode,
                 null,
-                h(SingleSelectField, {
-                    choices,
-                    availableChoices: choices,
-                    value,
-                    owner: {
-                        token,
-                        isCurrent: () => current,
-                        canContinueMetadataPublication: () => receipt,
+                h(
+                    'div',
+                    {
+                        onClick: () => parentEvents.push('click'),
+                        onPointerDown: () => parentEvents.push('pointerdown'),
+                        onKeyDown: () => parentEvents.push('keydown'),
                     },
-                    presentation,
-                    readOnly,
-                    inputId: 'choice',
-                    ariaLabel: 'Decision',
-                    allowAddingNewOptions: true,
-                    publishMetadata: (choice) => {
-                        metadata.push(choice.name);
-                        return publication?.(choice.name);
-                    },
-                    onValueChange: (next) => {
-                        writes.push(next);
-                        if (!accept) return false;
-                        value = next;
-                        render();
-                    },
-                } satisfies ControlledSingleSelectFieldProps)
+                    h(SingleSelectField, {
+                        choices,
+                        availableChoices: choices,
+                        value,
+                        owner: {
+                            token,
+                            isCurrent: () => current,
+                            canContinueMetadataPublication: () => receipt,
+                        },
+                        presentation,
+                        readOnly,
+                        inputId: 'choice',
+                        ariaLabel: 'Decision',
+                        allowAddingNewOptions: true,
+                        publishMetadata: (choice) => {
+                            metadata.push(choice.name);
+                            return publication?.(choice.name);
+                        },
+                        onValueChange: (next) => {
+                            writes.push(next);
+                            if (!accept) return false;
+                            value = next;
+                            render();
+                        },
+                    } satisfies ControlledSingleSelectFieldProps)
+                )
             )
         );
     await act(async () => render());
@@ -159,6 +168,7 @@ async function fixture(t: TestContext) {
         create,
         writes,
         metadata,
+        parentEvents,
         render,
         setAccept(next: boolean) {
             accept = next;
@@ -346,4 +356,25 @@ it('list Add Choice retains prompt cancellation/equivalent-label suppression and
     assert.deepEqual(f.metadata, ['New']);
     assert.deepEqual(f.writes, ['New']);
     assert.equal(prompts, 3);
+});
+
+it('readonly Select content lets the host activate its grid cell while editable controls contain events', async (t) => {
+    const f = await fixture(t);
+    for (const readOnly of [false, true]) {
+        f.setReadOnly(readOnly);
+        await f.rerender();
+        f.parentEvents.length = 0;
+        const control = f.container.querySelector('.mx-sdk-select')!;
+        await act(async () => {
+            for (const type of ['click', 'pointerdown', 'keydown'])
+                control.dispatchEvent(
+                    new f.window.Event(type, { bubbles: true })
+                );
+        });
+        assert.deepEqual(
+            f.parentEvents,
+            readOnly ? ['click', 'pointerdown', 'keydown'] : []
+        );
+        assert.deepEqual(f.writes, []);
+    }
 });

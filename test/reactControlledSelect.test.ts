@@ -114,6 +114,7 @@ it('real controlled list publishes exact ordered values, permits cap reduction, 
     let value = ['Alpha', 'Pending'];
     const writes: string[][] = [];
     let current = true;
+    let limitToOneSelection = false;
     const owner = { token: {}, isCurrent: () => current };
     const render = () =>
         root.render(
@@ -122,6 +123,7 @@ it('real controlled list publishes exact ordered values, permits cap reduction, 
                 value,
                 owner,
                 maxSelections: 1,
+                limitToOneSelection,
                 onValueChange: (next) => {
                     writes.push(next);
                     value = next;
@@ -141,6 +143,12 @@ it('real controlled list publishes exact ordered values, permits cap reduction, 
     current = false;
     await act(async () => retained.click());
     assert.deepEqual(writes, [['Pending'], []]);
+    current = true;
+    limitToOneSelection = true;
+    value = ['Alpha'];
+    await act(async () => render());
+    await act(async () => container.querySelectorAll('input')[1]!.click());
+    assert.deepEqual(writes, [['Pending'], [], ['Pending']]);
 });
 
 it('same-field list instances retain unique option IDs and label targets', () => {
@@ -190,6 +198,68 @@ it('same-field list instances retain unique option IDs and label targets', () =>
             .filter((input) => input.type === 'radio')
             .map((input) => input.name);
         assert.equal(new Set(radioNames).size, 2);
+    } finally {
+        window.close();
+    }
+});
+
+it('limit-to-one Multiple Select lists retain radio presentation and ordered canonical values', () => {
+    const html = renderToStaticMarkup(
+        h(MultipleSelectsField, {
+            ...common,
+            value: ['Alpha'],
+            limitToOneSelection: true,
+            onValueChange: () => {
+                throw Error('render must not write');
+            },
+        })
+    );
+    const window = new Window();
+    try {
+        window.document.body.innerHTML = html;
+        const radios = [
+            ...window.document.querySelectorAll('input[type=radio]'),
+        ];
+        assert.equal(radios.length, 2);
+        assert.ok(radios[0] instanceof window.HTMLInputElement);
+        assert.equal(radios[0].checked, true);
+        assert.equal(
+            window.document.querySelector('input[type=checkbox]'),
+            null
+        );
+    } finally {
+        window.close();
+    }
+});
+
+it('unavailable canonical selections retain neutral badges in both readonly controls', () => {
+    const window = new Window();
+    try {
+        for (const multiple of [false, true]) {
+            const shared = {
+                ...common,
+                readOnly: true,
+                presentation: 'dropdown' as const,
+            };
+            window.document.body.innerHTML = renderToStaticMarkup(
+                multiple
+                    ? h(MultipleSelectsField, {
+                          ...shared,
+                          value: ['Missing'],
+                          onValueChange: () => {},
+                      })
+                    : h(SingleSelectField, {
+                          ...shared,
+                          value: 'Missing',
+                          onValueChange: () => {},
+                      })
+            );
+            const badge = window.document.querySelector('.mx-sdk-select-badge');
+            assert.ok(badge instanceof window.HTMLElement);
+            assert.equal(badge.textContent, 'Missing');
+            assert.equal(badge.style.backgroundColor, 'gray');
+            assert.equal(badge.style.color, '#f3f4f6');
+        }
     } finally {
         window.close();
     }

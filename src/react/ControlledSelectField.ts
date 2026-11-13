@@ -190,7 +190,13 @@ function SelectControl(props: ControlProps): ReactNode {
         props.choices.map((choice) => [choice.name, choice])
     );
     const selected = props.values.map(
-        (name) => lookup.get(name) ?? { id: `unavailable:${name}`, name }
+        (name) =>
+            lookup.get(name) ?? {
+                id: `unavailable:${name}`,
+                name,
+                backgroundColor: 'gray',
+                color: '#f3f4f6',
+            }
     );
     const candidates = props.availableChoices.filter(
         (choice) => !props.multiple || !props.values.includes(choice.name)
@@ -227,7 +233,10 @@ function SelectControl(props: ControlProps): ReactNode {
     const choose = (name: string) => {
         if (
             !writable() ||
-            !canAdd ||
+            (!canAdd &&
+                !(
+                    props.presentation === 'list' && props.limitToOneSelection
+                )) ||
             !props.availableChoices.some((choice) => choice.name === name)
         )
             return;
@@ -376,9 +385,9 @@ function SelectControl(props: ControlProps): ReactNode {
                 .filter(Boolean)
                 .join(' '),
             'data-style': props.presentation,
-            onClick: stop,
-            onPointerDown: stop,
-            onKeyDown: stop,
+            onClick: props.readOnly ? undefined : stop,
+            onPointerDown: props.readOnly ? undefined : stop,
+            onKeyDown: props.readOnly ? undefined : stop,
             onBlur: (event: import('react').FocusEvent<HTMLDivElement>) => {
                 if (!event.currentTarget.contains(event.relatedTarget))
                     update({ open: false });
@@ -407,7 +416,7 @@ function SelectControl(props: ControlProps): ReactNode {
                               key: key(choice),
                               className: 'mx-sdk-select-list-option',
                           },
-                          props.multiple
+                          props.multiple && !props.limitToOneSelection
                               ? h('input', {
                                     type: 'checkbox',
                                     id: optionId,

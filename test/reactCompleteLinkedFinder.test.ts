@@ -39,14 +39,30 @@ test('external view reuses native prefetch, preserves one coordinator through St
     });
     await f.resolve(['A', 'B']);
     assert.equal((await pending).status, 'accepted');
-    await f.render({ queryKey: 'native-open' });
+    assert.equal(
+        f.host.querySelectorAll('[data-testid="linked-record-selector-item"]')
+            .length,
+        0
+    );
+    await f.render({
+        queryKey: 'native-open',
+        optionTestId: 'linked-record-selector-item',
+    });
     assert.equal(f.reads.length, 1);
     assert.equal(f.host.querySelectorAll('[role="option"]').length, 2);
-    await f.render({ closeAfterToggle: true });
+    const nativeRows = f.host.querySelectorAll(
+        '[data-testid="linked-record-selector-item"]'
+    );
+    assert.equal(nativeRows.length, 2);
+    assert.equal(nativeRows[0].getAttribute('role'), 'option');
+    await f.render({
+        closeAfterToggle: true,
+        optionTestId: 'linked-record-selector-item',
+    });
     await act(async () =>
         (
             f.host.querySelectorAll(
-                '[role="option"]'
+                '[data-testid="linked-record-selector-item"]'
             )[0] as unknown as HTMLElement
         ).click()
     );

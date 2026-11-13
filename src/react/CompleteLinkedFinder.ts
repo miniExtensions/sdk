@@ -64,6 +64,8 @@ export type CompleteLinkedFinderProps<Row, Filter, Owner extends object> = {
     /** Host table/schema readiness, separate from query and paging state. */
     initialLoading?: boolean;
     className?: string;
+    /** Optional stable instrumentation on each selectable record row. */
+    optionTestId?: string;
     testing?: boolean;
     /** Main-form single-link preference. Close remains independently owner-fenced. */
     closeAfterToggle?: boolean;
@@ -258,6 +260,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                           h(Combobox.Option<'li', string>, {
                               key: id,
                               value: id,
+                              ...{ 'data-testid': props.optionTestId },
                               disabled: !optionEnabled(id),
                               className: ({ active, selected }) =>
                                   `mx-sdk-finder-record${active ? ' mx-sdk-finder-option-active' : ''}${selected ? ' mx-sdk-finder-record-selected' : ''}`,

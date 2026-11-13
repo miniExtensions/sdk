@@ -21,7 +21,7 @@ const identity:object|null=coordinator.getSnapshot().readIdentity;
 coordinator.getSnapshot().readIdentity={};
 void coordinator.toggle(owner,'A');
 void coordinator.toggle(owner,'B',{closeAfterAddition:true});
-const props:CompleteLinkedFinderViewProps<{id:string},string,object>={host,coordinator,queryOnMount:false,filter:'',queryKey:owner,searchTerm:'',onSearchTermChange(){},filterForSearch:value=>value,candidates:()=>[],labels:{search:'Buscar',loading:'Cargando',noMatches:'Ninguno',unavailable:'No disponible',loadMore:'Más'}};
+const props:CompleteLinkedFinderViewProps<{id:string},string,object>={host,coordinator,queryOnMount:false,filter:'',queryKey:owner,searchTerm:'',onSearchTermChange(){},filterForSearch:value=>value,candidates:()=>[],optionTestId:'host-record-option',labels:{search:'Buscar',loading:'Cargando',noMatches:'Ninguno',unavailable:'No disponible',loadMore:'Más'}};
 createElement(CompleteLinkedFinderView<{id:string},string,object>,props);
 const collection:LinkedFinderAttachmentCollectionProps={rows:[{key:'occurrence',label:'A',openLabel:'Abrir',imageSources:[],icon:'document'}],layout:'grid',columns:2,fit:'contain',showNames:false,owner:{isCurrent:()=>true},labels:{attachments:'Adjuntos',retry:'Reintentar',imageUnavailable:'No disponible'},onOpen:()=>({status:'admitted'})};
 createElement(LinkedFinderAttachmentCollection,collection);
@@ -72,7 +72,7 @@ for(const strict of [false,true]){
  const projection=id=>({status:'present',primary:id==='A'?'A <b>literal</b>':'B',fields:[],images:[],language:'en',layout:'list',imageFit:'cover',imageHeight:80,shouldRenderThumbnail:false,thumbnailLocation:'right',fieldsPerCardRow:1,labels:{previousImage:'Previous',nextImage:'Next',noImage:'None'}});
  const collectionOwner=owner;
  const collection={rows:[{key:'first',label:'A',openLabel:'Abrir primero',imageSources:[],icon:'document'},{key:'second',label:'A',openLabel:'Abrir segundo',imageSources:[],icon:'document'}],layout:'icon',columns:2,fit:'contain',showNames:true,owner:{isCurrent:()=>coordinator.getSnapshot().owner===collectionOwner},labels:{attachments:'Adjuntos',retry:'Reintentar',imageUnavailable:'No disponible'},onOpen:index=>{opens+=index+1;return{status:'admitted'};}};
- const element=()=>React.createElement(strict?React.StrictMode:React.Fragment,null,React.createElement(ui.CompleteLinkedFinderView,{host,coordinator,queryOnMount:false,queryKey:coordinator,filter:search,searchTerm:search,onSearchTermChange(value){search=value;root.render(element());},filterForSearch:value=>value,candidates:(_owner,ids)=>ids.map(id=>({id,projection:projection(id)})),labels,closeAfterToggle:true}),React.createElement(ui.LinkedFinderAttachmentCollection,collection));
+ const element=()=>React.createElement(strict?React.StrictMode:React.Fragment,null,React.createElement(ui.CompleteLinkedFinderView,{host,coordinator,queryOnMount:false,queryKey:coordinator,filter:search,searchTerm:search,onSearchTermChange(value){search=value;root.render(element());},filterForSearch:value=>value,candidates:(_owner,ids)=>ids.map(id=>({id,projection:projection(id)})),optionTestId:'host-record-option',labels,closeAfterToggle:true}),React.createElement(ui.LinkedFinderAttachmentCollection,collection));
  const html=renderToString(element());assert(html.includes('A &lt;b&gt;literal&lt;/b&gt;'));assert(html.includes('aria-label="Buscar"'));assert.equal(allocations,1);
  let network=0;
  const window=new Window({url:'http://localhost/',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true,disableIframePageLoading:true,fetch:{interceptor:{beforeAsyncRequest(){network++;throw Error('Unexpected network');},beforeSyncRequest(){network++;throw Error('Unexpected network');}}}}});
@@ -86,8 +86,8 @@ for(const strict of [false,true]){
  try{
   const {hydrateRoot}=await import('react-dom/client');
   await React.act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>recoverable.push(error.message)});});
-  assert.equal(container.querySelectorAll('[role="option"]').length,2);assert.equal(allocations,1);
-  await React.act(async()=>container.querySelectorAll('[role="option"]')[1].click());assert.deepEqual(canonical,['hidden','A','A','B']);assert.equal(closes,1);
+  assert.equal(container.querySelectorAll('[role="option"]').length,2);assert.equal(container.querySelectorAll('[data-testid="host-record-option"]').length,2);assert.equal(allocations,1);
+  await React.act(async()=>container.querySelectorAll('[data-testid="host-record-option"]')[1].click());assert.deepEqual(canonical,['hidden','A','A','B']);assert.equal(closes,1);
   await React.act(async()=>container.querySelectorAll('[role="option"]')[0].click());assert.deepEqual(canonical,['hidden','B']);assert.equal(closes,1);
   await React.act(async()=>{const input=container.querySelector('input[type="search"]');Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,'typed');input.dispatchEvent(new window.Event('input',{bubbles:true}));});assert.equal(search,'typed');
   await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));assert.equal(allocations,2);

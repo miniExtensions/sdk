@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import {
     createElement as h,
     forwardRef,
@@ -421,11 +422,13 @@ function EditingSingleLineText({
 
 /** Complete configured native presentation. TextField/renderSingleLineTextField
  * retain their existing binding semantics, including null writes and IME policy. */
-export const SingleLineTextField = forwardRef<
-    HTMLInputElement,
-    SingleLineTextFieldProps
->(function SingleLineTextField(props, ref) {
-    return props.mode === 'readOnly'
-        ? h(ReadOnlySingleLineText, props)
-        : h(EditingSingleLineText, { props, inputRef: ref });
-});
+export const SingleLineTextField: React.ForwardRefExoticComponent<
+    React.PropsWithoutRef<SingleLineTextFieldProps> &
+        React.RefAttributes<HTMLInputElement>
+> = forwardRef<HTMLInputElement, SingleLineTextFieldProps>(
+    function SingleLineTextField(props, ref) {
+        return props.mode === 'readOnly'
+            ? h(ReadOnlySingleLineText, props)
+            : h(EditingSingleLineText, { props, inputRef: ref });
+    }
+);

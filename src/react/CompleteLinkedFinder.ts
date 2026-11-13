@@ -108,6 +108,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
     }, [coordinator]);
     const snapshot = coordinator?.getSnapshot();
     const owner = snapshot?.owner ?? null;
+    const readIdentity = snapshot?.readIdentity ?? null;
     const selected = snapshot?.selectedIds ?? [];
     const enabled = snapshot?.selectionEnabled === true;
     const currentOwner = () => {
@@ -141,6 +142,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         if (
             !coordinator ||
             !owner ||
+            !readIdentity ||
             !offset ||
             loadingMore ||
             (!preview && snapshot?.phase !== 'ready') ||
@@ -148,11 +150,16 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
             typeof IntersectionObserver === 'undefined'
         )
             return;
+        let active = true;
         const observer = new IntersectionObserver(
             (entries) => {
+                if (!active) return;
+                const current = coordinator.getSnapshot();
                 if (
+                    active &&
                     entries.some((entry) => entry.isIntersecting) &&
-                    coordinator.getSnapshot().owner === owner
+                    current.owner === owner &&
+                    current.readIdentity === readIdentity
                 )
                     void coordinator.queryNow({
                         filter: props.filter,
@@ -162,10 +169,14 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
             { root: scroll.current, rootMargin: '400px' }
         );
         observer.observe(sentinel.current);
-        return () => observer.disconnect();
+        return () => {
+            active = false;
+            observer.disconnect();
+        };
     }, [
         coordinator,
         owner,
+        readIdentity,
         offset,
         loadingMore,
         preview !== null,
@@ -303,24 +314,8 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                     (id) => count(value, id) !== count(selected, id)
                 );
                 if (changed != null)
-                    void coordinator.toggle(owner, changed).then((result) => {
-                        if (
-                            result.status !== 'admitted' ||
-                            !props.closeAfterToggle
-                        )
-                            return;
-                        try {
-                            // Single-link selection closes after an addition;
-                            // a canonical removal remains available for repair.
-                            if (
-                                host.isOwnerCurrent(owner) &&
-                                host.selection(owner)?.ids.includes(changed) &&
-                                host.isOwnerCurrent(owner)
-                            )
-                                host.close(owner);
-                        } catch {
-                            // Unreadable current selection/owner cannot grant close.
-                        }
+                    void coordinator.toggle(owner, changed, {
+                        closeAfterAddition: props.closeAfterToggle === true,
                     });
             },
             children: h(

@@ -68,6 +68,8 @@ callbacks schedule their own request. `initialLoading` is the host's table/schem
 readiness. Initial loading precedes errors, then admitted rows, then the supplied
 empty label; pagination keeps the rows and displays its own loading indicator.
 The observer uses the actual scrolling element and a `400px` root margin.
+Each observer retains the snapshot's opaque `readIdentity` and retires on
+cleanup; an old queued intersection cannot supersede a newer same-owner search.
 Selection can be disabled while retaining searchable presentation. Scanner
 configuration composes the existing scanner hook and never grants selection.
 `CompleteLinkedFinderView` composes an existing committed coordinator without
@@ -78,6 +80,11 @@ cursor and error without creating model options or a loading transition.
 Search callbacks receive the manual or barcode source. `closeAfterToggle`
 implements the main Form's single-link preference only after toggle admission;
 close still uses the captured owner and its separate native fence.
+The view delegates this preference to
+`toggle(expectedOwner, id, { closeAfterAddition: true })`. Close also retains
+the selection's search intent: a newer attempted direct or scheduled search
+retires it, even when the same owner remains or the new read is refused.
+Current canonical removal and ordinary two-argument toggles do not close.
 
 Cards have explicit `loading`, `unavailable` and `present` variants. The host
 chooses each exhaustive leaf variant after schema/config filtering, conversion,
@@ -172,3 +179,12 @@ navigation without granting edit/upload/delete authority. Inline document
 thumbnails use the existing `DocumentThumbnail` contract; discovered PDF
 requires its explicit same-origin version-matched worker/resource asset URLs.
 Omitting those assets remains unavailable presentation, not PDF qualification.
+
+`check:package` runs the installed Finder consumer for React 18 and 19 with
+ESM and CommonJS declaration/runtime exports. It checks SSR hydration, ordinary
+and StrictMode presentation, real controlled search events, canonical duplicate
+membership, current single-link close, retained pagination callbacks and
+attachment opening retirement. The consumer verifies installed module/CSS bytes
+against the packed archive and uses only synthetic host ports, with network
+disabled. This package matrix remains separate from actual native adapter and
+browser qualification.

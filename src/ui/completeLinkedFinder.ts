@@ -85,6 +85,8 @@ export type CompleteLinkedFinderQueryResult<Row, Owner extends object> =
 
 export type CompleteLinkedFinderSnapshot<Row, Owner extends object> = {
     readonly owner: Owner | null;
+    /** Opaque latest-read identity for fencing retained presentation callbacks. */
+    readonly readIdentity: object | null;
     readonly phase: 'idle' | 'loading' | 'ready' | 'error' | 'retired';
     readonly loadingMore: boolean;
     /** Ordered accepted raw occurrences, never deduplicated for scan authority. */
@@ -116,7 +118,9 @@ export type CompleteLinkedFinderCoordinator<
     ): CompleteLinkedFinderScheduleAdmission<Owner>;
     toggle(
         expectedOwner: Owner,
-        id: string
+        id: string,
+        /** Single-link UI preference; close remains a separately fenced host action. */
+        behavior?: { readonly closeAfterAddition?: boolean }
     ): Promise<CompleteLinkedFinderAdmission>;
     scan(
         request: CompleteLinkedFinderRequest<Filter>
@@ -145,6 +149,7 @@ export function createCompleteLinkedFinderCoordinator<
     type Result = CompleteLinkedFinderQueryResult<Row, Owner>;
     type Ticket = {
         owner: Owner;
+        identity: object;
         read: CompleteLinkedFinderRead<Row>;
         append: boolean;
         resetOffset: boolean;
@@ -263,6 +268,7 @@ export function createCompleteLinkedFinderCoordinator<
         const currentOwner = expected && owns(expected) ? expected : null;
         return {
             owner: currentOwner,
+            readIdentity: latest?.identity ?? null,
             phase,
             loadingMore,
             rawRecords,
@@ -329,6 +335,7 @@ export function createCompleteLinkedFinderCoordinator<
                 return { status: 'refused', reason: 'unavailable' };
             const ticket = {
                 owner: expected,
+                identity: Object.freeze({}),
                 read,
                 append: !request.resetOffset && readOffset !== null,
                 resetOffset: request.resetOffset,
@@ -551,11 +558,38 @@ export function createCompleteLinkedFinderCoordinator<
 
     async function toggle(
         expected: Owner,
-        id: string
+        id: string,
+        behavior?: { readonly closeAfterAddition?: boolean }
     ): Promise<CompleteLinkedFinderAdmission> {
-        if (!owns(expected) || !selection(expected)?.enabled || !owns(expected))
-            return { status: 'refused' };
-        return host.toggle(expected, id);
+        const intent = intentSequence;
+        const selected = selection(expected);
+        if (!selected?.enabled || !owns(expected)) return { status: 'refused' };
+        const wasSelected = selected.ids.includes(id);
+        const result = await host.toggle(expected, id);
+        if (
+            result.status === 'admitted' &&
+            behavior?.closeAfterAddition &&
+            !wasSelected
+        ) {
+            const sameIntent = () =>
+                intent === intentSequence &&
+                owns(expected) &&
+                intent === intentSequence;
+            try {
+                // The admitted write can advance its read's selected-value
+                // stamp. Close instead retains the captured search intent and
+                // owner, including reentrant host selection/publication calls.
+                if (
+                    sameIntent() &&
+                    selection(expected)?.ids.includes(id) &&
+                    sameIntent()
+                )
+                    host.close(expected);
+            } catch {
+                // Close refusal/failure does not undo an admitted toggle.
+            }
+        }
+        return result;
     }
 
     async function scan(request: CompleteLinkedFinderRequest<Filter>) {
@@ -586,7 +620,9 @@ export function createCompleteLinkedFinderCoordinator<
             if (
                 toggled.status !== 'admitted' ||
                 latest !== ticket ||
-                !owns(expected)
+                !owns(expected) ||
+                latest !== ticket ||
+                ticket.intent !== intentSequence
             )
                 return { status: 'unchanged' } as const;
             const closed = host.close(expected);

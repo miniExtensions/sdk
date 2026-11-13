@@ -1,5 +1,6 @@
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
+import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
@@ -3528,6 +3529,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(formGroupMatrix.versions.length, 2);
     assert.equal(formGroupMatrix.cleanup, 'completed');
+    const linkedFinderMatrix = checkCompleteLinkedFinderReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(linkedFinderMatrix.profiles.length, 4);
+    assert.equal(linkedFinderMatrix.cleanup, 'completed');
     const attachmentPreviewMatrix = checkAttachmentPreviewReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

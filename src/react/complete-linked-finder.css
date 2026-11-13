@@ -371,6 +371,7 @@
 }
 .mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-item {
     height: 100%;
+    aspect-ratio: 1;
     flex-shrink: 0;
 }
 .mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-visual {

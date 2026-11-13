@@ -163,9 +163,10 @@ form captions and column counts. No opening callback grants no opening
 authority. A captured current owner fences opening and image retry; these
 controls do not select the containing option or submit its form.
 
-The host retains the raw admitted attachment collection, navigation, modal,
-open/download policy and dismissal. Display proxy URLs need not become modal
-sources: rewriting an admitted URL can erase URL-only media classification.
+The host retains the original admitted occurrences, presentation resource
+projection, navigation, modal, open/download policy and dismissal. Preserve the
+host's effective resource and classification policy explicitly; rewriting URLs
+or inventing MIME can change URL-only media behavior.
 Hosts can compose the existing `AttachmentPreview` body in their own controlled
 navigation without granting edit/upload/delete authority. Inline document
 thumbnails use the existing `DocumentThumbnail` contract; discovered PDF

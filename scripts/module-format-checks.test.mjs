@@ -660,6 +660,7 @@ for (const name of [
     'currency',
     'multiple-select',
     'linked-records',
+    'complete-linked-finder',
     'single-select',
     'controlled-select',
 ]) {

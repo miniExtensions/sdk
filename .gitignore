@@ -16,3 +16,4 @@ coverage/
 !.env.example
 examples/react-form-header/.generated/
 examples/react-rollup/.generated/
+examples/react-complete-linked-finder/.generated/

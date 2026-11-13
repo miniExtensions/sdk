@@ -571,6 +571,21 @@ test('a scan superseded during an admitted toggle cannot close the newer search'
     f.coordinator.destroy();
 });
 
+test('an admitted scan toggle may advance its consumed selection read stamp while independently current close remains admitted', async () => {
+    const f = fixture();
+    const toggle = f.host.toggle;
+    f.host.toggle = async (owner, id) => {
+        const result = await toggle(owner, id);
+        f.configure({ postCurrent: false });
+        return result;
+    };
+    const pending = f.coordinator.scan(request('scan'));
+    f.allocated[0].resolve(page(['new']));
+    assert.deepEqual(await pending, { status: 'selected', id: 'new' });
+    assert.equal(f.closes.length, 1);
+    f.coordinator.destroy();
+});
+
 test('throwing scan eligibility reports failure without toggle or close', async () => {
     const f = fixture();
     const cause = new Error('eligibility');
@@ -616,3 +631,58 @@ test('read replacement during loading notification refuses allocation and does n
     assert.equal((await pending).status, 'accepted');
     f.coordinator.destroy();
 });
+
+for (const previous of ['queued', 'allocated'] as const) {
+    for (const preparation of ['refused', 'failed'] as const) {
+        test(`newer ${preparation} preparation retires older ${previous} rights without cancelling transport`, async (t) => {
+            t.mock.timers.enable({ apis: ['setTimeout'] });
+            const f = fixture();
+            const old =
+                previous === 'allocated'
+                    ? f.coordinator.queryNow(request('old'))
+                    : undefined;
+            if (previous === 'queued')
+                f.coordinator.scheduleSearch(request('old'));
+            f.host.captureRead = () => {
+                if (preparation === 'failed')
+                    throw Error('Capture unavailable');
+                return null;
+            };
+            assert.equal(
+                (await f.coordinator.queryNow(request('new'))).status,
+                preparation === 'failed' ? 'failure' : 'refused'
+            );
+            t.mock.timers.tick(10);
+            assert.equal(f.allocated.length, previous === 'allocated' ? 1 : 0);
+            if (old) {
+                f.allocated[0].resolve(page(['old-private']));
+                assert.equal((await old).status, 'retired');
+            }
+            assert.equal(f.publications.length, 0);
+            assert.deepEqual(f.coordinator.getSnapshot().rawRecords, []);
+            assert.equal(f.coordinator.getSnapshot().phase, 'idle');
+            f.coordinator.destroy();
+        });
+    }
+}
+
+for (const completion of ['refused', 'throw'] as const) {
+    test(`reentrant ${completion} capture reports retired after a newer accepted intent`, async () => {
+        const f = fixture();
+        const capture = f.host.captureRead;
+        let newer: ReturnType<typeof f.coordinator.queryNow> | undefined;
+        f.host.captureRead = (owner, input) => {
+            f.host.captureRead = capture;
+            newer = f.coordinator.queryNow(request('newer'));
+            if (completion === 'throw') throw Error('Old capture failure');
+            return null;
+        };
+        assert.equal(
+            (await f.coordinator.queryNow(request('old'))).status,
+            'retired'
+        );
+        f.allocated[0].resolve(page(['newer']));
+        assert.equal((await newer)?.status, 'accepted');
+        f.coordinator.destroy();
+    });
+}

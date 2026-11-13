@@ -1,3 +1,4 @@
+import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
     checkNativePortalKernelConsumer,
@@ -640,6 +641,7 @@ try {
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
                 path === 'docs/saved-progress.md' ||
+                path === 'docs/portal-shell.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
@@ -750,6 +752,9 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/attachment-preview.css',
         'dist/cjs/react/attachment-preview.css',
+        'dist/esm/react/portal-shell.css',
+        'dist/cjs/react/portal-shell.css',
+        'docs/portal-shell.md',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
@@ -2959,6 +2964,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const portalShellProof = checkPortalShellReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(portalShellProof.versions.length, 2);
+    assert.equal(portalShellProof.cleanup, 'completed');
     const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

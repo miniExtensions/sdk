@@ -199,6 +199,7 @@ export function assertModuleFormats(root) {
                 './react/address-field.css',
                 './react/html-description.css',
                 './react/complete-duration.css',
+                './react/portal-shell.css',
                 './react/search-gate.css',
                 './react/complete-calendly.css',
                 './react/complete-record-comments.css',

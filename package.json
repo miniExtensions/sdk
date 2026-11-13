@@ -196,7 +196,8 @@
         },
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
-        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css"
+        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
+        "./react/portal-shell.css": "./dist/esm/react/portal-shell.css"
     },
     "files": [
         "dist/esm",
@@ -268,7 +269,8 @@
         "docs/single-line-text.md",
         "docs/customer-chat.md",
         "docs/csv-export.md",
-        "docs/kanban.md"
+        "docs/kanban.md",
+        "docs/portal-shell.md"
     ],
     "engines": {
         "node": ">=22"

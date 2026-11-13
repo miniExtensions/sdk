@@ -7,6 +7,10 @@ import {
 } from 'react';
 import type { RuntimeFieldSchema } from '../runtime/types.js';
 import type { FieldRendererProps } from '../ui/rendererRegistry.js';
+import {
+    CompleteLocalizedNumericField,
+    type CompleteLocalizedNumericFieldOptions,
+} from './CompleteLocalizedNumericField.js';
 
 export type CurrencyFieldOptions = {
     /** Applied to the wrapper; the optional stylesheet can be replaced entirely. */
@@ -14,6 +18,22 @@ export type CurrencyFieldOptions = {
     /** Accessible Clear label; defaults to "Clear <field title>". */
     clearLabel?: string;
 };
+
+/** Explicit native-unit contract; the legacy binding API keeps its raw grammar. */
+export type ControlledCurrencyFieldProps = FieldRendererProps<'currency'> & {
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+
+export function ControlledCurrencyField(
+    props: ControlledCurrencyFieldProps
+): ReactNode {
+    return createElement(CompleteLocalizedNumericField, {
+        field: props,
+        options: props.options,
+    });
+}
 
 type CurrencyConfig = RuntimeFieldSchema['miniExtConfig'] | null;
 export function currencyConfiguration(

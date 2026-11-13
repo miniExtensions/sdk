@@ -409,6 +409,17 @@ to recognize currency bindings. Import `@miniextensions/sdk/react/currency.css`
 for optional defaults. See [React Currency presentation](ui.md#react-currency-presentation)
 for the bounded input contract, readonly fallback and Form/Grid/List usage.
 
+For host-controlled localized presentation, pass the accepted
+`FieldRendererProps<'currency'>` directly to `CurrencyField`. Its explicit
+`physicalKind: 'currency'` discriminator selects the existing
+`CompleteLocalizedNumericField` engine. `ControlledCurrencyFieldProps` accepts
+that field contract plus `options` for current-owner admission, deferred commits,
+input/form associations and localized Clear/empty labels. Import
+`@miniextensions/sdk/react/localized-numeric.css` for this presentation. Display
+precision and grouping do not write or round the canonical value on mount, focus
+or untouched blur. The binding and `renderCurrencyField` contracts above retain
+their raw numeric grammar.
+
 ## Duration clock input
 
 Duration uses the existing `binding.scalar` owner and native numeric seconds or

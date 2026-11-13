@@ -36,8 +36,9 @@ store. Cancel restores the drag-start local snapshot while its source and policy
 An authoritative projection replacement or readonly/modal policy transition retires
 the unallocated drag surface, sensor callbacks and old cancel snapshot. It starts
 from current projected rows and may reset card-local carousel presentation.
-This does not cancel or fence an already allocated category operation. A drop outside the board
-retains native local-preview semantics rather than claiming a remote rollback.
+This does not cancel or fence an already allocated category operation. A completion with no collision target (`over === null`) retains native
+local-preview semantics rather than claiming a remote rollback. Cached collision
+targets can still admit a drop beyond a visible column.
 Column drag handles are not newly enabled: the native frame did not attach them.
 The standalone frame uses 300px columns and preserves the native empty-column
 keyboard target offset (20px,74px); browser geometry must qualify this composition.

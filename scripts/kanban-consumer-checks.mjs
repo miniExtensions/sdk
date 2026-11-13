@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
+    existsSync,
     mkdtempSync,
     readFileSync,
     realpathSync,
@@ -33,7 +35,7 @@ const fixtureData = String.raw`
 const fields=[{id:'status',config:{type:'singleSelect',options:{choices:[{id:'open',name:'Open'},{id:'closed',name:'Closed'},{id:'empty',name:'Empty'}]}}}];
 function richFields(models,url,action){
  const config={type:'number',options:{precision:2}};
- const number=models.createRendererProps({physicalKind:'number',fieldId:'number',title:'Amount',field:{id:'number',name:'Amount',description:null,isComputed:false,isPrimaryField:false,config},displayConfig:null,value:-12.5,context:'linked-detail',computed:false,dirty:false,pending:false,validation:[],error:null,capability:{type:'readonly'}});
+ const number={physicalKind:'number',presentation:{type:'physical',config},fieldId:'number',title:'Amount',field:{id:'number',name:'Amount',description:null,isComputed:false,isPrimaryField:false,config},displayConfig:null,value:-12.5,context:'linked-detail',computed:false,dirty:false,pending:false,validation:[],error:null,capability:{type:'readonly'}};
  return [
  {key:'text',title:'Text',leaf:{kind:'text',display:{value:'Literal text',language:'en'}}},
  {key:'html',title:'HTML',leaf:{kind:'html',html:'<p><strong>HTML content</strong><script>unexpected()</script></p>'}},
@@ -43,7 +45,7 @@ function richFields(models,url,action){
  {key:'date',title:'Date',leaf:{kind:'date',display:{airtableDateConfig:{type:'date',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}},value:'2026-11-13',language:'en'}}},
  {key:'datetime',title:'Date time',leaf:{kind:'dateTime',display:{airtableDateConfig:{type:'dateTime',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'},timeFormat:{name:'24hour',format:'HH:mm'},timeZone:'utc'}},value:'2026-11-13T12:00:00.000Z',language:'en'}}},
  {key:'phone',title:'Phone',leaf:{kind:'phone',display:{value:'+15550000001',emptyLabel:'No phone'}}},
- {key:'duration',title:'Duration',leaf:{kind:'duration',display:{value:3661,format:'h:mm:ss',emptyLabel:'No duration'}}},
+ {key:'duration',title:'Duration',leaf:{kind:'duration',display:{value:3661,format:'h:mm:ss',language:'en'}}},
  {key:'checkbox',title:'Checkbox',leaf:{kind:'checkbox',value:true,checkedLabel:'Checked',uncheckedLabel:'Unchecked'}},
  {key:'barcode',title:'Barcode',leaf:{kind:'barcode',display:{value:{text:'Synthetic barcode',type:'code128'},language:'en'}}},
  {key:'button',title:'Action',leaf:{kind:'button',accepted:{mode:'controlled',value:{label:'Rich action',url:'/synthetic'},config:{openLinkType:'triggerWebhookPOST'},onTriggerWebhook:action}}},
@@ -113,6 +115,26 @@ export function checkKanbanReactMatrix({
             })
         );
         writeFileSync(join(directory, 'runtime.mjs'), kanbanRuntimeConsumer);
+        run('npm', [
+            'install',
+            '--ignore-scripts',
+            '--strict-peer-deps',
+            '--no-audit',
+            '--no-fund',
+            '--package-lock=false',
+        ]);
+        for (const name of [
+            'react',
+            'react-dom',
+            '@dnd-kit/core',
+            '@dnd-kit/sortable',
+            'use-state-with-deps',
+        ])
+            assert(
+                !existsSync(join(directory, 'node_modules', name)),
+                `Optional/private dependency installed for headless consumer: ${name}`
+            );
+
         for (const version of [
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
@@ -200,7 +222,8 @@ function browserEntry(format) {
         imports +
         fixtureData +
         String.raw`
-const calls={events:[],opens:[],unlinks:[],rich:0,errors:[],requests:0,submits:0,keys:[]};
+const calls={events:[],opens:[],unlinks:[],rich:0,errors:[],requests:0,submits:0,keys:[],csp:[]};
+document.addEventListener('securitypolicyviolation',event=>calls.csp.push({directive:event.effectiveDirective,blocked:event.blockedURI}));
 const oldError=console.error;console.error=(...args)=>{calls.errors.push(args.map(String).join(' '));oldError(...args);};
 window.addEventListener('error',event=>calls.errors.push(event.error?.message??event.message));
 window.addEventListener('unhandledrejection',event=>calls.errors.push(String(event.reason)));
@@ -227,7 +250,7 @@ function render(){
 }
 render();
 window.__kanbanProbe={
- snapshot(){return{calls:JSON.parse(JSON.stringify(calls)),records:JSON.parse(JSON.stringify(records)),model:{...model},pending:pending.length,react:React.version,platform:navigator.platform,storage:{local:localStorage.length,session:sessionStorage.length}};},
+ snapshot(){return{calls:JSON.parse(JSON.stringify(calls)),records:JSON.parse(JSON.stringify(records)),model:{...model},pending:pending.length,columns:api.projectKanbanColumns(source).map(({id,label})=>({id,label})),react:React.version,platform:navigator.platform,storage:{local:localStorage.length,session:sessionStorage.length}};},
  replace(patch){Object.assign(model,patch);if(patch.rows||patch.hideEmpty!==undefined){source=makeSource();}render();},
  reset(){records={a:{id:'a',fields:{status:'Open',sibling:'A'}},b:{id:'b',fields:{status:'Open',sibling:'B'}},c:{id:'c',fields:{status:'Closed',sibling:'C'}},legacy:{id:'legacy',fields:{status:'Old choice',sibling:'Legacy'}}};Object.assign(model,{readOnly:false,modalOpen:false,mounted:true,rich:false,pending:false,hideEmpty:false,rows:['a','b','c','legacy']});source=makeSource();render();},
  settle(outcome){const target=pending.shift();if(!target)throw Error('No pending mutation');if(outcome==='reject')target.reject(Error('Synthetic mutation failure'));else target.resolve(outcome==='logged-in'?{type:'logged-in',loggedInUserRecord:{synthetic:true}}:{type:'no-login'});},
@@ -253,6 +276,7 @@ export async function prepareKanbanBrowserFixtures({
 }) {
     report.kanban = { profiles: {}, results: [] };
     for (const format of ['esm', 'cjs']) {
+        const nonce = randomBytes(18).toString('base64');
         const entry = join(temporary, 'kanban-' + format + '.mjs');
         writeFileSync(entry, browserEntry(format));
         const bundle = await build({
@@ -266,7 +290,10 @@ export async function prepareKanbanBrowserFixtures({
             write: false,
             metafile: true,
             legalComments: 'none',
-            define: { 'process.env.NODE_ENV': '"production"' },
+            define: {
+                'process.env.NODE_ENV': '"production"',
+                __webpack_nonce__: JSON.stringify(nonce),
+            },
         });
         await assertBrowserInputs(bundle.metafile, temporary);
         const inputs = Object.keys(bundle.metafile.inputs).map((name) => {
@@ -287,6 +314,21 @@ export async function prepareKanbanBrowserFixtures({
             return item;
         });
         assert(inputs.some((item) => item.path.endsWith('/kanban/runtime.js')));
+        const runtimeBundle = JSON.parse(
+            readArchiveMember(
+                'package/dist/' + format + '/react/kanban/runtime.bundle.json'
+            )
+        );
+        assert(runtimeBundle.packages.includes('@dnd-kit/core'));
+        assert.equal(
+            runtimeBundle.provenance['@dnd-kit/core'].version,
+            '6.1.0'
+        );
+        const runtimeInput = inputs.find((item) =>
+            item.path.endsWith('/kanban/runtime.js')
+        );
+        assert.equal(runtimeInput.sha256, runtimeBundle.outputSha256);
+
         const outputs = [];
         for (const output of bundle.outputFiles) {
             const name = '/' + output.path.split('/').pop();
@@ -298,6 +340,7 @@ export async function prepareKanbanBrowserFixtures({
             });
         }
         report.kanban.profiles[format] = {
+            styleNonce: nonce,
             sourceSha256: hash(browserEntry(format)),
             inputs,
             outputs,
@@ -305,7 +348,9 @@ export async function prepareKanbanBrowserFixtures({
         allowed.set(
             '/kanban-' + format + '.html',
             Buffer.from(
-                "<!doctype html><html><head><meta charset=utf-8><meta http-equiv=Content-Security-Policy content=\"default-src 'none';script-src 'self';style-src 'self';img-src 'self' data:;connect-src 'none';base-uri 'none';form-action 'none'\"><link rel=icon href=data:,><link rel=stylesheet href=/kanban-" +
+                "<!doctype html><html><head><meta charset=utf-8><meta http-equiv=Content-Security-Policy content=\"default-src 'none';script-src 'self';style-src 'self' 'nonce-" +
+                    nonce +
+                    "';img-src 'self' data:;connect-src 'none';base-uri 'none';form-action 'none'\"><link rel=icon href=data:,><link rel=stylesheet href=/kanban-" +
                     format +
                     '.css><link rel=icon href=data:,><link rel=stylesheet href=/kanban-fixture.css><title>Kanban</title></head><body><main></main><script type=module src=/kanban-' +
                     format +
@@ -349,6 +394,31 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 patch
             );
         const reset = () => page.evaluate(() => window.__kanbanProbe.reset());
+        const keyboardReady = (id) =>
+            page.waitForFunction(
+                (id) =>
+                    [...document.querySelectorAll('[role="status"]')].some(
+                        (node) =>
+                            node.textContent?.includes(
+                                'was moved over droppable area ' + id
+                            )
+                    ),
+                id
+            );
+        const moveKey = async (key, target, label) => {
+            await page.keyboard.press(key);
+            if (label)
+                await page.waitForFunction(
+                    (label) =>
+                        document
+                            .querySelector('section [data-kanban-record="a"]')
+                            ?.closest('.mx-sdk-kanban-column')
+                            ?.querySelector('.mx-sdk-kanban-column-label')
+                            ?.textContent === label,
+                    label
+                );
+            else await keyboardReady(target);
+        };
         const source = (id) =>
             page.locator(
                 'section.mx-sdk-kanban [data-kanban-record="' + id + '"]'
@@ -369,6 +439,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         const verify = async (name) => {
             const snapshot = await state();
             assert.deepEqual(snapshot.calls.errors, []);
+            assert.deepEqual(snapshot.calls.csp, []);
             assert.equal(snapshot.calls.requests, 0);
             assert.equal(snapshot.calls.submits, 0);
             assert.deepEqual(snapshot.storage, { local: 0, session: 0 });
@@ -516,11 +587,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         assert.match(await leaf('Date time').innerText(), /12:00/);
         assert.match(await leaf('Phone').innerText(), /555/);
         assert.match(await leaf('Duration').innerText(), /1:01:01/);
-        assert(
-            await leaf('Checkbox')
-                .getByRole('checkbox', { name: 'Checked' })
-                .isChecked()
-        );
+        assert(await leaf('Checkbox').getByRole('checkbox').isChecked());
         assert.match(await leaf('Barcode').innerText(), /Synthetic barcode/);
         assert.equal(
             await leaf('Sequence')
@@ -619,7 +686,8 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await page.keyboard.press('ArrowDown');
+        await keyboardReady('a');
+        await moveKey('ArrowDown', 'b');
         await page.keyboard.press('Space');
         await overlay().waitFor({ state: 'detached' });
         assert.deepEqual(await order('Open'), ['b', 'a']);
@@ -633,7 +701,8 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await page.keyboard.press('ArrowRight');
+        await keyboardReady('a');
+        await moveKey('ArrowRight', 'c', 'Closed');
         await page.keyboard.press('Space');
         await page.waitForFunction(
             () =>
@@ -646,8 +715,14 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await page.keyboard.press('ArrowRight');
-        await page.keyboard.press('ArrowRight');
+        await keyboardReady('a');
+        await moveKey('ArrowRight', 'c', 'Closed');
+        await moveKey(
+            'ArrowRight',
+            (await state()).columns.find((column) => column.label === 'Empty')
+                .id,
+            'Empty'
+        );
         await page.keyboard.press('Space');
         await page.waitForFunction(
             () =>
@@ -655,6 +730,52 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 'Empty'
         );
         await verify('trusted-keyboard-empty-column-geometry');
+
+        await reset();
+        await source('a').focus();
+        await page.keyboard.press('Space');
+        await overlay().waitFor();
+        await keyboardReady('a');
+        await moveKey(
+            'ArrowLeft',
+            (await state()).columns.find(
+                (column) => column.label === 'Uncategorized'
+            ).id,
+            'Uncategorized'
+        );
+        await page.keyboard.press('Space');
+        await page.waitForFunction(
+            () =>
+                window.__kanbanProbe.snapshot().records.a.fields.status === null
+        );
+        assert.equal((await state()).calls.events.at(-1).value, null);
+        await verify('trusted-keyboard-uncategorized-id-to-null-value');
+
+        await reset();
+        await source('a').focus();
+        await page.keyboard.press('Space');
+        await overlay().waitFor();
+        await keyboardReady('a');
+        await moveKey('ArrowRight', 'c', 'Closed');
+        await moveKey(
+            'ArrowRight',
+            (await state()).columns.find((column) => column.label === 'Empty')
+                .id,
+            'Empty'
+        );
+        await moveKey('ArrowRight', 'legacy', 'Old choice');
+        assert(
+            (await page
+                .locator('.mx-sdk-kanban-board')
+                .evaluate((node) => node.scrollLeft)) > 0
+        );
+        await page.keyboard.press('Space');
+        await page.waitForFunction(
+            () =>
+                window.__kanbanProbe.snapshot().records.a.fields.status ===
+                'Old choice'
+        );
+        await verify('trusted-keyboard-horizontal-scroll-to-stale-category');
 
         for (const flag of ['readOnly', 'modalOpen']) {
             await reset();
@@ -727,6 +848,9 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await reset();
         const touchBefore = await page.evaluate(() => navigator.maxTouchPoints);
         const touch = await page.context().newCDPSession(page);
+        let touchActive = false,
+            touchError;
+        const touchCleanup = {};
         try {
             await touch.send('Emulation.setTouchEmulationEnabled', {
                 enabled: true,
@@ -749,9 +873,10 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 type: 'touchStart',
                 touchPoints: [{ x: a.x + 8, y: a.y + 12 }],
             });
+            touchActive = true;
             await touch.send('Input.dispatchTouchEvent', {
                 type: 'touchMove',
-                touchPoints: [{ x: a.x + 14, y: a.y + 18 }],
+                touchPoints: [{ x: a.x + 38, y: a.y + 42 }],
             });
             await overlay().waitFor();
             for (let step = 1; step <= 8; step++)
@@ -759,8 +884,8 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                     type: 'touchMove',
                     touchPoints: [
                         {
-                            x: a.x + 14 + ((b.x + 25 - a.x - 14) * step) / 8,
-                            y: a.y + 18 + ((b.y + 80 - a.y - 18) * step) / 8,
+                            x: a.x + 38 + ((b.x + 25 - a.x - 38) * step) / 8,
+                            y: a.y + 42 + ((b.y + 80 - a.y - 42) * step) / 8,
                         },
                     ],
                 });
@@ -768,6 +893,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 type: 'touchEnd',
                 touchPoints: [],
             });
+            touchActive = false;
             await page.waitForFunction(
                 () =>
                     window.__kanbanProbe.snapshot().records.a.fields.status ===
@@ -777,16 +903,45 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 await page.evaluate(() => window.__kanbanTouchTrusted),
                 [true]
             );
+        } catch (error) {
+            touchError = error;
         } finally {
-            await touch.send('Input.dispatchTouchEvent', {
-                type: 'touchCancel',
-                touchPoints: [],
-            });
-            await touch.send('Emulation.setTouchEmulationEnabled', {
-                enabled: touchBefore > 0,
-                maxTouchPoints: Math.max(1, touchBefore),
-            });
-            await touch.detach();
+            const failures = [];
+            for (const [name, cleanup] of [
+                [
+                    'input',
+                    async () => {
+                        if (touchActive)
+                            await touch.send('Input.dispatchTouchEvent', {
+                                type: 'touchCancel',
+                                touchPoints: [],
+                            });
+                    },
+                ],
+                [
+                    'emulation',
+                    () =>
+                        touch.send('Emulation.setTouchEmulationEnabled', {
+                            enabled: touchBefore > 0,
+                            maxTouchPoints: Math.max(1, touchBefore),
+                        }),
+                ],
+                ['session', () => touch.detach()],
+            ])
+                try {
+                    await cleanup();
+                    touchCleanup[name] = 'completed';
+                } catch (error) {
+                    touchCleanup[name] = { error: error.message };
+                    failures.push(error);
+                }
+            result.touchCleanup = touchCleanup;
+            if (failures.length)
+                throw new AggregateError(
+                    [...(touchError ? [touchError] : []), ...failures],
+                    'Kanban touch body/cleanup failed'
+                );
+            if (touchError) throw touchError;
         }
         assert.equal(
             await page.evaluate(() => navigator.maxTouchPoints),
@@ -839,7 +994,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
 
         result.react = (await state()).react;
         result.platform = (await state()).platform;
-        assert.equal(result.groups.length, 17);
+        assert.equal(result.groups.length, 19);
     }
     return evidence;
 }

@@ -248,6 +248,8 @@ async function installed(directory, format, happyDomModulePath) {
     host.innerHTML = ssr.html;
     document.body.append(host);
     let events = 0;
+    const days = [];
+    const focuses = [];
     let options = props();
     let root;
     const recoverable = [];
@@ -257,11 +259,15 @@ async function installed(directory, format, happyDomModulePath) {
             null,
             React.createElement(api.CalendarMonthGrid, {
                 ...options,
-                onDayChange() {
+                onDayChange(day) {
                     events++;
+                    days.push(day);
+                    options = { ...options, selectedDay: day };
+                    root.render(element());
                 },
-                onFocusChange() {
+                onFocusChange(day) {
                     events++;
+                    focuses.push(day);
                 },
             })
         );
@@ -312,6 +318,60 @@ async function installed(directory, format, happyDomModulePath) {
             0,
             'presentation switches must not emit focus/day intents'
         );
+        const day = (date) => {
+            const result = host.querySelector(
+                `[data-date="${date}"] .mx-sdk-calendar__day`
+            );
+            assert(result);
+            return result;
+        };
+        await React.act(async () =>
+            day('2026-02-16').dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
+        );
+        assert.deepEqual(days, ['2026-02-16']);
+        assert.equal(day('2026-02-16').getAttribute('data-selected'), 'true');
+        const beforePortalArrow = [...focuses];
+        await React.act(async () =>
+            day('2026-02-16').dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'ArrowRight',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.deepEqual(focuses, beforePortalArrow);
+        options = { ...options, surface: 'picker' };
+        await React.act(async () => root.render(element()));
+        await React.act(async () =>
+            day('2026-02-16').dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'ArrowRight',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(focuses.at(-1), '2026-02-17');
+        await React.act(async () =>
+            host
+                .querySelector('button[aria-label="Forward"]')
+                .dispatchEvent(
+                    new window.MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        detail: 0,
+                    })
+                )
+        );
+        assert(focuses.at(-1).startsWith('2026-03'));
+        assert.deepEqual(days, ['2026-02-16']);
         return {
             react: React.version,
             format,

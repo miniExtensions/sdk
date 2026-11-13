@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const calendarTypedConsumer = `
@@ -94,10 +94,17 @@ async function installed(directory, format, happyDomModulePath) {
     );
     assert.equal(consumer('react-aria/package.json').version, '3.53.1');
     assert.equal(consumer('react-stately/package.json').version, '3.51.0');
-    assert.equal(
-        consumer('@internationalized/date/package.json').version,
-        '3.12.4'
+    const datePackage = JSON.parse(
+        readFileSync(
+            join(
+                dirname(dirname(consumer.resolve('@internationalized/date'))),
+                'package.json'
+            ),
+            'utf8'
+        )
     );
+    assert.equal(datePackage.name, '@internationalized/date');
+    assert.equal(datePackage.version, '3.12.4');
     const policy = await load(consumer, 'ui', format);
     const field = {
         id: 'date',
@@ -360,15 +367,13 @@ async function installed(directory, format, happyDomModulePath) {
         );
         assert.equal(focuses.at(-1), '2026-02-17');
         await React.act(async () =>
-            host
-                .querySelector('button[aria-label="Forward"]')
-                .dispatchEvent(
-                    new window.MouseEvent('click', {
-                        bubbles: true,
-                        cancelable: true,
-                        detail: 0,
-                    })
-                )
+            host.querySelector('button[aria-label="Forward"]').dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
         );
         assert(focuses.at(-1).startsWith('2026-03'));
         assert.deepEqual(days, ['2026-02-16']);

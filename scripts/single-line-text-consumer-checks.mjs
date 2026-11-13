@@ -16,7 +16,7 @@ h(TextField, {binding});
 const immediate: ControlledSingleLineTextFieldProps = {mode:'controlled',value:null,onChange(value){const scalar:string=value;void scalar;},language:'en',title:'Name',characterLimit:8,initialMobile:false};
 h(SingleLineTextField, {...immediate,ref:createRef<HTMLInputElement>()});
 h(SingleLineTextField, {...immediate,enableInlineEdit:true,owner});
-const preview: SingleLineTextFieldProps = {...immediate,address:{mode:'preview',explanation:'Standalone form only'}};
+const preview: SingleLineTextFieldProps = {...immediate,address:{mode:'preview' as const,explanation:'Standalone form only'}};
 h(SingleLineTextField,preview);
 h(SingleLineTextField,{mode:'readOnly',value:'https://example.test/file.pdf',language:'en',obscurePassword:true,displayAsAttachments:true,displayAsButton:true});
 // @ts-expect-error deferred editing needs captured native authority
@@ -409,7 +409,7 @@ export function checkSingleLineTextReactMatrix({
             );
             assert.equal(result.react, version.react);
             assert.equal(result.checks, 36);
-            assert.ok(result.bindingChecks > 0);
+            assert.ok(result.bindingChecks.checks > 0);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);
         }

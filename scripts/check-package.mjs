@@ -594,6 +594,7 @@ try {
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
+                path === 'docs/single-line-text.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
@@ -634,6 +635,13 @@ try {
         'docs/testing.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
+        'docs/single-line-text.md',
+        'dist/esm/react/SingleLineTextField.js',
+        'dist/esm/react/SingleLineTextField.d.ts',
+        'dist/cjs/react/SingleLineTextField.js',
+        'dist/cjs/react/SingleLineTextField.d.ts',
+        'dist/esm/react/single-line-text.css',
+        'dist/cjs/react/single-line-text.css',
         'docs/customer-chat.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
@@ -1777,7 +1785,17 @@ new Parser([]).parse({maxDepth:'48'});
 
     // React is an optional host framework, never an SDK dependency. Check the
     // actual documented recipe only after proving dependency-free UI imports.
-    const reactRecipes = [...uiGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g)];
+    const singleLineRecipes = [
+        ...readFileSync(
+            join(installedPackage, 'docs/single-line-text.md'),
+            'utf8'
+        ).matchAll(/```tsx\n([\s\S]*?)\n```/g),
+    ];
+    assert(singleLineRecipes.length > 0, 'Missing shipped Single-line recipes');
+    const reactRecipes = [
+        ...uiGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g),
+        ...singleLineRecipes,
+    ];
     assert(reactRecipes.length > 0, 'Missing React mount/dispose recipe');
     run('npm', [
         'install',

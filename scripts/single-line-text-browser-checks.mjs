@@ -34,7 +34,7 @@ import '@miniextensions/sdk/react/single-line-text.css';
 const stats={writes:[],queries:[],details:[],submits:0,fetches:0};let patch,current='A',release;
 globalThis.fetch=async()=>{stats.fetches++;throw Error('No live requests');};
 const labels={clear:'Clear',loadingPredictions:'Loading suggestions',loadingDetails:'Loading selected address',failed:'Unable to load',retry:'Try again'};
-function App(){const [state,setState]=useState({main:'seed',deferred:'seed',address:'',source:'A',disabled:false});
+function App(){const [state,setState]=useState({main:'seed',deferred:'seed',address:'',preview:'manual',password:'secret',source:'A',disabled:false});
 patch=next=>{if(next.source)current=next.source;flushSync(()=>setState(old=>({...old,...next})));};
 const owner={token:state.source,isCurrent:()=>current===state.source};
 const change=key=>value=>{stats.writes.push([key,value]);setState(old=>({...old,[key]:value}));};
@@ -45,8 +45,8 @@ h('p',{id:'main-help'},'Keep literal whitespace. Five UTF-16 units.'),
 h(SingleLineTextField,{mode:'controlled',id:'main',title:'Immediate text',form:'proof-form',value:state.main,onChange:change('main'),language:'en',characterLimit:5,initialMobile:true,describedBy:'main-help',owner,disabled:state.disabled}),
 h(SingleLineTextField,{mode:'controlled',id:'deferred',title:'Deferred text',form:'proof-form',value:state.deferred,onChange:change('deferred'),language:'en',characterLimit:4,initialMobile:true,enableInlineEdit:true,owner,disabled:state.disabled}),
 h(SingleLineTextField,{mode:'controlled',id:'address',title:'Address text',form:'proof-form',value:state.address,onChange:change('address'),language:'en',characterLimit:5,initialMobile:true,owner,address}),
-h(SingleLineTextField,{mode:'controlled',id:'preview',title:'Preview text',value:'manual',onChange:change('preview'),language:'en',initialMobile:true,address:{mode:'preview',explanation:'Suggestions require the standalone form'}}),
-h(SingleLineTextField,{mode:'controlled',id:'password',title:'Password text',value:'secret',onChange:change('password'),language:'en',initialMobile:true,obscurePassword:true,address}),
+h(SingleLineTextField,{mode:'controlled',id:'preview',title:'Preview text',value:state.preview,onChange:change('preview'),language:'en',initialMobile:true,address:{mode:'preview',explanation:'Suggestions require the standalone form'}}),
+h(SingleLineTextField,{mode:'controlled',id:'password',title:'Password text',value:state.password,onChange:change('password'),language:'en',initialMobile:true,obscurePassword:true,address}),
 h('section',{'aria-label':'Masked display'},h(SingleLineTextField,{mode:'readOnly',value:'https://example.test/private.pdf',language:'en',obscurePassword:true,displayAsAttachments:true,displayAsButton:true})),
 h('input',{'aria-label':'Sibling draft',defaultValue:'keep sibling'}),
 h('button',{type:'button',onClick:()=>patch({source:state.source==='A'?'B':'A'})},'Replace owner'),

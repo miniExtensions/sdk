@@ -2402,6 +2402,7 @@ try {
                 console.log(`Native Chromium ${name}: passed`);
             } catch (error) {
                 item.status = 'failed';
+                item.url = page.url();
                 item.error = error.message;
                 item.pageErrors = errors;
                 try {

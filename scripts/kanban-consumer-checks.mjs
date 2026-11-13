@@ -880,6 +880,30 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         let touchActive = false,
             touchError;
         const touchCleanup = {};
+        const observation = (result.touchObservation = {
+            startUrl: page.url(),
+            navigation: [],
+            events: [],
+        });
+        const onNavigation = (frame) => {
+            if (frame === page.mainFrame())
+                observation.navigation.push({
+                    at: new Date().toISOString(),
+                    url: frame.url(),
+                });
+        };
+        const onConsole = (message) => {
+            const prefix = 'SDK_KANBAN_TOUCH_OBSERVATION ';
+            const text = message.text();
+            if (!text.startsWith(prefix)) return;
+            try {
+                observation.events.push(JSON.parse(text.slice(prefix.length)));
+            } catch (error) {
+                observation.eventReadError = error.message;
+            }
+        };
+        page.on('framenavigated', onNavigation);
+        page.on('console', onConsole);
         try {
             await touch.send('Emulation.setTouchEmulationEnabled', {
                 enabled: true,
@@ -889,15 +913,92 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             const a = await source('a').boundingBox(),
                 b = await column('Closed').boundingBox();
             assert(a && b);
-            await page.evaluate(() => {
-                window.__kanbanTouchTrusted = [];
-                document.addEventListener(
-                    'touchstart',
-                    (event) =>
-                        window.__kanbanTouchTrusted.push(event.isTrusted),
-                    { once: true }
-                );
-            });
+            observation.before = await page.evaluate(
+                ({ a, b }) => {
+                    window.__kanbanTouchTrusted = [];
+                    document.addEventListener(
+                        'touchstart',
+                        (event) =>
+                            window.__kanbanTouchTrusted.push(event.isTrusted),
+                        { once: true }
+                    );
+                    const pending = new Set();
+                    const capture = (event) => {
+                        record(event, 'capture');
+                        // A task observes the final flag after every event listener.
+                        // No awaited pause is added to input or the drop assertion.
+                        const timer = setTimeout(() => {
+                            pending.delete(timer);
+                            record(event, 'after-dispatch');
+                        }, 0);
+                        pending.add(timer);
+                    };
+                    const bubble = (event) => record(event, 'bubble');
+                    const record = (event, phase) => {
+                        console.debug(
+                            'SDK_KANBAN_TOUCH_OBSERVATION ' +
+                                JSON.stringify({
+                                    type: event.type,
+                                    phase,
+                                    trusted: event.isTrusted,
+                                    defaultPrevented: event.defaultPrevented,
+                                    at: performance.now(),
+                                    touches: [...event.touches].map(
+                                        (point) => ({
+                                            x: point.clientX,
+                                            y: point.clientY,
+                                        })
+                                    ),
+                                    target: event.target?.tagName,
+                                    url: location.href,
+                                })
+                        );
+                    };
+                    const types = [
+                        'touchstart',
+                        'touchmove',
+                        'touchend',
+                        'touchcancel',
+                    ];
+                    for (const type of types) {
+                        document.addEventListener(type, capture, {
+                            capture: true,
+                            passive: true,
+                        });
+                        document.addEventListener(type, bubble, {
+                            passive: true,
+                        });
+                    }
+                    window.__stopKanbanTouchObservation = () => {
+                        for (const timer of pending) clearTimeout(timer);
+                        pending.clear();
+                        for (const type of types) {
+                            document.removeEventListener(type, capture, true);
+                            document.removeEventListener(type, bubble);
+                        }
+                    };
+                    const target = document.elementFromPoint(a.x + 8, a.y + 12);
+                    return {
+                        url: location.href,
+                        historyLength: history.length,
+                        viewport: { width: innerWidth, height: innerHeight },
+                        scroll: { x: scrollX, y: scrollY },
+                        boardScrollLeft: document.querySelector(
+                            '.mx-sdk-kanban-board'
+                        )?.scrollLeft,
+                        source: a,
+                        destination: b,
+                        target: target?.tagName,
+                        targetTouchAction: target
+                            ? getComputedStyle(target).touchAction
+                            : null,
+                        targetRecord: target
+                            ?.closest('[data-kanban-record]')
+                            ?.getAttribute('data-kanban-record'),
+                    };
+                },
+                { a, b }
+            );
             await touch.send('Input.dispatchTouchEvent', {
                 type: 'touchStart',
                 touchPoints: [{ x: a.x + 8, y: a.y + 12 }],
@@ -932,6 +1033,11 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 await page.evaluate(() => window.__kanbanTouchTrusted),
                 [true]
             );
+            assert.equal(
+                page.url(),
+                observation.startUrl,
+                'A trusted Kanban category drop must stay on its board'
+            );
         } catch (error) {
             touchError = error;
         } finally {
@@ -964,6 +1070,26 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                     touchCleanup[name] = { error: error.message };
                     failures.push(error);
                 }
+            observation.endUrl = page.url();
+            try {
+                observation.after = await page.evaluate(() => {
+                    window.__stopKanbanTouchObservation?.();
+                    delete window.__stopKanbanTouchObservation;
+                    return {
+                        url: location.href,
+                        historyLength: history.length,
+                        probePresent: Boolean(window.__kanbanProbe),
+                        snapshot: window.__kanbanProbe?.snapshot(),
+                        focus: document.activeElement?.tagName,
+                        bodyText: document.body.innerText.slice(0, 1500),
+                    };
+                });
+            } catch (error) {
+                observation.captureError = error.message;
+            } finally {
+                page.off('framenavigated', onNavigation);
+                page.off('console', onConsole);
+            }
             result.touchCleanup = touchCleanup;
             if (failures.length)
                 throw new AggregateError(

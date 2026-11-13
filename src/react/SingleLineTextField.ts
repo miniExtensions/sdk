@@ -69,7 +69,7 @@ type ControlledPresentation = {
     address?: SingleLineTextAddressOptions;
     scanner?: Omit<
         BarcodeScannerFieldOptions,
-        'fieldType' | 'setValue' | 'ownerKey' | 'readOnly'
+        'fieldType' | 'setValue' | 'ownerKey' | 'readOnly' | 'isCurrent'
     >;
     className?: string;
     inputClassName?: string;
@@ -148,6 +148,7 @@ type ControllerProps = ControlledSingleLineTextFieldProps & {
     inputId: string;
     inputRef: ForwardedRef<HTMLInputElement>;
     generationIsCurrent(): boolean;
+    allowAutoStart: boolean;
 };
 
 function SingleLineTextController(props: ControllerProps): ReactNode {
@@ -176,7 +177,7 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
         props.disabled === true ||
         props.readOnly === true ||
         (props.enableInlineEdit === true && props.owner == null);
-    const emit = (raw: string, detached = false, clear = false) => {
+    const admits = (detached = false) => {
         const current = live.current;
         if (
             current == null ||
@@ -186,12 +187,12 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
             current.readOnly ||
             (props.enableInlineEdit === true && props.owner == null)
         )
-            return;
+            return false;
         if (props.owner != null) {
             try {
-                if (props.owner.isCurrent() !== true) return;
+                if (props.owner.isCurrent() !== true) return false;
             } catch {
-                return;
+                return false;
             }
         }
         // A host authority check may reenter React; never adopt its successor.
@@ -200,7 +201,11 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
             !props.generationIsCurrent() ||
             (!lease.mounted && !detached)
         )
-            return;
+            return false;
+        return true;
+    };
+    const emit = (raw: string, detached = false, clear = false) => {
+        if (!admits(detached)) return;
         const value = clear || limit == null ? raw : raw.slice(0, limit);
         if (input.current != null)
             setSelection({
@@ -211,9 +216,12 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
     };
     const scanner = useBarcodeScannerButtonInField({
         ...props.scanner,
+        autoStartCamera:
+            props.allowAutoStart && props.scanner?.autoStartCamera === true,
         fieldType: 'singleLineText',
         readOnly: disabled,
         ownerKey: lease,
+        isCurrent: admits,
         setValue: (value) => emit(value),
     });
     const address = props.obscurePassword ? undefined : props.address;
@@ -236,6 +244,8 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
         form: props.form,
         placeholder: props.placeholder,
         className,
+        'data-at-limit': reached,
+        'data-with-scanner': scanner.barcodeScannerButton != null,
         disabled,
         readOnly: props.readOnly,
         maxLength: limit,
@@ -282,7 +292,32 @@ function SingleLineTextController(props: ControllerProps): ReactNode {
                 ? h(CompleteAddressAutocomplete, {
                       ...inputProps,
                       identity: address.identity,
-                      reads: address.reads,
+                      reads: {
+                          listPredictions: (query, options) => {
+                              if (!admits())
+                                  return Promise.reject(
+                                      new Error(
+                                          'Address owner is no longer current'
+                                      )
+                                  );
+                              return address.reads.listPredictions(
+                                  query,
+                                  options
+                              );
+                          },
+                          getFormattedAddress: (placeId, options) => {
+                              if (!admits())
+                                  return Promise.reject(
+                                      new Error(
+                                          'Address owner is no longer current'
+                                      )
+                                  );
+                              return address.reads.getFormattedAddress(
+                                  placeId,
+                                  options
+                              );
+                          },
+                      },
                       labels: address.labels,
                       theme: address.theme,
                       ref: addressInput,
@@ -380,6 +415,7 @@ function EditingSingleLineText({
         inputId: id,
         inputRef,
         generationIsCurrent: () => committed.current === selected,
+        allowAutoStart: selected.generation === 0,
     });
 }
 

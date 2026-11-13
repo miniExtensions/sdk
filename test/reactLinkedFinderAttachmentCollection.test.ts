@@ -145,3 +145,65 @@ test('collection image failures use supplied ordered sources and retry without o
     assert.match(f.host.querySelector('img')!.src, /thumbnail.png$/);
     assert.equal(opens, 0);
 });
+
+for (const strict of [false, true]) {
+    test(`unsupported document discovery retains the collection play icon (${strict ? 'StrictMode' : 'ordinary'})`, async (t) => {
+        const f = await scannerDom(t);
+        const old = Object.getOwnPropertyDescriptor(
+            globalThis,
+            'IntersectionObserver'
+        );
+        class Observer {
+            constructor(
+                private callback: (
+                    entries: { isIntersecting: boolean }[]
+                ) => void
+            ) {}
+            observe() {
+                this.callback([{ isIntersecting: true }]);
+            }
+            disconnect() {}
+        }
+        Object.defineProperty(globalThis, 'IntersectionObserver', {
+            configurable: true,
+            value: Observer,
+        });
+        t.after(() => {
+            if (old)
+                Object.defineProperty(globalThis, 'IntersectionObserver', old);
+            else Reflect.deleteProperty(globalThis, 'IntersectionObserver');
+        });
+        t.mock.method(
+            globalThis,
+            'fetch',
+            async () =>
+                new Response('', { headers: { 'Content-Type': 'video/mp4' } })
+        );
+        const value = props();
+        await f.render(
+            h(LinkedFinderAttachmentCollection, {
+                ...value,
+                layout: 'grid',
+                rows: [
+                    {
+                        ...value.rows[0],
+                        imageSources: [],
+                        icon: 'play',
+                        document: {
+                            uri: 'https://example.test/opaque',
+                            options: { source: { kind: 'uri' } },
+                        },
+                    },
+                ],
+            }),
+            strict
+        );
+        await act(async () => {});
+        const icon = f.host.querySelector(
+            '.mx-sdk-finder-attachment-fallback svg path'
+        );
+        assert(icon);
+        assert.equal(icon.getAttribute('d'), 'M8 5v14l11-7L8 5Z');
+        assert.doesNotMatch(f.host.textContent, /unavailable/i);
+    });
+}

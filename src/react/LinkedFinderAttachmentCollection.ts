@@ -148,6 +148,7 @@ function Thumbnail({
                           identity: row.key,
                           visible,
                           inGrid: view.layout === 'grid',
+                          unavailable: fallback(),
                       })
                   )
                 : fallback()

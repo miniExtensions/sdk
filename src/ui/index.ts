@@ -1,5 +1,17 @@
 export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
 export {
+    createCompleteLinkedFinderCoordinator,
+    type CompleteLinkedFinderPage,
+    type CompleteLinkedFinderRequest,
+    type CompleteLinkedFinderAdmission,
+    type CompleteLinkedFinderRead,
+    type CompleteLinkedFinderSelection,
+    type CompleteLinkedFinderHost,
+    type CompleteLinkedFinderQueryResult,
+    type CompleteLinkedFinderSnapshot,
+    type CompleteLinkedFinderCoordinator,
+} from './completeLinkedFinder.js';
+export {
     createRecordCommentsController,
     presentRecordComment,
     type RecordComment,

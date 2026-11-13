@@ -660,6 +660,7 @@ for (const name of [
     'multiple-select',
     'linked-records',
     'single-select',
+    'controlled-select',
 ]) {
     test(`the exported ${name} stylesheet is hashed as an asset and checked on installation`, (t) => {
         const { root, manifest } = fixture(t);

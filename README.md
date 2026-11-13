@@ -282,7 +282,11 @@ It does not resolve identities, display email or avatar data, or grant writes.
 `CreatedByField`, `CreatedByFieldProps`, `CreatedByFieldOptions` and the typed
 `renderCreatedByField` slot. It displays the supplied native collaborator name
 with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
-It does not resolve identities, display email or avatar data, or grant writes.
+The binding/helper does not resolve identities, display email or avatar data, or
+grant writes. Explicit `mode="controlled"` provides the complete readonly
+collaborator badge, supplied name/email fallback and opt-in avatar policy using
+`@miniextensions/sdk/react/complete-collaborators.css`. No edit owner, choices,
+change callback or picker is required or forwarded.
 
 [External Sync Source presentation](docs/ui.md#react-external-sync-source-presentation)
 exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,

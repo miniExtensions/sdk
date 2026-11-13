@@ -16,7 +16,8 @@ import {
 
 export const completeCollaboratorTypedConsumer = String.raw`import { createElement } from 'react';
 import {
-    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField,
+    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField, CreatedByField,
+    type CreatedByFieldProps, type BindingCreatedByFieldProps, type ControlledCreatedByFieldProps,
     type ControlledSingleCollaboratorFieldProps, type SingleCollaboratorFieldProps,
     type CompleteCollaborator, type CompleteCollaboratorEditOwner,
     type CompleteSingleCollaboratorFieldProps,
@@ -27,6 +28,23 @@ type Native = CompleteCollaborator & { nativeMetadata: { order: number } };
 const a: Native = { id: 'usr_a', name: '<b>Literal</b>', email: 'a@example.invalid', nativeMetadata: { order: 2 } };
 const choices: readonly Native[] = [a];
 const owner: CompleteCollaboratorEditOwner = { token: {}, isCurrent: () => true };
+const creator: ControlledCreatedByFieldProps<Native> = { mode: 'controlled', value: a, title: 'Creator', labels: { empty: 'No creator' } };
+createElement(CreatedByField<Native>, creator);
+declare const legacyCreator: CreatedByFieldProps;
+const bindingCreator: BindingCreatedByFieldProps = legacyCreator;
+createElement(CreatedByField, bindingCreator);
+// @ts-expect-error computed creators cannot receive edit authority
+const creatorOwner: ControlledCreatedByFieldProps<Native> = { ...creator, owner };
+// @ts-expect-error computed creators cannot receive a write callback
+const creatorWrite: ControlledCreatedByFieldProps<Native> = { ...creator, onValueChange() {} };
+// @ts-expect-error readonly cannot be disabled for a computed creator
+const creatorEditable: ControlledCreatedByFieldProps<Native> = { ...creator, readOnly: false };
+// @ts-expect-error computed creators have no removal label callback
+const creatorRemove: ControlledCreatedByFieldProps<Native> = { ...creator, labels: { remove: () => 'Remove' } };
+// @ts-expect-error controlled creators cannot borrow bindings or render overrides
+createElement(CreatedByField<Native>, { ...creator, binding: legacyCreator.binding });
+// @ts-expect-error projected creator identities are objects, not strings
+const creatorId: ControlledCreatedByFieldProps<Native> = { ...creator, value: 'usr_a' };
 const avatarPolicy: CollaboratorAvatarPolicy = { type: 'source', getSource(url) { return { src: '/optimized?url=' + encodeURIComponent(url), srcSet: '/small 1x, /large 2x', sizes: '32px', loading: 'lazy', decoding: 'async' }; } };
 const single: CompleteSingleCollaboratorFieldProps<Native> = {
     value: a, choices, owner, inputId: 'single', formId: 'owner-form',
@@ -93,6 +111,7 @@ const b = { id: 'usr_b', name: 'Beta', email: 'beta@example.invalid', nativeMeta
 const retired = { id: 'usr_retired', name: '<img src=x onerror=alert(1)>', email: 'retired@example.invalid' };
 const duplicate = { ...a, name: 'Alpha occurrence' };
 const load = () => format === 'esm' ? import('@miniextensions/sdk/react') : Promise.resolve(require('@miniextensions/sdk/react'));
+const creatorServerNode = api => React.createElement(api.CreatedByField, { mode: 'controlled', value: retired, title: 'Created by', inputId: 'ssr-creator' });
 const editableServerNode = (api, common) => React.createElement('form', { id: 'ssr-form' },
     React.createElement('label', { id: 'ssr-label', htmlFor: 'ssr-person' }, 'Assignee'),
     React.createElement('span', { id: 'ssr-help' }, 'Choose a person'),
@@ -137,7 +156,10 @@ if (mode === 'ssr') {
     assert(avatars.includes('alt=""') && avatars.includes('width="32"') && avatars.includes('height="32"'));
     assert.equal(writes, 0);
     assert.equal(typeof globalThis.document, 'undefined', 'import and SSR must not create DOM');
-    console.log(JSON.stringify({ react: React.version, format, mode, groups: 1, writes, html, editable, cleanup: 'completed' }));
+    const creator = renderToString(creatorServerNode(api));
+    assert(creator.includes('&lt;img src=x onerror=alert(1)&gt;'));
+    assert(!/<(?:input|button|img)\b/.test(creator));
+    console.log(JSON.stringify({ react: React.version, format, mode, groups: 2, writes, html, editable, creator, cleanup: 'completed' }));
 } else {
     assert.equal(mode, 'dom');
     const { Window } = await import(pathToFileURL(process.argv[4]).href);
@@ -204,6 +226,7 @@ if (mode === 'ssr') {
         for (const [html, rendered, selector] of [
             [server.html, React.createElement(api.MultipleCollaboratorsField, { mode: 'controlled', ...hydrationCommon, value: [a, retired, duplicate], readOnly: true }), 'li'],
             [server.editable, editableServerNode(api, hydrationCommon), 'input'],
+            [server.creator, creatorServerNode(api), 'li'],
         ]) {
             const host = window.document.createElement('div');
             host.innerHTML = html; window.document.body.append(host);
@@ -449,12 +472,13 @@ const { build } = await import(pathToFileURL(process.argv[2]).href);
 const format = process.argv[3];
 const sdk = resolve('node_modules/@miniextensions/sdk');
 const script = format === 'esm'
- ? "import {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};"
- : "const {SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};";
+ ? "import {CreatedByField,SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField} from '@miniextensions/sdk/react'; export {CreatedByField,SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};"
+ : "const {CreatedByField,SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField}=require('@miniextensions/sdk/react'); module.exports={CreatedByField,SingleCollaboratorField,CompleteSingleCollaboratorField,CompleteMultipleCollaboratorsField,MultipleCollaboratorsField};";
 writeFileSync('production-entry.' + (format === 'esm' ? 'mjs' : 'cjs'), script);
 const result = await build({ entryPoints: ['production-entry.' + (format === 'esm' ? 'mjs' : 'cjs')], bundle: true, platform: 'browser', format: 'esm', minify: true, write: false, metafile: true, define: {'process.env.NODE_ENV':'"production"'} });
 const inputs = Object.keys(result.metafile.inputs);
 assert(inputs.some((path) => resolve(path) === join(sdk, 'dist', format, 'react/CompleteCollaboratorField.js')));
+assert(inputs.some((path) => resolve(path) === join(sdk, 'dist', format, 'react/CreatedByField.js')));
 assert(inputs.some((path) => resolve(path) === join(sdk, 'dist', format, 'react/completeCollaboratorPickerRuntime.js')));
 assert(!inputs.some((path) => /[/\\](?:next|@headlessui)[/\\]/.test(path)), 'consumer must not supply native Next or dev Headless UI');
 assert(result.outputFiles[0].contents.length > 0);
@@ -586,6 +610,21 @@ console.log(JSON.stringify(result));`
                 ])
             );
             assert.equal(legacySingle.checks, 94);
+            const creatorHelper = new URL(
+                './created-by-consumer-checks.mjs',
+                import.meta.url
+            ).href;
+            writeFileSync(
+                join(directory, 'creator-consumer.mjs'),
+                `import {checkCreatedByConsumer} from ${JSON.stringify(creatorHelper)};console.log(JSON.stringify(await checkCreatedByConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]})));`
+            );
+            const creator = JSON.parse(
+                run(process.execPath, [
+                    'creator-consumer.mjs',
+                    happyDomModulePath,
+                ]).trim()
+            );
+            assert.equal(creator.checks, 28);
 
             writeFileSync(
                 join(directory, 'production-build.mjs'),
@@ -716,7 +755,11 @@ console.log(JSON.stringify(result));`
                 const hydrationFile = `hydration-${format}.json`;
                 writeFileSync(
                     join(directory, hydrationFile),
-                    JSON.stringify({ html: ssr.html, editable: ssr.editable })
+                    JSON.stringify({
+                        html: ssr.html,
+                        editable: ssr.editable,
+                        creator: ssr.creator,
+                    })
                 );
                 const dom = JSON.parse(
                     run(process.execPath, [
@@ -735,7 +778,7 @@ console.log(JSON.stringify(result));`
                     ]).trim()
                 );
                 assert.equal(ssr.react, version.react);
-                assert.equal(ssr.groups, 1);
+                assert.equal(ssr.groups, 2);
                 assert.equal(ssr.cleanup, 'completed');
                 assert.equal(dom.react, version.react);
                 assert.equal(dom.groups, 8);
@@ -749,6 +792,7 @@ console.log(JSON.stringify(result));`
                     ssr: true,
                     legacyBindingChecks: legacy.checks,
                     legacySingleBindingChecks: legacySingle.checks,
+                    createdByChecks: creator.checks,
                     syntheticGroups: dom.groups,
                     production: true,
                     childSha256: createHash('sha256')

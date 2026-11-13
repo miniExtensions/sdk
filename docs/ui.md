@@ -1989,9 +1989,50 @@ After building, run `node examples/react-last-modified-by/dev.mjs` and open
 ## React Created By presentation
 
 The optional `/react` entry exports `CreatedByField`, `CreatedByFieldProps`,
+`BindingCreatedByFieldProps`, `ControlledCreatedByFieldProps`,
 `CreatedByFieldOptions` and `renderCreatedByField`. The binding component accepts
 `{ binding, render }` plus `className` and `clearLabel`. Supplying `render` replaces
 all stock markup. The options alias `TextFieldOptions`.
+
+Native hosts can supply projected display data through explicit controlled mode.
+It reuses `CompleteSingleCollaboratorField` while always forcing readonly. The
+host retains admission, identity, configuration and avatar-policy authority.
+Supplied names fall back to email using the existing complete badge semantics;
+no identity lookup is added. Null shows `labels.empty`, defaulting to
+`No collaborators`. Visibility, title, IDs, help/error associations, invalid state
+and class names pass through. Avatar requests require an explicit existing
+`avatarPolicy`; the default has no avatar network authority.
+
+```tsx
+import {
+    CreatedByField,
+    type CompleteCollaborator,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-collaborators.css';
+
+export function CreatorBadge({
+    value,
+}: {
+    value: CompleteCollaborator | null;
+}) {
+    return (
+        <CreatedByField
+            mode="controlled"
+            value={value}
+            title="Created by"
+            labels={{ empty: 'No creator' }}
+        />
+    );
+}
+```
+
+Controlled props grant no choices, edit owner, setter, render override or remove
+callback. The implementation projects only display props and `labels.empty`;
+forged editing flags/actions cannot enable a selector or removal control. It
+does not tighten the host's native collaborator admission or normalize supplied
+objects. `CreatedByFieldProps` retains its historical binding shape, also named
+`BindingCreatedByFieldProps`. The following binding/helper contract remains
+name-only with its existing masking behavior.
 
 ```tsx
 import { CreatedByField } from '@miniextensions/sdk/react';

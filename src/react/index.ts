@@ -334,10 +334,17 @@ export {
     type ExternalSyncSourceFieldOptions,
     type ControlledExternalSyncSourceFieldProps,
 } from './ExternalSyncSourceField.js';
-import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
+import {
+    createdByName,
+    renderControlledCreatedByField,
+    type CreatedByFieldOptions,
+    type ControlledCreatedByFieldProps,
+} from './CreatedByField.js';
+import type { CompleteCollaborator } from './CompleteCollaboratorField.js';
 export {
     renderCreatedByField,
     type CreatedByFieldOptions,
+    type ControlledCreatedByFieldProps,
 } from './CreatedByField.js';
 import {
     ControlledLastModifiedTimeField,
@@ -1034,8 +1041,30 @@ export function LastModifiedByField({
     });
 }
 export type CreatedByFieldProps = FieldProps & CreatedByFieldOptions;
+export type BindingCreatedByFieldProps = CreatedByFieldProps;
+type BoundCreatedByComponentProps = CreatedByFieldProps & {
+    [Key in Exclude<
+        keyof ControlledCreatedByFieldProps,
+        keyof CreatedByFieldProps
+    >]?: never;
+};
+/** Complete readonly native display or the unchanged name-only binding contract. */
+export function CreatedByField<T extends CompleteCollaborator>(
+    props: ControlledCreatedByFieldProps<T>
+): ReactNode;
+export function CreatedByField(props: BoundCreatedByComponentProps): ReactNode;
+export function CreatedByField<T extends CompleteCollaborator>(
+    props: BoundCreatedByComponentProps | ControlledCreatedByFieldProps<T>
+): ReactNode;
+export function CreatedByField<T extends CompleteCollaborator>(
+    props: BoundCreatedByComponentProps | ControlledCreatedByFieldProps<T>
+): ReactNode {
+    return props.mode === 'controlled'
+        ? renderControlledCreatedByField(props)
+        : createElement(BoundCreatedByField, props);
+}
 /** The supplied creator name stays readonly regardless of forged editing state. */
-export function CreatedByField({
+function BoundCreatedByField({
     binding,
     render,
     className,

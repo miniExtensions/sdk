@@ -889,6 +889,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             if (frame === page.mainFrame())
                 observation.navigation.push({
                     at: new Date().toISOString(),
+                    epochMs: Date.now(),
                     url: frame.url(),
                 });
         };
@@ -916,12 +917,11 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             observation.before = await page.evaluate(
                 ({ a, b }) => {
                     window.__kanbanTouchTrusted = [];
-                    document.addEventListener(
-                        'touchstart',
-                        (event) =>
-                            window.__kanbanTouchTrusted.push(event.isTrusted),
-                        { once: true }
-                    );
+                    const trusted = (event) =>
+                        window.__kanbanTouchTrusted.push(event.isTrusted);
+                    document.addEventListener('touchstart', trusted, {
+                        once: true,
+                    });
                     const pending = new Set();
                     const capture = (event) => {
                         record(event, 'capture');
@@ -942,7 +942,10 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                                     phase,
                                     trusted: event.isTrusted,
                                     defaultPrevented: event.defaultPrevented,
+                                    cancelable: event.cancelable,
                                     at: performance.now(),
+                                    timeOrigin: performance.timeOrigin,
+                                    epochMs: Date.now(),
                                     touches: [...event.touches].map(
                                         (point) => ({
                                             x: point.clientX,
@@ -970,6 +973,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                         });
                     }
                     window.__stopKanbanTouchObservation = () => {
+                        document.removeEventListener('touchstart', trusted);
                         for (const timer of pending) clearTimeout(timer);
                         pending.clear();
                         for (const type of types) {
@@ -1027,7 +1031,9 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             await page.waitForFunction(
                 () =>
                     window.__kanbanProbe.snapshot().records.a.fields.status ===
-                    'Closed'
+                    'Closed',
+                undefined,
+                { timeout: 5000 }
             );
             assert.deepEqual(
                 await page.evaluate(() => window.__kanbanTouchTrusted),

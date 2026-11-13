@@ -16,6 +16,13 @@ Calendar foundations only; complete rich cards, actual native thin adapters,
 team-device browser and hosted acceptance require their own execution evidence.
 See [the composition boundary](calendar.md).
 
+`scripts/calendar-browser-checks.mjs` joins the existing packed native-browser
+runner. It checks trusted day/keyboard controls, responsive selection retention,
+and twelve Portal event dots inside a compact 270px field at a 375px viewport.
+The dot geometry reproduces overlap with inline text wrapping and overflow with
+excess horizontal padding. Its fixtures construct no accepted owner or client;
+this is grid proof, not complete card/native/hosted acceptance.
+
 On macOS, run package/module-format checks with a canonical `TMPDIR` (for
 example `/private/tmp`). Native Node resolution returns real paths; a fixture
 created under the `/var` alias otherwise fails the unchanged exact-path

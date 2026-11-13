@@ -1,6 +1,7 @@
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
+import { checkCalendarBrowser } from './calendar-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
@@ -1549,6 +1550,7 @@ try {
             'scripts/complete-portal-chart-browser-checks.mjs',
             'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
+            'scripts/calendar-browser-checks.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
@@ -2182,6 +2184,15 @@ try {
             evidence: report.completeDate,
             output,
         });
+        report.calendar = {};
+        await checkCalendarBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.calendar,
+            output,
+            readArchiveMember,
+        });
+        report.archiveMemberReads = readArchiveMember.stats();
         report.createdTime = {};
         await checkCreatedTimeControlledBrowser({
             browser,

@@ -1,4 +1,5 @@
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
+import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import {
@@ -571,6 +572,35 @@ function run(command, args, cwd = temporaryDirectory) {
 try {
     // check:package also works alone; never pack leftover build output.
     run(process.execPath, ['scripts/build.mjs'], process.cwd());
+    // Run One's cold-entry assertion on this fresh build, never leftover dist.
+    for (const format of ['esm', 'cjs']) {
+        const entry = new URL(
+            `../dist/${format}/react/index.js`,
+            import.meta.url
+        ).href;
+        run(
+            process.execPath,
+            [
+                '--input-type=module',
+                '-e',
+                `
+            import assert from 'node:assert/strict';
+            import { createRequire } from 'node:module';
+            import { fileURLToPath } from 'node:url';
+            const require = createRequire(import.meta.url);
+            assert.equal(typeof document, 'undefined');
+            ${format === 'esm' ? `await import(${JSON.stringify(entry)});` : `require(fileURLToPath(${JSON.stringify(entry)}));`}
+            const loaded = Object.keys(require.cache).filter(path => /[\\/]react-dom[\\/]/.test(path));
+            assert.deepEqual(loaded, [], 'General React import initialized a DOM-dependent runtime');
+            assert.equal(typeof document, 'undefined');
+        `,
+            ],
+            process.cwd()
+        );
+    }
+    console.log(
+        'Fresh general React entries preserve consumer DOM bootstrap in ESM and CJS'
+    );
     const sourcePackage = assertSourcePackageBuild(process.cwd());
     console.log(
         `SDK source preparation matches checkout: ${sourcePackage.declarations} declarations in ${sourcePackage.formats} formats`
@@ -613,6 +643,7 @@ try {
                 path === 'docs/signature.md' ||
                 path === 'docs/single-line-text.md' ||
                 path === 'docs/csv-export.md' ||
+                path === 'docs/kanban.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
@@ -726,6 +757,9 @@ try {
         'docs/csv-export.md',
         'dist/esm/react/csv-export.css',
         'dist/cjs/react/csv-export.css',
+        'docs/kanban.md',
+        'dist/esm/react/kanban.css',
+        'dist/cjs/react/kanban.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -3461,6 +3495,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const kanbanMatrix = checkKanbanReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(kanbanMatrix.versions.length, 2);
+    assert.equal(kanbanMatrix.cleanup, 'completed');
     const csvExportMatrix = checkCSVExportReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

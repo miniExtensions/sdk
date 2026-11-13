@@ -92,6 +92,7 @@
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
         "./react/text.css": "./dist/esm/react/text.css",
+        "./react/single-line-text.css": "./dist/esm/react/single-line-text.css",
         "./react/number.css": "./dist/esm/react/number.css",
         "./react/date.css": "./dist/esm/react/date.css",
         "./react/datetime.css": "./dist/esm/react/datetime.css",
@@ -131,6 +132,7 @@
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css",
         "./react/theme.css": "./dist/esm/react/theme.css",
         "./react/form-header.css": "./dist/esm/react/form-header.css",
+        "./react/form-validation-summary.css": "./dist/esm/react/form-validation-summary.css",
         "./react/complete-date.css": "./dist/esm/react/complete-date.css",
         "./react/date": {
             "import": {
@@ -178,7 +180,8 @@
         },
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
-        "./react/complete-linked-finder.css": "./dist/esm/react/complete-linked-finder.css"
+        "./react/complete-linked-finder.css": "./dist/esm/react/complete-linked-finder.css",
+        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css"
     },
     "files": [
         "dist/esm",
@@ -229,6 +232,7 @@
         "examples/react-form-header/dev.mjs",
         "examples/react-form-header/tsconfig.json",
         "docs/signature.md",
+        "docs/single-line-text.md",
         "docs/customer-chat.md",
         "docs/csv-export.md",
         "docs/kanban.md"
@@ -246,7 +250,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/address-combobox-bundle.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node --test scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/date-popover-vendor.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",
@@ -264,6 +268,7 @@
         "chart.js": "4.4.2",
         "copy-to-clipboard": "3.3.3",
         "csv-stringify": "6.4.6",
+        "docx-preview": "0.3.0",
         "dompurify": "2.4.7",
         "email-validator": "2.0.4",
         "fuse.js": "6.6.2",
@@ -271,6 +276,7 @@
         "gemoji": "6.1.0",
         "hoist-non-react-statics": "3.3.2",
         "jsdom": "20.0.3",
+        "jszip": "3.10.1",
         "linkifyjs": "3.0.5",
         "lodash": "4.17.21",
         "markdown-it": "12.3.2",

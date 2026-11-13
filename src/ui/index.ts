@@ -333,3 +333,8 @@ export {
     type LinkedFinderImage,
     type LinkedFinderCarouselImage,
 } from './linkedFinderImages.js';
+export {
+    classifyAttachmentPreview,
+    isAttachmentPreviewImage,
+    type AttachmentPreviewSource,
+} from './attachmentPreview.js';

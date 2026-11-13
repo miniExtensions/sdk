@@ -2156,6 +2156,41 @@ open `http://127.0.0.1:4191`. `node scripts/check-external-sync-source-browser.m
 checks disabled controls, native strings, masking, owner replacement and layout.
 These fixtures contact no backend and do not synchronize records.
 
+### Controlled External Sync Source text
+
+Native hosts can use the same natural public component with an explicit
+controlled contract. `ExternalSyncSourceFieldProps` and its
+`BindingExternalSyncSourceFieldProps` alias retain the binding contract above.
+`ControlledExternalSyncSourceFieldProps` supplies already-converted text:
+
+```tsx
+import { ExternalSyncSourceField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+
+<ExternalSyncSourceField
+    mode="controlled"
+    value="Native source Ω"
+    language="en"
+    textSize="small"
+/>;
+```
+
+The host retains value conversion, masking, visibility and field-shell
+associations. Pass a string, null or undefined with the accepted language and
+optional `textSize`, `layout` and `className`. Null, undefined and empty text use
+the complete localized empty display. Whitespace stays nonempty. Text remains
+literal and uses the maintained readonly component's native automatic links;
+ordinary text clicks reach the host row, while link clicks stop propagation
+and retain their normal navigation behavior. Value or language replacement
+updates the same mounted display. Source choices do not remap its text.
+
+This mode has no binding, render override, setter, source selector or network
+operation. Preserve the native converter's rejection of unsupported raw values
+before rendering; do not extract a label from arbitrary source objects. The
+binding mode continues to display its disabled input and Clear button with its
+original masking, visibility and retirement behavior. Keep the two ownership
+contracts separate.
+
 ## React Number presentation
 
 The optional `/react` entry exports `NumberField`, `NumberFieldProps`,
@@ -3961,7 +3996,8 @@ clipboard behavior.
 ## React AI Text presentation
 
 The optional `/react` entry exports `AiTextField`, `AiTextFieldProps`,
-`AiTextFieldOptions` and `renderAiTextField`. Register the helper in the existing
+`BindingAiTextFieldProps`, `ControlledAiTextFieldProps`, `AiTextFieldOptions` and
+`renderAiTextField`. Register the helper in the existing
 physical `renderAiTextField` slot for `AirtableForm`, `AirtableGrid` or `AirtableList`:
 
 ```tsx
@@ -4006,14 +4042,45 @@ Feedback uses a polite status region. Click, auxiliary-click, double-click,
 pointer-down, key-down and key-up events are contained without cancelling native text
 selection defaults.
 
-This slice provides supplied-value display coverage. It adds no generation,
+The binding renderer provides supplied-value display coverage. It adds no generation,
 retry, parser, links, resource loading, normalization, hydration, editing or save
 action. Even forged editable capabilities remain unused. `AiTextFieldOptions`
 contains only optional `className`, decorating `mx-sdk-ai-text-field`; there is no
 new stylesheet or package subpath. Core and `/ui` remain React-free.
 
+Native hosts can instead supply their already-converted text through the explicit
+controlled mode. Host admission, AI-object conversion and admin-only refusal stay
+at the host boundary; this mode accepts no binding, render override or generation
+action. `AiTextFieldProps` retains its historical binding shape, also named
+`BindingAiTextFieldProps`.
+
+```tsx
+import { AiTextField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+
+const convertedText = 'Host-converted AI text';
+<AiTextField
+    mode="controlled"
+    value={convertedText}
+    language="en"
+    textSize="small"
+/>;
+```
+
+Controlled display uses the existing `CompleteReadOnlyTextField`: null, undefined
+and empty strings show the localized empty label; whitespace remains supplied
+text; HTML stays escaped and URLs become ordinary links. Links contain row click
+propagation without cancelling navigation. Optional `textSize`, `layout` and
+`className` pass through. This mode has no write, save, generation or retry
+authority. It does not broaden the binding renderer's stricter object contract or
+its literal-link behavior.
+
 `test/reactAiText.test.ts` covers source behavior. The normal package check runs
-installed ESM/CommonJS runtime cases and public JSX/Node declaration checks. The
+installed ESM/CommonJS runtime cases (134 legacy groups plus six controlled
+display and SSR/hydration groups) and public JSX/Node declaration checks. The
+normal native-browser check exercises controlled ESM/CommonJS rendering from the
+installed archive, including keyboard link navigation, replacement, localized
+emptiness and adjacent draft retention under React 18 and 19. The
 separate `scripts/build-ai-text-browser-proof.mjs` fixture uses an installed tested
 archive for synthetic Form/Grid/List, visibility and lifecycle evidence. Its
 injected DOM checks and native browser inspection do not establish live-backend,
@@ -6386,3 +6453,28 @@ composes its qualified widget; there is no native renderer slot. Scheduling
 completion uses only `onScheduled`, ordinary edits only `onChange`; neither
 implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
 value). Existing `CompleteCheckboxField` remains compatible.
+
+### Explicit attachment media preview
+
+`AttachmentPreview` from `@miniextensions/sdk/react` renders the complete media
+preview from an explicitly supplied `attachment: { url, filename?, type?,
+thumbnails?: { full?: { url } } }`. Import
+`@miniextensions/sdk/react/attachment-preview.css` once in the consuming app.
+It owns image/HEIC, native audio/video controls, PDF frames, Word rendering and
+unsupported guidance. Optional `labels.attachments` and
+`labels.previewNotAvailable` accept localized strings and default to English.
+The exported `AttachmentPreviewSource`, `AttachmentPreviewProps` and
+`AttachmentPreviewLabels` describe these portable inputs. The reusable
+`isAttachmentPreviewImage` and `classifyAttachmentPreview` helpers are exported
+from `@miniextensions/sdk/ui`.
+
+This explicit URL API is separate from the existing label-only
+`ReadonlyAttachmentsField`. It never recovers a URL from a label or performs
+upload, deletion, navigation, persistence or form submission. The consumer owns
+source authorization and supplies only URLs it intends to display/fetch.
+Preview classification preserves native MIME and suffix distinctions; upload
+admission remains a separate policy. Word uses `docx-preview@0.3.0` and
+`jszip@3.10.1` with existing best-effort rendering. Retired Word lifetimes write
+only to detached targets; a fulfilled vendor render does not promise that
+every image/font decoded successfully. PDF is the supplied URL followed by
+`#toolbar=0`, with the nonblank filename or localized Attachments title.

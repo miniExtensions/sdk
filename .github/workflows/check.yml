@@ -67,6 +67,10 @@ jobs:
                   SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Verify runner-provided Chrome
               run: google-chrome --version
+            - name: Qualify packed Form validation summary
+              run: node scripts/form-validation-summary-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
+              env:
+                  SDK_FORM_VALIDATION_CHROMIUM: /usr/bin/google-chrome
             - name: Execute packed native Chromium proof
               timeout-minutes: 10
               run: pnpm check:browser
@@ -114,6 +118,12 @@ jobs:
               timeout-minutes: 5
               run: node scripts/check-linked-child-review-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-child-review"
               env:
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed attachment preview Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-attachment-preview-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/attachment-preview"
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
             - name: Retain native Chromium receipt and failure evidence
               if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)

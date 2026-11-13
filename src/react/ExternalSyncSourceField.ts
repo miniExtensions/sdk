@@ -5,6 +5,30 @@ import {
     textConfiguration,
     type TextFieldOptions,
 } from './TextField.js';
+import {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+} from './CompleteReadOnlyTextField.js';
+
+/** Native conversion and visibility stay with the host; presentation has no actions. */
+export type ControlledExternalSyncSourceFieldProps =
+    CompleteReadOnlyTextFieldProps & {
+        mode: 'controlled';
+        binding?: never;
+        render?: never;
+    };
+
+export function ControlledExternalSyncSourceField(
+    props: ControlledExternalSyncSourceFieldProps
+): ReactNode {
+    return createElement(CompleteReadOnlyTextField, {
+        value: props.value,
+        language: props.language,
+        textSize: props.textSize,
+        layout: props.layout,
+        className: props.className,
+    });
+}
 
 export type ExternalSyncSourceFieldOptions = TextFieldOptions;
 

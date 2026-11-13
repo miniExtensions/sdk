@@ -651,11 +651,13 @@ for (const name of [
     'complete-verification',
     'complete-barcode-scanner',
     'complete-portal-chart',
+    'attachment-preview',
     'signature',
     'complete-address',
     'address-field',
     'complete-collaborators',
     'form-header',
+    'form-validation-summary',
     'date',
     'datetime',
     'duration',
@@ -664,6 +666,7 @@ for (const name of [
     'linked-records',
     'single-select',
     'controlled-select',
+    'single-line-text',
 ]) {
     test(`the exported ${name} stylesheet is hashed as an asset and checked on installation`, (t) => {
         const { root, manifest } = fixture(t);

@@ -1,0 +1,30 @@
+.mx-sdk-attachment-preview__image {
+    display: block;
+    vertical-align: middle;
+    max-height: 100%;
+    max-width: 100%;
+    background-color: #fff;
+    object-fit: contain;
+}
+.mx-sdk-attachment-preview__video {
+    display: block;
+    vertical-align: middle;
+    max-height: 100%;
+    max-width: 100%;
+}
+.mx-sdk-attachment-preview__word {
+    max-height: 100%;
+    max-width: 100%;
+    overflow: auto;
+}
+.mx-sdk-attachment-preview__unsupported-icon {
+    display: block;
+    vertical-align: middle;
+    height: 6rem;
+    width: 6rem;
+    color: #4b5563;
+}
+.mx-sdk-attachment-preview__unsupported-message {
+    margin: 0;
+    color: #6b7280;
+}

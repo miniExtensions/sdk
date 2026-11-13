@@ -1,4 +1,5 @@
 import { bundleKanban } from './kanban-bundle.mjs';
+import { build as bundle } from 'esbuild';
 import { assertDateVendor } from './date-vendor-checks.mjs';
 import { copyDocumentAssets } from './document-preview-assets.mjs';
 import { bundleDocumentPDF } from './document-pdf-bundle.mjs';
@@ -107,6 +108,41 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
     }
 }
 
+// This vendor release has an ESM-only explicit entry. Produce a genuine
+// CommonJS closure rather than relying on require(esm), unavailable on early
+// Node 22 hosts admitted by the package's existing engines contract.
+const wordEntry = require.resolve('docx-preview/dist/docx-preview.mjs');
+assert.equal(
+    JSON.parse(readFileSync(require.resolve('docx-preview/package.json')))
+        .version,
+    '0.3.0'
+);
+await bundle({
+    entryPoints: [wordEntry],
+    bundle: true,
+    platform: 'neutral',
+    format: 'cjs',
+    target: 'es2022',
+    external: ['jszip'],
+    minifyWhitespace: true,
+    legalComments: 'inline',
+    outfile: 'dist/cjs/react/attachmentPreviewVendor.js',
+});
+const previewPath = 'dist/cjs/react/AttachmentPreview.js';
+const preview = readFileSync(previewPath, 'utf8');
+assert(preview.includes('docx-preview/dist/docx-preview.mjs'));
+writeFileSync(
+    previewPath,
+    preview.replace(
+        'docx-preview/dist/docx-preview.mjs',
+        './attachmentPreviewVendor.js'
+    )
+);
+copyFileSync(
+    require.resolve('docx-preview/LICENSE'),
+    'dist/cjs/react/docx-preview.LICENSE.txt'
+);
+
 // Both compilers have finished; bundle only the Chart adapter closure.
 await bundlePortalChart();
 await bundleDocumentPDF();
@@ -189,6 +225,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-linked-finder',
         'form-completion',
         'form-header',
+        'form-validation-summary',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',
@@ -203,8 +240,10 @@ for (const format of ['esm', 'cjs']) {
         'complete-barcode-scanner',
         'barcode',
         'complete-portal-chart',
+        'attachment-preview',
         'complete-address',
         'address-field',
+        'single-line-text',
         'complete-collaborators',
         'complete-date',
         'date',

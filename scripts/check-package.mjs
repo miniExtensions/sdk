@@ -638,6 +638,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/canonical-form-frame.md' ||
                 path === 'docs/saved-progress.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
@@ -691,6 +692,11 @@ try {
     }
     for (const path of [
         ...documentFiles,
+        'docs/canonical-form-frame.md',
+        'dist/esm/forms/canonicalFrame.js',
+        'dist/esm/forms/canonicalFrame.d.ts',
+        'dist/cjs/forms/canonicalFrame.js',
+        'dist/cjs/forms/canonicalFrame.d.ts',
         'docs/browser-lifecycle.md',
         'docs/testing.md',
         'docs/calendar.md',

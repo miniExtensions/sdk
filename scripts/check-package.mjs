@@ -338,7 +338,7 @@ import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-drive
 import { checkMultipleSelectFormDriverRecipe } from './multi-select-form-driver-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
-    checkButtonConsumer,
+    checkButtonReactMatrix,
     buttonTypedConsumer,
     buttonReactTypedConsumer,
 } from './button-consumer-checks.mjs';
@@ -2800,14 +2800,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
-    const buttonProof = await checkButtonConsumer({
-        consumerDirectory: temporaryDirectory,
+    const buttonProof = checkButtonReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
     });
-    assert.equal(buttonProof.checks, 67);
-    console.log(
-        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
-    );
+    assert.equal(buttonProof.versions.length, 2);
+    assert.equal(buttonProof.cleanup, 'completed');
     const checkboxProof = checkCheckboxReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

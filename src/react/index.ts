@@ -2723,7 +2723,12 @@ export {
     type CompleteRecordCommentsDialogProps,
 } from './CompleteRecordComments.js';
 export { ButtonField, renderButtonField } from './ButtonField.js';
-export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+export type {
+    ButtonFieldProps,
+    ModelButtonFieldProps,
+    ControlledButtonFieldProps,
+    ButtonFieldMessages,
+} from './ButtonField.js';
 
 export {
     useFileSelection,

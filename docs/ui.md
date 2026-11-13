@@ -1187,6 +1187,33 @@ dispose, cancel, retry or replay a Button action. Retire the owner when its acce
 context changes. You may pass an already subscribed `ButtonFieldRenderProps`
 snapshot directly to `ButtonField` instead of using `useButtonField`.
 
+Hosts with an existing action lifecycle can instead use
+`ControlledButtonFieldProps` with `mode="controlled"`. The SDK renders the
+complete URL/webhook control, configured palette, loading indicator and localized
+empty value. The host supplies current data and a guarded callback; it retains
+request allocation, settlement, alerts and retry policy:
+
+```tsx
+<ButtonField
+    mode="controlled"
+    id="configured-action"
+    value={{ label: '', url: 'HTTPS://example.com/action' }}
+    config={{ openLinkType: 'triggerWebhookPOST', buttonColor: 'red' }}
+    busy={hostPending}
+    disabled={!currentSourceReady}
+    onTriggerWebhook={triggerCurrentHostAction}
+/>
+```
+
+Controlled mode preserves blank labels and URL protocol casing. A missing URL
+has no href and disables webhook activation. `id`, `form` and
+`aria-describedby` support native label, form and help associations. The callback
+must enforce current ownership and singleflight synchronously, including before
+React commits pending state. The component does not inspect its return value,
+cancel or replay requests, display settlement feedback, or impose model recovery
+rules. `messages.noValue` and `loadingLabel` customize presentation. The existing
+model props, `useButtonField` and `renderButtonField` retain their behavior.
+
 The same named slot works in `FieldRenderer`, `AirtableForm`, `AirtableGrid` and
 `AirtableList`; supply each shell's existing scope and app-owned layout:
 

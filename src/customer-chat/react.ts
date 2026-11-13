@@ -4,6 +4,7 @@ import {
     useEffect,
     useRef,
     useSyncExternalStore,
+    type ReactElement,
     type ReactNode,
 } from 'react';
 import type {
@@ -71,7 +72,7 @@ export function CustomerChatProvider<Identity, Configuration>(
                   >
               ) => ReactNode);
     }
-) {
+): ReactElement {
     const chat = useCustomerChat(props);
     return createElement(
         Fragment,

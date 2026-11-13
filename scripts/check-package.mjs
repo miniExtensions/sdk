@@ -1,3 +1,7 @@
+import {
+    checkOrdinaryValidationConsumer,
+    ordinaryValidationTypedConsumer,
+} from './ordinary-validation-consumer-checks.mjs';
 import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
@@ -1641,6 +1645,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
+                ordinaryValidationTypedConsumer +
                 borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
@@ -3539,6 +3544,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         2
+    );
+    assert.equal(
+        checkOrdinaryValidationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        854
     );
     assert.equal(
         await checkNativeFormProgressConsumer({

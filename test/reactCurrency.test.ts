@@ -8,6 +8,7 @@ import {
     CurrencyField,
     FieldRenderer,
     renderCurrencyField,
+    type ControlledCurrencyFieldProps,
 } from '../src/react/index.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import {
@@ -197,6 +198,194 @@ async function fixture(
         },
     };
 }
+
+it('explicit controlled Currency localizes display without initial, focus or untouched-blur writes', async (t) => {
+    const initial = 1234.56789;
+    const f = await fixture(
+        t,
+        { numberSeparator: 'period-comma', showThousandsSeparator: true },
+        initial
+    );
+    const field = f.props();
+    if (field.capability.type !== 'editable')
+        throw Error('Editable Currency expected');
+    const capability = field.capability;
+    const writes: unknown[] = [];
+    const props: ControlledCurrencyFieldProps = {
+        ...field,
+        capability: {
+            ...capability,
+            setValue(value) {
+                writes.push(value);
+                return capability.setValue(value);
+            },
+        },
+        options: {
+            owner: { token: f.scope, isCurrent: () => f.scope.current },
+        },
+    };
+    const revision = f.binding.getSnapshot().revision;
+    await f.render(h(CurrencyField, props));
+    assert.equal(f.input().value, '1.234,57');
+    await f.focus(true);
+    assert.equal(f.input().value, '1234,57');
+    await f.focus(false);
+    assert.equal(f.input().value, '1.234,57');
+    assert.deepEqual(writes, []);
+    assert.equal(f.binding.getSnapshot().value, initial);
+    assert.equal(f.binding.getSnapshot().revision, revision);
+    assert.equal(f.props().value, initial);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});
+
+it('controlled Currency defers canonical commits and permits Clear only for the current owner', async (t) => {
+    const initial = 1234.56789;
+    const f = await fixture(
+        t,
+        { numberSeparator: 'period-comma', allowNegativeNumbers: true },
+        initial
+    );
+    Object.defineProperty(f.window.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+    });
+    const token = {};
+    const writes: unknown[] = [];
+    const show = async () => {
+        const field = f.props();
+        if (field.capability.type !== 'editable')
+            throw Error('Editable Currency expected');
+        const capability = field.capability;
+        await f.render(
+            h(CurrencyField, {
+                ...field,
+                capability: {
+                    ...capability,
+                    setValue(value) {
+                        writes.push(value);
+                        return capability.setValue(value);
+                    },
+                },
+                options: {
+                    commit: 'deferred',
+                    clearLabel: 'Effacer le montant',
+                    owner: { token, isCurrent: () => f.scope.current },
+                },
+            })
+        );
+    };
+    await show();
+    await f.focus(true);
+    await f.edit('-25,756');
+    assert.equal(f.input().value, '-25,756');
+    assert.equal(f.binding.getSnapshot().value, initial);
+    assert.deepEqual(writes, []);
+    await f.focus(false);
+    assert.deepEqual(writes, [-25.76]);
+    assert.equal(f.binding.getSnapshot().value, -25.76);
+    await show();
+    const clear = f.container.querySelector('button')!;
+    assert.equal(clear.getAttribute('aria-label'), 'Effacer le montant');
+    f.scope.current = false;
+    await act(async () => clear.click());
+    assert.deepEqual(writes, [-25.76]);
+    assert.equal(f.binding.getSnapshot().value, -25.76);
+    f.scope.current = true;
+    await act(async () => clear.click());
+    assert.deepEqual(writes, [-25.76, null]);
+    assert.equal(f.binding.getSnapshot().value, null);
+    assert.equal(f.input().value, '');
+});
+
+it('controlled Currency refuses a deferred draft after the native owner becomes readonly', async (t) => {
+    const initial = 1234.56789;
+    const f = await fixture(t, { numberSeparator: 'period-comma' }, initial);
+    const token = {};
+    const options = {
+        commit: 'deferred' as const,
+        owner: { token, isCurrent: () => f.scope.current },
+    };
+    await f.render(h(CurrencyField, { ...f.props(), options }));
+    await f.focus(true);
+    await f.edit('25,75');
+    assert.equal(f.input().value, '25,75');
+    assert.equal(f.binding.getSnapshot().value, initial);
+    await act(async () => {
+        f.scope.writable = false;
+        f.owner.refresh();
+    });
+    assert.equal(f.binding.getSnapshot().canEdit, false);
+    const readonly = f.props();
+    await f.render(
+        h(CurrencyField, {
+            ...readonly,
+            displayConfig: { ...readonly.displayConfig, readOnly: true },
+            options,
+        })
+    );
+    assert.equal(f.input().disabled, true);
+    await f.focus(false);
+    await f.render(null);
+    assert.equal(f.binding.getSnapshot().value, initial);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});
+
+it('legacy Currency binding and contextual renderer retain raw precision and reject localized edits', async (t) => {
+    const initial = 1234.56789;
+    const f = await fixture(
+        t,
+        { numberSeparator: 'period-comma', showThousandsSeparator: true },
+        initial
+    );
+    await f.render(h(CurrencyField, { binding: f.binding }));
+    assert.equal(f.input().value, String(initial));
+    await f.edit('1.234,57');
+    assert.equal(f.binding.scalar!.getState().input, '1.234,57');
+    assert.equal(f.binding.scalar!.getState().valid, false);
+    assert.equal(f.binding.getSnapshot().value, initial);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+    const legacy: CurrencyFieldProps = {
+        binding: f.binding,
+        render: ({ snapshot, binding }) =>
+            h('output', null, `${snapshot.value}:${binding === f.binding}`),
+    };
+    await f.render(h(CurrencyField, legacy));
+    assert.equal(f.container.textContent, `${initial}:true`);
+});
+
+it('controlled Currency readonly symbols stay literal after the negative sign without rounding canonical values', async (t) => {
+    const initial = -1234.56789;
+    const f = await fixture(
+        t,
+        { numberSeparator: 'period-comma', showThousandsSeparator: true },
+        initial
+    );
+    for (const symbol of [
+        ' CHF ',
+        '<img src=x> & cents',
+        'long '.repeat(100),
+    ]) {
+        const field = f.props();
+        await f.render(
+            h(CurrencyField, {
+                ...field,
+                field: {
+                    ...field.field,
+                    config: {
+                        type: 'currency',
+                        options: { precision: 2, symbol },
+                    },
+                },
+                capability: { type: 'readonly' },
+                options: { presentation: 'display' },
+            })
+        );
+        assert.equal(f.container.textContent, `-${symbol}1.234,57`);
+        assert.equal(f.container.querySelector('img'), null);
+        assert.equal(f.container.querySelector('input'), null);
+    }
+    assert.equal(f.binding.getSnapshot().value, initial);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});
 
 it('retains raw precision, finite exponent edits and invalid drafts across StrictMode, binding and accepted slot remounts', async (t) => {
     const initial = 1234567.8912345;

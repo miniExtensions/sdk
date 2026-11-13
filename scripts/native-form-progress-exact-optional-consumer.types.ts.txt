@@ -1,0 +1,35 @@
+// Compile against an installed @miniextensions/sdk/forms package with
+// --strict --exactOptionalPropertyTypes --noEmit and NodeNext resolution.
+import type { NativeFormProgressStorage, NativeFormProgressWriteResult, NativeFormProgressSnapshot, NativeFormProgressRemovalResult } from '@miniextensions/sdk/forms';
+declare const owner: NativeFormProgressStorage;
+type LegacyParameters = Parameters<NativeFormProgressStorage['write']>[0];
+const legacyParameters: LegacyParameters = { expectedRevision: null, record: {} };
+const undefinedParameters: LegacyParameters = { expectedRevision: null, record: {}, isWriteStillEligible: undefined };
+// @ts-expect-error Parameters retains the legacy argument discriminator
+const guardedParameters: LegacyParameters = { expectedRevision: null, record: {}, isWriteStillEligible: () => false };
+const parametersResult: Promise<NativeFormProgressWriteResult> = owner.write(legacyParameters);
+void [undefinedParameters, guardedParameters, parametersResult];
+// A pre-existing legacy-only structural implementation remains assignable.
+const legacyImplementation: NativeFormProgressStorage = {
+    read: () => undefined,
+    write: async (_args: { expectedRevision: number | null; record: NativeFormProgressSnapshot['record'] }): Promise<NativeFormProgressWriteResult> => ({ status: 'conflict' }),
+    remove: () => true,
+    removeIfOwned: async (): Promise<NativeFormProgressRemovalResult> => ({ status: 'removed' }),
+};
+void legacyImplementation;
+
+type Base = { expectedRevision: number | null; record: {} };
+type OptionalGuard = Base & { isWriteStillEligible?: (() => boolean) | undefined };
+declare const optionalArgs: OptionalGuard;
+declare const guard: (() => boolean) | undefined;
+const legacy: Promise<NativeFormProgressWriteResult> = owner.write({ expectedRevision: null, record: {} });
+const explicitlyUndefined: Promise<NativeFormProgressWriteResult> = owner.write({ expectedRevision: null, record: {}, isWriteStillEligible: undefined });
+const optional = owner.write(optionalArgs);
+const variable = owner.write({ expectedRevision: null, record: {}, isWriteStillEligible: guard });
+// @ts-expect-error optional callback can cancel
+const unsafeOptional: Promise<NativeFormProgressWriteResult> = optional;
+// @ts-expect-error a callback variable can cancel
+const unsafeVariable: Promise<NativeFormProgressWriteResult> = variable;
+// @ts-expect-error unknown fresh properties remain rejected
+owner.write({ expectedRevision: null, record: {}, isWriteStillEligibile: () => false });
+void [legacy, explicitlyUndefined, unsafeOptional, unsafeVariable];

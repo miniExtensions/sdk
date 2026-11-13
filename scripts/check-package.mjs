@@ -1649,6 +1649,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         "'../src/runtime/index.js'",
         "'@miniextensions/sdk'"
     );
+    const nativeProgressExactOptionalConsumer = readFileSync(
+        'scripts/native-form-progress-exact-optional-consumer.types.ts.txt',
+        'utf8'
+    );
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
@@ -1736,10 +1740,30 @@ new Parser([]).parse({maxDepth:'48'});
             sourceEnvelopeFilename,
             ...formulasGuideSources,
         ]);
+        const exactOptionalFilename = `native-progress-exact-optional-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, exactOptionalFilename),
+            nativeProgressExactOptionalConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--exactOptionalPropertyTypes',
+            '--skipLibCheck',
+            'false',
+            '--target',
+            'ES2022',
+            '--module',
+            module,
+            '--moduleResolution',
+            moduleResolution,
+            exactOptionalFilename,
+        ]);
     }
 
     console.log(
-        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent.'
+        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent; native progress also checked with exact optional properties.'
     );
 
     const bundled = await build({

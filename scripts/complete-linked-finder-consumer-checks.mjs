@@ -94,6 +94,8 @@ for(const strict of [false,true]){
   const cascade=()=>React.createElement(strict?React.StrictMode:React.Fragment,null,React.createElement(ui.NativeLinkedFinderCascade,{owner,host:cascadeHost,drivers:[{fieldId:'country',fieldName:'Country',title:'Country',urlSearchValue:rawUrl,hidden:false},{fieldId:'state',fieldName:'State',title:'State',urlSearchValue:undefined,hidden:true}],values:driverValues,formReadOnly,labels:{loading:'Cargando',noMatches:'Ninguno'},testing:true}));
   await React.act(async()=>root.render(cascade()));await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));
   assert(cascadeQueries.some(query=>query.fieldId==='country'&&query.urlSearchValue===rawUrl));
+  const countryInput=container.querySelector('[data-field-id="country"] input');assert(countryInput&&!countryInput.disabled);
+  await React.act(async()=>countryInput.focus());await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));assert.equal(countryInput.getAttribute('aria-expanded'),'true');
   const hiddenReads=cascadeQueries.filter(query=>query.fieldId==='state').length;assert(hiddenReads>0);
   const choices=container.querySelectorAll('[data-field-id="country"] [role="option"]');assert.equal(choices.length,2);
   await React.act(async()=>choices[1].click());await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));

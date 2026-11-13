@@ -2,6 +2,7 @@ import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.m
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
+import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
 import {
     checkOrdinaryValidationConsumer,
     ordinaryValidationTypedConsumer,
@@ -556,6 +557,10 @@ const linkedFinderStarterFiles = [
     'tsconfig.json',
 ].map((path) => `examples/react-complete-linked-finder/${path}`);
 
+const summaryCardsStarterFiles = linkedFinderStarterFiles.map((path) =>
+    path.replace('react-complete-linked-finder/', 'react-portal-summary-cards/')
+);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -653,6 +658,7 @@ try {
                 path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
                 linkedFinderStarterFiles.includes(path) ||
+                summaryCardsStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 documentFiles.has(path) ||
@@ -740,6 +746,9 @@ try {
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
         'dist/cjs/react/complete-portal-chart.css',
+        'dist/esm/react/portal-summary-cards.css',
+        'dist/cjs/react/portal-summary-cards.css',
+        ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
@@ -3531,6 +3540,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
+    const summaryCardsMatrix = checkPortalSummaryCardsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(summaryCardsMatrix.versions.length, 2);
+    assert.equal(summaryCardsMatrix.cleanup, 'completed');
     const trackingMatrix = checkFormTrackingReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -4060,6 +4077,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
                         linkedFinderStarterFiles.includes(path) ||
+                        summaryCardsStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
                             'README.md',

@@ -690,6 +690,7 @@ for (const name of [
     'complete-collaborators',
     'form-header',
     'form-validation-summary',
+    'portal-summary-cards',
     'form-progress',
     'date',
     'datetime',

@@ -635,6 +635,7 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
 for (const name of [
     'button',
     'form-group',
+    'csv-export',
     'checkbox',
     'text',
     'number',

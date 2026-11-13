@@ -2945,6 +2945,12 @@ export {
 } from './CompleteFormHeader.js';
 
 export {
+    FormValidationSummary,
+    type FormValidationSummaryProps,
+    type FormValidationDiagnostic,
+} from './FormValidationSummary.js';
+
+export {
     CompleteFormFieldPresentation,
     type CompleteFormFieldPresentationProps,
 } from './CompleteFormFieldPresentation.js';

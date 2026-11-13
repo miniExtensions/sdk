@@ -206,6 +206,7 @@ export function assertModuleFormats(root) {
                 './react/csv-export.css',
                 './react/form-completion.css',
                 './react/form-header.css',
+                './react/form-validation-summary.css',
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',

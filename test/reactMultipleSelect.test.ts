@@ -4,6 +4,8 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     MultipleSelectField,
+    MultipleSelectsField,
+    BindingMultipleSelectsField,
     SelectField,
     FieldRenderer,
     renderMultipleSelectsField,
@@ -1018,3 +1020,24 @@ for (const flag of [
                 if (flag) assertMasked(f);
             }
         });
+
+it('canonical plural and explicit binding exports preserve ordered native binding edits', async (t) => {
+    const f = await fixture(t, {}, null);
+    await f.render(h(MultipleSelectsField, { binding: f.binding }));
+    await act(async () => f.checkbox('Blue').click());
+    await act(async () => f.checkbox('Red').click());
+    assert.deepEqual(f.binding.getSnapshot().value, ['Blue', 'Red']);
+    await f.render(h(BindingMultipleSelectsField, { binding: f.binding }));
+    await act(async () => f.button('Remove Blue').click());
+    assert.deepEqual(f.binding.getSnapshot().value, ['Red']);
+    await f.render(
+        h(MultipleSelectsField, {
+            binding: f.binding,
+            render: ({ snapshot, binding }) => {
+                assert.equal(binding, f.binding);
+                return h('output', null, JSON.stringify(snapshot.value));
+            },
+        })
+    );
+    assert.equal(f.container.querySelector('output')?.textContent, '["Red"]');
+});

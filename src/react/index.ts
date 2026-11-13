@@ -1,3 +1,5 @@
+import { ControlledSingleSelectField, ControlledMultipleSelectsField, type ControlledSingleSelectFieldProps, type ControlledMultipleSelectsFieldProps } from './ControlledSelectField.js';
+export type { ControlledSelectChoice, SelectEditOwner, ControlledSelectLabels, ControlledSelectCommonProps, ControlledSingleSelectFieldProps, ControlledMultipleSelectsFieldProps } from './ControlledSelectField.js';
 import {
     CompleteLocalizedNumericField,
     type CompleteLocalizedNumericRendererProps,
@@ -1811,7 +1813,7 @@ export function MultipleSelectField({
     );
 }
 
-export type SingleSelectFieldProps = FieldProps &
+export type BindingSingleSelectFieldProps = FieldProps &
     Omit<SingleSelectFieldOptions, 'source'>;
 
 function singleSelectBinding(
@@ -1899,14 +1901,29 @@ function singleSelectBinding(
 }
 
 /** Borrows the accepted binding; local choice text is scoped to its identity. */
-export function SingleSelectField({
+export function BindingSingleSelectField({
     binding,
     render,
     ...options
-}: SingleSelectFieldProps): ReactNode {
+}: BindingSingleSelectFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     return singleSelectBinding(binding, snapshot, options);
+}
+
+/** Additive controlled API; existing bindings keep their original semantics. */
+export type SingleSelectFieldProps = BindingSingleSelectFieldProps | ControlledSingleSelectFieldProps;
+export function SingleSelectField(props: SingleSelectFieldProps): ReactNode {
+    return 'binding' in props
+        ? createElement(BindingSingleSelectField, props)
+        : createElement(ControlledSingleSelectField, props);
+}
+export const BindingMultipleSelectsField = MultipleSelectField;
+export type MultipleSelectsFieldProps = MultipleSelectFieldProps | ControlledMultipleSelectsFieldProps;
+export function MultipleSelectsField(props: MultipleSelectsFieldProps): ReactNode {
+    return 'binding' in props
+        ? createElement(MultipleSelectField, props)
+        : createElement(ControlledMultipleSelectsField, props);
 }
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {

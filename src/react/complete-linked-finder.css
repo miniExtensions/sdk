@@ -175,7 +175,29 @@
 }
 .mx-sdk-finder-card-fields {
     display: grid;
-    gap: 0.5rem;
+    gap: 1rem;
+    overflow-x: auto;
+}
+.mx-sdk-finder-card-fields-list {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.mx-sdk-finder-card-fields-list > .mx-sdk-finder-card-field {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+}
+.mx-sdk-finder-card-fields-list .mx-sdk-finder-card-field-title {
+    height: 1rem;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mx-sdk-finder-card-fields-list .mx-sdk-finder-card-field-value {
+    height: 1.5rem;
+    overflow: hidden;
 }
 .mx-sdk-finder-card-field-title {
     color: #6b7280;

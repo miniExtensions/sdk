@@ -194,7 +194,7 @@ test('actual Gallery preserves identity reorder/removal, rejects stale source er
     );
 });
 
-test('List/Gallery layout switch owns independent failure lifetimes; Gallery/Kanban share carousel lifetime', async (t) => {
+test('List position survives hiding/side/layout changes; carousel failures share Gallery/Kanban lifetime only', async (t) => {
     const f = await htmlPresentationFixture(t);
     await f.render(h(LinkedFinderCard, { projection: present() }));
     const old = f.container.querySelector('img')!;
@@ -218,7 +218,42 @@ test('List/Gallery layout switch owns independent failure lifetimes; Gallery/Kan
     await f.render(h(LinkedFinderCard, { projection: present() }));
     assert.equal(
         f.container.querySelector('img')?.getAttribute('src'),
-        images[0].url
+        images[1].url
+    );
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: present({ shouldRenderThumbnail: false }),
+        })
+    );
+    assert.equal(f.container.querySelector('img'), null);
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: present({ thumbnailLocation: 'right' }),
+        })
+    );
+    assert.equal(
+        f.container.querySelector('img')?.getAttribute('src'),
+        images[1].url
+    );
+    await f.render(
+        h(LinkedFinderCard, { projection: present({ layout: 'gallery' }) })
+    );
+    assert.equal(
+        f.container.querySelector('img')?.getAttribute('src'),
+        images[0].largeUrl
+    );
+    await f.imageEvent(f.container.querySelector('img')!, 'error');
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: present({ layout: 'gallery', images: [] }),
+        })
+    );
+    await f.render(
+        h(LinkedFinderCard, { projection: present({ layout: 'gallery' }) })
+    );
+    assert.equal(
+        f.container.querySelector('img')?.getAttribute('src'),
+        images[0].largeUrl
     );
 });
 
@@ -356,11 +391,20 @@ test('admitted thumbnail enablement/location and detail grid survive List/Galler
             ?.tagName,
         'IMG'
     );
+    await f.render(
+        h(LinkedFinderCard, {
+            projection: present({
+                layout: 'gallery',
+                fields,
+                fieldsPerCardRow: 2,
+            }),
+        })
+    );
     assert.match(
         f.container
             .querySelector('.mx-sdk-finder-card-fields')
             ?.getAttribute('style') ?? '',
-        /repeat\(2, minmax\(0, 1fr\)\)/
+        /repeat\(2, minmax\(150px, 1fr\)\)/
     );
     await f.render(
         h(LinkedFinderCard, {

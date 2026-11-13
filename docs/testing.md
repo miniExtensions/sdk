@@ -43,6 +43,13 @@ project's pinned pnpm through Corepack when the global pnpm version differs.
 
 ## Git source preparation
 
+The normal package command first builds clean emitted files before its guard
+tests. The general React bootstrap guard imports the actual ESM/CommonJS
+entries and verifies that neither initializes ReactDOM without a DOM. A warm
+local `dist` directory must not be required for that guard to work in fresh CI.
+Artifact qualification then retains its own clean build and source-preparation
+comparison; the bootstrap guard does not replace either compiler or that proof.
+
 The mandatory package check builds the actual source beneath `node_modules`
 using the checkout's resolved dependencies, then compares every ESM/CommonJS
 emitted declaration byte for byte with the normal checkout build. Both builds

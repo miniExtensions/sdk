@@ -64,3 +64,24 @@ export type {
     PortalInlineEditQueueOptions,
     PortalInlineEditQueue,
 } from './inlineEditQueue.js';
+
+export {
+    projectCSVExport,
+    createCSVExportController,
+    CSVExportFailure,
+} from './csvExport.js';
+export { serializeCSVExportDocument } from './csvSerialization.js';
+export type {
+    CSVExportColumn,
+    CSVExportFieldValue,
+    CSVExportRow,
+    CSVExportInput,
+    CSVExportDocument,
+    CSVExportProjection,
+    CSVExportPlatform,
+    CSVExportRequest,
+    CSVExportOutcome,
+    CSVExportSnapshot,
+    CSVExportController,
+    CSVExportFailureReason,
+} from './csvExport.js';

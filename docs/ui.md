@@ -1187,6 +1187,48 @@ dispose, cancel, retry or replay a Button action. Retire the owner when its acce
 context changes. You may pass an already subscribed `ButtonFieldRenderProps`
 snapshot directly to `ButtonField` instead of using `useButtonField`.
 
+Hosts with an existing action lifecycle can instead use
+`ControlledButtonFieldProps` with `mode="controlled"`. The SDK renders the
+complete URL/webhook control, configured palette, loading indicator and localized
+empty value. The host supplies current data and a guarded callback; it retains
+request allocation, settlement, alerts and retry policy:
+
+```tsx
+import { ButtonField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/button.css';
+
+export function HostedButton({
+    hostPending,
+    currentSourceReady,
+    triggerCurrentHostAction,
+}: {
+    hostPending: boolean;
+    currentSourceReady: boolean;
+    triggerCurrentHostAction: () => unknown;
+}) {
+    return (
+        <ButtonField
+            mode="controlled"
+            id="configured-action"
+            value={{ label: '', url: 'HTTPS://example.com/action' }}
+            config={{ openLinkType: 'triggerWebhookPOST', buttonColor: 'red' }}
+            busy={hostPending}
+            disabled={!currentSourceReady}
+            onTriggerWebhook={triggerCurrentHostAction}
+        />
+    );
+}
+```
+
+Controlled mode preserves blank labels and URL protocol casing. A missing URL
+has no href and disables webhook activation. `id`, `form` and
+`aria-describedby` support native label, form and help associations. The callback
+must enforce current ownership and singleflight synchronously, including before
+React commits pending state. The component does not inspect its return value,
+cancel or replay requests, display settlement feedback, or impose model recovery
+rules. `messages.noValue` and `loadingLabel` customize presentation. The existing
+model props, `useButtonField` and `renderButtonField` retain their behavior.
+
 The same named slot works in `FieldRenderer`, `AirtableForm`, `AirtableGrid` and
 `AirtableList`; supply each shell's existing scope and app-owned layout:
 
@@ -2270,8 +2312,9 @@ These fixtures do not generate records or contact a backend.
 ## React Percent presentation
 
 The optional `/react` entry exports `PercentField`, `PercentFieldProps`,
-`PercentFieldOptions` and `renderPercentField`. `PercentField` delegates to
-`NumberField`, whose physical percent bindings use the same Number control.
+`ControlledPercentFieldProps`, `PercentFieldOptions` and `renderPercentField`.
+The binding branch delegates to `NumberField`, whose physical percent bindings
+use the same Number control.
 `PercentFieldOptions` aliases `NumberFieldOptions` and accepts only `className`.
 The existing `{ binding, render }` override still replaces all stock markup.
 
@@ -2300,7 +2343,7 @@ export const percentRenderers: FieldRendererSlots<ReactNode> = {
 };
 ```
 
-This is manual native-unit entry. A native fraction of `0.25` appears as `0.25`
+This binding contract is manual native-unit entry. A native fraction of `0.25` appears as `0.25`
 and editing `0.5` sets the native draft to `0.5`. The renderer does not multiply
 or divide by 100, append `%`, clamp to a range, round to configured precision or
 apply locale separators. It uses a text input with decimal input mode, or a
@@ -2345,6 +2388,55 @@ After building, `node examples/react-percent/dev.mjs` serves synthetic presentat
 fixtures at `http://127.0.0.1:4186`. `node scripts/check-percent-browser.mjs` checks
 native entry, retained partial drafts, remounts, restrictions and enclosing-form
 Enter behavior. Simulated composition does not certify real OS input methods.
+
+### Controlled physical Percent
+
+Select the separate localized contract explicitly with `mode="controlled"`.
+It delegates directly to the existing `CompleteLocalizedNumericField`; it does
+not enter controlled Number or change the raw binding/helper behavior above.
+
+```tsx
+import {
+    PercentField,
+    type ControlledPercentFieldProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/localized-numeric.css';
+
+export function LocalizedRatio({
+    field,
+    options,
+}: Omit<ControlledPercentFieldProps, 'mode'>) {
+    return <PercentField mode="controlled" field={field} options={options} />;
+}
+```
+
+`field` must be the current `FieldRendererProps<'percent'>` for a physical
+Percent field. Number/Currency props, a binding or a binding `render` callback
+cannot be mixed into this branch. The host retains field configuration,
+canonical fractional values, current write authority and explicit Save.
+Rendering never creates a new owner or starts a provider operation.
+
+With precision 2, native `0.75` displays `75.00`; a comma-decimal configuration
+displays `75,00`. Editing `125,755` in that configuration writes fraction
+`1.25755`, preserving fractional precision rather than rounding it as a Number.
+An explicit empty edit writes `null`; zero, permitted negative values and values
+above 100 percent remain distinct. Grouping is display-only, and the existing
+numeric engine rejects nonfinite, exponent and grouped edit text.
+
+Pass `options.owner` from the actual borrowed host lifetime. Its token/current
+check and the guarded capability retain stale-owner and committed replacement
+refusal; an ordinary value echo preserves the focused draft/caret. Existing
+`options.commit` supports immediate writes or deferred blur/Enter/unmount
+settlement. Readonly, pending and computed metadata never grant edit authority.
+Native adoption must select physical noncomputed Percent separately; computed
+effective-percent presentation remains with its existing renderer.
+
+For readonly output, use `options.presentation: 'display'`; this shows configured
+precision and `%`, with an optional localized `emptyLabel` and no editor. The
+existing progress option calculates width from the numeric fraction, not
+localized text. Only its visible fill clamps to 0–100; the canonical value is
+unchanged. `options.input`, `inputRef`, label/feedback associations and optional
+`localized-numeric.css` are the existing complete numeric component contracts.
 
 ## React Count presentation
 

@@ -340,3 +340,45 @@ test('StrictMode preserves allocated prefill transports while retiring old local
     );
     assert.equal(f.values.driver?.recordId, 'new-owner');
 });
+
+for (const selected of [null, pair('same', 'Same label')]) {
+    test(`prefill completion clears loading text without a canonical identity change (${selected ? 'same pair' : 'null'})`, async (t) => {
+        const values = { driver: selected };
+        const f = await fixture(
+            t,
+            {
+                values,
+                drivers: [
+                    {
+                        fieldId: 'driver',
+                        fieldName: 'Driver',
+                        title: null,
+                        hidden: false,
+                        urlSearchValue: 'Raw',
+                    },
+                ],
+            },
+            false,
+            null
+        );
+        const loadingInput = f.host.querySelector('input')!;
+        assert.equal(loadingInput.value, 'Chargement');
+        assert.equal(loadingInput.disabled, true);
+        const request = f.requests[0];
+        await act(async () => request.result.resolve(page([], selected)));
+        const input = f.host.querySelector('input')!;
+        assert.equal(input.value, selected?.stringValue ?? '');
+        assert.equal(input.disabled, false);
+        assert.equal(
+            f.host
+                .querySelector('[data-pending-requests]')
+                ?.getAttribute('data-pending-requests'),
+            '0'
+        );
+        assert.equal(values.driver, selected);
+        const requestCount = f.requests.length;
+        await f.render();
+        assert.equal(f.host.querySelector('input'), input);
+        assert.equal(f.requests.length, requestCount);
+    });
+}

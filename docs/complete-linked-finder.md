@@ -154,3 +154,20 @@ model publication pass their fences. Authenticated preview also receives it
 without creating a model or loading flash. The coordinator rechecks ownership
 and read identity after the callback. A callback failure is a failure outcome;
 it does not roll back already committed host/model data or the accepted cursor.
+
+Readonly `attachmentCollection` card leaves compose the SDK-owned
+`LinkedFinderAttachmentCollection`. Rows retain occurrence keys and supplied
+image fallback order; `grid` is the compact horizontal List presentation,
+while `thumbnail` and `icon` retain their explicit form settings. Grid ignores
+form captions and column counts. No opening callback grants no opening
+authority. A captured current owner fences opening and image retry; these
+controls do not select the containing option or submit its form.
+
+The host retains the raw admitted attachment collection, navigation, modal,
+open/download policy and dismissal. Display proxy URLs need not become modal
+sources: rewriting an admitted URL can erase URL-only media classification.
+Hosts can compose the existing `AttachmentPreview` body in their own controlled
+navigation without granting edit/upload/delete authority. Inline document
+thumbnails use the existing `DocumentThumbnail` contract; discovered PDF
+requires its explicit same-origin version-matched worker/resource asset URLs.
+Omitting those assets remains unavailable presentation, not PDF qualification.

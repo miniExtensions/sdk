@@ -54,6 +54,10 @@ import {
 } from './SingleLineTextField.js';
 import type { CollaboratorImageSource } from './CompleteCollaboratorField.js';
 import {
+    LinkedFinderAttachmentCollection,
+    type LinkedFinderAttachmentCollectionProps,
+} from './LinkedFinderAttachmentCollection.js';
+import {
     CreatedTimeResource,
     type CreatedTimeResourceProps,
 } from './CreatedTimeResource.js';
@@ -154,6 +158,10 @@ export type LinkedFinderCardLeaf =
               readonly viewBox: string;
               readonly unfilledColor: string;
           };
+      }
+    | {
+          readonly kind: 'attachmentCollection';
+          readonly display: LinkedFinderAttachmentCollectionProps;
       }
     | {
           readonly kind: 'attachmentImages';
@@ -404,6 +412,8 @@ export function LinkedFinderRichLeaf({
             );
         case 'rating':
             return h(Rating, { leaf });
+        case 'attachmentCollection':
+            return h(LinkedFinderAttachmentCollection, leaf.display);
         case 'attachmentImages':
             return leaf.images.length
                 ? h(

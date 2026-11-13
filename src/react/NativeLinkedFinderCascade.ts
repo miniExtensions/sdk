@@ -259,6 +259,14 @@ function CascadeDriver<Owner extends object>(
                     'div',
                     { className: 'mx-sdk-finder-input-wrap' },
                     h(Combobox.Input<'input', NativeLinkedFinderCascadeValue>, {
+                        // The frozen combobox memoizes displayValue by selected
+                        // identity. Prefill can finish without changing that
+                        // identity (including null), so refresh this disabled
+                        // input boundary without remounting the driver/reads.
+                        key:
+                            state.status === 'fetching-prefill'
+                                ? 'prefill'
+                                : 'selection',
                         disabled,
                         className: 'mx-sdk-finder-input',
                         autoComplete: 'off',

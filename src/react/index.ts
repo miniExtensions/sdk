@@ -3007,6 +3007,11 @@ export {
 } from './NativeLinkedFinderCascade.js';
 export { LinkedFinderCard, LinkedFinderRichLeaf } from './LinkedFinderCard.js';
 export {
+    LinkedFinderAttachmentCollection,
+    type LinkedFinderAttachmentCollectionProps,
+    type LinkedFinderAttachmentRow,
+} from './LinkedFinderAttachmentCollection.js';
+export {
     CompleteLinkedFinder,
     CompleteLinkedFinderView,
 } from './CompleteLinkedFinder.js';

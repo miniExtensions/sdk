@@ -5,6 +5,7 @@
 @import './complete-checkbox.css';
 @import './complete-collaborators.css';
 @import './barcode.css';
+@import './attachment-preview.css';
 
 .mx-sdk-native-linked-cascade {
     position: relative;
@@ -352,4 +353,125 @@
 .mx-sdk-finder-literal {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+}
+
+.mx-sdk-finder-attachment-collection {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.mx-sdk-finder-attachment-icon {
+    display: block;
+}
+.mx-sdk-finder-attachment-grid {
+    display: flex;
+    height: 100%;
+}
+.mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-item {
+    height: 100%;
+    flex-shrink: 0;
+}
+.mx-sdk-finder-attachment-grid .mx-sdk-finder-attachment-visual {
+    height: 100%;
+}
+.mx-sdk-finder-attachment-item {
+    position: relative;
+    min-width: 0;
+}
+.mx-sdk-finder-attachment-icon
+    .mx-sdk-finder-attachment-item
+    + .mx-sdk-finder-attachment-item {
+    margin-top: 0.25rem;
+}
+.mx-sdk-finder-attachment-visual {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+.mx-sdk-finder-attachment-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.mx-sdk-finder-attachment-icon .mx-sdk-finder-attachment-item {
+    display: flex;
+    align-items: center;
+    height: 3.5rem;
+    overflow: hidden;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+.mx-sdk-finder-attachment-icon .mx-sdk-finder-attachment-visual {
+    width: 3.5rem;
+    height: 100%;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 0;
+}
+.mx-sdk-finder-attachment-name {
+    margin: 0.25rem 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+.mx-sdk-finder-attachment-icon .mx-sdk-finder-attachment-name {
+    margin: 0 0 0 0.75rem;
+    color: #111827;
+    font-size: 0.875rem;
+}
+.mx-sdk-finder-attachment-open {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    cursor: pointer;
+}
+.mx-sdk-finder-attachment-open:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+}
+.mx-sdk-finder-attachment-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    overflow: hidden;
+    background: #d1d5db;
+}
+.mx-sdk-finder-attachment-fallback svg {
+    width: 3rem;
+    height: 3rem;
+    color: #e5e7eb;
+}
+.mx-sdk-finder-attachment-icon .mx-sdk-finder-attachment-fallback svg {
+    width: 2rem;
+    height: 2rem;
+}
+.mx-sdk-finder-attachment-retry {
+    position: relative;
+    z-index: 2;
+    border: 0;
+    background: transparent;
+    color: #374151;
+    font-size: 0.75rem;
+    text-decoration: underline;
+}
+.mx-sdk-finder-attachment-document {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    font-size: 0.75rem;
 }

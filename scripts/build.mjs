@@ -224,6 +224,7 @@ for (const format of ['esm', 'cjs']) {
         'form-completion',
         'form-header',
         'form-validation-summary',
+        'portal-summary-cards',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

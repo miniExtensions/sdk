@@ -50,6 +50,12 @@ export type {
 export { refreshPortalSummaryFields } from './summaryRefresh.js';
 export type { PortalSummaryRefreshOptions } from './summaryRefresh.js';
 
+export { projectPortalSummaryFields } from './summaryFields.js';
+export type {
+    PortalSummaryField,
+    PortalSummaryFieldsProjectionInput,
+} from './summaryFields.js';
+
 export {
     getSearchPageQueryKeys,
     hasSearchPageQueryParam,

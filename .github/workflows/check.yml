@@ -71,6 +71,11 @@ jobs:
               run: node scripts/form-validation-summary-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
               env:
                   SDK_FORM_VALIDATION_CHROMIUM: /usr/bin/google-chrome
+            - name: Qualify packed Portal parent summary cards
+              run: node scripts/portal-summary-cards-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
+              env:
+                  SDK_PORTAL_SUMMARY_CHROMIUM: /usr/bin/google-chrome
+                  SDK_PORTAL_SUMMARY_PROOF_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-summary-cards
             - name: Execute packed native Chromium proof
               timeout-minutes: 10
               run: pnpm check:browser

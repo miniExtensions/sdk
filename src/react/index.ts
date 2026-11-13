@@ -3062,3 +3062,10 @@ export {
     type AttachmentPreviewLabels,
 } from './AttachmentPreview.js';
 export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
+
+export {
+    PortalSummaryCards,
+    type PortalSummaryCard,
+    type PortalSummaryCardsProps,
+    type PortalSummaryFieldsHeight,
+} from './PortalSummaryCards.js';

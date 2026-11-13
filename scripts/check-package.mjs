@@ -543,6 +543,15 @@ const headerStarterFiles = completionStarterFiles.map((path) =>
     path.replace('react-form-completion/', 'react-form-header/')
 );
 
+const linkedFinderStarterFiles = [
+    'README.md',
+    'main.ts',
+    'consumer.cts',
+    'index.html',
+    'dev.mjs',
+    'tsconfig.json',
+].map((path) => `examples/react-complete-linked-finder/${path}`);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -594,6 +603,7 @@ try {
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
                 path === 'docs/calendar.md' ||
+                path === 'docs/complete-linked-finder.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
@@ -606,6 +616,7 @@ try {
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
+                linkedFinderStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 documentFiles.has(path) ||
@@ -637,6 +648,8 @@ try {
         'docs/browser-lifecycle.md',
         'docs/testing.md',
         'docs/calendar.md',
+        'docs/complete-linked-finder.md',
+        ...linkedFinderStarterFiles,
         'docs/count.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',

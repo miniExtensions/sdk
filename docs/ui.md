@@ -3119,6 +3119,27 @@ input method or screen reader.
 
 ## React Currency presentation
 
+For a native host's accepted controlled currency props, use the public component
+directly. The physical discriminator selects the existing localized numeric
+engine; its guarded canonical writer and explicit Save remain with the host.
+
+```tsx
+import { CurrencyField } from '@miniextensions/sdk/react';
+import type { FieldRendererProps } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/localized-numeric.css';
+
+export function ControlledAmount(props: FieldRendererProps<'currency'>) {
+    return <CurrencyField {...props} options={{ presentation: 'editor' }} />;
+}
+```
+
+The controlled API also accepts the shared numeric options for a current owner,
+deferred commits, readonly display, localized Clear/empty labels and existing
+input/form/help associations. For example, precision 2 with period-comma grouping
+displays canonical `1234.56789` as `1.234,57` without writing it. Readonly display
+places a negative sign before the literal currency symbol. It does not accept a
+binding or whole-field renderer. The legacy binding API below is unchanged.
+
 The optional `/react` entry exports `CurrencyField`, `CurrencyFieldProps`,
 `CurrencyFieldOptions` and `renderCurrencyField`. The binding component supports
 the existing `{ binding, render }` API; supplying `render` replaces all markup.

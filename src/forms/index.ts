@@ -273,3 +273,11 @@ export {
     type FormDisplayField,
     type FormPresentationIdentity,
 } from './header.js';
+
+export {
+    validateOrdinaryFormField,
+    type ValidateOrdinaryFormFieldInput,
+    type OrdinaryFormFieldDiagnostic,
+    type OrdinaryFormFieldFallbackReason,
+    type OrdinaryFormFieldValidationResult,
+} from './ordinaryValidation.js';

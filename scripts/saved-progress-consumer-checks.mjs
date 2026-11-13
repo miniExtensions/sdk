@@ -63,6 +63,7 @@ export async function assertSavedProgressConsumer({
         held = false,
         strict = false,
         initial = {},
+        readDenied = false,
     } = {}) {
         const data = new Map(
             seed == null ? [] : [['form-progress-synthetic', seed]]
@@ -79,6 +80,7 @@ export async function assertSavedProgressConsumer({
         const storage = {
             getItem(key) {
                 io.push(['read', key]);
+                if (readDenied) throw Error('Synthetic unavailable read');
                 return data.get(key) ?? null;
             },
             setItem(key, value) {
@@ -171,6 +173,9 @@ export async function assertSavedProgressConsumer({
             },
             deny(value) {
                 denied = value;
+            },
+            allowReads() {
+                readDenied = false;
             },
             snapshot: () =>
                 forms.parseNativeFormProgressValue(
@@ -396,6 +401,38 @@ export async function assertSavedProgressConsumer({
         await absence.publish({ edit: 1 });
         assert.equal(absence.snapshot().revision, 1);
         await absence.unmount();
+        // Synchronous unavailable reads still mean undefined; explicit absence remains a witness.
+        for (const receipt of [
+            undefined,
+            { shareId: 'synthetic', revision: null, writerId: null },
+        ]) {
+            const t = await fixture({
+                seed: envelope(),
+                readDenied: true,
+                initial: { progressRead: receipt },
+            });
+            assert.equal(t.container.querySelector('[role=alert]'), null);
+            assert.equal(t.records.length, 0);
+            t.allowReads();
+            await t.publish({ changed: true });
+            assert(t.container.querySelector('[role=alert]'));
+            assert.equal(t.data.get('form-progress-synthetic'), envelope());
+            await t.unmount();
+        }
+        const unavailableWitness = await fixture({
+            seed: envelope(),
+            readDenied: true,
+            initial: {
+                progressRead: {
+                    shareId: 'synthetic',
+                    revision: 7,
+                    writerId: 'foreign',
+                },
+            },
+        });
+        assert(unavailableWitness.container.querySelector('[role=alert]'));
+        assert.equal(unavailableWitness.records.length, 0);
+        await unavailableWitness.unmount();
         const legacyReceipt = await fixture({
             seed: JSON.stringify(legacy),
             initial: {

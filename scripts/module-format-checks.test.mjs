@@ -691,6 +691,7 @@ for (const name of [
     'form-header',
     'form-validation-summary',
     'portal-summary-cards',
+    'form-progress',
     'date',
     'datetime',
     'duration',

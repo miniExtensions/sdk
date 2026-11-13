@@ -193,6 +193,7 @@ export function assertModuleFormats(root) {
                 './react/complete-readonly-text.css',
                 './react/complete-clearable-text-input.css',
                 './react/complete-multiline.css',
+                './react/signature.css',
                 './react/complete-address.css',
                 './react/address-field.css',
                 './react/html-description.css',

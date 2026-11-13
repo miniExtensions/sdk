@@ -143,7 +143,8 @@
         },
         "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
         "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css",
-        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*"
+        "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*",
+        "./react/signature.css": "./dist/esm/react/signature.css"
     },
     "files": [
         "dist/esm",
@@ -190,7 +191,8 @@
         "examples/react-form-header/styles.css",
         "examples/react-form-header/build.mjs",
         "examples/react-form-header/dev.mjs",
-        "examples/react-form-header/tsconfig.json"
+        "examples/react-form-header/tsconfig.json",
+        "docs/signature.md"
     ],
     "engines": {
         "node": ">=22"
@@ -257,6 +259,7 @@
         "refractor": "3.6.0",
         "resize-observer-polyfill": "1.5.1",
         "shallowequal": "1.1.0",
+        "signature_pad": "4.1.7",
         "slugify": "1.6.6",
         "smooth-scroll-into-view-if-needed": "1.1.33",
         "ua-parser-js": "1.0.39",

@@ -1,3 +1,4 @@
+import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -683,6 +684,8 @@ try {
         'dist/cjs/react/AddressField.d.ts',
         'dist/esm/react/address-field.css',
         'dist/cjs/react/address-field.css',
+        'dist/esm/react/signature.css',
+        'dist/cjs/react/signature.css',
         'dist/esm/react/complete-address.css',
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
@@ -3437,6 +3440,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(calendlyWidgetMatrix.versions.length, 2);
     assert.equal(calendlyWidgetMatrix.cleanup, 'completed');
+    const signatureMatrix = checkSignatureReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(signatureMatrix.versions.length, 2);
+    assert.equal(signatureMatrix.cleanup, 'completed');
     const addressMatrix = checkCompleteAddressReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

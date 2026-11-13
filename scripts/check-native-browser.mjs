@@ -1,3 +1,4 @@
+import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
@@ -1545,6 +1546,7 @@ try {
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
+            'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
@@ -2264,6 +2266,18 @@ try {
                     control,
                 });
             }
+        }
+        for (const format of ['esm', 'cjs']) {
+            const key = 'signature' + format;
+            report[key] = {};
+            await checkSignatureBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report[key],
+                output,
+                format,
+                reference: nativeReactVersion === '18.3.1',
+            });
         }
         report.formTracking = {};
         await checkFormTrackingBrowser({

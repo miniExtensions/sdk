@@ -82,6 +82,11 @@ jobs:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/react18
+            - name: Execute Count Chromium proof
+              timeout-minutes: 3
+              run: node scripts/check-count-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/count"
+              env:
+                  SDK_COUNT_CHROMIUM: /usr/bin/google-chrome
             - name: Execute packed Linked Records Chromium proof
               timeout-minutes: 3
               run: node scripts/check-linked-records-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-records"

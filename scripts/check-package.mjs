@@ -1,5 +1,8 @@
+import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
+import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
+import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
 import {
     checkOrdinaryValidationConsumer,
     ordinaryValidationTypedConsumer,
@@ -554,6 +557,10 @@ const linkedFinderStarterFiles = [
     'tsconfig.json',
 ].map((path) => `examples/react-complete-linked-finder/${path}`);
 
+const summaryCardsStarterFiles = linkedFinderStarterFiles.map((path) =>
+    path.replace('react-complete-linked-finder/', 'react-portal-summary-cards/')
+);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -570,6 +577,35 @@ function run(command, args, cwd = temporaryDirectory) {
 try {
     // check:package also works alone; never pack leftover build output.
     run(process.execPath, ['scripts/build.mjs'], process.cwd());
+    // Run One's cold-entry assertion on this fresh build, never leftover dist.
+    for (const format of ['esm', 'cjs']) {
+        const entry = new URL(
+            `../dist/${format}/react/index.js`,
+            import.meta.url
+        ).href;
+        run(
+            process.execPath,
+            [
+                '--input-type=module',
+                '-e',
+                `
+            import assert from 'node:assert/strict';
+            import { createRequire } from 'node:module';
+            import { fileURLToPath } from 'node:url';
+            const require = createRequire(import.meta.url);
+            assert.equal(typeof document, 'undefined');
+            ${format === 'esm' ? `await import(${JSON.stringify(entry)});` : `require(fileURLToPath(${JSON.stringify(entry)}));`}
+            const loaded = Object.keys(require.cache).filter(path => /[\\/]react-dom[\\/]/.test(path));
+            assert.deepEqual(loaded, [], 'General React import initialized a DOM-dependent runtime');
+            assert.equal(typeof document, 'undefined');
+        `,
+            ],
+            process.cwd()
+        );
+    }
+    console.log(
+        'Fresh general React entries preserve consumer DOM bootstrap in ESM and CJS'
+    );
     const sourcePackage = assertSourcePackageBuild(process.cwd());
     console.log(
         `SDK source preparation matches checkout: ${sourcePackage.declarations} declarations in ${sourcePackage.formats} formats`
@@ -598,6 +634,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/saved-progress.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
@@ -611,6 +648,7 @@ try {
                 path === 'docs/signature.md' ||
                 path === 'docs/single-line-text.md' ||
                 path === 'docs/csv-export.md' ||
+                path === 'docs/kanban.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
@@ -620,6 +658,7 @@ try {
                 path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
                 linkedFinderStarterFiles.includes(path) ||
+                summaryCardsStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 documentFiles.has(path) ||
@@ -707,6 +746,9 @@ try {
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
         'dist/cjs/react/complete-portal-chart.css',
+        'dist/esm/react/portal-summary-cards.css',
+        'dist/cjs/react/portal-summary-cards.css',
+        ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
@@ -724,6 +766,9 @@ try {
         'docs/csv-export.md',
         'dist/esm/react/csv-export.css',
         'dist/cjs/react/csv-export.css',
+        'docs/kanban.md',
+        'dist/esm/react/kanban.css',
+        'dist/cjs/react/kanban.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -1679,6 +1724,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         "'../src/runtime/index.js'",
         "'@miniextensions/sdk'"
     );
+    const nativeProgressExactOptionalConsumer = readFileSync(
+        'scripts/native-form-progress-exact-optional-consumer.types.ts.txt',
+        'utf8'
+    );
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
@@ -1766,10 +1815,30 @@ new Parser([]).parse({maxDepth:'48'});
             sourceEnvelopeFilename,
             ...formulasGuideSources,
         ]);
+        const exactOptionalFilename = `native-progress-exact-optional-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, exactOptionalFilename),
+            nativeProgressExactOptionalConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--exactOptionalPropertyTypes',
+            '--skipLibCheck',
+            'false',
+            '--target',
+            'ES2022',
+            '--module',
+            module,
+            '--moduleResolution',
+            moduleResolution,
+            exactOptionalFilename,
+        ]);
     }
 
     console.log(
-        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent.'
+        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent; native progress also checked with exact optional properties.'
     );
 
     const bundled = await build({
@@ -2871,6 +2940,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const savedProgressProof = checkSavedProgressReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(savedProgressProof.versions.length, 2);
+    assert.equal(savedProgressProof.cleanup, 'completed');
     const customerChatProof = checkCustomerChatMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3427,6 +3504,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const kanbanMatrix = checkKanbanReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(kanbanMatrix.versions.length, 2);
+    assert.equal(kanbanMatrix.cleanup, 'completed');
     const csvExportMatrix = checkCSVExportReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3455,6 +3540,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
+    const summaryCardsMatrix = checkPortalSummaryCardsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(summaryCardsMatrix.versions.length, 2);
+    assert.equal(summaryCardsMatrix.cleanup, 'completed');
     const trackingMatrix = checkFormTrackingReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3984,6 +4077,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
                         linkedFinderStarterFiles.includes(path) ||
+                        summaryCardsStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
                             'README.md',

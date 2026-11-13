@@ -1,5 +1,22 @@
 # Source test coverage
 
+## Portal parent-record summary cards
+
+`test/portalSummaryFields.test.ts` covers current schema names, configured order,
+first duplicates and stale IDs. `test/reactPortalSummaryCards.test.ts` renders
+the real public component through SSR and StrictMode, checking empty/zero/blank
+display text, independent titles, replacements, inert text and optional host
+decoration without reads or form submissions. Existing summary-refresh tests
+continue to own bounded reads and generation retirement.
+
+`scripts/portal-summary-cards-consumer-checks.mjs` installs the actual archive
+with React 18/19 and checks ESM/CommonJS, strict readonly declarations, both CSS
+outputs, SSR/hydration, public-converter usage and the shipped standalone
+example. The normal package workflow also runs its actual Chromium checks for
+all four line clamps, full tooltips, title clipping and responsive wrapping.
+These synthetic SDK checks do not establish native record admission, settings
+permissions or hosted save/refresh acceptance.
+
 ## Calendar surfaces
 
 `test/calendarDateProjection.test.ts` compares the distinct computed DATE

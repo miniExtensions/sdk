@@ -3034,7 +3034,6 @@ export {
     type NativeLinkedFinderCascadeDescriptor,
     type NativeLinkedFinderCascadeLabels,
 } from './NativeLinkedFinderCascade.js';
-export { LinkedFinderCard, LinkedFinderRichLeaf } from './LinkedFinderCard.js';
 export {
     LinkedFinderAttachmentCollection,
     type LinkedFinderAttachmentCollectionProps,
@@ -3050,12 +3049,6 @@ export type {
     CompleteLinkedFinderCandidate,
     CompleteLinkedFinderViewProps,
 } from './CompleteLinkedFinder.js';
-export type {
-    LinkedFinderCardProjection,
-    LinkedFinderCardField,
-    LinkedFinderCardLeaf,
-    LinkedFinderPill,
-} from './LinkedFinderCard.js';
 
 export {
     CSVExportButton,
@@ -3063,8 +3056,36 @@ export {
     type CSVExportLabels,
 } from './CSVExportButton.js';
 export {
+    LinkedFinderCard,
+    LinkedFinderRichLeaf,
+    type LinkedFinderCardProjection,
+    type LinkedFinderCardField,
+    type LinkedFinderCardLeaf,
+    type LinkedFinderPill,
+} from './LinkedFinderCard.js';
+export { Kanban, type KanbanProps, type KanbanCard } from './Kanban.js';
+export {
     AttachmentPreview,
     type AttachmentPreviewProps,
     type AttachmentPreviewLabels,
 } from './AttachmentPreview.js';
 export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
+
+export {
+    PortalSummaryCards,
+    type PortalSummaryCard,
+    type PortalSummaryCardsProps,
+    type PortalSummaryFieldsHeight,
+} from './PortalSummaryCards.js';
+export {
+    useNativeFormProgress,
+    type NativeFormProgressOptions,
+    type NativeFormProgressPorts,
+    type NativeFormProgressRead,
+    type NativeFormProgressStorageEvent,
+} from './useNativeFormProgress.js';
+export {
+    FormProgressConflictAlert,
+    formProgressConflictHeading,
+    formProgressConflictMessage,
+} from './FormProgressConflictAlert.js';

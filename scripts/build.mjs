@@ -1,3 +1,4 @@
+import { bundleKanban } from './kanban-bundle.mjs';
 import { build as bundle } from 'esbuild';
 import { assertDateVendor } from './date-vendor-checks.mjs';
 import { copyDocumentAssets } from './document-preview-assets.mjs';
@@ -149,6 +150,7 @@ await bundleCalendar();
 await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
+await bundleKanban();
 if (process.argv.includes('--capture-date-popover'))
     await bundleDatePopover(process.cwd(), true);
 await bundleDatePopover();
@@ -221,9 +223,12 @@ for (const format of ['esm', 'cjs']) {
         'form-tracking',
         'form-group',
         'csv-export',
+        'kanban',
         'form-completion',
         'form-header',
         'form-validation-summary',
+        'portal-summary-cards',
+        'form-progress',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

@@ -24,6 +24,30 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+## Native-compatible progress storage
+
+`createNativeFormProgressStorage` preserves the native browser-local revision
+and writer protocol through host-supplied storage and optional Web Locks. Its
+`write({ expectedRevision, record })` calls retain the original `written`,
+`conflict`, and `unavailable` result union.
+
+Pass `isWriteStillEligible: () => boolean` on a write to opt into cancellation.
+The callback runs after acquiring the lock, immediately before any storage
+access. A strict `false` returns `{ status: 'cancelled' }` without reading,
+writing, removing malformed data, or warning. Without Web Locks, the same check
+runs immediately. Omitting the callback or passing `undefined` preserves legacy
+behavior and result types. Optional callbacks and argument unions that may carry
+a callback include `cancelled` in their result type; extracted write methods
+retain these overloads. The exported `NativeFormProgressWriteResult` and the
+method's `ReturnType` remain the legacy union. The method's `Parameters` retain
+the legacy argument shape with an optional `isWriteStillEligible?: undefined`
+discriminator.
+
+Callback exceptions follow native behavior: with a lock they return
+`unavailable` and warn; without a lock they reject the write Promise. The host
+owns eligibility, conflict state, Restore, and Save. This SDK contract does not
+change the native caller or establish native adoption.
+
 ## Native-compatible Save coordination
 
 `createFormSaveCoordinator<Key, Snapshot>({ isEqual })` coordinates explicit
@@ -3241,3 +3265,11 @@ The CSS is independent of Tailwind and carries the native red error palette,
 scrolling/flex layout, zero corner radius, list spacing and underlined links.
 Native consumer validation and browser/manual parity must be verified at the
 final integration pin; SDK component tests alone do not verify FormLoaded.
+
+### Complete native-compatible saved progress
+
+Use [`useNativeFormProgress` and `FormProgressConflictAlert`](saved-progress.md)
+for the native revision/writer protocol, committed writer queue, retry and
+reload-required conflict presentation. The host retains its canonical unfiltered
+draft, Restore/load witness and Submit cleanup; this is separate from
+`createProgress` and its public token/value protocol.

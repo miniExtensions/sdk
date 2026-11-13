@@ -86,6 +86,11 @@ jobs:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/react18
+            - name: Qualify packed Portal parent summary cards
+              run: node scripts/portal-summary-cards-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
+              env:
+                  SDK_PORTAL_SUMMARY_CHROMIUM: /usr/bin/google-chrome
+                  SDK_PORTAL_SUMMARY_PROOF_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-summary-cards
             - name: Execute Count Chromium proof
               timeout-minutes: 3
               run: node scripts/check-count-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/count"
@@ -122,6 +127,12 @@ jobs:
             - name: Execute installed attachment preview Chromium proof
               timeout-minutes: 5
               run: node scripts/check-attachment-preview-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/attachment-preview"
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed saved-progress Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-saved-progress-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/saved-progress"
               env:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome

@@ -118,6 +118,13 @@ function PreviewVideo({ src }: { src: string }) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     useEffect(() => {
         const video = videoRef.current;
+        // StrictMode replays teardown on the retained node. Restore its source
+        // without resetting ordinary rerenders or declarative source changes.
+        if (video && video.getAttribute('src') !== src)
+            video.setAttribute('src', src);
+    }, [src]);
+    useEffect(() => {
+        const video = videoRef.current;
         return () => {
             if (video == null) return;
             video.pause();

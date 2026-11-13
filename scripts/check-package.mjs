@@ -1,3 +1,4 @@
+import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
     checkCanonicalFormConsumer,
@@ -645,6 +646,7 @@ try {
                 path === 'docs/forms.md' ||
                 path === 'docs/canonical-form-frame.md' ||
                 path === 'docs/saved-progress.md' ||
+                path === 'docs/portal-shell.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
@@ -666,6 +668,7 @@ try {
                 path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
+                path === 'docs/form-submit.md' ||
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
                 headerStarterFiles.includes(path) ||
@@ -759,6 +762,9 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/attachment-preview.css',
         'dist/cjs/react/attachment-preview.css',
+        'dist/esm/react/portal-shell.css',
+        'dist/cjs/react/portal-shell.css',
+        'docs/portal-shell.md',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
@@ -776,6 +782,7 @@ try {
         'dist/cjs/react/form-completion.css',
         'docs/form-completion.md',
         'docs/form-header.md',
+        'docs/form-submit.md',
         'docs/field-presentation.md',
         'docs/form-groups.md',
         'dist/esm/react/form-group.css',
@@ -812,6 +819,8 @@ try {
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
         'dist/cjs/react/complete-multiline.css',
+        'dist/esm/react/form-submit.css',
+        'dist/cjs/react/form-submit.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',
@@ -2966,6 +2975,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const portalShellProof = checkPortalShellReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(portalShellProof.versions.length, 2);
+    assert.equal(portalShellProof.cleanup, 'completed');
     const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

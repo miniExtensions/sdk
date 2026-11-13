@@ -299,6 +299,174 @@ render({url:'/pixel.svg',type:'image/svg+xml'});`
                 await page.screenshot({
                     path: join(directory, `${react}-${format}.png`),
                 });
+                // Production React does not replay effects. Exercise the same
+                // installed public component with development React as well.
+                writeFileSync(
+                    join(root, 'media.js'),
+                    imports +
+                        `
+const root=createRoot(document.querySelector('#app'));
+const state={setups:0,cleanups:0,submits:0,events:[],nodes:[]};
+const id=node=>{let i=state.nodes.indexOf(node);if(i<0){i=state.nodes.length;state.nodes.push(node)}return i};
+for(const name of ['pause','load']){const original=HTMLMediaElement.prototype[name];HTMLMediaElement.prototype[name]=function(...args){state.events.push({id:id(this),name});return original.apply(this,args)}}
+document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();state.submits++});
+function Probe({attachment}){React.useEffect(()=>{state.setups++;return()=>{state.cleanups++}},[]);return React.createElement(AttachmentPreview,{attachment})}
+window.media={state,render(kind,url,strict,key='first'){const preview=React.createElement(Probe,{key,attachment:{url,type:kind==='video'?'video/mp4':'audio/mpeg'}});flushSync(()=>root.render(strict?React.createElement(React.StrictMode,null,preview):preview))},close(){flushSync(()=>root.render(null))},read(){const node=document.querySelector('#app video,#app audio');return node?{id:id(node),src:node.getAttribute('src'),controls:node.controls,kind:node.localName}:null},retired(i){const node=state.nodes[i];return {connected:node.isConnected,src:node.getAttribute('src'),events:state.events.filter(e=>e.id===i).map(e=>e.name)}}};`
+                );
+                const development = await build({
+                    absWorkingDir: root,
+                    entryPoints: ['media.js'],
+                    bundle: true,
+                    platform: 'browser',
+                    format: 'esm',
+                    target: 'es2022',
+                    outfile: join(root, 'bundle', 'main.js'),
+                    write: false,
+                    metafile: true,
+                    define: { 'process.env.NODE_ENV': '"development"' },
+                });
+                await assertBrowserInputs(development.metafile, root);
+                assets.set('/main.js', development.outputFiles[0].contents);
+                await page.goto(origin);
+                const mediaCases = [];
+                for (const strict of [false, true]) {
+                    for (const kind of ['video', 'audio']) {
+                        await page.evaluate(() => window.media.close());
+                        const before = await page.evaluate(() => ({
+                            setups: window.media.state.setups,
+                            cleanups: window.media.state.cleanups,
+                        }));
+                        const render = (url, key = 'first') =>
+                            page.evaluate(
+                                ({ kind, url, strict, key }) =>
+                                    window.media.render(kind, url, strict, key),
+                                { kind, url, strict, key }
+                            );
+                        await render('/a.mp4');
+                        const first = await page.evaluate(() =>
+                            window.media.read()
+                        );
+                        assert.equal(first.src, '/a.mp4');
+                        assert.equal(first.kind, kind);
+                        assert.equal(first.controls, true);
+                        const replay = await page.evaluate(() => ({
+                            setups: window.media.state.setups,
+                            cleanups: window.media.state.cleanups,
+                            events: window.media.state.events.length,
+                        }));
+                        assert.equal(
+                            replay.setups - before.setups,
+                            strict ? 2 : 1
+                        );
+                        assert.equal(
+                            replay.cleanups - before.cleanups,
+                            strict ? 1 : 0
+                        );
+                        await render('/a.mp4');
+                        assert.deepEqual(
+                            await page.evaluate(() => window.media.read()),
+                            first
+                        );
+                        await render('/b.mp4');
+                        assert.deepEqual(
+                            await page.evaluate(() => window.media.read()),
+                            { ...first, src: '/b.mp4' }
+                        );
+                        assert.equal(
+                            await page.evaluate(
+                                () => window.media.state.events.length
+                            ),
+                            replay.events
+                        );
+                        const beforeRetirement = await page.evaluate(
+                            (id) => window.media.retired(id),
+                            first.id
+                        );
+                        await render('/c.mp4', 'successor');
+                        const successor = await page.evaluate(() =>
+                            window.media.read()
+                        );
+                        assert.notEqual(successor.id, first.id);
+                        assert.equal(successor.src, '/c.mp4');
+                        const retired = await page.evaluate(
+                            (id) => window.media.retired(id),
+                            first.id
+                        );
+                        assert.equal(retired.connected, false);
+                        if (kind === 'video') {
+                            assert.equal(retired.src, null);
+                            assert.deepEqual(
+                                retired.events.slice(
+                                    beforeRetirement.events.length
+                                ),
+                                ['pause', 'load']
+                            );
+                        }
+                        // Switch media kinds without changing the owning host.
+                        const other = kind === 'video' ? 'audio' : 'video';
+                        await page.evaluate(
+                            ({ other, strict }) =>
+                                window.media.render(
+                                    other,
+                                    '/other.mp4',
+                                    strict,
+                                    'successor'
+                                ),
+                            { other, strict }
+                        );
+                        const replacement = await page.evaluate(() =>
+                            window.media.read()
+                        );
+                        assert.notEqual(replacement.id, successor.id);
+                        assert.equal(replacement.kind, other);
+                        assert.equal(replacement.src, '/other.mp4');
+                        const replaced = await page.evaluate(
+                            (id) => window.media.retired(id),
+                            successor.id
+                        );
+                        assert.equal(replaced.connected, false);
+                        if (kind === 'video') assert.equal(replaced.src, null);
+                        await page.evaluate(() => window.media.close());
+                        assert.equal(
+                            await page.evaluate(() => window.media.read()),
+                            null
+                        );
+                        const final = await page.evaluate(
+                            (id) => window.media.retired(id),
+                            replacement.id
+                        );
+                        assert.equal(final.connected, false);
+                        if (other === 'video') {
+                            assert.equal(final.src, null);
+                            assert.deepEqual(final.events.slice(-2), [
+                                'pause',
+                                'load',
+                            ]);
+                        }
+                        mediaCases.push({
+                            kind,
+                            strict,
+                            retainedSource: true,
+                            replacement: true,
+                            remount: true,
+                            domRetirement: true,
+                            explicitVideoCleanup: kind === 'video',
+                        });
+                    }
+                }
+                assert.equal(
+                    await page.evaluate(() => window.media.state.submits),
+                    0
+                );
+                assert.deepEqual(errors, []);
+                assert.deepEqual(external, []);
+                profiles.at(-1).developmentMedia = {
+                    strictModeReplay: true,
+                    scope: 'Media source/controls and video cleanup, not decoder/playback or audio resource-release proof',
+                    cases: mediaCases,
+                    submits: 0,
+                    externalRequests: 0,
+                };
             } finally {
                 await context.close();
             }

@@ -392,11 +392,16 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             .waitFor({ state: 'attached' });
         const state = () =>
             page.evaluate(() => window.__kanbanProbe.snapshot());
-        const replace = (patch) =>
-            page.evaluate(
-                (patch) => window.__kanbanProbe.replace(patch),
-                patch
-            );
+        const replace = async (patch) => {
+            const mounted = await page.evaluate((patch) => {
+                window.__kanbanProbe.replace(patch);
+                return window.__kanbanProbe.snapshot().model.mounted;
+            }, patch);
+            if (mounted)
+                await page
+                    .locator('section [data-kanban-ready="true"]')
+                    .waitFor({ state: 'attached' });
+        };
         const reset = async () => {
             await page.evaluate(() => window.__kanbanProbe.reset());
             await page

@@ -599,6 +599,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/saved-progress.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||

@@ -92,6 +92,7 @@
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
         "./react/text.css": "./dist/esm/react/text.css",
+        "./react/single-line-text.css": "./dist/esm/react/single-line-text.css",
         "./react/number.css": "./dist/esm/react/number.css",
         "./react/date.css": "./dist/esm/react/date.css",
         "./react/datetime.css": "./dist/esm/react/datetime.css",
@@ -236,6 +237,7 @@
         "examples/react-form-header/dev.mjs",
         "examples/react-form-header/tsconfig.json",
         "docs/signature.md",
+        "docs/single-line-text.md",
         "docs/customer-chat.md",
         "docs/csv-export.md"
     ],

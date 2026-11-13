@@ -365,7 +365,10 @@ and the native editor-slot API remains available.
 computed, read-only slot. It displays the supplied native object's `value` as
 escaped selectable text with whitespace preserved. Native state and stale flags
 remain unchanged; masking precedes value access. No generation, retry, prompt or
-reference inspection, parsing, links, hydration or editing is added.
+reference inspection, parsing or editing is added to the binding renderer.
+Its explicit `mode="controlled"` accepts host-converted text and language, with
+the existing read-only text links, localized empty state, size and layout. Import
+`@miniextensions/sdk/react/complete-readonly-text.css` for that presentation.
 
 [Multiple Attachments adapter](docs/ui.md#react-multiple-attachments-adapter)
 exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for

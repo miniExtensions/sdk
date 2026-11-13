@@ -3,13 +3,17 @@ import {
     checkCSVExportBrowser,
 } from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
-import { checkExternalSyncSourceControlledBrowser } from './external-sync-source-controlled-browser-checks.mjs';
+import {
+    checkExternalSyncSourceControlledBrowser,
+    checkAiTextControlledBrowser,
+} from './external-sync-source-controlled-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
+import { checkSingleLineTextBrowser } from './single-line-text-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -2245,6 +2249,13 @@ try {
             evidence: report.externalSyncSourceControlled,
             output,
         });
+        report.aiTextControlled = {};
+        await checkAiTextControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.aiTextControlled,
+            output,
+        });
         report.completeDuration = {};
         await checkCompleteDurationBrowser({
             browser,
@@ -2321,6 +2332,18 @@ try {
             output,
         });
         report.completeBarcode = {};
+        report.singleLineText = [];
+        for (const format of ['esm', 'cjs']) {
+            const evidence = {};
+            report.singleLineText.push(evidence);
+            await checkSingleLineTextBrowser({
+                browser,
+                consumer: temporary,
+                evidence,
+                output,
+                format,
+            });
+        }
         await checkCompleteBarcodeBrowser({
             browser,
             consumer: temporary,

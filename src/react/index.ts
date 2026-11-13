@@ -240,6 +240,8 @@ export {
     AiTextField,
     renderAiTextField,
     type AiTextFieldProps,
+    type BindingAiTextFieldProps,
+    type ControlledAiTextFieldProps,
     type AiTextFieldOptions,
 } from './AiTextField.js';
 export {
@@ -306,6 +308,14 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export {
+    SingleLineTextField,
+    type SingleLineTextFieldProps,
+    type ControlledSingleLineTextFieldProps,
+    type ReadOnlySingleLineTextFieldProps,
+    type SingleLineTextAddressOptions,
+    type SingleLineTextEditOwner,
+} from './SingleLineTextField.js';
 import {
     ControlledExternalSyncSourceField,
     type ControlledExternalSyncSourceFieldProps,

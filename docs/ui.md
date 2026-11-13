@@ -3996,7 +3996,8 @@ clipboard behavior.
 ## React AI Text presentation
 
 The optional `/react` entry exports `AiTextField`, `AiTextFieldProps`,
-`AiTextFieldOptions` and `renderAiTextField`. Register the helper in the existing
+`BindingAiTextFieldProps`, `ControlledAiTextFieldProps`, `AiTextFieldOptions` and
+`renderAiTextField`. Register the helper in the existing
 physical `renderAiTextField` slot for `AirtableForm`, `AirtableGrid` or `AirtableList`:
 
 ```tsx
@@ -4041,14 +4042,45 @@ Feedback uses a polite status region. Click, auxiliary-click, double-click,
 pointer-down, key-down and key-up events are contained without cancelling native text
 selection defaults.
 
-This slice provides supplied-value display coverage. It adds no generation,
+The binding renderer provides supplied-value display coverage. It adds no generation,
 retry, parser, links, resource loading, normalization, hydration, editing or save
 action. Even forged editable capabilities remain unused. `AiTextFieldOptions`
 contains only optional `className`, decorating `mx-sdk-ai-text-field`; there is no
 new stylesheet or package subpath. Core and `/ui` remain React-free.
 
+Native hosts can instead supply their already-converted text through the explicit
+controlled mode. Host admission, AI-object conversion and admin-only refusal stay
+at the host boundary; this mode accepts no binding, render override or generation
+action. `AiTextFieldProps` retains its historical binding shape, also named
+`BindingAiTextFieldProps`.
+
+```tsx
+import { AiTextField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+
+const convertedText = 'Host-converted AI text';
+<AiTextField
+    mode="controlled"
+    value={convertedText}
+    language="en"
+    textSize="small"
+/>;
+```
+
+Controlled display uses the existing `CompleteReadOnlyTextField`: null, undefined
+and empty strings show the localized empty label; whitespace remains supplied
+text; HTML stays escaped and URLs become ordinary links. Links contain row click
+propagation without cancelling navigation. Optional `textSize`, `layout` and
+`className` pass through. This mode has no write, save, generation or retry
+authority. It does not broaden the binding renderer's stricter object contract or
+its literal-link behavior.
+
 `test/reactAiText.test.ts` covers source behavior. The normal package check runs
-installed ESM/CommonJS runtime cases and public JSX/Node declaration checks. The
+installed ESM/CommonJS runtime cases (134 legacy groups plus six controlled
+display and SSR/hydration groups) and public JSX/Node declaration checks. The
+normal native-browser check exercises controlled ESM/CommonJS rendering from the
+installed archive, including keyboard link navigation, replacement, localized
+emptiness and adjacent draft retention under React 18 and 19. The
 separate `scripts/build-ai-text-browser-proof.mjs` fixture uses an installed tested
 archive for synthetic Form/Grid/List, visibility and lifecycle evidence. Its
 injected DOM checks and native browser inspection do not establish live-backend,

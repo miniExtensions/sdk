@@ -20,6 +20,10 @@ guarded react-aria 3.53.1 distribution. Do not relax that closure's version or
 license guard to deduplicate these distinct consumers.
 The source references the standard ES2023 Intl declarations required by that
 graph, retaining strict library checking and the existing ES2022 runtime target.
+Both runtime formats bundle the static ESM hook closure. Importing the upstream
+CommonJS barrel also initializes unrelated widget modules; keep those out of
+Calendar imports. Both TypeScript compilers, matching declarations and actual
+CommonJS output checks remain required.
 
 `parseCalendarFieldDate` retains the native picker policy: DateTime uses each
 field's effective display zone, while timestamp-shaped computed DATE values use

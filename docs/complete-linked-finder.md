@@ -124,3 +124,9 @@ native prefill flag or inventing ordinary error presentation. Optional
 uses `clear`; explicit nullable selection uses `publish(null)`. Both canonical
 driver state and Save remain in the host. Cleanup removes queued work and local
 observers while leaving allocated transport alone.
+
+`NativeLinkedFinderCascadeDriverView` renders one native partial-metadata
+survivor with its explicit `previousFieldId`, even when that predecessor is
+outside the mounted descriptor list. It accepts the same host, canonical pairs,
+raw URL value and outer readonly policy. An optional descriptor `testId` retains
+the native field's existing automation identity without granting authority.

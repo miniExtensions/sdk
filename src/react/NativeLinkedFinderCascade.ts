@@ -28,6 +28,7 @@ export type NativeLinkedFinderCascadeDescriptor = {
     readonly title: string | null;
     readonly urlSearchValue: NativeLinkedFinderCascadeUrlValue;
     readonly hidden: boolean;
+    readonly testId?: string;
 };
 
 export type NativeLinkedFinderCascadeLabels = {
@@ -223,6 +224,7 @@ function CascadeDriver<Owner extends object>(
                 .join(' '),
             style: props.style,
             'data-field-id': driver.fieldId,
+            'data-testid': driver.testId,
             'data-pending-requests': state.pending.length,
         },
         h<{
@@ -297,6 +299,16 @@ function CascadeDriver<Owner extends object>(
             ),
         })
     );
+}
+
+export type NativeLinkedFinderCascadeDriverViewProps<Owner extends object> =
+    DriverProps<Owner> & { formReadOnly?: boolean };
+
+/** One native partial-metadata survivor, with its actual predecessor retained. */
+export function NativeLinkedFinderCascadeDriverView<Owner extends object>(
+    props: NativeLinkedFinderCascadeDriverViewProps<Owner>
+): ReactElement | null {
+    return props.formReadOnly ? null : h(CascadeDriver<Owner>, props);
 }
 
 /** Actual searchable native-compatible selectors, without a client or native JSX slots. */

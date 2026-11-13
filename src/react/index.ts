@@ -2989,6 +2989,8 @@ export {
 } from './signatureReceipt.js';
 export {
     NativeLinkedFinderCascade,
+    NativeLinkedFinderCascadeDriverView,
+    type NativeLinkedFinderCascadeDriverViewProps,
     type NativeLinkedFinderCascadeProps,
     type NativeLinkedFinderCascadeDescriptor,
     type NativeLinkedFinderCascadeLabels,

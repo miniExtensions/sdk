@@ -4,6 +4,7 @@ import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
     NativeLinkedFinderCascade,
+    NativeLinkedFinderCascadeDriverView,
     type NativeLinkedFinderCascadeProps,
 } from '../src/react/index.js';
 import type {
@@ -25,7 +26,8 @@ const page = (
 async function fixture(
     t: TestContext,
     patch: Partial<NativeLinkedFinderCascadeProps<object>> = {},
-    strict = false
+    strict = false,
+    singlePredecessor?: string | null
 ) {
     const f = await scannerDom(t);
     const owner = {};
@@ -87,7 +89,17 @@ async function fixture(
     };
     const render = async (next: Partial<typeof props> = {}) => {
         props = { ...props, ...next };
-        await f.render(h(NativeLinkedFinderCascade, props), strict);
+        const { drivers, ...shared } = props;
+        await f.render(
+            singlePredecessor === undefined
+                ? h(NativeLinkedFinderCascade, props)
+                : h(NativeLinkedFinderCascadeDriverView, {
+                      ...shared,
+                      driver: drivers[0],
+                      previousFieldId: singlePredecessor,
+                  }),
+            strict
+        );
     };
     await render();
     const settle = async () => {
@@ -148,6 +160,48 @@ test('cascade SSR renders escaped localized selector chrome without allocating r
     assert.match(html, /&lt;Driver&gt;/);
     assert.match(html, /role="combobox"/);
     assert.equal(reads, 0);
+});
+
+test('one native partial survivor retains its external predecessor, test identity and string-only scheduling', async (t) => {
+    const f = await fixture(
+        t,
+        {
+            values: { country: pair('country-A', 'Same') },
+            drivers: [
+                {
+                    fieldId: 'region',
+                    fieldName: 'Region',
+                    title: null,
+                    urlSearchValue: undefined,
+                    hidden: false,
+                    testId: 'native-region',
+                },
+            ],
+        },
+        false,
+        'country'
+    );
+    await f.settle();
+    assert.equal(
+        f.host
+            .querySelector('[data-testid="native-region"]')
+            ?.getAttribute('data-field-id'),
+        'region'
+    );
+    assert.deepEqual(f.requests[0].query.filterData, {
+        previousFilterFieldId: 'country',
+        previousFilterPrimaryValue: 'Same',
+    });
+    await f.render({ values: { country: pair('country-B', 'Same') } });
+    await f.settle();
+    assert.equal(f.requests.length, 1);
+    await f.render({ values: { country: pair('country-B', 'Different') } });
+    await f.settle();
+    assert.equal(f.requests.length, 2);
+    assert.equal(
+        f.requests[1].query.filterData?.previousFilterPrimaryValue,
+        'Different'
+    );
 });
 
 test('hidden partial survivors still run independent raw-array prefill and predecessor reads; Form readonly suppresses all', async (t) => {

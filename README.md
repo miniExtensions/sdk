@@ -184,6 +184,10 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
+The optional [customer-chat lifecycle](docs/customer-chat.md) has dedicated
+`customer-chat`, `customer-chat/react` and `customer-chat/intercom` imports.
+The host supplies one broker across all roots and explicitly enables its driver.
+
 | Import                         | Included behavior                                                                                                                                                                      | Guide                                                                        |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                                        | [Runtime](docs/runtime.md)                                                   |
@@ -214,6 +218,11 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Count presentation](docs/count.md) preserves the binding-based `CountField`
+contract and adds controlled, host-converted text through the same public
+component. The controlled mode reuses complete readonly text and its CSS;
+the surrounding field shell retains title, help, feedback and form association.
 
 [Single Select presentation](docs/ui.md#react-single-select-presentation) exports
 `SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
@@ -280,6 +289,10 @@ exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
 `ExternalSyncSourceFieldOptions` and the typed `renderExternalSyncSourceField` slot.
 It displays the supplied SDK string with the disabled Text control and optional
 `@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
+The same field accepts explicit `mode="controlled"` with converted text and
+`language`, reusing complete localized empty/link presentation through
+`@miniextensions/sdk/react/complete-readonly-text.css`. Existing binding props and
+render overrides retain their original disabled-input behavior.
 
 [Formula presentation](docs/ui.md#react-formula-presentation) exports
 `FormulaField`, `FormulaFieldProps`, `FormulaFieldOptions` and the typed

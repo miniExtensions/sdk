@@ -203,8 +203,10 @@ export function assertModuleFormats(root) {
                 './react/complete-record-comments.css',
                 './react/form-tracking.css',
                 './react/form-group.css',
+                './react/csv-export.css',
                 './react/form-completion.css',
                 './react/form-header.css',
+                './react/form-validation-summary.css',
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',
@@ -221,6 +223,7 @@ export function assertModuleFormats(root) {
                 './react/linked-records.css',
                 './react/complete-linked-finder.css',
                 './react/single-select.css',
+                './react/controlled-select.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
@@ -249,7 +252,9 @@ export function assertModuleFormats(root) {
             subpath === '.' ||
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
-                subpath === './react/date'
+                subpath === './react/date' ||
+                subpath === './customer-chat/react' ||
+                subpath === './customer-chat/intercom'
         );
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

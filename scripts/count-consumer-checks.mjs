@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
@@ -9,10 +11,11 @@ export const countReactTypedConsumer = `
 import type { ReactNode } from 'react';
 import {
     CountField, renderCountField, AirtableForm, AirtableGrid, AirtableList,
-    type CountFieldProps, type CountFieldOptions, type NumberFieldOptions,
+    type CountFieldProps, type ControlledCountFieldProps, type CountFieldOptions, type NumberFieldOptions,
 } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/number.css';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
 const options: CountFieldOptions = { className: 'count-consumer' };
 const sharedOptions: NumberFieldOptions = options;
 // @ts-expect-error Count has no Clear control.
@@ -29,6 +32,22 @@ export function BoundCount(props: CountFieldProps) {
 }
 export function Override(props: CountFieldProps) {
     return <CountField {...props} render={({ snapshot }) => <span>{String(snapshot.value ?? '')}</span>} />;
+}
+export function ControlledCount(props: ControlledCountFieldProps) {
+    return <CountField {...props} />;
+}
+export function checkControlledTypes(props: CountFieldProps) {
+    <CountField value="0" language="en" textSize="large" layout="cell-short" />;
+    // @ts-expect-error Controlled Count requires a display language.
+    <CountField value="0" />;
+    // @ts-expect-error Source numeric conversion belongs to the host.
+    <CountField value={42} language="en" />;
+    // @ts-expect-error Binding and controlled contracts cannot be mixed.
+    <CountField {...props} value="0" language="en" />;
+    // @ts-expect-error Controlled Count has no setter.
+    <CountField value="0" language="en" setValue={() => {}} />;
+    // @ts-expect-error Controlled Count has no render override or borrowed binding.
+    <CountField value="0" language="en" render={() => null} />;
 }
 export function checkKinds(count: FieldRendererProps<'count'>, number: FieldRendererProps<'number'>, autoNumber: FieldRendererProps<'autoNumber'>) {
     renderCountField(count);
@@ -93,6 +112,15 @@ export async function checkCountConsumer({
                 'utf8'
             ),
             /\.mx-sdk-number:focus-visible/
+        );
+        assert.match(
+            readFileSync(
+                require.resolve(
+                    '@miniextensions/sdk/react/complete-readonly-text.css'
+                ),
+                'utf8'
+            ),
+            /\.mx-sdk-complete-readonly-text/
         );
         assert.throws(
             () => require.resolve('@miniextensions/sdk/react/count.css'),
@@ -235,6 +263,39 @@ export async function checkCountConsumer({
                             fallback: () => null,
                         })
                     );
+                for (const [value, expected] of [
+                    ['0', '0'],
+                    ['NaN', 'NaN'],
+                    ['Infinity', 'Infinity'],
+                    ['', 'No Value'],
+                    [null, 'No Value'],
+                    [undefined, 'No Value'],
+                ]) {
+                    await act(async () =>
+                        root.render(
+                            h(react.CountField, { value, language: 'en' })
+                        )
+                    );
+                    assert.equal(container.textContent, expected);
+                    assert.equal(input(), null);
+                }
+                await act(async () =>
+                    root.render(
+                        h(react.CountField, {
+                            value: '<b>Count error</b> https://example.invalid/count',
+                            language: 'en',
+                            textSize: 'large',
+                            layout: 'cell-short',
+                        })
+                    )
+                );
+                assert.equal(container.querySelector('b,img,script'), null);
+                assert.equal(
+                    container.querySelector('a').getAttribute('href'),
+                    'https://example.invalid/count'
+                );
+                assert.ok(container.querySelector('.read-only-text.text-lg'));
+                assert.equal(binding.getSnapshot().value, 42.125);
                 const before = fields.controller.getState().draftRevision;
                 await act(async () => root.render(tree()));
                 assert.equal(input().value, '42.125');
@@ -765,5 +826,181 @@ export async function checkCountConsumer({
             else Reflect.deleteProperty(globalThis, key);
         });
         await window.happyDOM.close();
+    }
+}
+
+export const countNodeTypedConsumer = `
+import { createElement } from 'react';
+import {
+    CountField,
+    type CountFieldProps,
+    type ControlledCountFieldProps,
+} from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+declare const binding: FormFieldBinding;
+const bound: CountFieldProps = {
+    binding,
+    className: 'legacy-count',
+    render: ({ snapshot }) => String(snapshot.value ?? ''),
+};
+createElement(CountField, bound);
+const controlled: ControlledCountFieldProps = {
+    value: '0', language: 'en', textSize: 'large',
+    layout: 'cell-medium', className: 'controlled-count',
+};
+createElement(CountField, controlled);
+createElement(CountField, { ...controlled, value: null });
+createElement(CountField, { ...controlled, value: undefined });
+// @ts-expect-error controlled values are already converted text
+const numeric: ControlledCountFieldProps = { ...controlled, value: 0 };
+// @ts-expect-error the caller supplies the language
+createElement(CountField, { value: '0' });
+// @ts-expect-error Count owns no setter
+createElement(CountField, { ...controlled, setValue() {} });
+// @ts-expect-error the controlled leaf owns its presentation
+createElement(CountField, { ...controlled, render() { return null; } });
+const mixed = { ...controlled, binding };
+// @ts-expect-error modes cannot be combined, including through variables
+createElement(CountField, mixed);
+void numeric;
+`;
+
+/** Install the exact archive into fresh public React consumers, one at a time. */
+export function checkCountReactMatrix({
+    archivePath,
+    typescriptBin,
+    happyDomModulePath,
+}) {
+    archivePath = resolve(archivePath);
+    const parent = mkdtempSync(join(tmpdir(), 'sdk-count-consumers-'));
+    const versions = [];
+    const worker = `
+import { createRequire } from 'node:module';
+import { checkCountConsumer } from ${JSON.stringify(import.meta.url)};
+const require = createRequire(import.meta.url);
+const result = await checkCountConsumer({
+    consumerDirectory: process.cwd(),
+    happyDomModulePath: process.argv[2],
+});
+console.log(JSON.stringify({ ...result, react: require('react').version }));
+`;
+    try {
+        for (const version of [
+            { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
+            { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
+        ]) {
+            const directory = mkdtempSync(join(parent, version.react + '-'));
+            const run = (command, args) =>
+                execFileSync(command, args, {
+                    cwd: directory,
+                    encoding: 'utf8',
+                    timeout: 120000,
+                    stdio: ['ignore', 'pipe', 'pipe'],
+                });
+            writeFileSync(
+                join(directory, 'package.json'),
+                JSON.stringify({
+                    private: true,
+                    type: 'module',
+                    dependencies: {
+                        '@miniextensions/sdk': 'file:' + archivePath,
+                        react: version.react,
+                        'react-dom': version.react,
+                        '@types/react': version.types,
+                        '@types/react-dom': version.domTypes,
+                    },
+                })
+            );
+            run('npm', [
+                'install',
+                '--ignore-scripts',
+                '--strict-peer-deps',
+                '--no-audit',
+                '--no-fund',
+                '--package-lock=false',
+            ]);
+            const installed = join(
+                directory,
+                'node_modules/@miniextensions/sdk'
+            );
+            for (const format of ['esm', 'cjs']) {
+                for (const filename of [
+                    'index.js',
+                    'index.d.ts',
+                    'CountField.js',
+                    'CountField.d.ts',
+                    'CompleteReadOnlyTextField.js',
+                    'complete-readonly-text.css',
+                    'number.css',
+                ]) {
+                    const path = `dist/${format}/react/${filename}`;
+                    assert(
+                        readFileSync(join(installed, path)).equals(
+                            execFileSync('tar', [
+                                '-xOf',
+                                archivePath,
+                                'package/' + path,
+                            ])
+                        ),
+                        `Count consumer must use the packed ${path}`
+                    );
+                }
+                const filename =
+                    'count-consumer.' + (format === 'esm' ? 'mts' : 'cts');
+                writeFileSync(
+                    join(directory, filename),
+                    countNodeTypedConsumer
+                );
+                run(process.execPath, [
+                    typescriptBin,
+                    '--noEmit',
+                    '--strict',
+                    '--skipLibCheck',
+                    'false',
+                    '--target',
+                    'ES2022',
+                    '--module',
+                    'NodeNext',
+                    '--moduleResolution',
+                    'NodeNext',
+                    filename,
+                ]);
+            }
+            writeFileSync(
+                join(directory, 'count-consumer.tsx'),
+                countReactTypedConsumer
+            );
+            run(process.execPath, [
+                typescriptBin,
+                '--noEmit',
+                '--strict',
+                '--skipLibCheck',
+                'false',
+                '--target',
+                'ES2022',
+                '--module',
+                'ESNext',
+                '--moduleResolution',
+                'Bundler',
+                '--jsx',
+                'react-jsx',
+                'count-consumer.tsx',
+            ]);
+            writeFileSync(join(directory, 'count-runtime.mjs'), worker);
+            const result = JSON.parse(
+                run(process.execPath, [
+                    'count-runtime.mjs',
+                    happyDomModulePath,
+                ]).trim()
+            );
+            assert.equal(result.react, version.react);
+            assert.equal(result.checks, 20);
+            versions.push({ ...result, strictTypes: true, publicCss: true });
+        }
+        return { versions, cleanup: 'completed' };
+    } finally {
+        rmSync(parent, { recursive: true, force: true });
     }
 }

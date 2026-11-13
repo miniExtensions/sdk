@@ -182,8 +182,10 @@ for (const format of ['esm', 'cjs']) {
         'localized-numeric',
         'form-tracking',
         'form-group',
+        'csv-export',
         'form-completion',
         'form-header',
+        'form-validation-summary',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',
@@ -210,6 +212,7 @@ for (const format of ['esm', 'cjs']) {
         'linked-records',
         'complete-linked-finder',
         'single-select',
+        'controlled-select',
         'rich-text',
     ]) {
         copyFileSync(

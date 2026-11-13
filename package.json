@@ -144,6 +144,7 @@
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css",
         "./react/theme.css": "./dist/esm/react/theme.css",
         "./react/form-header.css": "./dist/esm/react/form-header.css",
+        "./react/form-validation-summary.css": "./dist/esm/react/form-validation-summary.css",
         "./react/complete-date.css": "./dist/esm/react/complete-date.css",
         "./react/date": {
             "import": {

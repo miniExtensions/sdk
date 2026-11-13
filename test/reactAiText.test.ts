@@ -8,7 +8,9 @@ import {
     AirtableList,
     FieldRenderer,
     NumberField,
+    AiTextField as PublicAiTextField,
 } from '../src/react/index.js';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { AiTextField, renderAiTextField } from '../src/react/AiTextField.js';
 import {
     createFormFieldBindings,
@@ -975,4 +977,132 @@ it('keeps an empty create-mode AI answer visible when its owner policy does', as
     await f.render(f.tree());
     assert.equal(f.output().textContent, '');
     assert.deepEqual(f.binding.getSnapshot().value, value);
+});
+
+it('public controlled AI Text preserves converted literal/link output, locale and presentation without controls', async (t) => {
+    const f = await fixture(t);
+    const before = f.owner.controller.getState();
+    let activations = 0;
+    const display = (
+        value: string | null | undefined,
+        language: 'en' | 'fr' = 'en'
+    ) =>
+        h(
+            'div',
+            { onClick: () => activations++ },
+            h(PublicAiTextField, {
+                mode: 'controlled',
+                value,
+                language,
+                textSize: 'large',
+                layout: 'cell-short',
+            })
+        );
+    const value = '<img src=x> AI Ω https://example.test/answer';
+    await f.render(display(value));
+    assert.equal(
+        f.container.querySelector('p.read-only-text')?.textContent,
+        value
+    );
+    assert.equal(
+        f.container.querySelector('img,script,input,textarea,select,button'),
+        null
+    );
+    assert.ok(f.container.querySelector('[data-layout="cell-short"] .text-lg'));
+    const link = f.container.querySelector('a')!;
+    assert.equal(link.href, 'https://example.test/answer');
+    assert.equal(link.target, '_blank');
+    let prevented: boolean | undefined;
+    f.container.addEventListener(
+        'click',
+        (event) => {
+            prevented = event.defaultPrevented;
+            event.preventDefault(); // The synthetic host owns navigation in this test.
+        },
+        { once: true }
+    );
+    await act(async () => {
+        link.dispatchEvent(
+            new f.window.MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(prevented, false);
+    assert.equal(activations, 0);
+    await act(async () => {
+        f.container
+            .querySelector('p.read-only-text')!
+            .dispatchEvent(new f.window.MouseEvent('click', { bubbles: true }));
+    });
+    assert.equal(activations, 1);
+    for (const empty of [null, undefined, '']) {
+        await f.render(display(empty, 'fr'));
+        assert.equal(
+            f.container.querySelector('[data-testid="no-value-test-id"]')
+                ?.textContent,
+            'Pas de Valeur'
+        );
+        assert.equal(f.container.querySelector('a,input,button'), null);
+    }
+    await f.render(display('  '));
+    assert.equal(
+        f.container.querySelector('p.read-only-text')?.textContent,
+        '  '
+    );
+    assert.deepEqual(f.owner.controller.getState(), before);
+});
+
+it('switches public AI Text ownership modes on one mount while keeping the strict binding inert and unchanged', async (t) => {
+    const f = await fixture(t);
+    await f.render(h(PublicAiTextField, { binding: f.binding }));
+    assert.equal(f.output().textContent, literal);
+    assert.equal(f.container.querySelector('a,img,strong,b'), null);
+    let reads = 0;
+    const controlled = {
+        mode: 'controlled' as const,
+        value: 'Converted https://example.test/answer',
+        language: 'en' as const,
+        binding: new Proxy(
+            {},
+            {
+                get() {
+                    reads++;
+                    throw Error('Controlled AI Text must not borrow a binding');
+                },
+            }
+        ) as never,
+        render: (() => {
+            reads++;
+            throw Error('Controlled AI Text must not borrow a renderer');
+        }) as never,
+    };
+    await f.render(h(PublicAiTextField, controlled));
+    assert.equal(
+        f.container.querySelector('p.read-only-text')?.textContent,
+        controlled.value
+    );
+    assert.ok(f.container.querySelector('a'));
+    assert.equal(f.container.querySelector('output,input,button'), null);
+    assert.equal(reads, 0);
+    await f.render(h(PublicAiTextField, { binding: f.binding }));
+    assert.equal(f.output().textContent, literal);
+    assert.equal(f.container.querySelector('a,img,strong,b'), null);
+    assert.deepEqual(f.binding.getSnapshot().value, native);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});
+
+it('server-renders the public controlled AI Text without binding access, markup execution or generation UI', () => {
+    const html = renderToStaticMarkup(
+        h(PublicAiTextField, {
+            mode: 'controlled',
+            value: '<script>literal</script> Ω',
+            language: 'en',
+            textSize: 'small',
+        })
+    );
+    assert.match(html, /&lt;script&gt;literal&lt;\/script&gt; Ω/);
+    assert.match(html, /text-sm/);
+    assert.doesNotMatch(html, /<(?:script|input|textarea|select|button)\b/);
 });

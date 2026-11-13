@@ -3,7 +3,10 @@ import {
     checkCSVExportBrowser,
 } from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
-import { checkExternalSyncSourceControlledBrowser } from './external-sync-source-controlled-browser-checks.mjs';
+import {
+    checkExternalSyncSourceControlledBrowser,
+    checkAiTextControlledBrowser,
+} from './external-sync-source-controlled-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCalendarBrowser } from './calendar-browser-checks.mjs';
@@ -2255,6 +2258,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.externalSyncSourceControlled,
+            output,
+        });
+        report.aiTextControlled = {};
+        await checkAiTextControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.aiTextControlled,
             output,
         });
         report.completeDuration = {};

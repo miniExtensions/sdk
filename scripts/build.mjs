@@ -187,6 +187,7 @@ for (const format of ['esm', 'cjs']) {
         'csv-export',
         'form-completion',
         'form-header',
+        'form-validation-summary',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

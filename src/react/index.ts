@@ -240,6 +240,8 @@ export {
     AiTextField,
     renderAiTextField,
     type AiTextFieldProps,
+    type BindingAiTextFieldProps,
+    type ControlledAiTextFieldProps,
     type AiTextFieldOptions,
 } from './AiTextField.js';
 export {
@@ -2943,6 +2945,12 @@ export {
     type FormHeaderSettingsTarget,
     type FormHeaderLabels,
 } from './CompleteFormHeader.js';
+
+export {
+    FormValidationSummary,
+    type FormValidationSummaryProps,
+    type FormValidationDiagnostic,
+} from './FormValidationSummary.js';
 
 export {
     CompleteFormFieldPresentation,

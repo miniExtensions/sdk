@@ -361,7 +361,7 @@ export function LinkedFinderRichLeaf({
 }
 
 type Present = Extract<LinkedFinderCardProjection, { status: 'present' }>;
-function ListImage({ card }: { card: Present }) {
+function useListImage(card: Present) {
     const vector = linkedFinderListImageVector(card.images);
     const [state, setState] = useState({ vector, index: 0 });
     const current = state.vector === vector ? state : { vector, index: 0 };
@@ -533,6 +533,13 @@ export function LinkedFinderCard({
             },
             projection.label
         );
+    return h(PresentCard, { projection });
+}
+
+function PresentCard({ projection }: { projection: Present }): ReactElement {
+    // Native List position belongs to the record presenter, so it survives
+    // thumbnail hiding, moving sides and a Gallery/Kanban round trip.
+    const listImage = useListImage(projection);
     return h(
         'div',
         {
@@ -542,8 +549,19 @@ export function LinkedFinderCard({
             (projection.layout !== 'list' ||
                 projection.thumbnailLocation === 'left')
             ? projection.layout === 'list'
-                ? h(ListImage, { card: projection })
-                : h(Carousel, { card: projection })
+                ? listImage
+                : projection.images.length
+                  ? h(Carousel, { card: projection })
+                  : h(
+                        'div',
+                        {
+                            className: 'mx-sdk-finder-carousel',
+                            style: { height: projection.imageHeight },
+                            role: 'img',
+                            'aria-label': projection.labels.noImage,
+                        },
+                        '▧'
+                    )
             : null,
         h(
             'div',
@@ -556,10 +574,13 @@ export function LinkedFinderCard({
             h(
                 'div',
                 {
-                    className: 'mx-sdk-finder-card-fields',
-                    style: {
-                        gridTemplateColumns: `repeat(${projection.fieldsPerCardRow}, minmax(0, 1fr))`,
-                    },
+                    className: `mx-sdk-finder-card-fields mx-sdk-finder-card-fields-${projection.layout}`,
+                    style:
+                        projection.layout === 'list'
+                            ? undefined
+                            : {
+                                  gridTemplateColumns: `repeat(${projection.fieldsPerCardRow}, minmax(150px, 1fr))`,
+                              },
                 },
                 projection.fields.map((field) =>
                     h(
@@ -578,7 +599,11 @@ export function LinkedFinderCard({
                                   field.title
                               )
                             : null,
-                        h(LinkedFinderRichLeaf, { leaf: field.leaf })
+                        h(
+                            'div',
+                            { className: 'mx-sdk-finder-card-field-value' },
+                            h(LinkedFinderRichLeaf, { leaf: field.leaf })
+                        )
                     )
                 )
             )
@@ -586,7 +611,7 @@ export function LinkedFinderCard({
         projection.shouldRenderThumbnail &&
             projection.layout === 'list' &&
             projection.thumbnailLocation === 'right'
-            ? h(ListImage, { card: projection })
+            ? listImage
             : null
     );
 }

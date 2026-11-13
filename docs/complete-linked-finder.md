@@ -90,8 +90,10 @@ not. Gallery/Kanban mount only the first six images, prefer supplied large URLs,
 retain selected IDs through reorder, clamp after removal and track failure by
 identity plus resolved source. No-ID identity contains index and resolved URL.
 Failures never backfill a seventh image. Native attempts are keyed and guarded
-against late old-source events. Switching List/Carousel retires the other local
-failure state; Gallery/Kanban share the carousel lifetime. All images are supplied
+against late old-source events. List failure position survives hiding, moving
+thumbnail sides and a Gallery round trip until its data vector changes.
+Gallery/Kanban share the carousel lifetime; hiding, an empty raw array or switching
+to List retires that carousel. All images are supplied
 descriptors: no cache, file or thumbnail service lookup is performed.
 
 The native cascade remains a separate compatibility recipe from

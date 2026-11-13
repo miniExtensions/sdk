@@ -170,12 +170,31 @@ function App(){const[state,setState]=useState({label:'Save <literal>',mode:'save
             name: 'Review',
             exact: true,
         });
+        // The earlier click leaves the pointer on this same DOM button.
+        // Keyboard focus does not move that pointer away.
+        await page.locator('#answer').hover();
+        assert.equal(
+            await review.evaluate((node) => node.matches(':hover')),
+            false
+        );
         assert.equal(
             await review.evaluate(
                 (node) => getComputedStyle(node).backgroundColor
             ),
             'rgb(22, 163, 74)'
         );
+        await review.hover();
+        assert.equal(
+            await review.evaluate((node) => node.matches(':hover')),
+            true
+        );
+        assert.equal(
+            await review.evaluate(
+                (node) => getComputedStyle(node).backgroundColor
+            ),
+            'rgb(34, 197, 94)'
+        );
+        await page.locator('#answer').hover();
         await review.focus();
         await page.keyboard.press('Enter');
         assert.equal(await page.evaluate(() => window.submitProof.count), 3);

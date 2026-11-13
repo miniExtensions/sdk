@@ -409,6 +409,17 @@ to recognize currency bindings. Import `@miniextensions/sdk/react/currency.css`
 for optional defaults. See [React Currency presentation](ui.md#react-currency-presentation)
 for the bounded input contract, readonly fallback and Form/Grid/List usage.
 
+For host-controlled localized presentation, pass the accepted
+`FieldRendererProps<'currency'>` directly to `CurrencyField`. Its explicit
+`physicalKind: 'currency'` discriminator selects the existing
+`CompleteLocalizedNumericField` engine. `ControlledCurrencyFieldProps` accepts
+that field contract plus `options` for current-owner admission, deferred commits,
+input/form associations and localized Clear/empty labels. Import
+`@miniextensions/sdk/react/localized-numeric.css` for this presentation. Display
+precision and grouping do not write or round the canonical value on mount, focus
+or untouched blur. The binding and `renderCurrencyField` contracts above retain
+their raw numeric grammar.
+
 ## Duration clock input
 
 Duration uses the existing `binding.scalar` owner and native numeric seconds or
@@ -1515,3 +1526,24 @@ Only loaded `viewType: 'chart'` values contribute, in input order. Duplicate lab
 The canvas is `aria-hidden`; corresponding `dt`/`dd` pairs provide its textual data. Chart.js owns actual canvas painting and responsive observers through the verified official adapter. Updates retain the mounted Chart instance; unmount destroys only its owned instance. Native React development StrictMode remounts are covered by the packed-browser check. Import/server rendering does not initialize a canvas.
 
 Distribution keeps exact Chart.js 4.4.2 as a runtime dependency. The MIT `react-chartjs-2` 5.3.1 adapter, whose peer contract includes React18/19, is verified and bundled into this component's two emitted modules after TypeScript compilation. React and Chart.js remain external; the SDK's React peer remains optional for headless consumers. No adapter dev dependency or native alias is required by a packed customer. The adapter's notice ships in `THIRD_PARTY_NOTICES.md`.
+
+## Natural Duration controls
+
+`DurationField` accepts the complete controlled native-seconds contract as well
+as the existing binding props. Use `ControlledDurationFieldProps` for controlled
+hosts; `DurationFieldProps` retains its legacy binding type. Supplying a binding
+and a controlled writer together is rejected. `CompleteDurationField` and
+`renderDurationField` remain compatible entry points.
+
+A controlled host supplies the real field/session identity, owner generation,
+action-time currentness and canonical writer. The component retains focused raw
+clock drafts and caret through cosmetic/value echoes. It does not create a Form,
+a canonical store or Save authority. Native callers without that authority keep
+their existing fallback.
+
+`ReadOnlyDurationField` accepts canonical seconds, a supported Duration format
+and the existing readonly text presentation options (`language`, size, layout and
+class). It formats seconds even for `h:mm`, distinguishes zero from empty values,
+and needs no editing owner or writer. Both natural entry points are exported by
+`@miniextensions/sdk/react`. Existing `complete-duration.css` and readonly text
+styles remain optional; no new stylesheet or dependency is introduced.

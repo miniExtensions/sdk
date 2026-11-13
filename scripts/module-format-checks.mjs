@@ -187,12 +187,14 @@ export function assertModuleFormats(root) {
                 './react/button.css',
                 './react/checkbox.css',
                 './react/text.css',
+                './react/single-line-text.css',
                 './react/number.css',
                 './react/localized-numeric.css',
                 './react/complete-phone.css',
                 './react/complete-readonly-text.css',
                 './react/complete-clearable-text-input.css',
                 './react/complete-multiline.css',
+                './react/signature.css',
                 './react/complete-address.css',
                 './react/address-field.css',
                 './react/html-description.css',
@@ -202,24 +204,34 @@ export function assertModuleFormats(root) {
                 './react/complete-record-comments.css',
                 './react/form-tracking.css',
                 './react/form-group.css',
+                './react/csv-export.css',
+                './react/kanban.css',
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/form-submit.css',
+                './react/form-validation-summary.css',
+                './react/portal-summary-cards.css',
+                './react/form-progress.css',
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',
                 './react/complete-barcode-scanner.css',
                 './react/barcode.css',
                 './react/complete-portal-chart.css',
+                './react/attachment-preview.css',
                 './react/complete-collaborators.css',
                 './react/date.css',
+                './react/calendar.css',
+                './react/calendar-complete.css',
                 './react/complete-date.css',
                 './react/datetime.css',
                 './react/duration.css',
                 './react/currency.css',
                 './react/multiple-select.css',
                 './react/linked-records.css',
+                './react/complete-linked-finder.css',
                 './react/single-select.css',
+                './react/controlled-select.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
@@ -248,7 +260,10 @@ export function assertModuleFormats(root) {
             subpath === '.' ||
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
-                subpath === './react/date'
+                subpath === './react/date' ||
+                subpath === './react/calendar' ||
+                subpath === './customer-chat/react' ||
+                subpath === './customer-chat/intercom'
         );
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

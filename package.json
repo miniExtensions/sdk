@@ -92,8 +92,21 @@
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
         "./react/text.css": "./dist/esm/react/text.css",
+        "./react/single-line-text.css": "./dist/esm/react/single-line-text.css",
         "./react/number.css": "./dist/esm/react/number.css",
         "./react/date.css": "./dist/esm/react/date.css",
+        "./react/calendar.css": "./dist/esm/react/calendar.css",
+        "./react/calendar-complete.css": "./dist/esm/react/calendar-complete.css",
+        "./react/calendar": {
+            "import": {
+                "types": "./dist/esm/react/calendar/index.d.ts",
+                "default": "./dist/esm/react/calendar/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/calendar/index.d.ts",
+                "default": "./dist/cjs/react/calendar/index.js"
+            }
+        },
         "./react/datetime.css": "./dist/esm/react/datetime.css",
         "./react/duration.css": "./dist/esm/react/duration.css",
         "./react/complete-duration.css": "./dist/esm/react/complete-duration.css",
@@ -104,6 +117,8 @@
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
+        "./react/controlled-select.css": "./dist/esm/react/controlled-select.css",
+        "./react/complete-linked-finder.css": "./dist/esm/react/complete-linked-finder.css",
         "./react/single-select.css": "./dist/esm/react/single-select.css",
         "./react/rich-text.css": "./dist/esm/react/rich-text.css",
         "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css",
@@ -130,6 +145,10 @@
         "./react/complete-barcode-scanner.css": "./dist/esm/react/complete-barcode-scanner.css",
         "./react/theme.css": "./dist/esm/react/theme.css",
         "./react/form-header.css": "./dist/esm/react/form-header.css",
+        "./react/form-submit.css": "./dist/esm/react/form-submit.css",
+        "./react/form-progress.css": "./dist/esm/react/form-progress.css",
+        "./react/form-validation-summary.css": "./dist/esm/react/form-validation-summary.css",
+        "./react/portal-summary-cards.css": "./dist/esm/react/portal-summary-cards.css",
         "./react/complete-date.css": "./dist/esm/react/complete-date.css",
         "./react/date": {
             "import": {
@@ -144,7 +163,40 @@
         "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
         "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css",
         "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*",
-        "./react/form-submit.css": "./dist/esm/react/form-submit.css"
+        "./react/signature.css": "./dist/esm/react/signature.css",
+        "./customer-chat": {
+            "import": {
+                "types": "./dist/esm/customer-chat/index.d.ts",
+                "default": "./dist/esm/customer-chat/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/index.d.ts",
+                "default": "./dist/cjs/customer-chat/index.js"
+            }
+        },
+        "./customer-chat/react": {
+            "import": {
+                "types": "./dist/esm/customer-chat/react.d.ts",
+                "default": "./dist/esm/customer-chat/react.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/react.d.ts",
+                "default": "./dist/cjs/customer-chat/react.js"
+            }
+        },
+        "./customer-chat/intercom": {
+            "import": {
+                "types": "./dist/esm/customer-chat/intercom.d.ts",
+                "default": "./dist/esm/customer-chat/intercom.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/intercom.d.ts",
+                "default": "./dist/cjs/customer-chat/intercom.js"
+            }
+        },
+        "./react/csv-export.css": "./dist/esm/react/csv-export.css",
+        "./react/kanban.css": "./dist/esm/react/kanban.css",
+        "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css"
     },
     "files": [
         "dist/esm",
@@ -153,12 +205,30 @@
         "docs/formulas.md",
         "docs/runtime.md",
         "docs/ui.md",
+        "docs/complete-linked-finder.md",
+        "examples/react-complete-linked-finder/README.md",
+        "examples/react-complete-linked-finder/main.ts",
+        "examples/react-complete-linked-finder/consumer.cts",
+        "examples/react-complete-linked-finder/index.html",
+        "examples/react-complete-linked-finder/dev.mjs",
+        "examples/react-complete-linked-finder/tsconfig.json",
         "docs/forms.md",
+        "docs/saved-progress.md",
         "docs/field-bindings.md",
+        "docs/count.md",
         "docs/portals.md",
+        "docs/native-portal-kernel.md",
+        "docs/native-portal-differential.md",
+        "examples/react-portal-summary-cards/README.md",
+        "examples/react-portal-summary-cards/main.ts",
+        "examples/react-portal-summary-cards/consumer.cts",
+        "examples/react-portal-summary-cards/tsconfig.json",
+        "examples/react-portal-summary-cards/index.html",
+        "examples/react-portal-summary-cards/dev.mjs",
         "docs/auth.md",
         "docs/browser-lifecycle.md",
         "docs/testing.md",
+        "docs/calendar.md",
         "examples/browser/README.md",
         "examples/browser/package.json",
         "examples/browser/package-lock.json",
@@ -174,6 +244,7 @@
         "docs/complete-rich-text.md",
         "docs/complete-record-comments.md",
         "docs/complete-collaborators.md",
+        "docs/controlled-select.md",
         "docs/form-completion.md",
         "examples/react-form-completion/README.md",
         "examples/react-form-completion/main.ts",
@@ -183,6 +254,7 @@
         "examples/react-form-completion/build.mjs",
         "examples/react-form-completion/tsconfig.json",
         "docs/form-header.md",
+        "docs/form-submit.md",
         "docs/form-groups.md",
         "docs/field-presentation.md",
         "examples/react-form-header/README.md",
@@ -192,7 +264,11 @@
         "examples/react-form-header/build.mjs",
         "examples/react-form-header/dev.mjs",
         "examples/react-form-header/tsconfig.json",
-        "docs/form-submit.md"
+        "docs/signature.md",
+        "docs/single-line-text.md",
+        "docs/customer-chat.md",
+        "docs/csv-export.md",
+        "docs/kanban.md"
     ],
     "engines": {
         "node": ">=22"
@@ -207,7 +283,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/address-combobox-bundle.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node scripts/build.mjs && node --test scripts/calendar-vendor-checks.test.mjs scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/date-popover-vendor.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",
@@ -224,6 +300,8 @@
         "@zxing/library": "0.20.0",
         "chart.js": "4.4.2",
         "copy-to-clipboard": "3.3.3",
+        "csv-stringify": "6.4.6",
+        "docx-preview": "0.3.0",
         "dompurify": "2.4.7",
         "email-validator": "2.0.4",
         "fuse.js": "6.6.2",
@@ -231,6 +309,7 @@
         "gemoji": "6.1.0",
         "hoist-non-react-statics": "3.3.2",
         "jsdom": "20.0.3",
+        "jszip": "3.10.1",
         "linkifyjs": "3.0.5",
         "lodash": "4.17.21",
         "markdown-it": "12.3.2",
@@ -259,13 +338,18 @@
         "refractor": "3.6.0",
         "resize-observer-polyfill": "1.5.1",
         "shallowequal": "1.1.0",
+        "signature_pad": "4.1.7",
         "slugify": "1.6.6",
         "smooth-scroll-into-view-if-needed": "1.1.33",
         "ua-parser-js": "1.0.39",
         "utif2": "4.1.0"
     },
     "devDependencies": {
+        "@dnd-kit/core": "6.1.0",
+        "@dnd-kit/sortable": "7.0.2",
+        "@dnd-kit/utilities": "3.2.2",
         "@headlessui/react": "2.2.9",
+        "@internationalized/date": "3.12.4",
         "@radix-ui/react-popover": "1.1.14",
         "@types/dompurify": "2.4.0",
         "@types/jsdom": "20.0.1",
@@ -275,6 +359,7 @@
         "@types/react-dom": "18.3.1",
         "@types/ua-parser-js": "0.7.39",
         "c8": "11.0.0",
+        "calendar-react-aria": "npm:react-aria@3.53.0",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
         "headlessui-address-source": "npm:@headlessui/react@1.7.2",
@@ -283,9 +368,12 @@
         "playwright": "1.64.0",
         "prettier": "3.6.2",
         "react": "18.3.1",
+        "react-aria": "3.53.1",
         "react-chartjs-2": "5.3.1",
         "react-dom": "18.3.1",
-        "typescript": "5.9.3"
+        "react-stately": "3.51.0",
+        "typescript": "5.9.3",
+        "use-state-with-deps": "1.1.2"
     },
     "peerDependencies": {
         "react": "^18.3.1 || ^19.0.0",
@@ -303,6 +391,7 @@
         "./dist/esm/react/html/htmlPurifier.js": "./dist/esm/react/html/htmlPurifier.browser.js",
         "./dist/cjs/react/html/htmlPurifier.js": "./dist/cjs/react/html/htmlPurifier.browser.js",
         "./src/react/html/htmlPurifier.js": "./src/react/html/htmlPurifier.browser.ts",
-        "./src/react/html/htmlPurifier.ts": "./src/react/html/htmlPurifier.browser.ts"
+        "./src/react/html/htmlPurifier.ts": "./src/react/html/htmlPurifier.browser.ts",
+        "csv-stringify": "csv-stringify/browser/esm"
     }
 }

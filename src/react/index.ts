@@ -1,4 +1,22 @@
 import {
+    ControlledSingleSelectField,
+    ControlledMultipleSelectsField,
+    type ControlledSingleSelectFieldProps,
+    type ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+export type {
+    ControlledSelectChoice,
+    SelectEditOwner,
+    ControlledSelectLabels,
+    ControlledSelectCommonProps,
+    ControlledSingleSelectFieldProps,
+    ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+import {
+    CompleteDurationField,
+    type CompleteDurationFieldProps,
+} from './CompleteDurationField.js';
+import {
     CompleteLocalizedNumericField,
     type CompleteLocalizedNumericRendererProps,
     type CompleteLocalizedNumericFieldOptions,
@@ -134,6 +152,10 @@ export {
     type CompleteDurationFieldProps,
 } from './CompleteDurationField.js';
 export {
+    ReadOnlyDurationField,
+    type ReadOnlyDurationFieldProps,
+} from './ReadOnlyDurationField.js';
+export {
     useDurationInputAdapter,
     type DurationInputAdapterProps,
     type DurationInputOwnership,
@@ -218,6 +240,8 @@ export {
     AiTextField,
     renderAiTextField,
     type AiTextFieldProps,
+    type BindingAiTextFieldProps,
+    type ControlledAiTextFieldProps,
     type AiTextFieldOptions,
 } from './AiTextField.js';
 export {
@@ -284,7 +308,19 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
-import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+export {
+    SingleLineTextField,
+    type SingleLineTextFieldProps,
+    type ControlledSingleLineTextFieldProps,
+    type ReadOnlySingleLineTextFieldProps,
+    type SingleLineTextAddressOptions,
+    type SingleLineTextEditOwner,
+} from './SingleLineTextField.js';
+import {
+    ControlledExternalSyncSourceField,
+    type ControlledExternalSyncSourceFieldProps,
+    type ExternalSyncSourceFieldOptions,
+} from './ExternalSyncSourceField.js';
 import {
     lastModifiedByName,
     type LastModifiedByFieldOptions,
@@ -296,11 +332,19 @@ export {
 export {
     renderExternalSyncSourceField,
     type ExternalSyncSourceFieldOptions,
+    type ControlledExternalSyncSourceFieldProps,
 } from './ExternalSyncSourceField.js';
-import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
+import {
+    createdByName,
+    renderControlledCreatedByField,
+    type CreatedByFieldOptions,
+    type ControlledCreatedByFieldProps,
+} from './CreatedByField.js';
+import type { CompleteCollaborator } from './CompleteCollaboratorField.js';
 export {
     renderCreatedByField,
     type CreatedByFieldOptions,
+    type ControlledCreatedByFieldProps,
 } from './CreatedByField.js';
 import {
     ControlledLastModifiedTimeField,
@@ -364,8 +408,17 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
-import { countInput, type CountFieldOptions } from './CountField.js';
-export { renderCountField, type CountFieldOptions } from './CountField.js';
+import {
+    countInput,
+    ControlledCountField,
+    type ControlledCountFieldProps,
+    type CountFieldOptions,
+} from './CountField.js';
+export {
+    renderCountField,
+    type CountFieldOptions,
+    type ControlledCountFieldProps,
+} from './CountField.js';
 import {
     ControlledAutoNumberField,
     type AutoNumberControlledProps,
@@ -385,12 +438,15 @@ export {
     type PercentFieldOptions,
 } from './PercentField.js';
 import {
+    ControlledCurrencyField,
     CurrencyControl,
     currencyConfiguration,
+    type ControlledCurrencyFieldProps,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
 export {
     renderCurrencyField,
+    type ControlledCurrencyFieldProps,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
 import {
@@ -985,8 +1041,30 @@ export function LastModifiedByField({
     });
 }
 export type CreatedByFieldProps = FieldProps & CreatedByFieldOptions;
+export type BindingCreatedByFieldProps = CreatedByFieldProps;
+type BoundCreatedByComponentProps = CreatedByFieldProps & {
+    [Key in Exclude<
+        keyof ControlledCreatedByFieldProps,
+        keyof CreatedByFieldProps
+    >]?: never;
+};
+/** Complete readonly native display or the unchanged name-only binding contract. */
+export function CreatedByField<T extends CompleteCollaborator>(
+    props: ControlledCreatedByFieldProps<T>
+): ReactNode;
+export function CreatedByField(props: BoundCreatedByComponentProps): ReactNode;
+export function CreatedByField<T extends CompleteCollaborator>(
+    props: BoundCreatedByComponentProps | ControlledCreatedByFieldProps<T>
+): ReactNode;
+export function CreatedByField<T extends CompleteCollaborator>(
+    props: BoundCreatedByComponentProps | ControlledCreatedByFieldProps<T>
+): ReactNode {
+    return props.mode === 'controlled'
+        ? renderControlledCreatedByField(props)
+        : createElement(BoundCreatedByField, props);
+}
 /** The supplied creator name stays readonly regardless of forged editing state. */
-export function CreatedByField({
+function BoundCreatedByField({
     binding,
     render,
     className,
@@ -1025,13 +1103,41 @@ export function CreatedByField({
 }
 export type ExternalSyncSourceFieldProps = FieldProps &
     ExternalSyncSourceFieldOptions;
+export type BindingExternalSyncSourceFieldProps = ExternalSyncSourceFieldProps;
+type BoundExternalSyncSourceComponentProps = ExternalSyncSourceFieldProps & {
+    [Key in Exclude<
+        keyof ControlledExternalSyncSourceFieldProps,
+        keyof ExternalSyncSourceFieldProps
+    >]?: never;
+};
+type ExternalSyncSourceComponentProps =
+    | BoundExternalSyncSourceComponentProps
+    | ControlledExternalSyncSourceFieldProps;
+
+/** Complete native-compatible display or the unchanged readonly binding contract. */
+export function ExternalSyncSourceField(
+    props: BoundExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ControlledExternalSyncSourceFieldProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode;
+export function ExternalSyncSourceField(
+    props: ExternalSyncSourceComponentProps
+): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledExternalSyncSourceField, props)
+        : createElement(BoundExternalSyncSourceField, props);
+}
 /** The supplied source name stays readonly regardless of forged editing state. */
-export function ExternalSyncSourceField({
+function BoundExternalSyncSourceField({
     binding,
     render,
     className,
     clearLabel,
-}: ExternalSyncSourceFieldProps): ReactNode {
+}: BoundExternalSyncSourceComponentProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
@@ -1176,9 +1282,26 @@ function BoundRollupField({
         className,
     });
 }
+/** Existing binding contract; its native numeric and metadata semantics are unchanged. */
 export type CountFieldProps = FieldProps & CountFieldOptions;
+type CountFieldComponentProps =
+    | (CountFieldProps & {
+          value?: never;
+          language?: never;
+          textSize?: never;
+          layout?: never;
+      })
+    | ControlledCountFieldProps;
+
+/** Binding-owned control or controlled, already converted native presentation. */
+export function CountField(props: CountFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(BindingCountField, props)
+        : createElement(ControlledCountField, props);
+}
+
 /** Computed Count metadata and native values remain owned by the binding. */
-export function CountField({
+function BindingCountField({
     binding,
     render,
     className,
@@ -1492,8 +1615,40 @@ function BoundIconRatingField({
     });
 }
 export type PercentFieldProps = NumberFieldProps;
+/** Explicit physical-percent display units; the binding API remains raw fractions. */
+export type ControlledPercentFieldProps = {
+    mode: 'controlled';
+    field: Extract<
+        CompleteLocalizedNumericRendererProps,
+        { physicalKind: 'percent' }
+    >;
+    options?: CompleteLocalizedNumericFieldOptions;
+    binding?: never;
+    render?: never;
+};
+type BoundPercentComponentProps = PercentFieldProps & {
+    mode?: never;
+    field?: never;
+    options?: never;
+};
+type PercentComponentProps =
+    | BoundPercentComponentProps
+    | ControlledPercentFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
+/** Compatible legacy binding props; controlled callers use ControlledDurationFieldProps. */
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
+export type BindingDurationFieldProps = DurationFieldProps & {
+    value?: never;
+    onChange?: never;
+    owner?: never;
+};
+export type ControlledDurationFieldProps = CompleteDurationFieldProps & {
+    binding?: never;
+    render?: never;
+};
+export type DurationFieldComponentProps =
+    | BindingDurationFieldProps
+    | ControlledDurationFieldProps;
 function BoundNumberField({
     binding,
     render,
@@ -1657,17 +1812,40 @@ function BoundNumberField({
         status(snapshot)
     );
 }
-/** Percent input preserves native fractions without display conversion. */
-export function PercentField(props: PercentFieldProps): ReactNode {
+/** Controlled display units or the compatible raw-fraction binding contract. */
+export function PercentField(props: BoundPercentComponentProps): ReactNode;
+export function PercentField(props: ControlledPercentFieldProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode;
+export function PercentField(props: PercentComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return props.field.physicalKind === 'percent'
+            ? createElement(CompleteLocalizedNumericField, props)
+            : null;
     return createElement(NumberField, props);
 }
-/** Currency adornment shares the existing numeric owner and raw native units. */
-export function CurrencyField(props: CurrencyFieldProps): ReactNode {
-    return createElement(NumberField, props);
+type BoundCurrencyComponentProps = CurrencyFieldProps & {
+    physicalKind?: never;
+};
+type CurrencyComponentProps =
+    | BoundCurrencyComponentProps
+    | ControlledCurrencyFieldProps;
+/** Explicit controlled localization or the compatible raw binding contract. */
+export function CurrencyField(props: BoundCurrencyComponentProps): ReactNode;
+export function CurrencyField(props: ControlledCurrencyFieldProps): ReactNode;
+export function CurrencyField(props: CurrencyComponentProps): ReactNode;
+export function CurrencyField(props: CurrencyComponentProps): ReactNode {
+    return props.physicalKind === 'currency'
+        ? createElement(ControlledCurrencyField, props)
+        : createElement(NumberField, props);
 }
-/** Clock editing shares the existing scalar owner; render may replace all markup. */
-export function DurationField(props: DurationFieldProps): ReactNode {
-    return createElement(NumberField, props);
+/** Complete controlled clock or compatible binding; the caller retains canonical writes and Save. */
+export function DurationField(props: BindingDurationFieldProps): ReactNode;
+export function DurationField(props: ControlledDurationFieldProps): ReactNode;
+export function DurationField(props: DurationFieldComponentProps): ReactNode;
+export function DurationField(props: DurationFieldComponentProps): ReactNode {
+    return props.binding !== undefined
+        ? createElement(NumberField, props)
+        : createElement(CompleteDurationField, props);
 }
 export type BoundCheckboxFieldProps = FieldProps &
     CheckboxFieldOptions & {
@@ -1811,7 +1989,7 @@ export function MultipleSelectField({
     );
 }
 
-export type SingleSelectFieldProps = FieldProps &
+export type BindingSingleSelectFieldProps = FieldProps &
     Omit<SingleSelectFieldOptions, 'source'>;
 
 function singleSelectBinding(
@@ -1899,14 +2077,40 @@ function singleSelectBinding(
 }
 
 /** Borrows the accepted binding; local choice text is scoped to its identity. */
-export function SingleSelectField({
+export function BindingSingleSelectField({
     binding,
     render,
     ...options
-}: SingleSelectFieldProps): ReactNode {
+}: BindingSingleSelectFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     return singleSelectBinding(binding, snapshot, options);
+}
+
+/** Additive controlled API; existing bindings keep their original semantics. */
+// Preserve the published binding props contract, including indexed access to
+// `binding`; controlled callers use the separately named controlled props.
+export type SingleSelectFieldProps = BindingSingleSelectFieldProps;
+export type SingleSelectFieldInputProps =
+    | SingleSelectFieldProps
+    | ControlledSingleSelectFieldProps;
+export function SingleSelectField(
+    props: SingleSelectFieldInputProps
+): ReactNode {
+    return 'binding' in props
+        ? createElement(BindingSingleSelectField, props)
+        : createElement(ControlledSingleSelectField, props);
+}
+export const BindingMultipleSelectsField = MultipleSelectField;
+export type MultipleSelectsFieldProps =
+    | MultipleSelectFieldProps
+    | ControlledMultipleSelectsFieldProps;
+export function MultipleSelectsField(
+    props: MultipleSelectsFieldProps
+): ReactNode {
+    return 'binding' in props
+        ? createElement(MultipleSelectField, props)
+        : createElement(ControlledMultipleSelectsField, props);
 }
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {
@@ -2697,7 +2901,12 @@ export {
     type CompleteRecordCommentsDialogProps,
 } from './CompleteRecordComments.js';
 export { ButtonField, renderButtonField } from './ButtonField.js';
-export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+export type {
+    ButtonFieldProps,
+    ModelButtonFieldProps,
+    ControlledButtonFieldProps,
+    ButtonFieldMessages,
+} from './ButtonField.js';
 
 export {
     useFileSelection,
@@ -2775,6 +2984,12 @@ export {
 } from './CompleteFormHeader.js';
 
 export {
+    FormValidationSummary,
+    type FormValidationSummaryProps,
+    type FormValidationDiagnostic,
+} from './FormValidationSummary.js';
+
+export {
     CompleteFormFieldPresentation,
     type CompleteFormFieldPresentationProps,
 } from './CompleteFormFieldPresentation.js';
@@ -2789,6 +3004,85 @@ export {
     CompleteCheckboxField,
     type CompleteCheckboxFieldProps,
 } from './CompleteCheckboxField.js';
+
+export {
+    SignatureField,
+    type SignatureFieldProps,
+    type SignatureMessages,
+} from './SignatureField.js';
+export {
+    SignatureCanvas,
+    type SignatureCanvasHandle,
+    type SignatureCanvasProps,
+} from './SignatureCanvas.js';
+export {
+    SignatureStorageError,
+    type SignatureAuthority,
+    type SignatureMethod,
+    type SignatureReceiptState,
+    type SignatureReleaseResult,
+    type SignatureStorage,
+    type SignatureAppend,
+    type SignatureRecovery,
+    type TemporarySignature,
+} from './signatureReceipt.js';
+
+export {
+    CSVExportButton,
+    type CSVExportButtonProps,
+    type CSVExportLabels,
+} from './CSVExportButton.js';
+export {
+    NativeLinkedFinderCascade,
+    type NativeLinkedFinderCascadeProps,
+    type NativeLinkedFinderCascadeDescriptor,
+    type NativeLinkedFinderCascadeLabels,
+} from './NativeLinkedFinderCascade.js';
+export {
+    CompleteLinkedFinder,
+    CompleteLinkedFinderView,
+} from './CompleteLinkedFinder.js';
+export type {
+    CompleteLinkedFinderProps,
+    CompleteLinkedFinderLabels,
+    CompleteLinkedFinderCandidate,
+    CompleteLinkedFinderViewProps,
+} from './CompleteLinkedFinder.js';
+
+export {
+    LinkedFinderCard,
+    LinkedFinderRichLeaf,
+    type LinkedFinderCardProjection,
+    type LinkedFinderCardField,
+    type LinkedFinderCardLeaf,
+    type LinkedFinderPill,
+} from './LinkedFinderCard.js';
+export { Kanban, type KanbanProps, type KanbanCard } from './Kanban.js';
+export {
+    AttachmentPreview,
+    type AttachmentPreviewProps,
+    type AttachmentPreviewLabels,
+} from './AttachmentPreview.js';
+export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
+
+export {
+    PortalSummaryCards,
+    type PortalSummaryCard,
+    type PortalSummaryCardsProps,
+    type PortalSummaryFieldsHeight,
+} from './PortalSummaryCards.js';
+export {
+    useNativeFormProgress,
+    type NativeFormProgressOptions,
+    type NativeFormProgressPorts,
+    type NativeFormProgressRead,
+    type NativeFormProgressStorageEvent,
+} from './useNativeFormProgress.js';
+export {
+    FormProgressConflictAlert,
+    formProgressConflictHeading,
+    formProgressConflictMessage,
+} from './FormProgressConflictAlert.js';
 
 export {
     FormSubmitButton,

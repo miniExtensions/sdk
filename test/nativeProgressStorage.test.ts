@@ -79,3 +79,12 @@ it('parity assertions reject stricter no-lock writes and unconditional owned cle
         { code: 'ERR_ASSERTION' }
     );
 });
+
+it('matches PR7699 post-lock eligibility and no-lock/error behavior', async () => {
+    const { assertNativeFormProgressEligibilityParity } = await import(
+        pathToFileURL(
+            resolve('scripts/native-form-progress-eligibility-checks.mjs')
+        ).href
+    );
+    assert.equal(await assertNativeFormProgressEligibilityParity(forms), 12);
+});

@@ -9,7 +9,8 @@ export const externalSyncSourceReactTypedConsumer = `
 import type { ReactNode } from 'react';
 import {
     ExternalSyncSourceField, renderExternalSyncSourceField, AirtableForm, AirtableGrid, AirtableList,
-    type ExternalSyncSourceFieldProps, type ExternalSyncSourceFieldOptions, type TextFieldOptions,
+    type ExternalSyncSourceFieldProps, type BindingExternalSyncSourceFieldProps,
+    type ControlledExternalSyncSourceFieldProps, type ExternalSyncSourceFieldOptions, type TextFieldOptions,
 } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/text.css';
@@ -25,6 +26,17 @@ export const renderers: FieldRendererSlots<ReactNode> = {
 export function BoundSource(props: ExternalSyncSourceFieldProps) {
     return <ExternalSyncSourceField {...props} {...options} />;
 }
+export function BindingCompatibility(props: BindingExternalSyncSourceFieldProps) { return <ExternalSyncSourceField {...props} />; }
+const controlled: ControlledExternalSyncSourceFieldProps = { mode: 'controlled', value: 'Source Ω', language: 'fr', textSize: 'small', layout: 'cell-short' };
+export const Controlled = () => <ExternalSyncSourceField {...controlled} />;
+// @ts-expect-error Controlled display requires the accepted language.
+export const MissingLanguage = () => <ExternalSyncSourceField mode="controlled" value="Source" />;
+// @ts-expect-error Controlled display accepts converted text, never raw source objects.
+export const RawObject = () => <ExternalSyncSourceField mode="controlled" value={{ name: 'Source' }} language="en" />;
+// @ts-expect-error No setter authority belongs to controlled readonly presentation.
+export const Setter = () => <ExternalSyncSourceField mode="controlled" value="Source" language="en" onValueChange={() => {}} />;
+// @ts-expect-error A controlled display cannot borrow a binding or render callback.
+export const Mixed = (props: ExternalSyncSourceFieldProps) => <ExternalSyncSourceField {...props} mode="controlled" value="Source" language="en" />;
 export function Override(props: ExternalSyncSourceFieldProps) {
     return <ExternalSyncSourceField {...props} render={({ snapshot }) => <span>{String(snapshot.value ?? '')}</span>} />;
 }
@@ -85,7 +97,8 @@ export async function checkExternalSyncSourceConsumer({
             value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
         });
     const { createElement: h, act, StrictMode, Fragment } = require('react');
-    const { createRoot } = require('react-dom/client');
+    const { createRoot, hydrateRoot } = require('react-dom/client');
+    const { renderToString } = require('react-dom/server');
     let checks = 0;
     try {
         assert.match(
@@ -101,6 +114,15 @@ export async function checkExternalSyncSourceConsumer({
                     '@miniextensions/sdk/react/external-sync-source.css'
                 ),
             { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }
+        );
+        assert.match(
+            readFileSync(
+                require.resolve(
+                    '@miniextensions/sdk/react/complete-readonly-text.css'
+                ),
+                'utf8'
+            ),
+            /\.mx-sdk-complete-readonly-text/
         );
         for (const format of ['esm', 'cjs']) {
             const load = (name) =>
@@ -895,6 +917,95 @@ export async function checkExternalSyncSourceConsumer({
                 assert.equal(capabilityActions, 0);
                 assert.equal(requests, 0);
                 checks++;
+
+                const controlled = (value, language = 'en') =>
+                    h(react.ExternalSyncSourceField, {
+                        mode: 'controlled',
+                        value,
+                        language,
+                        textSize: 'small',
+                        layout: 'cell-short',
+                    });
+                const source =
+                    '<img src=x> Source Ω https://example.test/source';
+                await act(async () => root.render(controlled(source)));
+                assert.equal(
+                    container.querySelector('p.read-only-text').textContent,
+                    source
+                );
+                assert.equal(
+                    container.querySelector('input,button,img,script'),
+                    null
+                );
+                assert.equal(
+                    container.querySelector('a').getAttribute('href'),
+                    'https://example.test/source'
+                );
+                assert(
+                    container.querySelector(
+                        '[data-layout="cell-short"] .text-sm'
+                    )
+                );
+                for (const empty of [null, undefined, '']) {
+                    await act(async () => root.render(controlled(empty, 'fr')));
+                    assert.equal(
+                        container.querySelector(
+                            '[data-testid="no-value-test-id"]'
+                        ).textContent,
+                        'Pas de Valeur'
+                    );
+                    assert.equal(
+                        container.querySelector('a,input,button'),
+                        null
+                    );
+                }
+                assert.equal(writes, 0);
+                checks++;
+
+                const hydrationContainer = window.document.createElement('div');
+                hydrationContainer.innerHTML = renderToString(
+                    controlled(source)
+                );
+                const originalText =
+                    hydrationContainer.querySelector('p.read-only-text');
+                assert.equal(
+                    hydrationContainer.querySelector('img,input,button'),
+                    null
+                );
+                window.document.body.append(hydrationContainer);
+                const recoverable = [];
+                let hydration;
+                try {
+                    await act(async () => {
+                        hydration = hydrateRoot(
+                            hydrationContainer,
+                            controlled(source),
+                            {
+                                onRecoverableError: (error) =>
+                                    recoverable.push(error),
+                            }
+                        );
+                    });
+                    assert.equal(
+                        hydrationContainer.querySelector('p.read-only-text'),
+                        originalText
+                    );
+                    await act(async () =>
+                        hydration.render(controlled('Replacement source'))
+                    );
+                    assert.equal(
+                        hydrationContainer.querySelector('p.read-only-text')
+                            .textContent,
+                        'Replacement source'
+                    );
+                    assert.equal(hydrationContainer.querySelector('a'), null);
+                    assert.deepEqual(recoverable, []);
+                    assert.equal(requests, 0);
+                    checks++;
+                } finally {
+                    if (hydration) await act(async () => hydration.unmount());
+                    hydrationContainer.remove();
+                }
             } finally {
                 await act(async () => root.unmount());
                 for (const dispose of cleanup.reverse()) dispose();

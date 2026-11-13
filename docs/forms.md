@@ -24,6 +24,30 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+## Native-compatible progress storage
+
+`createNativeFormProgressStorage` preserves the native browser-local revision
+and writer protocol through host-supplied storage and optional Web Locks. Its
+`write({ expectedRevision, record })` calls retain the original `written`,
+`conflict`, and `unavailable` result union.
+
+Pass `isWriteStillEligible: () => boolean` on a write to opt into cancellation.
+The callback runs after acquiring the lock, immediately before any storage
+access. A strict `false` returns `{ status: 'cancelled' }` without reading,
+writing, removing malformed data, or warning. Without Web Locks, the same check
+runs immediately. Omitting the callback or passing `undefined` preserves legacy
+behavior and result types. Optional callbacks and argument unions that may carry
+a callback include `cancelled` in their result type; extracted write methods
+retain these overloads. The exported `NativeFormProgressWriteResult` and the
+method's `ReturnType` remain the legacy union. The method's `Parameters` retain
+the legacy argument shape with an optional `isWriteStillEligible?: undefined`
+discriminator.
+
+Callback exceptions follow native behavior: with a lock they return
+`unavailable` and warn; without a lock they reject the write Promise. The host
+owns eligibility, conflict state, Restore, and Save. This SDK contract does not
+change the native caller or establish native adoption.
+
 ## Native-compatible Save coordination
 
 `createFormSaveCoordinator<Key, Snapshot>({ isEqual })` coordinates explicit
@@ -3165,3 +3189,87 @@ function to its synchronous lifecycle callback. Its existing revision and
 pretransport authority guards are unchanged. The host retains coalescing, queued
 request rereads, original request settlement and authority. Never pass a mutable
 current-config getter in place of the captured policy.
+
+### Ordinary frontend validation
+
+`validateOrdinaryFormField` is a pure single-field facet from
+`@miniextensions/sdk/forms`. Pass the physical `fieldType`,
+`airtableFieldConfig`, `miniExtConfig`, current `value`, `storedValue`,
+`isConditionallyHidden`, and `isComputeMode` explicitly. The supported result
+contains `diagnostic: null` or a finite diagnostic code. `character-limit`
+also carries the original numeric `limit`, including zero. Hosts retain
+localization and field identity/order.
+
+A `native-fallback` result carries a reason. Call the existing native helper
+with its original arguments and preserve its result or exception. Fallback
+is not a validation error or a successful validation result.
+
+Required precedes visible linked minimum, then the physical kind's ordinary
+rule. Compute waives Required only. Ordinary readonly means
+`miniExtConfig.readOnly === true`; physical computed kinds waive Required.
+Hiding waives Required, text limits and linked minimum, while email, URL,
+negative-number, selection and linked maximum rules retain native behavior.
+Select values use offered or stored canonical names, collaborators use IDs,
+and only literal `true` enables the URL syntax bypass.
+
+This facet does not evaluate conditional predicates, page date ranges,
+linked-open Review debt, or selection/Save authority. Those policies remain
+with their existing owners. The public page adapter retains its separate
+conservative shape and page-policy behavior.
+
+## Form validation summary
+
+```tsx
+import { createElement } from 'react';
+import {
+    FormValidationSummary,
+    type FormValidationDiagnostic,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/form-validation-summary.css';
+
+const diagnostics: readonly FormValidationDiagnostic[] = [
+    {
+        fieldId: 'fld_name',
+        fieldTitle: 'Full name',
+        errorMessage: 'Field is required',
+    },
+];
+
+export const summary = createElement(FormValidationSummary, {
+    heading: 'Please correct the following fields',
+    diagnostics,
+});
+```
+
+Supply already-authorized field diagnostics in display order and a localized
+heading. The SDK renders the complete error Alert and list. It renders each
+semantic field title as a literal `#fieldId` anchor followed by a space and the
+parenthesized message. Keep semantic titles even when inline field labels are
+hidden. Field IDs must be unique; items retain their React identity by field ID.
+Text is rendered literally, without HTML interpretation.
+
+Replace the diagnostics prop when existing host validation changes. An empty
+array renders nothing. The component does not calculate validation, retain error
+state, localize messages, or change page/section navigation. Keep generic
+administrative errors in the native host; do not pass them as field diagnostics.
+
+For native adoption, retain the existing `loadingState.type === 'error'` and
+`error.type` discrimination. Replace only the field-validation summary with
+`FormValidationSummary`, mapping `error.errors` to `diagnostics` and the existing
+localized `please_correct_the_following_fields()` string to `heading`. Keep the
+existing generic `AdminOnlyErrorMessage` branch. Clearing remains governed by the
+host's existing validation/loading-state transition. No expansion or focus
+behavior is added.
+
+The CSS is independent of Tailwind and carries the native red error palette,
+scrolling/flex layout, zero corner radius, list spacing and underlined links.
+Native consumer validation and browser/manual parity must be verified at the
+final integration pin; SDK component tests alone do not verify FormLoaded.
+
+### Complete native-compatible saved progress
+
+Use [`useNativeFormProgress` and `FormProgressConflictAlert`](saved-progress.md)
+for the native revision/writer protocol, committed writer queue, retry and
+reload-required conflict presentation. The host retains its canonical unfiltered
+draft, Restore/load witness and Submit cleanup; this is separate from
+`createProgress` and its public token/value protocol.

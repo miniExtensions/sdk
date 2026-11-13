@@ -1,0 +1,347 @@
+.mx-sdk-native-linked-cascade {
+    position: relative;
+    margin-bottom: 1.5rem;
+    color: var(--mx-sdk-finder-text, #374151);
+}
+.mx-sdk-finder-label {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 500;
+    line-height: 1.5rem;
+}
+.mx-sdk-finder-input-wrap {
+    position: relative;
+    margin-top: 0.5rem;
+}
+.mx-sdk-finder-input {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    border: 1px solid var(--mx-sdk-finder-border, #d1d5db);
+    border-radius: 0.5rem;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    background: var(--mx-sdk-finder-background, white);
+    color: inherit;
+    font: inherit;
+}
+.mx-sdk-finder-input:focus {
+    border-color: var(--mx-sdk-accent, #2563eb);
+    outline: 2px solid var(--mx-sdk-accent, #2563eb);
+    outline-offset: 1px;
+}
+.mx-sdk-finder-input:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.mx-sdk-finder-hidden-toggle {
+    display: none;
+}
+.mx-sdk-finder-chevron {
+    pointer-events: none;
+    position: absolute;
+    inset-inline-end: 0.5rem;
+    top: 0.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #9ca3af;
+}
+.mx-sdk-finder-options {
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 99;
+    margin: 0.25rem 0 0;
+    padding: 0.25rem 0;
+    width: 100%;
+    max-height: 24rem;
+    overflow: auto;
+    border-radius: 0.375rem;
+    background: var(--mx-sdk-finder-background, white);
+    color: inherit;
+    list-style: none;
+    box-shadow:
+        0 8px 24px #0002,
+        0 0 0 1px #0001;
+}
+.mx-sdk-finder-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+}
+.mx-sdk-finder-option-active {
+    background: var(--mx-sdk-finder-active-background, #dbeafe);
+    color: var(--mx-sdk-finder-active-text, #1e3a8a);
+}
+.mx-sdk-finder-selected-label {
+    font-weight: 600;
+}
+.mx-sdk-finder-check {
+    flex-shrink: 0;
+}
+.mx-sdk-finder-feedback {
+    padding: 0.5rem 1rem;
+}
+.mx-sdk-finder-feedback p {
+    margin: 0;
+    color: var(--mx-sdk-finder-error, #991b1b);
+}
+.mx-sdk-complete-linked-finder {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    color: inherit;
+}
+.mx-sdk-finder-search {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 0.25rem 1rem;
+    border-bottom: 2px solid #d1d5db;
+    padding: 0.375rem 0;
+}
+.mx-sdk-finder-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    padding: 0.5rem;
+}
+.mx-sdk-finder-scroll {
+    max-height: 24rem;
+    overflow-y: auto;
+    padding: 1rem;
+}
+.mx-sdk-finder-records {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+    outline: none;
+}
+.mx-sdk-finder-record {
+    position: relative;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid #e5e7eb;
+    border-radius: 0.375rem;
+    background: white;
+    color: #111827;
+}
+.mx-sdk-finder-record-selected {
+    border-color: var(--mx-accent-color, #3b82f6);
+}
+.mx-sdk-finder-record[aria-disabled='true'] {
+    cursor: default;
+    opacity: 0.6;
+}
+.mx-sdk-finder-record > .mx-sdk-finder-check {
+    position: static;
+    margin-left: 0.75rem;
+    color: var(--mx-accent-color, #3b82f6);
+}
+.mx-sdk-finder-sentinel {
+    min-height: 1px;
+    text-align: center;
+    padding: 2rem;
+}
+.mx-sdk-finder-card {
+    min-width: 0;
+    width: 100%;
+}
+.mx-sdk-finder-card-list {
+    display: flex;
+    align-items: center;
+}
+.mx-sdk-finder-card-content {
+    min-width: 0;
+    padding: 0.75rem;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-finder-card-primary {
+    margin: 0;
+    font-weight: 600;
+    white-space: pre-wrap;
+}
+.mx-sdk-finder-card-field {
+    margin-top: 0.5rem;
+}
+.mx-sdk-finder-card-fields {
+    display: grid;
+    gap: 1rem;
+    overflow-x: auto;
+}
+.mx-sdk-finder-card-fields-list {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.mx-sdk-finder-card-fields-list > .mx-sdk-finder-card-field {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+}
+.mx-sdk-finder-card-fields-list .mx-sdk-finder-card-field-title {
+    height: 1rem;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mx-sdk-finder-card-fields-list .mx-sdk-finder-card-field-value {
+    height: 1.5rem;
+    overflow: hidden;
+}
+.mx-sdk-finder-card-field-title {
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+.mx-sdk-finder-card-loading,
+.mx-sdk-finder-card-unavailable {
+    padding: 0.75rem;
+}
+.mx-sdk-finder-list-image {
+    flex-shrink: 0;
+    width: 6rem;
+    max-width: 30%;
+}
+.mx-sdk-finder-carousel {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #f3f4f6;
+}
+.mx-sdk-finder-carousel-track {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    transition: transform 0.3s;
+}
+.mx-sdk-finder-carousel-track > img {
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+}
+.mx-sdk-finder-carousel-dots {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    background: #0004;
+}
+.mx-sdk-finder-carousel-dots button {
+    border: 0;
+    padding: 0.125rem 0.25rem;
+    background: transparent;
+    color: #ffffff80;
+    cursor: pointer;
+}
+.mx-sdk-finder-carousel-dots button[aria-current='true'] {
+    color: white;
+}
+.mx-sdk-finder-carousel > button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    border-radius: 50%;
+    background: white;
+    color: #374151;
+    width: 1.75rem;
+    height: 1.75rem;
+    cursor: pointer;
+}
+.mx-sdk-finder-carousel > button:first-of-type {
+    left: 0.5rem;
+}
+.mx-sdk-finder-carousel > button:last-of-type {
+    right: 0.5rem;
+}
+.mx-sdk-finder-image-placeholder {
+    font-size: 2rem;
+    color: #9ca3af;
+}
+.mx-sdk-finder-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+.mx-sdk-finder-pill,
+.mx-sdk-finder-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    background: #f3f4f6;
+    white-space: pre-wrap;
+}
+.mx-sdk-finder-linked-pill {
+    border: 1px solid #e5e7eb;
+}
+.mx-sdk-finder-avatar {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.mx-sdk-finder-rating {
+    display: inline-flex;
+    gap: 0.125rem;
+}
+.mx-sdk-finder-rating-icons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.mx-sdk-finder-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.mx-sdk-finder-sequence {
+    display: flex;
+    flex-wrap: wrap;
+}
+.mx-sdk-finder-sequence-item {
+    margin: 0 0.5rem 0.5rem 0;
+}
+.mx-sdk-finder-field-error {
+    color: #b91c1c;
+}
+.mx-sdk-finder-rating svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+}
+.mx-sdk-finder-attachment-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+.mx-sdk-finder-attachment-images img {
+    width: 4rem;
+    height: 4rem;
+    object-fit: cover;
+    border-radius: 0.25rem;
+}
+.mx-sdk-finder-literal {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

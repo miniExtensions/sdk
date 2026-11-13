@@ -77,7 +77,9 @@ before(async () => {
         },
         bundle: true,
         platform: 'node',
-        external: ['react', 'react-dom'],
+        // This Node ESM recipe shares React with the fixture; let Node load the
+        // native CJS hook against that same peer rather than bundling require().
+        external: ['react', 'react-dom', 'use-state-with-deps'],
         format: 'esm',
         outfile: join(directory, 'recipe.mjs'),
         logLevel: 'silent',

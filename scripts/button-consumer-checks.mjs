@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
 const deferred = () => {
@@ -122,6 +124,40 @@ export async function checkButtonConsumer({
         assert(markup.includes('mx-sdk-button'));
         assert.equal(visual.calls.length, 0);
         visual.model.dispose();
+        checks++;
+        for (const [url, expected] of [
+            [null, null],
+            ['', 'https://'],
+            ['/relative', '/relative'],
+            ['HTTPS://example.test', 'HTTPS://example.test'],
+            ['MAILTO:a@example.test', 'MAILTO:a@example.test'],
+            ['example.test', 'https://example.test'],
+        ]) {
+            const controlled = renderToStaticMarkup(
+                element(api.react.ButtonField, {
+                    mode: 'controlled',
+                    id: 'native-button',
+                    value: { label: '', url },
+                    config: { openLinkType: '_self', buttonColor: 'red' },
+                })
+            );
+            assert.equal(controlled.includes('href='), expected !== null);
+            if (expected !== null)
+                assert(controlled.includes(`href="${expected}"`));
+            assert(controlled.includes('target="_self"'));
+            assert(controlled.includes('rel="noreferrer"'));
+            assert(controlled.includes('--theme-600:220 38 38'));
+            assert(!controlled.includes('Action'));
+        }
+        const controlledEmpty = renderToStaticMarkup(
+            element(api.react.ButtonField, {
+                mode: 'controlled',
+                value: null,
+                language: 'es',
+            })
+        );
+        assert(controlledEmpty.includes('Sin Botón'));
+        assert(!controlledEmpty.includes('<button'));
         checks++;
         for (const mode of [undefined, '_self', '_blank', '_parent']) {
             const f = makeCore(api.ui, api.forms, (data) => {
@@ -979,6 +1015,70 @@ export async function checkButtonConsumer({
     const tree = (model) =>
         createElement(StrictMode, null, createElement(CustomButton, { model }));
     try {
+        for (const api of [esm, cjs]) {
+            let actions = 0,
+                submits = 0,
+                rows = 0;
+            const controlledTree = (busy = false, disabled = false) =>
+                createElement(
+                    StrictMode,
+                    null,
+                    createElement(
+                        'form',
+                        {
+                            onSubmit: (e) => {
+                                e.preventDefault();
+                                submits++;
+                            },
+                            onClick: () => rows++,
+                        },
+                        createElement(
+                            'label',
+                            { htmlFor: 'controlled-action' },
+                            'Configured field'
+                        ),
+                        createElement(api.react.ButtonField, {
+                            mode: 'controlled',
+                            id: 'controlled-action',
+                            value: { label: '', url: 'example.test' },
+                            config: {
+                                openLinkType: 'triggerWebhookPOST',
+                                buttonColor: 'red',
+                            },
+                            busy,
+                            disabled,
+                            onTriggerWebhook: () => {
+                                actions++;
+                            },
+                        })
+                    )
+                );
+            await act(async () => root.render(controlledTree()));
+            const button = container.querySelector('button');
+            assert.equal(button.type, 'button');
+            assert.equal(button.textContent, '');
+            assert.equal(button.labels[0].textContent, 'Configured field');
+            await act(async () => button.click());
+            assert.equal(actions, 1);
+            await act(async () => root.render(controlledTree(true)));
+            assert(container.querySelector('.mx-sdk-button-spinner'));
+            assert.equal(
+                container.querySelector('button').getAttribute('aria-busy'),
+                'true'
+            );
+            await act(async () => container.querySelector('button').click());
+            assert.equal(actions, 1);
+            await act(async () => root.render(controlledTree(false, true)));
+            await act(async () => container.querySelector('button').click());
+            assert.equal(actions, 1);
+            await act(async () => root.render(controlledTree()));
+            await act(async () => container.querySelector('button').click());
+            assert.equal(actions, 2);
+            assert.equal(submits, 0);
+            assert.equal(rows, 0);
+            assert.equal(container.querySelector('[role=status]'), null);
+            checks++;
+        }
         const f = makeCore(esm.ui, esm.forms);
         models.push(f.model);
         const held = deferred();
@@ -1265,10 +1365,13 @@ export const typedPortalButtonFactory: typeof createPortalButtonFieldModel = cre
 export const buttonReactTypedConsumer = `
 import type { ButtonFieldModel, ButtonFieldRenderProps } from '@miniextensions/sdk/ui';
 import { createElement, type ReactNode } from 'react';
-import { ButtonField, renderButtonField, useButtonField } from '@miniextensions/sdk/react';
+import { ButtonField, renderButtonField, useButtonField, type ControlledButtonFieldProps, type ModelButtonFieldProps } from '@miniextensions/sdk/react';
 import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
 export const slots: FieldRendererSlots<ReactNode> = { renderButtonField };
 export const visualButton = (props: ButtonFieldRenderProps) => createElement(ButtonField, props);
+export const modelButton = (props: ModelButtonFieldProps) => createElement(ButtonField, props);
+export const controlledButton = (props: ControlledButtonFieldProps) => createElement(ButtonField, props);
+export const nativeButton = createElement(ButtonField, { mode: 'controlled', value: { label: '', url: null }, config: { openLinkType: 'triggerWebhookPOST', buttonColor: 'red' }, onTriggerWebhook: () => Promise.resolve(false) });
 export function typedReactButtonConsumer(model: ButtonFieldModel): ButtonFieldRenderProps {
     const props: ButtonFieldRenderProps = useButtonField(model);
     const prepared = props.prepareLink();
@@ -1284,3 +1387,106 @@ export function typedReactButtonConsumer(model: ButtonFieldModel): ButtonFieldRe
     return props;
 }
 `;
+
+/** Each React major loads the actual archive in a fresh process, including SSR. */
+export function checkButtonReactMatrix({
+    archivePath,
+    typescriptBin,
+    happyDomModulePath,
+    esbuildModulePath,
+}) {
+    const directory = mkdtempSync(join(tmpdir(), 'sdk-button-consumer-'));
+    const versions = [];
+    const run = (command, args) =>
+        execFileSync(command, args, {
+            cwd: directory,
+            stdio: ['ignore', 'pipe', 'inherit'],
+        });
+    try {
+        writeFileSync(
+            join(directory, 'package.json'),
+            JSON.stringify({ private: true, type: 'module' })
+        );
+        const runtime = join(directory, 'button-runtime.mjs');
+        writeFileSync(
+            runtime,
+            `import {checkButtonConsumer} from ${JSON.stringify(pathToFileURL(fileURLToPath(import.meta.url)).href)}; process.stdout.write(JSON.stringify(await checkButtonConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]})));`
+        );
+        for (const [react, types, domTypes] of [
+            ['18.3.1', '18.3.12', '18.3.1'],
+            ['19.2.0', '19.2.2', '19.2.2'],
+        ]) {
+            run('npm', [
+                'install',
+                '--ignore-scripts',
+                '--strict-peer-deps',
+                '--no-audit',
+                '--no-fund',
+                '--package-lock=false',
+                archivePath,
+                `react@${react}`,
+                `react-dom@${react}`,
+                `@types/react@${types}`,
+                `@types/react-dom@${domTypes}`,
+            ]);
+            for (const extension of ['mts', 'cts', 'ts']) {
+                const name = `button.${extension}`;
+                writeFileSync(join(directory, name), buttonReactTypedConsumer);
+                run(process.execPath, [
+                    typescriptBin,
+                    '--noEmit',
+                    '--strict',
+                    '--target',
+                    'ES2022',
+                    '--module',
+                    extension === 'ts' ? 'ESNext' : 'NodeNext',
+                    '--moduleResolution',
+                    extension === 'ts' ? 'Bundler' : 'NodeNext',
+                    name,
+                ]);
+            }
+            const result = JSON.parse(
+                run(process.execPath, [runtime, happyDomModulePath]).toString()
+            );
+            assert.equal(result.reactVersion, react);
+            assert.equal(result.checks, 71);
+            const { buildSync } = createRequire(import.meta.url)(
+                esbuildModulePath
+            );
+            for (const format of ['esm', 'cjs']) {
+                const contents =
+                    format === 'esm'
+                        ? "import {ButtonField} from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/button.css';console.log(ButtonField);"
+                        : "const {ButtonField}=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/button.css');console.log(ButtonField);";
+                const bundle = buildSync({
+                    stdin: { contents, resolveDir: directory },
+                    bundle: true,
+                    platform: 'browser',
+                    format: 'iife',
+                    outdir: join(directory, 'browser-output'),
+                    write: false,
+                    metafile: true,
+                    logLevel: 'silent',
+                });
+                const css =
+                    bundle.outputFiles.find((file) =>
+                        file.path.endsWith('.css')
+                    )?.text ?? '';
+                assert(css.includes('.mx-sdk-button-controlled'));
+                assert(css.includes('.mx-sdk-button-spinner'));
+                assert(
+                    !Object.keys(bundle.metafile.inputs).some((input) =>
+                        input.includes('react-redux')
+                    )
+                );
+            }
+            versions.push(result);
+            console.log(
+                `Installed Button React${react}: both model/controlled contracts, ESM/CJS/types/CSS/SSR and synthetic DOM passed.`
+            );
+        }
+        return { versions, cleanup: 'completed' };
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
+}

@@ -23,6 +23,39 @@ import {
 import { compilerMetadata } from './build-metadata.mjs';
 import { withCommonJsSource } from './commonjs-source.mjs';
 
+test('general React ESM and CJS entries do not initialize ReactDOM before consumer DOM bootstrap', () => {
+    for (const format of ['esm', 'cjs']) {
+        const entry = new URL(
+            `../dist/${format}/react/index.js`,
+            import.meta.url
+        ).href;
+        const result = spawnSync(
+            process.execPath,
+            [
+                '--input-type=module',
+                '-e',
+                `
+            import assert from 'node:assert/strict';
+            import { createRequire } from 'node:module';
+            import { fileURLToPath } from 'node:url';
+            const require = createRequire(import.meta.url);
+            assert.equal(typeof document, 'undefined');
+            ${format === 'esm' ? `await import(${JSON.stringify(entry)});` : `require(fileURLToPath(${JSON.stringify(entry)}));`}
+            const loaded = Object.keys(require.cache).filter(path => /[\\/]react-dom[\\/]/.test(path));
+            assert.deepEqual(loaded, [], 'General React import initialized a DOM-dependent runtime');
+            assert.equal(typeof document, 'undefined');
+        `,
+            ],
+            { encoding: 'utf8' }
+        );
+        assert.equal(
+            result.status,
+            0,
+            `${format}: ${result.stderr || result.stdout}`
+        );
+    }
+});
+
 const write = (root, path, value) => {
     mkdirSync(join(root, path, '..'), { recursive: true });
     writeFileSync(join(root, path), value);
@@ -635,6 +668,8 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
 for (const name of [
     'button',
     'form-group',
+    'csv-export',
+    'kanban',
     'checkbox',
     'text',
     'number',
@@ -648,17 +683,25 @@ for (const name of [
     'complete-verification',
     'complete-barcode-scanner',
     'complete-portal-chart',
+    'attachment-preview',
+    'signature',
     'complete-address',
     'address-field',
     'complete-collaborators',
     'form-header',
+    'form-validation-summary',
+    'portal-summary-cards',
+    'form-progress',
     'date',
     'datetime',
     'duration',
     'currency',
     'multiple-select',
     'linked-records',
+    'complete-linked-finder',
     'single-select',
+    'controlled-select',
+    'single-line-text',
 ]) {
     test(`the exported ${name} stylesheet is hashed as an asset and checked on installation`, (t) => {
         const { root, manifest } = fixture(t);

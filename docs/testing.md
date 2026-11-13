@@ -1,5 +1,54 @@
 # Source test coverage
 
+## Portal parent-record summary cards
+
+`test/portalSummaryFields.test.ts` covers current schema names, configured order,
+first duplicates and stale IDs. `test/reactPortalSummaryCards.test.ts` renders
+the real public component through SSR and StrictMode, checking empty/zero/blank
+display text, independent titles, replacements, inert text and optional host
+decoration without reads or form submissions. Existing summary-refresh tests
+continue to own bounded reads and generation retirement.
+
+`scripts/portal-summary-cards-consumer-checks.mjs` installs the actual archive
+with React 18/19 and checks ESM/CommonJS, strict readonly declarations, both CSS
+outputs, SSR/hydration, public-converter usage and the shipped standalone
+example. The normal package workflow also runs its actual Chromium checks for
+all four line clamps, full tooltips, title clipping and responsive wrapping.
+These synthetic SDK checks do not establish native record admission, settings
+permissions or hosted save/refresh acceptance.
+
+## Calendar surfaces
+
+`test/calendarDateProjection.test.ts` compares the distinct computed DATE
+policies directly, plus range clipping, DST endpoints, viewer versus field zones,
+invalid pairs, repair and ordered multi-value days. `test/calendarController.test.ts`
+covers separate clocks, read ordering, R30, native admission and captured-frame
+retirement. `test/reactCalendarMonthGrid.test.ts` uses the real selected package
+graph for fixed/variable weeks, native keyboard differences, selection, focus,
+responsive retention, SSR, hydration and StrictMode.
+
+`test/reactCalendarRecordPicker.test.ts`, `test/reactPortalCalendar.test.ts` and
+`test/calendarComposition.test.ts` add the complete structured surfaces: actual
+listbox selection/rich details, error-before-loading and paging, current native
+admission, clock-object changes without recentering, explicit focus refusal,
+stable query control versus exact card authority, and synchronous display
+publication during an ordered month/read operation. Directly held callbacks
+exercise ABA and unmount retirement independently of detached DOM behavior.
+
+The normal package check calls `scripts/calendar-consumer-checks.mjs` for actual
+installed React 18/19 ESM/CJS/declarations/CSS/SSR/hydration checks. These are
+SDK evidence only; actual native thin adapters, team-device browser and hosted
+acceptance require their own execution evidence. The complete style aggregate
+uses the existing shared rich-leaf styles without rewriting their owners.
+See [the composition boundary](calendar.md).
+
+`scripts/calendar-browser-checks.mjs` joins the existing packed native-browser
+runner. It checks trusted day/keyboard controls, responsive selection retention,
+and twelve Portal event dots inside a compact 270px field at a 375px viewport.
+The dot geometry reproduces overlap with inline text wrapping and overflow with
+excess horizontal padding. Its fixtures construct no accepted owner or client;
+this is grid proof, not complete card/native/hosted acceptance.
+
 On macOS, run package/module-format checks with a canonical `TMPDIR` (for
 example `/private/tmp`). Native Node resolution returns real paths; a fixture
 created under the `/var` alias otherwise fails the unchanged exact-path
@@ -10,6 +59,13 @@ Keep those comparisons intact. Use the
 project's pinned pnpm through Corepack when the global pnpm version differs.
 
 ## Git source preparation
+
+The normal package command first builds clean emitted files before its guard
+tests. The general React bootstrap guard imports the actual ESM/CommonJS
+entries and verifies that neither initializes ReactDOM without a DOM. A warm
+local `dist` directory must not be required for that guard to work in fresh CI.
+Artifact qualification then retains its own clean build and source-preparation
+comparison; the bootstrap guard does not replace either compiler or that proof.
 
 The mandatory package check builds the actual source beneath `node_modules`
 using the checkout's resolved dependencies, then compares every ESM/CommonJS
@@ -446,7 +502,7 @@ Task IDs: 3815.
 ## Last Modified By presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
-They cover the supplied native collaborator name, empty/null/missing values,
+The legacy groups cover the supplied native collaborator name, empty/null/missing values,
 malformed direct helper values, privacy of email/ID/avatar data, metadata choice
 changes without identity resolution, and retained native objects. Forged editable
 capabilities and binding model access traps cannot grant edits. Disabled input and
@@ -470,7 +526,15 @@ resources.
 
 ## Created By presentation checks
 
-`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+`pnpm check:package` preserves 20 legacy installed ESM/CommonJS groups and adds
+eight controlled CreatedBy groups with synthetic owners. The complete
+collaborator matrix runs those 28 groups under React 18.3.1 and 19.2.0, with
+positive/negative declarations, cold SSR/hydration and production bundles.
+The mandatory packed browser profile adds an actual CreatedBy group to the
+existing 12 collaborator groups, recording field/format/version, forbidden
+capability reads, unchanged writes, locale/avatar/identity replacement, edited
+adjacent draft and one explicit Save after proving no implicit submission.
+This is synthetic SDK proof; native Form acceptance remains separate.
 They cover the supplied native collaborator name, empty/null/missing values,
 malformed direct helper values, privacy of email/ID/avatar data, metadata choice
 changes without identity resolution, and retained native objects. Forged editable
@@ -495,7 +559,18 @@ resources.
 
 ## External Sync Source presentation checks
 
-`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+The explicit controlled public mode additionally reuses the maintained complete
+readonly text component. `reactExternalSyncSource.test.ts` checks localized empty
+and literal/link output, size/layout propagation, same-mount ownership-mode
+switching and zero borrowed binding actions. The existing packed consumer adds
+ESM/CJS declarations, readonly/mixed-mode type refusals, CSS resolution, SSR,
+hydration and replacement on React 18/19. The mandatory packed Chromium harness
+registers `external-sync-source-controlled-browser-checks.mjs` for trusted Tab,
+link Enter to an owned loopback popup, row propagation, empty/replacement and
+adjacent draft preservation. Its contexts/server/source directory are cleaned
+and receipts distinguish these synthetic checks from native adoption.
+
+`pnpm check:package` runs 24 installed ESM/CommonJS groups with synthetic owners.
 They cover canonical computed Form bindings, literal SDK strings and unknown
 labels, empty/null/missing values, metadata choice changes on the same owner,
 forged editable capabilities and model access traps. Defensive direct helper

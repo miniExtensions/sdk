@@ -709,3 +709,66 @@ it('localizes method navigation and action labels through the public messages', 
         'Firme aquí'
     );
 });
+
+it('finishes typed A after tab navigation without clearing a newer drawn B', async (t) => {
+    const f = await fixture(t, all);
+    await f.type('A');
+    await f.click('Sign');
+    await f.click('Draw');
+    await f.draw();
+    assert.equal(f.button('Saving...').disabled, true);
+    await f.resolve();
+    assert.equal(f.writes.length, 1);
+    assert.equal(f.releases, 0);
+    assert.equal(f.button('Sign').disabled, false);
+    await f.click('Type');
+    assert.equal(f.container.querySelector('input')?.value, '');
+});
+
+it('finishes uploaded A after tab navigation without clearing a newer typed B', async (t) => {
+    const f = await fixture(t, all);
+    await f.click('Upload');
+    await f.upload('A.png');
+    await f.click('Sign');
+    await f.click('Type');
+    await f.type('B');
+    await f.resolve();
+    assert.equal(f.writes.length, 1);
+    assert.equal(f.releases, 0);
+    assert.equal(f.container.querySelector('input')?.value, 'B');
+    await f.click('Upload');
+    assert.doesNotMatch(f.container.textContent, /A.png/);
+});
+
+it('never clears a successor drawing canvas when an enabled old draw operation settles', async (t) => {
+    const f = await fixture(t, all);
+    await f.click('Draw');
+    await f.draw();
+    await f.click('Sign');
+    const old = f.container.querySelector('canvas');
+    await f.click('Type');
+    await f.type('B');
+    await f.click('Draw');
+    assert.notEqual(f.container.querySelector('canvas'), old);
+    await f.draw(40);
+    await f.resolve();
+    assert.equal(f.writes.length, 1);
+    assert.equal(f.button('Sign').disabled, false);
+    assert.equal(f.releases, 0);
+});
+
+it('retires and clears a disabled inactive method while preserving the current method draft', async (t) => {
+    const f = await fixture(t, all);
+    await f.type('A');
+    await f.click('Sign');
+    await f.click('Upload');
+    await f.upload('B.png');
+    await f.update({ config: { ...all, allowTypedSignature: false } });
+    await f.resolve();
+    assert.equal(f.writes.length, 0);
+    assert.equal(f.releases, 1);
+    assert.match(f.container.textContent, /B.png/);
+    await f.update({ config: all });
+    await f.click('Type');
+    assert.equal(f.container.querySelector('input')?.value, '');
+});

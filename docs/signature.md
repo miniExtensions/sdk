@@ -8,8 +8,9 @@ records. Existing attachment presentation remains the host's responsibility.
 
 Pass the canonical attachment `value`, a stable `ownerIdentity`, field `id`,
 `storage`, `appendCurrent`, and `onRecovery`. Same-owner value echoes preserve
-drafts. Changing the owner or field retires the old control. Disabling or leaving
-a method retires its pending operation. Draft editing remains available during
+drafts. Changing the owner or field retires the old control. Disabling a method
+retires its pending operation. Tab navigation preserves an admitted operation
+while its method remains enabled. Draft editing remains available during
 storage; completion of A cannot clear a newer draft B.
 
 `storage.store(file, authority)` must return attachment metadata and a `release`

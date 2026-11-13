@@ -340,6 +340,59 @@ export async function checkSignatureBrowser({
                         `signature-${format}-dpr${ratio}-typed.png`
                     ),
                 });
+                // Keep a typed intake admitted while a different method's B
+                // is edited. Tab navigation is not method disablement.
+                await first
+                    .getByRole('button', { name: 'Sign', exact: true })
+                    .click();
+                await page.waitForFunction(
+                    () => window.signatureProof.snapshot().rasters.length === 2
+                );
+                await first
+                    .getByRole('tab', { name: 'Draw', exact: true })
+                    .click();
+                const crossCanvas = first.locator('canvas');
+                await crossCanvas.waitFor();
+                const crossBounds = await crossCanvas.boundingBox();
+                assert(crossBounds);
+                await page.mouse.move(crossBounds.x + 15, crossBounds.y + 20);
+                await page.mouse.down();
+                await page.mouse.move(crossBounds.x + 90, crossBounds.y + 70, {
+                    steps: 6,
+                });
+                await page.mouse.up();
+                const beforeTransfer = await crossCanvas.evaluate((node) =>
+                    node.toDataURL()
+                );
+                assert.equal(
+                    await first
+                        .getByRole('button', { name: 'Saving...', exact: true })
+                        .isDisabled(),
+                    true
+                );
+                await page.evaluate(() => window.signatureProof.resolve());
+                await page.waitForFunction(
+                    () => window.signatureProof.snapshot().writes.length === 2
+                );
+                assert.equal(
+                    await crossCanvas.evaluate((node) => node.toDataURL()),
+                    beforeTransfer
+                );
+                assert.equal(
+                    await first
+                        .getByRole('button', { name: 'Sign', exact: true })
+                        .isEnabled(),
+                    true
+                );
+                await first
+                    .getByRole('tab', { name: 'Type', exact: true })
+                    .click();
+                assert.equal(
+                    await first
+                        .getByPlaceholder('Type your name here')
+                        .inputValue(),
+                    ''
+                );
                 await first
                     .getByRole('tab', { name: 'Draw', exact: true })
                     .click();
@@ -373,10 +426,10 @@ export async function checkSignatureBrowser({
                     .getByRole('button', { name: 'Sign', exact: true })
                     .click();
                 await page.waitForFunction(
-                    () => window.signatureProof.snapshot().rasters.length === 2
+                    () => window.signatureProof.snapshot().rasters.length === 3
                 );
                 const drawn = await page.evaluate(
-                    () => window.signatureProof.snapshot().rasters[1]
+                    () => window.signatureProof.snapshot().rasters[2]
                 );
                 assert(drawn.painted > 0);
                 assert(drawn.transparent > 0);
@@ -390,7 +443,7 @@ export async function checkSignatureBrowser({
                 await page.mouse.up();
                 await page.evaluate(() => window.signatureProof.resolve());
                 await page.waitForFunction(
-                    () => window.signatureProof.snapshot().writes.length === 2
+                    () => window.signatureProof.snapshot().writes.length === 3
                 );
                 assert.equal(
                     await first
@@ -483,6 +536,7 @@ export async function checkSignatureBrowser({
                     ratio,
                     typed,
                     drawn,
+                    crossMethod: 'passed',
                     resized,
                     trailing,
                     status: 'passed',

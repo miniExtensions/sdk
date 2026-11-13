@@ -126,15 +126,19 @@ function SignatureSession(props: SignatureFieldProps) {
     const commitEffect =
         typeof window === 'undefined' ? useEffect : useLayoutEffect;
     commitEffect(() => {
+        const previousMethods = committed.current.enabled;
         committed.current = { props, active, enabled };
         mounted.current = true;
         if (
             operation.current != null &&
-            operation.current.authority.method !== active
+            !enabled.includes(operation.current.authority.method)
         ) {
             operation.current = null;
             setBusy(false);
             setError(null);
+        }
+        for (const method of previousMethods) {
+            if (!enabled.includes(method)) clear(method);
         }
     });
     commitEffect(
@@ -199,7 +203,7 @@ function SignatureSession(props: SignatureFieldProps) {
         const current = () =>
             mounted.current &&
             operation.current === admitted &&
-            committed.current.active === active;
+            committed.current.enabled.includes(active);
         try {
             let upload: File;
             if (active === 'upload' && file != null) upload = file;

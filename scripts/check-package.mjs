@@ -587,6 +587,7 @@ try {
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
+                path === 'docs/signature.md' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
@@ -624,6 +625,7 @@ try {
         'docs/browser-lifecycle.md',
         'docs/testing.md',
         'docs/complete-record-comments.md',
+        'docs/signature.md',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/date/index.js',

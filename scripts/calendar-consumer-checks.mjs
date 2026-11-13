@@ -89,6 +89,7 @@ function portalFixture() {
     let controlCurrent = true,
         presentationCurrent = true,
         retirePresentationOnRetain = false;
+    let beforePresentationRead;
     const admitted = () => ({ type: 'admitted' });
     const clock = {
         utcDay: () => '2026-02-15',
@@ -113,7 +114,12 @@ function portalFixture() {
         }),
         presentationOwner: Object.freeze({
             token: Object.freeze({}),
-            isCurrent: () => presentationCurrent,
+            isCurrent() {
+                const before = beforePresentationRead;
+                beforePresentationRead = undefined;
+                before?.();
+                return presentationCurrent;
+            },
         }),
         retainedMonth: '2026-02',
         records: Object.freeze([
@@ -162,6 +168,9 @@ function portalFixture() {
         opens,
         removals,
         isPresentationCurrent: () => presentationCurrent,
+        beforeNextPresentationRead(callback) {
+            beforePresentationRead = callback;
+        },
         retireDisplay() {
             presentationCurrent = false;
         },
@@ -800,13 +809,18 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
                 assert.equal(presentation.isCurrent(), true);
                 assert(Object.isFrozen(presentation));
                 assert(Object.isFrozen(presentation.recordIds));
-                assert.deepEqual(presentation.recordIds, [
-                    ...new Set(
-                        [
-                            ...host.querySelectorAll('article[data-record-id]'),
-                        ].map((node) => node.getAttribute('data-record-id'))
-                    ),
-                ]);
+                assert.deepEqual(
+                    [...presentation.recordIds].sort(),
+                    [
+                        ...new Set(
+                            [
+                                ...host.querySelectorAll(
+                                    'article[data-record-id]'
+                                ),
+                            ].map((node) => node.getAttribute('data-record-id'))
+                        ),
+                    ].sort()
+                );
                 visiblePublications.push(presentation);
                 assert(
                     visiblePublications.length < 16,
@@ -898,6 +912,20 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             'equivalent host wrappers must not republish or loop'
         );
         assert.equal(heldWidePresentation.isCurrent(), true);
+        completePortal.beforeNextPresentationRead(() => {
+            portalProps = { ...portalProps, frame: { ...portalProps.frame } };
+            consumer('react-dom').flushSync(() => root.render(portalElement()));
+        });
+        await React.act(async () =>
+            assert.equal(heldWidePresentation.isCurrent(), true)
+        );
+        assert.equal(visiblePublications.length, settledRegistrations);
+        assert.equal(
+            visiblePresentation(),
+            heldWidePresentation,
+            'an equivalent synchronous guard publication preserves the descriptor'
+        );
+        assert.equal(heldWidePresentation.isCurrent(), true);
         assert.equal(
             host.querySelectorAll('article[data-record-id="one"]').length,
             1
@@ -955,6 +983,64 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             false,
             'width ABA cannot revive the old registration'
         );
+        const spanningRecords = Array.from({ length: 90 }, (_, index) => {
+            const date = new Date(Date.UTC(2026, 0, index + 1))
+                .toISOString()
+                .slice(0, 10);
+            return {
+                id: date,
+                fields: { date },
+                display: { status: 'present', primary: date },
+            };
+        });
+        const localeFrame = {
+            ...completePortal.frame,
+            records: spanningRecords,
+            recordActions: [],
+        };
+        for (const locale of [
+            'en-US-u-ca-islamic-umalqura',
+            'ar-SA-u-ca-islamic-umalqura',
+        ]) {
+            portalProps = { ...portalProps, frame: localeFrame, locale };
+            await React.act(async () => root.render(portalElement()));
+            const mounted = [
+                ...host.querySelectorAll('article[data-record-id]'),
+            ].map((node) => node.getAttribute('data-record-id'));
+            assert.equal(visiblePresentation().isCurrent(), true);
+            assert.deepEqual(
+                [...visiblePresentation().recordIds].sort(),
+                [...new Set(mounted)].sort()
+            );
+            assert(
+                new Set(mounted.map((id) => id.slice(0, 7))).size > 1,
+                `${locale} actual mounted month spans ISO months`
+            );
+        }
+        const heldLocalePresentation = visiblePresentation();
+        completePortal.beforeNextPresentationRead(() => {
+            portalProps = {
+                ...portalProps,
+                frame: { ...localeFrame, records: [] },
+            };
+            consumer('react-dom').flushSync(() => root.render(portalElement()));
+        });
+        await React.act(async () =>
+            assert.equal(heldLocalePresentation.isCurrent(), false)
+        );
+        assert.notEqual(
+            visiblePresentation(),
+            heldLocalePresentation,
+            'a real synchronous record lease change retires the predecessor'
+        );
+        assert.deepEqual(visiblePresentation().recordIds, []);
+        assert.equal(visiblePresentation().isCurrent(), true);
+        portalProps = {
+            ...portalProps,
+            frame: completePortal.frame,
+            locale: 'en-US',
+        };
+        await React.act(async () => root.render(portalElement()));
         assert.deepEqual(
             completePortal.reads,
             [],

@@ -4,6 +4,7 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    useState,
     type ReactElement,
     type ReactNode,
     type MouseEvent,
@@ -174,6 +175,33 @@ const synchronizeController = (
 const useCommittedEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
+type RenderedCards = {
+    records: Map<object, string>;
+    revision: object;
+    changed(): void;
+};
+
+/** Only articles actually mounted by the grid contribute presentation IDs. */
+function CommittedPortalRecord(props: {
+    membership: RenderedCards;
+    recordId: string;
+    children: ReactElement;
+}): ReactElement {
+    const occurrence = useRef({});
+    const { membership, recordId } = props;
+    useCommittedEffect(() => {
+        membership.records.set(occurrence.current, recordId);
+        membership.revision = {};
+        membership.changed();
+        return () => {
+            membership.records.delete(occurrence.current);
+            membership.revision = {};
+            membership.changed();
+        };
+    }, [membership, recordId]);
+    return props.children;
+}
+
 /**
  * Complete native-compatible Portal month board. Canonical retained month,
  * transport, child forms and relationship writes remain the captured host's.
@@ -318,7 +346,7 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
                         : actions.remove!()
                 );
             });
-        return h(
+        const article = h(
             'article',
             {
                 key: `${record.id}:${occurrence}`,
@@ -359,25 +387,17 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
                   )
                 : null
         );
+        return props.registerVisibleRecords
+            ? h(CommittedPortalRecord, {
+                  key: `${record.id}:${occurrence}`,
+                  membership: renderedCards,
+                  recordId: record.id,
+                  children: article,
+              })
+            : article;
     };
-    const eventCounts: Record<string, number> = {};
-    const dayContent: Record<string, ReactNode> = {};
-    for (const [day, values] of days) {
-        eventCounts[day] = values.length;
-        if (props.isWide)
-            dayContent[day] = h(
-                'div',
-                { className: 'mx-sdk-portal-calendar__records' },
-                values.map(renderRecord)
-            );
-    }
     const selectedRecords = days.get(snapshot.selectedDay) ?? [];
     const visibleMonth = composition.focusedDay.slice(0, 7);
-    const visibleRecords = mode
-        ? [...days]
-              .filter(([day]) => day.slice(0, 7) === visibleMonth)
-              .flatMap(([, values]) => values)
-        : selectedRecords;
     // Frame/action wrappers may change when registration itself rerenders the
     // host. Immutable data, schema and real owner/presentation changes must
     // instead allocate a fresh lease, including a committed A -> B -> A.
@@ -402,16 +422,33 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
             props.locale,
         ]
     );
-    type VisibilityContext = { lease: object; current(): boolean };
+    const [, refreshMembership] = useState(0);
+    const renderedCards = useMemo<RenderedCards>(
+        () => ({
+            records: new Map(),
+            revision: {},
+            changed: () => refreshMembership((revision) => revision + 1),
+        }),
+        [visibilityLease]
+    );
+    type VisibilityContext = {
+        lease: object;
+        membershipRevision: object;
+        register: PortalCalendarProps['registerVisibleRecords'];
+        current(): boolean;
+    };
     type VisibilityPublication = {
         lease: object;
+        membershipRevision: object;
         register: NonNullable<PortalCalendarProps['registerVisibleRecords']>;
         active: boolean;
+        checking: boolean;
         descriptor: PortalCalendarVisibleRecords;
         dispose?: () => void;
     };
     const committedVisibility = useRef<VisibilityContext | null>(null);
     const visibilityPublication = useRef<VisibilityPublication | null>(null);
+    const creatingVisibility = useRef<VisibilityContext | null>(null);
     const retireVisibility = (publication: VisibilityPublication | null) => {
         if (!publication) return;
         publication.active = false;
@@ -429,23 +466,29 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
         []
     );
     useCommittedEffect(() => {
+        const membershipRevision = renderedCards.revision;
+        const register = props.registerVisibleRecords;
         const context: VisibilityContext = {
             lease: visibilityLease,
+            membershipRevision,
+            register,
             current: () =>
+                renderedCards.revision === membershipRevision &&
                 composition.current() &&
                 committedPresentation.current === presentationLease &&
                 displayCurrent() &&
                 composition.current() &&
-                committedPresentation.current === presentationLease,
+                committedPresentation.current === presentationLease &&
+                renderedCards.revision === membershipRevision,
         };
         committedVisibility.current = context;
-        const register = props.registerVisibleRecords;
         const previous = visibilityPublication.current;
         if (
             previous?.active &&
             previous.lease === visibilityLease &&
+            previous.membershipRevision === membershipRevision &&
             previous.register === register &&
-            previous.descriptor.isCurrent()
+            (previous.checking || previous.descriptor.isCurrent())
         )
             return;
         // A currentness check or disposer can synchronously commit a successor.
@@ -454,35 +497,90 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
         if (
             committedVisibility.current !== context ||
             !register ||
-            !context.current() ||
-            committedVisibility.current !== context
+            (creatingVisibility.current?.lease === visibilityLease &&
+                creatingVisibility.current.membershipRevision ===
+                    membershipRevision &&
+                creatingVisibility.current.register === register)
         )
             return;
+        const creating = creatingVisibility.current;
+        creatingVisibility.current = context;
+        let current = false;
+        try {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const latest: VisibilityContext | null =
+                    committedVisibility.current;
+                if (
+                    !latest ||
+                    latest.lease !== visibilityLease ||
+                    latest.membershipRevision !== membershipRevision ||
+                    latest.register !== register
+                )
+                    return;
+                const readable = latest.current();
+                if (committedVisibility.current === latest) {
+                    current = readable;
+                    break;
+                }
+            }
+        } finally {
+            creatingVisibility.current = creating;
+        }
+        if (!current || visibilityPublication.current !== null) return;
         let publication: VisibilityPublication;
         const descriptor: PortalCalendarVisibleRecords = Object.freeze({
             recordIds: Object.freeze([
-                ...new Set(visibleRecords.map((record) => record.id)),
+                ...new Set(renderedCards.records.values()),
             ]),
             isCurrent() {
-                const latest = committedVisibility.current;
-                const committed = () =>
-                    publication.active &&
-                    visibilityPublication.current === publication &&
-                    latest !== null &&
-                    latest.lease === publication.lease &&
-                    committedVisibility.current === latest;
-                if (committed() && latest!.current() && committed())
-                    return true;
+                let equivalentRetryExhausted = false;
+                if (!publication.checking) {
+                    publication.checking = true;
+                    try {
+                        // One equivalent synchronous wrapper commit may refresh
+                        // the guard. A host that never settles gets a bounded
+                        // refusal rather than recursive or unbounded retries.
+                        for (let attempt = 0; attempt < 2; attempt++) {
+                            const latest = committedVisibility.current;
+                            const committed = () =>
+                                publication.active &&
+                                visibilityPublication.current === publication &&
+                                latest !== null &&
+                                latest.lease === publication.lease &&
+                                latest.membershipRevision ===
+                                    publication.membershipRevision &&
+                                renderedCards.revision ===
+                                    publication.membershipRevision;
+                            if (!committed()) break;
+                            const current = latest!.current();
+                            if (!committed()) break;
+                            if (committedVisibility.current === latest) {
+                                if (current) return true;
+                                break;
+                            }
+                            equivalentRetryExhausted = attempt === 1;
+                        }
+                    } finally {
+                        publication.checking = false;
+                    }
+                }
                 // A failed observation can never revive through a later guard
                 // refresh, even if the host reuses an old data/owner identity.
                 publication.active = false;
+                if (
+                    equivalentRetryExhausted &&
+                    visibilityPublication.current === publication
+                )
+                    refreshMembership((revision) => revision + 1);
                 return false;
             },
         });
         publication = {
             lease: visibilityLease,
+            membershipRevision,
             register,
             active: true,
+            checking: false,
             descriptor,
         };
         visibilityPublication.current = publication;
@@ -499,6 +597,17 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
             throw error;
         }
     });
+    const eventCounts: Record<string, number> = {};
+    const dayContent: Record<string, ReactNode> = {};
+    for (const [day, values] of days) {
+        eventCounts[day] = values.length;
+        if (props.isWide)
+            dayContent[day] = h(
+                'div',
+                { className: 'mx-sdk-portal-calendar__records' },
+                values.map(renderRecord)
+            );
+    }
     const capturedLoadMore = frame.loadMore;
     const moreCapabilityCurrent = () =>
         frame.hasMore === true &&

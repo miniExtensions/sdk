@@ -36,7 +36,9 @@ Portal's optional `registerVisibleRecords` callback receives a
 `PortalCalendarVisibleRecords` descriptor after the SDK presentation commits.
 Its frozen `recordIds` contains unique IDs of cards actually rendered: the
 selected day's cards in narrow mode, or the displayed month's cards in wide
-mode. Invalid-date and off-month wide records are absent, even when they remain
+mode. Membership comes from the committed SDK card lifecycle, including locale
+calendar months that span ISO months; it is not inferred from an ISO-month
+filter. Invalid-date and off-month wide records are absent, even when they remain
 in the accepted native result. This membership is separate from canonical
 record selection. Registration never runs during render or server rendering.
 
@@ -50,7 +52,10 @@ registration, including StrictMode cleanup and unmount. A failed `isCurrent()`
 observation is permanent; data or presentation A → B → A cannot revive an old
 descriptor. Currentness refreshes only against the latest committed equivalent
 frame, and a synchronous successor publication cannot be borrowed by its
-predecessor.
+predecessor. One equivalent synchronous wrapper refresh can be revalidated on
+the same descriptor. A guard that keeps committing equivalent wrappers gets a
+bounded refusal: the held descriptor stays retired and reconciliation can
+publish a fresh descriptor once the host settles.
 
 A native adapter can register the descriptor and mount its own existing child
 owners only for its current IDs. This restores the native narrow selected-day

@@ -5,11 +5,13 @@ import { JSDOM } from 'jsdom';
 import {
     act,
     createElement as h,
+    memo,
     StrictMode,
     useCallback,
     useState,
 } from 'react';
 import { renderToString } from 'react-dom/server';
+import { I18nProvider } from '../src/react/CalendarRuntime.js';
 import type { Root } from 'react-dom/client';
 import type { RuntimeAirtableField } from '../src/runtime/types.js';
 import type { CalendarClock } from '../src/ui/calendarController.js';
@@ -786,4 +788,143 @@ it('a visibility currentness read rejects a synchronous replacement and never bo
     assert.equal(successor.isCurrent(), true);
     assert.equal(held.isCurrent(), false);
     assert.deepEqual(native.state.events, []);
+});
+
+it('equivalent synchronous wrapper guard refresh keeps a descriptor current and bounds an unsettled observation', async (t) => {
+    const native = host();
+    const frame = native.frame();
+    const publications: PortalCalendarVisibleRecords[] = [];
+    const f = await fixture(t, {
+        frame,
+        registerVisibleRecords(value) {
+            publications.push(value);
+            return () => assert.equal(value.isCurrent(), false);
+        },
+    });
+    const held = publications[publications.length - 1]!;
+    const count = publications.length;
+    const equivalentFrame = () => ({
+        ...frame,
+        presentationOwner: { ...frame.presentationOwner },
+        recordActions: frame.recordActions.map((actions) => ({ ...actions })),
+    });
+    native.state.beforePresentationRead = () => {
+        native.state.beforePresentationRead = undefined;
+        f.updateSync({ frame: equivalentFrame() });
+    };
+    await act(async () => assert.equal(held.isCurrent(), true));
+    assert.equal(publications.length, count);
+    assert.equal(publications[publications.length - 1], held);
+    assert.equal(held.isCurrent(), true);
+    let reentries = 0;
+    const unsettled = () => {
+        native.state.beforePresentationRead = undefined;
+        reentries++;
+        f.updateSync({ frame: equivalentFrame() });
+        native.state.beforePresentationRead = unsettled;
+    };
+    await act(async () => {
+        native.state.beforePresentationRead = unsettled;
+        assert.equal(held.isCurrent(), false);
+        native.state.beforePresentationRead = undefined;
+    });
+    assert.ok(
+        reentries > 0 && reentries <= 2,
+        'an unsettled read must terminate'
+    );
+    assert.equal(held.isCurrent(), false);
+    const successor = publications[publications.length - 1]!;
+    assert.notEqual(successor, held);
+    assert.equal(successor.isCurrent(), true);
+    assert.deepEqual(native.state.events, []);
+});
+
+it('wide visibility follows actual mounted locale-calendar cards, including inherited child-only locale updates', async (t) => {
+    const native = host();
+    const spanningRecords: PortalCalendarRecord[] = Array.from(
+        { length: 90 },
+        (_, index) => {
+            const date = new Date(Date.UTC(2026, 0, index + 1))
+                .toISOString()
+                .slice(0, 10);
+            return {
+                id: date,
+                fields: { date },
+                display: { status: 'present', primary: date },
+            };
+        }
+    );
+    const publications: PortalCalendarVisibleRecords[] = [];
+    const StablePortal = memo(PortalCalendar);
+    let setLocale: (locale: string) => void = () =>
+        assert.fail('unmounted locale host');
+    function LocaleHost(props: PortalCalendarProps) {
+        const [locale, updateLocale] = useState('en-US');
+        setLocale = updateLocale;
+        return h(I18nProvider, {
+            locale,
+            children: h(StablePortal, props),
+        });
+    }
+    const f = await fixture(
+        t,
+        {
+            frame: native.frame({
+                records: spanningRecords,
+                recordActions: [],
+            }),
+            isWide: true,
+            locale: undefined,
+            registerVisibleRecords(value) {
+                publications.push(value);
+                return () => assert.equal(value.isCurrent(), false);
+            },
+        },
+        false,
+        LocaleHost
+    );
+    const gregorian = publications[publications.length - 1]!;
+    for (const locale of [
+        'en-US-u-ca-islamic-umalqura',
+        'ar-SA-u-ca-islamic-umalqura',
+    ]) {
+        await act(async () => setLocale(locale));
+        const current = publications[publications.length - 1]!;
+        const mounted = [
+            ...f.container.querySelectorAll('article[data-record-id]'),
+        ].map((node) => node.getAttribute('data-record-id')!);
+        assert.equal(current.isCurrent(), true);
+        assert.deepEqual(
+            [...current.recordIds].sort(),
+            [...new Set(mounted)].sort()
+        );
+        assert.ok(
+            new Set(mounted.map((id) => id.slice(0, 7))).size > 1,
+            `${locale} displays one real calendar month spanning ISO months: ${JSON.stringify(mounted)}; ${f.container.querySelector('h2')?.textContent}`
+        );
+    }
+    assert.equal(gregorian.isCurrent(), false);
+    assert.deepEqual(
+        native.state.events,
+        [],
+        'locale changes do not allocate query reads'
+    );
+    await f.click(f.button('Next'));
+    const next = publications[publications.length - 1]!;
+    assert.deepEqual(
+        [...next.recordIds].sort(),
+        [
+            ...new Set(
+                [
+                    ...f.container.querySelectorAll('article[data-record-id]'),
+                ].map((node) => node.getAttribute('data-record-id')!)
+            ),
+        ].sort()
+    );
+    assert.equal(next.isCurrent(), true);
+    await f.unmount();
+    assert.equal(
+        publications.every((value) => !value.isCurrent()),
+        true
+    );
 });

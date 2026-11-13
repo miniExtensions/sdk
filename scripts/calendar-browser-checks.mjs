@@ -44,7 +44,7 @@ window.calendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.ve
 `;
 
 export const completeCalendarBrowserSource = `
-import React,{createElement as h,useLayoutEffect,useState,useSyncExternalStore} from 'react';
+import React,{createElement as h,useCallback,useLayoutEffect,useState,useSyncExternalStore} from 'react';
 import {createRoot} from 'react-dom/client';
 import {CalendarRecordPicker,PortalCalendar} from '@miniextensions/sdk/react/calendar';
 // Explicit synthetic host ports only. These are not SDK-private accepted pages,
@@ -55,6 +55,8 @@ const clock={utcDay:()=> '2026-02-15',localDay:()=> '2026-02-15',localMonth:()=>
 const date=id=>({id,name:id,description:null,isComputed:false,isPrimaryField:false,config:{type:'date',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}}});
 const admitted=()=>({type:'admitted'}),refused=reason=>({type:'refused',reason});
 const canonical=['off-day'],attempts=[],writes=[],pickerReads=[],portalReads=[],opens=[],removals=[];
+const visiblePublications=[];
+let activeVisiblePublication=null;
 let pickerOwner={},pickerLive=true,pickerControlLive=true,capped=false,refuseReads=false;
 let portalOwner={},portalLive=true,portalControlLive=true,portalCanOpen=true,retainedMonth='2026-02';
 let setPickerFrame=null,setPortalFrame=null,observed=null;
@@ -69,6 +71,19 @@ function publishPortal(){portalOwner={};setPortalFrame?.(makePortal());}
 function App(){
  const [mode,setMode]=useState('picker'),[mounted,setMounted]=useState(true);
  const [pickerFrame,publishP]=useState(()=>makePicker()),[portalFrame,publishQ]=useState(()=>makePortal());
+ const [,setVisiblePublication]=useState(null);
+ const registerVisibleRecords=useCallback(presentation=>{
+  if(!presentation.isCurrent())throw new Error('Registration must describe the committed Portal');
+  visiblePublications.push(presentation);
+  if(visiblePublications.length>40)throw new Error('Portal registration did not settle');
+  activeVisiblePublication=presentation;
+  setVisiblePublication(presentation);
+  return ()=>{
+   if(presentation.isCurrent())throw new Error('Disposed Portal presentation remained current');
+   if(activeVisiblePublication===presentation)activeVisiblePublication=null;
+   setVisiblePublication(current=>current===presentation?null:current);
+  };
+ },[]);
  const isWide=useSyncExternalStore(subscribe,()=>media.matches,()=>false);
  useLayoutEffect(()=>{setPickerFrame=publishP;setPortalFrame=publishQ;observed={mode,mounted,isWide};return()=>{setPickerFrame=null;setPortalFrame=null;};});
  const show=mode=>{setMode(mode);setMounted(true);};
@@ -85,10 +100,10 @@ function App(){
   h('button',{type:'button','data-complete-calendar':'retire-portal',onClick:()=>{portalLive=false;}},'Retire Portal display'),
   h('button',{type:'button','data-complete-calendar':'retire-portal-control',onClick:()=>{portalControlLive=false;}},'Retire Portal controls'),
   h('button',{type:'button','data-complete-calendar':'unmount',onClick:()=>setMounted(false)},'Unmount complete Calendar')),
-  mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:portalFrame,clock,locale:'en-US',isWide})):null);
+  mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.completeCalendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],portalReads:[...portalReads],opens:[...opens],removals:[...removals]})};
+window.completeCalendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],portalReads:[...portalReads],opens:[...opens],removals:[...removals],visibleRecordIds:activeVisiblePublication?.isCurrent()?[...activeVisiblePublication.recordIds]:null,visiblePublications:visiblePublications.length,retiredVisiblePublications:visiblePublications.filter(value=>!value.isCurrent()).length})};
 `;
 
 const fixtureStyle = `
@@ -655,6 +670,7 @@ export async function checkCalendarBrowser({
                 window.completeCalendarProof.snapshot().isWide
         );
         assert.deepEqual((await completeSnapshot()).portalReads, []);
+        assert.deepEqual((await completeSnapshot()).visibleRecordIds, ['one']);
         assert.equal(
             await page
                 .locator('.mx-sdk-portal-calendar__primary')
@@ -679,6 +695,7 @@ export async function checkCalendarBrowser({
             await day('2026-02-15').getAttribute('data-selected'),
             'true'
         );
+        assert.deepEqual((await completeSnapshot()).visibleRecordIds, ['one']);
         await page
             .getByRole('button', {
                 name: 'Open record: Literal <appointment>',
@@ -695,7 +712,9 @@ export async function checkCalendarBrowser({
             await page.locator('.mx-sdk-portal-calendar__record').count(),
             0
         );
+        assert.deepEqual((await completeSnapshot()).visibleRecordIds, []);
         await day('2026-02-15').click();
+        assert.deepEqual((await completeSnapshot()).visibleRecordIds, ['one']);
         assert.deepEqual(
             (await completeSnapshot()).writes,
             beforeDayWrites.writes
@@ -712,6 +731,13 @@ export async function checkCalendarBrowser({
             (await completeSnapshot()).portalReads,
             [],
             'Wide/narrow/wide has no unsolicited reads'
+        );
+        const visibleAfterResize = await completeSnapshot();
+        assert.deepEqual(visibleAfterResize.visibleRecordIds, ['one']);
+        assert.equal(
+            visibleAfterResize.retiredVisiblePublications,
+            visibleAfterResize.visiblePublications - 1,
+            'Only the current committed rendered membership survives day/width ABA'
         );
         await page
             .getByRole('button', {
@@ -775,6 +801,11 @@ export async function checkCalendarBrowser({
             removals: (await completeSnapshot()).removals,
             reads: (await completeSnapshot()).portalReads,
             dayRecordWrites: 0,
+            visibleMembership: {
+                recordIds: visibleAfterResize.visibleRecordIds,
+                publications: visibleAfterResize.visiblePublications,
+                retired: visibleAfterResize.retiredVisiblePublications,
+            },
         });
         await page.locator('[data-complete-calendar="unmount"]').click();
         assert.equal(
@@ -782,6 +813,12 @@ export async function checkCalendarBrowser({
                 .locator('.mx-sdk-calendar-picker,.mx-sdk-portal-calendar')
                 .count(),
             0
+        );
+        const unmounted = await completeSnapshot();
+        assert.equal(unmounted.visibleRecordIds, null);
+        assert.equal(
+            unmounted.retiredVisiblePublications,
+            unmounted.visiblePublications
         );
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);

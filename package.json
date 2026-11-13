@@ -216,6 +216,8 @@
         "docs/field-bindings.md",
         "docs/count.md",
         "docs/portals.md",
+        "docs/native-portal-kernel.md",
+        "docs/native-portal-differential.md",
         "examples/react-portal-summary-cards/README.md",
         "examples/react-portal-summary-cards/main.ts",
         "examples/react-portal-summary-cards/consumer.cts",

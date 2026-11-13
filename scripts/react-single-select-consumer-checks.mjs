@@ -7,7 +7,7 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 export const reactSingleSelectTypedConsumer = `
 import type { ReactNode } from 'react';
-import { SingleSelectField, SelectField, renderSingleSelectField, AirtableForm, AirtableGrid, AirtableList, type SingleSelectFieldProps, type SingleSelectFieldOptions } from '@miniextensions/sdk/react';
+import { SingleSelectField, SelectField, renderSingleSelectField, AirtableForm, AirtableGrid, AirtableList, type SingleSelectFieldProps, type ControlledSingleSelectFieldProps, type SingleSelectFieldOptions } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/single-select.css';
 const source = {};
@@ -19,6 +19,9 @@ const identity: SingleSelectFieldOptions = { source: 'owner' };
 // @ts-expect-error Options come from the accepted selection owner.
 const choices: SingleSelectFieldOptions = { options: ['Alpha'] };
 export const renderers: FieldRendererSlots<ReactNode> = { renderSingleSelectField: props => renderSingleSelectField(props, options) };
+// Existing consumers retain required binding indexed-access; controlled UI is additive.
+export type ExistingBinding = SingleSelectFieldProps['binding'];
+export function Controlled(props: ControlledSingleSelectFieldProps) { return <SingleSelectField {...props}/>; }
 export function Bound(props: SingleSelectFieldProps) { return <><SingleSelectField {...props} className={options.className} clearLabel={options.clearLabel} emptyLabel={options.emptyLabel}/><SelectField binding={props.binding}/></>; }
 export function Custom(props: SingleSelectFieldProps) { return <SingleSelectField {...props} render={({snapshot}) => <span>{String(snapshot.value == null)}</span>}/>; }
 export function Kinds(single: FieldRendererProps<'singleSelect'>, multiple: FieldRendererProps<'multipleSelects'>, text: FieldRendererProps<'singleLineText'>) {
@@ -38,10 +41,12 @@ export function Compositions({form,portal}:{form:FormRenderScope;portal:PortalRe
 
 export const reactSingleSelectCommonJsTypedConsumer = `
 import React = require('react');
-import { SingleSelectField, renderSingleSelectField, type SingleSelectFieldProps, type SingleSelectFieldOptions } from '@miniextensions/sdk/react';
+import { SingleSelectField, renderSingleSelectField, type SingleSelectFieldProps, type ControlledSingleSelectFieldProps, type SingleSelectFieldOptions } from '@miniextensions/sdk/react';
 import type { FieldRendererProps, FieldRendererSlots } from '@miniextensions/sdk/ui';
 const options: SingleSelectFieldOptions = { source: {}, emptyLabel: 'None' };
 export const renderers: FieldRendererSlots<React.ReactNode> = { renderSingleSelectField: props => renderSingleSelectField(props, options) };
+export type ExistingBinding = SingleSelectFieldProps['binding'];
+export function controlled(props: ControlledSingleSelectFieldProps) { return React.createElement(SingleSelectField, props); }
 export function binding(props: SingleSelectFieldProps) { return React.createElement(SingleSelectField, {...props,className:options.className,clearLabel:options.clearLabel,emptyLabel:options.emptyLabel}); }
 export function slot(props: FieldRendererProps<'singleSelect'>) { return renderSingleSelectField(props, options); }
 // @ts-expect-error The optional React renderer does not leak through core.

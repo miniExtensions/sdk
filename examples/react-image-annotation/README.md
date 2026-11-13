@@ -1,7 +1,8 @@
 # Explicit host-authorized image annotation
 
 UNQUALIFIED source preparation for SDK-COMPLETE-ANNOTATION-COMPOSITION.
-No barrel/dependency/native switch change or executable qualification is included.
+Additive public exports/CSS/package-proof sources are prepared; runtime dependency,
+lock, vendor browser and native integration/qualification remain pending.
 
 ImageAnnotationField owns the picker, image decode boundary, eight-tool lazy
 markerjs2 popup, scoped labels/keyboard behavior, source/editor generations and
@@ -44,8 +45,9 @@ The generated 64x32 bundled PNG is source fixture data; it has NOT been decoded
 or rendered in a browser by this preparation.
 
 Remaining integration/qualification:
-- Compose exact shared React exports, CSS/package files and markerjs2@2.32.7
-  dependency/lock/notice/build closure under current custody; no install occurred.
+- Complete markerjs2@2.32.7 runtime dependency/lock closure with the normal toolchain;
+  no dependency was invented or installed. Public exports/CSS/build/notice and packed
+  SSR/type consumer source registrations are prepared, not executed.
 - Register maintained component/session/lazy-driver and real packed React18/19
   ESM/CJS/types/CSS/SSR checks. Authoring is not a pass.
 - Real sandboxed browser proof must use bundled 64x32 image and ACTUAL vendor,
@@ -60,5 +62,5 @@ Remaining integration/qualification:
 
 The external main.ts example accepts real host ports and creates no session,
 credentials, fake owner, provider, fixture or storage implementation. Its public
-imports are planned integration targets and have NOT compiled against a packed
-artifact; shared exports are intentionally untouched in this source-only stage.
+imports now have additive source exports but have NOT compiled against a packed
+artifact. Runtime vendor dependency/lock and full vendor/browser/native proof remain open.

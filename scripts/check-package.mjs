@@ -3,6 +3,7 @@ import {
     ordinaryValidationTypedConsumer,
 } from './ordinary-validation-consumer-checks.mjs';
 import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
+import { checkCustomerChatMatrix } from './customer-chat-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -129,6 +130,7 @@ import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
 import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
+import { checkImageAnnotationReactMatrix } from './image-annotation-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -592,7 +594,12 @@ try {
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
+                path === 'docs/customer-chat.md' ||
+                path === 'docs/image-annotation-markerjs2-license.txt' ||
+                path === 'examples/react-image-annotation/README.md' ||
+                path === 'examples/react-image-annotation/main.ts' ||
                 path === 'docs/complete-collaborators.md' ||
+                path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
                 path === 'docs/field-presentation.md' ||
@@ -630,6 +637,10 @@ try {
         'docs/testing.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
+        'docs/customer-chat.md',
+        'docs/image-annotation-markerjs2-license.txt',
+        'examples/react-image-annotation/README.md',
+        'examples/react-image-annotation/main.ts',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/date/index.js',
@@ -642,6 +653,9 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/single-select.css',
         'dist/cjs/react/single-select.css',
+        'dist/esm/react/controlled-select.css',
+        'dist/cjs/react/controlled-select.css',
+        'docs/controlled-select.md',
         'dist/esm/react/rich-text.css',
         'dist/cjs/react/rich-text.css',
         'dist/esm/react/text.css',
@@ -680,6 +694,8 @@ try {
         'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
+        'dist/esm/react/complete-image-annotation.css',
+        'dist/cjs/react/complete-image-annotation.css',
         'dist/esm/react/complete-readonly-text.css',
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
@@ -2805,6 +2821,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const customerChatProof = checkCustomerChatMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(customerChatProof.versions.length, 2);
+    assert.equal(customerChatProof.cleanup, 'completed');
     const buttonProof = await checkButtonConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -3475,6 +3498,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(verificationMatrix.versions.length, 2);
     assert.equal(verificationMatrix.cleanup, 'completed');
+    const annotationMatrix = checkImageAnnotationReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(annotationMatrix.versions.length, 2);
+    assert.equal(annotationMatrix.cleanup, 'completed');
     const headerMatrix = checkFormHeaderReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

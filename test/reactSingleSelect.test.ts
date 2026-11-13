@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     SingleSelectField,
+    BindingSingleSelectField,
     SelectField,
     FieldRenderer,
     renderSingleSelectField,
@@ -1175,3 +1176,25 @@ for (const layout of ['grid', 'list'] as const)
         await dom.render(dom.tree(host));
         assert.equal(dom.container.querySelector('select'), null);
     });
+
+it('canonical SingleSelectField and explicit binding export preserve the same accepted binding and custom render contract', async (t) => {
+    const dom = await environment(t);
+    const f = dom.makeOwner({}, 'Alpha');
+    await dom.render(h(SingleSelectField, { binding: f.binding }));
+    await dom.choose('Beta');
+    assert.equal(f.binding.getSnapshot().value, 'Beta');
+    await dom.render(h(BindingSingleSelectField, { binding: f.binding }));
+    assert.equal(dom.select().value, 'Beta');
+    await dom.choose('Alpha');
+    assert.equal(f.binding.getSnapshot().value, 'Alpha');
+    await dom.render(
+        h(SingleSelectField, {
+            binding: f.binding,
+            render: ({ snapshot, binding }) => {
+                assert.equal(binding, f.binding);
+                return h('output', null, String(snapshot.value));
+            },
+        })
+    );
+    assert.equal(dom.container.querySelector('output')?.textContent, 'Alpha');
+});

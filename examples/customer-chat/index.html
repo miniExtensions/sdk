@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Customer chat lifecycle — synthetic fixture</title>
+    <style>
+        body {
+            font: 16px system-ui;
+            max-width: 950px;
+            margin: 40px auto;
+            padding: 20px;
+            color: #17212b;
+        }
+        button {
+            padding: 12px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f0f3f6;
+            padding: 16px;
+            overflow: auto;
+        }
+    </style>
+    <h1>Customer chat lifecycle</h1>
+    <p>
+        Synthetic provider only. Acceptance, insertion, availability and
+        visibility are independent.
+    </p>
+    <div>
+        <button id="toggle-1">Toggle root 1</button>
+        <button id="toggle-2">Toggle root 2</button>
+        <button id="switch">Switch root 2 app</button>
+        <button id="hide">Toggle root 1 overlay</button>
+        <button id="insert">Fire insertion callback</button>
+        <button id="available">Provider available</button>
+        <button id="show">Fire visibility callbacks</button>
+        <button id="stale">Try retained help</button>
+    </div>
+    <div id="root-one"></div>
+    <div id="root-two"></div>
+    <p id="result" role="status">No help requested</p>
+    <div id="status"></div>
+    <pre id="events"></pre>
+    <script type="module" src="./main.js"></script>
+</html>

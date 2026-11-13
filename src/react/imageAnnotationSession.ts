@@ -226,6 +226,7 @@ export function createImageAnnotationSession<Upload>(ports: {
         beginSource,
         clearSource() {
             if (active) retire(active);
+            if (!disposed && ownerIsCurrent()) ports.onSavingChange?.(false);
         },
         dispose() {
             if (disposed) return;

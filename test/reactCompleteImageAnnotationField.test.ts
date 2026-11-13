@@ -240,3 +240,18 @@ it('StrictMode unmount releases each local URL once and refuses late feedback', 
     assert.deepEqual(f.errors, []);
     assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
 });
+
+
+it('clearing an older remote request cannot retire the newer local selection', async (t) => {
+    const f = await fixture(t);
+    const remote = { token: {}, url: 'data:image/png;base64,iVBORw0KGgo=', filename: 'remote.png' };
+    await f.update({ remoteSource: remote });
+    await f.select();
+    const local = f.container.querySelector('img');
+    assert.ok(local);
+    assert.equal(local.getAttribute('src'), 'blob:annotation-1');
+    await f.update({ remoteSource: null });
+    assert.equal(f.container.querySelector('img'), local);
+    assert.deepEqual(f.revoked, []);
+    assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
+});

@@ -1,3 +1,4 @@
+import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
@@ -2209,6 +2210,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.createdTimeDocuments,
+            output,
+        });
+        report.controlledSelect = {};
+        await checkControlledSelectBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.controlledSelect,
             output,
         });
         report.completeDuration = {};

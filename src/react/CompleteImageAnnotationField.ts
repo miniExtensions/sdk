@@ -81,6 +81,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
     const installed = useRef<ReturnType<typeof createImageAnnotationSession<Upload>> | null>(null);
     const sourceRef = useRef<ImageAnnotationSourceLease | null>(null);
     const lastRemote = useRef<ImageAnnotationRequest | null>(null);
+    const remoteLease = useRef<object | null>(null);
     const initializing = useRef(new WeakSet<object>());
     const nextSourceKey = useRef(0);
     const [sourceKey, setSourceKey] = useState(0);
@@ -128,6 +129,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
         setPickerKey((key) => key + 1);
         sourceRef.current = null;
         lastRemote.current = null;
+        remoteLease.current = null;
         setSource(null);
         setSaving(false);
         setFailure(null);
@@ -148,12 +150,13 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
         if (!request) {
             // Parent clears its selection on normal close. The rendered upload
             // continues; an externally removed still-open source is retired.
-            if (lastRemote.current && sourceRef.current?.isCurrent()) {
+            if (lastRemote.current && sourceRef.current?.token === remoteLease.current && sourceRef.current?.isCurrent()) {
                 session.clearSource();
                 sourceRef.current = null;
                 setSource(null);
             }
             lastRemote.current = null;
+            remoteLease.current = null;
             return;
         }
         if (lifetime.disabled || lifetime.readOnly) return;
@@ -165,6 +168,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
         lastRemote.current = request;
         setFailure(null);
         const lease = session.beginSource({ ...request, ownedObjectUrl: false });
+        remoteLease.current = lease?.token ?? null;
         sourceRef.current = lease;
         setSourceKey(++nextSourceKey.current);
         setSource(lease);
@@ -210,6 +214,7 @@ export function ImageAnnotationField<Upload>(props: ImageAnnotationFieldProps<Up
                         filename: file.name,
                         ownedObjectUrl: true,
                     });
+                    remoteLease.current = null;
                     sourceRef.current = lease;
                     setSourceKey(++nextSourceKey.current);
                     setSource(lease);

@@ -1,4 +1,18 @@
 import {
+    ControlledSingleSelectField,
+    ControlledMultipleSelectsField,
+    type ControlledSingleSelectFieldProps,
+    type ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+export type {
+    ControlledSelectChoice,
+    SelectEditOwner,
+    ControlledSelectLabels,
+    ControlledSelectCommonProps,
+    ControlledSingleSelectFieldProps,
+    ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+import {
     CompleteDurationField,
     type CompleteDurationFieldProps,
 } from './CompleteDurationField.js';
@@ -75,6 +89,25 @@ export {
     RecoverableImage,
     type RecoverableImageProps,
 } from './RecoverableImage.js';
+export {
+    ImageAnnotationField,
+    CompleteImageAnnotationField,
+    type ImageAnnotationFieldProps,
+    type ImageAnnotationFieldLabels,
+    type ImageAnnotationRequest,
+} from './CompleteImageAnnotationField.js';
+export type {
+    ImageAnnotationOwner,
+    ImageAnnotationStorage,
+    ImageAnnotationAppend,
+    ImageAnnotationSource,
+    ImageAnnotationFailure,
+    AnnotatedImage,
+} from './imageAnnotationSession.js';
+export type {
+    ImageAnnotationTool,
+    ImageAnnotationEditorLabels,
+} from './imageAnnotationMarkerDriver.js';
 export {
     NativeRichTextEditor,
     type NativeRichTextEditorHandle,
@@ -1851,7 +1884,7 @@ export function MultipleSelectField({
     );
 }
 
-export type SingleSelectFieldProps = FieldProps &
+export type BindingSingleSelectFieldProps = FieldProps &
     Omit<SingleSelectFieldOptions, 'source'>;
 
 function singleSelectBinding(
@@ -1939,14 +1972,40 @@ function singleSelectBinding(
 }
 
 /** Borrows the accepted binding; local choice text is scoped to its identity. */
-export function SingleSelectField({
+export function BindingSingleSelectField({
     binding,
     render,
     ...options
-}: SingleSelectFieldProps): ReactNode {
+}: BindingSingleSelectFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     return singleSelectBinding(binding, snapshot, options);
+}
+
+/** Additive controlled API; existing bindings keep their original semantics. */
+// Preserve the published binding props contract, including indexed access to
+// `binding`; controlled callers use the separately named controlled props.
+export type SingleSelectFieldProps = BindingSingleSelectFieldProps;
+export type SingleSelectFieldInputProps =
+    | SingleSelectFieldProps
+    | ControlledSingleSelectFieldProps;
+export function SingleSelectField(
+    props: SingleSelectFieldInputProps
+): ReactNode {
+    return 'binding' in props
+        ? createElement(BindingSingleSelectField, props)
+        : createElement(ControlledSingleSelectField, props);
+}
+export const BindingMultipleSelectsField = MultipleSelectField;
+export type MultipleSelectsFieldProps =
+    | MultipleSelectFieldProps
+    | ControlledMultipleSelectsFieldProps;
+export function MultipleSelectsField(
+    props: MultipleSelectsFieldProps
+): ReactNode {
+    return 'binding' in props
+        ? createElement(MultipleSelectField, props)
+        : createElement(ControlledMultipleSelectsField, props);
 }
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {

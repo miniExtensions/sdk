@@ -184,6 +184,10 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
+The optional [customer-chat lifecycle](docs/customer-chat.md) has dedicated
+`customer-chat`, `customer-chat/react` and `customer-chat/intercom` imports.
+The host supplies one broker across all roots and explicitly enables its driver.
+
 | Import                         | Included behavior                                                                                                                                                                      | Guide                                                                        |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                                        | [Runtime](docs/runtime.md)                                                   |

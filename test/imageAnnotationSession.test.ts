@@ -284,3 +284,17 @@ it('a throwing UI-close notification cannot interrupt editor cleanup', () => {
     ownerCurrent = false;
     session.dispose();
 });
+
+
+it('explicit source removal resets saving immediately while refusing retired continuation', async () => {
+    const f = fixture();
+    const task = f.begin().render(png());
+    assert.ok(task);
+    assert.equal(f.saving.at(-1), true);
+    f.session.clearSource();
+    assert.equal(f.saving.at(-1), false);
+    f.upload.resolve({ temporary: true });
+    await task;
+    assert.deepEqual(f.reads, []);
+    assert.deepEqual(f.appended, []);
+});

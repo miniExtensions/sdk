@@ -4,3 +4,5 @@ dist
 pnpm-lock.yaml
 # Immutable upstream snapshots and narrowly documented compatibility patches.
 vendor
+# Unmodified historical provider artifact and its delivered notices.
+test/fixtures/customer-chat

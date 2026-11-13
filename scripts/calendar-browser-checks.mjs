@@ -156,7 +156,9 @@ export async function prepareCalendarBrowser(
         for (const name of ['react', 'react-dom'])
             assert.equal(
                 Object.keys(result.metafile.inputs).filter((input) =>
-                    input.endsWith(`/node_modules/${name}/index.js`)
+                    realpathSync(resolve(root, input)).endsWith(
+                        `/node_modules/${name}/index.js`
+                    )
                 ).length,
                 1,
                 `One consumer ${name} instance required`

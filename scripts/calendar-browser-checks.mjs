@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { calendarCompleteStyleAssets } from './calendar-complete-style-assets.mjs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
@@ -42,6 +43,54 @@ createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)
 window.calendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.version,dayIntents:[...dayIntents],focusIntents:[...focusIntents]})};
 `;
 
+export const completeCalendarBrowserSource = `
+import React,{createElement as h,useLayoutEffect,useState,useSyncExternalStore} from 'react';
+import {createRoot} from 'react-dom/client';
+import {CalendarRecordPicker,PortalCalendar} from '@miniextensions/sdk/react/calendar';
+// Explicit synthetic host ports only. These are not SDK-private accepted pages,
+// native adapters, provider calls, child forms, or backend persistence evidence.
+const media=window.matchMedia('(min-width: 1024px)');
+const subscribe=listener=>{media.addEventListener('change',listener);return ()=>media.removeEventListener('change',listener);};
+const clock={utcDay:()=> '2026-02-15',localDay:()=> '2026-02-15',localMonth:()=> '2026-02',localToday:()=> '2026-02-14',clientUtcOffset:()=>0};
+const date=id=>({id,name:id,description:null,isComputed:false,isPrimaryField:false,config:{type:'date',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}}});
+const admitted=()=>({type:'admitted'}),refused=reason=>({type:'refused',reason});
+const canonical=['off-day'],attempts=[],writes=[],pickerReads=[],portalReads=[],opens=[],removals=[];
+let pickerOwner={},pickerLive=true,pickerControlLive=true,capped=false,refuseReads=false;
+let portalOwner={},portalLive=true,portalControlLive=true,portalCanOpen=true,retainedMonth='2026-02';
+let setPickerFrame=null,setPortalFrame=null,observed=null;
+const pickerControl={owner:{},isCurrent:()=>pickerControlLive,scheduleRead(request){pickerReads.push(request);return refuseReads?refused('native-read-refusal'):admitted();}};
+const pickerRecords=[{id:'one',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'two',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'off-day',fields:{start:'2026-02-21',end:'2026-02-21'}}];
+const presentations={one:{type:'list',primary:'Rich appointment',showPreviewFieldTitle:true,details:[{key:'notes',title:'Notes',leaf:{kind:'text',display:{value:'Rich https://example.test/calendar',language:'en',layout:'linked-list'}}},{key:'tag',title:'Tag',leaf:{kind:'pills',items:[{label:'Accepted tag'}]}}]},two:{type:'calendar',primary:'Second appointment',subtitle:'Native compact detail'},'off-day':{type:'calendar',primary:'Off-day selection',subtitle:''}};
+function makePicker(patch={}){const expected=pickerOwner;return Object.freeze({control:pickerControl,presentationOwner:{owner:expected,isCurrent:()=>pickerLive&&pickerOwner===expected},records:pickerRecords,startField:date('start'),endField:date('end'),selectedRecordIds:[...canonical],presentationByRecordId:presentations,selectionEnabled:true,errorMessage:null,isLoading:false,isLoadingMore:false,canLoadMore:true,toggleRecord(id){attempts.push(id);if(!pickerControlLive||!pickerLive||pickerOwner!==expected)return refused('stale-host');if(capped&&!canonical.includes(id))return refused('native-cap');const index=canonical.indexOf(id);if(index>=0)canonical.splice(index,1);else canonical.push(id);writes.push(id);publishPicker();return admitted();},...patch});}
+function publishPicker(patch={}){pickerOwner={};setPickerFrame?.(makePicker(patch));}
+const portalControl={owner:{},isCurrent:()=>portalControlLive,retainMonth(month){if(!portalControlLive)return refused('stale-control');portalReads.push(['retain',month]);retainedMonth=month;publishPortal();return admitted();},readFirstPage(request){if(!portalControlLive)return refused('stale-control');portalReads.push(['read',request]);return admitted();}};
+function makePortal(){const expected=portalOwner;const current=()=>portalControlLive&&portalLive&&portalOwner===expected;return Object.freeze({control:portalControl,presentationOwner:{token:expected,isCurrent:()=>portalLive&&portalOwner===expected},retainedMonth,records:[{id:'one',fields:{date:'2026-02-15'},display:{status:'present',primary:'Literal <appointment>',subtitle:'Native compact subtitle'}}],dateField:date('date'),fallbackClientUtcOffset:0,shouldShowToTheSide:true,recordActions:[{recordId:'one',...(portalCanOpen?{open(request){if(!current())return refused('stale-host');opens.push(request);return admitted();}}:{}),remove(){if(!current())return refused('stale-host');removals.push('one');return admitted();}}],status:'ready'});}
+function publishPortal(){portalOwner={};setPortalFrame?.(makePortal());}
+function App(){
+ const [mode,setMode]=useState('picker'),[mounted,setMounted]=useState(true);
+ const [pickerFrame,publishP]=useState(()=>makePicker()),[portalFrame,publishQ]=useState(()=>makePortal());
+ const isWide=useSyncExternalStore(subscribe,()=>media.matches,()=>false);
+ useLayoutEffect(()=>{setPickerFrame=publishP;setPortalFrame=publishQ;observed={mode,mounted,isWide};return()=>{setPickerFrame=null;setPortalFrame=null;};});
+ const show=mode=>{setMode(mode);setMounted(true);};
+ return h(React.Fragment,null,h('div',{className:'fixture-controls'},
+  h('button',{type:'button','data-complete-calendar':'picker',onClick:()=>show('picker')},'Complete picker'),
+  h('button',{type:'button','data-complete-calendar':'portal',onClick:()=>show('portal')},'Complete Portal'),
+  h('button',{type:'button','data-complete-calendar':'cap',onClick:()=>{capped=true;publishPicker();}},'Native cap'),
+  h('button',{type:'button','data-complete-calendar':'disable',onClick:()=>publishPicker({selectionEnabled:false})},'Disable selection'),
+  h('button',{type:'button','data-complete-calendar':'refuse-read',onClick:()=>{refuseReads=true;publishPicker();}},'Refuse reads'),
+  h('button',{type:'button','data-complete-calendar':'error-loading',onClick:()=>publishPicker({errorMessage:'Calendar native error',isLoading:true})},'Error and loading'),
+  h('button',{type:'button','data-complete-calendar':'restore',onClick:()=>{pickerLive=true;portalLive=true;publishPicker();publishPortal();}},'Restore presentation'),
+  h('button',{type:'button','data-complete-calendar':'retire-picker',onClick:()=>{pickerLive=false;}},'Retire picker display'),
+  h('button',{type:'button','data-complete-calendar':'remove-only',onClick:()=>{portalCanOpen=false;publishPortal();}},'Remove-only card'),
+  h('button',{type:'button','data-complete-calendar':'retire-portal',onClick:()=>{portalLive=false;}},'Retire Portal display'),
+  h('button',{type:'button','data-complete-calendar':'retire-portal-control',onClick:()=>{portalControlLive=false;}},'Retire Portal controls'),
+  h('button',{type:'button','data-complete-calendar':'unmount',onClick:()=>setMounted(false)},'Unmount complete Calendar')),
+  mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:portalFrame,clock,locale:'en-US',isWide})):null);
+}
+createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
+window.completeCalendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],portalReads:[...portalReads],opens:[...opens],removals:[...removals]})};
+`;
+
 const fixtureStyle = `
 body{margin:8px;font:14px system-ui,sans-serif;color:#111827}
 main{width:100%;max-width:1100px;margin:0 auto}
@@ -52,13 +101,21 @@ main{width:100%;max-width:1100px;margin:0 auto}
 `;
 
 /** Prepare the actual installed public grid and CSS under existing TGZ custody. */
-export async function prepareCalendarBrowser(consumer, readArchiveMember) {
+export async function prepareCalendarBrowser(
+    consumer,
+    readArchiveMember,
+    profile = 'grid'
+) {
     assert.equal(typeof readArchiveMember, 'function');
     const root = realpathSync(consumer);
     const directory = mkdtempSync(join(root, '.calendar-browser-'));
     try {
         const entry = join(directory, 'host.mjs');
-        writeFileSync(entry, calendarBrowserSource);
+        const complete = profile === 'complete';
+        const source = complete
+            ? completeCalendarBrowserSource
+            : calendarBrowserSource;
+        writeFileSync(entry, source);
         const result = await build({
             absWorkingDir: root,
             entryPoints: [entry],
@@ -85,6 +142,17 @@ export async function prepareCalendarBrowser(consumer, readArchiveMember) {
             inputs.some((input) => input.endsWith('/react/calendar/index.js')),
             'Public Calendar entry required'
         );
+        if (complete)
+            for (const name of [
+                'CalendarRecordPicker',
+                'PortalCalendar',
+                'LinkedFinderCard',
+                'CalendarRuntime',
+            ])
+                assert(
+                    inputs.some((input) => input.endsWith(`/react/${name}.js`)),
+                    `Actual installed ${name} required`
+                );
         for (const name of ['react', 'react-dom'])
             assert.equal(
                 Object.keys(result.metafile.inputs).filter((input) =>
@@ -105,26 +173,46 @@ export async function prepareCalendarBrowser(consumer, readArchiveMember) {
             );
             return { member, bytes: bytes.length, sha256: hash(bytes) };
         });
-        const cssMember = 'package/dist/esm/react/calendar.css';
+        const cssMember =
+            'package/dist/esm/react/' +
+            (complete ? 'calendar-complete.css' : 'calendar.css');
         const css = readFileSync(
-            join(installed, 'dist/esm/react/calendar.css')
+            join(installed, cssMember.slice('package/'.length))
         );
         assert.deepEqual(css, readArchiveMember(cssMember));
-        const style = Buffer.concat([css, Buffer.from(fixtureStyle)]);
+        const fullStyles = complete
+            ? calendarCompleteStyleAssets(installed, readArchiveMember)
+            : null;
+        const style = complete
+            ? Buffer.from(fixtureStyle)
+            : Buffer.concat([css, Buffer.from(fixtureStyle)]);
         const script = result.outputFiles[0].contents;
+        const scriptPath = complete ? '/complete-calendar.js' : '/calendar.js';
+        const styleHref = complete ? fullStyles.href : '/calendar.css';
         const html = Buffer.from(
-            '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SDK Calendar foundations</title><link rel="stylesheet" href="/calendar.css"><main></main><script type="module" src="/calendar.js"></script>'
+            '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SDK Calendar composition</title><link rel="stylesheet" href="' +
+                styleHref +
+                '">' +
+                (complete
+                    ? '<link rel="stylesheet" href="/calendar-fixture.css">'
+                    : '') +
+                '<main></main><script type="module" src="' +
+                scriptPath +
+                '"></script>'
         );
         return {
             assets: new Map([
-                ['/', html],
-                ['/calendar.js', script],
-                ['/calendar.css', style],
+                [complete ? '/complete' : '/', html],
+                [scriptPath, script],
+                [complete ? '/calendar-fixture.css' : '/calendar.css', style],
+                ...[...(fullStyles?.assets ?? new Map())],
                 ['/favicon.ico', Buffer.alloc(0)],
             ]),
             receipt: {
                 harnessSha256: hash(readFileSync(new URL(import.meta.url))),
-                hostSha256: hash(calendarBrowserSource),
+                hostSha256: hash(source),
+                profile,
+                completeStyles: fullStyles?.inputs,
                 scriptSha256: hash(script),
                 css: { member: cssMember, sha256: hash(css) },
                 servedStyleSha256: hash(style),
@@ -175,7 +263,15 @@ export async function checkCalendarBrowser({
             consumer,
             readArchiveMember
         );
+        const completePrepared = await prepareCalendarBrowser(
+            consumer,
+            readArchiveMember,
+            'complete'
+        );
         evidence.package = prepared.receipt;
+        evidence.completePackage = completePrepared.receipt;
+        for (const [path, bytes] of completePrepared.assets)
+            prepared.assets.set(path, bytes);
         evidence.cleanup.fixtureDirectory = 'removed';
         server = createServer((request, response) => {
             const pathname = new URL(request.url, 'http://localhost').pathname;
@@ -432,19 +528,269 @@ export async function checkCalendarBrowser({
             (await snapshot()).focusIntents,
             afterNext.focusIntents
         );
+        // Continue within the same guarded runner, browser and owned origin.
+        await page.setViewportSize({ width: 375, height: 844 });
+        await page.goto(origin + '/complete');
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const completeSnapshot = () =>
+            page.evaluate(() => window.completeCalendarProof.snapshot());
+        assert.equal(
+            await page.evaluate(() => typeof screen.orientation.angle),
+            'number',
+            'Cold browser import uses real ScreenOrientation'
+        );
+        const option = (index) =>
+            page
+                .locator('.mx-sdk-calendar-picker__records [role=option]')
+                .nth(index);
+        assert.equal(await option(0).count(), 1);
+        assert.equal(await option(1).count(), 1);
+        assert.deepEqual((await completeSnapshot()).pickerReads, []);
+        assert.deepEqual((await completeSnapshot()).writes, []);
+        assert.equal(
+            await option(0).locator('a').getAttribute('href'),
+            'https://example.test/calendar'
+        );
+        assert.equal(
+            await option(0).locator('.mx-sdk-finder-pill').textContent(),
+            'Accepted tag'
+        );
+        const richGeometry = await option(0).evaluate((row) => ({
+            border: getComputedStyle(row).borderTopWidth,
+            width: row.getBoundingClientRect().width,
+            viewport: innerWidth,
+            documentWidth: document.documentElement.scrollWidth,
+        }));
+        assert.equal(
+            richGeometry.border,
+            '3px',
+            'Complete picker scoped CSS is loaded'
+        );
+        assert(
+            richGeometry.width > 0 &&
+                richGeometry.documentWidth <= richGeometry.viewport
+        );
+        await option(0).click({ position: { x: 6, y: 6 } });
+        await page.waitForFunction(
+            () => window.completeCalendarProof.snapshot().writes.length === 1
+        );
+        assert.deepEqual((await completeSnapshot()).canonical, [
+            'off-day',
+            'one',
+        ]);
+        assert.equal(await option(0).getAttribute('aria-selected'), 'true');
+        const bulkBefore = await completeSnapshot();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.press('Escape');
+        assert.deepEqual(
+            (await completeSnapshot()).attempts,
+            bulkBefore.attempts,
+            'Bulk/clear cannot write hidden off-day membership'
+        );
+        await page.locator('[data-complete-calendar="cap"]').click();
+        await option(1).click({ position: { x: 6, y: 6 } });
+        assert.deepEqual((await completeSnapshot()).attempts, ['one', 'two']);
+        assert.deepEqual((await completeSnapshot()).writes, ['one']);
+        assert.deepEqual((await completeSnapshot()).canonical, [
+            'off-day',
+            'one',
+        ]);
+        await page.locator('.mx-sdk-calendar-picker__more').click();
+        assert.deepEqual((await completeSnapshot()).pickerReads, [
+            { month: '2026-02', resetOffset: false, clientUtcOffset: 0 },
+        ]);
+        await page.locator('[data-complete-calendar="refuse-read"]').click();
+        await page.locator('.mx-sdk-calendar-picker__more').click();
+        assert.equal((await completeSnapshot()).pickerReads.length, 2);
+        assert.deepEqual((await completeSnapshot()).writes, ['one']);
+        await page.locator('[data-complete-calendar="disable"]').click();
+        await option(1).click({ position: { x: 6, y: 6 } });
+        assert.deepEqual((await completeSnapshot()).attempts, ['one', 'two']);
+        await page.locator('[data-complete-calendar="error-loading"]').click();
+        assert.equal(
+            await page
+                .locator('.mx-sdk-calendar-picker__list [role=alert]')
+                .textContent(),
+            'Calendar native error'
+        );
+        assert.equal(
+            await page
+                .locator('.mx-sdk-calendar-picker__list [role=status]')
+                .count(),
+            0
+        );
+        await saveScreenshot('complete-picker-error-loading');
+        await page.locator('[data-complete-calendar="restore"]').click();
+        await page.locator('[data-complete-calendar="retire-picker"]').click();
+        const retiredPicker = await completeSnapshot();
+        await option(0).click({ position: { x: 6, y: 6 } });
+        assert.deepEqual(
+            (await completeSnapshot()).attempts,
+            retiredPicker.attempts,
+            'Retired display cannot invoke a retained visible row'
+        );
+        evidence.results.push({
+            name: 'complete-picker-rich-r30-status-paging-refusal',
+            canonical: (await completeSnapshot()).canonical,
+            attempts: (await completeSnapshot()).attempts,
+            writes: (await completeSnapshot()).writes,
+            reads: (await completeSnapshot()).pickerReads,
+            richGeometry,
+        });
+
+        await page.setViewportSize({ width: 1100, height: 844 });
+        await page.locator('[data-complete-calendar="portal"]').click();
+        await page.waitForFunction(
+            () =>
+                window.completeCalendarProof.snapshot().mode === 'portal' &&
+                window.completeCalendarProof.snapshot().isWide
+        );
+        assert.deepEqual((await completeSnapshot()).portalReads, []);
+        assert.equal(
+            await page
+                .locator('.mx-sdk-portal-calendar__primary')
+                .textContent(),
+            'Literal <appointment>'
+        );
+        assert.equal(await page.locator('appointment').count(), 0);
+        await page
+            .getByRole('button', {
+                name: 'Open record: Literal <appointment>',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual((await completeSnapshot()).opens, [
+            { shouldShowToTheSide: true },
+        ]);
+        await page.setViewportSize({ width: 375, height: 844 });
+        await page.waitForFunction(
+            () => !window.completeCalendarProof.snapshot().isWide
+        );
+        assert.equal(
+            await day('2026-02-15').getAttribute('data-selected'),
+            'true'
+        );
+        await page
+            .getByRole('button', {
+                name: 'Open record: Literal <appointment>',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual((await completeSnapshot()).opens, [
+            { shouldShowToTheSide: true },
+            { shouldShowToTheSide: false },
+        ]);
+        const beforeDayWrites = await completeSnapshot();
+        await day('2026-02-16').click();
+        assert.equal(
+            await page.locator('.mx-sdk-portal-calendar__record').count(),
+            0
+        );
+        await day('2026-02-15').click();
+        assert.deepEqual(
+            (await completeSnapshot()).writes,
+            beforeDayWrites.writes
+        );
+        assert.deepEqual(
+            (await completeSnapshot()).removals,
+            beforeDayWrites.removals
+        );
+        await page.setViewportSize({ width: 1024, height: 844 });
+        await page.waitForFunction(
+            () => window.completeCalendarProof.snapshot().isWide
+        );
+        assert.deepEqual(
+            (await completeSnapshot()).portalReads,
+            [],
+            'Wide/narrow/wide has no unsolicited reads'
+        );
+        await page
+            .getByRole('button', {
+                name: 'Remove record: Literal <appointment>',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual((await completeSnapshot()).removals, ['one']);
+        await page.locator('[data-complete-calendar="remove-only"]').click();
+        assert.equal(
+            await page
+                .getByRole('button', {
+                    name: 'Open record: Literal <appointment>',
+                    exact: true,
+                })
+                .count(),
+            0
+        );
+        await page
+            .getByRole('button', {
+                name: 'Remove record: Literal <appointment>',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual((await completeSnapshot()).removals, ['one', 'one']);
+        await page.locator('[data-complete-calendar="retire-portal"]').click();
+        await page
+            .getByRole('button', {
+                name: 'Remove record: Literal <appointment>',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual(
+            (await completeSnapshot()).removals,
+            ['one', 'one'],
+            'Retired display cannot reuse child/remove authority'
+        );
+        await page.locator('[data-complete-calendar="restore"]').click();
+        await saveScreenshot('complete-portal-wide');
+        await page.getByRole('button', { name: 'Next', exact: true }).click();
+        assert.deepEqual(
+            (await completeSnapshot()).portalReads,
+            [
+                ['retain', '2026-03'],
+                [
+                    'read',
+                    { type: 'firstPage', onlyFetchIfNotAlreadyFetched: false },
+                ],
+            ],
+            'One stable-control retain then forced read despite display publication'
+        );
+        await page
+            .locator('[data-complete-calendar="retire-portal-control"]')
+            .click();
+        await page.getByRole('button', { name: 'Next', exact: true }).click();
+        assert.equal((await completeSnapshot()).portalReads.length, 2);
+        assert.deepEqual((await completeSnapshot()).writes, ['one']);
+        evidence.results.push({
+            name: 'complete-portal-responsive-card-capability-control-retirement',
+            opens: (await completeSnapshot()).opens,
+            removals: (await completeSnapshot()).removals,
+            reads: (await completeSnapshot()).portalReads,
+            dayRecordWrites: 0,
+        });
+        await page.locator('[data-complete-calendar="unmount"]').click();
+        assert.equal(
+            await page
+                .locator('.mx-sdk-calendar-picker,.mx-sdk-portal-calendar')
+                .count(),
+            0
+        );
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.status = 'passed';
         evidence.scope =
-            'Installed public Calendar grid and CSS, trusted synthetic localhost interaction only; no complete rich-card surface, native host, provider, read receipt or hosted acceptance.';
+            'Installed public Calendar grid and complete picker/Portal composition with shared rich leaves and exact owning CSS; trusted synthetic localhost host ports only, no native adapter, provider, read receipt or hosted acceptance.';
     } catch (error) {
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
         if (page)
             try {
-                evidence.failureState = await page.evaluate(() =>
-                    window.calendarProof?.snapshot()
+                evidence.failureState = await page.evaluate(
+                    () =>
+                        window.completeCalendarProof?.snapshot() ??
+                        window.calendarProof?.snapshot()
                 );
                 await page.screenshot({
                     path: join(output, 'calendar-failure.png'),

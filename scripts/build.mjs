@@ -207,6 +207,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-date',
         'date',
         'calendar',
+        'calendar-complete',
         'datetime',
         'duration',
         'currency',

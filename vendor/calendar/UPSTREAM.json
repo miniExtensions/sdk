@@ -10,7 +10,7 @@
         "aliases": {
             "react-aria": "calendar-react-aria"
         },
-        "adaptation": "Capture the unbundled compiled ESM CalendarMonthGrid entry once, then generate ESM and CommonJS from its static-import dependency closure. This retains reachable Calendar hooks without eager unrelated upstream CommonJS-barrel effects. Both TypeScript compilers and declaration comparisons remain mandatory. React and React DOM stay external optional SDK peers. Bare CommonJS React peer calls in ESM use explicit namespace facades; no global require or Node polyfill. Upstream code and licenses are unmodified; the source-entry hash and each dependency input/output hash are recorded."
+        "adaptation": "Capture the unbundled compiled ESM CalendarRuntime entry once, then generate ESM and CommonJS from its static-import dependency closure. This retains reachable Calendar grid and list-selection hooks without eager unrelated upstream CommonJS-barrel effects. Both TypeScript compilers and declaration comparisons remain mandatory. React and React DOM stay external optional SDK peers. Bare CommonJS React peer calls in ESM use explicit namespace facades; no global require or Node polyfill. Upstream code and licenses are unmodified; the source-entry hash and each dependency input/output hash are recorded."
     },
     "rootEntrySha256": {
         "react-aria": {
@@ -31,13 +31,23 @@
             "dist/private/calendar/useCalendarGrid.mjs": "0c512768b1b88f0db76b9df6e8bcf629fe07069d164f38f6f2bd620ec1b6d67a",
             "dist/private/calendar/useCalendarGrid.cjs": "0ce93e19a3851f3fb0806345b79e0905063271e43fe7227655067735ae3faa9b",
             "dist/private/i18n/I18nProvider.mjs": "d280532a19497c5b241376d8a4d8be98d9b9b5e1dff58cac6c415ec2b54ab784",
-            "dist/private/i18n/I18nProvider.cjs": "af18eb76424bd644271c36e5d01b1a90dc74a35a89eed118cb68cf87087b22fe"
+            "dist/private/i18n/I18nProvider.cjs": "af18eb76424bd644271c36e5d01b1a90dc74a35a89eed118cb68cf87087b22fe",
+            "dist/exports/useListBox.mjs": "9da36f66b5ad05606e2de8f748071594a6667e7cf36169195c4765fffe3bf44d",
+            "dist/exports/useListBox.cjs": "6dea31d5011f195c70d02055637004547fe7cc503d2669a542a6aa8f27b50030",
+            "dist/private/listbox/useListBox.mjs": "aaac87eb6e97d82ab89ab46ef0087b6bdb453625f9105b20f362604ce319f5fc",
+            "dist/private/listbox/useListBox.cjs": "c333d95980d34689594c5050ea326c3a24e0bb13dadf38a9f34c3d1af61d9547",
+            "dist/private/listbox/useOption.mjs": "73f61cc5614ceeab767e102541916f4be3b81499899b9c2a3b21dedb7c7f4c9a",
+            "dist/private/listbox/useOption.cjs": "82a29b14218efccbb6f43751499467c35077fc5b51c8bdbb6d78a407dd956e3d"
         },
         "react-stately": {
             "dist/exports/index.mjs": "e2327fb945111258413c24385fd24aa0e1824343d18da22a995a5255cdd1956e",
             "dist/exports/index.cjs": "b1755272cf0ec81e12056aab8a45c334dc6f5639d2e015a2cf73ac6afe070956",
             "dist/exports/useCalendarState.mjs": "c3220b2479bcbb9eb8a13d5b9b5cf9937c1bf6ff04e895336026b03d1da3bfd0",
-            "dist/exports/useCalendarState.cjs": "18a29e92f7085af788f0108c4b80e64c0273c556dc2d57ec4c0edfb79213b91a"
+            "dist/exports/useCalendarState.cjs": "18a29e92f7085af788f0108c4b80e64c0273c556dc2d57ec4c0edfb79213b91a",
+            "dist/exports/useListState.mjs": "cd1f73acf6447277ad3d646ae5afcbb8bcf6a27398ae3bcc568c1585ff6df321",
+            "dist/exports/useListState.cjs": "6a38e1c35b00de0d9a7f0dc66793255d2c614229b63fd145c4b82f57c82de81f",
+            "dist/exports/Item.mjs": "557bd4e008f103d96a81d48c5ebca0568d4faf06b1e726aa5c2c5fe6b74f88bb",
+            "dist/exports/Item.cjs": "13b067bd1b45b4451c13c21e74cdafbfe6dff0ccae32c40b7fa89de22ded290c"
         },
         "@internationalized/date": {
             "dist/index.mjs": "ab2b1b2a3b0976495b43e0f26b2e5484b3f284c63bfdbaf22d2234daff79146d",

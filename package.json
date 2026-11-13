@@ -95,6 +95,7 @@
         "./react/number.css": "./dist/esm/react/number.css",
         "./react/date.css": "./dist/esm/react/date.css",
         "./react/calendar.css": "./dist/esm/react/calendar.css",
+        "./react/calendar-complete.css": "./dist/esm/react/calendar-complete.css",
         "./react/calendar": {
             "import": {
                 "types": "./dist/esm/react/calendar/index.d.ts",

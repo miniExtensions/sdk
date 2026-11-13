@@ -111,7 +111,7 @@ export function assertCalendarVendor(root = process.cwd()) {
 }
 
 /**
- * Inline the reviewed Calendar closure only. The ordinary SDK core consumer
+ * Inline the reviewed shared Calendar runtime closure only. The ordinary SDK core consumer
  * keeps React optional, while both Calendar formats use the consumer's peers.
  */
 export async function bundleCalendar(root = process.cwd()) {
@@ -121,12 +121,12 @@ export async function bundleCalendar(root = process.cwd()) {
     // Capture the compiler's ESM source before the first output replaces it.
     // Its static imports let both output formats retain only reachable hooks;
     // the upstream CommonJS barrel eagerly evaluates unrelated UI modules.
-    const sourceEntry = 'dist/esm/react/CalendarMonthGrid.js';
+    const sourceEntry = 'dist/esm/react/CalendarRuntime.js';
     const sourcePath = join(root, sourceEntry);
     const source = readFileSync(sourcePath, 'utf8');
     const receipts = [];
     for (const format of ['esm', 'cjs']) {
-        const child = `dist/${format}/react/CalendarMonthGrid.js`;
+        const child = `dist/${format}/react/CalendarRuntime.js`;
         const path = join(root, child);
         const result = await build({
             absWorkingDir: root,
@@ -239,8 +239,8 @@ export async function bundleCalendar(root = process.cwd()) {
             external: [...externalPeers].sort(),
             adaptation:
                 format === 'esm'
-                    ? 'Compile the captured ESM Calendar entry and reachable dependency closure. Only CommonJS React peer require calls use an SDK-owned external ESM namespace facade; no global require or Node polyfill.'
-                    : 'Convert the captured ESM Calendar entry and reachable dependency closure to CommonJS; React peer calls remain ordinary external imports.',
+                    ? 'Compile the captured ESM Calendar runtime entry and reachable dependency closure. Only CommonJS React peer require calls use an SDK-owned external ESM namespace facade; no global require or Node polyfill.'
+                    : 'Convert the captured ESM Calendar runtime entry and reachable dependency closure to CommonJS; React peer calls remain ordinary external imports.',
             packages: [...packages.values()].sort((a, b) =>
                 a.name.localeCompare(b.name)
             ),

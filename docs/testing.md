@@ -1,6 +1,6 @@
 # Source test coverage
 
-## Calendar foundations
+## Calendar surfaces
 
 `test/calendarDateProjection.test.ts` compares the distinct computed DATE
 policies directly, plus range clipping, DST endpoints, viewer versus field zones,
@@ -10,10 +10,19 @@ retirement. `test/reactCalendarMonthGrid.test.ts` uses the real selected package
 graph for fixed/variable weeks, native keyboard differences, selection, focus,
 responsive retention, SSR, hydration and StrictMode.
 
+`test/reactCalendarRecordPicker.test.ts`, `test/reactPortalCalendar.test.ts` and
+`test/calendarComposition.test.ts` add the complete structured surfaces: actual
+listbox selection/rich details, error-before-loading and paging, current native
+admission, clock-object changes without recentering, explicit focus refusal,
+stable query control versus exact card authority, and synchronous display
+publication during an ordered month/read operation. Directly held callbacks
+exercise ABA and unmount retirement independently of detached DOM behavior.
+
 The normal package check calls `scripts/calendar-consumer-checks.mjs` for actual
 installed React 18/19 ESM/CJS/declarations/CSS/SSR/hydration checks. These are
-Calendar foundations only; complete rich cards, actual native thin adapters,
-team-device browser and hosted acceptance require their own execution evidence.
+SDK evidence only; actual native thin adapters, team-device browser and hosted
+acceptance require their own execution evidence. The complete style aggregate
+uses the existing shared rich-leaf styles without rewriting their owners.
 See [the composition boundary](calendar.md).
 
 `scripts/calendar-browser-checks.mjs` joins the existing packed native-browser

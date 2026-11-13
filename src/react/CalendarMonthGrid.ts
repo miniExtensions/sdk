@@ -15,14 +15,14 @@ import {
     useFocusRing,
     useLocale,
     type AriaButtonOptions,
-} from 'calendar-react-aria';
-import { useCalendarState, type CalendarState } from 'react-stately';
+} from './CalendarRuntime.js';
+import { useCalendarState, type CalendarState } from './CalendarRuntime.js';
 import {
     createCalendar,
     getWeeksInMonth,
     parseDate,
     type CalendarDate,
-} from '@internationalized/date';
+} from './CalendarRuntime.js';
 
 export type CalendarMonthGridLabels = {
     calendar: string;
@@ -35,6 +35,8 @@ export type CalendarMonthGridProps = {
     surface: 'picker' | 'portal';
     /** An accepted ISO calendar day. Selection and query ownership stay outside. */
     selectedDay: string;
+    /** Explicitly admitted local focus; omitted retains native uncontrolled focus. */
+    focusedDay?: string;
     /** Portal's >=1024 presentation snapshot. Viewport changes perform no read. */
     isWide?: boolean;
     /** Local Date components used only for the native visual today highlight. */
@@ -81,6 +83,9 @@ function MonthGrid(props: CalendarMonthGridProps): ReactElement {
     const onChange = (day: CalendarDate) => props.onDayChange(day.toString());
     const state = useCalendarState({
         value,
+        focusedValue: props.focusedDay
+            ? parseDate(props.focusedDay)
+            : undefined,
         defaultFocusedValue: selectedDay,
         onChange,
         onFocusChange: (day) => props.onFocusChange(day.toString()),

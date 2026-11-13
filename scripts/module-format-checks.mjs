@@ -215,6 +215,7 @@ export function assertModuleFormats(root) {
                 './react/complete-collaborators.css',
                 './react/date.css',
                 './react/calendar.css',
+                './react/calendar-complete.css',
                 './react/complete-date.css',
                 './react/datetime.css',
                 './react/duration.css',

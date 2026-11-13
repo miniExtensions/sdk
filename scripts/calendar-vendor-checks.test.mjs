@@ -164,14 +164,14 @@ function writeEntries(directory, unreviewed = false) {
         const destination = join(directory, 'dist', format, 'react');
         mkdirSync(destination, { recursive: true });
         writeFileSync(
-            join(destination, 'CalendarMonthGrid.js'),
+            join(destination, 'CalendarRuntime.js'),
             format === 'esm'
                 ? `import * as React from 'react';
-import {useCalendar,useCalendarCell,useCalendarGrid} from 'calendar-react-aria';
-import {useCalendarState} from 'react-stately';
+import {useCalendar,useCalendarCell,useCalendarGrid,useListBox,useOption} from 'calendar-react-aria';
+import {useCalendarState,useListState,Item} from 'react-stately';
 import {parseDate} from '@internationalized/date';
 export function CalendarMonthGrid(props){return React.createElement('div',null,props.children);}
-export {useCalendar,useCalendarCell,useCalendarGrid,useCalendarState,parseDate};
+export {useCalendar,useCalendarCell,useCalendarGrid,useCalendarState,parseDate,useListBox,useOption,useListState,Item};
 ${unreviewed ? "export {default as unexpected} from 'fuse.js';" : ''}
 `
                 : 'exports.NOT_THE_BUNDLE_INPUT = true;\n'
@@ -183,7 +183,7 @@ it('bundles the actual selected packages with external React peers and byte-veri
     const owned = fixture();
     try {
         writeEntries(owned.directory);
-        const sourceEntry = 'dist/esm/react/CalendarMonthGrid.js';
+        const sourceEntry = 'dist/esm/react/CalendarRuntime.js';
         const sourceSha256 = hash(
             readFileSync(join(owned.directory, sourceEntry))
         );
@@ -196,13 +196,13 @@ it('bundles the actual selected packages with external React peers and byte-veri
             );
             assert.equal(
                 receipt.sha256,
-                hash(readFileSync(join(base, 'CalendarMonthGrid.js')))
+                hash(readFileSync(join(base, 'CalendarRuntime.js')))
             );
             assert.equal(receipt.sourceEntry, sourceEntry);
             assert.equal(receipt.sourceSha256, sourceSha256);
             assert(
                 !readFileSync(
-                    join(base, 'CalendarMonthGrid.js'),
+                    join(base, 'CalendarRuntime.js'),
                     'utf8'
                 ).includes('NOT_THE_BUNDLE_INPUT')
             );

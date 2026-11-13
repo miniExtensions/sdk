@@ -1,9 +1,44 @@
-# Calendar foundations
+# Calendar surfaces
 
-The additive `/ui` date projections and controllers, and `/react/calendar`
-`CalendarMonthGrid`, prepare the Calendar extraction. They do not yet deliver
-complete `CalendarRecordPicker` or `PortalCalendar` rich-card/native adoption.
-The shared complete finder/card delivery remains a composition dependency.
+The dedicated `/react/calendar` entry contains `CalendarRecordPicker`,
+`PortalCalendar` and the lower-level `CalendarMonthGrid`. These components take
+already-admitted native data and semantic action ports. They do not create a
+client, query cache, canonical record store, child form or relationship writer.
+Native adapters, the qualified package pin and native/hosted acceptance remain
+separate delivery obligations; an SDK check does not establish those outcomes.
+
+Import `@miniextensions/sdk/react/calendar-complete.css` for the complete
+surfaces. It composes the existing shared rich-leaf styles unchanged. Import
+`@miniextensions/sdk/react/calendar.css` for the standalone month grid alone.
+Picker details reuse `LinkedFinderRichLeaf` and `LinkedFinderCardField` from the
+shared Finder delivery. There is no native JSX/render callback or unknown-field
+string fallback. The native Portal Calendar compact presentation is deliberately
+literal primary/optional subtitle, with no thumbnail or carousel.
+
+`CalendarRecordPickerAcceptedFrame` separates a stable `control` owner/read port
+from its exact `presentationOwner`, accepted records/schema, rich projections,
+full canonical selected-ID array and semantic toggle. `selectionEnabled` is an
+admitted native policy; the native toggle still makes the final cap/readonly
+decision. Missing display projection is unavailable, never hydrated from cache.
+The picker uses the actual multi-selection listbox hooks and keeps error before
+loading. More is explicit, disabled while paging, and requests `resetOffset:false`.
+
+`PortalCalendarAcceptedFrame` also separates stable month/read control from its
+exact display owner. Its `retainedMonth` is the accepted canonical applied month.
+The control owner must survive its own admitted month transition so that the
+ordered forced read can follow; that does not retain the old cards' authority.
+Each record's optional `open` and `remove` ports are separately admitted native
+capabilities. Wide Open forwards the configured side policy; narrow Open forces
+modal presentation. Child readonly/custom-view admission stays inside the
+captured native opener, and absence of one action never grants another.
+
+Both surfaces retain their controller across ordinary display publications and
+retire captured actions on owner/config/view replacement, ABA and unmount.
+Portal record actions additionally retire on day/width presentation transitions.
+The injected clock is a mount-lifetime context; replacing its object on a parent
+render does not recenter the calendar. Its methods perform the current native
+time/offset reads. Local UI updates after an admitted read do not grant record
+authority or resynchronize an old accepted frame.
 
 Import `@miniextensions/sdk/react/calendar` and its `calendar.css` subpath for
 standalone grids and styles. The general `/react` entry intentionally keeps the
@@ -22,8 +57,9 @@ The source references the standard ES2023 Intl declarations required by that
 graph, retaining strict library checking and the existing ES2022 runtime target.
 Both runtime formats bundle the static ESM hook closure. Importing the upstream
 CommonJS barrel also initializes unrelated widget modules; keep those out of
-Calendar imports. Both TypeScript compilers, matching declarations and actual
-CommonJS output checks remain required.
+Calendar imports. Grid and listbox share one private `CalendarRuntime` closure,
+so their locale and selection contexts agree. Both TypeScript compilers,
+matching declarations and actual CommonJS output checks remain required.
 
 `parseCalendarFieldDate` retains the native picker policy: DateTime uses each
 field's effective display zone, while timestamp-shaped computed DATE values use
@@ -63,12 +99,17 @@ The grid controls local day presentation only. Picker uses six weeks and full
 day/focus props. Portal uses variable weeks, omits grid keydown, forwards only
 the wide-day aria-label, and forwards narrow-day button props. Narrow/wide
 changes preserve the supplied day and issue no query or record write. SDK
-composition seams accept already-rendered SDK content; these do not grant
-record actions or replace the required complete shared rich-card contract.
+composition seams accept already-rendered SDK content; the complete surfaces
+own their structured record composition and separately fence its actions.
 Narrow event dots reserve the native top-six spacing for the day number and
 use reverse flex wrapping at the bottom; inline text line boxes can otherwise
 push dense dot clusters into the number on phone widths.
 
-Source tests and installed React 18/19 ESM/CJS/type/SSR/hydration checks cover
-these foundations. Real-browser, complete surface, native adapter and hosted
-acceptance are separate evidence obligations.
+The source suites exercise date/controller policies, real listbox interaction,
+status/paging, clock replacement, focus refusal, synchronous month publication,
+responsive actions and directly retained callbacks. The normal package matrix
+uses installed React 18/19 ESM/CJS, strict declarations, CSS, cold SSR,
+hydration and StrictMode; the existing native-browser runner owns trusted
+Chromium controls. Execution results must identify the tested source/archive.
+Synthetic SDK frames establish no native receipt, actual child lifecycle,
+provider, fixture or hosted acceptance.

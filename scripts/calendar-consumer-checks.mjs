@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { calendarCompleteStyleAssets } from './calendar-complete-style-assets.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
     mkdirSync,
     mkdtempSync,
     readFileSync,
+    realpathSync,
     rmSync,
     writeFileSync,
 } from 'node:fs';
@@ -15,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const calendarTypedConsumer = `
 import {createElement,type ComponentProps} from 'react';
-import {CalendarMonthGrid} from '@miniextensions/sdk/react/calendar';
+import {CalendarMonthGrid,CalendarRecordPicker,PortalCalendar} from '@miniextensions/sdk/react/calendar';
 import {createCalendarRecordPickerController,createPortalCalendarController,parseCalendarFieldDate,getPortalCalendarDateKeys,type CalendarClock} from '@miniextensions/sdk/ui';
 const clock:CalendarClock={utcDay:()=> '2026-09-01',localDay:()=> '2026-08-31',localMonth:()=> '2026-08',localToday:()=> '2026-08-31',clientUtcOffset:()=> -480};
 const picker=createCalendarRecordPickerController({owner:{},isCurrent:()=>true,selectedRecordIds:['other'],visibleDay:'2026-09-01',visibleDayRecordIds:['one'],scheduleRead(request){const reset:boolean=request.resetOffset;void reset;return {type:'admitted'};},toggleRecord(id){const native:string=id;void native;return {type:'admitted'};}},clock);
@@ -32,7 +34,18 @@ createCalendarRecordPickerController({owner:{},isCurrent:()=>true,selectedRecord
 createElement(CalendarMonthGrid,{...props,selectedDay:12});
 // @ts-expect-error arbitrary layout modes do not redefine the native policies
 createElement(CalendarMonthGrid,{...props,surface:'map'});
-void day;void days;
+declare const pickerFrame:ComponentProps<typeof CalendarRecordPicker>['frame'];
+declare const portalFrame:ComponentProps<typeof PortalCalendar>['frame'];
+createElement(CalendarRecordPicker,{frame:pickerFrame,clock,locale:'en-US'});
+createElement(PortalCalendar,{frame:portalFrame,clock,locale:'en-US',isWide:true});
+// @ts-expect-error full surfaces do not accept a native JSX card renderer
+createElement(CalendarRecordPicker,{frame:pickerFrame,renderRecord:()=>null});
+// @ts-expect-error responsive mode is an explicit host snapshot
+createElement(PortalCalendar,{frame:portalFrame});
+const {presentationOwner,...withoutDisplayOwner}=portalFrame;
+// @ts-expect-error stable control ownership does not replace accepted display-frame ownership
+createElement(PortalCalendar,{frame:withoutDisplayOwner,isWide:true});
+void day;void days;void presentationOwner;
 `;
 
 async function load(consumer, entry, format) {
@@ -59,36 +72,306 @@ function props(surface = 'picker', isWide = false) {
     };
 }
 
-async function server(directory, format) {
+function portalFixture() {
+    const reads = [],
+        opens = [],
+        removals = [];
+    let controlCurrent = true,
+        presentationCurrent = true,
+        retirePresentationOnRetain = false;
+    const admitted = () => ({ type: 'admitted' });
+    const clock = {
+        utcDay: () => '2026-02-15',
+        localDay: () => '2026-02-15',
+        localMonth: () => '2026-02',
+        localToday: () => '2026-02-14',
+        clientUtcOffset: () => 0,
+    };
+    const frame = Object.freeze({
+        control: Object.freeze({
+            owner: Object.freeze({}),
+            isCurrent: () => controlCurrent,
+            retainMonth(month) {
+                reads.push(['retain', month]);
+                if (retirePresentationOnRetain) presentationCurrent = false;
+                return admitted();
+            },
+            readFirstPage(request) {
+                reads.push(['read', request]);
+                return admitted();
+            },
+        }),
+        presentationOwner: Object.freeze({
+            token: Object.freeze({}),
+            isCurrent: () => presentationCurrent,
+        }),
+        retainedMonth: '2026-02',
+        records: Object.freeze([
+            Object.freeze({
+                id: 'one',
+                fields: Object.freeze({ date: '2026-02-15' }),
+                display: Object.freeze({
+                    status: 'present',
+                    primary: 'Literal <appointment>',
+                    subtitle: 'Native compact subtitle',
+                }),
+            }),
+        ]),
+        dateField: {
+            id: 'date',
+            name: 'Date',
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: {
+                type: 'date',
+                options: { dateFormat: { name: 'iso', format: 'YYYY-MM-DD' } },
+            },
+        },
+        fallbackClientUtcOffset: 0,
+        shouldShowToTheSide: true,
+        recordActions: Object.freeze([
+            {
+                recordId: 'one',
+                open(request) {
+                    opens.push(request);
+                    return admitted();
+                },
+                remove() {
+                    removals.push('one');
+                    return admitted();
+                },
+            },
+        ]),
+        status: 'ready',
+    });
+    return {
+        frame,
+        clock,
+        reads,
+        opens,
+        removals,
+        isPresentationCurrent: () => presentationCurrent,
+        retireDisplay() {
+            presentationCurrent = false;
+        },
+        retireControl() {
+            controlCurrent = false;
+        },
+        retireDisplayOnRetain() {
+            retirePresentationOnRetain = true;
+        },
+    };
+}
+
+function pickerFixture() {
+    const reads = [],
+        attempts = [],
+        accepted = [];
+    const canonical = ['off-day'];
+    let controlCurrent = true,
+        displayCurrent = true,
+        displayOwner = {},
+        capped = false,
+        refuseRead = false;
+    const clock = {
+        utcDay: () => '2026-02-15',
+        localDay: () => '2026-02-15',
+        localMonth: () => '2026-02',
+        localToday: () => '2026-02-14',
+        clientUtcOffset: () => 0,
+    };
+    const date = (id) => ({
+        id,
+        name: id,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: {
+            type: 'date',
+            options: { dateFormat: { name: 'iso', format: 'YYYY-MM-DD' } },
+        },
+    });
+    const records = Object.freeze([
+        { id: 'one', fields: { start: '2026-02-15', end: '2026-02-15' } },
+        { id: 'two', fields: { start: '2026-02-15', end: '2026-02-15' } },
+        { id: 'off-day', fields: { start: '2026-02-21', end: '2026-02-21' } },
+    ]);
+    const presentationByRecordId = Object.freeze({
+        one: {
+            type: 'list',
+            primary: 'Rich appointment',
+            showPreviewFieldTitle: true,
+            details: [
+                {
+                    key: 'notes',
+                    title: 'Notes',
+                    leaf: {
+                        kind: 'text',
+                        display: {
+                            value: 'Rich https://example.test/calendar',
+                            language: 'en',
+                            layout: 'linked-list',
+                        },
+                    },
+                },
+                {
+                    key: 'tags',
+                    title: 'Tags',
+                    leaf: { kind: 'pills', items: [{ label: 'Accepted tag' }] },
+                },
+            ],
+        },
+        two: {
+            type: 'calendar',
+            primary: 'Second appointment',
+            subtitle: 'Native compact detail',
+        },
+        'off-day': {
+            type: 'calendar',
+            primary: 'Off-day selection',
+            subtitle: '',
+        },
+    });
+    const control = Object.freeze({
+        owner: Object.freeze({}),
+        isCurrent: () => controlCurrent,
+        scheduleRead(request) {
+            reads.push(request);
+            return refuseRead
+                ? { type: 'refused', reason: 'native-read-refusal' }
+                : { type: 'admitted' };
+        },
+    });
+    const makeFrame = (patch = {}) => {
+        const expected = displayOwner;
+        return Object.freeze({
+            control,
+            presentationOwner: Object.freeze({
+                owner: expected,
+                isCurrent: () => displayCurrent && displayOwner === expected,
+            }),
+            records,
+            startField: date('start'),
+            endField: date('end'),
+            selectedRecordIds: Object.freeze([...canonical]),
+            presentationByRecordId,
+            selectionEnabled: true,
+            errorMessage: null,
+            isLoading: false,
+            isLoadingMore: false,
+            canLoadMore: true,
+            toggleRecord(id) {
+                attempts.push(id);
+                if (
+                    !controlCurrent ||
+                    !displayCurrent ||
+                    displayOwner !== expected
+                )
+                    return { type: 'refused', reason: 'stale-host' };
+                if (capped && !canonical.includes(id))
+                    return { type: 'refused', reason: 'native-cap' };
+                const index = canonical.indexOf(id);
+                if (index >= 0) canonical.splice(index, 1);
+                else canonical.push(id);
+                accepted.push(id);
+                return { type: 'admitted' };
+            },
+            ...patch,
+        });
+    };
+    return {
+        clock,
+        reads,
+        attempts,
+        accepted,
+        canonical,
+        initialFrame: makeFrame(),
+        publish(patch) {
+            displayOwner = {};
+            return makeFrame(patch);
+        },
+        cap() {
+            capped = true;
+        },
+        refuseReads() {
+            refuseRead = true;
+        },
+        retireDisplay() {
+            displayCurrent = false;
+        },
+        retireControl() {
+            controlCurrent = false;
+        },
+    };
+}
+
+async function server(directory, format, surface = 'grid') {
     const consumer = createRequire(join(directory, 'package.json'));
     const React = consumer('react');
     const api = await load(consumer, 'react/calendar', format);
     let actions = 0;
     assert.equal(typeof document, 'undefined');
+    const fixture =
+        surface === 'portal'
+            ? portalFixture()
+            : surface === 'picker'
+              ? pickerFixture()
+              : null;
+    const content =
+        surface === 'portal'
+            ? React.createElement(api.PortalCalendar, {
+                  frame: fixture.frame,
+                  clock: fixture.clock,
+                  locale: 'en-US',
+                  isWide: true,
+              })
+            : surface === 'picker'
+              ? React.createElement(api.CalendarRecordPicker, {
+                    frame: fixture.initialFrame,
+                    clock: fixture.clock,
+                    locale: 'en-US',
+                })
+              : React.createElement(api.CalendarMonthGrid, {
+                    ...props(),
+                    onDayChange() {
+                        actions++;
+                    },
+                    onFocusChange() {
+                        actions++;
+                    },
+                });
     const html = consumer('react-dom/server').renderToString(
-        React.createElement(
-            React.StrictMode,
-            null,
-            React.createElement(api.CalendarMonthGrid, {
-                ...props(),
-                onDayChange() {
-                    actions++;
-                },
-                onFocusChange() {
-                    actions++;
-                },
-            })
-        )
+        React.createElement(React.StrictMode, null, content)
     );
     assert.equal(actions, 0);
-    assert(html.includes('9+'));
-    assert(html.includes('Appointments'));
+    if (surface === 'portal') {
+        assert(html.includes('Literal &lt;appointment&gt;'));
+        assert(html.includes('Native compact subtitle'));
+        assert.deepEqual(fixture.reads, []);
+        assert.deepEqual(fixture.opens, []);
+        assert.deepEqual(fixture.removals, []);
+    } else if (surface === 'picker') {
+        assert(html.includes('Rich appointment'));
+        assert(html.includes('https://example.test/calendar'));
+        assert(html.includes('mx-sdk-finder-pill'));
+        assert(!html.includes('Off-day selection'));
+        assert.deepEqual(fixture.reads, []);
+        assert.deepEqual(fixture.attempts, []);
+    } else {
+        assert(html.includes('9+'));
+        assert(html.includes('Appointments'));
+    }
     assert.equal(typeof document, 'undefined');
     return { html, react: React.version };
 }
 
-async function installed(directory, format, happyDomModulePath) {
+async function installed(directory, format, happyDomModulePath, archivePath) {
     const consumer = createRequire(join(directory, 'package.json'));
+    assert.equal(typeof document, 'undefined');
+    // Match the universal SSR-to-hydration lifetime. Cold browser imports are
+    // separately qualified in Chromium, which supplies real ScreenOrientation.
+    const api = await load(consumer, 'react/calendar', format);
     const calendarEntry = consumer
         .resolve('@miniextensions/sdk/react/calendar')
         .replace('/cjs/', `/${format}/`);
@@ -98,7 +381,7 @@ async function installed(directory, format, happyDomModulePath) {
     );
     const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
     assert.equal(
-        sha256(readFileSync(join(calendarDirectory, 'CalendarMonthGrid.js'))),
+        sha256(readFileSync(join(calendarDirectory, 'CalendarRuntime.js'))),
         vendor.sha256
     );
     assert.equal(
@@ -122,6 +405,24 @@ async function installed(directory, format, happyDomModulePath) {
     assert.throws(() => consumer.resolve('calendar-react-aria'), {
         code: 'MODULE_NOT_FOUND',
     });
+    assert.equal(
+        realpathSync(
+            consumer.resolve('@miniextensions/sdk/react/calendar-complete.css')
+        ),
+        realpathSync(
+            join(
+                directory,
+                'node_modules/@miniextensions/sdk/dist/esm/react/calendar-complete.css'
+            )
+        )
+    );
+    const completeStyles = calendarCompleteStyleAssets(
+        join(directory, 'node_modules/@miniextensions/sdk'),
+        (member) =>
+            execFileSync('tar', ['-xzOf', archivePath, member], {
+                maxBuffer: 1024 * 1024,
+            })
+    );
     const policy = await load(consumer, 'ui', format);
     const field = {
         id: 'date',
@@ -212,8 +513,27 @@ async function installed(directory, format, happyDomModulePath) {
             { encoding: 'utf8' }
         )
     );
-    const { Window } = createRequire(import.meta.url)(happyDomModulePath);
-    const window = new Window();
+    const { Window: CSSWindow } = createRequire(import.meta.url)(
+        happyDomModulePath
+    );
+    const cssWindow = new CSSWindow();
+    const { JSDOM } = consumer('jsdom');
+    assert.equal(consumer('jsdom/package.json').version, '20.0.3');
+    // One real DOM implementation for the whole mounted lifecycle. React Aria
+    // retains its live-announcer node across component mounts in this process.
+    const window = new JSDOM(
+        '<!doctype html><html><head></head><body></body></html>',
+        {
+            url: 'http://localhost/',
+            pretendToBeVisual: true,
+        }
+    ).window;
+    // JSDOM implements the standards HTML parser but not CSS.escape. Reuse the
+    // existing harness's actual CSS namespace without changing browser behavior.
+    Object.defineProperty(window, 'CSS', {
+        configurable: true,
+        value: cssWindow.CSS,
+    });
     const keys = [
         'window',
         'document',
@@ -255,7 +575,7 @@ async function installed(directory, format, happyDomModulePath) {
             key === 'IS_REACT_ACT_ENVIRONMENT'
                 ? true
                 : key === 'Window'
-                  ? Window
+                  ? window.Window
                   : [
                           'getComputedStyle',
                           'requestAnimationFrame',
@@ -272,7 +592,6 @@ async function installed(directory, format, happyDomModulePath) {
     const React = consumer('react');
     assert.equal(React.version, ssr.react);
     assert.equal(consumer('react-dom/package.json').version, React.version);
-    const api = await load(consumer, 'react/calendar', format);
     const css = readFileSync(
         consumer.resolve('@miniextensions/sdk/react/calendar.css'),
         'utf8'
@@ -407,12 +726,334 @@ async function installed(directory, format, happyDomModulePath) {
         );
         assert(focuses.at(-1).startsWith('2026-03'));
         assert.deepEqual(days, ['2026-02-16']);
+        await React.act(async () => root.unmount());
+        root = undefined;
+        // The same standards parser and Node implementation serve grid,
+        // Portal and picker SSR/hydration; exact literal names remain unchanged.
+        const completePortal = portalFixture();
+        let portalProps = {
+            frame: completePortal.frame,
+            clock: completePortal.clock,
+            locale: 'en-US',
+            isWide: true,
+        };
+        const portalElement = () =>
+            React.createElement(
+                React.StrictMode,
+                null,
+                React.createElement(api.PortalCalendar, portalProps)
+            );
+        const portalServer = JSON.parse(
+            execFileSync(
+                process.execPath,
+                [
+                    fileURLToPath(import.meta.url),
+                    '--ssr',
+                    directory,
+                    format,
+                    'portal',
+                ],
+                { encoding: 'utf8' }
+            )
+        );
+        host.innerHTML = portalServer.html;
+        const originalPortalTable = host.querySelector('table');
+        const originalPortalCard = host.querySelector(
+            'article[data-record-id="one"]'
+        );
+        assert(originalPortalTable && originalPortalCard);
+        assert.equal(
+            originalPortalCard
+                .querySelector('button[aria-label^="Open record:"]')
+                .getAttribute('aria-label'),
+            'Open record: Literal <appointment>'
+        );
+        recoverable.length = 0;
+        await React.act(async () => {
+            root = hydrateRoot(host, portalElement(), {
+                onRecoverableError(error) {
+                    recoverable.push(error);
+                },
+            });
+        });
+        assert.deepEqual(recoverable, []);
+        assert.equal(
+            host.querySelector('table'),
+            originalPortalTable,
+            'hydrate the original parsed Portal table'
+        );
+        assert.equal(
+            host.querySelector('article[data-record-id="one"]'),
+            originalPortalCard,
+            'hydrate the original literal compact card'
+        );
+        assert.deepEqual(completePortal.reads, []);
+        assert.deepEqual(completePortal.opens, []);
+        assert.deepEqual(completePortal.removals, []);
+        assert.equal(
+            host.querySelectorAll('article[data-record-id="one"]').length,
+            1
+        );
+        assert(host.textContent.includes('Literal <appointment>'));
+        assert.equal(
+            host.querySelector('appointment'),
+            null,
+            'accepted compact primary stays literal'
+        );
+        const click = async (selector) => {
+            const target = host.querySelector(selector);
+            assert(target, selector);
+            await React.act(async () => target.click());
+        };
+        await click('button[aria-label^="Open record:"]');
+        assert.deepEqual(completePortal.opens, [{ shouldShowToTheSide: true }]);
+        portalProps = { ...portalProps, isWide: false };
+        await React.act(async () => root.render(portalElement()));
+        assert.equal(
+            host.querySelector(
+                '[data-date="2026-02-15"] [data-selected=true]'
+            ) != null,
+            true
+        );
+        await click('button[aria-label^="Open record:"]');
+        assert.deepEqual(completePortal.opens, [
+            { shouldShowToTheSide: true },
+            { shouldShowToTheSide: false },
+        ]);
+        portalProps = { ...portalProps, isWide: true };
+        await React.act(async () => root.render(portalElement()));
+        assert.deepEqual(
+            completePortal.reads,
+            [],
+            'responsive card changes must not issue a read'
+        );
+        await click('button[aria-label^="Remove record:"]');
+        assert.deepEqual(completePortal.removals, ['one']);
+        const readonlyFrame = Object.freeze({
+            ...completePortal.frame,
+            presentationOwner: {
+                token: {},
+                isCurrent: completePortal.isPresentationCurrent,
+            },
+            recordActions: [
+                {
+                    recordId: 'one',
+                    remove() {
+                        completePortal.removals.push('one');
+                        return { type: 'admitted' };
+                    },
+                },
+            ],
+        });
+        portalProps = { ...portalProps, frame: readonlyFrame };
+        await React.act(async () => root.render(portalElement()));
+        assert.equal(
+            host.querySelector('button[aria-label^="Open record:"]'),
+            null,
+            'display data never grants an absent open action'
+        );
+        await click('button[aria-label^="Remove record:"]');
+        assert.deepEqual(completePortal.removals, ['one', 'one']);
+        completePortal.retireDisplayOnRetain();
+        await click('button[aria-label="Next"]');
+        assert.deepEqual(
+            completePortal.reads,
+            [
+                ['retain', '2026-03'],
+                [
+                    'read',
+                    { type: 'firstPage', onlyFetchIfNotAlreadyFetched: false },
+                ],
+            ],
+            'display retirement during retain cannot cancel the one ordered control-scoped forced read'
+        );
+        assert.deepEqual(
+            completePortal.removals,
+            ['one', 'one'],
+            'calendar focus performs no record write'
+        );
+        await React.act(async () => root.unmount());
+        root = undefined;
+        const completePicker = pickerFixture();
+        let pickerProps = {
+            frame: completePicker.initialFrame,
+            clock: completePicker.clock,
+            locale: 'en-US',
+        };
+        const pickerElement = () =>
+            React.createElement(
+                React.StrictMode,
+                null,
+                React.createElement(api.CalendarRecordPicker, pickerProps)
+            );
+        const pickerServer = JSON.parse(
+            execFileSync(
+                process.execPath,
+                [
+                    fileURLToPath(import.meta.url),
+                    '--ssr',
+                    directory,
+                    format,
+                    'picker',
+                ],
+                { encoding: 'utf8' }
+            )
+        );
+        host.innerHTML = pickerServer.html;
+        recoverable.length = 0;
+        await React.act(async () => {
+            root = hydrateRoot(host, pickerElement(), {
+                onRecoverableError(error) {
+                    recoverable.push(error);
+                },
+            });
+        });
+        assert.deepEqual(recoverable, []);
+        assert.deepEqual(completePicker.reads, []);
+        assert.deepEqual(completePicker.attempts, []);
+        const list = () => {
+            const value = host.querySelector(
+                '.mx-sdk-calendar-picker__records'
+            );
+            assert(value);
+            return value;
+        };
+        const optionsForPicker = () => list().querySelectorAll('[role=option]');
+        assert.equal(optionsForPicker().length, 2);
+        assert.equal(
+            list().querySelector('a[href="https://example.test/calendar"]') !=
+                null,
+            true,
+            'actual shared text leaf retains link presentation'
+        );
+        assert.equal(
+            list().querySelector('.mx-sdk-finder-pill').textContent,
+            'Accepted tag'
+        );
+        await React.act(async () =>
+            optionsForPicker()[0].dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
+        );
+        assert.deepEqual(completePicker.accepted, ['one']);
+        assert.deepEqual(
+            completePicker.canonical,
+            ['off-day', 'one'],
+            'one visible semantic toggle preserves global off-day selection'
+        );
+        pickerProps = { ...pickerProps, frame: completePicker.publish() };
+        await React.act(async () => root.render(pickerElement()));
+        assert.equal(
+            optionsForPicker()[0].getAttribute('aria-selected'),
+            'true'
+        );
+        const beforeBulk = [...completePicker.attempts];
+        await React.act(async () =>
+            list().dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'a',
+                    ctrlKey: true,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.deepEqual(
+            completePicker.attempts,
+            beforeBulk,
+            'bulk select cannot reach the native semantic writer'
+        );
+        completePicker.cap();
+        await React.act(async () =>
+            optionsForPicker()[1].dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
+        );
+        assert.deepEqual(completePicker.attempts, ['one', 'two']);
+        assert.deepEqual(completePicker.accepted, ['one']);
+        assert.deepEqual(
+            completePicker.canonical,
+            ['off-day', 'one'],
+            'current native cap refusal remains authoritative'
+        );
+        await click('.mx-sdk-calendar-picker__more');
+        assert.deepEqual(completePicker.reads, [
+            { month: '2026-02', resetOffset: false, clientUtcOffset: 0 },
+        ]);
+        completePicker.refuseReads();
+        await click('.mx-sdk-calendar-picker__more');
+        assert.equal(completePicker.reads.length, 2);
+        assert.deepEqual(
+            completePicker.canonical,
+            ['off-day', 'one'],
+            'read admission refusal cannot write record membership'
+        );
+        pickerProps = {
+            ...pickerProps,
+            frame: completePicker.publish({
+                errorMessage: 'Calendar native error',
+                isLoading: true,
+            }),
+        };
+        await React.act(async () => root.render(pickerElement()));
+        assert.equal(
+            host.querySelector('.mx-sdk-calendar-picker__list [role=alert]')
+                .textContent,
+            'Calendar native error'
+        );
+        assert.equal(
+            host.querySelector('.mx-sdk-calendar-picker__list [role=status]'),
+            null,
+            'picker error precedes loading'
+        );
+        pickerProps = {
+            ...pickerProps,
+            frame: completePicker.publish({ selectionEnabled: false }),
+        };
+        await React.act(async () => root.render(pickerElement()));
+        const beforeDisabled = [...completePicker.attempts];
+        await React.act(async () =>
+            optionsForPicker()[1].dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
+        );
+        assert.deepEqual(completePicker.attempts, beforeDisabled);
+        completePicker.retireDisplay();
+        await React.act(async () =>
+            optionsForPicker()[0].dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
+        );
+        assert.deepEqual(
+            completePicker.attempts,
+            beforeDisabled,
+            'retired presentation cannot grant a held row action'
+        );
+        await React.act(async () => root.unmount());
+        root = undefined;
         return {
             react: React.version,
             format,
-            groups: 3,
+            groups: 5,
+            completeStyleInputs: completeStyles.inputs.length,
             hydration: true,
-            scope: 'Installed Calendar foundations only; no complete rich-card or native acceptance.',
+            scope: 'Installed complete Calendar picker/Portal composition and shared rich leaves; synthetic host ports only, no native or hosted acceptance.',
         };
     } finally {
         if (root) await React.act(async () => root.unmount());
@@ -425,7 +1066,8 @@ async function installed(directory, format, happyDomModulePath) {
                 );
             else Reflect.deleteProperty(globalThis, keys[index]);
         }
-        await window.happyDOM.close();
+        window.close();
+        await cssWindow.happyDOM.close();
     }
 }
 
@@ -502,17 +1144,18 @@ export function checkCalendarReactMatrix({
                             directory,
                             format,
                             happyDomModulePath,
+                            archivePath,
                         ],
                         { cwd: directory, encoding: 'utf8' }
                     )
                 );
                 assert.equal(result.react, version.react);
-                assert.equal(result.groups, 3);
+                assert.equal(result.groups, 5);
                 profiles.push(result);
             }
             versions.push({ react: version.react, profiles });
             console.log(
-                `Installed Calendar foundations React${version.react}: ESM/CJS, strict declarations, CSS, cold SSR/hydration/StrictMode, projection and controller checks passed.`
+                `Installed Calendar surfaces React${version.react}: ESM/CJS, strict declarations, owning CSS, cold SSR/hydration/StrictMode, real picker/Portal, projection and controller checks passed; synthetic host ports only.`
             );
         }
         return { versions, cleanup: 'completed' };
@@ -522,10 +1165,19 @@ export function checkCalendarReactMatrix({
 }
 
 if (process.argv[2] === '--ssr')
-    console.log(JSON.stringify(await server(process.argv[3], process.argv[4])));
+    console.log(
+        JSON.stringify(
+            await server(process.argv[3], process.argv[4], process.argv[5])
+        )
+    );
 if (process.argv[2] === '--installed')
     console.log(
         JSON.stringify(
-            await installed(process.argv[3], process.argv[4], process.argv[5])
+            await installed(
+                process.argv[3],
+                process.argv[4],
+                process.argv[5],
+                process.argv[6]
+            )
         )
     );

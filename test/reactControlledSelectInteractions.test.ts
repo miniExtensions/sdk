@@ -2,11 +2,9 @@ import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode } from 'react';
-import { flushSync } from 'react-dom';
-import {
-    SingleSelectField,
-    type ControlledSelectChoice,
-    type ControlledSingleSelectFieldProps,
+import type {
+    ControlledSelectChoice,
+    ControlledSingleSelectFieldProps,
 } from '../src/react/index.js';
 
 const initialChoices: ControlledSelectChoice[] = [
@@ -39,6 +37,11 @@ async function fixture(t: TestContext) {
                     ? true
                     : window[key as keyof Window],
         });
+    // React DOM snapshots DOM/event support on first import. Install the real
+    // fixture globals before loading either entry point, including flushSync.
+    // The public barrel also loads the Rich Text portal runtime, so defer it.
+    const { SingleSelectField } = await import('../src/react/index.js');
+    const { flushSync } = await import('react-dom');
     const { createRoot } = await import('react-dom/client');
     const container = window.document.createElement('div');
     window.document.body.append(container);
@@ -208,12 +211,18 @@ it('dropdown searches displayed and canonical names, ignores IME Enter, selects 
     assert.deepEqual(f.writes, []);
     await f.key('Enter');
     assert.deepEqual(f.writes, ['Beta']);
-    assert.equal(f.window.document.activeElement, f.input());
+    assert.ok(
+        f.window.document.activeElement === f.input(),
+        'the combobox must retain focus'
+    );
     await f.type('Alpha');
     assert.equal(f.option('First').textContent, 'First');
     await f.key('Escape');
     assert.equal(f.container.querySelector('[role=listbox]'), null);
-    assert.equal(f.window.document.activeElement, f.input());
+    assert.ok(
+        f.window.document.activeElement === f.input(),
+        'the combobox must retain focus'
+    );
     assert.deepEqual(f.writes, ['Beta']);
 });
 

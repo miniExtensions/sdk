@@ -1,5 +1,17 @@
-import { ControlledSingleSelectField, ControlledMultipleSelectsField, type ControlledSingleSelectFieldProps, type ControlledMultipleSelectsFieldProps } from './ControlledSelectField.js';
-export type { ControlledSelectChoice, SelectEditOwner, ControlledSelectLabels, ControlledSelectCommonProps, ControlledSingleSelectFieldProps, ControlledMultipleSelectsFieldProps } from './ControlledSelectField.js';
+import {
+    ControlledSingleSelectField,
+    ControlledMultipleSelectsField,
+    type ControlledSingleSelectFieldProps,
+    type ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
+export type {
+    ControlledSelectChoice,
+    SelectEditOwner,
+    ControlledSelectLabels,
+    ControlledSelectCommonProps,
+    ControlledSingleSelectFieldProps,
+    ControlledMultipleSelectsFieldProps,
+} from './ControlledSelectField.js';
 import {
     CompleteLocalizedNumericField,
     type CompleteLocalizedNumericRendererProps,
@@ -1912,15 +1924,21 @@ export function BindingSingleSelectField({
 }
 
 /** Additive controlled API; existing bindings keep their original semantics. */
-export type SingleSelectFieldProps = BindingSingleSelectFieldProps | ControlledSingleSelectFieldProps;
+export type SingleSelectFieldProps =
+    | BindingSingleSelectFieldProps
+    | ControlledSingleSelectFieldProps;
 export function SingleSelectField(props: SingleSelectFieldProps): ReactNode {
     return 'binding' in props
         ? createElement(BindingSingleSelectField, props)
         : createElement(ControlledSingleSelectField, props);
 }
 export const BindingMultipleSelectsField = MultipleSelectField;
-export type MultipleSelectsFieldProps = MultipleSelectFieldProps | ControlledMultipleSelectsFieldProps;
-export function MultipleSelectsField(props: MultipleSelectsFieldProps): ReactNode {
+export type MultipleSelectsFieldProps =
+    | MultipleSelectFieldProps
+    | ControlledMultipleSelectsFieldProps;
+export function MultipleSelectsField(
+    props: MultipleSelectsFieldProps
+): ReactNode {
     return 'binding' in props
         ? createElement(MultipleSelectField, props)
         : createElement(ControlledMultipleSelectsField, props);

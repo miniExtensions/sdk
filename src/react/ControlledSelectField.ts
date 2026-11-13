@@ -464,7 +464,7 @@ function SelectControl(props: ControlProps): ReactNode {
                   { className: 'mx-sdk-select-search' },
                   h('input', {
                       ref: input,
-                      id: props.presentation === 'list' ? `${id}-new` : id,
+                      id,
                       form: props.formId,
                       role:
                           props.presentation === 'dropdown'

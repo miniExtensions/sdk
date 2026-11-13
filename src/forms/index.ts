@@ -274,4 +274,7 @@ export {
     type FormPresentationIdentity,
 } from './header.js';
 
-export { compileSelectConditions, type SelectConditionCompilation } from './selectConditions.js';
+export {
+    compileSelectConditions,
+    type SelectConditionCompilation,
+} from './selectConditions.js';

@@ -498,6 +498,11 @@ export async function assertPortalShellConsumer({
             writes: writes.length,
             reads: reads.length,
         };
+        const skipMainId = container.querySelector('main').id;
+        assert.equal(
+            find('a', 'Skip to content').getAttribute('href'),
+            `#${skipMainId}`
+        );
         await React.act(async () => find('a', 'Skip to content').click());
         assert.equal(
             window.document.activeElement,
@@ -551,6 +556,11 @@ export async function assertPortalShellConsumer({
         assert.equal(
             window.location.href.split('#')[0],
             'https://consumer.invalid/portal?viewId=open'
+        );
+        assert.equal(
+            decodeURIComponent(new URL(window.location.href).hash.slice(1)),
+            skipMainId,
+            'Only the intended skip-to-content fragment may change'
         );
         return {
             navigationIntents: intents.filter(

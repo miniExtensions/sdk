@@ -144,7 +144,37 @@
         "./react/field-presentation.css": "./dist/esm/react/field-presentation.css",
         "./react/complete-checkbox.css": "./dist/esm/react/complete-checkbox.css",
         "./react/document-preview/pdfjs-6.5.438/*": "./dist/vendor/document-preview/pdfjs-6.5.438/*",
-        "./react/signature.css": "./dist/esm/react/signature.css"
+        "./react/signature.css": "./dist/esm/react/signature.css",
+        "./customer-chat": {
+            "import": {
+                "types": "./dist/esm/customer-chat/index.d.ts",
+                "default": "./dist/esm/customer-chat/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/index.d.ts",
+                "default": "./dist/cjs/customer-chat/index.js"
+            }
+        },
+        "./customer-chat/react": {
+            "import": {
+                "types": "./dist/esm/customer-chat/react.d.ts",
+                "default": "./dist/esm/customer-chat/react.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/react.d.ts",
+                "default": "./dist/cjs/customer-chat/react.js"
+            }
+        },
+        "./customer-chat/intercom": {
+            "import": {
+                "types": "./dist/esm/customer-chat/intercom.d.ts",
+                "default": "./dist/esm/customer-chat/intercom.js"
+            },
+            "require": {
+                "types": "./dist/cjs/customer-chat/intercom.d.ts",
+                "default": "./dist/cjs/customer-chat/intercom.js"
+            }
+        }
     },
     "files": [
         "dist/esm",
@@ -192,7 +222,8 @@
         "examples/react-form-header/build.mjs",
         "examples/react-form-header/dev.mjs",
         "examples/react-form-header/tsconfig.json",
-        "docs/signature.md"
+        "docs/signature.md",
+        "docs/customer-chat.md"
     ],
     "engines": {
         "node": ">=22"

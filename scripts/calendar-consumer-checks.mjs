@@ -88,6 +88,16 @@ async function server(directory, format) {
 
 async function installed(directory, format, happyDomModulePath) {
     const consumer = createRequire(join(directory, 'package.json'));
+    assert.equal(
+        consumer('calendar-react-aria/package.json').version,
+        '3.53.0'
+    );
+    assert.equal(consumer('react-aria/package.json').version, '3.53.1');
+    assert.equal(consumer('react-stately/package.json').version, '3.51.0');
+    assert.equal(
+        consumer('@internationalized/date/package.json').version,
+        '3.12.4'
+    );
     const policy = await load(consumer, 'ui', format);
     const field = {
         id: 'date',

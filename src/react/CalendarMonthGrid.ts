@@ -15,7 +15,7 @@ import {
     useFocusRing,
     useLocale,
     type AriaButtonOptions,
-} from 'react-aria';
+} from 'calendar-react-aria';
 import { useCalendarState, type CalendarState } from 'react-stately';
 import {
     createCalendar,

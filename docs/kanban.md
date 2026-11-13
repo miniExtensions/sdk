@@ -85,3 +85,10 @@ adoption, native current-authority/regression/localhost acceptance, the existing
 release-age policy and normal native master landing remain separate whole-ticket
 requirements. No hosted fixture, provider mutation, production or Five W2 witness
 is authorized merely by this component.
+
+Touch activation retains the native zero-distance movement constraint so a
+stationary tap can still activate Open or a nested control. The board cancels
+the first admitted nonzero touch movement before dnd-kit's activation return
+can let the browser claim that gesture. This one-movement listener releases on
+movement, end/cancel, drag completion, retirement or unmount. It does not apply
+a global touch-action restriction to card controls, disabled boards or gutters.

@@ -507,6 +507,193 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         );
         await verify('declared-stale-columns-and-escaped-real-rich-card');
 
+        // Exercise native taps and a non-draggable scroll target independently
+        // from the admitted moving-touch cancellation below.
+        const controlTouch = await page.context().newCDPSession(page);
+        const controlBefore = await page.evaluate(
+            () => navigator.maxTouchPoints
+        );
+        let controlActive = false,
+            controlError;
+        const controlCleanup = (result.touchControlCleanup = {});
+        try {
+            await controlTouch.send('Emulation.setTouchEmulationEnabled', {
+                enabled: true,
+                maxTouchPoints: 1,
+            });
+            await page.evaluate(() => {
+                window.__kanbanControlTrust = [];
+                const record = (event) =>
+                    window.__kanbanControlTrust.push(event.isTrusted);
+                document.addEventListener('touchstart', record, {
+                    capture: true,
+                    passive: true,
+                });
+                window.__stopKanbanControlTrust = () =>
+                    document.removeEventListener('touchstart', record, true);
+            });
+            const tap = async (locator, inset) => {
+                await locator.scrollIntoViewIfNeeded();
+                const box = await locator.boundingBox();
+                assert(box);
+                const point = inset
+                    ? { x: box.x + 8, y: box.y + 12 }
+                    : { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+                await controlTouch.send('Input.dispatchTouchEvent', {
+                    type: 'touchStart',
+                    touchPoints: [point],
+                });
+                controlActive = true;
+                await controlTouch.send('Input.dispatchTouchEvent', {
+                    type: 'touchEnd',
+                    touchPoints: [],
+                });
+                controlActive = false;
+            };
+            await tap(
+                source('a').getByRole('button', {
+                    name: 'Open a',
+                    exact: true,
+                }),
+                true
+            );
+            await page.waitForFunction(
+                () => window.__kanbanProbe.snapshot().calls.opens.length === 1
+            );
+            await tap(
+                source('a').getByRole('button', {
+                    name: 'Next image',
+                    exact: true,
+                })
+            );
+            await page.waitForFunction(() =>
+                document
+                    .querySelector(
+                        'section [data-kanban-record="a"] .mx-sdk-finder-carousel-track'
+                    )
+                    ?.style.transform.includes('-100%')
+            );
+            assert.deepEqual((await state()).calls.opens, ['a']);
+            assert.equal((await state()).calls.events.length, 0);
+            assert.equal(await overlay().count(), 0);
+            await verify(
+                'trusted-touch-open-and-nested-carousel-taps-without-drag'
+            );
+
+            const closed = await column('Closed').boundingBox(),
+                empty = await column('Empty').boundingBox();
+            assert(closed && empty);
+            const point = {
+                x: (closed.x + closed.width + empty.x) / 2,
+                y: closed.y + 80,
+            };
+            assert(
+                await page.evaluate((point) => {
+                    const target = document.elementFromPoint(point.x, point.y);
+                    return (
+                        Boolean(target?.closest('.mx-sdk-kanban-board')) &&
+                        !target?.closest('[data-kanban-record]')
+                    );
+                }, point)
+            );
+            await controlTouch.send('Input.dispatchTouchEvent', {
+                type: 'touchStart',
+                touchPoints: [point],
+            });
+            controlActive = true;
+            for (let step = 1; step <= 5; step++)
+                await controlTouch.send('Input.dispatchTouchEvent', {
+                    type: 'touchMove',
+                    touchPoints: [{ x: point.x - step * 30, y: point.y }],
+                });
+            await controlTouch.send('Input.dispatchTouchEvent', {
+                type: 'touchEnd',
+                touchPoints: [],
+            });
+            controlActive = false;
+            await page.waitForFunction(
+                () =>
+                    document.querySelector('.mx-sdk-kanban-board').scrollLeft >
+                    10
+            );
+            assert.equal((await state()).calls.events.length, 0);
+            assert.equal((await state()).records.a.fields.status, 'Open');
+            assert.equal(await overlay().count(), 0);
+            result.touchControls = await page.evaluate(() => ({
+                trusted: window.__kanbanControlTrust,
+                scrollLeft: document.querySelector('.mx-sdk-kanban-board')
+                    .scrollLeft,
+                url: location.href,
+            }));
+            assert.deepEqual(result.touchControls.trusted, [true, true, true]);
+            assert.equal(
+                result.touchControls.url,
+                origin + '/kanban-' + format + '.html'
+            );
+            await verify(
+                'trusted-touch-board-gutter-scroll-without-category-operation'
+            );
+        } catch (error) {
+            controlError = error;
+        } finally {
+            const failures = [];
+            for (const [name, cleanup] of [
+                [
+                    'input',
+                    async () => {
+                        if (controlActive)
+                            await controlTouch.send(
+                                'Input.dispatchTouchEvent',
+                                { type: 'touchCancel', touchPoints: [] }
+                            );
+                    },
+                ],
+                [
+                    'emulation',
+                    () =>
+                        controlTouch.send(
+                            'Emulation.setTouchEmulationEnabled',
+                            {
+                                enabled: controlBefore > 0,
+                                maxTouchPoints: Math.max(1, controlBefore),
+                            }
+                        ),
+                ],
+                ['session', () => controlTouch.detach()],
+                [
+                    'observation',
+                    () =>
+                        page.evaluate(() => {
+                            window.__stopKanbanControlTrust?.();
+                            delete window.__stopKanbanControlTrust;
+                            delete window.__kanbanControlTrust;
+                        }),
+                ],
+            ])
+                try {
+                    await cleanup();
+                    controlCleanup[name] = 'completed';
+                } catch (error) {
+                    controlCleanup[name] = { error: error.message };
+                    failures.push(error);
+                }
+            if (failures.length)
+                throw new AggregateError(
+                    [...(controlError ? [controlError] : []), ...failures],
+                    'Kanban native touch controls cleanup failed'
+                );
+            if (controlError) throw controlError;
+        }
+        // A fresh document separates scroll momentum and tap state from the
+        // unchanged drag/cancel/operation matrix. No timer delay is introduced.
+        await page.reload();
+        await page
+            .locator('section [data-kanban-ready="true"]')
+            .waitFor({ state: 'attached' });
+        await page
+            .getByRole('textbox', { name: 'Adjacent draft' })
+            .fill('Preserved local draft');
+
         const arrow = source('a').getByRole('button', {
             name: 'Next image',
             exact: true,
@@ -1039,6 +1226,18 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 await page.evaluate(() => window.__kanbanTouchTrusted),
                 [true]
             );
+            const firstMovingEvent = observation.events.find(
+                (event) =>
+                    event.type === 'touchmove' &&
+                    event.phase === 'after-dispatch'
+            );
+            assert.equal(firstMovingEvent?.cancelable, true);
+            assert.equal(
+                firstMovingEvent.defaultPrevented,
+                true,
+                'The first admitted moving touch must cancel the browser gesture'
+            );
+
             assert.equal(
                 page.url(),
                 observation.startUrl,
@@ -1155,7 +1354,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
 
         result.react = (await state()).react;
         result.platform = (await state()).platform;
-        assert.equal(result.groups.length, 19);
+        assert.equal(result.groups.length, 21);
     }
     return evidence;
 }

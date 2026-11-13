@@ -38,6 +38,7 @@ import { Container, ContainerProps } from './Container.js';
 import { Item } from './Item.js';
 import { RenderItemFunc } from './Item.js';
 import { useStateWithDeps } from './projectionState.js';
+import { claimKanbanTouchMove } from './touchGesture.js';
 import { useThemeSnapshot, getThemePortalProps } from '../ThemeBoundary.js';
 const animateLayoutChanges: AnimateLayoutChanges = (args) =>
     defaultAnimateLayoutChanges({ ...args, wasDragging: true });
@@ -175,12 +176,18 @@ export function MultipleContainers({
 }: KanbanBoardProps): React.ReactElement {
     const contextId = useId();
     const live = useRef(true);
+    const touchMoveCleanup = useRef<(() => void) | null>(null);
+    const releaseTouchMove = useCallback(() => {
+        touchMoveCleanup.current?.();
+        touchMoveCleanup.current = null;
+    }, []);
     useEffect(() => {
         live.current = true;
         return () => {
             live.current = false;
+            releaseTouchMove();
         };
-    }, []);
+    }, [releaseTouchMove]);
     const acceptsDrag = () =>
         live.current && isCurrent() && !disabled && !modalOpen;
     const isAnExtensionModalOpen = modalOpen;
@@ -267,6 +274,14 @@ export function MultipleContainers({
             activationConstraint: {
                 distance: 0,
             },
+            onActivation: ({ event }) => {
+                releaseTouchMove();
+                if (acceptsDrag())
+                    touchMoveCleanup.current = claimKanbanTouchMove(
+                        event,
+                        acceptsDrag
+                    );
+            },
         }),
         useSensor(KeyboardSensor, {
             coordinateGetter,
@@ -291,6 +306,7 @@ export function MultipleContainers({
         return index;
     };
     const onDragCancel = () => {
+        releaseTouchMove();
         if (!acceptsDrag()) return;
         if (clonedItems) {
             // Reset items to their original state in case items have been
@@ -386,6 +402,7 @@ export function MultipleContainers({
             }
         },
         onDragEnd: ({ active, over }) => {
+            releaseTouchMove();
             if (!acceptsDrag()) return;
             if (isColumnId(items, active.id) && over?.id) {
                 setContainers((containers) => {

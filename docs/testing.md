@@ -495,7 +495,18 @@ resources.
 
 ## External Sync Source presentation checks
 
-`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+The explicit controlled public mode additionally reuses the maintained complete
+readonly text component. `reactExternalSyncSource.test.ts` checks localized empty
+and literal/link output, size/layout propagation, same-mount ownership-mode
+switching and zero borrowed binding actions. The existing packed consumer adds
+ESM/CJS declarations, readonly/mixed-mode type refusals, CSS resolution, SSR,
+hydration and replacement on React 18/19. The mandatory packed Chromium harness
+registers `external-sync-source-controlled-browser-checks.mjs` for trusted Tab,
+link Enter to an owned loopback popup, row propagation, empty/replacement and
+adjacent draft preservation. Its contexts/server/source directory are cleaned
+and receipts distinguish these synthetic checks from native adoption.
+
+`pnpm check:package` runs 24 installed ESM/CommonJS groups with synthetic owners.
 They cover canonical computed Form bindings, literal SDK strings and unknown
 labels, empty/null/missing values, metadata choice changes on the same owner,
 forged editable capabilities and model access traps. Defensive direct helper

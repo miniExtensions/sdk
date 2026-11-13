@@ -1,4 +1,5 @@
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
+import { checkExternalSyncSourceControlledBrowser } from './external-sync-source-controlled-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
@@ -1550,6 +1551,7 @@ try {
             'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
+            'scripts/external-sync-source-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -2217,6 +2219,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.controlledSelect,
+            output,
+        });
+        report.externalSyncSourceControlled = {};
+        await checkExternalSyncSourceControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.externalSyncSourceControlled,
             output,
         });
         report.completeDuration = {};

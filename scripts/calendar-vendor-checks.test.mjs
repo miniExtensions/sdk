@@ -174,14 +174,7 @@ export function CalendarMonthGrid(props){return React.createElement('div',null,p
 export {useCalendar,useCalendarCell,useCalendarGrid,useCalendarState,parseDate};
 ${unreviewed ? "export {default as unexpected} from 'fuse.js';" : ''}
 `
-                : `const React=require('react');
-const aria=require('calendar-react-aria');
-const stately=require('react-stately');
-const date=require('@internationalized/date');
-exports.CalendarMonthGrid=function(props){return React.createElement('div',null,props.children);};
-exports.useCalendar=aria.useCalendar;exports.useCalendarCell=aria.useCalendarCell;exports.useCalendarGrid=aria.useCalendarGrid;exports.useCalendarState=stately.useCalendarState;exports.parseDate=date.parseDate;
-${unreviewed ? "exports.unexpected=require('fuse.js');" : ''}
-`
+                : 'exports.NOT_THE_BUNDLE_INPUT = true;\n'
         );
     }
 }
@@ -190,6 +183,10 @@ it('bundles the actual selected packages with external React peers and byte-veri
     const owned = fixture();
     try {
         writeEntries(owned.directory);
+        const sourceEntry = 'dist/esm/react/CalendarMonthGrid.js';
+        const sourceSha256 = hash(
+            readFileSync(join(owned.directory, sourceEntry))
+        );
         const outputs = await bundleCalendar(owned.directory);
         assert.equal(outputs.length, 2);
         for (const format of ['esm', 'cjs']) {
@@ -200,6 +197,14 @@ it('bundles the actual selected packages with external React peers and byte-veri
             assert.equal(
                 receipt.sha256,
                 hash(readFileSync(join(base, 'CalendarMonthGrid.js')))
+            );
+            assert.equal(receipt.sourceEntry, sourceEntry);
+            assert.equal(receipt.sourceSha256, sourceSha256);
+            assert(
+                !readFileSync(
+                    join(base, 'CalendarMonthGrid.js'),
+                    'utf8'
+                ).includes('NOT_THE_BUNDLE_INPUT')
             );
             assert.equal(
                 receipt.licensesSha256,
@@ -234,10 +239,16 @@ it('bundles the actual selected packages with external React peers and byte-veri
                 receipt.inputs.some(
                     (item) =>
                         item.package === 'react-aria' &&
-                        item.path.endsWith(
-                            `.${format === 'esm' ? 'mjs' : 'cjs'}`
-                        )
+                        item.path.endsWith('.mjs')
                 )
+            );
+            assert(
+                !receipt.inputs.some(
+                    (item) =>
+                        item.package === 'react-aria' &&
+                        item.path.endsWith('.cjs')
+                ),
+                'Both outputs must use static upstream ESM imports'
             );
             assert(
                 receipt.inputs.every((item) =>

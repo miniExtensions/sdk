@@ -10,7 +10,7 @@
         "aliases": {
             "react-aria": "calendar-react-aria"
         },
-        "adaptation": "Bundle only the compiled CalendarMonthGrid dependency closure into ESM/CommonJS. React and React DOM stay external optional SDK peers. Bare CommonJS React peer calls in ESM use explicit namespace facades; no global require or Node polyfill. Upstream code and licenses are unmodified; each bundled input and output hash is recorded."
+        "adaptation": "Capture the unbundled compiled ESM CalendarMonthGrid entry once, then generate ESM and CommonJS from its static-import dependency closure. This retains reachable Calendar hooks without eager unrelated upstream CommonJS-barrel effects. Both TypeScript compilers and declaration comparisons remain mandatory. React and React DOM stay external optional SDK peers. Bare CommonJS React peer calls in ESM use explicit namespace facades; no global require or Node polyfill. Upstream code and licenses are unmodified; the source-entry hash and each dependency input/output hash are recorded."
     },
     "rootEntrySha256": {
         "react-aria": {

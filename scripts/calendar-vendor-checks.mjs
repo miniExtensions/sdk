@@ -118,6 +118,12 @@ export async function bundleCalendar(root = process.cwd()) {
     root = resolve(root);
     const upstream = assertCalendarVendor(root);
     const provenanceRoot = join(root, 'vendor/calendar');
+    // Capture the compiler's ESM source before the first output replaces it.
+    // Its static imports let both output formats retain only reachable hooks;
+    // the upstream CommonJS barrel eagerly evaluates unrelated UI modules.
+    const sourceEntry = 'dist/esm/react/CalendarMonthGrid.js';
+    const sourcePath = join(root, sourceEntry);
+    const source = readFileSync(sourcePath, 'utf8');
     const receipts = [];
     for (const format of ['esm', 'cjs']) {
         const child = `dist/${format}/react/CalendarMonthGrid.js`;
@@ -125,15 +131,14 @@ export async function bundleCalendar(root = process.cwd()) {
         const result = await build({
             absWorkingDir: root,
             stdin: {
-                contents: readFileSync(path, 'utf8'),
-                resolveDir: dirname(path),
-                sourcefile: basename(path),
+                contents: source,
+                resolveDir: dirname(sourcePath),
+                sourcefile: basename(sourcePath),
                 loader: 'js',
             },
             bundle: true,
             platform: 'neutral',
-            mainFields:
-                format === 'esm' ? ['module', 'main'] : ['main', 'module'],
+            mainFields: ['module', 'main'],
             format,
             target: 'es2022',
             outfile: path,
@@ -165,7 +170,7 @@ export async function bundleCalendar(root = process.cwd()) {
         const inputs = [];
         const externalPeers = new Set(['react', 'react-dom']);
         for (const name of Object.keys(result.metafile.inputs)) {
-            if (resolve(root, name) === path) continue;
+            if (resolve(root, name) === sourcePath) continue;
             if (name.startsWith(`${peerNamespace}:`)) {
                 assert.equal(format, 'esm');
                 const peer = name.slice(peerNamespace.length + 1);
@@ -228,12 +233,14 @@ export async function bundleCalendar(root = process.cwd()) {
         const receipt = {
             schemaVersion: 1,
             child,
+            sourceEntry,
+            sourceSha256: hash(source),
             sha256: hash(bytes),
             external: [...externalPeers].sort(),
             adaptation:
                 format === 'esm'
-                    ? 'Only CommonJS React peer require calls use an SDK-owned external ESM namespace facade; no global require or Node polyfill.'
-                    : 'CommonJS React peer calls remain ordinary external imports.',
+                    ? 'Compile the captured ESM Calendar entry and reachable dependency closure. Only CommonJS React peer require calls use an SDK-owned external ESM namespace facade; no global require or Node polyfill.'
+                    : 'Convert the captured ESM Calendar entry and reachable dependency closure to CommonJS; React peer calls remain ordinary external imports.',
             packages: [...packages.values()].sort((a, b) =>
                 a.name.localeCompare(b.name)
             ),
@@ -253,6 +260,8 @@ export async function bundleCalendar(root = process.cwd()) {
         receipts.push({
             format,
             child,
+            sourceEntry,
+            sourceSha256: receipt.sourceSha256,
             sha256: receipt.sha256,
             packages: receipt.packages,
         });

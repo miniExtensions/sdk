@@ -35,7 +35,7 @@ license links intact:
 SDK_ARCHIVE="/absolute/path/to/miniextensions-sdk-0.1.0-alpha.0.tgz"
 mkdir customer-app
 tar -xzf "$SDK_ARCHIVE" -C customer-app --strip-components=1 \
-  package/examples/browser package/docs package/README.md \
+  package/examples package/docs package/README.md \
   package/LICENSE package/THIRD_PARTY_NOTICES.md
 cd customer-app/examples/browser
 npm install --ignore-scripts --no-audit --no-fund "$SDK_ARCHIVE"

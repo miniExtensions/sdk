@@ -4067,6 +4067,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
                         linkedFinderStarterFiles.includes(path) ||
+                        summaryCardsStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
                             'README.md',

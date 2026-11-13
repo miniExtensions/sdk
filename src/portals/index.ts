@@ -1,4 +1,22 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
+export { createNativePortalCollectionKernel } from './nativeCollectionKernel.js';
+export { runNativePortalCollectionRead } from './nativeCollectionHost.js';
+export type {
+    NativePortalCollectionHostPort,
+    NativePortalCollectionReadOutcome,
+} from './nativeCollectionHost.js';
+export type {
+    NativePortalCollectionScope,
+    NativePortalCollectionPaging,
+    NativePortalCollectionReadReceipt,
+    NativePortalCollectionCleanupReceipt,
+    NativePortalCollectionFrame,
+    NativePortalCollectionState,
+    NativePortalCollectionResponse,
+    NativePortalCollectionBegin,
+    NativePortalCollectionTransition,
+    NativePortalCollectionKernel,
+} from './nativeCollectionKernel.js';
 export { getPortalLinkedRecordFieldConfig } from './helpers.js';
 export { evaluatePortalViewAvailability } from './viewAvailability.js';
 export {

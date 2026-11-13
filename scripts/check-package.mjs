@@ -1,5 +1,10 @@
 import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
+import {
+    checkNativePortalKernelConsumer,
+    checkNativePortalKernelReactMatrix,
+    nativePortalKernelTypedConsumer,
+} from './native-portal-kernel-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
@@ -640,6 +645,8 @@ try {
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/portals.md' ||
+                path === 'docs/native-portal-kernel.md' ||
+                path === 'docs/native-portal-differential.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
@@ -1755,6 +1762,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
+                nativePortalKernelTypedConsumer +
                 ordinaryValidationTypedConsumer +
                 borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
@@ -1895,6 +1903,13 @@ new Parser([]).parse({maxDepth:'48'});
     assert.equal(
         portalBrowserContext.miniExtensionsPortalExample.helperType,
         'function'
+    );
+
+    assert.equal(
+        await checkNativePortalKernelConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
     );
 
     // React is an optional host framework, never an SDK dependency. Check the
@@ -2953,6 +2968,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalShellProof.versions.length, 2);
     assert.equal(portalShellProof.cleanup, 'completed');
+    const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(nativePortalKernelProof.versions.length, 2);
+    assert.equal(nativePortalKernelProof.cleanup, 'completed');
+
     const savedProgressProof = checkSavedProgressReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

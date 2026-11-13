@@ -220,6 +220,7 @@ export function assertModuleFormats(root) {
                 './react/multiple-select.css',
                 './react/linked-records.css',
                 './react/single-select.css',
+                './react/controlled-select.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
@@ -248,7 +249,9 @@ export function assertModuleFormats(root) {
             subpath === '.' ||
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
-                subpath === './react/date'
+                subpath === './react/date' ||
+                subpath === './customer-chat/react' ||
+                subpath === './customer-chat/intercom'
         );
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

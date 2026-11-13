@@ -5,6 +5,7 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    type ReactElement,
 } from 'react';
 import type { AirtableAttachment } from '../runtime/types.js';
 import { ActionButton } from './ActionButton.js';
@@ -84,7 +85,7 @@ const acceptedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
 const font = '"Brush Script MT", "Lucida Handwriting", cursive';
 
 /** Complete portable control; storage authority and the attachment list stay with the host. */
-export function SignatureField(props: SignatureFieldProps) {
+export function SignatureField(props: SignatureFieldProps): ReactElement {
     return h(SignatureSession, {
         ...props,
         key: JSON.stringify([props.ownerIdentity, props.id]),

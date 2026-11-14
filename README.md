@@ -273,10 +273,15 @@ TXT/CSV/sanitized HTML/image/TIFF/PDF thumbnails and local versioned PDF workers
 known PDF modals use the same canvas leaf. Neither contract grants write authority.
 
 [Last Modified By presentation](docs/ui.md#react-last-modified-by-presentation) exports
-`LastModifiedByField`, `LastModifiedByFieldProps`, `LastModifiedByFieldOptions` and the typed
-`renderLastModifiedByField` slot. It displays the supplied native collaborator name
-with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
-It does not resolve identities, display email or avatar data, or grant writes.
+`LastModifiedByField`, its legacy `LastModifiedByFieldProps` and
+`BindingLastModifiedByFieldProps`, `ControlledLastModifiedByFieldProps`,
+`LastModifiedByFieldOptions` and the typed `renderLastModifiedByField` slot.
+The binding/helper displays the supplied native name with the disabled Text
+control and optional `@miniextensions/sdk/react/text.css`. Explicit
+`mode="controlled"` provides the complete readonly collaborator badge,
+name/email fallback, localized empty label and opt-in avatar policy using
+`@miniextensions/sdk/react/complete-collaborators.css`. It grants no edit owner,
+choices, change callback or picker.
 
 [Created By presentation](docs/ui.md#react-created-by-presentation) exports
 `CreatedByField`, `CreatedByFieldProps`, `CreatedByFieldOptions` and the typed

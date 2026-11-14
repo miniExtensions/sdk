@@ -3067,9 +3067,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(lastModifiedByProof.checks, 20);
+    assert.equal(lastModifiedByProof.checks, 28);
     console.log(
-        `Installed Last Modified By renderer, readonly native names, shared Text CSS and local example: ${lastModifiedByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        `Installed Last Modified By binding/helper and controlled readonly display: ${lastModifiedByProof.checks} ESM/CJS groups (20 legacy plus 8 controlled) passed; synthetic owners only.`
     );
     const createdByProof = await checkCreatedByConsumer({
         consumerDirectory: temporaryDirectory,

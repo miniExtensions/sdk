@@ -323,10 +323,13 @@ import {
 } from './ExternalSyncSourceField.js';
 import {
     lastModifiedByName,
+    renderControlledLastModifiedByField,
+    type ControlledLastModifiedByFieldProps,
     type LastModifiedByFieldOptions,
 } from './LastModifiedByField.js';
 export {
     renderLastModifiedByField,
+    type ControlledLastModifiedByFieldProps,
     type LastModifiedByFieldOptions,
 } from './LastModifiedByField.js';
 export {
@@ -1002,8 +1005,36 @@ export function BindingCreatedTimeField({
     });
 }
 export type LastModifiedByFieldProps = FieldProps & LastModifiedByFieldOptions;
+export type BindingLastModifiedByFieldProps = LastModifiedByFieldProps;
+type BoundLastModifiedByComponentProps = LastModifiedByFieldProps & {
+    [Key in Exclude<
+        keyof ControlledLastModifiedByFieldProps,
+        keyof LastModifiedByFieldProps
+    >]?: never;
+};
+/** Complete readonly native display or the unchanged name-only binding contract. */
+export function LastModifiedByField<T extends CompleteCollaborator>(
+    props: ControlledLastModifiedByFieldProps<T>
+): ReactNode;
+export function LastModifiedByField(
+    props: BoundLastModifiedByComponentProps
+): ReactNode;
+export function LastModifiedByField<T extends CompleteCollaborator>(
+    props:
+        | BoundLastModifiedByComponentProps
+        | ControlledLastModifiedByFieldProps<T>
+): ReactNode;
+export function LastModifiedByField<T extends CompleteCollaborator>(
+    props:
+        | BoundLastModifiedByComponentProps
+        | ControlledLastModifiedByFieldProps<T>
+): ReactNode {
+    return props.mode === 'controlled'
+        ? renderControlledLastModifiedByField(props)
+        : createElement(BoundLastModifiedByField, props);
+}
 /** The supplied modifier name stays readonly regardless of forged editing state. */
-export function LastModifiedByField({
+function BoundLastModifiedByField({
     binding,
     render,
     className,

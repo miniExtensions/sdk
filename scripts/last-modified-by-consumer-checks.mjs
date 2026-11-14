@@ -6,14 +6,34 @@ import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 export const lastModifiedByReactTypedConsumer = `
-import type { ReactNode } from 'react';
+import { createElement, type ReactNode } from 'react';
 import {
     LastModifiedByField, renderLastModifiedByField, AirtableForm, AirtableGrid, AirtableList,
-    type LastModifiedByFieldProps, type LastModifiedByFieldOptions, type TextFieldOptions,
+    type LastModifiedByFieldProps, type BindingLastModifiedByFieldProps, type ControlledLastModifiedByFieldProps, type LastModifiedByFieldOptions, type TextFieldOptions,
 } from '@miniextensions/sdk/react';
 import type { AirtableCollaborator } from '@miniextensions/sdk';
 import type { FieldRendererProps, FieldRendererSlots, FormRenderScope, PortalRenderScope } from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/text.css';
+type Native = AirtableCollaborator & { nativeMetadata: { order: number } };
+const a: Native = { id: 'usr_a', name: 'Modifier', email: 'a@example.invalid', nativeMetadata: { order: 1 } };
+const owner = { token: {}, isCurrent: () => true };
+const modifier: ControlledLastModifiedByFieldProps<Native> = { mode: 'controlled', value: a, title: 'Modifier', labels: { empty: 'No modifier' } };
+createElement(LastModifiedByField<Native>, modifier);
+declare const legacyModifier: LastModifiedByFieldProps;
+const bindingModifier: BindingLastModifiedByFieldProps = legacyModifier;
+createElement(LastModifiedByField, bindingModifier);
+// @ts-expect-error computed modifiers cannot receive edit authority
+const modifierOwner: ControlledLastModifiedByFieldProps<Native> = { ...modifier, owner };
+// @ts-expect-error computed modifiers cannot receive a write callback
+const modifierWrite: ControlledLastModifiedByFieldProps<Native> = { ...modifier, onValueChange() {} };
+// @ts-expect-error readonly cannot be disabled for a computed modifier
+const modifierEditable: ControlledLastModifiedByFieldProps<Native> = { ...modifier, readOnly: false };
+// @ts-expect-error computed modifiers have no removal label callback
+const modifierRemove: ControlledLastModifiedByFieldProps<Native> = { ...modifier, labels: { remove: () => 'Remove' } };
+// @ts-expect-error controlled modifiers cannot borrow bindings or render overrides
+createElement(LastModifiedByField<Native>, { ...modifier, binding: legacyModifier.binding });
+// @ts-expect-error projected modifier identities are objects, not strings
+const modifierId: ControlledLastModifiedByFieldProps<Native> = { ...modifier, value: 'usr_a' };
 const options: LastModifiedByFieldOptions = { className: 'modifier-consumer', clearLabel: 'Clear modifier' };
 const sharedOptions: TextFieldOptions = options;
 const aliasOptions: LastModifiedByFieldOptions = sharedOptions;
@@ -64,7 +84,7 @@ export function Compositions({ form, portal }: { form: FormRenderScope; portal: 
 }
 `;
 
-/** Installed name-only presentation with synthetic owners and no external transport. */
+/** Installed legacy and controlled display with synthetic owners and no external transport. */
 export async function checkLastModifiedByConsumer({
     consumerDirectory,
     happyDomModulePath,
@@ -977,6 +997,181 @@ export async function checkLastModifiedByConsumer({
                     assert.equal(portalWrites, 0);
                     assert.deepEqual(detailProps.value, portalModifier);
                 }
+                await act(async () =>
+                    root.render(h(react.LastModifiedByField, { binding }))
+                );
+                const originalInput = input();
+                assert(originalInput);
+                const originalName = originalInput.value;
+                const ownerBeforeControlled = fields.controller.getState();
+                const controlled = (value, options = {}) =>
+                    h(react.LastModifiedByField, {
+                        mode: 'controlled',
+                        value,
+                        inputId: 'controlled-modifier',
+                        title: 'Last modified by',
+                        ...options,
+                    });
+                await act(async () => root.render(controlled(nativeModifier)));
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-name')
+                        .textContent,
+                    nativeModifier.name
+                );
+                assert.equal(
+                    container.querySelector('input,button,img,[role=combobox]'),
+                    null
+                );
+                await act(async () =>
+                    root.render(h(react.LastModifiedByField, { binding }))
+                );
+                assert.equal(input().value, originalName);
+                assert.equal(input().disabled, true);
+                checks++;
+
+                let forbiddenReads = 0;
+                const forbidden = () => {
+                    forbiddenReads++;
+                    throw Error('Modifier must not inspect editing authority');
+                };
+                const displayLabels = { empty: 'No modifier' };
+                Object.defineProperty(displayLabels, 'remove', {
+                    enumerable: true,
+                    get: forbidden,
+                });
+                const modifierForged = {
+                    mode: 'controlled',
+                    value: nativeModifier,
+                    labels: displayLabels,
+                };
+                for (const key of [
+                    'binding',
+                    'render',
+                    'owner',
+                    'choices',
+                    'onValueChange',
+                    'onChange',
+                    'readOnly',
+                ])
+                    Object.defineProperty(modifierForged, key, {
+                        enumerable: true,
+                        get: forbidden,
+                    });
+                // Call the public hook-free dispatcher before React copies caller props.
+                const projected = react.LastModifiedByField(modifierForged);
+                await act(async () => root.render(projected));
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-name')
+                        .textContent,
+                    nativeModifier.name
+                );
+                assert.equal(container.querySelector('input,button,img'), null);
+                assert.equal(forbiddenReads, 0);
+                checks++;
+
+                const modifier = {
+                    ...nativeModifier,
+                    name: '',
+                    email: 'modifier-next@example.invalid',
+                    profilePicUrl: undefined,
+                };
+                await act(async () =>
+                    root.render(
+                        controlled(modifier, {
+                            describedBy: 'modifier-help',
+                            invalid: true,
+                        })
+                    )
+                );
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-name')
+                        .textContent,
+                    modifier.email
+                );
+                assert.equal(
+                    container
+                        .querySelector('[role=group]')
+                        .getAttribute('aria-describedby'),
+                    'modifier-help'
+                );
+                assert.equal(
+                    container
+                        .querySelector('[role=group]')
+                        .getAttribute('aria-invalid'),
+                    'true'
+                );
+                await act(async () =>
+                    root.render(
+                        controlled(null, {
+                            labels: { empty: 'Aucun auteur' },
+                        })
+                    )
+                );
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-empty')
+                        .textContent,
+                    'Aucun auteur'
+                );
+                await act(async () =>
+                    root.render(controlled(nativeModifier, { visible: false }))
+                );
+                assert.equal(container.querySelector('[role=group]'), null);
+                checks++;
+
+                let parentEvents = 0,
+                    submits = 0;
+                const modifierTree = (value) =>
+                    h(
+                        'form',
+                        {
+                            onSubmit(event) {
+                                event.preventDefault();
+                                submits++;
+                            },
+                        },
+                        h(
+                            'div',
+                            {
+                                onClick() {
+                                    parentEvents++;
+                                },
+                                onKeyDown() {
+                                    parentEvents++;
+                                },
+                            },
+                            controlled(value)
+                        ),
+                        h('input', {
+                            'aria-label': 'Modifier adjacent draft',
+                            defaultValue: 'Keep draft',
+                        })
+                    );
+                await act(async () =>
+                    root.render(modifierTree(nativeModifier))
+                );
+                const adjacent = container.querySelector('input');
+                adjacent.value = 'Edited draft';
+                const modifierGroup = container.querySelector('[role=group]');
+                for (const name of ['click', 'keydown']) {
+                    const event = new window.Event(name, {
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                    await act(async () => modifierGroup.dispatchEvent(event));
+                    assert.equal(event.defaultPrevented, false);
+                }
+                await act(async () => root.render(modifierTree(null)));
+                assert.equal(container.querySelector('input'), adjacent);
+                assert.equal(adjacent.value, 'Edited draft');
+                assert.equal(parentEvents, 0);
+                assert.equal(submits, 0);
+                assert.equal(writes, 0);
+                assert.equal(requests, 0);
+                assert.deepEqual(
+                    fields.controller.getState(),
+                    ownerBeforeControlled
+                );
+                checks++;
                 await act(async () =>
                     root.render(h(react.LastModifiedByField, { binding }))
                 );

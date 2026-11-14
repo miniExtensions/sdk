@@ -524,6 +524,15 @@ Chromium proof. The `examples/react-last-modified-by` synthetic fixture serves o
 `http://127.0.0.1:4193`. These checks perform no identity lookup and load no avatar
 resources.
 
+The controlled LastModifiedBy contract adds eight installed ESM/CommonJS groups
+alongside the 20 legacy groups. The complete collaborator matrix repeats these
+under React 18.3.1 and 19.2.0. Source and installed checks cover forced readonly,
+forged capability getters, same-mount identity/email/locale replacement, null,
+visibility, binding-mode transitions and an edited adjacent draft. Source SSR
+also checks literal text and the absence of avatar/editing authority. These are
+synthetic SDK checks; native Form integration and actual browser acceptance
+remain separate.
+
 ## Created By presentation checks
 
 `pnpm check:package` preserves 20 legacy installed ESM/CommonJS groups and adds

@@ -16,8 +16,9 @@ import {
 
 export const completeCollaboratorTypedConsumer = String.raw`import { createElement } from 'react';
 import {
-    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField, CreatedByField,
+    SingleCollaboratorField, BindingSingleCollaboratorField, CompleteSingleCollaboratorField, CompleteMultipleCollaboratorsField, MultipleCollaboratorsField, CreatedByField, LastModifiedByField,
     type CreatedByFieldProps, type BindingCreatedByFieldProps, type ControlledCreatedByFieldProps,
+    type LastModifiedByFieldProps, type BindingLastModifiedByFieldProps, type ControlledLastModifiedByFieldProps,
     type ControlledSingleCollaboratorFieldProps, type SingleCollaboratorFieldProps,
     type CompleteCollaborator, type CompleteCollaboratorEditOwner,
     type CompleteSingleCollaboratorFieldProps,
@@ -45,6 +46,23 @@ const creatorRemove: ControlledCreatedByFieldProps<Native> = { ...creator, label
 createElement(CreatedByField<Native>, { ...creator, binding: legacyCreator.binding });
 // @ts-expect-error projected creator identities are objects, not strings
 const creatorId: ControlledCreatedByFieldProps<Native> = { ...creator, value: 'usr_a' };
+const modifier: ControlledLastModifiedByFieldProps<Native> = { mode: 'controlled', value: a, title: 'Modifier', labels: { empty: 'No modifier' } };
+createElement(LastModifiedByField<Native>, modifier);
+declare const legacyModifier: LastModifiedByFieldProps;
+const bindingModifier: BindingLastModifiedByFieldProps = legacyModifier;
+createElement(LastModifiedByField, bindingModifier);
+// @ts-expect-error computed modifiers cannot receive edit authority
+const modifierOwner: ControlledLastModifiedByFieldProps<Native> = { ...modifier, owner };
+// @ts-expect-error computed modifiers cannot receive a write callback
+const modifierWrite: ControlledLastModifiedByFieldProps<Native> = { ...modifier, onValueChange() {} };
+// @ts-expect-error readonly cannot be disabled for a computed modifier
+const modifierEditable: ControlledLastModifiedByFieldProps<Native> = { ...modifier, readOnly: false };
+// @ts-expect-error computed modifiers have no removal label callback
+const modifierRemove: ControlledLastModifiedByFieldProps<Native> = { ...modifier, labels: { remove: () => 'Remove' } };
+// @ts-expect-error controlled modifiers cannot borrow bindings or render overrides
+createElement(LastModifiedByField<Native>, { ...modifier, binding: legacyModifier.binding });
+// @ts-expect-error projected modifier identities are objects, not strings
+const modifierId: ControlledLastModifiedByFieldProps<Native> = { ...modifier, value: 'usr_a' };
 const avatarPolicy: CollaboratorAvatarPolicy = { type: 'source', getSource(url) { return { src: '/optimized?url=' + encodeURIComponent(url), srcSet: '/small 1x, /large 2x', sizes: '32px', loading: 'lazy', decoding: 'async' }; } };
 const single: CompleteSingleCollaboratorFieldProps<Native> = {
     value: a, choices, owner, inputId: 'single', formId: 'owner-form',
@@ -626,6 +644,22 @@ console.log(JSON.stringify(result));`
             );
             assert.equal(creator.checks, 28);
 
+            const modifierHelper = new URL(
+                './last-modified-by-consumer-checks.mjs',
+                import.meta.url
+            ).href;
+            writeFileSync(
+                join(directory, 'modifier-consumer.mjs'),
+                `import {checkLastModifiedByConsumer} from ${JSON.stringify(modifierHelper)};console.log(JSON.stringify(await checkLastModifiedByConsumer({consumerDirectory:process.cwd(),happyDomModulePath:process.argv[2]})));`
+            );
+            const modifier = JSON.parse(
+                run(process.execPath, [
+                    'modifier-consumer.mjs',
+                    happyDomModulePath,
+                ]).trim()
+            );
+            assert.equal(modifier.checks, 28);
+
             writeFileSync(
                 join(directory, 'production-build.mjs'),
                 productionBuild
@@ -793,6 +827,7 @@ console.log(JSON.stringify(result));`
                     legacyBindingChecks: legacy.checks,
                     legacySingleBindingChecks: legacySingle.checks,
                     createdByChecks: creator.checks,
+                    lastModifiedByChecks: modifier.checks,
                     syntheticGroups: dom.groups,
                     production: true,
                     childSha256: createHash('sha256')

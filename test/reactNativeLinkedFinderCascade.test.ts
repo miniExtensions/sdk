@@ -348,6 +348,7 @@ test('StrictMode preserves allocated prefill transports while retiring old local
 
 for (const selected of [null, pair('same', 'Same label')]) {
     test(`prefill completion clears loading text without a canonical identity change (${selected ? 'same pair' : 'null'})`, async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
         const values = { driver: selected };
         const f = await fixture(
             t,
@@ -382,8 +383,20 @@ for (const selected of [null, pair('same', 'Same label')]) {
         );
         assert.equal(values.driver, selected);
         const requestCount = f.requests.length;
+        // Prefill completion does not cancel the independent ordinary producer.
+        await act(async () => t.mock.timers.tick(10));
+        assert.equal(f.requests.length, requestCount + 1);
+        assert.deepEqual(f.requests.at(-1)!.query, {
+            fieldId: 'driver',
+            searchTerm: '',
+            urlSearchValue: 'Raw',
+            filterData: null,
+        });
+        await act(async () => f.requests.at(-1)!.result.resolve(page([])));
         await f.render();
+        await act(async () => t.mock.timers.tick(10));
         assert.equal(f.host.querySelector('input'), input);
-        assert.equal(f.requests.length, requestCount);
+        assert.equal(input.value, selected?.stringValue ?? '');
+        assert.equal(f.requests.length, requestCount + 1);
     });
 }

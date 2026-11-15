@@ -1462,6 +1462,271 @@ for (const language of ['javascript', '__proto__']) {
     });
 }
 
+for (const readOnly of [false, true]) {
+    it(
+        'loads mixed stored checklists and bullets in ' +
+            (readOnly ? 'readonly' : 'editable') +
+            ' mode without writes',
+        async (t) => {
+            const f = await completeRichTextFixture(t);
+            const ref = createRef<NativeRichTextEditorHandle>();
+            const writes: string[] = [];
+            await f.render(
+                h(ControlledCompleteEditor, {
+                    editorRef: ref,
+                    writes,
+                    readOnly,
+                    initial:
+                        '[x] Complete\n[ ] Pending\n\n- Item one\n- Item two',
+                })
+            );
+            const { view } = await f.editor(ref);
+            view.state.doc.check();
+            assert.equal(
+                view.state.doc.textContent,
+                'CompletePendingItem oneItem two'
+            );
+            assert.equal(view.editable, !readOnly);
+            assert.deepEqual(
+                [
+                    ...view.dom.querySelectorAll<HTMLInputElement>(
+                        'input[type="checkbox"]'
+                    ),
+                ].map((input) => input.checked),
+                [true, false]
+            );
+            assert.equal(
+                view.dom.querySelectorAll('ul:not(.checkbox_list) > li').length,
+                2
+            );
+            assert.deepEqual(writes, []);
+        }
+    );
+}
+
+type MixedListScenario = {
+    name: string;
+    markdown: string;
+    lists: string[];
+    labels: string[];
+    checked: boolean[];
+    stored?: string;
+    orderedStart?: number;
+    marked?: boolean;
+    storedLabels?: string[];
+};
+
+const mixedListScenarios: MixedListScenario[] = [
+    {
+        name: 'the exact native checklist followed by plain bullets',
+        markdown: '[x] Complete\n[ ] Pending\n\n- Item one\n- Item two',
+        lists: ['checkbox_list', 'bullet_list'],
+        labels: ['Complete', 'Pending', 'Item one', 'Item two'],
+        checked: [true, false],
+        stored: '[x] Complete\n[ ] Pending\n\n* Item one\n* Item two\n\n\n',
+    },
+    {
+        name: 'plain bullets followed by standard Markdown tasks',
+        markdown: '- Item one\n- Item two\n\n- [x] Complete\n- [ ] Pending',
+        lists: ['bullet_list', 'checkbox_list'],
+        labels: ['Item one', 'Item two', 'Complete', 'Pending'],
+        checked: [true, false],
+        stored: '* Item one\n* Item two\n\n[x] Complete\n[ ] Pending\n\n\n',
+    },
+    {
+        name: 'alternating tasks and plain bullets',
+        markdown: '- [ ] First\n- Plain\n- [x] Last\n- Ending',
+        lists: ['checkbox_list', 'bullet_list', 'checkbox_list', 'bullet_list'],
+        labels: ['First', 'Plain', 'Last', 'Ending'],
+        checked: [false, true],
+        stored: '[ ] First\n\n* Plain\n\n[x] Last\n\n* Ending\n\n\n',
+    },
+    {
+        name: 'nested mixed lists without closing the parent item early',
+        markdown:
+            '- [x] Parent\n  - Nested plain\n  - [ ] Nested task\n- Sibling',
+        lists: ['checkbox_list', 'bullet_list'],
+        labels: ['Parent', 'Nested plain', 'Nested task', 'Sibling'],
+        checked: [true, false],
+    },
+    {
+        name: 'numbered items with literal markers and nested mixed lists',
+        markdown:
+            '3. [x] literal\n4. Second\n   - [x] Nested done\n   - Nested plain',
+        lists: ['ordered_list'],
+        labels: ['[x] literal', 'Second', 'Nested done', 'Nested plain'],
+        checked: [true],
+        orderedStart: 3,
+        storedLabels: [
+            '\\[x\\] literal',
+            'Second',
+            'Nested done',
+            'Nested plain',
+        ],
+        stored: '\n3. \\[x\\] literal\n4. Second\n   - [x] Nested done\n   * Nested plain\n\n\n',
+    },
+    {
+        name: 'legacy extra-whitespace labels',
+        markdown: '- [x]  Done\n- Plain',
+        lists: ['checkbox_list', 'bullet_list'],
+        labels: [' Done', 'Plain'],
+        checked: [true],
+    },
+    {
+        name: 'legacy checkbox admission before a softbreak label',
+        markdown: '- [x]\n  Continue\n- Plain',
+        lists: ['checkbox_list', 'bullet_list'],
+        labels: ['[x] Continue', 'Plain'],
+        checked: [true],
+        storedLabels: ['Continue', 'Plain'],
+    },
+    {
+        name: 'the existing nonbreaking-whitespace checkbox syntax',
+        markdown: '- [x]\u00a0Done\n- [\u00a0] Pending\n- Plain',
+        lists: ['checkbox_list', 'bullet_list'],
+        labels: ['Done', 'Pending', 'Plain'],
+        checked: [true, false],
+        stored: '[x] Done\n[ ] Pending\n\n* Plain\n\n\n',
+    },
+    {
+        name: 'literal and escaped markers alongside marked task labels',
+        markdown:
+            '- Refer to [x] marker\n- \\[x] escaped marker\n- [X] **Bold** and [link](https://example.com/)\n- Plain _emphasis_',
+        lists: ['bullet_list', 'checkbox_list', 'bullet_list'],
+        labels: [
+            'Refer to [x] marker',
+            '[x] escaped marker',
+            'Bold and link',
+            'Plain emphasis',
+        ],
+        checked: [true],
+        marked: true,
+    },
+    {
+        name: 'loose mixed items with multiple paragraphs',
+        markdown:
+            '- [x] Task\n\n  More paragraph\n\n- Plain\n\n  Plain second paragraph',
+        lists: ['checkbox_list', 'bullet_list'],
+        labels: ['Task', 'More paragraph', 'Plain', 'Plain second paragraph'],
+        checked: [true],
+    },
+];
+
+for (const scenario of mixedListScenarios) {
+    it(
+        'pastes ' +
+            scenario.name +
+            ' over a selected document without dropping content',
+        async (t) => {
+            const f = await completeRichTextFixture(t);
+            const ref = createRef<NativeRichTextEditorHandle>();
+            const writes: string[] = [];
+            await f.render(
+                h(ControlledCompleteEditor, {
+                    editorRef: ref,
+                    writes,
+                    initial: 'Sentinel before mixed list',
+                })
+            );
+            const { view } = await f.editor(ref);
+            await f.select(view, 1, view.state.doc.content.size - 1);
+            const event = await f.paste(view, {
+                'text/plain': scenario.markdown,
+            });
+            assert.equal(event.defaultPrevented, true);
+            view.state.doc.check();
+            const lists: string[] = [];
+            view.state.doc.forEach((node) => {
+                if (node.type.name.endsWith('_list'))
+                    lists.push(node.type.name);
+            });
+            assert.deepEqual(lists, scenario.lists);
+            assert.equal(view.state.doc.textContent, scenario.labels.join(''));
+            assert.deepEqual(
+                [
+                    ...view.dom.querySelectorAll<HTMLInputElement>(
+                        'input[type="checkbox"]'
+                    ),
+                ].map((input) => input.checked),
+                scenario.checked
+            );
+            if (scenario.orderedStart !== undefined)
+                assert.equal(
+                    view.state.doc.firstChild?.attrs.order,
+                    scenario.orderedStart
+                );
+            if (scenario.marked) {
+                assert.equal(
+                    view.dom.querySelector('strong')?.textContent,
+                    'Bold'
+                );
+                assert.equal(
+                    view.dom.querySelector('em')?.textContent,
+                    'emphasis'
+                );
+                assert.equal(
+                    view.dom.querySelector('a')?.getAttribute('href'),
+                    'https://example.com/'
+                );
+            }
+            assert.equal(writes.length, 1);
+            const stored = writes[0]!;
+            assert(!stored.includes('Sentinel'));
+            for (const label of scenario.storedLabels ?? scenario.labels) {
+                // Formatting separates label characters in stored Markdown.
+                if (!scenario.marked) assert(stored.includes(label));
+            }
+            if (scenario.stored !== undefined)
+                assert.equal(stored, scenario.stored);
+            const pasted = view.state.doc.toJSON();
+            const reloadedWrites: string[] = [];
+            await f.render(
+                h(ControlledCompleteEditor, {
+                    key: 'reloaded',
+                    editorRef: ref,
+                    writes: reloadedWrites,
+                    initial: stored,
+                })
+            );
+            const reloaded = (await f.editor(ref)).view;
+            reloaded.state.doc.check();
+            assert.deepEqual(reloaded.state.doc.toJSON(), pasted);
+            assert.deepEqual(reloadedWrites, []);
+        }
+    );
+}
+
+it('preserves surrounding text and marks when mixed lists replace a partial selection', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '**Before** SELECT _after_',
+        })
+    );
+    const { view } = await f.editor(ref);
+    await f.select(view, 8, 14);
+    await f.paste(view, { 'text/plain': '- [x] Task\n- Plain' });
+    view.state.doc.check();
+    assert.equal(view.state.doc.textContent, 'Before TaskPlain after');
+    assert.equal(view.dom.querySelector('strong')?.textContent, 'Before');
+    assert.equal(view.dom.querySelector('em')?.textContent, 'after');
+    assert.equal(
+        view.dom.querySelector<HTMLInputElement>('input[type="checkbox"]')
+            ?.checked,
+        true
+    );
+    assert.equal(
+        view.dom.querySelectorAll('ul:not(.checkbox_list) > li').length,
+        1
+    );
+    assert.equal(writes.length, 1);
+    assert(!writes[0]!.includes('SELECT'));
+});
+
 it('normalizes bare stored checkbox syntax only through the real Markdown paste path', async (t) => {
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();

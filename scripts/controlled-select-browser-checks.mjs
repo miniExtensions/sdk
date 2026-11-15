@@ -67,18 +67,20 @@ export async function checkControlledSelectBrowser({
                 imports +
                 `
 const {createElement:h,useState,useRef}=React;
-let writes=[],submits=0,activations=0,observed;
+let writes=[],submits=0,activations=0,observed,singleEchoTransitions=[];
 const choices=[{id:'a',name:'Alpha',displayName:'First'},{id:'b',name:'Beta',displayName:'Second'},{id:'c',name:'Gamma',displayName:'Third'}];
 function App(){
  const [state,setState]=useState({single:null,multi:['Alpha','Beta'],limited:['Alpha'],choices,readonly:false,active:true,token:{}});
  const latest=useRef(state);latest.current=state;observed=state;
+ const canonicalSingle=useRef(state.single);
  const scope=state.token;
  const owner={token:scope,isCurrent:()=>latest.current.active&&latest.current.token===scope};
+ const singleOwner={token:scope,isCurrent:()=>owner.isCurrent()&&canonicalSingle.current===state.single};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
- const change=(key,value)=>{if(!owner.isCurrent()||latest.current.readonly)return false;writes.push({kind:'value',key,value});setState(old=>({...old,[key]:value}));};
+ const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
  return h('form',{id:'select-form',style:{'--mx-sdk-field-theme-color':'#7c3aed'},onSubmit:event=>{event.preventDefault();submits++;}},
  h('label',{htmlFor:'single'},'Decision'),h('p',{id:'select-help'},'Choice help'),
- h(SingleSelectField,{...common,inputId:'single',ariaLabel:'Decision',describedBy:'select-help',presentation:'dropdown',value:state.single,onValueChange:value=>change('single',value),allowAddingNewOptions:true,publishMetadata:choice=>{if(!owner.isCurrent())return false;writes.push({kind:'metadata',choice});setState(old=>({...old,choices:[...old.choices,choice]}));return true;}}),
+ h(SingleSelectField,{...common,owner:singleOwner,inputId:'single',ariaLabel:'Decision',describedBy:'select-help',presentation:'dropdown',value:state.single,onValueChange:value=>change('single',value),allowAddingNewOptions:true,publishMetadata:choice=>{if(!owner.isCurrent())return false;writes.push({kind:'metadata',choice});setState(old=>({...old,choices:[...old.choices,choice]}));return true;}}),
  h('section',{'aria-label':'Many control'},h(MultipleSelectsField,{...common,ariaLabel:'Many',presentation:'list',value:state.multi,maxSelections:2,onValueChange:value=>change('multi',value),allowAddingNewOptions:true,publishMetadata:choice=>{if(!owner.isCurrent())return false;writes.push({kind:'metadata',choice});setState(old=>({...old,choices:[...old.choices,choice]}));return true;}})),
  h(MultipleSelectsField,{...common,ariaLabel:'One from many',presentation:'list',value:state.limited,limitToOneSelection:true,onValueChange:value=>change('limited',value)}),
  h('div',{'data-grid-cell':'',onClick:()=>{activations++;}},h(MultipleSelectsField,{...common,presentation:'dropdown',readOnly:true,value:['Missing'],onValueChange:()=>{throw Error('readonly writer');}})),
@@ -88,7 +90,7 @@ function App(){
  h('button',{type:'submit'},'Explicit Save'));
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submits,activations,single:observed.single,multi:observed.multi,limited:observed.limited})};
+window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submits,activations,single:observed.single,multi:observed.multi,limited:observed.limited,singleEchoTransitions:[...singleEchoTransitions]})};
 `;
             const entry = join(
                 directory,
@@ -204,9 +206,52 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
             });
             await single.fill('Second');
             await single.press('ArrowDown');
+            const beforeSingleSelection = await snapshot();
             await single.press('Enter');
-            assert.equal((await snapshot()).single, 'Beta');
-            assert.equal((await snapshot()).submits, 0);
+            await page.waitForFunction(() => {
+                const input = document.getElementById('single');
+                return (
+                    window.selectProof.snapshot().single === 'Beta' &&
+                    input?.value === '' &&
+                    input.getAttribute('aria-expanded') === 'false'
+                );
+            });
+            const afterSingleSelection = await snapshot();
+            const synchronousCanonicalEcho = {
+                value: afterSingleSelection.single,
+                writes: afterSingleSelection.writes.slice(
+                    beforeSingleSelection.writes.length
+                ),
+                authority: afterSingleSelection.singleEchoTransitions.slice(
+                    beforeSingleSelection.singleEchoTransitions.length
+                ),
+                search: await single.inputValue(),
+                expanded: await single.getAttribute('aria-expanded'),
+                submits: afterSingleSelection.submits,
+                sentinel: await page
+                    .getByRole('textbox', {
+                        name: 'Adjacent sentinel',
+                        exact: true,
+                    })
+                    .inputValue(),
+            };
+            assert.deepEqual(synchronousCanonicalEcho, {
+                value: 'Beta',
+                writes: [{ kind: 'value', key: 'single', value: 'Beta' }],
+                authority: [
+                    {
+                        renderedValue: null,
+                        canonicalValue: 'Beta',
+                        currentBefore: true,
+                        currentAfter: false,
+                    },
+                ],
+                search: '',
+                expanded: 'false',
+                submits: 0,
+                sentinel: 'untouched',
+            });
+            assert.equal(await page.getByRole('listbox').count(), 0);
             assert.equal(
                 await single.getAttribute('aria-describedby'),
                 'select-help'
@@ -461,6 +506,7 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
             });
             evidence.results.push({
                 format,
+                synchronousCanonicalEcho,
                 presentation,
                 dialogs,
                 ...(await snapshot()),
@@ -471,7 +517,7 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; canonical echo, deferred metadata order, caps/radios, action spacing and wrapped layout, themed list inputs, keyboard focus and disabled actions, cancelled prompt and one Clear, readonly grid events, sentinel and explicit submit. No native Form/provider claim.';
+            'Installed controlled ESM/CJS Select UI; synchronous value-bound canonical owner echo with one Enter writer and settled search/menu, deferred metadata order, caps/radios, action spacing and wrapped layout, themed list inputs, keyboard focus and disabled actions, cancelled prompt and one Clear, readonly grid events, sentinel and explicit submit. No native Form/provider claim.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

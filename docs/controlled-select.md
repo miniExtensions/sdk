@@ -22,6 +22,10 @@ The host must preserve the captured authority across only that exact metadata
 transition. Refusal, exceptions and authority retirement do not trigger rollback,
 provider creation, or a retry against a successor. A same-value Single selection
 still reaches the native writer; the component does not discard its intent.
+After an accepted selection, clearing search waits for the exact controlled
+value echo and current owner. Single dropdowns close; Multiple dropdowns stay
+open. A newer interaction, different value, owner replacement or edit-policy
+change retires that pending UI update without retrying the writer.
 
 `createSelectConditionEvaluation` takes explicit current record/schema/link
 context and option rules. It owns compatible condition compilation and lazy

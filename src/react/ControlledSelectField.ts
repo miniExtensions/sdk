@@ -90,6 +90,19 @@ const key = (choice: ControlledSelectChoice) =>
         canonicalName: choice.name,
         displayName: label(choice),
     });
+const sameValues = (left: readonly string[], right: readonly string[]) =>
+    left.length === right.length &&
+    left.every((value, index) => value === right[index]);
+
+type SelectionSettlement = {
+    epoch: object;
+    revision: number;
+    previousValues: readonly string[];
+    values: readonly string[];
+    open: boolean;
+    accepted: boolean;
+    observedExpected: boolean;
+};
 
 /** Complete controlled picker. Only transient search/open state is owned here. */
 function SelectControl(props: ControlProps): ReactNode {
@@ -106,6 +119,7 @@ function SelectControl(props: ControlProps): ReactNode {
         generation.current = { token: props.owner.token, epoch: {} };
     const epoch = generation.current.epoch;
     const live = useRef<ControlProps | null>(null);
+    const pendingSettlement = useRef<SelectionSettlement | null>(null);
     const commitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
     commitEffect(() => {
@@ -114,6 +128,12 @@ function SelectControl(props: ControlProps): ReactNode {
             live.current = null;
         };
     });
+    commitEffect(
+        () => () => {
+            pendingSettlement.current = null;
+        },
+        []
+    );
     const revision = useRef(0);
     const creation = useRef<{ epoch: object } | null>(null);
     const [creationState, setCreationState] = useState<{
@@ -166,9 +186,16 @@ function SelectControl(props: ControlProps): ReactNode {
         // Retained blur/search/hover callbacks must not erase a successor's draft.
         if (live.current !== props || generation.current.epoch !== epoch)
             return;
-        if (change.text !== undefined && change.text !== state.text)
+        const next = { ...state, ...change };
+        if (
+            next.text !== state.text ||
+            next.open !== state.open ||
+            next.active !== state.active
+        ) {
             revision.current++;
-        setDraft({ ...state, ...change });
+            pendingSettlement.current = null;
+        }
+        setDraft(next);
     };
     const writable = () =>
         live.current === props &&
@@ -216,19 +243,87 @@ function SelectControl(props: ControlProps): ReactNode {
     const found = state.text
         ? (fuse?.search(state.text).map((result) => result.item) ?? [])
         : candidates;
-    const settle = (submittedRevision: number, open: boolean) => {
+    const settlePending = (committed: boolean) => {
+        const pending = pendingSettlement.current;
+        if (!pending) return;
         const current = live.current;
         if (
             !current ||
-            generation.current.epoch !== epoch ||
-            revision.current !== submittedRevision ||
+            generation.current.epoch !== pending.epoch ||
+            revision.current !== pending.revision ||
             current.disabled ||
             current.readOnly ||
-            current.visible === false ||
-            !current.owner.isCurrent()
-        )
+            current.visible === false
+        ) {
+            pendingSettlement.current = null;
             return;
-        setDraft({ epoch, text: '', open, active: -1 });
+        }
+        const expected = sameValues(current.values, pending.values);
+        const currentOwner = current.owner.isCurrent();
+        if (
+            (!expected &&
+                (pending.observedExpected ||
+                    !sameValues(current.values, pending.previousValues))) ||
+            (committed && expected && !currentOwner)
+        ) {
+            // A different committed value or retired authority cannot later
+            // become this operation's receipt by returning to the same value.
+            pendingSettlement.current = null;
+            return;
+        }
+        if (committed && expected) pending.observedExpected = true;
+        // Native value-bound authority can be false until the controlled echo.
+        // Only that exact current echo may settle; no writer is retried here.
+        if (!pending.accepted || !expected || !currentOwner) return;
+        pendingSettlement.current = null;
+        setDraft({
+            epoch: pending.epoch,
+            text: '',
+            open: pending.open,
+            active: -1,
+        });
+    };
+    commitEffect(() => settlePending(true));
+    const changeAndSettle = (
+        values: string[],
+        submittedRevision: number,
+        previousValues: readonly string[]
+    ) => {
+        // Metadata admission may synchronously admit a newer picker intent.
+        // Keep its settlement while preserving the original native writer gate.
+        if (
+            generation.current.epoch !== epoch ||
+            revision.current !== submittedRevision
+        )
+            return props.change(values);
+        const pending: SelectionSettlement = {
+            epoch,
+            revision: submittedRevision,
+            previousValues: [...previousValues],
+            values: [...values],
+            open: props.multiple,
+            accepted: false,
+            observedExpected: false,
+        };
+        // Observe synchronous commits during the writer, but never clear the
+        // picker until the writer has actually accepted this exact intent.
+        pendingSettlement.current = pending;
+        let accepted: boolean | void;
+        try {
+            accepted = props.change(values);
+        } catch (error) {
+            if (pendingSettlement.current === pending)
+                pendingSettlement.current = null;
+            throw error;
+        }
+        if (pendingSettlement.current === pending) {
+            if (accepted === false) pendingSettlement.current = null;
+            else {
+                pending.accepted = true;
+                settlePending(false);
+            }
+        }
+        return accepted;
     };
     const choose = (name: string) => {
         if (
@@ -244,12 +339,13 @@ function SelectControl(props: ControlProps): ReactNode {
             !props.multiple || props.limitToOneSelection
                 ? [name]
                 : [...props.values, name];
-        const submittedRevision = revision.current;
-        const accepted = props.change(next);
-        if (accepted !== false) settle(submittedRevision, props.multiple);
+        const submittedRevision = ++revision.current;
+        changeAndSettle(next, submittedRevision, [...props.values]);
     };
     const remove = (name: string, element?: HTMLButtonElement) => {
         if (!writable()) return;
+        revision.current++;
+        pendingSettlement.current = null;
         if (element) focusAfterRemoval.current = { epoch, element };
         const accepted = props.change(
             props.values.filter((value) => value !== name)
@@ -257,7 +353,10 @@ function SelectControl(props: ControlProps): ReactNode {
         if (accepted === false) focusAfterRemoval.current = null;
     };
     const clear = () => {
-        if (writable()) props.change([]);
+        if (!writable()) return;
+        revision.current++;
+        pendingSettlement.current = null;
+        props.change([]);
     };
     const create = (name = state.text) => {
         if (
@@ -270,7 +369,9 @@ function SelectControl(props: ControlProps): ReactNode {
             return;
         const operation = { epoch };
         creation.current = operation;
-        const submittedRevision = revision.current;
+        const submittedRevision = ++revision.current;
+        pendingSettlement.current = null;
+        const previousValues = [...props.values];
         setCreationState({ epoch, busy: true, failed: false });
         let metadataPublished = false;
         const publishMetadata = props.publishMetadata;
@@ -292,17 +393,30 @@ function SelectControl(props: ControlProps): ReactNode {
                     return accepted;
                 },
                 selectName: (name) =>
-                    props.change(
+                    changeAndSettle(
                         !props.multiple || props.limitToOneSelection
                             ? [name]
-                            : [...props.values, name]
+                            : [...props.values, name],
+                        submittedRevision,
+                        previousValues
                     ),
             });
             if (
-                result.status === 'selected' ||
-                result.status === 'already-selected'
-            )
-                settle(submittedRevision, props.multiple);
+                result.status === 'already-selected' &&
+                generation.current.epoch === epoch &&
+                revision.current === submittedRevision
+            ) {
+                pendingSettlement.current = {
+                    epoch,
+                    revision: submittedRevision,
+                    previousValues,
+                    values: previousValues,
+                    open: props.multiple,
+                    accepted: true,
+                    observedExpected: false,
+                };
+                settlePending(false);
+            }
         } catch (error) {
             if (live.current && generation.current.epoch === epoch)
                 setCreationState({ epoch, busy: true, failed: true });

@@ -1,0 +1,58 @@
+import type {
+    PostgresConnection,
+    PostgresDatabase,
+    PostgresSchema,
+    PostgresTable,
+    PostgresTableReference,
+    PostgresField,
+    PostgresType,
+    PostgresRelationship,
+    PostgresRecord,
+    PostgresRecordIdentity,
+    PostgresValue,
+} from '@miniextensions/sdk';
+
+export type NativeMetadataExports = [
+    PostgresConnection,
+    PostgresDatabase,
+    PostgresSchema,
+    PostgresTable,
+    PostgresField,
+    PostgresType,
+    PostgresRelationship,
+];
+
+export const table: PostgresTableReference = {
+    connectionId: 'synthetic-connection',
+    schemaName: 'Sales Ops',
+    tableName: 'Order Items',
+};
+export const identity: PostgresRecordIdentity = {
+    type: 'primary-key',
+    values: [
+        { columnName: 'tenant_id', value: 'tenant-one' },
+        { columnName: 'id', value: '9007199254740993' },
+    ],
+};
+export const record: PostgresRecord = {
+    table,
+    identity,
+    fields: {
+        id: '9007199254740993',
+        amount: '12345678901234567890.1234567890',
+        nullable: null,
+    },
+};
+export const keyless: PostgresRecord = {
+    table,
+    identity: null,
+    fields: { title: '' },
+};
+export const value: PostgresValue = record.fields.id;
+
+// @ts-expect-error Native wire values must not lose integer/numeric precision.
+export const numericCoercion: PostgresValue = 9007199254740993;
+// @ts-expect-error Temporal wire values retain PostgreSQL text precision/timezone semantics.
+export const temporalCoercion: PostgresValue = new Date();
+// @ts-expect-error Native identities do not become Airtable record IDs.
+export const airtableIdentity: PostgresRecordIdentity = 'rec_example';

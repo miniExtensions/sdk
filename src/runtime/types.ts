@@ -22,6 +22,19 @@ import type {
     CanonicalSelectorFilter,
     CanonicalSelectFieldChoice,
 } from './contracts/generated.js';
+import type {
+    CanonicalPostgresConnection,
+    CanonicalPostgresDatabase,
+    CanonicalPostgresField,
+    CanonicalPostgresRecord,
+    CanonicalPostgresRecordIdentity,
+    CanonicalPostgresRelationship,
+    CanonicalPostgresSchema,
+    CanonicalPostgresTable,
+    CanonicalPostgresTableReference,
+    CanonicalPostgresType,
+    CanonicalPostgresValue,
+} from './contracts/postgres.generated.js';
 
 export type { CanonicalOperationTransports } from './contracts/generated.js';
 
@@ -45,6 +58,18 @@ export type SelectFieldChoice = CanonicalSelectFieldChoice;
 export type AirtableFieldSet = CanonicalAirtableFieldSet;
 export type AirtableRecord = CanonicalAirtableRecord;
 export type AirtableValue = CanonicalAirtableValue;
+/** Native PostgreSQL metadata and wire values; these do not imply a loaded Form. */
+export type PostgresConnection = CanonicalPostgresConnection;
+export type PostgresDatabase = CanonicalPostgresDatabase;
+export type PostgresSchema = CanonicalPostgresSchema;
+export type PostgresTable = CanonicalPostgresTable;
+export type PostgresTableReference = CanonicalPostgresTableReference;
+export type PostgresField = CanonicalPostgresField;
+export type PostgresType = CanonicalPostgresType;
+export type PostgresRelationship = CanonicalPostgresRelationship;
+export type PostgresRecord = CanonicalPostgresRecord;
+export type PostgresValue = CanonicalPostgresValue;
+export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type RuntimeQuery = CanonicalQuery;
 export type RuntimeLanguage = CanonicalLanguage;
 export type RuntimeAirtableField = CanonicalAirtableField;

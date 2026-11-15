@@ -74,7 +74,8 @@ function exactKeys(value, keys) {
 export async function assertPublicDistribution(
     packageRoot,
     packedPaths,
-    internal
+    internal,
+    postgres = null
 ) {
     const contents = new Map();
     const privateValues = [
@@ -86,6 +87,14 @@ export async function assertPublicDistribution(
         ...internal.sources.map(({ path }) => path),
         ...internal.dependencies.map(({ path }) => path),
         ...internal.operations.map(({ module }) => module),
+        ...(postgres
+            ? [
+                  postgres.sourceRepository,
+                  postgres.sourceRevision,
+                  ...postgres.sources.map(({ path }) => path),
+                  ...postgres.dependencies.map(({ path }) => path),
+              ]
+            : []),
     ].filter((value) => typeof value === 'string' && value.length > 0);
     for (const path of packedPaths) {
         assert(
@@ -169,6 +178,78 @@ export async function assertPublicDistribution(
             sha256(contents.get(prefix + '.js')) === publicModuleHashes[format],
             'Contract runtime bytes changed beyond the private comment'
         );
+    }
+    if (postgres) {
+        const nativeDeclarations = contents.get(
+            'dist/esm/runtime/contracts/postgres.generated.d.ts'
+        );
+        assert(nativeDeclarations, 'Missing PostgreSQL contract declarations');
+        assert(
+            nativeDeclarations.equals(
+                contents.get(
+                    'dist/cjs/runtime/contracts/postgres.generated.d.ts'
+                )
+            ),
+            'PostgreSQL module formats have different contract declarations'
+        );
+        const nativeDigest = sha256(nativeDeclarations);
+        for (const format of ['esm', 'cjs']) {
+            const prefix = `dist/${format}/runtime/contracts/postgres.generated`;
+            const provenance = JSON.parse(
+                contents.get(prefix + '.provenance.json')
+            );
+            assert(
+                exactKeys(provenance, [
+                    ...provenanceFields,
+                    'contractFamily',
+                    'aliases',
+                ]),
+                'Unexpected PostgreSQL public provenance fields'
+            );
+            assert(
+                provenance.schemaVersion === 1 &&
+                    provenance.contractFamily === 'postgres' &&
+                    postgres.contractFamily === 'postgres',
+                'Invalid PostgreSQL public provenance schema'
+            );
+            for (const field of [
+                'compilerVersion',
+                'generatorSha256',
+                'transport',
+                'declarationCount',
+                'generatedSha256',
+            ])
+                assert(
+                    provenance[field] === postgres[field],
+                    `PostgreSQL public provenance changed recorded ${field}`
+                );
+            assert(
+                provenance.contractDeclarationsSha256 === nativeDigest,
+                'PostgreSQL provenance does not identify packaged declarations'
+            );
+            assert(
+                JSON.stringify(provenance.aliases) ===
+                    JSON.stringify(postgres.aliases),
+                'PostgreSQL public provenance lost native aliases'
+            );
+            assert(
+                Array.isArray(provenance.operations) &&
+                    provenance.operations.length === 0,
+                'Native PostgreSQL metadata cannot claim runtime operations'
+            );
+            assert(
+                JSON.stringify(provenance.dependencies) ===
+                    JSON.stringify(
+                        publicContractDependencies(postgres.dependencies)
+                    ),
+                'PostgreSQL dependency provenance differs from captured inputs'
+            );
+            assert(
+                sha256(contents.get(prefix + '.js')) ===
+                    publicModuleHashes[format],
+                'PostgreSQL runtime bytes changed beyond the private comment'
+            );
+        }
     }
     assert(
         contents

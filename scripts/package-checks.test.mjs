@@ -646,6 +646,150 @@ test('public distribution accepts captured contracts and complete notices', asyn
     await fixture.check();
 });
 
+async function postgresDistributionFixture(t) {
+    const fixture = await distributionFixture(t);
+    const hash = (value) => createHash('sha256').update(value).digest('hex');
+    const declaration = 'export type CanonicalPostgresValue = string | null;\n';
+    const postgres = {
+        sourceRepository: 'synthetic/private-postgres-source',
+        sourceRevision: 'c'.repeat(40),
+        sources: [{ path: 'synthetic/internal-postgres-types.ts' }],
+        compilerVersion: '5.9.3',
+        generatorSha256: hash('fixture-postgres-generator'),
+        contractFamily: 'postgres',
+        aliases: ['PostgresValue'],
+        transport: 'plain JSON',
+        declarationCount: 1,
+        generatedSha256: hash('fixture-postgres-generated-source'),
+        dependencies: [],
+    };
+    const provenance = {
+        schemaVersion: 1,
+        contractFamily: postgres.contractFamily,
+        aliases: postgres.aliases,
+        compilerVersion: postgres.compilerVersion,
+        generatorSha256: postgres.generatorSha256,
+        transport: postgres.transport,
+        declarationCount: postgres.declarationCount,
+        generatedSha256: postgres.generatedSha256,
+        contractDeclarationsSha256: hash(declaration),
+        operations: [],
+        dependencies: ['@trpc/server', 'airtable', 'zod', '@types/node'].map(
+            (name) => ({ package: name, inputSha256: [] })
+        ),
+    };
+    const paths = [...fixture.paths];
+    for (const format of ['esm', 'cjs']) {
+        const prefix = `dist/${format}/runtime/contracts/postgres.generated`;
+        for (const [suffix, content] of [
+            ['.d.ts', declaration],
+            ['.provenance.json', JSON.stringify(provenance)],
+            [
+                '.js',
+                await readFile(
+                    join(
+                        fixture.root,
+                        `dist/${format}/runtime/contracts/generated.js`
+                    )
+                ),
+            ],
+        ]) {
+            const path = prefix + suffix;
+            await write(fixture.root, path, content);
+            paths.push(path);
+        }
+    }
+    return {
+        ...fixture,
+        postgres,
+        nativeProvenance: provenance,
+        paths,
+        check: () =>
+            assertPublicDistribution(
+                fixture.root,
+                paths,
+                fixture.internal,
+                postgres
+            ),
+    };
+}
+
+test('public distribution accepts separate PostgreSQL metadata provenance', async (t) => {
+    const fixture = await postgresDistributionFixture(t);
+    await fixture.check();
+});
+
+test('public distribution rejects private PostgreSQL provenance in package files', async (t) => {
+    for (const [path, leaked] of [
+        ['dist/esm/runtime/contracts/postgres.generated.js', 'revision'],
+        ['docs/runtime.md', 'source'],
+    ]) {
+        await t.test(path, async (t) => {
+            const fixture = await postgresDistributionFixture(t);
+            const original = await readFile(join(fixture.root, path), 'utf8');
+            const value =
+                leaked === 'revision'
+                    ? fixture.postgres.sourceRevision
+                    : fixture.postgres.sources[0].path;
+            await write(fixture.root, path, original + '// ' + value + '\n');
+            await assert.rejects(
+                fixture.check(),
+                /Private source provenance shipped/
+            );
+        });
+    }
+});
+
+test('public distribution rejects changed PostgreSQL declaration bytes', async (t) => {
+    const fixture = await postgresDistributionFixture(t);
+    for (const format of ['esm', 'cjs'])
+        await write(
+            fixture.root,
+            `dist/${format}/runtime/contracts/postgres.generated.d.ts`,
+            'export type CanonicalPostgresValue = number;\n'
+        );
+    await assert.rejects(
+        fixture.check(),
+        /PostgreSQL provenance does not identify/
+    );
+});
+
+test('public distribution rejects PostgreSQL runtime code beyond type declarations', async (t) => {
+    const fixture = await postgresDistributionFixture(t);
+    await write(
+        fixture.root,
+        'dist/esm/runtime/contracts/postgres.generated.js',
+        'export function unexpectedOperation() {}\n'
+    );
+    await assert.rejects(fixture.check(), /PostgreSQL runtime bytes changed/);
+});
+
+test('public distribution rejects private or expanded PostgreSQL metadata receipts', async (t) => {
+    for (const [field, value, message] of [
+        [
+            'sourceRevision',
+            'b'.repeat(40),
+            /Unexpected PostgreSQL public provenance fields/,
+        ],
+        ['aliases', [], /lost native aliases/],
+        [
+            'operations',
+            [{ operation: 'forms.save' }],
+            /cannot claim runtime operations/,
+        ],
+    ]) {
+        await t.test(field, async (t) => {
+            const fixture = await postgresDistributionFixture(t);
+            await write(
+                fixture.root,
+                'dist/esm/runtime/contracts/postgres.generated.provenance.json',
+                JSON.stringify({ ...fixture.nativeProvenance, [field]: value })
+            );
+            await assert.rejects(fixture.check(), message);
+        });
+    }
+});
+
 async function capturedSdkDependencyFixture(t) {
     const fixture = await distributionFixture(t);
     const digest = createHash('sha256')

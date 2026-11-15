@@ -1,0 +1,30 @@
+{
+    "sourceRepository": "miniExtensions/monorepo",
+    "sourceRevision": "4af72eaf2d24f71fcc77f4e21e762a4ef8a05f22",
+    "compilerVersion": "5.9.3",
+    "generatorSha256": "6e337f2fdb5391893e1a81dc8deb3b27226d8636273da7afa8fb401f1c6388f4",
+    "contractFamily": "postgres",
+    "aliases": [
+        "PostgresConnection",
+        "PostgresDatabase",
+        "PostgresSchema",
+        "PostgresTable",
+        "PostgresTableReference",
+        "PostgresField",
+        "PostgresType",
+        "PostgresRelationship",
+        "PostgresRecord",
+        "PostgresValue",
+        "PostgresRecordIdentity"
+    ],
+    "transport": "plain JSON; canonical enum literals; no runtime code or imports",
+    "sources": [
+        {
+            "path": "types/postgres/types.ts",
+            "sha256": "b208eaef5eecda19750f21cda818897ea9c977b1cdb5a78c3a96f9ca1173d0b6"
+        }
+    ],
+    "dependencies": [],
+    "declarationCount": 39,
+    "generatedSha256": "907716b559bbdc87882ad7366b230f2e29504fc1093aac3e5198b8a7e3ed457f"
+}

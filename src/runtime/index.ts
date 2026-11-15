@@ -16,6 +16,17 @@ export type {
     AirtableCollaborator,
     AirtableRecord,
     AirtableValue,
+    PostgresConnection,
+    PostgresDatabase,
+    PostgresField,
+    PostgresRecord,
+    PostgresRecordIdentity,
+    PostgresRelationship,
+    PostgresSchema,
+    PostgresTable,
+    PostgresTableReference,
+    PostgresType,
+    PostgresValue,
     SelectFieldChoice,
 } from './types.js';
 export type * from './types.js';

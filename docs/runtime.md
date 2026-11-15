@@ -6,6 +6,13 @@ client: your app renders the interface while the existing handlers enforce
 the Form/Portal's visitor, record, field, and action permissions. Public tRPC
 requests use the official `@trpc/client` HTTP link and its plain JSON protocol.
 
+The package also exports native PostgreSQL connection, database, schema, table,
+field, relationship and record metadata types. `PostgresValue` preserves the
+server's text representation as `string | null`, including large numbers,
+timestamps, JSON and arrays; SQL NULL remains distinct from an empty string.
+These additive metadata contracts do not yet enable PostgreSQL Form/Portal
+operations or change the existing Airtable runtime contracts.
+
 For a complete browser application, start with the shipped
 [browser lifecycle guide](browser-lifecycle.md). It explains how to copy the
 packaged Form and Portal starter into your own project, install the exact
@@ -372,7 +379,7 @@ snapshot against the detailed internal manifest:
 node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --check
 ```
 
-The generator checks the selected source revision and input file hashes.
+Operation-snapshot generation checks the selected source revision and input file hashes.
 Before compiling contracts or writing outputs, it executes that checkout's
 unchanged canonical public-runtime CORS transport helper.
 Every generated public tRPC query/mutation must receive both preflight and
@@ -395,6 +402,21 @@ historical revision and is not an automatic selection of current backend code.
 Regenerate the snapshot and update the packaged declaration digest when
 adopting API contract changes. Installed consumers need no internal source,
 generator or credentials.
+
+Native PostgreSQL metadata has an independent generated snapshot, so adding
+these types does not replace the existing operation contracts. Maintainers
+verify it with:
+
+```sh
+node scripts/generate-runtime-contracts.mjs --postgres-only --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --verify --check
+```
+
+Omit `--verify --check` to generate it. This mode reads only the canonical native
+models and uses the same compiler, source-hash and bidirectional contract checks;
+it generates no API operations and does not run transport CORS checks. Both
+module formats ship `runtime/contracts/postgres.generated.d.ts` with public
+declaration provenance. Private source revisions and source paths remain in the
+repository's internal manifest.
 
 ## Portal tables, search, and pagination
 

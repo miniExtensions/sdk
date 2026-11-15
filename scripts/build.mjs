@@ -158,17 +158,6 @@ await bundleDatePopover();
 mkdirSync('dist/cjs', { recursive: true });
 writeFileSync('dist/cjs/package.json', '{"type":"commonjs"}\n');
 
-// The detailed source manifest remains the generator's internal --check input.
-const internal = JSON.parse(
-    readFileSync('src/runtime/contracts/generated.provenance.json', 'utf8')
-);
-const declarations = readFileSync('dist/esm/runtime/contracts/generated.d.ts');
-assert(
-    declarations.equals(
-        readFileSync('dist/cjs/runtime/contracts/generated.d.ts')
-    ),
-    'Module formats must distribute identical contract declarations'
-);
 const publicOperationFields = [
     'operation',
     'input',
@@ -177,38 +166,59 @@ const publicOperationFields = [
     'kind',
     'transport',
 ];
-const publicProvenance = {
-    schemaVersion: 1,
-    compilerVersion: internal.compilerVersion,
-    generatorSha256: internal.generatorSha256,
-    transport: internal.transport,
-    declarationCount: internal.declarationCount,
-    generatedSha256: internal.generatedSha256,
-    contractDeclarationsSha256: createHash('sha256')
-        .update(declarations)
-        .digest('hex'),
-    operations: internal.operations.map((operation) =>
-        Object.fromEntries(
-            publicOperationFields.map((field) => [field, operation[field]])
-        )
-    ),
-    dependencies: publicContractDependencies(internal.dependencies),
-};
-for (const format of ['esm', 'cjs']) {
-    const modulePath = `dist/${format}/runtime/contracts/generated.js`;
-    const module = readFileSync(modulePath, 'utf8');
-    const privateComment = `// Canonical monorepo revision: ${internal.sourceRevision}\n`;
-    assert.equal(
-        module.split(privateComment).length,
-        2,
-        'Expected one generated revision comment'
+for (const name of ['generated', 'postgres.generated']) {
+    // The detailed source manifest remains the generator's internal --check input.
+    const internal = JSON.parse(
+        readFileSync(`src/runtime/contracts/${name}.provenance.json`, 'utf8')
     );
-    // Remove only this comment; emitted code and other comments stay intact.
-    writeFileSync(modulePath, module.replace(privateComment, ''));
-    writeFileSync(
-        `dist/${format}/runtime/contracts/generated.provenance.json`,
-        JSON.stringify(publicProvenance, null, 4) + '\n'
+    const declarations = readFileSync(
+        `dist/esm/runtime/contracts/${name}.d.ts`
     );
+    assert(
+        declarations.equals(
+            readFileSync(`dist/cjs/runtime/contracts/${name}.d.ts`)
+        ),
+        'Module formats must distribute identical contract declarations'
+    );
+    const publicProvenance = {
+        schemaVersion: 1,
+        ...(name === 'postgres.generated'
+            ? {
+                  contractFamily: internal.contractFamily,
+                  aliases: internal.aliases,
+              }
+            : {}),
+        compilerVersion: internal.compilerVersion,
+        generatorSha256: internal.generatorSha256,
+        transport: internal.transport,
+        declarationCount: internal.declarationCount,
+        generatedSha256: internal.generatedSha256,
+        contractDeclarationsSha256: createHash('sha256')
+            .update(declarations)
+            .digest('hex'),
+        operations: (internal.operations ?? []).map((operation) =>
+            Object.fromEntries(
+                publicOperationFields.map((field) => [field, operation[field]])
+            )
+        ),
+        dependencies: publicContractDependencies(internal.dependencies),
+    };
+    for (const format of ['esm', 'cjs']) {
+        const modulePath = `dist/${format}/runtime/contracts/${name}.js`;
+        const module = readFileSync(modulePath, 'utf8');
+        const privateComment = `// Canonical monorepo revision: ${internal.sourceRevision}\n`;
+        assert.equal(
+            module.split(privateComment).length,
+            2,
+            'Expected one generated revision comment'
+        );
+        // Remove only this comment; emitted code and other comments stay intact.
+        writeFileSync(modulePath, module.replace(privateComment, ''));
+        writeFileSync(
+            `dist/${format}/runtime/contracts/${name}.provenance.json`,
+            JSON.stringify(publicProvenance, null, 4) + '\n'
+        );
+    }
 }
 
 for (const format of ['esm', 'cjs']) {

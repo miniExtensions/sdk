@@ -893,6 +893,12 @@ try {
                 'src/runtime/contracts/generated.provenance.json',
                 'utf8'
             )
+        ),
+        JSON.parse(
+            readFileSync(
+                'src/runtime/contracts/postgres.generated.provenance.json',
+                'utf8'
+            )
         )
     );
     await assertPackedDocLinks(
@@ -1760,6 +1766,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         'scripts/native-form-progress-exact-optional-consumer.types.ts.txt',
         'utf8'
     );
+    const postgresMetadataConsumer = readFileSync(
+        'scripts/postgres-public-consumer.types.ts.txt',
+        'utf8'
+    );
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
@@ -1828,6 +1838,11 @@ new Parser([]).parse({maxDepth:'48'});
             join(temporaryDirectory, sourceEnvelopeFilename),
             sourceEnvelopeConsumer
         );
+        const postgresMetadataFilename = `postgres-metadata-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, postgresMetadataFilename),
+            postgresMetadataConsumer
+        );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',
@@ -1847,6 +1862,7 @@ new Parser([]).parse({maxDepth:'48'});
             linkedChildEditFilename,
             pageFilename,
             sourceEnvelopeFilename,
+            postgresMetadataFilename,
             ...formulasGuideSources,
         ]);
         const exactOptionalFilename = `native-progress-exact-optional-${filename}`;

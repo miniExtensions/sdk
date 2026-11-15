@@ -305,7 +305,7 @@ globalThis.controlledFormulaProof={
         type: 'image/svg+xml',
         filename: 'Other',
     };
-    const duplicate = { ...first, filename: 'First repeated' };
+    const duplicate = { ...first, filename: 'First repeated.svg' };
     const last = {
         url: origin + '/last.svg',
         type: 'image/svg+xml',
@@ -349,7 +349,7 @@ globalThis.controlledFormulaProof={
     await dialog.getByText('3 / 4', { exact: true }).waitFor();
     await dialog
         .locator('.mx-sdk-url-gallery__filename')
-        .getByText('First repeated', { exact: true })
+        .getByText('First repeated.svg', { exact: true })
         .waitFor();
     assert.equal(
         await dialog
@@ -371,7 +371,7 @@ globalThis.controlledFormulaProof={
         .getByRole('button', { name: 'Download file', exact: true })
         .click();
     const download = await downloadPromise;
-    assert.equal(download.suggestedFilename(), 'First repeated');
+    assert.equal(download.suggestedFilename(), duplicate.filename);
     assert.equal(await download.failure(), null);
     assert.equal(readFileSync(await download.path(), 'utf8'), image);
     await download.delete();
@@ -389,7 +389,7 @@ globalThis.controlledFormulaProof={
     await dialog.getByText('3 / 3', { exact: true }).waitFor();
     await dialog
         .locator('.mx-sdk-url-gallery__filename')
-        .getByText('First repeated', { exact: true })
+        .getByText('First repeated.svg', { exact: true })
         .waitFor();
     await renderControlled({ gallery: { ...gallery, entries: [first] } });
     await dialog.getByText('1 / 1', { exact: true }).waitFor();

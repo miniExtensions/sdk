@@ -233,6 +233,7 @@ export function assertModuleFormats(root) {
                 './react/complete-linked-finder.css',
                 './react/single-select.css',
                 './react/controlled-select.css',
+                './react/readonly-url-gallery.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {

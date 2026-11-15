@@ -276,11 +276,23 @@ import {
 } from './RollupField.js';
 export type { ControlledRollupFieldProps } from './RollupField.js';
 export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
-import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
+import {
+    FormulaControl,
+    ControlledFormulaField,
+    type ControlledFormulaFieldProps,
+    type FormulaFieldOptions,
+} from './FormulaField.js';
 export {
     renderFormulaField,
     type FormulaFieldOptions,
+    type ControlledFormulaFieldProps,
 } from './FormulaField.js';
+export {
+    ReadOnlyURLGallery,
+    type ReadOnlyURLGalleryProps,
+    type ReadOnlyURLGalleryEntry,
+    type ReadOnlyURLGalleryLabels,
+} from './ReadOnlyURLGallery.js';
 export {
     renderMultipleRecordLinksField,
     type LinkedRecordsFieldOptions,
@@ -1202,7 +1214,7 @@ function BoundExternalSyncSourceField({
 }
 export type FormulaFieldProps = FieldProps & FormulaFieldOptions;
 /** Present the accepted computed answer without borrowing any binding actions. */
-export function FormulaField({
+export function BindingFormulaField({
     binding,
     render,
     className,
@@ -1230,6 +1242,15 @@ export function FormulaField({
         validation: snapshot.validation,
         className,
     });
+}
+/** Additive rich-result API; published binding props retain their inert contract. */
+export type FormulaFieldInputProps =
+    | (FormulaFieldProps & { mode?: never })
+    | ControlledFormulaFieldProps;
+export function FormulaField(props: FormulaFieldInputProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledFormulaField, props)
+        : createElement(BindingFormulaField, props);
 }
 export type LookupFieldProps = FieldProps & LookupFieldOptions;
 /** Present the accepted Lookup array without borrowing binding or linked actions. */

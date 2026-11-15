@@ -246,6 +246,7 @@ for (const format of ['esm', 'cjs']) {
         'barcode',
         'complete-portal-chart',
         'attachment-preview',
+        'readonly-url-gallery',
         'complete-address',
         'address-field',
         'single-line-text',

@@ -7,6 +7,10 @@ retain the binding contract; `BindingSingleSelectField` and
 `BindingMultipleSelectsField` name those paths explicitly.
 
 Import `@miniextensions/sdk/react/controlled-select.css` for the default controls.
+It includes spaced Add/Clear buttons and native list inputs with focus and
+disabled states, without a utility-CSS build. Input accents and focus outlines
+inherit `--mx-sdk-field-theme-color`, then `--mx-sdk-accent` or the existing
+`--theme-600` color scale, with a blue default.
 Provide canonical name values separately from choice display labels, original
 choice IDs (including pending blank IDs), available choices, and a real current
 owner token/currentness check. The component owns only transient search/open

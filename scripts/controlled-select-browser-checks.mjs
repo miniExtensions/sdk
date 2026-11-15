@@ -76,10 +76,10 @@ function App(){
  const owner={token:scope,isCurrent:()=>latest.current.active&&latest.current.token===scope};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{if(!owner.isCurrent()||latest.current.readonly)return false;writes.push({kind:'value',key,value});setState(old=>({...old,[key]:value}));};
- return h('form',{id:'select-form',onSubmit:event=>{event.preventDefault();submits++;}},
+ return h('form',{id:'select-form',style:{'--mx-sdk-field-theme-color':'#7c3aed'},onSubmit:event=>{event.preventDefault();submits++;}},
  h('label',{htmlFor:'single'},'Decision'),h('p',{id:'select-help'},'Choice help'),
  h(SingleSelectField,{...common,inputId:'single',ariaLabel:'Decision',describedBy:'select-help',presentation:'dropdown',value:state.single,onValueChange:value=>change('single',value),allowAddingNewOptions:true,publishMetadata:choice=>{if(!owner.isCurrent())return false;writes.push({kind:'metadata',choice});setState(old=>({...old,choices:[...old.choices,choice]}));return true;}}),
- h(MultipleSelectsField,{...common,ariaLabel:'Many',presentation:'list',value:state.multi,maxSelections:2,onValueChange:value=>change('multi',value)}),
+ h('section',{'aria-label':'Many control'},h(MultipleSelectsField,{...common,ariaLabel:'Many',presentation:'list',value:state.multi,maxSelections:2,onValueChange:value=>change('multi',value),allowAddingNewOptions:true,publishMetadata:choice=>{if(!owner.isCurrent())return false;writes.push({kind:'metadata',choice});setState(old=>({...old,choices:[...old.choices,choice]}));return true;}})),
  h(MultipleSelectsField,{...common,ariaLabel:'One from many',presentation:'list',value:state.limited,limitToOneSelection:true,onValueChange:value=>change('limited',value)}),
  h('div',{'data-grid-cell':'',onClick:()=>{activations++;}},h(MultipleSelectsField,{...common,presentation:'dropdown',readOnly:true,value:['Missing'],onValueChange:()=>{throw Error('readonly writer');}})),
  h('label',null,'Adjacent sentinel',h('input',{defaultValue:'untouched'})),
@@ -172,6 +172,16 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
             page.on('pageerror', (error) =>
                 evidence.pageErrors.push(error.message)
             );
+            const dialogs = [];
+            page.on('dialog', (dialog) => {
+                dialogs.push({
+                    type: dialog.type(),
+                    message: dialog.message(),
+                });
+                dialog
+                    .dismiss()
+                    .catch((error) => evidence.pageErrors.push(error.message));
+            });
             await page.route('**/*', (route) => {
                 const url = new URL(route.request().url());
                 if (
@@ -221,23 +231,174 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 { kind: 'value', key: 'single', value: 'New choice' },
             ]);
             const many = page.getByRole('group', { name: 'Many', exact: true });
-            assert.equal(
-                await many
-                    .getByRole('checkbox', { name: 'Third', exact: true })
-                    .isDisabled(),
-                true
-            );
-            await many
-                .getByRole('checkbox', { name: 'First', exact: true })
-                .uncheck();
-            await many
-                .getByRole('checkbox', { name: 'Third', exact: true })
-                .check();
-            assert.deepEqual((await snapshot()).multi, ['Beta', 'Gamma']);
+            const manyControl = page.getByRole('region', {
+                name: 'Many control',
+                exact: true,
+            });
+            const add = manyControl.getByRole('button', {
+                name: 'Add new option',
+                exact: true,
+            });
+            const clear = manyControl.getByRole('button', {
+                name: 'Clear',
+                exact: true,
+            });
+            const firstCheckbox = many.getByRole('checkbox', {
+                name: 'First',
+                exact: true,
+            });
+            const thirdCheckbox = many.getByRole('checkbox', {
+                name: 'Third',
+                exact: true,
+            });
             const one = page.getByRole('group', {
                 name: 'One from many',
                 exact: true,
             });
+            const firstRadio = one.getByRole('radio', {
+                name: 'First',
+                exact: true,
+            });
+            const appearance = (locator) =>
+                locator.evaluate((node) => {
+                    const rect = node.getBoundingClientRect();
+                    const style = getComputedStyle(node);
+                    return {
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                        background: style.backgroundColor,
+                        borderWidth: parseFloat(style.borderTopWidth),
+                        borderStyle: style.borderTopStyle,
+                        accent: style.accentColor,
+                        opacity: Number(style.opacity),
+                        cursor: style.cursor,
+                    };
+                });
+            const actionLayout = async () => {
+                const [addBox, clearBox] = await Promise.all([
+                    appearance(add),
+                    appearance(clear),
+                ]);
+                const sameRow =
+                    Math.abs(addBox.y - clearBox.y) <
+                    Math.min(addBox.height, clearBox.height);
+                const gap = sameRow
+                    ? clearBox.x - (addBox.x + addBox.width)
+                    : clearBox.y - (addBox.y + addBox.height);
+                assert(gap >= 4, 'Add/Clear need visible separation');
+                for (const box of [addBox, clearBox]) {
+                    assert(
+                        box.height >= 28,
+                        'Action needs a padded button box'
+                    );
+                    assert(box.borderWidth >= 1);
+                    assert.notEqual(box.borderStyle, 'none');
+                    assert.notEqual(box.background, 'rgba(0, 0, 0, 0)');
+                    assert.notEqual(box.background, 'transparent');
+                }
+                return { add: addBox, clear: clearBox, sameRow, gap };
+            };
+            const presentation = { actions: [] };
+            for (const width of [390, 1024]) {
+                await page.setViewportSize({ width, height: 844 });
+                presentation.actions.push({ width, ...(await actionLayout()) });
+            }
+            await page.setViewportSize({ width: 390, height: 844 });
+            await manyControl.evaluate((node) => {
+                node.style.width = '8rem';
+            });
+            const wrappedActions = await actionLayout();
+            assert.equal(wrappedActions.sameRow, false);
+            presentation.actions.push({ width: '8rem', ...wrappedActions });
+            await manyControl.evaluate((node) => {
+                node.style.removeProperty('width');
+            });
+            const [checkboxAppearance, radioAppearance, disabledAppearance] =
+                await Promise.all([
+                    appearance(firstCheckbox),
+                    appearance(firstRadio),
+                    appearance(thirdCheckbox),
+                ]);
+            for (const input of [checkboxAppearance, radioAppearance]) {
+                assert(Math.abs(input.width - 16) <= 0.5);
+                assert(Math.abs(input.height - 16) <= 0.5);
+                assert.equal(input.accent, 'rgb(124, 58, 237)');
+            }
+            assert(disabledAppearance.opacity < checkboxAppearance.opacity);
+            assert.equal(disabledAppearance.cursor, 'not-allowed');
+            presentation.inputs = {
+                checkbox: checkboxAppearance,
+                radio: radioAppearance,
+                disabled: disabledAppearance,
+            };
+            assert.equal(await add.isDisabled(), true);
+            const disabledAdd = await appearance(add);
+            assert(disabledAdd.opacity < (await appearance(clear)).opacity);
+            assert.equal(disabledAdd.cursor, 'not-allowed');
+            const beforeDisabledAdd = await snapshot();
+            await add.scrollIntoViewIfNeeded();
+            const addBounds = await add.boundingBox();
+            assert(addBounds);
+            await page.mouse.click(
+                addBounds.x + addBounds.width / 2,
+                addBounds.y + addBounds.height / 2
+            );
+            assert.deepEqual(await snapshot(), beforeDisabledAdd);
+            assert.deepEqual(dialogs, []);
+            const keyboardFocus = async (target) => {
+                for (let index = 0; index < 32; index++) {
+                    await page.keyboard.press('Tab');
+                    if (await add.isDisabled())
+                        assert.equal(
+                            await add.evaluate(
+                                (node) => node === document.activeElement
+                            ),
+                            false,
+                            'Disabled Add must be skipped by Tab'
+                        );
+                    const focused = await target.evaluate((node) => {
+                        const style = getComputedStyle(node);
+                        return {
+                            active: node === document.activeElement,
+                            visible: node.matches(':focus-visible'),
+                            outlineWidth: parseFloat(style.outlineWidth),
+                            outlineStyle: style.outlineStyle,
+                            outlineColor: style.outlineColor,
+                        };
+                    });
+                    if (!focused.active) continue;
+                    assert.equal(focused.visible, true);
+                    assert(focused.outlineWidth >= 2);
+                    assert.notEqual(focused.outlineStyle, 'none');
+                    assert.equal(focused.outlineColor, 'rgb(124, 58, 237)');
+                    return focused;
+                }
+                throw Error('Select control was not reachable by Tab');
+            };
+            presentation.focus = {
+                checkbox: await keyboardFocus(firstCheckbox),
+                clear: await keyboardFocus(clear),
+                radio: await keyboardFocus(firstRadio),
+            };
+            assert.equal(await thirdCheckbox.isDisabled(), true);
+            await firstCheckbox.uncheck();
+            assert.equal(await add.isDisabled(), false);
+            presentation.focus.add = await keyboardFocus(add);
+            const beforeCancelledAdd = await snapshot();
+            const [prompt] = await Promise.all([
+                page.waitForEvent('dialog'),
+                add.press('Enter'),
+            ]);
+            assert.equal(prompt.type(), 'prompt');
+            assert.equal(prompt.message(), 'Add new option');
+            assert.deepEqual(await snapshot(), beforeCancelledAdd);
+            assert.deepEqual(dialogs, [
+                { type: 'prompt', message: 'Add new option' },
+            ]);
+            await thirdCheckbox.check();
+            assert.deepEqual((await snapshot()).multi, ['Beta', 'Gamma']);
             assert.equal(await one.getByRole('checkbox').count(), 0);
             await one
                 .getByRole('radio', { name: 'Second', exact: true })
@@ -247,6 +408,23 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 .getByRole('radio', { name: 'Second', exact: true })
                 .click();
             assert.deepEqual((await snapshot()).limited, []);
+            const beforeClear = (await snapshot()).writes.length;
+            await clear.click();
+            const cleared = await snapshot();
+            assert.deepEqual(cleared.multi, []);
+            assert.deepEqual(cleared.writes.slice(beforeClear), [
+                { kind: 'value', key: 'multi', value: [] },
+            ]);
+            assert.equal(cleared.submits, 0);
+            assert.equal(
+                await page
+                    .getByRole('textbox', {
+                        name: 'Adjacent sentinel',
+                        exact: true,
+                    })
+                    .inputValue(),
+                'untouched'
+            );
             const missing = page.locator(
                 '[data-grid-cell] .mx-sdk-select-badge'
             );
@@ -281,14 +459,19 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 path: join(output, 'controlled-select-' + format + '.png'),
                 fullPage: true,
             });
-            evidence.results.push({ format, ...(await snapshot()) });
+            evidence.results.push({
+                format,
+                presentation,
+                dialogs,
+                ...(await snapshot()),
+            });
             await context.close();
             context = null;
         }
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; canonical echo, deferred metadata order, caps/radios, readonly grid events, sentinel and explicit submit. No native Form/provider claim.';
+            'Installed controlled ESM/CJS Select UI; canonical echo, deferred metadata order, caps/radios, action spacing and wrapped layout, themed list inputs, keyboard focus and disabled actions, cancelled prompt and one Clear, readonly grid events, sentinel and explicit submit. No native Form/provider claim.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

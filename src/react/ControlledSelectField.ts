@@ -420,6 +420,7 @@ function SelectControl(props: ControlProps): ReactNode {
                           props.multiple && !props.limitToOneSelection
                               ? h('input', {
                                     type: 'checkbox',
+                                    className: 'mx-sdk-select-list-input',
                                     id: optionId,
                                     form: props.formId,
                                     checked,
@@ -430,6 +431,7 @@ function SelectControl(props: ControlProps): ReactNode {
                                             : choose(choice.name),
                                 })
                               : h(RadioInput, {
+                                    className: 'mx-sdk-select-list-input',
                                     id: optionId,
                                     name: `${generatedId}-group`,
                                     form: props.formId,
@@ -644,6 +646,7 @@ function SelectControl(props: ControlProps): ReactNode {
                   'button',
                   {
                       type: 'button',
+                      className: 'mx-sdk-select-action',
                       form: props.formId,
                       disabled: !canAdd || busy,
                       'aria-busy': busy,
@@ -667,6 +670,7 @@ function SelectControl(props: ControlProps): ReactNode {
                   'button',
                   {
                       type: 'button',
+                      className: 'mx-sdk-select-action',
                       form: props.formId,
                       onClick: clear,
                       'aria-label': props.labels?.clear ?? 'Clear',

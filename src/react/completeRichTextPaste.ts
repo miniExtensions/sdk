@@ -11,6 +11,8 @@ import {
     LANGUAGES,
 } from '../../vendor/rich-markdown-editor/sdk-runtime.js';
 
+import { configureRichTextCheckboxes } from './completeRichTextCheckboxes.js';
+
 const PROSEMIRROR_SLICE_MIME_TYPE = 'application/x-prosemirror-slice';
 const PROSEMIRROR_HTML_MARKER = 'data-pm-slice';
 export const generalPastePluginKey = new PluginKey<unknown>(
@@ -108,6 +110,10 @@ export const shouldParsePlainTextAsMarkdown = ({
 export class GeneralPasteHandlerExtension extends Extension {
     override get name(): string {
         return 'general-markdown-paste-fix';
+    }
+
+    get rulePlugins(): (typeof configureRichTextCheckboxes)[] {
+        return [configureRichTextCheckboxes];
     }
 
     override get plugins(): Plugin<unknown>[] {

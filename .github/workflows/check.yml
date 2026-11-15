@@ -69,13 +69,13 @@ jobs:
               run: google-chrome --version
             - name: Execute packed Formula Chromium proof with React 19
               timeout-minutes: 5
-              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-native-browser-results/formula/react19"
+              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-formula-browser-results/react19"
               env:
                   SDK_FORMULA_REACT_VERSION: 19.2.0
                   SDK_FORMULA_CHROMIUM: /usr/bin/google-chrome
             - name: Execute packed Formula Chromium proof with React 18
               timeout-minutes: 5
-              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-native-browser-results/formula/react18"
+              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-formula-browser-results/react18"
               env:
                   SDK_FORMULA_REACT_VERSION: 18.3.1
                   SDK_FORMULA_CHROMIUM: /usr/bin/google-chrome
@@ -159,7 +159,9 @@ jobs:
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: sdk-native-browser-results-attempt-${{ github.run_attempt }}
-                  path: ${{ runner.temp }}/sdk-native-browser-results/
+                  path: |
+                      ${{ runner.temp }}/sdk-native-browser-results/
+                      ${{ runner.temp }}/sdk-formula-browser-results/
                   if-no-files-found: warn
                   retention-days: 7
                   compression-level: 0
@@ -200,8 +202,9 @@ jobs:
                   SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
+                  SDK_FORMULA_RESULT_DIR: ${{ runner.temp }}/sdk-formula-browser-results
               run: |
-                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
+                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR', 'SDK_FORMULA_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
     check:
         name: check (24)
         needs: [source, package]

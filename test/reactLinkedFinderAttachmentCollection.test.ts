@@ -152,6 +152,79 @@ test('collection image failures use supplied ordered sources and retry without o
 });
 
 for (const strict of [false, true]) {
+    test(`offscreen collection rows enter icon layout and retire old visibility callbacks (${strict ? 'StrictMode' : 'ordinary'})`, async (t) => {
+        const f = await scannerDom(t);
+        const old = Object.getOwnPropertyDescriptor(
+            globalThis,
+            'IntersectionObserver'
+        );
+        const callbacks: ((entries: { isIntersecting: boolean }[]) => void)[] =
+            [];
+        class Observer {
+            constructor(
+                private callback: (
+                    entries: { isIntersecting: boolean }[]
+                ) => void
+            ) {
+                callbacks.push(callback);
+            }
+            observe() {
+                this.callback([{ isIntersecting: false }]);
+            }
+            disconnect() {}
+        }
+        Object.defineProperty(globalThis, 'IntersectionObserver', {
+            configurable: true,
+            value: Observer,
+        });
+        t.after(() => {
+            if (old)
+                Object.defineProperty(globalThis, 'IntersectionObserver', old);
+            else Reflect.deleteProperty(globalThis, 'IntersectionObserver');
+        });
+        const value = props();
+        const view: LinkedFinderAttachmentCollectionProps = {
+            ...value,
+            layout: 'thumbnail',
+            rows: [{ ...value.rows[0], imageSources: [], icon: 'play' }],
+        };
+        const render = (
+            layout: LinkedFinderAttachmentCollectionProps['layout']
+        ) =>
+            f.render(
+                h(LinkedFinderAttachmentCollection, { ...view, layout }),
+                strict
+            );
+        await render('thumbnail');
+        const row = f.host.querySelector('li');
+        assert(row);
+        assert.equal(row.querySelector('svg'), null);
+        const retired = [...callbacks];
+        await render('icon');
+        assert.equal(f.host.querySelector('li'), row);
+        assert(
+            row.querySelector('svg'),
+            'Icon layout must show an offscreen row'
+        );
+        await render('thumbnail');
+        assert.equal(row.querySelector('svg'), null);
+        await act(async () => {
+            for (const callback of callbacks.filter(
+                (c) => !retired.includes(c)
+            ))
+                callback([{ isIntersecting: true }]);
+        });
+        assert(row.querySelector('svg'));
+        await act(async () => {
+            for (const callback of retired)
+                callback([{ isIntersecting: false }]);
+        });
+        assert(
+            row.querySelector('svg'),
+            'A retired observer must not hide the currently visible thumbnail'
+        );
+    });
+
     test(`unsupported document discovery retains the collection play icon (${strict ? 'StrictMode' : 'ordinary'})`, async (t) => {
         const f = await scannerDom(t);
         const old = Object.getOwnPropertyDescriptor(

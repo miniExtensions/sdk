@@ -82,7 +82,8 @@ function Thumbnail({
     view: LinkedFinderAttachmentCollectionProps;
 }): ReactNode {
     const ref = useRef<HTMLDivElement | null>(null);
-    const [visible, setVisible] = useState(view.layout === 'icon');
+    const [inView, setInView] = useState(false);
+    const visible = view.layout === 'icon' || inView;
     useEffect(() => {
         if (
             view.layout === 'icon' ||
@@ -90,11 +91,15 @@ function Thumbnail({
             typeof IntersectionObserver === 'undefined'
         )
             return;
+        let active = true;
         const observer = new IntersectionObserver(([entry]) => {
-            if (current(view.owner)) setVisible(entry.isIntersecting);
+            if (active && current(view.owner)) setInView(entry.isIntersecting);
         });
         observer.observe(ref.current);
-        return () => observer.disconnect();
+        return () => {
+            active = false;
+            observer.disconnect();
+        };
     }, [view.layout, view.owner]);
     const fallback = (document = false) =>
         h(

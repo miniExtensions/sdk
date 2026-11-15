@@ -15,6 +15,7 @@ export {
     type CompleteLinkedFinderPage,
     type CompleteLinkedFinderRequest,
     type CompleteLinkedFinderAdmission,
+    type CompleteLinkedFinderScheduleAdmission,
     type CompleteLinkedFinderRead,
     type CompleteLinkedFinderSelection,
     type CompleteLinkedFinderHost,

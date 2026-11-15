@@ -68,6 +68,8 @@ callbacks schedule their own request. `initialLoading` is the host's table/schem
 readiness. Initial loading precedes errors, then admitted rows, then the supplied
 empty label; pagination keeps the rows and displays its own loading indicator.
 The observer uses the actual scrolling element and a `400px` root margin.
+Each observer retains the snapshot's opaque `readIdentity` and retires on
+cleanup; an old queued intersection cannot supersede a newer same-owner search.
 Selection can be disabled while retaining searchable presentation. Scanner
 configuration composes the existing scanner hook and never grants selection.
 `CompleteLinkedFinderView` composes an existing committed coordinator without
@@ -78,6 +80,11 @@ cursor and error without creating model options or a loading transition.
 Search callbacks receive the manual or barcode source. `closeAfterToggle`
 implements the main Form's single-link preference only after toggle admission;
 close still uses the captured owner and its separate native fence.
+The view delegates this preference to
+`toggle(expectedOwner, id, { closeAfterAddition: true })`. Close also retains
+the selection's search intent: a newer attempted direct or scheduled search
+retires it, even when the same owner remains or the new read is refused.
+Current canonical removal and ordinary two-argument toggles do not close.
 
 Cards have explicit `loading`, `unavailable` and `present` variants. The host
 chooses each exhaustive leaf variant after schema/config filtering, conversion,
@@ -89,6 +96,14 @@ checkbox, barcode and accepted button presenters. SDK-owned badges, linked
 labels, people, rating icons and admitted attachment images complete the card.
 No React renderer slot or unknown-type text fallback is accepted. A button needs
 an independently admitted button snapshot with captured capabilities.
+Configured URL buttons have a separate `urlButton` descriptor that composes the
+existing current-owner resource control, without inventing Button schema.
+Rating uses the shared readonly `RatingInput`, including nullable empty labels;
+hosts can supply the actual glyph path/viewBox/unfilled color as admitted data.
+People use the shared `PersonBadge` and preserve already admitted avatar
+`srcSet`, sizes, loading and decoding properties; import the existing
+`complete-collaborators.css` leaf styles. Field errors have an explicit variant,
+and lookup sequences can retain native wrapping/spacing without renderer slots.
 Numeric leaves explicitly carry the admitted localized empty label. Present
 cards require thumbnail enablement/location and fields-per-row settings, so a
 disabled thumbnail reserves no Gallery space and List can preserve either
@@ -124,3 +139,52 @@ native prefill flag or inventing ordinary error presentation. Optional
 uses `clear`; explicit nullable selection uses `publish(null)`. Both canonical
 driver state and Save remain in the host. Cleanup removes queued work and local
 observers while leaving allocated transport alone.
+
+`NativeLinkedFinderCascadeDriverView` renders one native partial-metadata
+survivor with its explicit `previousFieldId`, even when that predecessor is
+outside the mounted descriptor list. It accepts the same host, canonical pairs,
+raw URL value and outer readonly policy. An optional descriptor `testId` retains
+the native field's existing automation identity without granting authority.
+
+`admitScheduledSearch(expectedOwner, request)` is a synchronous scheduling
+admission over the same queue and pagination cursor as `scheduleSearch`. It
+returns `{status: 'admitted', owner, nonce, isCurrent}` or `{status: 'refused'}`.
+The nonce identifies an intent; it does not promise transport allocation,
+publication or results. A later intent, owner replacement or disposal retires
+its `isCurrent()` predicate. Use this receipt before moving owner-bound local
+focus. `scheduleSearch` still returns `void`; `queryNow` still returns its exact
+accepted page or refusal/retirement/failure outcome.
+
+A captured read may provide `didAccept(exactPage)`. This one-time host
+presentation hook runs only after cache publication, identity projection and
+model publication pass their fences. Authenticated preview also receives it
+without creating a model or loading flash. The coordinator rechecks ownership
+and read identity after the callback. A callback failure is a failure outcome;
+it does not roll back already committed host/model data or the accepted cursor.
+
+Readonly `attachmentCollection` card leaves compose the SDK-owned
+`LinkedFinderAttachmentCollection`. Rows retain occurrence keys and supplied
+image fallback order; `grid` is the compact horizontal List presentation,
+while `thumbnail` and `icon` retain their explicit form settings. Grid ignores
+form captions and column counts. No opening callback grants no opening
+authority. A captured current owner fences opening and image retry; these
+controls do not select the containing option or submit its form.
+
+The host retains the original admitted occurrences, presentation resource
+projection, navigation, modal, open/download policy and dismissal. Preserve the
+host's effective resource and classification policy explicitly; rewriting URLs
+or inventing MIME can change URL-only media behavior.
+Hosts can compose the existing `AttachmentPreview` body in their own controlled
+navigation without granting edit/upload/delete authority. Inline document
+thumbnails use the existing `DocumentThumbnail` contract; discovered PDF
+requires its explicit same-origin version-matched worker/resource asset URLs.
+Omitting those assets remains unavailable presentation, not PDF qualification.
+
+`check:package` runs the installed Finder consumer for React 18 and 19 with
+ESM and CommonJS declaration/runtime exports. It checks SSR hydration, ordinary
+and StrictMode presentation, real controlled search events, canonical duplicate
+membership, current single-link close, retained pagination callbacks and
+attachment opening retirement. The consumer verifies installed module/CSS bytes
+against the packed archive and uses only synthetic host ports, with network
+disabled. This package matrix remains separate from actual native adapter and
+browser qualification.

@@ -48,7 +48,15 @@ import {
 import { ButtonField, type ButtonFieldProps } from './ButtonField.js';
 import { RatingInput } from './RatingInput.js';
 import { PersonBadge } from './PersonBadge.js';
+import {
+    SingleLineTextField,
+    type ReadOnlySingleLineTextFieldProps,
+} from './SingleLineTextField.js';
 import type { CollaboratorImageSource } from './CompleteCollaboratorField.js';
+import {
+    LinkedFinderAttachmentCollection,
+    type LinkedFinderAttachmentCollectionProps,
+} from './LinkedFinderAttachmentCollection.js';
 import {
     CreatedTimeResource,
     type CreatedTimeResourceProps,
@@ -77,6 +85,10 @@ export type LinkedFinderCardLeaf =
     | {
           readonly kind: 'text';
           readonly display: CompleteReadOnlyTextFieldProps;
+      }
+    | {
+          readonly kind: 'singleLine';
+          readonly display: ReadOnlySingleLineTextFieldProps;
       }
     | { readonly kind: 'html'; readonly html: string; readonly height?: number }
     | { readonly kind: 'quill'; readonly html: string }
@@ -146,6 +158,10 @@ export type LinkedFinderCardLeaf =
               readonly viewBox: string;
               readonly unfilledColor: string;
           };
+      }
+    | {
+          readonly kind: 'attachmentCollection';
+          readonly display: LinkedFinderAttachmentCollectionProps;
       }
     | {
           readonly kind: 'attachmentImages';
@@ -265,6 +281,8 @@ export function LinkedFinderRichLeaf({
             );
         case 'text':
             return h(CompleteReadOnlyTextField, leaf.display);
+        case 'singleLine':
+            return h(SingleLineTextField, leaf.display);
         case 'html':
             return h(
                 'div',
@@ -394,6 +412,8 @@ export function LinkedFinderRichLeaf({
             );
         case 'rating':
             return h(Rating, { leaf });
+        case 'attachmentCollection':
+            return h(LinkedFinderAttachmentCollection, leaf.display);
         case 'attachmentImages':
             return leaf.images.length
                 ? h(

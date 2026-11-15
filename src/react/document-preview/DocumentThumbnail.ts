@@ -34,6 +34,8 @@ type Props = {
     visible: boolean;
     inert?: boolean;
     inGrid: boolean;
+    /** SDK-owned collection fallback; ordinary document leaves keep their status text. */
+    unavailable?: ReactNode;
     pdfModal?: boolean;
     onDownload?: (
         bytes: Uint8Array,
@@ -310,12 +312,13 @@ export function DocumentThumbnail(props: Props): ReactNode {
     if (!props.visible || props.inert || !ownerCurrent) return null;
     const accepted = state?.key === key ? state : null;
     const document = accepted?.document;
+    const unavailable =
+        props.unavailable ?? h('span', { role: 'status' }, labels.unavailable);
     let content: ReactNode;
     if (!source || (sourceKind !== 'uri' && sourceKind !== 'bytes'))
-        content = h('span', { role: 'status' }, labels.unavailable);
+        content = unavailable;
     else if (!accepted) content = h('span', { role: 'status' }, labels.loading);
-    else if (!document || accepted.failed)
-        content = h('span', { role: 'status' }, labels.unavailable);
+    else if (!document || accepted.failed) content = unavailable;
     else if (document.media === 'text')
         content = h(LiteralText, {
             as: 'div',

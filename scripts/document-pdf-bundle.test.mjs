@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Script } from 'node:vm';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import {
     assertDocumentPDFBundle,
@@ -47,6 +48,41 @@ test('both private PDF formats are self-contained browser adapters with exact in
     const cjs = readFileSync(join(root, receipt.outputs[1].path), 'utf8');
     new Script(cjs);
     assert.doesNotMatch(cjs, /@napi-rs\/canvas|getBuiltinModule/);
+});
+test('runtime PDF worker imports preserve upstream bundler annotations even with a consistent byte receipt', async (t) => {
+    const { root, receipt } = await fixture(t);
+    for (const output of receipt.outputs) {
+        const path = join(root, output.path);
+        const original = readFileSync(path, 'utf8');
+        assert.match(
+            original,
+            /import\(\/\* webpackIgnore: true \*\/ \/\* @vite-ignore \*\/ this\.workerSrc\)/
+        );
+        const changed = Buffer.from(
+            original.replace(
+                '/* webpackIgnore: true */ /* @vite-ignore */ ',
+                ''
+            )
+        );
+        writeFileSync(path, changed);
+        const rebased = structuredClone(receipt);
+        const entry = rebased.outputs.find(
+            (entry) => entry.format === output.format
+        );
+        entry.size = changed.length;
+        entry.sha256 = createHash('sha256').update(changed).digest('hex');
+        const receiptFile = join(
+            root,
+            'dist/esm/react/document-preview/pdfEngineRuntime.receipt.json'
+        );
+        writeFileSync(receiptFile, JSON.stringify(rebased));
+        assert.throws(
+            () => assertDocumentPDFBundle(root),
+            /upstream bundler annotations/
+        );
+        writeFileSync(path, original);
+        writeFileSync(receiptFile, JSON.stringify(receipt));
+    }
 });
 test('private PDF modules fit the unchanged archive-proof capture budget', async (t) => {
     const { root, receipt } = await fixture(t);

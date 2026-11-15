@@ -349,7 +349,7 @@ THE SOFTWARE.
 
 ## Heroicons
 
-The numeric and complete readonly-text empty-state symbols retain the native NoSymbol icon, and FormValidationSummary retains the native XCircle icon, from [Heroicons](https://github.com/tailwindlabs/heroicons).
+The numeric and complete readonly-text empty-state symbols retain the native NoSymbol icon, FormValidationSummary retains the native XCircle icon, and readonly Finder attachments retain the native solid Play and Document icons, from [Heroicons](https://github.com/tailwindlabs/heroicons).
 
 ```text
 MIT License

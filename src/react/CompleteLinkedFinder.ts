@@ -64,6 +64,8 @@ export type CompleteLinkedFinderProps<Row, Filter, Owner extends object> = {
     /** Host table/schema readiness, separate from query and paging state. */
     initialLoading?: boolean;
     className?: string;
+    /** Optional stable instrumentation on each selectable record row. */
+    optionTestId?: string;
     testing?: boolean;
     /** Main-form single-link preference. Close remains independently owner-fenced. */
     closeAfterToggle?: boolean;
@@ -108,6 +110,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
     }, [coordinator]);
     const snapshot = coordinator?.getSnapshot();
     const owner = snapshot?.owner ?? null;
+    const readIdentity = snapshot?.readIdentity ?? null;
     const selected = snapshot?.selectedIds ?? [];
     const enabled = snapshot?.selectionEnabled === true;
     const currentOwner = () => {
@@ -141,6 +144,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         if (
             !coordinator ||
             !owner ||
+            !readIdentity ||
             !offset ||
             loadingMore ||
             (!preview && snapshot?.phase !== 'ready') ||
@@ -148,11 +152,16 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
             typeof IntersectionObserver === 'undefined'
         )
             return;
+        let active = true;
         const observer = new IntersectionObserver(
             (entries) => {
+                if (!active) return;
+                const current = coordinator.getSnapshot();
                 if (
+                    active &&
                     entries.some((entry) => entry.isIntersecting) &&
-                    coordinator.getSnapshot().owner === owner
+                    current.owner === owner &&
+                    current.readIdentity === readIdentity
                 )
                     void coordinator.queryNow({
                         filter: props.filter,
@@ -162,10 +171,14 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
             { root: scroll.current, rootMargin: '400px' }
         );
         observer.observe(sentinel.current);
-        return () => observer.disconnect();
+        return () => {
+            active = false;
+            observer.disconnect();
+        };
     }, [
         coordinator,
         owner,
+        readIdentity,
         offset,
         loadingMore,
         preview !== null,
@@ -176,6 +189,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         autoStartCamera: props.scanner?.autoStartCamera ?? false,
         hideButton: !props.scanner?.enabled || !enabled || !coordinator,
         ownerKey: owner,
+        isCurrent: () => owner !== null && enabled && currentOwner(),
         runInLoop: true,
         labels: props.scanner?.labels,
         style: props.scanner?.style,
@@ -246,6 +260,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                           h(Combobox.Option<'li', string>, {
                               key: id,
                               value: id,
+                              ...{ 'data-testid': props.optionTestId },
                               disabled: !optionEnabled(id),
                               className: ({ active, selected }) =>
                                   `mx-sdk-finder-record${active ? ' mx-sdk-finder-option-active' : ''}${selected ? ' mx-sdk-finder-record-selected' : ''}`,
@@ -302,13 +317,8 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                     (id) => count(value, id) !== count(selected, id)
                 );
                 if (changed != null)
-                    void coordinator.toggle(owner, changed).then((result) => {
-                        if (
-                            result.status === 'admitted' &&
-                            props.closeAfterToggle &&
-                            host.isOwnerCurrent(owner)
-                        )
-                            host.close(owner);
+                    void coordinator.toggle(owner, changed, {
+                        closeAfterAddition: props.closeAfterToggle === true,
                     });
             },
             children: h(

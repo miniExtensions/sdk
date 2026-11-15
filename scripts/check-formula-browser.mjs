@@ -347,6 +347,22 @@ globalThis.controlledFormulaProof={
     const dialog = page.getByRole('dialog', { name: 'Formula files' });
     await dialog.waitFor();
     await dialog.getByText('3 / 4', { exact: true }).waitFor();
+    const assertCenteredPreview = async () => {
+        const viewer = await dialog
+            .locator('.mx-sdk-url-gallery__viewer')
+            .boundingBox();
+        const preview = await dialog
+            .locator('.mx-sdk-url-gallery__preview')
+            .boundingBox();
+        assert(viewer && preview);
+        assert.ok(
+            Math.abs(
+                viewer.x + viewer.width / 2 - preview.x - preview.width / 2
+            ) < 1,
+            'The preview stays centered when an edge control is absent'
+        );
+    };
+    await assertCenteredPreview();
     await dialog
         .locator('.mx-sdk-url-gallery__filename')
         .getByText('First repeated.svg', { exact: true })
@@ -379,6 +395,13 @@ globalThis.controlledFormulaProof={
         .getByRole('button', { name: 'Next file', exact: true })
         .click();
     await dialog.getByText('4 / 4', { exact: true }).waitFor();
+    assert.equal(
+        await dialog
+            .getByRole('button', { name: 'Next file', exact: true })
+            .count(),
+        0
+    );
+    await assertCenteredPreview();
     await dialog
         .getByRole('button', { name: 'Previous file', exact: true })
         .click();
@@ -393,6 +416,13 @@ globalThis.controlledFormulaProof={
         .waitFor();
     await renderControlled({ gallery: { ...gallery, entries: [first] } });
     await dialog.getByText('1 / 1', { exact: true }).waitFor();
+    assert.equal(
+        await dialog
+            .getByRole('button', { name: /^(Previous|Next) file$/ })
+            .count(),
+        0
+    );
+    await assertCenteredPreview();
     await renderControlled({
         gallery: {
             ...gallery,

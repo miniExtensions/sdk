@@ -369,6 +369,7 @@ function GalleryDialog(props: DialogProps): ReactNode {
                     ? h(
                           ActionButton,
                           {
+                              className: 'mx-sdk-url-gallery__previous',
                               'aria-label': props.labels.previous,
                               onClick: () => props.choose(props.index - 1),
                           },
@@ -388,6 +389,7 @@ function GalleryDialog(props: DialogProps): ReactNode {
                     ? h(
                           ActionButton,
                           {
+                              className: 'mx-sdk-url-gallery__next',
                               'aria-label': props.labels.next,
                               onClick: () => props.choose(props.index + 1),
                           },

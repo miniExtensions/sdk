@@ -149,16 +149,23 @@
     font-size: 0.75rem;
 }
 .mx-sdk-url-gallery__viewer {
-    display: flex;
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
     align-items: center;
     gap: 0.5rem;
     min-height: 0;
     flex: 1;
 }
+.mx-sdk-url-gallery__previous {
+    grid-area: 1 / 1;
+}
+.mx-sdk-url-gallery__next {
+    grid-area: 1 / 3;
+}
 .mx-sdk-url-gallery__preview {
     display: grid;
     place-items: center;
-    flex: 1;
+    grid-area: 1 / 2;
     height: 100%;
     min-width: 0;
     min-height: 0;

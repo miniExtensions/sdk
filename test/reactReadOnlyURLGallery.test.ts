@@ -194,11 +194,7 @@ it('navigates and closes without submission, reflects current options and reject
     await f.render({ entries, hideAttachmentName: false });
     const retiredRow = f.host.querySelector('button')!;
     await f.open(0);
-    assert.ok(
-        f.host
-            .querySelector('button[aria-label="Previous"]')
-            ?.hasAttribute('disabled')
-    );
+    assert.equal(f.host.querySelector('button[aria-label="Previous"]'), null);
     await f.click('button[aria-label="Next"]');
     assert.equal(f.index(), '2 / 2');
     await f.click('button[aria-label="Select attachment 1"]');

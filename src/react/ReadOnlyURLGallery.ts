@@ -365,15 +365,16 @@ function GalleryDialog(props: DialogProps): ReactNode {
             h(
                 'div',
                 { className: 'mx-sdk-url-gallery__viewer' },
-                h(
-                    ActionButton,
-                    {
-                        disabled: props.index === 0,
-                        'aria-label': props.labels.previous,
-                        onClick: () => props.choose(props.index - 1),
-                    },
-                    '‹'
-                ),
+                props.index > 0
+                    ? h(
+                          ActionButton,
+                          {
+                              'aria-label': props.labels.previous,
+                              onClick: () => props.choose(props.index - 1),
+                          },
+                          '‹'
+                      )
+                    : null,
                 h(
                     'div',
                     { className: 'mx-sdk-url-gallery__preview' },
@@ -383,15 +384,16 @@ function GalleryDialog(props: DialogProps): ReactNode {
                         labels: props.labels,
                     })
                 ),
-                h(
-                    ActionButton,
-                    {
-                        disabled: props.index === props.entries.length - 1,
-                        'aria-label': props.labels.next,
-                        onClick: () => props.choose(props.index + 1),
-                    },
-                    '›'
-                )
+                props.index < props.entries.length - 1
+                    ? h(
+                          ActionButton,
+                          {
+                              'aria-label': props.labels.next,
+                              onClick: () => props.choose(props.index + 1),
+                          },
+                          '›'
+                      )
+                    : null
             ),
             h(
                 'p',

@@ -352,6 +352,7 @@ function SelectControl(props: ControlProps): ReactNode {
             'span',
             {
                 className: 'mx-sdk-select-badge',
+                title: label(choice),
                 style: {
                     color: choice.color,
                     backgroundColor: choice.backgroundColor,

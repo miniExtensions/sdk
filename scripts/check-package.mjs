@@ -230,6 +230,7 @@ import {
 } from './rollup-consumer-checks.mjs';
 import {
     checkFormulaConsumer,
+    checkControlledFormulaReactMatrix,
     formulaReactTypedConsumer,
 } from './formula-consumer-checks.mjs';
 import {
@@ -649,6 +650,7 @@ try {
                 path === 'docs/portal-shell.md' ||
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
+                path === 'docs/formula.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||
@@ -713,6 +715,7 @@ try {
         'docs/complete-linked-finder.md',
         ...linkedFinderStarterFiles,
         'docs/count.md',
+        'docs/formula.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
         'docs/single-line-text.md',
@@ -762,6 +765,8 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/attachment-preview.css',
         'dist/cjs/react/attachment-preview.css',
+        'dist/esm/react/readonly-url-gallery.css',
+        'dist/cjs/react/readonly-url-gallery.css',
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
         'docs/portal-shell.md',
@@ -3141,6 +3146,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(formulaProof.checks, 26);
+    const controlledFormulaMatrix = await checkControlledFormulaReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(controlledFormulaMatrix.profiles.length, 4);
     console.log(
         `Installed Formula presentation: ${formulaProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );

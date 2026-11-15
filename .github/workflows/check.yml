@@ -67,6 +67,18 @@ jobs:
                   SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Verify runner-provided Chrome
               run: google-chrome --version
+            - name: Execute packed Formula Chromium proof with React 19
+              timeout-minutes: 5
+              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-native-browser-results/formula/react19"
+              env:
+                  SDK_FORMULA_REACT_VERSION: 19.2.0
+                  SDK_FORMULA_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute packed Formula Chromium proof with React 18
+              timeout-minutes: 5
+              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-native-browser-results/formula/react18"
+              env:
+                  SDK_FORMULA_REACT_VERSION: 18.3.1
+                  SDK_FORMULA_CHROMIUM: /usr/bin/google-chrome
             - name: Qualify packed Form validation summary
               run: node scripts/form-validation-summary-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
               env:

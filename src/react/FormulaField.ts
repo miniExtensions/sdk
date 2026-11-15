@@ -10,6 +10,170 @@ import {
     type FieldRendererProps,
 } from '../ui/rendererRegistry.js';
 import { textConfiguration } from './TextField.js';
+import { SingleSelectField } from './index.js';
+import type { ControlledSingleSelectFieldProps } from './ControlledSelectField.js';
+import { CompleteHTMLRenderer } from './html/CompleteHTMLRenderer.js';
+import { SingleLineTextField } from './SingleLineTextField.js';
+import {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+} from './CompleteReadOnlyTextField.js';
+import {
+    ReadOnlyURLGallery,
+    type ReadOnlyURLGalleryProps,
+} from './ReadOnlyURLGallery.js';
+
+/** Accepted native result/configuration facts. This contract grants no writes,
+ * computes no formula, and never accepts a UI renderer or fabricated binding. */
+export type ControlledFormulaFieldProps = Pick<
+    CompleteReadOnlyTextFieldProps,
+    'language' | 'textSize' | 'layout' | 'className'
+> & {
+    mode: 'controlled';
+    binding?: never;
+    render?: never;
+    inputId?: string;
+    formId?: string;
+    ariaLabel?: string;
+    labelledBy?: string;
+    describedBy?: string;
+    obscurePassword?: boolean;
+    renderFormulaAsHTML?: boolean;
+    heightForFormulaFieldHTML?: number | string | null;
+    renderFormulaAsAttachment?: boolean;
+    displayAsButton?: boolean;
+    validUrlButtonLabel?: string | null;
+    invalidUrlButtonLabel?: string | null;
+    buttonLabels?: { openLink?: string; invalidLink?: string };
+    /** Display-only Select facts; the Formula always supplies a readonly owner. */
+    select?: Pick<
+        ControlledSingleSelectFieldProps,
+        'choices' | 'labels' | 'isInGrid'
+    >;
+    /** Ordered entries admitted by the host's existing HTTP(S) extractor. */
+    gallery?: ReadOnlyURLGalleryProps;
+} & (
+        | {
+              isValid: false;
+              value?: never;
+              formattedValue?: never;
+              resultType?: never;
+          }
+        | {
+              isValid: true;
+              resultType: string;
+              value: unknown;
+              /** Existing localized/error/special-value conversion, not raw markup. */
+              formattedValue: string | null | undefined;
+              /** Failed conversion is a fact, not permission to preempt rich modes. */
+              formattingFailed?: boolean;
+          }
+    );
+
+const readonlySelectOwner = { isCurrent: () => false, token: {} };
+const noFormulaWrite = () => false;
+const invalidFormula =
+    'This field has an invalid value. Check the field in Airtable.';
+const unexpectedFormula =
+    'This field contains an unexpected value. Try refreshing the airtable base';
+
+function formulaError(message: string): ReactNode {
+    return createElement(
+        'div',
+        { role: 'alert', className: 'mx-sdk-formula-error' },
+        createElement('p', { 'aria-label': 'error-message' }, message)
+    );
+}
+
+/** Complete readonly result presentation, with legacy conflict precedence. */
+export function ControlledFormulaField(
+    props: ControlledFormulaFieldProps
+): ReactNode {
+    let content: ReactNode;
+    if (!props.isValid) content = formulaError(invalidFormula);
+    else if (props.obscurePassword)
+        content = createElement(CompleteReadOnlyTextField, {
+            value: '••••••••',
+            language: props.language,
+            textSize: props.textSize,
+            layout: props.layout,
+        });
+    else if (props.resultType === 'singleSelect') {
+        content =
+            props.value != null && typeof props.value !== 'string'
+                ? formulaError(unexpectedFormula)
+                : props.value == null || props.value === ''
+                  ? createElement(CompleteReadOnlyTextField, {
+                        value: null,
+                        language: props.language,
+                    })
+                  : createElement(SingleSelectField, {
+                        choices: props.select?.choices ?? [],
+                        availableChoices: props.select?.choices ?? [],
+                        labels: props.select?.labels,
+                        isInGrid: props.select?.isInGrid,
+                        inputId: props.inputId,
+                        formId: props.formId,
+                        ariaLabel: props.ariaLabel,
+                        describedBy: props.describedBy,
+                        presentation: 'dropdown',
+                        value: props.value as string | null,
+                        readOnly: true,
+                        owner: readonlySelectOwner,
+                        onValueChange: noFormulaWrite,
+                    });
+    } else if (props.renderFormulaAsHTML) {
+        content =
+            typeof props.value !== 'string'
+                ? formulaError(unexpectedFormula)
+                : createElement(CompleteHTMLRenderer, {
+                      html: props.value,
+                      style: {
+                          height: props.heightForFormulaFieldHTML ?? undefined,
+                      },
+                  });
+    } else if (props.renderFormulaAsAttachment) {
+        content =
+            typeof props.value !== 'string'
+                ? formulaError(unexpectedFormula)
+                : createElement(ReadOnlyURLGallery, {
+                      ...props.gallery,
+                      entries: props.gallery?.entries ?? [],
+                  });
+    } else if (props.displayAsButton) {
+        content = createElement(SingleLineTextField, {
+            mode: 'readOnly',
+            value: typeof props.value === 'string' ? props.value : null,
+            language: props.language,
+            displayAsButton: true,
+            validButtonLabel: props.validUrlButtonLabel,
+            invalidButtonLabel: props.invalidUrlButtonLabel,
+            resource: { labels: props.buttonLabels },
+        });
+    } else if (props.formattingFailed)
+        content = formulaError(unexpectedFormula);
+    else
+        content = createElement(CompleteReadOnlyTextField, {
+            value: props.formattedValue,
+            language: props.language,
+            textSize: props.textSize,
+            layout: props.layout,
+        });
+    return createElement(
+        'div',
+        {
+            id: props.inputId,
+            role: 'group',
+            'aria-label': props.ariaLabel,
+            'aria-labelledby': props.labelledBy,
+            'aria-describedby': props.describedBy,
+            className: ['mx-sdk-controlled-formula', props.className]
+                .filter(Boolean)
+                .join(' '),
+        },
+        content
+    );
+}
 
 export type FormulaFieldOptions = { className?: string };
 type FormulaControlProps = Pick<

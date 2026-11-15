@@ -197,6 +197,7 @@
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
         "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
+        "./react/readonly-url-gallery.css": "./dist/esm/react/readonly-url-gallery.css",
         "./react/portal-shell.css": "./dist/esm/react/portal-shell.css"
     },
     "files": [
@@ -218,6 +219,7 @@
         "docs/saved-progress.md",
         "docs/field-bindings.md",
         "docs/count.md",
+        "docs/formula.md",
         "docs/portals.md",
         "docs/native-portal-kernel.md",
         "docs/native-portal-differential.md",

@@ -7,11 +7,21 @@ the Form/Portal's visitor, record, field, and action permissions. Public tRPC
 requests use the official `@trpc/client` HTTP link and its plain JSON protocol.
 
 The package also exports native PostgreSQL connection, database, schema, table,
-field, relationship and record metadata types. `PostgresValue` preserves the
+field, relationship and record metadata types. It also exports `PostgresSource`,
+`PostgresFilter`, `PostgresSort`, `PostgresSelectQuery` and `PostgresSelectResult`
+for structured native reads with explicit source identity, nested filters,
+sorting and offset pagination. Read rows remain native fieldsets without a
+record identity or display label. `PostgresValue` preserves the
 server's text representation as `string | null`, including large numbers,
 timestamps, JSON and arrays; SQL NULL remains distinct from an empty string.
 These additive metadata contracts do not yet enable PostgreSQL Form/Portal
 operations or change the existing Airtable runtime contracts.
+
+Record settings contracts require an explicit display column, including when a
+table has a native primary key. A customer-configured identifier also requires
+explicit stability confirmation. `PostgresRecordEditingValidation` describes
+only the current visible snapshot; it grants no ongoing mutation capability or
+promise of future uniqueness.
 
 For a complete browser application, start with the shipped
 [browser lifecycle guide](browser-lifecycle.md). It explains how to copy the

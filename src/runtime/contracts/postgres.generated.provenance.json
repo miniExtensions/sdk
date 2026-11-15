@@ -1,11 +1,12 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "4af72eaf2d24f71fcc77f4e21e762a4ef8a05f22",
+    "sourceRevision": "c1d5e69f5ecab57a3aa9bddd53da43d8a2dfc28e",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "6e337f2fdb5391893e1a81dc8deb3b27226d8636273da7afa8fb401f1c6388f4",
+    "generatorSha256": "d38485ab4d0263115e94da9f3051906b6c2c3ff4e2796ff5fe3aeadaac4283bc",
     "contractFamily": "postgres",
     "aliases": [
         "PostgresConnection",
+        "PostgresSource",
         "PostgresDatabase",
         "PostgresSchema",
         "PostgresTable",
@@ -15,16 +16,32 @@
         "PostgresRelationship",
         "PostgresRecord",
         "PostgresValue",
-        "PostgresRecordIdentity"
+        "PostgresRecordIdentity",
+        "PostgresFilter",
+        "PostgresSort",
+        "PostgresSelectQuery",
+        "PostgresSelectResult",
+        "PostgresIdentifierConfiguration",
+        "PostgresRecordDisplayConfiguration",
+        "PostgresRecordEditingConfiguration",
+        "PostgresRecordEditingValidation"
     ],
     "transport": "plain JSON; canonical enum literals; no runtime code or imports",
     "sources": [
         {
+            "path": "types/postgres/query.ts",
+            "sha256": "231316f064a7c2e39825f8196fafe7e778b98add169c0f01c69fc22b783b1359"
+        },
+        {
+            "path": "types/postgres/recordSettings.ts",
+            "sha256": "62ed8da263dd88e072d7949e7174c006683ae34f2721d0afb9909955fd664206"
+        },
+        {
             "path": "types/postgres/types.ts",
-            "sha256": "b208eaef5eecda19750f21cda818897ea9c977b1cdb5a78c3a96f9ca1173d0b6"
+            "sha256": "d51fb22dc4422919e8d92ed37f58bc90586b94a3a42b6a4b8847ab710bcdaf39"
         }
     ],
     "dependencies": [],
-    "declarationCount": 39,
-    "generatedSha256": "907716b559bbdc87882ad7366b230f2e29504fc1093aac3e5198b8a7e3ed457f"
+    "declarationCount": 70,
+    "generatedSha256": "727443900adaa66dedbe451e1f1214e3d2a187759bede8b463dd47079d1f00eb"
 }

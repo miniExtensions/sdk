@@ -210,8 +210,9 @@ for (const [
         kindType: `TrpcKind${index}`,
     });
 }
-const postgresAliases = [
+const postgresModelAliases = [
     'PostgresConnection',
+    'PostgresSource',
     'PostgresDatabase',
     'PostgresSchema',
     'PostgresTable',
@@ -223,11 +224,34 @@ const postgresAliases = [
     'PostgresValue',
     'PostgresRecordIdentity',
 ];
+const postgresQueryAliases = [
+    'PostgresFilter',
+    'PostgresSort',
+    'PostgresSelectQuery',
+    'PostgresSelectResult',
+];
+const postgresRecordSettingsAliases = [
+    'PostgresIdentifierConfiguration',
+    'PostgresRecordDisplayConfiguration',
+    'PostgresRecordEditingConfiguration',
+    'PostgresRecordEditingValidation',
+];
+const postgresAliases = [
+    ...postgresModelAliases,
+    ...postgresQueryAliases,
+    ...postgresRecordSettingsAliases,
+];
 let corsValidation = null;
 let canonicalCorsPolicyPath;
 if (postgresOnly) {
     entryLines.push(
-        `import type { ${postgresAliases.join(', ')} } from './types/postgres/types';`
+        `import type { ${postgresModelAliases.join(', ')} } from './types/postgres/types';`
+    );
+    entryLines.push(
+        `import type { ${postgresQueryAliases.join(', ')} } from './types/postgres/query';`
+    );
+    entryLines.push(
+        `import type { ${postgresRecordSettingsAliases.join(', ')} } from './types/postgres/recordSettings';`
     );
     for (const name of postgresAliases)
         entryLines.push(`export type Canonical${name} = ${name};`);

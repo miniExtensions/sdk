@@ -26,10 +26,19 @@ import type {
     CanonicalPostgresConnection,
     CanonicalPostgresDatabase,
     CanonicalPostgresField,
+    CanonicalPostgresFilter,
+    CanonicalPostgresIdentifierConfiguration,
     CanonicalPostgresRecord,
+    CanonicalPostgresRecordDisplayConfiguration,
+    CanonicalPostgresRecordEditingConfiguration,
+    CanonicalPostgresRecordEditingValidation,
     CanonicalPostgresRecordIdentity,
     CanonicalPostgresRelationship,
     CanonicalPostgresSchema,
+    CanonicalPostgresSelectQuery,
+    CanonicalPostgresSelectResult,
+    CanonicalPostgresSort,
+    CanonicalPostgresSource,
     CanonicalPostgresTable,
     CanonicalPostgresTableReference,
     CanonicalPostgresType,
@@ -60,6 +69,7 @@ export type AirtableRecord = CanonicalAirtableRecord;
 export type AirtableValue = CanonicalAirtableValue;
 /** Native PostgreSQL metadata and wire values; these do not imply a loaded Form. */
 export type PostgresConnection = CanonicalPostgresConnection;
+export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;
 export type PostgresSchema = CanonicalPostgresSchema;
 export type PostgresTable = CanonicalPostgresTable;
@@ -70,6 +80,20 @@ export type PostgresRelationship = CanonicalPostgresRelationship;
 export type PostgresRecord = CanonicalPostgresRecord;
 export type PostgresValue = CanonicalPostgresValue;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
+export type PostgresIdentifierConfiguration =
+    CanonicalPostgresIdentifierConfiguration;
+export type PostgresRecordDisplayConfiguration =
+    CanonicalPostgresRecordDisplayConfiguration;
+export type PostgresRecordEditingConfiguration =
+    CanonicalPostgresRecordEditingConfiguration;
+/** A current visible snapshot observation, never ongoing mutation authority. */
+export type PostgresRecordEditingValidation =
+    CanonicalPostgresRecordEditingValidation;
+/** Structured read contracts; public runtime transport is a separate integration. */
+export type PostgresFilter = CanonicalPostgresFilter;
+export type PostgresSort = CanonicalPostgresSort;
+export type PostgresSelectQuery = CanonicalPostgresSelectQuery;
+export type PostgresSelectResult = CanonicalPostgresSelectResult;
 export type RuntimeQuery = CanonicalQuery;
 export type RuntimeLanguage = CanonicalLanguage;
 export type RuntimeAirtableField = CanonicalAirtableField;

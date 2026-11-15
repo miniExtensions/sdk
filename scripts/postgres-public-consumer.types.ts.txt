@@ -10,6 +10,15 @@ import type {
     PostgresRecord,
     PostgresRecordIdentity,
     PostgresValue,
+    PostgresSource,
+    PostgresFilter,
+    PostgresSort,
+    PostgresSelectQuery,
+    PostgresSelectResult,
+    PostgresIdentifierConfiguration,
+    PostgresRecordDisplayConfiguration,
+    PostgresRecordEditingConfiguration,
+    PostgresRecordEditingValidation,
 } from '@miniextensions/sdk';
 
 export type NativeMetadataExports = [
@@ -49,6 +58,123 @@ export const keyless: PostgresRecord = {
     fields: { title: '' },
 };
 export const value: PostgresValue = record.fields.id;
+
+export const source: PostgresSource = {
+    type: 'postgres',
+    connectionId: table.connectionId,
+    databaseName: 'synthetic_database',
+};
+export const filter: PostgresFilter = {
+    type: 'and',
+    filters: [
+        {
+            type: 'comparison',
+            columnName: 'amount',
+            operator: 'gte',
+            value: '12345678901234567890.1234567890',
+        },
+        {
+            type: 'not',
+            filter: {
+                type: 'or',
+                filters: [
+                    { type: 'null', columnName: 'title', operator: 'is-null' },
+                    {
+                        type: 'text',
+                        columnName: 'title',
+                        operator: 'starts-with',
+                        caseSensitive: true,
+                        value: 'literal_%',
+                    },
+                ],
+            },
+        },
+    ],
+};
+export const sort: PostgresSort = {
+    columnName: 'amount',
+    direction: 'asc',
+    nulls: 'first',
+};
+export const query: PostgresSelectQuery = {
+    source,
+    table,
+    columns: ['id', 'amount', 'nullable'],
+    where: filter,
+    orderBy: [sort],
+    limit: 25,
+    offset: 0,
+};
+export const result: PostgresSelectResult = {
+    source,
+    table,
+    columns: [],
+    rows: [record.fields],
+    page: { limit: 25, offset: 0, hasMore: false, nextOffset: null },
+};
+
+export const displayConfiguration: PostgresRecordDisplayConfiguration = {
+    source,
+    table,
+    displayColumnName: 'customer_name',
+};
+export const configuredIdentifier: PostgresIdentifierConfiguration = {
+    type: 'configured-key',
+    columnNames: ['tenant_id', 'external_id'],
+    stabilityConfirmed: true,
+};
+export const editingConfiguration: PostgresRecordEditingConfiguration = {
+    ...displayConfiguration,
+    identifier: configuredIdentifier,
+};
+export const nativePkConfiguration: PostgresRecordEditingConfiguration = {
+    ...displayConfiguration,
+    identifier: { type: 'primary-key' },
+};
+export const editingObservation: PostgresRecordEditingValidation = {
+    configuration: editingConfiguration,
+    relationOid: 16400,
+    identifierColumnNames: ['tenant_id', 'external_id'],
+    hasVisibleRows: true,
+    uniquenessScope: 'current-visible-snapshot',
+    stabilityBasis: 'customer-confirmed',
+};
+
+// @ts-expect-error Even native-primary-key editing requires an explicit display column.
+export const missingDisplay: PostgresRecordEditingConfiguration = {
+    source,
+    table,
+    identifier: { type: 'primary-key' },
+};
+// @ts-expect-error Configured keys require explicit customer stability confirmation.
+export const unconfirmedIdentifier: PostgresIdentifierConfiguration = {
+    type: 'configured-key',
+    columnNames: ['external_id'],
+};
+export const permanentUniqueness: PostgresRecordEditingValidation = {
+    ...editingObservation,
+    // @ts-expect-error A visible-row observation cannot establish permanent global uniqueness.
+    uniquenessScope: 'all-rows-forever',
+};
+
+export const crossedSource: PostgresSource = {
+    // @ts-expect-error Native PostgreSQL query sources cannot become Airtable sources.
+    type: 'airtable',
+    connectionId: table.connectionId,
+    databaseName: 'synthetic_database',
+};
+export const crossedQuery: PostgresSelectQuery = {
+    ...query,
+    // @ts-expect-error PostgreSQL queries do not use Airtable filter formulas.
+    where: 'AND({amount} > 0)',
+};
+export const implicitNull: PostgresFilter = {
+    type: 'comparison',
+    columnName: 'amount',
+    operator: 'eq',
+    // @ts-expect-error SQL NULL has explicit operators rather than a scalar operand.
+    value: null,
+};
 
 // @ts-expect-error Native wire values must not lose integer/numeric precision.
 export const numericCoercion: PostgresValue = 9007199254740993;

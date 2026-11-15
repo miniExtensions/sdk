@@ -205,6 +205,72 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         evidence.results.push(
             'one explicit Save, readonly refusal, equal-value owner replacement and current writer'
         );
+        const mixedPayload =
+            '[x] Complete\n[ ] Pending\n\n- Item one\n- Item two';
+        const mixedStored =
+            '[x] Complete\n[ ] Pending\n\n* Item one\n* Item two\n\n\n';
+        await update({
+            identity: 'mixed-list:notes',
+            value: 'Sentinel before mixed list',
+        });
+        await editor.waitFor();
+        await editor.click();
+        await editor.press('ControlOrMeta+a');
+        assert.equal(
+            await editor.evaluate(() => document.getSelection()?.toString()),
+            'Sentinel before mixed list'
+        );
+        await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+            origin,
+        });
+        await page.evaluate(
+            (text) => navigator.clipboard.writeText(text),
+            mixedPayload
+        );
+        assert.deepEqual(
+            await page.evaluate(async () => {
+                const items = await navigator.clipboard.read();
+                return Promise.all(
+                    items.map(async (item) => ({
+                        types: item.types,
+                        text: await (await item.getType('text/plain')).text(),
+                    }))
+                );
+            }),
+            [{ types: ['text/plain'], text: mixedPayload }]
+        );
+        const beforeMixed = await snapshot();
+        await editor.press('ControlOrMeta+v');
+        await page.waitForFunction(
+            (expected) =>
+                window.canonicalRichText.snapshot().state.value === expected,
+            mixedStored
+        );
+        const afterMixed = await snapshot();
+        assert.equal(afterMixed.writes.length, beforeMixed.writes.length + 1);
+        assert.deepEqual(afterMixed.writes.at(-1), {
+            identity: 'mixed-list:notes',
+            value: mixedStored,
+        });
+        assert.equal(
+            await editor.evaluate((node) => node.textContent),
+            'CompletePendingItem oneItem two'
+        );
+        assert.deepEqual(
+            await editor
+                .locator('input[type=checkbox]')
+                .evaluateAll((inputs) => inputs.map((input) => input.checked)),
+            [true, false]
+        );
+        assert.equal(
+            await editor.locator('ul:not(.checkbox_list) > li').count(),
+            2
+        );
+        assert.equal(afterMixed.saves.length, 1);
+        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
+        evidence.results.push(
+            'trusted plain-only mixed checklist/bullet clipboard replaces selected document with exact stored content and no implicit Save'
+        );
         await update({ readOnly: true, value: null });
         await page.locator('#empty-notes').waitFor();
         assert.equal(await page.locator('.ProseMirror').count(), 0);

@@ -7,6 +7,10 @@ retain the binding contract; `BindingSingleSelectField` and
 `BindingMultipleSelectsField` name those paths explicitly.
 
 Import `@miniextensions/sdk/react/controlled-select.css` for the default controls.
+It includes spaced Add/Clear buttons and native list inputs with focus and
+disabled states, without a utility-CSS build. Input accents and focus outlines
+inherit `--mx-sdk-field-theme-color`, then `--mx-sdk-accent` or the existing
+`--theme-600` color scale, with a blue default.
 Provide canonical name values separately from choice display labels, original
 choice IDs (including pending blank IDs), available choices, and a real current
 owner token/currentness check. The component owns only transient search/open
@@ -18,6 +22,10 @@ The host must preserve the captured authority across only that exact metadata
 transition. Refusal, exceptions and authority retirement do not trigger rollback,
 provider creation, or a retry against a successor. A same-value Single selection
 still reaches the native writer; the component does not discard its intent.
+After an accepted selection, clearing search waits for the exact controlled
+value echo and current owner. Single dropdowns close; Multiple dropdowns stay
+open. A newer interaction, different value, owner replacement or edit-policy
+change retires that pending UI update without retrying the writer.
 
 `createSelectConditionEvaluation` takes explicit current record/schema/link
 context and option rules. It owns compatible condition compilation and lazy

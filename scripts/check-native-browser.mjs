@@ -3,6 +3,7 @@ import {
     checkKanbanBrowser,
 } from './kanban-consumer-checks.mjs';
 import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
+import { checkFormCaptchaBrowser } from './form-captcha-browser-checks.mjs';
 import {
     prepareCSVExportBrowserFixtures,
     checkCSVExportBrowser,
@@ -1559,6 +1560,8 @@ try {
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
+            'scripts/form-captcha-consumer-checks.mjs',
+            'scripts/form-captcha-browser-checks.mjs',
             'scripts/csv-export-consumer-checks.mjs',
             'scripts/kanban-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
@@ -2355,6 +2358,13 @@ try {
             });
         }
         report.formSubmit = {};
+        report.formCaptcha = {};
+        await checkFormCaptchaBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formCaptcha,
+            output,
+        });
         await checkFormSubmitBrowser({
             browser,
             consumer: temporary,

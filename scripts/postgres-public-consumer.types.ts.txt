@@ -9,6 +9,7 @@ import {
 import type {
     PostgresAttachmentDisplayFailure,
     PostgresBooleanColumnConfig,
+    PostgresEnumColumnConfig,
     PostgresConnection,
     PostgresCreateQuery,
     PostgresCreateResult,
@@ -177,6 +178,63 @@ export const textWhitespaceOnBoolean: PostgresBooleanColumnConfig = {
 export const unfinishedBooleanStyle: PostgresBooleanColumnConfig = {
     // @ts-expect-error This scalar storage checkpoint does not include checkbox styles.
     checkboxStyle: 'switch',
+};
+
+export const absentEnumConfig: PostgresEnumColumnConfig = {};
+export const enumConfig: PostgresEnumColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedEnumConfig: PostgresEnumColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const enumDescriptionStyles: PostgresEnumColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+enumConfig.title = 'A Enum field';
+delete enumConfig.title;
+export const wrongEnumSetting: PostgresEnumColumnConfig = {
+    // @ts-expect-error Native database text is not a settings boolean.
+    readOnly: 't',
+};
+export const nullEnumSetting: PostgresEnumColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    required: null,
+};
+export const textDisplayOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Enum settings do not offer text or attachment display.
+    displayAs: 'attachments-public-urls',
+};
+export const textPlaceholderOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Placeholder text belongs to text-column settings.
+    placeholderText: '',
+};
+export const textLimitOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Character limits belong to text-column settings.
+    characterLimit: 0,
+};
+export const textWhitespaceOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Whitespace policy belongs to text-column settings.
+    preserveTrailingWhitespace: false,
+};
+export const unfinishedEnumStyle: PostgresEnumColumnConfig = {
+    // @ts-expect-error This scalar storage checkpoint does not include checkbox styles.
+    checkboxStyle: 'switch',
+};
+
+export const storedEnumChoices: PostgresEnumColumnConfig = {
+    // @ts-expect-error Enum labels are native database metadata, not settings.
+    enumLabels: ['copied label'],
 };
 
 export const absentNumericConfig: PostgresNumericColumnConfig = {};

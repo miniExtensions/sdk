@@ -32,7 +32,13 @@ const dateFamily = {
     schemaName: 'postgresDateColumnConfigSchema',
     typeName: 'PostgresDateColumnConfig',
 };
-const allFamilies = [textFamily, booleanFamily, numericFamily, dateFamily];
+const scalarFamilies = [textFamily, booleanFamily, numericFamily, dateFamily];
+const enumFamily = {
+    kind: 'enum',
+    schemaName: 'postgresEnumColumnConfigSchema',
+    typeName: 'PostgresEnumColumnConfig',
+};
+const allFamilies = [...scalarFamilies, enumFamily];
 const historicalSources = [
     '.prettierrc',
     'package.json',
@@ -64,11 +70,17 @@ const presentationSources = [
     ...numericDateSources,
     postgresTextPresentationAuthorSource,
 ].sort();
+const enumSources = [
+    ...presentationSources,
+    'types/extensions/postgres/enumColumnFieldDefinitions.ts',
+    'types/postgres/enumValue.ts',
+].sort();
 const receiptVersions = new Map([
     [1, { families: [textFamily], sources: historicalSources }],
     [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
-    [3, { families: allFamilies, sources: numericDateSources }],
-    [4, { families: allFamilies, sources: presentationSources }],
+    [3, { families: scalarFamilies, sources: numericDateSources }],
+    [4, { families: scalarFamilies, sources: presentationSources }],
+    [5, { families: allFamilies, sources: enumSources }],
 ]);
 const sharedReceiptKeys = [
     'formatVersion',
@@ -164,7 +176,8 @@ export function verifyPostgresConfigReceipt({
     );
     const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
-    const hasPresentation = receipt.formatVersion === 4;
+    const hasPresentation =
+        receipt.formatVersion === 4 || receipt.formatVersion === 5;
     requireReceipt(
         exactKeys(receipt, [
             ...sharedReceiptKeys,
@@ -354,7 +367,8 @@ export function assertPostgresConfigReceiptProvenance(
     validatorSha256
 ) {
     const proof = internal.configurationValidation;
-    const hasPresentation = proof?.receiptVersion === 4;
+    const hasPresentation =
+        proof?.receiptVersion === 4 || proof?.receiptVersion === 5;
     requireReceipt(
         exactKeys(proof, [
             'receiptVersion',

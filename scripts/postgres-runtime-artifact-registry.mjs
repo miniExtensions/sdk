@@ -46,10 +46,12 @@ export const postgresRuntimeArtifactModules = [
 export function postgresRuntimeArtifactSpecifications(configurationValidation) {
     const version = configurationValidation?.receiptVersion;
     assert(
-        [1, 2, 3, 4].includes(version),
+        [1, 2, 3, 4, 5].includes(version),
         'Unknown PostgreSQL runtime receipt version'
     );
-    return version === 4 ? [attachment, presentation] : [attachment];
+    return version === 4 || version === 5
+        ? [attachment, presentation]
+        : [attachment];
 }
 
 /** Receipt version determines the exact set, never an artifact's presence/count. */

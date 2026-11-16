@@ -43,6 +43,7 @@ const identities = {
         'PostgresNumericColumnConfig',
     ],
     date: ['postgresDateColumnConfigSchema', 'PostgresDateColumnConfig'],
+    enum: ['postgresEnumColumnConfigSchema', 'PostgresEnumColumnConfig'],
 };
 const family = (kind) => {
     assert(Object.hasOwn(identities, kind));
@@ -64,7 +65,7 @@ const family = (kind) => {
 };
 
 function fixture(version) {
-    assert([1, 2, 3, 4].includes(version));
+    assert([1, 2, 3, 4, 5].includes(version));
     const paths =
         version === 1
             ? historicalInputs
@@ -79,8 +80,14 @@ function fixture(version) {
                             'types/extensions/postgres/numericColumnFieldDefinitions.ts',
                         ]
                       : []),
-                  ...(version === 4
+                  ...(version >= 4
                       ? [postgresTextPresentationAuthorSource]
+                      : []),
+                  ...(version === 5
+                      ? [
+                            'types/extensions/postgres/enumColumnFieldDefinitions.ts',
+                            'types/postgres/enumValue.ts',
+                        ]
                       : []),
               ].sort();
     const inputs = new Map(
@@ -101,7 +108,7 @@ function fixture(version) {
                 ? 'postgres-text-column-config'
                 : 'postgres-column-configs',
         scope:
-            version === 4
+            version >= 4
                 ? 'scalar-storage-and-presentation'
                 : 'scalar-storage-only',
         sourceRepository: 'miniExtensions/monorepo',
@@ -121,6 +128,7 @@ function fixture(version) {
                       ...(version >= 3
                           ? [family('numeric'), family('date')]
                           : []),
+                      ...(version === 5 ? [family('enum')] : []),
                   ],
               }),
         runtimeAdmission: 'pending',
@@ -130,7 +138,7 @@ function fixture(version) {
             sha256: hash(generatedBytes),
         },
     };
-    if (version === 4) {
+    if (version >= 4) {
         const presentationBytes = Buffer.from(
             'synthetic generated presentation bytes\n'
         );
@@ -206,7 +214,9 @@ test('v4 binds the exact presentation authoring closure and generated sidecar', 
     assert.equal(verified.receiptVersion, 4);
     assert.deepEqual(
         verified.aliases,
-        Object.values(identities).map(([, type]) => type)
+        Object.values(identities)
+            .slice(0, 4)
+            .map(([, type]) => type)
     );
     assert.deepEqual(verified.presentation, value.receipt.presentation);
     assert.deepEqual(value.readPaths, [
@@ -215,8 +225,32 @@ test('v4 binds the exact presentation authoring closure and generated sidecar', 
     ]);
 });
 
+test('v5 binds native enum configuration without rewriting historical family closures', () => {
+    const value = fixture(5);
+    value.receipt.families.reverse();
+    const verified = value.verify();
+    assert.equal(value.paths.length, 22);
+    assert.equal(verified.receiptVersion, 5);
+    assert.deepEqual(
+        verified.aliases,
+        Object.values(identities).map(([, type]) => type)
+    );
+    assert.deepEqual(verified.presentation, value.receipt.presentation);
+    assert.deepEqual(value.readPaths, [
+        ...value.paths,
+        postgresTextPresentationSource,
+    ]);
+    for (const version of [2, 3, 4]) {
+        const historical = fixture(version);
+        historical.receipt.families[historical.receipt.families.length - 1] =
+            family('enum');
+        assert.throws(historical.verify, /family-identity/);
+        assert.deepEqual(historical.readPaths, []);
+    }
+});
+
 test("receipt versions cannot substitute later families or another version's source closure", async (t) => {
-    for (const kind of ['numeric', 'date'])
+    for (const kind of ['numeric', 'date', 'enum'])
         await t.test(`v2 refuses the known ${kind} family`, () => {
             const value = fixture(2);
             value.receipt.families[1] = family(kind);
@@ -226,6 +260,8 @@ test("receipt versions cannot substitute later families or another version's sou
     for (const [from, to] of [
         [2, 3],
         [3, 2],
+        [4, 5],
+        [5, 4],
     ]) {
         await t.test(`relabel v${from} as v${to}`, () => {
             const value = fixture(from);
@@ -250,7 +286,7 @@ test("receipt versions cannot substitute later families or another version's sou
 
 test('configuration receipts refuse unreviewed versions, family identities and admission', async (t) => {
     for (const [name, mutate, reason] of [
-        ['version', (r) => (r.formatVersion = 5), 'format-version'],
+        ['version', (r) => (r.formatVersion = 6), 'format-version'],
         [
             'contract',
             (r) => (r.contract = 'postgres-text-column-config'),
@@ -303,7 +339,7 @@ test('configuration receipts refuse unreviewed versions, family identities and a
             'editor-pending',
         ],
     ]) {
-        for (const version of [2, 3, 4])
+        for (const version of [2, 3, 4, 5])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -329,7 +365,7 @@ test('configuration receipts refuse missing, reordered or unsafe source membersh
             (r) => (r.sources[0].path = postgresFieldConfigProvenance),
         ],
     ]) {
-        for (const version of [2, 3, 4])
+        for (const version of [2, 3, 4, 5])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -365,7 +401,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
             'generated-integrity',
         ],
     ]) {
-        for (const version of [2, 3, 4])
+        for (const version of [2, 3, 4, 5])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -375,7 +411,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
 });
 
 test('build provenance binds the validator and both canonical configuration inputs without source access', async (t) => {
-    for (const version of [1, 2, 3, 4]) {
+    for (const version of [1, 2, 3, 4, 5]) {
         await t.test(`version ${version}`, () => {
             const verified = fixture(version).verify();
             const validatorSha256 = hash('synthetic validator bytes');
@@ -392,7 +428,7 @@ test('build provenance binds the validator and both canonical configuration inpu
                     },
                 ],
                 configurationValidation: { ...verified, validatorSha256 },
-                ...(version === 4
+                ...(version >= 4
                     ? {
                           runtimeArtifacts: [
                               {
@@ -406,7 +442,7 @@ test('build provenance binds the validator and both canonical configuration inpu
                       }
                     : {}),
             };
-            if (version === 4)
+            if (version >= 4)
                 internal.sources.push(
                     {
                         path: verified.presentation.sourcePath,
@@ -490,7 +526,7 @@ test('build provenance binds the validator and both canonical configuration inpu
 });
 
 test('canonical configuration inputs must match the selected Git revision before verification', async (t) => {
-    for (const version of [2, 3, 4])
+    for (const version of [2, 3, 4, 5])
         await t.test(`version ${version}`, (t) => {
             const root = mkdtempSync(
                 path.join(tmpdir(), 'sdk-config-receipt-git-')
@@ -536,7 +572,7 @@ test('canonical configuration inputs must match the selected Git revision before
                 /canonical-source-drift/
             );
             write(postgresFieldConfigProvenance, JSON.stringify(value.receipt));
-            if (version === 4) {
+            if (version >= 4) {
                 write(
                     postgresTextPresentationSource,
                     'changed uncommitted policy'
@@ -559,7 +595,7 @@ test('canonical configuration inputs must match the selected Git revision before
         });
 });
 
-test('v4 refuses missing, expanded or substituted presentation identities and bytes', async (t) => {
+test('presentation receipts refuse missing, expanded or substituted identities and bytes', async (t) => {
     for (const [name, mutate, reason] of [
         [
             'missing policy',
@@ -618,18 +654,19 @@ test('v4 refuses missing, expanded or substituted presentation identities and by
             'receipt-scope',
         ],
     ])
-        await t.test(name, () => {
-            const value = fixture(4);
-            mutate(value);
-            assert.throws(value.verify, new RegExp(reason));
-            assert(
-                value.readPaths.every(
-                    (path) =>
-                        value.paths.includes(path) ||
-                        path === postgresTextPresentationSource
-                )
-            );
-        });
+        for (const version of [4, 5])
+            await t.test(`v${version}: ${name}`, () => {
+                const value = fixture(version);
+                mutate(value);
+                assert.throws(value.verify, new RegExp(reason));
+                assert(
+                    value.readPaths.every(
+                        (path) =>
+                            value.paths.includes(path) ||
+                            path === postgresTextPresentationSource
+                    )
+                );
+            });
     for (const version of [1, 2, 3]) {
         const value = fixture(version);
         value.receipt.presentation = fixture(4).receipt.presentation;
@@ -637,59 +674,63 @@ test('v4 refuses missing, expanded or substituted presentation identities and by
     }
 });
 
-test('v4 build proof binds both policy sources and the generated runtime input', () => {
-    const verified = fixture(4).verify();
-    const validatorSha256 = hash('synthetic validator');
-    const internal = {
-        aliases: verified.aliases,
-        configurationValidation: { ...verified, validatorSha256 },
-        sources: [
-            {
-                path: postgresFieldConfigSource,
-                sha256: verified.schemaSourceSha256,
-            },
-            {
-                path: postgresFieldConfigProvenance,
-                sha256: verified.receiptSourceSha256,
-            },
-            {
-                path: verified.presentation.sourcePath,
-                sha256: verified.presentation.sourceSha256,
-            },
-            {
-                path: verified.presentation.generated.path,
-                sha256: verified.presentation.generated.sha256,
-            },
-        ],
-        runtimeArtifacts: [
-            {
-                module: 'postgresTextPresentation.generated',
-                sourcePath: verified.presentation.generated.path,
-                sourceSha256: verified.presentation.generated.sha256,
-            },
-        ],
-    };
-    assertPostgresConfigReceiptProvenance(internal, validatorSha256);
-    for (const mutate of [
-        (v) => v.sources.pop(),
-        (v) => (v.sources[2].sha256 = hash('changed author')),
-        (v) =>
-            (v.configurationValidation.presentation.generated.sha256 =
-                hash('changed sidecar')),
-        (v) =>
-            (v.runtimeArtifacts[0].sourcePath =
-                verified.presentation.sourcePath),
-        (v) =>
-            (v.runtimeArtifacts[0].sourceSha256 =
-                verified.presentation.sourceSha256),
-        (v) => (v.runtimeArtifacts = []),
-    ]) {
-        const changed = structuredClone(internal);
-        mutate(changed);
-        assert.throws(
-            () =>
-                assertPostgresConfigReceiptProvenance(changed, validatorSha256),
-            /presentation-provenance/
-        );
-    }
-});
+for (const version of [4, 5])
+    test(`v${version} build proof binds both policy sources and the generated runtime input`, () => {
+        const verified = fixture(version).verify();
+        const validatorSha256 = hash('synthetic validator');
+        const internal = {
+            aliases: verified.aliases,
+            configurationValidation: { ...verified, validatorSha256 },
+            sources: [
+                {
+                    path: postgresFieldConfigSource,
+                    sha256: verified.schemaSourceSha256,
+                },
+                {
+                    path: postgresFieldConfigProvenance,
+                    sha256: verified.receiptSourceSha256,
+                },
+                {
+                    path: verified.presentation.sourcePath,
+                    sha256: verified.presentation.sourceSha256,
+                },
+                {
+                    path: verified.presentation.generated.path,
+                    sha256: verified.presentation.generated.sha256,
+                },
+            ],
+            runtimeArtifacts: [
+                {
+                    module: 'postgresTextPresentation.generated',
+                    sourcePath: verified.presentation.generated.path,
+                    sourceSha256: verified.presentation.generated.sha256,
+                },
+            ],
+        };
+        assertPostgresConfigReceiptProvenance(internal, validatorSha256);
+        for (const mutate of [
+            (v) => v.sources.pop(),
+            (v) => (v.sources[2].sha256 = hash('changed author')),
+            (v) =>
+                (v.configurationValidation.presentation.generated.sha256 =
+                    hash('changed sidecar')),
+            (v) =>
+                (v.runtimeArtifacts[0].sourcePath =
+                    verified.presentation.sourcePath),
+            (v) =>
+                (v.runtimeArtifacts[0].sourceSha256 =
+                    verified.presentation.sourceSha256),
+            (v) => (v.runtimeArtifacts = []),
+        ]) {
+            const changed = structuredClone(internal);
+            mutate(changed);
+            assert.throws(
+                () =>
+                    assertPostgresConfigReceiptProvenance(
+                        changed,
+                        validatorSha256
+                    ),
+                /presentation-provenance/
+            );
+        }
+    });

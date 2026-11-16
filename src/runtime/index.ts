@@ -34,6 +34,7 @@ export type {
     PostgresCreateResult,
     PostgresDatabase,
     PostgresDateColumnConfig,
+    PostgresEnumColumnConfig,
     PostgresField,
     PostgresFilter,
     PostgresIdentifierConfiguration,

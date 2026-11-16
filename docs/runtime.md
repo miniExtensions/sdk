@@ -457,11 +457,12 @@ declaration provenance. Private source revisions and source paths remain in the
 repository's internal manifest.
 
 `PostgresTextColumnConfig`, `PostgresBooleanColumnConfig`,
-`PostgresNumericColumnConfig` and `PostgresDateColumnConfig` are portable inferred
+`PostgresNumericColumnConfig`, `PostgresDateColumnConfig` and
+`PostgresEnumColumnConfig` are portable inferred
 types of the application's generated scalar column storage schemas, which come
 from its authored settings. Optional settings stay absent unless supplied;
 explicit false, zero, empty strings and undefined retain their canonical types.
-Boolean, numeric and SQL DATE settings expose the common controls and omit
+Boolean, numeric, SQL DATE and enum settings expose the common controls and omit
 text-only display, attachment, placeholder, character and whitespace controls.
 They add no numeric formatting, date format, time zone or checkbox-style setting.
 Native numeric and SQL DATE values remain text/NULL. No Zod import, schema
@@ -482,6 +483,12 @@ attachment parser stays separate. The private
 native manifest binds the receipt validator's bytes, and
 build checks verify that binding without opening the canonical checkout.
 Ordinary SDK CI still uses committed portable declarations and SDK dependencies.
+Version 5 adds the enum storage family and its exact 22-source authoring closure.
+Versions 1–4 keep their existing family/source sets. Versions 4 and 5 use the
+same two portable display artifacts. Enum labels remain ordered database
+metadata; configuration does not copy choices, trim values or admit enum writes.
+This checkpoint covers enum settings/read preview; native enum entry and its
+Required edge cases remain separate implementation work.
 
 `parsePostgresAttachmentDisplay` projects stored text into read-only URL strings.
 Literal commas separate absolute HTTP(S) URLs; use `%2C` for a comma inside one

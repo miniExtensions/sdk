@@ -18,6 +18,7 @@ import {
     cpSync,
     mkdirSync,
     readFileSync,
+    readdirSync,
     rmSync,
     writeFileSync,
 } from 'node:fs';
@@ -29,7 +30,12 @@ import {
     publicContractDependencies,
     publicPostgresRuntimeArtifacts,
 } from './distribution-checks.mjs';
-import { postgresRuntimeOutputHashes } from './postgres-runtime-artifacts.mjs';
+import {
+    assertPostgresRuntimeArtifactSet,
+    assertPostgresRuntimeEmitter,
+    assertPostgresRuntimeContractInventory,
+    assertPostgresRuntimeRegistryProvenance,
+} from './postgres-runtime-artifact-registry.mjs';
 import { assertPostgresConfigReceiptProvenance } from './postgres-config-receipts.mjs';
 import {
     assertModuleFormats,
@@ -187,6 +193,7 @@ for (const name of ['generated', 'postgres.generated']) {
     );
     let runtimeArtifacts;
     if (name === 'postgres.generated') {
+        assertPostgresRuntimeRegistryProvenance(internal);
         assertPostgresConfigReceiptProvenance(
             internal,
             createHash('sha256')
@@ -201,15 +208,32 @@ for (const name of ['generated', 'postgres.generated']) {
                 .digest('hex')
         );
         runtimeArtifacts = publicPostgresRuntimeArtifacts(
-            internal.runtimeArtifacts
+            internal.runtimeArtifacts,
+            internal.configurationValidation
         );
+        const specifications = assertPostgresRuntimeArtifactSet(
+            internal.runtimeArtifacts,
+            internal.configurationValidation
+        );
+        for (const format of ['esm', 'cjs'])
+            assertPostgresRuntimeContractInventory(
+                readdirSync(`dist/${format}/runtime/contracts`, {
+                    recursive: true,
+                }),
+                internal.configurationValidation
+            );
         for (const [index, artifact] of runtimeArtifacts.entries()) {
             const recorded = internal.runtimeArtifacts[index];
+            const specification = assertPostgresRuntimeEmitter(
+                recorded,
+                internal.configurationValidation
+            );
+            assert.equal(specification.module, specifications[index].module);
             const source = readFileSync(
                 `src/runtime/contracts/${artifact.module}.ts`,
                 'utf8'
             );
-            const expected = postgresRuntimeOutputHashes(source);
+            const expected = specification.outputHashes(source);
             assert.deepEqual(
                 {
                     generatedSha256: artifact.generatedSha256,
@@ -218,20 +242,6 @@ for (const name of ['generated', 'postgres.generated']) {
                 },
                 expected,
                 'Generated PostgreSQL display runtime is stale'
-            );
-            assert.equal(
-                artifact.emitterSha256,
-                createHash('sha256')
-                    .update(
-                        readFileSync(
-                            new URL(
-                                './postgres-runtime-artifacts.mjs',
-                                import.meta.url
-                            )
-                        )
-                    )
-                    .digest('hex'),
-                'PostgreSQL runtime emitter provenance is stale'
             );
             assert(
                 internal.sources.some(

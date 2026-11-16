@@ -9,6 +9,8 @@ import {
     assertPostgresConfigReceiptProvenance,
     postgresFieldConfigProvenance,
     postgresFieldConfigSource,
+    postgresTextPresentationAuthorSource,
+    postgresTextPresentationSource,
     readPostgresConfigReceipt,
     verifyPostgresConfigReceipt,
 } from './postgres-config-receipts.mjs';
@@ -62,7 +64,7 @@ const family = (kind) => {
 };
 
 function fixture(version) {
-    assert([1, 2, 3].includes(version));
+    assert([1, 2, 3, 4].includes(version));
     const paths =
         version === 1
             ? historicalInputs
@@ -70,12 +72,15 @@ function fixture(version) {
                   ...historicalInputs,
                   'types/extensions/postgres/booleanColumnFieldDefinitions.ts',
                   'types/postgres/columnTypes.ts',
-                  ...(version === 3
+                  ...(version >= 3
                       ? [
                             'types/extensions/postgres/commonColumnFieldDefinitions.ts',
                             'types/extensions/postgres/dateColumnFieldDefinitions.ts',
                             'types/extensions/postgres/numericColumnFieldDefinitions.ts',
                         ]
+                      : []),
+                  ...(version === 4
+                      ? [postgresTextPresentationAuthorSource]
                       : []),
               ].sort();
     const inputs = new Map(
@@ -95,7 +100,10 @@ function fixture(version) {
             version === 1
                 ? 'postgres-text-column-config'
                 : 'postgres-column-configs',
-        scope: 'scalar-storage-only',
+        scope:
+            version === 4
+                ? 'scalar-storage-and-presentation'
+                : 'scalar-storage-only',
         sourceRepository: 'miniExtensions/monorepo',
         sourceMode: 'working-tree-content',
         sources,
@@ -110,7 +118,7 @@ function fixture(version) {
                   families: [
                       text,
                       family('boolean'),
-                      ...(version === 3
+                      ...(version >= 3
                           ? [family('numeric'), family('date')]
                           : []),
                   ],
@@ -122,6 +130,23 @@ function fixture(version) {
             sha256: hash(generatedBytes),
         },
     };
+    if (version === 4) {
+        const presentationBytes = Buffer.from(
+            'synthetic generated presentation bytes\n'
+        );
+        inputs.set(postgresTextPresentationSource, presentationBytes);
+        receipt.presentation = {
+            kind: 'text-column-presentation',
+            sourcePath: postgresTextPresentationAuthorSource,
+            sourceSha256: hash(
+                inputs.get(postgresTextPresentationAuthorSource)
+            ),
+            generated: {
+                path: postgresTextPresentationSource,
+                sha256: hash(presentationBytes),
+            },
+        };
+    }
     const readPaths = [];
     const verify = () =>
         verifyPostgresConfigReceipt({
@@ -174,6 +199,22 @@ test('v3 configuration receipts bind all four families and the complete shared-f
     assert.deepEqual(value.readPaths, value.paths);
 });
 
+test('v4 binds the exact presentation authoring closure and generated sidecar', () => {
+    const value = fixture(4);
+    const verified = value.verify();
+    assert.equal(value.paths.length, 20);
+    assert.equal(verified.receiptVersion, 4);
+    assert.deepEqual(
+        verified.aliases,
+        Object.values(identities).map(([, type]) => type)
+    );
+    assert.deepEqual(verified.presentation, value.receipt.presentation);
+    assert.deepEqual(value.readPaths, [
+        ...value.paths,
+        postgresTextPresentationSource,
+    ]);
+});
+
 test("receipt versions cannot substitute later families or another version's source closure", async (t) => {
     for (const kind of ['numeric', 'date'])
         await t.test(`v2 refuses the known ${kind} family`, () => {
@@ -209,7 +250,7 @@ test("receipt versions cannot substitute later families or another version's sou
 
 test('configuration receipts refuse unreviewed versions, family identities and admission', async (t) => {
     for (const [name, mutate, reason] of [
-        ['version', (r) => (r.formatVersion = 4), 'format-version'],
+        ['version', (r) => (r.formatVersion = 5), 'format-version'],
         [
             'contract',
             (r) => (r.contract = 'postgres-text-column-config'),
@@ -262,7 +303,7 @@ test('configuration receipts refuse unreviewed versions, family identities and a
             'editor-pending',
         ],
     ]) {
-        for (const version of [2, 3])
+        for (const version of [2, 3, 4])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -288,7 +329,7 @@ test('configuration receipts refuse missing, reordered or unsafe source membersh
             (r) => (r.sources[0].path = postgresFieldConfigProvenance),
         ],
     ]) {
-        for (const version of [2, 3])
+        for (const version of [2, 3, 4])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -324,7 +365,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
             'generated-integrity',
         ],
     ]) {
-        for (const version of [2, 3])
+        for (const version of [2, 3, 4])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -334,7 +375,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
 });
 
 test('build provenance binds the validator and both canonical configuration inputs without source access', async (t) => {
-    for (const version of [1, 2, 3]) {
+    for (const version of [1, 2, 3, 4]) {
         await t.test(`version ${version}`, () => {
             const verified = fixture(version).verify();
             const validatorSha256 = hash('synthetic validator bytes');
@@ -351,7 +392,31 @@ test('build provenance binds the validator and both canonical configuration inpu
                     },
                 ],
                 configurationValidation: { ...verified, validatorSha256 },
+                ...(version === 4
+                    ? {
+                          runtimeArtifacts: [
+                              {
+                                  module: 'postgresTextPresentation.generated',
+                                  sourcePath:
+                                      verified.presentation.generated.path,
+                                  sourceSha256:
+                                      verified.presentation.generated.sha256,
+                              },
+                          ],
+                      }
+                    : {}),
             };
+            if (version === 4)
+                internal.sources.push(
+                    {
+                        path: verified.presentation.sourcePath,
+                        sha256: verified.presentation.sourceSha256,
+                    },
+                    {
+                        path: verified.presentation.generated.path,
+                        sha256: verified.presentation.generated.sha256,
+                    }
+                );
             assertPostgresConfigReceiptProvenance(internal, validatorSha256);
             const commonAlias = structuredClone(internal);
             commonAlias.aliases.unshift('PostgresValue');
@@ -425,7 +490,7 @@ test('build provenance binds the validator and both canonical configuration inpu
 });
 
 test('canonical configuration inputs must match the selected Git revision before verification', async (t) => {
-    for (const version of [2, 3])
+    for (const version of [2, 3, 4])
         await t.test(`version ${version}`, (t) => {
             const root = mkdtempSync(
                 path.join(tmpdir(), 'sdk-config-receipt-git-')
@@ -471,10 +536,160 @@ test('canonical configuration inputs must match the selected Git revision before
                 /canonical-source-drift/
             );
             write(postgresFieldConfigProvenance, JSON.stringify(value.receipt));
+            if (version === 4) {
+                write(
+                    postgresTextPresentationSource,
+                    'changed uncommitted policy'
+                );
+                assert.throws(
+                    () =>
+                        readPostgresConfigReceipt({ monorepo: root, revision }),
+                    /canonical-source-drift/
+                );
+                write(
+                    postgresTextPresentationSource,
+                    value.inputs.get(postgresTextPresentationSource)
+                );
+            }
             write(value.paths[0], 'changed uncommitted input');
             assert.throws(
                 () => readPostgresConfigReceipt({ monorepo: root, revision }),
                 /canonical-source-drift/
             );
         });
+});
+
+test('v4 refuses missing, expanded or substituted presentation identities and bytes', async (t) => {
+    for (const [name, mutate, reason] of [
+        [
+            'missing policy',
+            (v) => delete v.receipt.presentation,
+            'receipt-fields',
+        ],
+        [
+            'expanded policy',
+            (v) => (v.receipt.presentation.allowWrites = true),
+            'presentation-identity',
+        ],
+        [
+            'kind',
+            (v) => (v.receipt.presentation.kind = 'form-execution'),
+            'presentation-identity',
+        ],
+        [
+            'authored path',
+            (v) => (v.receipt.presentation.sourcePath = 'other.ts'),
+            'presentation-identity',
+        ],
+        [
+            'authored hash',
+            (v) => (v.receipt.presentation.sourceSha256 = hash('other source')),
+            'presentation-identity',
+        ],
+        [
+            'generated path',
+            (v) => (v.receipt.presentation.generated.path = 'other.ts'),
+            'presentation-identity',
+        ],
+        [
+            'expanded output',
+            (v) => (v.receipt.presentation.generated.ready = true),
+            'presentation-identity',
+        ],
+        [
+            'generated hash',
+            (v) =>
+                (v.receipt.presentation.generated.sha256 =
+                    hash('other output')),
+            'presentation-integrity',
+        ],
+        [
+            'generated bytes',
+            (v) =>
+                v.inputs.set(
+                    postgresTextPresentationSource,
+                    Buffer.from('changed output')
+                ),
+            'presentation-integrity',
+        ],
+        [
+            'old scope',
+            (v) => (v.receipt.scope = 'scalar-storage-only'),
+            'receipt-scope',
+        ],
+    ])
+        await t.test(name, () => {
+            const value = fixture(4);
+            mutate(value);
+            assert.throws(value.verify, new RegExp(reason));
+            assert(
+                value.readPaths.every(
+                    (path) =>
+                        value.paths.includes(path) ||
+                        path === postgresTextPresentationSource
+                )
+            );
+        });
+    for (const version of [1, 2, 3]) {
+        const value = fixture(version);
+        value.receipt.presentation = fixture(4).receipt.presentation;
+        assert.throws(value.verify, /receipt-fields/);
+    }
+});
+
+test('v4 build proof binds both policy sources and the generated runtime input', () => {
+    const verified = fixture(4).verify();
+    const validatorSha256 = hash('synthetic validator');
+    const internal = {
+        aliases: verified.aliases,
+        configurationValidation: { ...verified, validatorSha256 },
+        sources: [
+            {
+                path: postgresFieldConfigSource,
+                sha256: verified.schemaSourceSha256,
+            },
+            {
+                path: postgresFieldConfigProvenance,
+                sha256: verified.receiptSourceSha256,
+            },
+            {
+                path: verified.presentation.sourcePath,
+                sha256: verified.presentation.sourceSha256,
+            },
+            {
+                path: verified.presentation.generated.path,
+                sha256: verified.presentation.generated.sha256,
+            },
+        ],
+        runtimeArtifacts: [
+            {
+                module: 'postgresTextPresentation.generated',
+                sourcePath: verified.presentation.generated.path,
+                sourceSha256: verified.presentation.generated.sha256,
+            },
+        ],
+    };
+    assertPostgresConfigReceiptProvenance(internal, validatorSha256);
+    for (const mutate of [
+        (v) => v.sources.pop(),
+        (v) => (v.sources[2].sha256 = hash('changed author')),
+        (v) =>
+            (v.configurationValidation.presentation.generated.sha256 =
+                hash('changed sidecar')),
+        (v) =>
+            (v.runtimeArtifacts[0].sourcePath =
+                verified.presentation.sourcePath),
+        (v) =>
+            (v.runtimeArtifacts[0].sourceSha256 =
+                verified.presentation.sourceSha256),
+        (v) => (v.runtimeArtifacts = []),
+    ]) {
+        const changed = structuredClone(internal);
+        mutate(changed);
+        assert.throws(
+            () =>
+                assertPostgresConfigReceiptProvenance(changed, validatorSha256),
+            /presentation-provenance/
+        );
+    }
 });

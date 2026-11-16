@@ -1,8 +1,8 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "be9bd81cca929213a9522483f6b620852b429dcc",
+    "sourceRevision": "21338b58fefd95d0d28da9c3db08cb2478e9990d",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "56170c87548d2ab263428334b06e1f9701bd89e0cd0a2d60480863364ab99e40",
+    "generatorSha256": "0a431dd8f1074548754f39ff592044f965357f241bb7c6823b667e88c9e132d1",
     "contractFamily": "postgres",
     "aliases": [
         "PostgresConnection",
@@ -37,18 +37,28 @@
         "PostgresDateColumnConfig"
     ],
     "configurationValidation": {
-        "receiptVersion": 3,
+        "receiptVersion": 4,
         "aliases": [
             "PostgresTextColumnConfig",
             "PostgresBooleanColumnConfig",
             "PostgresNumericColumnConfig",
             "PostgresDateColumnConfig"
         ],
-        "receiptSourceSha256": "a638ef3d1e3042be64ef4f4c64cc147a45461ab464f980628ee0835c8d355b6f",
+        "receiptSourceSha256": "971bd313b9bc10ff6664c1f7f3a2d5576697a1abe44a30e1d88c9465f55a0a6a",
         "schemaSourceSha256": "f989501ed1908f9da6ac7ebc6d550d82e320ec1cf4ef4f16aedcf6508e3f7c40",
-        "sourceSnapshotSha256": "e1ab5a1ab935855a1ba5990c48a7e52974561c46b15f11cf9fb45661afbb50ac",
-        "validatorSha256": "3bc5e0b00ba8c81d95654135dd9f05911f4a43db4016c3d52e3a49249070abf2"
+        "sourceSnapshotSha256": "5f7a6d36069a36f042d5c174bd5f75ded77c03b7103be2676a2e12e2efd9b848",
+        "presentation": {
+            "kind": "text-column-presentation",
+            "sourcePath": "types/extensions/postgres/textColumnPresentation.ts",
+            "sourceSha256": "b783d5cc9cf1ec00e91f1a6c490a2d6a8aa52c9c731d90ad8901a204b96996c1",
+            "generated": {
+                "path": "types/generated/postgres/text-presentation.ts",
+                "sha256": "8c76f9e14bc9243bda5a48d372469e0e409da7268afee89d10ded294fb7669b1"
+            }
+        },
+        "validatorSha256": "bd0f338766d313fc49657fe5282b50542dae350a3863b99baa99442e4db9aae1"
     },
+    "runtimeRegistrySha256": "139cb32efb3fc540a1a5e712a5f12cbc6ee4077c384210d3bdbd4c447b3436ac",
     "runtimeArtifacts": [
         {
             "module": "postgresAttachmentDisplay.generated",
@@ -61,17 +71,37 @@
                 "cjs": "0e38d6c95ab0cc27e4278d0de4da1c5ae235978352a4c917e642c9462fe91076"
             },
             "declarationsSha256": "ed738c9c6a5b2cf2e9c634c7ff298ce847d316fe1b4995b2bafaff6f8b48d230"
+        },
+        {
+            "module": "postgresTextPresentation.generated",
+            "sourcePath": "types/generated/postgres/text-presentation.ts",
+            "sourceSha256": "8c76f9e14bc9243bda5a48d372469e0e409da7268afee89d10ded294fb7669b1",
+            "emitterSha256": "34ed748f45c41cdf176949dba1cf9384db06c81d753286f374fffef79470e416",
+            "generatedSha256": "27ca508594c7ac1f69fd1997e742c6364d807c1a99e5f34ff946a37cdb51e5c8",
+            "moduleSha256": {
+                "esm": "d1a17a30b1352f60ee91e7b90cf9d37f7d6e7d2dbbd74ee7f73c226980bd20ee",
+                "cjs": "491623a39a4456f8a1c81ddea28fe107b816eae61e6f9e1756b96ad942e3b72f"
+            },
+            "declarationsSha256": "20e4370158761309e59b872202b427b85820e1158336f4a6379c81ef3f3244c4"
         }
     ],
     "transport": "plain JSON contracts; canonical enum literals; separate generated presentation runtime",
     "sources": [
         {
+            "path": "types/extensions/postgres/textColumnPresentation.ts",
+            "sha256": "b783d5cc9cf1ec00e91f1a6c490a2d6a8aa52c9c731d90ad8901a204b96996c1"
+        },
+        {
             "path": "types/generated/postgres/field-config.provenance.json",
-            "sha256": "a638ef3d1e3042be64ef4f4c64cc147a45461ab464f980628ee0835c8d355b6f"
+            "sha256": "971bd313b9bc10ff6664c1f7f3a2d5576697a1abe44a30e1d88c9465f55a0a6a"
         },
         {
             "path": "types/generated/postgres/field-config.ts",
             "sha256": "f989501ed1908f9da6ac7ebc6d550d82e320ec1cf4ef4f16aedcf6508e3f7c40"
+        },
+        {
+            "path": "types/generated/postgres/text-presentation.ts",
+            "sha256": "8c76f9e14bc9243bda5a48d372469e0e409da7268afee89d10ded294fb7669b1"
         },
         {
             "path": "types/postgres/attachmentDisplay.ts",
@@ -109,5 +139,5 @@
         }
     ],
     "declarationCount": 96,
-    "generatedSha256": "cd3156194abe01d8467e9ae04cd318cb02d14217b2160fef665f13a28c2d52cf"
+    "generatedSha256": "7a45a2374a379063397015a85ef0c3d79d62a9e5576b237d4f55bec86420a3d0"
 }

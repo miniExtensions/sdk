@@ -3,6 +3,12 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import ts from 'typescript';
+import {
+    assertPostgresRuntimeArtifactSet,
+    assertPostgresRuntimeEmitter,
+    assertPostgresRuntimeContractInventory,
+    assertPostgresRuntimeRegistryProvenance,
+} from './postgres-runtime-artifact-registry.mjs';
 
 const operationFields = [
     'operation',
@@ -39,6 +45,42 @@ const publicModuleHashes = {
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+function assertImportFreePresentation(bytes, filename, label) {
+    const file = ts.createSourceFile(
+        filename,
+        bytes.toString('utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+        filename.endsWith('.d.ts') ? ts.ScriptKind.TS : ts.ScriptKind.JS
+    );
+    let hasImport = false;
+    const inspect = (node) => {
+        if (
+            ts.isImportDeclaration(node) ||
+            ts.isImportEqualsDeclaration(node) ||
+            ts.isImportTypeNode(node) ||
+            (ts.isExportDeclaration(node) && node.moduleSpecifier != null) ||
+            (ts.isCallExpression(node) &&
+                (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+                    (ts.isIdentifier(node.expression) &&
+                        node.expression.text === 'require') ||
+                    (ts.isPropertyAccessExpression(node.expression) &&
+                        node.expression.name.text === 'require')))
+        )
+            hasImport = true;
+        ts.forEachChild(node, inspect);
+    };
+    inspect(file);
+    assert(
+        file.parseDiagnostics.length === 0 &&
+            file.referencedFiles.length === 0 &&
+            file.typeReferenceDirectives.length === 0 &&
+            file.libReferenceDirectives.length === 0 &&
+            !hasImport,
+        `PostgreSQL presentation ${label} must remain import-free`
+    );
+}
+
 // Canonical field kinds come through the SDK's field-types re-export. Admit
 // only its captured enum declaration, not arbitrary SDK or node_modules files.
 export function publicContractDependencies(dependencies) {
@@ -71,21 +113,30 @@ function exactKeys(value, keys) {
 }
 
 /** The public receipt identifies outputs without canonical source locations. */
-export function publicPostgresRuntimeArtifacts(artifacts) {
-    assert(
-        Array.isArray(artifacts) && artifacts.length === 1,
-        'Missing PostgreSQL display runtime provenance'
-    );
+export function publicPostgresRuntimeArtifacts(
+    artifacts,
+    configurationValidation
+) {
+    assertPostgresRuntimeArtifactSet(artifacts, configurationValidation);
     return artifacts.map((artifact) => {
         assert(
-            artifact.module === 'postgresAttachmentDisplay.generated',
-            'Unexpected PostgreSQL runtime module'
+            exactKeys(artifact, [
+                'module',
+                'sourcePath',
+                'sourceSha256',
+                'emitterSha256',
+                'generatedSha256',
+                'moduleSha256',
+                'declarationsSha256',
+            ]),
+            'Unexpected PostgreSQL runtime provenance fields'
         );
         assert(
             exactKeys(artifact.moduleSha256, ['esm', 'cjs']),
             'Invalid PostgreSQL runtime module hashes'
         );
         for (const value of [
+            artifact.sourceSha256,
             artifact.emitterSha256,
             artifact.generatedSha256,
             artifact.declarationsSha256,
@@ -95,6 +146,7 @@ export function publicPostgresRuntimeArtifacts(artifacts) {
                 typeof value === 'string' && /^[a-f0-9]{64}$/.test(value),
                 'Invalid PostgreSQL runtime digest'
             );
+        assertPostgresRuntimeEmitter(artifact, configurationValidation);
         return {
             module: artifact.module,
             emitterSha256: artifact.emitterSha256,
@@ -118,6 +170,7 @@ export async function assertPublicDistribution(
         // The private backend source namespace must not leak through new
         // documentation paths absent from the generated contract manifest.
         'backend-src/',
+        'types/scripts/postgres-configs/',
         internal.sourceRepository,
         internal.sourceRevision,
         ...internal.sources.map(({ path }) => path),
@@ -216,6 +269,7 @@ export async function assertPublicDistribution(
         );
     }
     if (postgres) {
+        assertPostgresRuntimeRegistryProvenance(postgres);
         const nativeDeclarations = contents.get(
             'dist/esm/runtime/contracts/postgres.generated.d.ts'
         );
@@ -259,6 +313,13 @@ export async function assertPublicDistribution(
         );
         const nativeDigest = sha256(nativeDeclarations);
         for (const format of ['esm', 'cjs']) {
+            const directory = `dist/${format}/runtime/contracts/`;
+            assertPostgresRuntimeContractInventory(
+                packedPaths
+                    .filter((path) => path.startsWith(directory))
+                    .map((path) => path.slice(directory.length)),
+                postgres.configurationValidation
+            );
             const prefix = `dist/${format}/runtime/contracts/postgres.generated`;
             const provenance = JSON.parse(
                 contents.get(prefix + '.provenance.json')
@@ -316,7 +377,8 @@ export async function assertPublicDistribution(
                 'PostgreSQL runtime bytes changed beyond the private comment'
             );
             const expectedRuntime = publicPostgresRuntimeArtifacts(
-                postgres.runtimeArtifacts
+                postgres.runtimeArtifacts,
+                postgres.configurationValidation
             );
             assert(
                 JSON.stringify(provenance.runtimeArtifacts) ===
@@ -341,6 +403,18 @@ export async function assertPublicDistribution(
                     sha256(runtimeDeclarations) === artifact.declarationsSha256,
                     'PostgreSQL display runtime declarations differ from recorded outputs'
                 );
+                if (artifact.module === 'postgresTextPresentation.generated') {
+                    assertImportFreePresentation(
+                        runtimeModule,
+                        `${artifact.module}.js`,
+                        'runtime'
+                    );
+                    assertImportFreePresentation(
+                        runtimeDeclarations,
+                        `${artifact.module}.d.ts`,
+                        'declarations'
+                    );
+                }
             }
         }
     }

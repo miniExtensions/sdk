@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
     mkdtemp,
     mkdir,
@@ -31,6 +32,18 @@ import {
     postgresRuntimeOutputHashes,
 } from './postgres-runtime-artifacts.mjs';
 import './postgres-runtime-artifacts.test.mjs';
+import './postgres-presentation-runtime-artifacts.test.mjs';
+import {
+    compilePostgresPresentationRuntime,
+    postgresPresentationRuntimeModule,
+    postgresPresentationRuntimeOutputHashes,
+} from './postgres-presentation-runtime-artifacts.mjs';
+import {
+    assertPostgresRuntimeArtifactSet,
+    assertPostgresRuntimeEmitter,
+    postgresRuntimeArtifactSpecifications,
+    postgresRuntimeRegistrySha256,
+} from './postgres-runtime-artifact-registry.mjs';
 import './postgres-config-receipts.test.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import {
@@ -656,18 +669,21 @@ test('public distribution accepts captured contracts and complete notices', asyn
     await fixture.check();
 });
 
-async function postgresDistributionFixture(t) {
+async function postgresDistributionFixture(t, { presentation = false } = {}) {
     const fixture = await distributionFixture(t);
     const hash = (value) => createHash('sha256').update(value).digest('hex');
+    const specifications = postgresRuntimeArtifactSpecifications({
+        receiptVersion: presentation ? 4 : 3,
+    });
     const declaration = 'export type CanonicalPostgresValue = string | null;\n';
     const runtimeSource =
         'export const portableDisplayFixture: string = "synthetic";\n';
     const runtimeOutput = compilePostgresRuntime(runtimeSource);
     const runtimeArtifact = {
         module: postgresAttachmentRuntimeModule,
-        sourcePath: 'synthetic/internal-postgres-display.ts',
+        sourcePath: 'types/postgres/attachmentDisplay.ts',
         sourceSha256: hash('synthetic canonical display source'),
-        emitterSha256: hash('synthetic display emitter'),
+        emitterSha256: hash(await readFile(specifications[0].emitter)),
         ...postgresRuntimeOutputHashes(runtimeSource),
     };
     const postgres = {
@@ -689,13 +705,45 @@ async function postgresDistributionFixture(t) {
         generatedSha256: hash('fixture-postgres-generated-source'),
         dependencies: [],
         runtimeArtifacts: [runtimeArtifact],
+        configurationValidation: { receiptVersion: 3 },
+        runtimeRegistrySha256: postgresRuntimeRegistrySha256(),
     };
+    const runtimeOutputs = [
+        { module: postgresAttachmentRuntimeModule, output: runtimeOutput },
+    ];
+    if (presentation) {
+        const source = await readFile(
+            new URL(
+                '../src/runtime/contracts/postgresTextPresentation.generated.ts',
+                import.meta.url
+            ),
+            'utf8'
+        );
+        const artifact = {
+            module: postgresPresentationRuntimeModule,
+            sourcePath: 'types/generated/postgres/text-presentation.ts',
+            sourceSha256: hash('synthetic canonical presentation'),
+            emitterSha256: hash(await readFile(specifications[1].emitter)),
+            ...postgresPresentationRuntimeOutputHashes(source),
+        };
+        postgres.configurationValidation = { receiptVersion: 4 };
+        postgres.runtimeArtifacts.push(artifact);
+        postgres.sources.push({
+            path: artifact.sourcePath,
+            sha256: artifact.sourceSha256,
+        });
+        runtimeOutputs.push({
+            module: artifact.module,
+            output: compilePostgresPresentationRuntime(source),
+        });
+    }
     const provenance = {
         schemaVersion: 1,
         contractFamily: postgres.contractFamily,
         aliases: postgres.aliases,
         runtimeArtifacts: publicPostgresRuntimeArtifacts(
-            postgres.runtimeArtifacts
+            postgres.runtimeArtifacts,
+            postgres.configurationValidation
         ),
         compilerVersion: postgres.compilerVersion,
         generatorSha256: postgres.generatorSha256,
@@ -728,14 +776,15 @@ async function postgresDistributionFixture(t) {
             await write(fixture.root, path, content);
             paths.push(path);
         }
-        for (const [suffix, content] of [
-            ['.js', runtimeOutput[format]],
-            ['.d.ts', runtimeOutput.declaration],
-        ]) {
-            const path = `dist/${format}/runtime/contracts/${postgresAttachmentRuntimeModule}${suffix}`;
-            await write(fixture.root, path, content);
-            paths.push(path);
-        }
+        for (const { module, output } of runtimeOutputs)
+            for (const [suffix, content] of [
+                ['.js', output[format]],
+                ['.d.ts', output.declaration],
+            ]) {
+                const path = `dist/${format}/runtime/contracts/${module}${suffix}`;
+                await write(fixture.root, path, content);
+                paths.push(path);
+            }
     }
     return {
         ...fixture,
@@ -755,6 +804,275 @@ async function postgresDistributionFixture(t) {
 test('public distribution accepts separate PostgreSQL metadata provenance', async (t) => {
     const fixture = await postgresDistributionFixture(t);
     await fixture.check();
+});
+
+test('v4 public distribution requires both fixed runtime artifacts', async (t) => {
+    const fixture = await postgresDistributionFixture(t, {
+        presentation: true,
+    });
+    await fixture.check();
+    for (const [name, mutate, message] of [
+        [
+            'missing policy',
+            (p) => p.runtimeArtifacts.pop(),
+            /Missing PostgreSQL display runtime provenance/,
+        ],
+        [
+            'duplicate parser',
+            (p) =>
+                (p.runtimeArtifacts[1].module =
+                    postgresAttachmentRuntimeModule),
+            /Unexpected PostgreSQL runtime module/,
+        ],
+        [
+            'unknown module',
+            (p) => (p.runtimeArtifacts[1].module = 'private.generated'),
+            /Unexpected PostgreSQL runtime module/,
+        ],
+        [
+            'authored input substitution',
+            (p) =>
+                (p.runtimeArtifacts[1].sourcePath =
+                    'types/extensions/postgres/textColumnPresentation.ts'),
+            /Unexpected PostgreSQL runtime source/,
+        ],
+        [
+            'legacy receipt',
+            (p) => (p.configurationValidation.receiptVersion = 3),
+            /Unexpected packaged PostgreSQL contract file/,
+        ],
+    ])
+        await t.test(name, async (t) => {
+            const fixture = await postgresDistributionFixture(t, {
+                presentation: true,
+            });
+            mutate(fixture.postgres);
+            await assert.rejects(fixture.check(), message);
+        });
+});
+
+test('archive guard refuses swapped per-module emitter metadata with unchanged runtime bytes', async (t) => {
+    for (const index of [0, 1])
+        await t.test(index === 0 ? 'parser' : 'presentation', async (t) => {
+            const fixture = await postgresDistributionFixture(t, {
+                presentation: true,
+            });
+            const wrong =
+                fixture.postgres.runtimeArtifacts[1 - index].emitterSha256;
+            assert.notEqual(
+                wrong,
+                fixture.postgres.runtimeArtifacts[index].emitterSha256
+            );
+            fixture.postgres.runtimeArtifacts[index].emitterSha256 = wrong;
+            fixture.nativeProvenance.runtimeArtifacts[index].emitterSha256 =
+                wrong;
+            for (const format of ['esm', 'cjs'])
+                await write(
+                    fixture.root,
+                    `dist/${format}/runtime/contracts/postgres.generated.provenance.json`,
+                    JSON.stringify(fixture.nativeProvenance)
+                );
+            await assert.rejects(
+                fixture.check(),
+                /emitter provenance is stale/
+            );
+        });
+});
+
+test('runtime registry binds each module to its own emitter bytes', () => {
+    const proof = { receiptVersion: 4 };
+    const specifications = postgresRuntimeArtifactSpecifications(proof);
+    const artifacts = specifications.map((specification) => ({
+        module: specification.module,
+        sourcePath: specification.sourcePath,
+        emitterSha256: createHash('sha256')
+            .update(readFileSync(specification.emitter))
+            .digest('hex'),
+    }));
+    assertPostgresRuntimeArtifactSet(artifacts, proof);
+    for (const artifact of artifacts)
+        assertPostgresRuntimeEmitter(artifact, proof);
+    assert.throws(
+        () =>
+            assertPostgresRuntimeEmitter(
+                { ...artifacts[1], emitterSha256: artifacts[0].emitterSha256 },
+                proof
+            ),
+        /emitter provenance is stale/
+    );
+    assert.throws(
+        () =>
+            assertPostgresRuntimeArtifactSet(artifacts, { receiptVersion: 3 }),
+        /Missing PostgreSQL display runtime provenance/
+    );
+    assert.throws(
+        () => postgresRuntimeArtifactSpecifications(undefined),
+        /Unknown PostgreSQL runtime receipt version/
+    );
+    assert.throws(
+        () => postgresRuntimeArtifactSpecifications({ receiptVersion: null }),
+        /Unknown PostgreSQL runtime receipt version/
+    );
+});
+
+test('a legacy proof cannot leave an unrecorded policy in the actual package', async (t) => {
+    const fixture = await postgresDistributionFixture(t, {
+        presentation: true,
+    });
+    fixture.postgres.configurationValidation = { receiptVersion: 3 };
+    fixture.postgres.runtimeArtifacts.pop();
+    fixture.nativeProvenance.runtimeArtifacts = publicPostgresRuntimeArtifacts(
+        fixture.postgres.runtimeArtifacts,
+        fixture.postgres.configurationValidation
+    );
+    for (const format of ['esm', 'cjs'])
+        await write(
+            fixture.root,
+            `dist/${format}/runtime/contracts/postgres.generated.provenance.json`,
+            JSON.stringify(fixture.nativeProvenance)
+        );
+    await assert.rejects(
+        fixture.check(),
+        /Unexpected packaged PostgreSQL contract file/
+    );
+});
+
+test('unknown unrecorded contract files cannot enter the actual archive inventory', async (t) => {
+    const fixture = await postgresDistributionFixture(t, {
+        presentation: true,
+    });
+    for (const suffix of ['.js', '.d.ts']) {
+        const path = `dist/esm/runtime/contracts/postgresUntracked.generated${suffix}`;
+        await write(fixture.root, path, 'export {};\n');
+        fixture.paths.push(path);
+    }
+    await assert.rejects(
+        fixture.check(),
+        /Unexpected packaged PostgreSQL contract file/
+    );
+});
+
+test('independent distribution validation requires explicit receipt version and current registry bytes', async (t) => {
+    for (const [name, mutate, reason] of [
+        [
+            'missing version',
+            (p) => delete p.configurationValidation,
+            /Unknown PostgreSQL runtime receipt version/,
+        ],
+        [
+            'registry hash',
+            (p) => (p.runtimeRegistrySha256 = '0'.repeat(64)),
+            /registry provenance is stale/,
+        ],
+    ])
+        await t.test(name, async (t) => {
+            const fixture = await postgresDistributionFixture(t, {
+                presentation: true,
+            });
+            mutate(fixture.postgres);
+            await assert.rejects(fixture.check(), reason);
+        });
+});
+
+test('policy bytes and declarations cannot drift from recorded outputs', async (t) => {
+    for (const suffix of ['.js', '.d.ts'])
+        await t.test(suffix, async (t) => {
+            const fixture = await postgresDistributionFixture(t, {
+                presentation: true,
+            });
+            const path = `dist/esm/runtime/contracts/${postgresPresentationRuntimeModule}${suffix}`;
+            await write(
+                fixture.root,
+                path,
+                (await readFile(join(fixture.root, path), 'utf8')) +
+                    '\n// changed output\n'
+            );
+            await assert.rejects(
+                fixture.check(),
+                /runtime (bytes|declarations) differ/
+            );
+        });
+});
+
+test('policy declarations cannot import Zod even with rehashed output metadata', async (t) => {
+    const fixture = await postgresDistributionFixture(t, {
+        presentation: true,
+    });
+    const declaration =
+        'import type { ZodType } from "zod";\nexport type Policy = ZodType;\n';
+    fixture.postgres.runtimeArtifacts[1].declarationsSha256 = createHash(
+        'sha256'
+    )
+        .update(declaration)
+        .digest('hex');
+    fixture.nativeProvenance.runtimeArtifacts = publicPostgresRuntimeArtifacts(
+        fixture.postgres.runtimeArtifacts,
+        fixture.postgres.configurationValidation
+    );
+    for (const format of ['esm', 'cjs']) {
+        await write(
+            fixture.root,
+            `dist/${format}/runtime/contracts/${postgresPresentationRuntimeModule}.d.ts`,
+            declaration
+        );
+        await write(
+            fixture.root,
+            `dist/${format}/runtime/contracts/postgres.generated.provenance.json`,
+            JSON.stringify(fixture.nativeProvenance)
+        );
+    }
+    await assert.rejects(
+        fixture.check(),
+        /presentation declarations must remain import-free/
+    );
+});
+
+test('policy JavaScript stays import-free despite rehashed output metadata', async (t) => {
+    for (const format of ['esm', 'cjs'])
+        await t.test(format, async (t) => {
+            const fixture = await postgresDistributionFixture(t, {
+                presentation: true,
+            });
+            const path = `dist/${format}/runtime/contracts/${postgresPresentationRuntimeModule}.js`;
+            const dependency =
+                format === 'esm'
+                    ? 'import { z } from "zod";\n'
+                    : 'require("zod");\n';
+            const runtime =
+                dependency + (await readFile(join(fixture.root, path), 'utf8'));
+            fixture.postgres.runtimeArtifacts[1].moduleSha256[format] =
+                createHash('sha256').update(runtime).digest('hex');
+            fixture.nativeProvenance.runtimeArtifacts =
+                publicPostgresRuntimeArtifacts(
+                    fixture.postgres.runtimeArtifacts,
+                    fixture.postgres.configurationValidation
+                );
+            await write(fixture.root, path, runtime);
+            for (const output of ['esm', 'cjs'])
+                await write(
+                    fixture.root,
+                    `dist/${output}/runtime/contracts/postgres.generated.provenance.json`,
+                    JSON.stringify(fixture.nativeProvenance)
+                );
+            await assert.rejects(
+                fixture.check(),
+                /presentation runtime must remain import-free/
+            );
+        });
+});
+
+test('private canonical policy generator banners are refused outside hashed runtime modules', async (t) => {
+    const fixture = await postgresDistributionFixture(t, {
+        presentation: true,
+    });
+    const path = 'docs/runtime.md';
+    await write(
+        fixture.root,
+        path,
+        (await readFile(join(fixture.root, path), 'utf8')) +
+            '\n// Generated by types/scripts/postgres-configs/generate.ts\n'
+    );
+    await assert.rejects(fixture.check(), /Private source provenance shipped/);
 });
 
 test('public distribution rejects private PostgreSQL provenance in package files', async (t) => {
@@ -866,7 +1184,7 @@ test('public distribution rejects missing or modified generated PostgreSQL displ
             fixture.paths.splice(fixture.paths.indexOf(path), 1);
             await assert.rejects(
                 fixture.check(),
-                /Missing packaged PostgreSQL display runtime/
+                /Missing packaged PostgreSQL contract file/
             );
         });
     }
@@ -931,6 +1249,11 @@ test('public distribution rejects private or expanded PostgreSQL metadata receip
         [
             'configurationValidation',
             { validatorSha256: 'synthetic private validator' },
+            /Unexpected PostgreSQL public provenance fields/,
+        ],
+        [
+            'runtimeRegistrySha256',
+            '0'.repeat(64),
             /Unexpected PostgreSQL public provenance fields/,
         ],
         [

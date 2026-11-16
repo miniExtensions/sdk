@@ -7,6 +7,10 @@ export const postgresFieldConfigSource =
     'types/generated/postgres/field-config.ts';
 export const postgresFieldConfigProvenance =
     'types/generated/postgres/field-config.provenance.json';
+export const postgresTextPresentationAuthorSource =
+    'types/extensions/postgres/textColumnPresentation.ts';
+export const postgresTextPresentationSource =
+    'types/generated/postgres/text-presentation.ts';
 
 const textFamily = {
     kind: 'text',
@@ -56,10 +60,15 @@ const numericDateSources = [
     'types/extensions/postgres/dateColumnFieldDefinitions.ts',
     'types/extensions/postgres/numericColumnFieldDefinitions.ts',
 ].sort();
+const presentationSources = [
+    ...numericDateSources,
+    postgresTextPresentationAuthorSource,
+].sort();
 const receiptVersions = new Map([
     [1, { families: [textFamily], sources: historicalSources }],
     [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
     [3, { families: allFamilies, sources: numericDateSources }],
+    [4, { families: allFamilies, sources: presentationSources }],
 ]);
 const sharedReceiptKeys = [
     'formatVersion',
@@ -155,6 +164,7 @@ export function verifyPostgresConfigReceipt({
     );
     const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
+    const hasPresentation = receipt.formatVersion === 4;
     requireReceipt(
         exactKeys(receipt, [
             ...sharedReceiptKeys,
@@ -165,6 +175,7 @@ export function verifyPostgresConfigReceipt({
                       'editorPending',
                   ]
                 : ['families']),
+            ...(hasPresentation ? ['presentation'] : []),
         ]),
         'receipt-fields'
     );
@@ -173,7 +184,10 @@ export function verifyPostgresConfigReceipt({
             (historical
                 ? 'postgres-text-column-config'
                 : 'postgres-column-configs') &&
-            receipt.scope === 'scalar-storage-only' &&
+            receipt.scope ===
+                (hasPresentation
+                    ? 'scalar-storage-and-presentation'
+                    : 'scalar-storage-only') &&
             receipt.sourceRepository === 'miniExtensions/monorepo' &&
             receipt.sourceMode === 'working-tree-content' &&
             receipt.runtimeAdmission === 'pending',
@@ -266,12 +280,44 @@ export function verifyPostgresConfigReceipt({
             'source-integrity'
         );
     }
+    if (hasPresentation) {
+        const presentation = receipt.presentation;
+        requireReceipt(
+            exactKeys(presentation, [
+                'kind',
+                'sourcePath',
+                'sourceSha256',
+                'generated',
+            ]) &&
+                presentation.kind === 'text-column-presentation' &&
+                presentation.sourcePath ===
+                    postgresTextPresentationAuthorSource &&
+                digest(presentation.sourceSha256) &&
+                receipt.sources.some(
+                    (source) =>
+                        source.path === presentation.sourcePath &&
+                        source.sha256 === presentation.sourceSha256
+                ) &&
+                exactKeys(presentation.generated, ['path', 'sha256']) &&
+                presentation.generated.path ===
+                    postgresTextPresentationSource &&
+                digest(presentation.generated.sha256),
+            'presentation-identity'
+        );
+        const bytes = readSource(postgresTextPresentationSource);
+        requireReceipt(
+            Buffer.isBuffer(bytes) &&
+                sha256(bytes) === presentation.generated.sha256,
+            'presentation-integrity'
+        );
+    }
     return {
         receiptVersion: receipt.formatVersion,
         aliases: families.map((family) => family.typeName),
         receiptSourceSha256: sha256(receiptBytes),
         schemaSourceSha256: sha256(generatedBytes),
         sourceSnapshotSha256: receipt.sourceSnapshotSha256,
+        ...(hasPresentation ? { presentation: receipt.presentation } : {}),
     };
 }
 
@@ -308,6 +354,7 @@ export function assertPostgresConfigReceiptProvenance(
     validatorSha256
 ) {
     const proof = internal.configurationValidation;
+    const hasPresentation = proof?.receiptVersion === 4;
     requireReceipt(
         exactKeys(proof, [
             'receiptVersion',
@@ -316,6 +363,7 @@ export function assertPostgresConfigReceiptProvenance(
             'schemaSourceSha256',
             'sourceSnapshotSha256',
             'validatorSha256',
+            ...(hasPresentation ? ['presentation'] : []),
         ]) &&
             receiptVersions.has(proof.receiptVersion) &&
             digest(proof.sourceSnapshotSha256) &&
@@ -348,4 +396,44 @@ export function assertPostgresConfigReceiptProvenance(
                 ),
             'input-provenance'
         );
+    if (hasPresentation) {
+        const presentation = proof.presentation;
+        requireReceipt(
+            exactKeys(presentation, [
+                'kind',
+                'sourcePath',
+                'sourceSha256',
+                'generated',
+            ]) &&
+                presentation.kind === 'text-column-presentation' &&
+                presentation.sourcePath ===
+                    postgresTextPresentationAuthorSource &&
+                digest(presentation.sourceSha256) &&
+                exactKeys(presentation.generated, ['path', 'sha256']) &&
+                presentation.generated.path ===
+                    postgresTextPresentationSource &&
+                digest(presentation.generated.sha256) &&
+                [
+                    [presentation.sourcePath, presentation.sourceSha256],
+                    [
+                        presentation.generated.path,
+                        presentation.generated.sha256,
+                    ],
+                ].every(([path, sha256]) =>
+                    internal.sources.some(
+                        (source) =>
+                            source.path === path && source.sha256 === sha256
+                    )
+                ) &&
+                Array.isArray(internal.runtimeArtifacts) &&
+                internal.runtimeArtifacts.some(
+                    (artifact) =>
+                        artifact.module ===
+                            'postgresTextPresentation.generated' &&
+                        artifact.sourcePath === presentation.generated.path &&
+                        artifact.sourceSha256 === presentation.generated.sha256
+                ),
+            'presentation-provenance'
+        );
+    }
 }

@@ -2,7 +2,7 @@
     "sourceRepository": "miniExtensions/monorepo",
     "sourceRevision": "bd353fb1abd6c1c229d1ee3bd90bdfbbc6746836",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "56170c87548d2ab263428334b06e1f9701bd89e0cd0a2d60480863364ab99e40",
+    "generatorSha256": "0a431dd8f1074548754f39ff592044f965357f241bb7c6823b667e88c9e132d1",
     "corsValidation": {
         "publicOperations": 13,
         "probes": 234,

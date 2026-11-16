@@ -15,6 +15,12 @@ export {
     PostgresAttachmentDisplayError,
     POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
 } from './contracts/postgresAttachmentDisplay.generated.js';
+export {
+    postgresTextColumnPresentationDefinition,
+    resolvePostgresTextColumnPresentation,
+    PostgresTextColumnPresentationError,
+    type PostgresTextColumnPresentation,
+} from './contracts/postgresTextPresentation.generated.js';
 export type {
     AirtableAttachment,
     AirtableBarcodeValue,

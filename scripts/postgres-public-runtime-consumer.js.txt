@@ -2,6 +2,9 @@ const {
     parsePostgresAttachmentDisplay,
     PostgresAttachmentDisplayError,
     POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
+    postgresTextColumnPresentationDefinition,
+    resolvePostgresTextColumnPresentation,
+    PostgresTextColumnPresentationError,
 } = SDK;
 assert.equal(typeof parsePostgresAttachmentDisplay, 'function');
 assert.match(POSTGRES_ATTACHMENT_DISPLAY_SYNTAX, /%2C/);
@@ -32,6 +35,63 @@ for (const [value, reason, index] of [
             assert.equal(error.reason, reason);
             assert.equal(error.index, index);
             assert(!error.message.includes('example.invalid'));
+            return true;
+        }
+    );
+}
+
+assert.equal(postgresTextColumnPresentationDefinition.sourceType, 'postgres');
+assert.equal(postgresTextColumnPresentationDefinition.columnKind, 'text');
+assert.equal(postgresTextColumnPresentationDefinition.settingId, 'displayAs');
+assert.deepEqual(
+    postgresTextColumnPresentationDefinition.choices.map(
+        (choice) => choice.value
+    ),
+    ['text', 'attachments-public-urls']
+);
+for (const state of [{}, { displayAs: undefined }, { displayAs: 'text' }]) {
+    const presentation = resolvePostgresTextColumnPresentation(
+        Object.freeze(state)
+    );
+    assert.equal(presentation.renderer, 'text');
+    assert.equal(presentation.storedValue, 'text');
+    assert.equal(presentation.nativeValueInput, 'applicable');
+    assert.equal(presentation.fileOpening, 'none');
+    assert.equal(presentation.attachmentMutation, 'excluded');
+    assert.equal(presentation.generatedAttachmentOutput, 'excluded');
+}
+const attachmentSettings = Object.freeze({
+    displayAs: 'attachments-public-urls',
+    readOnly: false,
+});
+const attachmentPresentation =
+    resolvePostgresTextColumnPresentation(attachmentSettings);
+assert.equal(attachmentPresentation.renderer, 'public-url-attachments');
+assert.equal(attachmentPresentation.nativeValueInput, 'read-only');
+assert.equal(attachmentPresentation.fileOpening, 'existing-public-http-urls');
+assert.equal(attachmentPresentation.storedValue, 'text');
+assert.equal(attachmentPresentation.attachmentMutation, 'excluded');
+assert.equal(attachmentPresentation.generatedAttachmentOutput, 'excluded');
+assert.deepEqual(attachmentSettings, {
+    displayAs: 'attachments-public-urls',
+    readOnly: false,
+});
+for (const displayAs of [
+    null,
+    '',
+    false,
+    0,
+    [],
+    {},
+    'upload',
+    'private-mode',
+]) {
+    assert.throws(
+        () => resolvePostgresTextColumnPresentation({ displayAs }),
+        (error) => {
+            assert(error instanceof PostgresTextColumnPresentationError);
+            assert.equal(error.reason, 'INVALID_PRESENTATION');
+            assert(!error.message.includes('private-mode'));
             return true;
         }
     );

@@ -11,11 +11,9 @@ import {
     readPostgresConfigReceipt,
 } from './postgres-config-receipts.mjs';
 import {
-    postgresAttachmentRuntimeModule,
-    postgresAttachmentRuntimeSource,
-    postgresRuntimeOutputHashes,
-    rewritePostgresAttachmentRuntime,
-} from './postgres-runtime-artifacts.mjs';
+    postgresRuntimeArtifactSpecifications,
+    postgresRuntimeRegistrySha256,
+} from './postgres-runtime-artifact-registry.mjs';
 
 // This is a transport map, not a second definition of any API payload.
 const v1 = [
@@ -266,11 +264,21 @@ const configurationValidation = postgresOnly
     ? readConfigurationValidation()
     : null;
 const postgresFieldConfigAliases = configurationValidation?.aliases ?? [];
-const postgresRuntimeExports = [
-    'parsePostgresAttachmentDisplay',
-    'PostgresAttachmentDisplayError',
-    'POSTGRES_ATTACHMENT_DISPLAY_SYNTAX',
-];
+const postgresRuntimeSpecifications = postgresOnly
+    ? postgresRuntimeArtifactSpecifications(configurationValidation)
+    : [];
+const runtimeRegistrySha256 = postgresOnly
+    ? postgresRuntimeRegistrySha256()
+    : null;
+const runtimeEmitterHashes = new Map(
+    postgresRuntimeSpecifications.map((specification) => [
+        specification.module,
+        hash(readFileSync(specification.emitter)),
+    ])
+);
+const postgresRuntimeExports = postgresRuntimeSpecifications.flatMap(
+    (specification) => specification.exports
+);
 const postgresAliases = [
     ...postgresModelAliases,
     ...postgresQueryAliases,
@@ -462,32 +470,34 @@ const canonicalFromGenerated${name}: ${sourceType} = generated${name};
             );
     }
     if (postgresOnly) {
-        const runtimeModule = path
-            .relative(
-                monorepo,
-                path.join(
-                    outputDirectory,
-                    `${postgresAttachmentRuntimeModule}.ts`
+        for (const [
+            index,
+            specification,
+        ] of postgresRuntimeSpecifications.entries()) {
+            const runtimeModule = path
+                .relative(
+                    monorepo,
+                    path.join(outputDirectory, `${specification.module}.ts`)
                 )
-            )
-            .split(path.sep)
-            .join('/')
-            .replace(/\.ts$/, '');
-        entryLines.push(
-            "import type * as CanonicalDisplayRuntime from './types/postgres/attachmentDisplay';",
-            `import type * as GeneratedDisplayRuntime from ${JSON.stringify(runtimeModule)};`
-        );
-        for (const name of postgresRuntimeExports) {
-            entryLines.push(`
-declare const canonicalRuntime${name}: typeof CanonicalDisplayRuntime.${name};
-declare const generatedRuntime${name}: typeof GeneratedDisplayRuntime.${name};
-const generatedRuntimeFromCanonical${name}: typeof GeneratedDisplayRuntime.${name} = canonicalRuntime${name};
-const canonicalRuntimeFromGenerated${name}: typeof CanonicalDisplayRuntime.${name} = generatedRuntime${name};
+                .split(path.sep)
+                .join('/')
+                .replace(/\.ts$/, '');
+            entryLines.push(
+                `import type * as CanonicalRuntime${index} from './${specification.sourcePath.replace(/\.ts$/, '')}';`,
+                `import type * as GeneratedRuntime${index} from ${JSON.stringify(runtimeModule)};`
+            );
+            for (const name of specification.exports) {
+                entryLines.push(`
+declare const canonicalRuntime${name}: typeof CanonicalRuntime${index}.${name};
+declare const generatedRuntime${name}: typeof GeneratedRuntime${index}.${name};
+const generatedRuntimeFromCanonical${name}: typeof GeneratedRuntime${index}.${name} = canonicalRuntime${name};
+const canonicalRuntimeFromGenerated${name}: typeof CanonicalRuntime${index}.${name} = generatedRuntime${name};
 `);
-            if (!diagnose)
-                entryLines.push(
-                    `type VerifyRuntime${name} = AssertContract<EquivalentContract<typeof CanonicalDisplayRuntime.${name}, typeof GeneratedDisplayRuntime.${name}>>;`
-                );
+                if (!diagnose)
+                    entryLines.push(
+                        `type VerifyRuntime${name} = AssertContract<EquivalentContract<typeof CanonicalRuntime${index}.${name}, typeof GeneratedRuntime${index}.${name}>>;`
+                    );
+            }
         }
     }
 }
@@ -777,28 +787,31 @@ const generated = await prettier.format(
 // mode still validates the entry before checking or writing either artifact.
 assertSemanticEntry();
 
-let generatedRuntime = null;
+const generatedRuntimes = new Map();
 const runtimeArtifacts = [];
 if (postgresOnly) {
-    const canonicalRuntime = readFileSync(
-        path.join(monorepo, postgresAttachmentRuntimeSource)
-    );
-    sourceFiles.add(postgresAttachmentRuntimeSource);
-    generatedRuntime = await rewritePostgresAttachmentRuntime(
-        canonicalRuntime.toString('utf8'),
-        JSON.parse(readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8'))
-    );
-    runtimeArtifacts.push({
-        module: postgresAttachmentRuntimeModule,
-        sourcePath: postgresAttachmentRuntimeSource,
-        sourceSha256: hash(canonicalRuntime),
-        emitterSha256: hash(
-            readFileSync(
-                new URL('./postgres-runtime-artifacts.mjs', import.meta.url)
+    for (const specification of postgresRuntimeSpecifications) {
+        const canonicalRuntime = readFileSync(
+            path.join(monorepo, specification.sourcePath)
+        );
+        sourceFiles.add(specification.sourcePath);
+        const generatedRuntime = await specification.rewrite(
+            canonicalRuntime.toString('utf8'),
+            JSON.parse(
+                readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8')
             )
-        ),
-        ...postgresRuntimeOutputHashes(generatedRuntime),
-    });
+        );
+        generatedRuntimes.set(specification.module, generatedRuntime);
+        runtimeArtifacts.push({
+            module: specification.module,
+            sourcePath: specification.sourcePath,
+            sourceSha256: hash(canonicalRuntime),
+            emitterSha256: runtimeEmitterHashes.get(specification.module),
+            ...specification.outputHashes(generatedRuntime),
+        });
+    }
+    if (configurationValidation.presentation)
+        sourceFiles.add(configurationValidation.presentation.sourcePath);
 }
 
 // Provenance covers contract declarations and canonical procedure construction,
@@ -867,6 +880,7 @@ const serializedProvenance =
                       contractFamily: 'postgres',
                       aliases: postgresAliases,
                       configurationValidation,
+                      runtimeRegistrySha256,
                       runtimeArtifacts,
                   }
                 : {
@@ -917,6 +931,18 @@ if (
     throw new Error(
         'Canonical PostgreSQL configuration inputs changed during generation.'
     );
+if (
+    postgresOnly &&
+    (postgresRuntimeRegistrySha256() !== runtimeRegistrySha256 ||
+        postgresRuntimeSpecifications.some(
+            (specification) =>
+                hash(readFileSync(specification.emitter)) !==
+                runtimeEmitterHashes.get(specification.module)
+        ))
+)
+    throw new Error(
+        'PostgreSQL runtime emitter inputs changed during generation.'
+    );
 if (check) {
     const recordedGenerated = readFileSync(generatedFile, 'utf8');
     const recordedProvenance = readFileSync(provenanceFile, 'utf8');
@@ -948,21 +974,20 @@ if (check) {
                 })
         );
     }
-    if (
-        generatedRuntime != null &&
-        readFileSync(
-            path.join(outputDirectory, `${postgresAttachmentRuntimeModule}.ts`),
-            'utf8'
-        ) !== generatedRuntime
-    )
-        throw new Error('Generated PostgreSQL display runtime is stale.');
+    for (const [module, generatedRuntime] of generatedRuntimes) {
+        if (
+            readFileSync(path.join(outputDirectory, `${module}.ts`), 'utf8') !==
+            generatedRuntime
+        )
+            throw new Error('Generated PostgreSQL display runtime is stale.');
+    }
 } else {
     mkdirSync(outputDirectory, { recursive: true });
     writeFileSync(generatedFile, generated);
     writeFileSync(provenanceFile, provenance);
-    if (generatedRuntime != null)
+    for (const [module, generatedRuntime] of generatedRuntimes)
         writeFileSync(
-            path.join(outputDirectory, `${postgresAttachmentRuntimeModule}.ts`),
+            path.join(outputDirectory, `${module}.ts`),
             generatedRuntime
         );
 }

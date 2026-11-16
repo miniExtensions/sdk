@@ -24,6 +24,15 @@ authoring state can load for explicit refresh and rebind. Such a legacy binding
 does not admit a preview or mutation until current metadata is known and matches;
 loading it never silently fills the missing collation or grants write authority.
 
+`postgresTextColumnPresentationDefinition` and
+`resolvePostgresTextColumnPresentation` come from the same generated native text
+policy used by the application. Missing `displayAs` selects ordinary text;
+`attachments-public-urls` selects read-only links to existing public files.
+Unknown or null modes throw `PostgresTextColumnPresentationError` with reason
+`INVALID_PRESENTATION`. Both modes keep the stored value as text and exclude
+attachment mutation and generated attachment output. Text input applicability
+does not grant database permissions or admit a public Form/Portal operation.
+
 Record settings contracts require an explicit display column, including when a
 table has a native primary key. A customer-configured identifier also requires
 explicit stability confirmation. `PostgresRecordEditingValidation` describes
@@ -464,7 +473,12 @@ public Form loading, saving or submission, or define Required submission rules.
 Native maintainer generation verifies the canonical configuration receipt,
 generated schema and complete versioned source-hash closure. Historical v1
 receipts contribute the text family; v2 requires exactly the text and Boolean
-families; v3 requires exactly text, Boolean, numeric and SQL DATE. The private
+families; v3 requires exactly text, Boolean, numeric and SQL DATE. V4 keeps those
+four storage families and also binds the authored text-presentation policy and
+its generated sidecar. The SDK relocates that sidecar into a separate portable
+runtime module with no imports or copied policy implementation. Its descriptor,
+resolver and error class are verified against the canonical module; the
+attachment parser stays separate. The private
 native manifest binds the receipt validator's bytes, and
 build checks verify that binding without opening the canonical checkout.
 Ordinary SDK CI still uses committed portable declarations and SDK dependencies.

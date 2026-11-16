@@ -2,6 +2,9 @@ import {
     parsePostgresAttachmentDisplay,
     PostgresAttachmentDisplayError,
     POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
+    postgresTextColumnPresentationDefinition,
+    resolvePostgresTextColumnPresentation,
+    PostgresTextColumnPresentationError,
 } from '@miniextensions/sdk';
 import type {
     PostgresAttachmentDisplayFailure,
@@ -32,9 +35,40 @@ import type {
     PostgresRecordEditingConfiguration,
     PostgresRecordEditingValidation,
     PostgresTextColumnConfig,
+    PostgresTextColumnPresentation,
     PostgresUpdateQuery,
     PostgresUpdateResult,
 } from '@miniextensions/sdk';
+
+export const defaultTextPresentation: 'text' =
+    postgresTextColumnPresentationDefinition.defaultValue;
+export const ordinaryTextPresentation: PostgresTextColumnPresentation =
+    resolvePostgresTextColumnPresentation({});
+export const absentDisplayPresentation: PostgresTextColumnPresentation =
+    resolvePostgresTextColumnPresentation({ displayAs: undefined });
+export function inspectNativeTextPresentation(
+    presentation: PostgresTextColumnPresentation
+) {
+    const stored: 'text' = presentation.storedValue;
+    const mutation: 'excluded' = presentation.attachmentMutation;
+    const output: 'excluded' = presentation.generatedAttachmentOutput;
+    if (presentation.renderer === 'public-url-attachments') {
+        const input: 'read-only' = presentation.nativeValueInput;
+        const opening: 'existing-public-http-urls' = presentation.fileOpening;
+        return { stored, mutation, output, input, opening };
+    }
+    const input: 'applicable' = presentation.nativeValueInput;
+    return { stored, mutation, output, input };
+}
+export const invalidPresentationReason: 'INVALID_PRESENTATION' =
+    new PostgresTextColumnPresentationError().reason;
+// @ts-expect-error Presentation metadata is a readonly authored descriptor.
+postgresTextColumnPresentationDefinition.defaultValue = 'text';
+resolvePostgresTextColumnPresentation({
+    displayAs: 'text',
+    // @ts-expect-error Presentation selection does not accept a database-permission callback.
+    canEdit: () => true,
+});
 
 // These remain optional stored settings, not editor-default materialization.
 export const absentTextConfig: PostgresTextColumnConfig = {};
@@ -481,21 +515,28 @@ export const configuredUpdateQuery: PostgresUpdateQuery = {
 };
 // These older saved-authoring shapes are loadable for explicit refresh/rebind.
 // Their missing metadata never establishes valid read/edit or mutation authority.
-export const legacyPrimaryBindingForRebind: PostgresRowObservation['identifier'] = {
-    configuration: { type: 'primary-key' },
-    columns: [
-        { name: 'tenant_id', ordinal: 1, typeOid: 25, formattedType: 'text' },
-        { name: 'id', ordinal: 2, typeOid: 20, formattedType: 'bigint' },
-    ],
-};
-export const legacyConfiguredBindingForRebind: PostgresRowObservation['identifier'] = {
-    ...legacyPrimaryBindingForRebind,
-    configuration: {
-        type: 'configured-key',
-        columnNames: ['tenant_id', 'id'],
-        stabilityConfirmed: true,
-    },
-};
+export const legacyPrimaryBindingForRebind: PostgresRowObservation['identifier'] =
+    {
+        configuration: { type: 'primary-key' },
+        columns: [
+            {
+                name: 'tenant_id',
+                ordinal: 1,
+                typeOid: 25,
+                formattedType: 'text',
+            },
+            { name: 'id', ordinal: 2, typeOid: 20, formattedType: 'bigint' },
+        ],
+    };
+export const legacyConfiguredBindingForRebind: PostgresRowObservation['identifier'] =
+    {
+        ...legacyPrimaryBindingForRebind,
+        configuration: {
+            type: 'configured-key',
+            columnNames: ['tenant_id', 'id'],
+            stabilityConfirmed: true,
+        },
+    };
 const { collationOid: knownCollation, ...legacyFieldMetadata } = observedId;
 // @ts-expect-error Fresh discovered fields require known collation metadata.
 export const missingFieldCollation: PostgresField = legacyFieldMetadata;
@@ -509,20 +550,22 @@ export const stringFieldCollation: PostgresField = {
     // @ts-expect-error Native collation OIDs do not accept string coercion.
     collationOid: '16422',
 };
-export const stringBindingCollation: PostgresRowObservation['identifier']['columns'][number] = {
-    name: 'id',
-    ordinal: 2,
-    typeOid: 20,
-    formattedType: 'bigint',
-    // @ts-expect-error A present binding collation is an OID or explicit SQL NULL.
-    collationOid: '16422',
-};
-export const unconfirmedUpdateKey: PostgresRowObservation['identifier']['configuration'] = {
-    type: 'configured-key',
-    columnNames: ['tenant_id', 'id'],
-    // @ts-expect-error A configured stable key requires explicit confirmation.
-    stabilityConfirmed: false,
-};
+export const stringBindingCollation: PostgresRowObservation['identifier']['columns'][number] =
+    {
+        name: 'id',
+        ordinal: 2,
+        typeOid: 20,
+        formattedType: 'bigint',
+        // @ts-expect-error A present binding collation is an OID or explicit SQL NULL.
+        collationOid: '16422',
+    };
+export const unconfirmedUpdateKey: PostgresRowObservation['identifier']['configuration'] =
+    {
+        type: 'configured-key',
+        columnNames: ['tenant_id', 'id'],
+        // @ts-expect-error A configured stable key requires explicit confirmation.
+        stabilityConfirmed: false,
+    };
 export const missingUpdateBaseline: PostgresUpdateQuery = {
     ...updateQuery,
     // @ts-expect-error A submitted field always includes its observed baseline.
@@ -530,8 +573,14 @@ export const missingUpdateBaseline: PostgresUpdateQuery = {
 };
 export const undefinedUpdateValue: PostgresUpdateQuery = {
     ...updateQuery,
-    // @ts-expect-error Undefined is not SQL NULL or omission from the changes array.
-    changes: [{ columnName: 'customer_name', expected: null, value: undefined }],
+    changes: [
+        {
+            columnName: 'customer_name',
+            expected: null,
+            // @ts-expect-error Undefined is not SQL NULL or omission from the changes array.
+            value: undefined,
+        },
+    ],
 };
 export const numericUpdateValue: PostgresUpdateQuery = {
     ...updateQuery,

@@ -24,6 +24,82 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+For an application-owned immutable state kernel with native host admission,
+validation and allocation, see [canonical Form frames](canonical-form-frame.md).
+It is an additive SDK-first API; native integration remains a separate milestone.
+
+## Linked and two-source projection candidate
+
+`createLinkedFormRecordProjection` is an additive, synchronous projection
+candidate from `@miniextensions/sdk/forms`. It accepts an explicit
+`compatibility: 'native-form-v1'` snapshot with the complete ordered Form fields,
+physical field metadata, accepted output record, linked loading/cache states and
+conditional linked-record filter pairs. An optional
+`formRecordForConditionEvaluation` supplies a separate authoritative decision
+record; the output still comes from `formRecord`.
+
+The helper JSON-clones the whole output record before making decisions. It
+evaluates section and field conditions against the same unpruned evaluation
+snapshot, then prunes linked selections against supplied loaded cached rows.
+Active filter pairs combine with AND. Selected order and duplicates survive;
+uncached IDs disappear, including under an empty filter entry. Null or blank
+driver pairs skip membership checks but retain cache pruning. Setting
+`evaluateConditionalFields: false` disables visibility pruning while linked
+filtering still runs. The helper reads no store, client, provider or mutable
+cache, and it does not own the canonical draft, dirty IDs or Save operation.
+
+The result is either `available` with the projected record and ordered hidden
+field IDs, or `blocked` with diagnostics and no partial output. Unsupported
+condition drivers and malformed snapshots block the whole projection. An
+accepted capture consists of ordinary objects and arrays with enumerable data
+properties. Accessors, non-enumerable data (except array length), symbols and
+custom or null prototypes return `blocked/invalid-snapshot` before cloning.
+This prevents field-name overrides, cached rows and active filter values from
+silently disappearing during capture. Intentional interpreter hooks are exempt
+from this data-graph check. Their options container still requires enumerable
+data descriptors; hook values are captured without invoking getters. Primitive
+`undefined`, non-finite numbers and `-0`
+retain the documented native JSON output normalization.
+
+An all-loading context with active visibility also returns
+`blocked/native-loading-boundary`: the native cached empty-identifier path can
+affect scalar visibility and that ambient cache is outside this snapshot. A
+native consumer must invoke its original fallback with the complete original
+arguments outside the SDK exception boundary, so native exceptions retain their behavior.
+Low-level interpreter adapters must use the same captured snapshot. The returned
+record has the broad runtime record type because JSON normalization can change
+caller-specific narrowed values and metadata.
+
+This candidate is not yet qualified for native adoption. Contract tests, actual
+native differential witnesses, public packed consumers, store/Form/Review/Save
+acceptance and receiving verification remain delivery gates. The existing
+hosted projection route retains its current fallback boundaries until those
+gates and the separately serialized native integration are complete.
+
+## Native-compatible progress storage
+
+`createNativeFormProgressStorage` preserves the native browser-local revision
+and writer protocol through host-supplied storage and optional Web Locks. Its
+`write({ expectedRevision, record })` calls retain the original `written`,
+`conflict`, and `unavailable` result union.
+
+Pass `isWriteStillEligible: () => boolean` on a write to opt into cancellation.
+The callback runs after acquiring the lock, immediately before any storage
+access. A strict `false` returns `{ status: 'cancelled' }` without reading,
+writing, removing malformed data, or warning. Without Web Locks, the same check
+runs immediately. Omitting the callback or passing `undefined` preserves legacy
+behavior and result types. Optional callbacks and argument unions that may carry
+a callback include `cancelled` in their result type; extracted write methods
+retain these overloads. The exported `NativeFormProgressWriteResult` and the
+method's `ReturnType` remain the legacy union. The method's `Parameters` retain
+the legacy argument shape with an optional `isWriteStillEligible?: undefined`
+discriminator.
+
+Callback exceptions follow native behavior: with a lock they return
+`unavailable` and warn; without a lock they reject the write Promise. The host
+owns eligibility, conflict state, Restore, and Save. This SDK contract does not
+change the native caller or establish native adoption.
+
 ## Native-compatible Save coordination
 
 `createFormSaveCoordinator<Key, Snapshot>({ isEqual })` coordinates explicit
@@ -3192,3 +3268,60 @@ This facet does not evaluate conditional predicates, page date ranges,
 linked-open Review debt, or selection/Save authority. Those policies remain
 with their existing owners. The public page adapter retains its separate
 conservative shape and page-policy behavior.
+
+## Form validation summary
+
+```tsx
+import { createElement } from 'react';
+import {
+    FormValidationSummary,
+    type FormValidationDiagnostic,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/form-validation-summary.css';
+
+const diagnostics: readonly FormValidationDiagnostic[] = [
+    {
+        fieldId: 'fld_name',
+        fieldTitle: 'Full name',
+        errorMessage: 'Field is required',
+    },
+];
+
+export const summary = createElement(FormValidationSummary, {
+    heading: 'Please correct the following fields',
+    diagnostics,
+});
+```
+
+Supply already-authorized field diagnostics in display order and a localized
+heading. The SDK renders the complete error Alert and list. It renders each
+semantic field title as a literal `#fieldId` anchor followed by a space and the
+parenthesized message. Keep semantic titles even when inline field labels are
+hidden. Field IDs must be unique; items retain their React identity by field ID.
+Text is rendered literally, without HTML interpretation.
+
+Replace the diagnostics prop when existing host validation changes. An empty
+array renders nothing. The component does not calculate validation, retain error
+state, localize messages, or change page/section navigation. Keep generic
+administrative errors in the native host; do not pass them as field diagnostics.
+
+For native adoption, retain the existing `loadingState.type === 'error'` and
+`error.type` discrimination. Replace only the field-validation summary with
+`FormValidationSummary`, mapping `error.errors` to `diagnostics` and the existing
+localized `please_correct_the_following_fields()` string to `heading`. Keep the
+existing generic `AdminOnlyErrorMessage` branch. Clearing remains governed by the
+host's existing validation/loading-state transition. No expansion or focus
+behavior is added.
+
+The CSS is independent of Tailwind and carries the native red error palette,
+scrolling/flex layout, zero corner radius, list spacing and underlined links.
+Native consumer validation and browser/manual parity must be verified at the
+final integration pin; SDK component tests alone do not verify FormLoaded.
+
+### Complete native-compatible saved progress
+
+Use [`useNativeFormProgress` and `FormProgressConflictAlert`](saved-progress.md)
+for the native revision/writer protocol, committed writer queue, retry and
+reload-required conflict presentation. The host retains its canonical unfiltered
+draft, Restore/load witness and Submit cleanup; this is separate from
+`createProgress` and its public token/value protocol.

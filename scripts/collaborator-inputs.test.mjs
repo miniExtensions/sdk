@@ -27,6 +27,7 @@ function fixture(t, format) {
     const archiveRoot = join(temporary, 'archive');
     const archive = join(temporary, 'sdk.tgz');
     const inputs = { esm: {}, cjs: {} };
+    const creators = {};
     const write = (path, bytes) => {
         mkdirSync(join(path, '..'), { recursive: true });
         writeFileSync(path, bytes);
@@ -61,6 +62,9 @@ function fixture(t, format) {
     );
     for (const target of ['esm', 'cjs']) {
         sdkInput(`dist/${target}/react/CompleteCollaboratorField.js`, [target]);
+        creators[target] = sdkInput(`dist/${target}/react/CreatedByField.js`, [
+            target,
+        ]);
         sdkInput(`dist/${target}/react/completeCollaboratorPickerRuntime.js`, [
             target,
         ]);
@@ -96,7 +100,7 @@ function fixture(t, format) {
             // preparation, path checks, tar reads and byte/hash binding run.
             build: async ({ entryPoints }) => {
                 const target = entryPoints[0].endsWith('.cjs') ? 'cjs' : 'esm';
-                if (target === format) beforeSelectedBuild();
+                if (target === format) beforeSelectedBuild(inputs[target]);
                 return {
                     metafile: { inputs: inputs[target] },
                     outputFiles: [
@@ -112,6 +116,8 @@ function fixture(t, format) {
         pack,
         address,
         report,
+        creator: creators[format],
+        temporary,
         beforeBuild(action) {
             beforeSelectedBuild = action;
         },
@@ -119,6 +125,38 @@ function fixture(t, format) {
 }
 
 for (const format of ['esm', 'cjs']) {
+    test(`${format} Collaborator provenance binds the actual packed CreatedBy member`, async (t) => {
+        const { record, creator, report } = fixture(t, format);
+        await record();
+        const evidence = report.completeCollaborators[format];
+        assert.equal(
+            evidence.packagedCreatedByMember,
+            `package/dist/${format}/react/CreatedByField.js`
+        );
+        assert.equal(
+            evidence.packagedCreatedBySha256,
+            hash(readFileSync(creator))
+        );
+    });
+
+    for (const change of ['changed-bytes', 'missing-input']) {
+        test(`${format} Collaborator provenance rejects CreatedBy ${change}`, async (t) => {
+            const { record, creator, temporary, beforeBuild, report } = fixture(
+                t,
+                format
+            );
+            await record();
+            beforeBuild((inputs) => {
+                if (change === 'changed-bytes')
+                    writeFileSync(creator, 'changed installed creator bytes');
+                else delete inputs[relative(temporary, creator)];
+            });
+            await assert.rejects(record, assert.AssertionError);
+            assert.equal(report.completeCollaborators[format], undefined);
+            if (format === 'cjs') assert(report.completeCollaborators.esm);
+        });
+    }
+
     test(`${format} Collaborator provenance binds each shipped Address runtime input to its archive bytes`, async (t) => {
         const { record, address, report } = fixture(t, format);
         await record();

@@ -1,9 +1,29 @@
+import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
+import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
+import {
+    checkCanonicalFormConsumer,
+    canonicalFormTypedConsumer,
+} from './canonical-form-consumer-checks.mjs';
+import {
+    checkNativePortalKernelConsumer,
+    checkNativePortalKernelReactMatrix,
+    nativePortalKernelTypedConsumer,
+} from './native-portal-kernel-consumer-checks.mjs';
+import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
+import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
+import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
+import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
+import { checkPrintableFormReactMatrix } from './printable-form-consumer-checks.mjs';
+import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
+import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
+import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
 import {
     checkOrdinaryValidationConsumer,
     ordinaryValidationTypedConsumer,
 } from './ordinary-validation-consumer-checks.mjs';
 import { checkSignatureReactMatrix } from './signature-consumer-checks.mjs';
 import { checkCustomerChatMatrix } from './customer-chat-consumer-checks.mjs';
+import { checkCalendarReactMatrix } from './calendar-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
@@ -13,6 +33,7 @@ import { checkCompleteAddressReactMatrix } from './complete-address-consumer-che
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
 import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
+import { checkControlledLookupReactMatrix } from './controlled-lookup-consumer-checks.mjs';
 import { checkFieldPresentationReactMatrix } from './field-presentation-consumer-checks.mjs';
 import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
@@ -121,6 +142,7 @@ import { checkCompleteLocalizedNumericReactMatrix } from './complete-localized-n
 import { checkCompleteReadOnlyPhoneReactMatrix } from './complete-readonly-phone-consumer-checks.mjs';
 import { checkCompleteReadOnlyTextReactMatrix } from './complete-readonly-text-consumer-checks.mjs';
 import { checkCompleteClearableInputReactMatrix } from './complete-clearable-input-consumer-checks.mjs';
+import { checkSingleLineTextReactMatrix } from './single-line-text-consumer-checks.mjs';
 import { checkCompleteMultilineReactMatrix } from './complete-multiline-consumer-checks.mjs';
 import { checkHTMLDescriptionReactMatrix } from './html-description-consumer-checks.mjs';
 import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
@@ -214,6 +236,7 @@ import {
 } from './rollup-consumer-checks.mjs';
 import {
     checkFormulaConsumer,
+    checkControlledFormulaReactMatrix,
     formulaReactTypedConsumer,
 } from './formula-consumer-checks.mjs';
 import {
@@ -270,7 +293,7 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
-    checkCountConsumer,
+    checkCountReactMatrix,
     countReactTypedConsumer,
 } from './count-consumer-checks.mjs';
 import {
@@ -344,7 +367,7 @@ import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-drive
 import { checkMultipleSelectFormDriverRecipe } from './multi-select-form-driver-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
-    checkButtonConsumer,
+    checkButtonReactMatrix,
     buttonTypedConsumer,
     buttonReactTypedConsumer,
 } from './button-consumer-checks.mjs';
@@ -371,6 +394,10 @@ import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkFormSaveIdentityConsumer } from './form-save-identity-consumer-checks.mjs';
+import {
+    checkLinkedProjectionConsumer,
+    linkedProjectionTypedConsumer,
+} from './linked-projection-consumer-checks.mjs';
 import {
     checkFormSaveCoordinatorConsumer,
     formSaveCoordinatorTypedConsumer,
@@ -542,6 +569,28 @@ const headerStarterFiles = completionStarterFiles.map((path) =>
     path.replace('react-form-completion/', 'react-form-header/')
 );
 
+const printableStarterFiles = [
+    'README.md',
+    'main.ts',
+    'index.html',
+    'dev.mjs',
+    'build.mjs',
+    'tsconfig.json',
+].map((path) => `examples/react-printable-form/${path}`);
+
+const linkedFinderStarterFiles = [
+    'README.md',
+    'main.ts',
+    'consumer.cts',
+    'index.html',
+    'dev.mjs',
+    'tsconfig.json',
+].map((path) => `examples/react-complete-linked-finder/${path}`);
+
+const summaryCardsStarterFiles = linkedFinderStarterFiles.map((path) =>
+    path.replace('react-complete-linked-finder/', 'react-portal-summary-cards/')
+);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -558,6 +607,35 @@ function run(command, args, cwd = temporaryDirectory) {
 try {
     // check:package also works alone; never pack leftover build output.
     run(process.execPath, ['scripts/build.mjs'], process.cwd());
+    // Run One's cold-entry assertion on this fresh build, never leftover dist.
+    for (const format of ['esm', 'cjs']) {
+        const entry = new URL(
+            `../dist/${format}/react/index.js`,
+            import.meta.url
+        ).href;
+        run(
+            process.execPath,
+            [
+                '--input-type=module',
+                '-e',
+                `
+            import assert from 'node:assert/strict';
+            import { createRequire } from 'node:module';
+            import { fileURLToPath } from 'node:url';
+            const require = createRequire(import.meta.url);
+            assert.equal(typeof document, 'undefined');
+            ${format === 'esm' ? `await import(${JSON.stringify(entry)});` : `require(fileURLToPath(${JSON.stringify(entry)}));`}
+            const loaded = Object.keys(require.cache).filter(path => /[\\/]react-dom[\\/]/.test(path));
+            assert.deepEqual(loaded, [], 'General React import initialized a DOM-dependent runtime');
+            assert.equal(typeof document, 'undefined');
+        `,
+            ],
+            process.cwd()
+        );
+    }
+    console.log(
+        'Fresh general React entries preserve consumer DOM bootstrap in ESM and CJS'
+    );
     const sourcePackage = assertSourcePackageBuild(process.cwd());
     console.log(
         `SDK source preparation matches checkout: ${sourcePackage.declarations} declarations in ${sourcePackage.formats} formats`
@@ -586,14 +664,29 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/canonical-form-frame.md' ||
+                path === 'docs/saved-progress.md' ||
+                path === 'docs/portal-shell.md' ||
                 path === 'docs/field-bindings.md' ||
+                path === 'docs/count.md' ||
+                path === 'docs/formula.md' ||
+                path === 'docs/rating.md' ||
+                path === 'docs/form-captcha.md' ||
+                path === 'docs/printable-form.md' ||
                 path === 'docs/portals.md' ||
+                path === 'docs/native-portal-kernel.md' ||
+                path === 'docs/native-portal-differential.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
+                path === 'docs/calendar.md' ||
+                path === 'docs/complete-linked-finder.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
                 path === 'docs/signature.md' ||
+                path === 'docs/single-line-text.md' ||
+                path === 'docs/csv-export.md' ||
+                path === 'docs/kanban.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/image-annotation-markerjs2-license.txt' ||
                 path === 'examples/react-image-annotation/README.md' ||
@@ -602,10 +695,15 @@ try {
                 path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
                 path === 'docs/form-header.md' ||
+                path === 'docs/form-submit.md' ||
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
+                path === 'docs/lookup.md' ||
                 headerStarterFiles.includes(path) ||
+                linkedFinderStarterFiles.includes(path) ||
+                summaryCardsStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
+                printableStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 documentFiles.has(path) ||
                 path.startsWith('dist/esm/') ||
@@ -633,16 +731,45 @@ try {
     }
     for (const path of [
         ...documentFiles,
+        'docs/canonical-form-frame.md',
+        'dist/esm/forms/canonicalFrame.js',
+        'dist/esm/forms/canonicalFrame.d.ts',
+        'dist/cjs/forms/canonicalFrame.js',
+        'dist/cjs/forms/canonicalFrame.d.ts',
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'docs/calendar.md',
+        'docs/complete-linked-finder.md',
+        ...linkedFinderStarterFiles,
+        'docs/count.md',
+        'docs/formula.md',
         'docs/complete-record-comments.md',
         'docs/signature.md',
+        'docs/single-line-text.md',
+        'dist/esm/react/SingleLineTextField.js',
+        'dist/esm/react/SingleLineTextField.d.ts',
+        'dist/cjs/react/SingleLineTextField.js',
+        'dist/cjs/react/SingleLineTextField.d.ts',
+        'dist/esm/react/single-line-text.css',
+        'dist/cjs/react/single-line-text.css',
         'docs/customer-chat.md',
         'docs/image-annotation-markerjs2-license.txt',
         'examples/react-image-annotation/README.md',
         'examples/react-image-annotation/main.ts',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
+        'dist/esm/react/calendar.css',
+        'dist/cjs/react/calendar.css',
+        'dist/esm/react/calendar-complete.css',
+        'dist/cjs/react/calendar-complete.css',
+        'dist/esm/react/CalendarRuntime.js',
+        'dist/cjs/react/CalendarRuntime.js',
+        'dist/esm/react/calendar/index.js',
+        'dist/cjs/react/calendar/index.js',
+        'dist/esm/react/calendar-vendor.json',
+        'dist/cjs/react/calendar-vendor.json',
+        'dist/esm/react/calendar.LICENSES.txt',
+        'dist/cjs/react/calendar.LICENSES.txt',
         'dist/esm/react/date/index.js',
         'dist/cjs/react/date/index.js',
         'dist/esm/react/theme.css',
@@ -655,6 +782,9 @@ try {
         'dist/cjs/react/single-select.css',
         'dist/esm/react/controlled-select.css',
         'dist/cjs/react/controlled-select.css',
+        'dist/esm/react/lookup.css',
+        'dist/cjs/react/lookup.css',
+        'docs/lookup.md',
         'docs/controlled-select.md',
         'dist/esm/react/rich-text.css',
         'dist/cjs/react/rich-text.css',
@@ -662,14 +792,56 @@ try {
         'dist/cjs/react/text.css',
         'dist/esm/react/number.css',
         'dist/cjs/react/number.css',
+        'dist/esm/react/rating.css',
+        'dist/cjs/react/rating.css',
+        'docs/rating.md',
+        'docs/form-captcha.md',
+        'docs/printable-form.md',
+        ...printableStarterFiles,
+        ...['esm', 'cjs'].flatMap((format) => [
+            ...[
+                'ReadonlyPrintDocumentView',
+                'PrintableForm',
+                'PrintableFormJobControls',
+                'printableFormEngine',
+            ].flatMap((name) => [
+                `dist/${format}/react/${name}.js`,
+                `dist/${format}/react/${name}.d.ts`,
+            ]),
+            ...[
+                'readonlyPrintDocument',
+                'printableForm',
+                'printableDOM',
+            ].flatMap((name) => [
+                `dist/${format}/ui/${name}.js`,
+                `dist/${format}/ui/${name}.d.ts`,
+            ]),
+            `dist/${format}/react/printable-form.css`,
+        ]),
+        'dist/esm/react/form-captcha.css',
+        'dist/cjs/react/form-captcha.css',
+        'dist/esm/react/FormCaptcha.js',
+        'dist/cjs/react/FormCaptcha.js',
+        'dist/esm/ui/recaptchaV2Provider.js',
+        'dist/cjs/ui/recaptchaV2Provider.js',
         'dist/esm/react/localized-numeric.css',
         'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/complete-duration.css',
         'dist/cjs/react/complete-duration.css',
+        'dist/esm/react/attachment-preview.css',
+        'dist/cjs/react/attachment-preview.css',
+        'dist/esm/react/readonly-url-gallery.css',
+        'dist/cjs/react/readonly-url-gallery.css',
+        'dist/esm/react/portal-shell.css',
+        'dist/cjs/react/portal-shell.css',
+        'docs/portal-shell.md',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
         'dist/cjs/react/complete-portal-chart.css',
+        'dist/esm/react/portal-summary-cards.css',
+        'dist/cjs/react/portal-summary-cards.css',
+        ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
@@ -680,10 +852,17 @@ try {
         'dist/cjs/react/form-completion.css',
         'docs/form-completion.md',
         'docs/form-header.md',
+        'docs/form-submit.md',
         'docs/field-presentation.md',
         'docs/form-groups.md',
         'dist/esm/react/form-group.css',
         'dist/cjs/react/form-group.css',
+        'docs/csv-export.md',
+        'dist/esm/react/csv-export.css',
+        'dist/cjs/react/csv-export.css',
+        'docs/kanban.md',
+        'dist/esm/react/kanban.css',
+        'dist/cjs/react/kanban.css',
         ...headerStarterFiles,
         'dist/esm/react/form-header.css',
         'dist/cjs/react/form-header.css',
@@ -712,6 +891,8 @@ try {
         'dist/cjs/react/complete-address.css',
         'dist/esm/react/complete-multiline.css',
         'dist/cjs/react/complete-multiline.css',
+        'dist/esm/react/form-submit.css',
+        'dist/cjs/react/form-submit.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',
@@ -730,6 +911,8 @@ try {
         'dist/cjs/react/multiple-select.css',
         'dist/esm/react/linked-records.css',
         'dist/cjs/react/linked-records.css',
+        'dist/esm/react/complete-linked-finder.css',
+        'dist/cjs/react/complete-linked-finder.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1480,6 +1663,7 @@ export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, clien
     linked.destroy(); model.destroy(); native.destroy();
 }
 ${formSaveCoordinatorTypedConsumer}
+${linkedProjectionTypedConsumer}
 import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
 import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, checkIfFormUrlIsValid, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
 const formUrlValid: boolean = checkIfFormUrlIsValid('example.test');
@@ -1639,6 +1823,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         "'../src/runtime/index.js'",
         "'@miniextensions/sdk'"
     );
+    const nativeProgressExactOptionalConsumer = readFileSync(
+        'scripts/native-form-progress-exact-optional-consumer.types.ts.txt',
+        'utf8'
+    );
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
@@ -1661,7 +1849,9 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
+                nativePortalKernelTypedConsumer +
                 ordinaryValidationTypedConsumer +
+                canonicalFormTypedConsumer +
                 borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
@@ -1726,10 +1916,30 @@ new Parser([]).parse({maxDepth:'48'});
             sourceEnvelopeFilename,
             ...formulasGuideSources,
         ]);
+        const exactOptionalFilename = `native-progress-exact-optional-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, exactOptionalFilename),
+            nativeProgressExactOptionalConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--exactOptionalPropertyTypes',
+            '--skipLibCheck',
+            'false',
+            '--target',
+            'ES2022',
+            '--module',
+            module,
+            '--moduleResolution',
+            moduleResolution,
+            exactOptionalFilename,
+        ]);
     }
 
     console.log(
-        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent.'
+        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent; native progress also checked with exact optional properties.'
     );
 
     const bundled = await build({
@@ -1783,9 +1993,26 @@ new Parser([]).parse({maxDepth:'48'});
         'function'
     );
 
+    assert.equal(
+        await checkNativePortalKernelConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+
     // React is an optional host framework, never an SDK dependency. Check the
     // actual documented recipe only after proving dependency-free UI imports.
-    const reactRecipes = [...uiGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g)];
+    const singleLineRecipes = [
+        ...readFileSync(
+            join(installedPackage, 'docs/single-line-text.md'),
+            'utf8'
+        ).matchAll(/```tsx\n([\s\S]*?)\n```/g),
+    ];
+    assert(singleLineRecipes.length > 0, 'Missing shipped Single-line recipes');
+    const reactRecipes = [
+        ...uiGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g),
+        ...singleLineRecipes,
+    ];
     assert(reactRecipes.length > 0, 'Missing React mount/dispose recipe');
     run('npm', [
         'install',
@@ -2821,6 +3048,29 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    const portalShellProof = checkPortalShellReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(portalShellProof.versions.length, 2);
+    assert.equal(portalShellProof.cleanup, 'completed');
+    const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(nativePortalKernelProof.versions.length, 2);
+    assert.equal(nativePortalKernelProof.cleanup, 'completed');
+
+    const savedProgressProof = checkSavedProgressReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(savedProgressProof.versions.length, 2);
+    assert.equal(savedProgressProof.cleanup, 'completed');
     const customerChatProof = checkCustomerChatMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -2828,14 +3078,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(customerChatProof.versions.length, 2);
     assert.equal(customerChatProof.cleanup, 'completed');
-    const buttonProof = await checkButtonConsumer({
-        consumerDirectory: temporaryDirectory,
+    const buttonProof = checkButtonReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
     });
-    assert.equal(buttonProof.checks, 67);
-    console.log(
-        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
-    );
+    assert.equal(buttonProof.versions.length, 2);
+    assert.equal(buttonProof.cleanup, 'completed');
     const checkboxProof = checkCheckboxReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -2890,23 +3140,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(lastModifiedByProof.checks, 20);
+    assert.equal(lastModifiedByProof.checks, 28);
     console.log(
-        `Installed Last Modified By renderer, readonly native names, shared Text CSS and local example: ${lastModifiedByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        `Installed Last Modified By binding/helper and controlled readonly display: ${lastModifiedByProof.checks} ESM/CJS groups (20 legacy plus 8 controlled) passed; synthetic owners only.`
     );
     const createdByProof = await checkCreatedByConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(createdByProof.checks, 20);
+    assert.equal(createdByProof.checks, 28);
     console.log(
-        `Installed Created By renderer, readonly native names, shared Text CSS and local example: ${createdByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        `Installed Created By binding/helper and controlled readonly display: ${createdByProof.checks} ESM/CJS groups (20 legacy plus 8 controlled) passed; synthetic owners only.`
     );
     const externalSyncSourceProof = await checkExternalSyncSourceConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(externalSyncSourceProof.checks, 20);
+    assert.equal(externalSyncSourceProof.checks, 24);
     console.log(
         `Installed External Sync Source renderer, readonly SDK strings, shared Text CSS and local example: ${externalSyncSourceProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
@@ -2964,6 +3214,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(formulaProof.checks, 26);
+    const controlledFormulaMatrix = await checkControlledFormulaReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(controlledFormulaMatrix.profiles.length, 4);
     console.log(
         `Installed Formula presentation: ${formulaProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
@@ -3068,13 +3323,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed read-only attachment presentation: ${readonlyAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
-    const countProof = await checkCountConsumer({
-        consumerDirectory: temporaryDirectory,
+    const countProof = checkCountReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(countProof.checks, 20);
+    assert.equal(countProof.versions.length, 2);
+    assert.equal(countProof.cleanup, 'completed');
     console.log(
-        `Installed Count renderer, readonly native display, shared Number CSS and local example: ${countProof.checks} ESM/CJS groups passed; synthetic owners only.`
+        'Installed Count React18/19: packed ESM/CJS, strict NodeNext/Bundler declarations, public CSS and 20 regression groups per version passed.'
     );
     const autoNumberProof = await checkAutoNumberConsumer({
         consumerDirectory: temporaryDirectory,
@@ -3089,6 +3346,33 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(ratingProof.checks, 24);
+    const controlledRatingProof = await checkControlledRatingReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(controlledRatingProof.profiles.length, 2);
+    assert.equal(controlledRatingProof.cleanup, 'completed');
+    const formCaptchaProof = await checkFormCaptchaReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(formCaptchaProof.profiles.length, 2);
+    assert.equal(formCaptchaProof.cleanup, 'completed');
+    const printableProof = await checkPrintableFormReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        packedMetadata: packed,
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(printableProof.profiles.length, 2);
+    assert.equal(printableProof.cleanup, 'completed');
+    console.log(
+        'Installed Printable Form React18/19 public ESM/CJS, types, CSS, SSR and 180 original runtime tests passed. Actual browser print preview/Cancel remains separate.'
+    );
+    console.log(
+        'Installed Form CAPTCHA React18/19 ESM/CJS/types/CSS/SSR/hydration and synthetic lifecycle checks passed. Native integration remains separate.'
+    );
     console.log(
         `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
@@ -3096,7 +3380,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(percentProof.checks, 16);
+    assert.equal(percentProof.checks, 18);
     console.log(
         `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
@@ -3353,6 +3637,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(clearableInputMatrix.versions.length, 2);
     assert.equal(clearableInputMatrix.cleanup, 'completed');
+    const singleLineTextMatrix = checkSingleLineTextReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(singleLineTextMatrix.versions.length, 2);
+    assert.equal(singleLineTextMatrix.cleanup, 'completed');
     const completeMultilineMatrix = checkCompleteMultilineReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3368,6 +3659,22 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
+    const kanbanMatrix = checkKanbanReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(kanbanMatrix.versions.length, 2);
+    assert.equal(kanbanMatrix.cleanup, 'completed');
+    const csvExportMatrix = checkCSVExportReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(csvExportMatrix.versions.length, 2);
+    assert.equal(csvExportMatrix.cleanup, 'completed');
     const formGroupMatrix = checkFormGroupReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3376,12 +3683,33 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(formGroupMatrix.versions.length, 2);
     assert.equal(formGroupMatrix.cleanup, 'completed');
+    const linkedFinderMatrix = checkCompleteLinkedFinderReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(linkedFinderMatrix.profiles.length, 4);
+    assert.equal(linkedFinderMatrix.cleanup, 'completed');
+    const attachmentPreviewMatrix = checkAttachmentPreviewReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(attachmentPreviewMatrix.profiles.length, 4);
+    assert.equal(attachmentPreviewMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
+    const summaryCardsMatrix = checkPortalSummaryCardsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(summaryCardsMatrix.versions.length, 2);
+    assert.equal(summaryCardsMatrix.cleanup, 'completed');
     const trackingMatrix = checkFormTrackingReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3398,6 +3726,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(collaboratorMatrix.profiles.length, 4);
     assert.equal(collaboratorMatrix.cleanup, 'completed');
+    const controlledLookupMatrix = checkControlledLookupReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(controlledLookupMatrix.profiles.length, 4);
+    assert.equal(controlledLookupMatrix.cleanup, 'completed');
     const htmlDescriptionMatrix = checkHTMLDescriptionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3442,6 +3778,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(dateMatrix.versions.length, 2);
     assert.equal(dateMatrix.cleanup, 'completed');
+    const calendarMatrix = checkCalendarReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(calendarMatrix.versions.length, 2);
+    assert.equal(calendarMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3579,6 +3922,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         854
+    );
+    assert.equal(
+        await checkCanonicalFormConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
     );
     assert.equal(
         await checkNativeFormProgressConsumer({
@@ -3894,6 +4243,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 }),
                 2
             );
+            assert.deepEqual(
+                checkLinkedProjectionConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    run,
+                }),
+                { formats: 2, comparisons: 156, refusals: 12 }
+            );
             const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
                 consumerDirectory: temporaryDirectory,
             });
@@ -3909,6 +4265,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     (path) =>
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
+                        linkedFinderStarterFiles.includes(path) ||
+                        summaryCardsStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
                             'README.md',

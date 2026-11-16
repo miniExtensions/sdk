@@ -1,6 +1,38 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
+export { createNativePortalCollectionKernel } from './nativeCollectionKernel.js';
+export { runNativePortalCollectionRead } from './nativeCollectionHost.js';
+export type {
+    NativePortalCollectionHostPort,
+    NativePortalCollectionReadOutcome,
+} from './nativeCollectionHost.js';
+export type {
+    NativePortalCollectionScope,
+    NativePortalCollectionPaging,
+    NativePortalCollectionReadReceipt,
+    NativePortalCollectionCleanupReceipt,
+    NativePortalCollectionFrame,
+    NativePortalCollectionState,
+    NativePortalCollectionResponse,
+    NativePortalCollectionBegin,
+    NativePortalCollectionTransition,
+    NativePortalCollectionKernel,
+} from './nativeCollectionKernel.js';
 export { getPortalLinkedRecordFieldConfig } from './helpers.js';
 export { evaluatePortalViewAvailability } from './viewAvailability.js';
+export {
+    resolvePortalShellSelection,
+    projectPortalShellMenu,
+    flattenPortalShellMenu,
+    isPortalShellUrl,
+    portalShellSelectionsEqual,
+} from './shell.js';
+export type {
+    PortalShellView,
+    PortalShellMenuItem,
+    PortalShellSelection,
+    PortalShellInitialSelection,
+    PortalShellIntent,
+} from './shell.js';
 export type {
     PortalAvailableCustomView,
     PortalViewAvailability,
@@ -50,6 +82,12 @@ export type {
 export { refreshPortalSummaryFields } from './summaryRefresh.js';
 export type { PortalSummaryRefreshOptions } from './summaryRefresh.js';
 
+export { projectPortalSummaryFields } from './summaryFields.js';
+export type {
+    PortalSummaryField,
+    PortalSummaryFieldsProjectionInput,
+} from './summaryFields.js';
+
 export {
     getSearchPageQueryKeys,
     hasSearchPageQueryParam,
@@ -64,3 +102,37 @@ export type {
     PortalInlineEditQueueOptions,
     PortalInlineEditQueue,
 } from './inlineEditQueue.js';
+
+export {
+    projectCSVExport,
+    createCSVExportController,
+    CSVExportFailure,
+} from './csvExport.js';
+export { serializeCSVExportDocument } from './csvSerialization.js';
+export type {
+    CSVExportColumn,
+    CSVExportFieldValue,
+    CSVExportRow,
+    CSVExportInput,
+    CSVExportDocument,
+    CSVExportProjection,
+    CSVExportPlatform,
+    CSVExportRequest,
+    CSVExportOutcome,
+    CSVExportSnapshot,
+    CSVExportController,
+    CSVExportFailureReason,
+} from './csvExport.js';
+
+export {
+    projectKanbanColumns,
+    getKanbanColumnAirtableValue,
+    createKanbanCategoryOperation,
+    uncategorizedKanbanColumnId,
+} from './kanban.js';
+export type {
+    KanbanColumn,
+    KanbanProjectionInput,
+    KanbanMutationResult,
+    KanbanCategoryInvocation,
+} from './kanban.js';

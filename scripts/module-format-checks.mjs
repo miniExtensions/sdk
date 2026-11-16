@@ -187,7 +187,9 @@ export function assertModuleFormats(root) {
                 './react/button.css',
                 './react/checkbox.css',
                 './react/text.css',
+                './react/single-line-text.css',
                 './react/number.css',
+                './react/rating.css',
                 './react/localized-numeric.css',
                 './react/complete-phone.css',
                 './react/complete-readonly-text.css',
@@ -198,13 +200,22 @@ export function assertModuleFormats(root) {
                 './react/address-field.css',
                 './react/html-description.css',
                 './react/complete-duration.css',
+                './react/portal-shell.css',
                 './react/search-gate.css',
                 './react/complete-calendly.css',
                 './react/complete-record-comments.css',
                 './react/form-tracking.css',
+                './react/form-captcha.css',
+                './react/printable-form.css',
                 './react/form-group.css',
+                './react/csv-export.css',
+                './react/kanban.css',
                 './react/form-completion.css',
                 './react/form-header.css',
+                './react/form-submit.css',
+                './react/form-validation-summary.css',
+                './react/portal-summary-cards.css',
+                './react/form-progress.css',
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',
@@ -212,16 +223,22 @@ export function assertModuleFormats(root) {
                 './react/complete-barcode-scanner.css',
                 './react/barcode.css',
                 './react/complete-portal-chart.css',
+                './react/attachment-preview.css',
                 './react/complete-collaborators.css',
                 './react/date.css',
+                './react/calendar.css',
+                './react/calendar-complete.css',
                 './react/complete-date.css',
                 './react/datetime.css',
                 './react/duration.css',
                 './react/currency.css',
                 './react/multiple-select.css',
                 './react/linked-records.css',
+                './react/complete-linked-finder.css',
                 './react/single-select.css',
                 './react/controlled-select.css',
+                './react/readonly-url-gallery.css',
+                './react/lookup.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
@@ -233,7 +250,7 @@ export function assertModuleFormats(root) {
             );
             assert.equal(
                 require.resolve(manifest.name + subpath.slice(1)),
-                file
+                fs.realpathSync(file)
             );
             const bytes = readFileSync(file);
             entries.push({
@@ -251,6 +268,7 @@ export function assertModuleFormats(root) {
                 /^\.\/[A-Za-z0-9_-]+$/.test(subpath) ||
                 subpath === './react/html' ||
                 subpath === './react/date' ||
+                subpath === './react/calendar' ||
                 subpath === './customer-chat/react' ||
                 subpath === './customer-chat/intercom'
         );
@@ -276,7 +294,10 @@ export function assertModuleFormats(root) {
                         manifest.name +
                             (subpath === '.' ? '' : subpath.slice(1))
                     ),
-                    file,
+                    // Node resolves real paths, including OS-provided parent
+                    // aliases such as macOS /var -> /private/var. Package-owned
+                    // symlinks are still refused by the regular-file/tree checks.
+                    fs.realpathSync(file),
                     'Native require resolution must select the declared CommonJS entry'
                 );
             }

@@ -1,0 +1,35 @@
+.mx-sdk-form-captcha {
+    color: inherit;
+    font: inherit;
+    max-width: 100%;
+}
+.mx-sdk-form-captcha[hidden] {
+    display: none;
+}
+.mx-sdk-form-captcha-widget {
+    max-width: 100%;
+}
+.mx-sdk-form-captcha-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    box-sizing: border-box;
+    width: 19rem;
+    max-width: 100%;
+    min-height: 4.75rem;
+    padding: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.2rem;
+    background: #f9fafb;
+    color: #374151;
+}
+.mx-sdk-form-captcha-checkbox {
+    flex: 0 0 1.4rem;
+    height: 1.4rem;
+    border: 2px solid #9ca3af;
+    border-radius: 0.15rem;
+}
+.mx-sdk-form-captcha-status {
+    margin: 0.4rem 0;
+    font-size: 0.875rem;
+}

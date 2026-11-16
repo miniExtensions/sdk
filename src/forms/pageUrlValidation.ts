@@ -50,7 +50,7 @@ const hasUnsafeUrlText = (url: string): boolean =>
  * Returns the exact href supported by Form URL fields, or null when the value
  * is not safe to activate. Bare hosts retain their historical HTTPS default.
  */
-const getValidUrlHref = (url: string): string | null => {
+export const getValidUrlHref = (url: string): string | null => {
     if (hasUnsafeUrlText(url)) return null;
 
     const hasExplicitScheme = explicitSchemePattern.test(url);

@@ -1,10 +1,31 @@
+import {
+    prepareKanbanBrowserFixtures,
+    checkKanbanBrowser,
+} from './kanban-consumer-checks.mjs';
+import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
+import {
+    preparePrintableFormBrowserFixtures,
+    checkPrintableFormBrowser,
+} from './printable-form-browser-checks.mjs';
+import { checkFormCaptchaBrowser } from './form-captcha-browser-checks.mjs';
+import {
+    prepareCSVExportBrowserFixtures,
+    checkCSVExportBrowser,
+} from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
+import { checkControlledLookupBrowser } from './controlled-lookup-browser-checks.mjs';
+import {
+    checkExternalSyncSourceControlledBrowser,
+    checkAiTextControlledBrowser,
+} from './external-sync-source-controlled-browser-checks.mjs';
 import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
+import { checkCalendarBrowser } from './calendar-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
+import { checkSingleLineTextBrowser } from './single-line-text-browser-checks.mjs';
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -1544,13 +1565,23 @@ try {
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
+            'scripts/printable-form-browser-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
+            'scripts/controlled-lookup-consumer-checks.mjs',
+            'scripts/controlled-lookup-browser-checks.mjs',
+            'scripts/form-captcha-consumer-checks.mjs',
+            'scripts/form-captcha-browser-checks.mjs',
+            'scripts/csv-export-consumer-checks.mjs',
+            'scripts/kanban-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
             'scripts/complete-portal-chart-browser-checks.mjs',
             'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
+            'scripts/calendar-browser-checks.mjs',
+            'scripts/calendar-complete-style-assets.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
+            'scripts/external-sync-source-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -1981,6 +2012,41 @@ try {
             regular,
             hash,
         });
+        await prepareKanbanBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await preparePrintableFormBrowserFixtures({
+            temporary,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareCSVExportBrowserFixtures({
+            temporary,
+            archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         await prepareFormGroupBrowserFixtures({
             temporary,
             archive,
@@ -2183,6 +2249,15 @@ try {
             evidence: report.completeDate,
             output,
         });
+        report.calendar = {};
+        await checkCalendarBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.calendar,
+            output,
+            readArchiveMember,
+        });
+        report.archiveMemberReads = readArchiveMember.stats();
         report.createdTime = {};
         await checkCreatedTimeControlledBrowser({
             browser,
@@ -2218,6 +2293,28 @@ try {
             browser,
             consumer: temporary,
             evidence: report.controlledSelect,
+            output,
+        });
+        report.controlledLookup = {};
+        await checkControlledLookupBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.controlledLookup,
+            output,
+            readArchiveMember,
+        });
+        report.externalSyncSourceControlled = {};
+        await checkExternalSyncSourceControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.externalSyncSourceControlled,
+            output,
+        });
+        report.aiTextControlled = {};
+        await checkAiTextControlledBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.aiTextControlled,
             output,
         });
         report.completeDuration = {};
@@ -2288,6 +2385,20 @@ try {
                 reference: nativeReactVersion === '18.3.1',
             });
         }
+        report.formSubmit = {};
+        report.formCaptcha = {};
+        await checkFormCaptchaBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formCaptcha,
+            output,
+        });
+        await checkFormSubmitBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formSubmit,
+            output,
+        });
         report.formTracking = {};
         await checkFormTrackingBrowser({
             browser,
@@ -2296,6 +2407,18 @@ try {
             output,
         });
         report.completeBarcode = {};
+        report.singleLineText = [];
+        for (const format of ['esm', 'cjs']) {
+            const evidence = {};
+            report.singleLineText.push(evidence);
+            await checkSingleLineTextBrowser({
+                browser,
+                consumer: temporary,
+                evidence,
+                output,
+                format,
+            });
+        }
         await checkCompleteBarcodeBrowser({
             browser,
             consumer: temporary,
@@ -2376,6 +2499,7 @@ try {
                 console.log(`Native Chromium ${name}: passed`);
             } catch (error) {
                 item.status = 'failed';
+                item.url = page.url();
                 item.error = error.message;
                 item.pageErrors = errors;
                 try {
@@ -2912,6 +3036,20 @@ try {
                 page,
                 evidence: report.fieldPresentation,
             });
+        });
+        await run('kanban', async (page, origin) => {
+            await checkKanbanBrowser({ page, origin, evidence: report.kanban });
+        });
+        await run('printable-form-layout', async (page, origin) => {
+            await page.goto(origin + '/printable-form-layout.html');
+            await checkPrintableFormBrowser({
+                page,
+                evidence: report.printableForm,
+            });
+        });
+        await run('csv-export', async (page, origin) => {
+            await page.goto(origin + '/csv-export.html');
+            await checkCSVExportBrowser({ page, evidence: report.csvExport });
         });
         await run('form-group', async (page, origin) => {
             await page.goto(origin + '/form-group.html');
@@ -3893,8 +4031,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete field presentation and one-page section groups.
-            26 +
+            // Include complete fields, printable layout, CSV, Kanban and section groups.
+            29 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

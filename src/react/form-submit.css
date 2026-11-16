@@ -1,0 +1,68 @@
+.mx-sdk-form-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: var(
+        --mx-sdk-form-submit-background,
+        rgb(var(--theme-600, 37 99 235))
+    );
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    cursor: pointer;
+}
+.mx-sdk-form-submit:hover {
+    background-color: var(
+        --mx-sdk-form-submit-hover,
+        rgb(var(--theme-500, 59 130 246))
+    );
+}
+.mx-sdk-form-submit:focus-visible {
+    outline: 2px solid
+        var(--mx-sdk-form-submit-background, rgb(var(--theme-600, 37 99 235)));
+    outline-offset: 2px;
+}
+.mx-sdk-form-submit[data-mode='compute'] {
+    background-color: #4b5563;
+}
+.mx-sdk-form-submit[data-mode='compute']:hover {
+    background-color: #6b7280;
+}
+.mx-sdk-form-submit[data-mode='review'] {
+    background-color: #16a34a;
+}
+.mx-sdk-form-submit[data-mode='review']:hover {
+    background-color: #22c55e;
+}
+.mx-sdk-form-submit:disabled {
+    pointer-events: none;
+    opacity: 0.5;
+}
+.mx-sdk-form-submit-pending {
+    display: inline-flex;
+    margin-right: 0.5rem;
+}
+.mx-sdk-form-submit-spinner {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #fff;
+    animation: mx-sdk-form-submit-spin 1s linear infinite;
+}
+@keyframes mx-sdk-form-submit-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mx-sdk-form-submit-spinner {
+        animation: none;
+    }
+}

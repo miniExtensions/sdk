@@ -25,6 +25,8 @@ export type BarcodeScannerButtonOptions = BarcodeScannerLayout & {
     runInLoop: boolean;
     labels?: BarcodeScannerLabels;
     ownerKey?: unknown;
+    /** Admission for a new session or decoded write; never cancels allocated host work. */
+    isCurrent?(): boolean;
 };
 type Session = { busy: boolean; owner: unknown; loop: boolean };
 
@@ -47,6 +49,16 @@ export function useBarcodeScannerButton(options: BarcodeScannerButtonOptions) {
         restart.current = null;
     }, []);
     const start = useCallback(() => {
+        try {
+            if (
+                !mounted.current ||
+                (latest.current.isCurrent != null &&
+                    latest.current.isCurrent() !== true)
+            )
+                return;
+        } catch {
+            return;
+        }
         retire();
         const next = {
             busy: false,
@@ -58,12 +70,25 @@ export function useBarcodeScannerButton(options: BarcodeScannerButtonOptions) {
     }, [retire]);
     useCommittedEffect(() => {
         mounted.current = true;
-        if (options.autoStartCamera && !options.hideButton) start();
+        if (
+            !options.isCurrent &&
+            options.autoStartCamera &&
+            !options.hideButton
+        )
+            start();
         return () => {
             mounted.current = false;
             retire();
         };
         // Auto-start is an initial configuration, not a replay on re-enable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        // Opt-in host admission may depend on ancestor layout commits. Existing
+        // callers retain their layout-timed initial start above.
+        if (options.isCurrent && options.autoStartCamera && !options.hideButton)
+            start();
+        // Auto-start belongs to this mount, never re-enable or owner replacement.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const policy = useRef({
@@ -92,6 +117,15 @@ export function useBarcodeScannerButton(options: BarcodeScannerButtonOptions) {
         setSession(null);
     };
     const onUpdate = async (text: string) => {
+        try {
+            if (
+                latest.current.isCurrent != null &&
+                latest.current.isCurrent() !== true
+            )
+                return;
+        } catch {
+            return;
+        }
         if (
             !session ||
             live.current !== session ||

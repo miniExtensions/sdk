@@ -10,9 +10,16 @@ import {
 } from '../src/react/imageAnnotationSession.js';
 
 function deferred<T>() {
-    let resolve: (value: T) => void = () => { throw new Error('not initialized'); };
-    let reject: (error: unknown) => void = () => { throw new Error('not initialized'); };
-    const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+    let resolve: (value: T) => void = () => {
+        throw new Error('not initialized');
+    };
+    let reject: (error: unknown) => void = () => {
+        throw new Error('not initialized');
+    };
+    const promise = new Promise<T>((yes, no) => {
+        resolve = yes;
+        reject = no;
+    });
     return { promise, resolve, reject };
 }
 
@@ -22,7 +29,11 @@ function fixture() {
     let value: AnnotatedImage[] = [];
     const upload = deferred<{ temporary: true }>();
     const url = deferred<string>();
-    const uploads: Array<Parameters<ImageAnnotationStorage<{ temporary: true }>['createTemporaryPng']>[0]> = [];
+    const uploads: Array<
+        Parameters<
+            ImageAnnotationStorage<{ temporary: true }>['createTemporaryPng']
+        >[0]
+    > = [];
     const reads: Array<{ temporary: true }> = [];
     const appended: Array<Parameters<ImageAnnotationAppend>[0]> = [];
     const operations = new WeakSet<object>();
@@ -34,11 +45,22 @@ function fixture() {
     const session = createImageAnnotationSession({
         owner,
         storage: {
-            createTemporaryPng(input) { uploads.push(input); return upload.promise; },
-            resolveUrl(handle) { reads.push(handle); return url.promise; },
+            createTemporaryPng(input) {
+                uploads.push(input);
+                return upload.promise;
+            },
+            resolveUrl(handle) {
+                reads.push(handle);
+                return url.promise;
+            },
         },
         appendCurrent(input) {
-            if (!current || input.owner !== ownerToken || operations.has(input.operation)) return 'retired';
+            if (
+                !current ||
+                input.owner !== ownerToken ||
+                operations.has(input.operation)
+            )
+                return 'retired';
             operations.add(input.operation);
             appended.push(input);
             value = value.concat(input.attachment);
@@ -49,29 +71,58 @@ function fixture() {
         onSavingChange: (next) => saving.push(next),
         onFailure: (phase) => failures.push(phase),
     });
-    const begin = (url = 'blob:owned', filename = 'source.jpeg', ownedObjectUrl = true) => {
+    const begin = (
+        url = 'blob:owned',
+        filename = 'source.jpeg',
+        ownedObjectUrl = true
+    ) => {
         const lease = session.beginSource({ url, filename, ownedObjectUrl });
         assert.ok(lease);
         return lease;
     };
     return {
-        session, owner, begin, upload, url, uploads, reads, appended,
-        released, closed, saving, failures,
-        retireOwner() { current = false; },
-        republishOwner() { current = true; },
-        addNeighbor(attachment: AnnotatedImage) { value = value.concat(attachment); },
+        session,
+        owner,
+        begin,
+        upload,
+        url,
+        uploads,
+        reads,
+        appended,
+        released,
+        closed,
+        saving,
+        failures,
+        retireOwner() {
+            current = false;
+        },
+        republishOwner() {
+            current = true;
+        },
+        addNeighbor(attachment: AnnotatedImage) {
+            value = value.concat(attachment);
+        },
         value: () => value,
     };
 }
 
 // Session tests assert transport/ownership, not browser PNG decoding or dimensions.
-const png = () => new Blob([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' });
+const png = () =>
+    new Blob([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], {
+        type: 'image/png',
+    });
 
 it('preserves native annotated filenames including missing extension/name', () => {
-    assert.equal(buildAnnotatedImageFilename('photo.jpeg'), 'photo-annotated.png');
+    assert.equal(
+        buildAnnotatedImageFilename('photo.jpeg'),
+        'photo-annotated.png'
+    );
     assert.equal(buildAnnotatedImageFilename('image'), 'image-annotated.png');
     assert.equal(buildAnnotatedImageFilename(''), 'image-annotated.png');
-    assert.equal(buildAnnotatedImageFilename('one.two.png'), 'one.two-annotated.png');
+    assert.equal(
+        buildAnnotatedImageFilename('one.two.png'),
+        'one.two-annotated.png'
+    );
 });
 
 it('allocates nothing on source selection, focus-independent setup or UI close', () => {
@@ -152,6 +203,26 @@ it('retirement during URL read refuses append without pretending to cancel the r
     assert.deepEqual(f.appended, []);
 });
 
+it('disposal cuts a pending URL while the host owner remains current', async () => {
+    const f = fixture();
+    const task = f.begin().render(png());
+    assert.ok(task);
+    f.upload.resolve({ temporary: true });
+    await Promise.resolve();
+    assert.equal(f.owner.isCurrent(), true);
+    assert.equal(f.reads.length, 1);
+    f.session.dispose();
+    assert.equal(f.owner.isCurrent(), true);
+    f.url.resolve('https://synthetic.invalid/late.png');
+    await task;
+    assert.equal(f.owner.isCurrent(), true);
+    assert.equal(f.uploads.length, 1);
+    assert.equal(f.reads.length, 1);
+    assert.deepEqual(f.appended, []);
+    assert.deepEqual(f.failures, []);
+    assert.deepEqual(f.released, ['blob:owned']);
+});
+
 it('same URL source A to B to A never revives the original render lease', async () => {
     const f = fixture();
     const a = f.begin('https://synthetic.invalid/A.png', 'A.png', false);
@@ -190,7 +261,14 @@ it('dispose is irreversible even if the old host token later appears current aga
     f.upload.resolve({ temporary: true });
     await task;
     assert.equal(old.isCurrent(), false);
-    assert.equal(f.session.beginSource({ url: 'blob:late', filename: '', ownedObjectUrl: true }), null);
+    assert.equal(
+        f.session.beginSource({
+            url: 'blob:late',
+            filename: '',
+            ownedObjectUrl: true,
+        }),
+        null
+    );
     assert.deepEqual(f.reads, []);
     assert.deepEqual(f.released, ['blob:owned', 'blob:late']);
 });
@@ -208,7 +286,11 @@ it('releases owned URLs exactly once across close, replacement and repeated disp
 
 it('never revokes a borrowed remote URL', () => {
     const f = fixture();
-    const lease = f.begin('https://synthetic.invalid/remote.png', 'remote.png', false);
+    const lease = f.begin(
+        'https://synthetic.invalid/remote.png',
+        'remote.png',
+        false
+    );
     lease.close();
     f.session.dispose();
     assert.deepEqual(f.released, []);
@@ -231,7 +313,9 @@ it('original append port reads latest canonical value and preserves concurrent a
     assert.ok(task);
     const neighbor: AnnotatedImage = {
         url: 'https://synthetic.invalid/concurrent.png',
-        filename: 'concurrent.png', size: 1, type: 'image/png',
+        filename: 'concurrent.png',
+        size: 1,
+        type: 'image/png',
     };
     f.addNeighbor(neighbor);
     f.upload.resolve({ temporary: true });
@@ -257,7 +341,6 @@ it('current storage rejection reports once without URL read, append, delete or a
     assert.equal(lease.render(png()), null);
 });
 
-
 it('a throwing UI-close notification cannot interrupt editor cleanup', () => {
     const failures: ImageAnnotationFailure[] = [];
     const releases: string[] = [];
@@ -265,18 +348,33 @@ it('a throwing UI-close notification cannot interrupt editor cleanup', () => {
     const session = createImageAnnotationSession({
         owner: { token: {}, isCurrent: () => ownerCurrent },
         storage: {
-            async createTemporaryPng() { return {}; },
-            async resolveUrl() { return 'https://synthetic.invalid/unused'; },
+            async createTemporaryPng() {
+                return {};
+            },
+            async resolveUrl() {
+                return 'https://synthetic.invalid/unused';
+            },
         },
-        appendCurrent() { return 'retired'; },
+        appendCurrent() {
+            return 'retired';
+        },
         releaseObjectUrl: (url) => releases.push(url),
-        onClose() { throw new Error('synthetic host callback'); },
+        onClose() {
+            throw new Error('synthetic host callback');
+        },
         onFailure: (phase) => failures.push(phase),
     });
-    const lease = session.beginSource({ url: 'blob:close', filename: '', ownedObjectUrl: true });
+    const lease = session.beginSource({
+        url: 'blob:close',
+        filename: '',
+        ownedObjectUrl: true,
+    });
     assert.ok(lease);
     let nativeDetached = false;
-    const nativeClose = () => { lease.close(); nativeDetached = true; };
+    const nativeClose = () => {
+        lease.close();
+        nativeDetached = true;
+    };
     nativeClose();
     assert.equal(nativeDetached, true);
     assert.deepEqual(releases, ['blob:close']);
@@ -284,7 +382,6 @@ it('a throwing UI-close notification cannot interrupt editor cleanup', () => {
     ownerCurrent = false;
     session.dispose();
 });
-
 
 it('explicit source removal resets saving immediately while refusing retired continuation', async () => {
     const f = fixture();

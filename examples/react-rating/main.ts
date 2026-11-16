@@ -19,6 +19,7 @@ import {
     RatingField,
 } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/number.css';
+import '@miniextensions/sdk/react/rating.css';
 import '@miniextensions/sdk/react/currency.css';
 import '@miniextensions/sdk/react/duration.css';
 import './styles.css';
@@ -704,4 +705,62 @@ function App() {
         )
     );
 }
-createRoot(document.getElementById('app')!).render(h(StrictMode, null, h(App)));
+function ControlledExample() {
+    const [value, setValue] = useState<number | null>(null);
+    const [maximum, setMaximum] = useState(5);
+    const [disabled, setDisabled] = useState(false);
+    const [changes, setChanges] = useState(0);
+    return h(
+        'section',
+        {
+            'aria-label': 'Complete controlled rating',
+            id: 'controlled-rating-example',
+        },
+        h('h2', null, 'Complete controlled rating'),
+        h('label', { htmlFor: 'controlled-rating' }, 'Controlled rating'),
+        h(RatingField, {
+            mode: 'controlled',
+            value,
+            max: maximum,
+            icon: 'heart',
+            color: 'redBright',
+            id: 'controlled-rating',
+            disabled,
+            describedBy: 'controlled-rating-help',
+            onChange: (next) => {
+                setValue(next);
+                setChanges((n) => n + 1);
+            },
+        }),
+        h(
+            'p',
+            { id: 'controlled-rating-help' },
+            'The host owns the committed value. No Save is allocated.'
+        ),
+        h('output', { id: 'controlled-rating-value' }, JSON.stringify(value)),
+        h('output', { id: 'controlled-rating-changes' }, String(changes)),
+        h(
+            'button',
+            { type: 'button', onClick: () => setValue(8) },
+            'Refresh rating to eight'
+        ),
+        h(
+            'button',
+            { type: 'button', onClick: () => setMaximum(3) },
+            'Shrink rating maximum'
+        ),
+        h(
+            'button',
+            { type: 'button', onClick: () => setDisabled((v) => !v) },
+            'Toggle rating readonly'
+        )
+    );
+}
+createRoot(document.getElementById('app')!).render(
+    h(
+        StrictMode,
+        null,
+        h(ControlledExample),
+        h('div', { id: 'legacy-rating-example' }, h(App))
+    )
+);

@@ -38,12 +38,39 @@ export type NativeFormProgressStorageOptions = {
     getLocks?(): NativeFormProgressLockManager | undefined;
     onWarning?(operation: 'read' | 'remove' | 'write'): void;
 };
+type NativeFormProgressWriteArgs = {
+    expectedRevision: number | null;
+    record: AirtableFieldSet;
+};
+type NativeFormProgressWriteWithEligibility = NativeFormProgressWriteArgs & {
+    isWriteStillEligible?: (() => boolean) | undefined;
+};
+type NativeFormProgressEligibleWriteResult =
+    | NativeFormProgressWriteResult
+    | { status: 'cancelled' };
+type NativeFormProgressLegacyWriteArgs = NativeFormProgressWriteArgs & {
+    isWriteStillEligible?: undefined;
+};
+type NativeFormProgressGuardedWriteArgs = NativeFormProgressWriteArgs & {
+    isWriteStillEligible: () => boolean;
+};
+
 export type NativeFormProgressStorage = {
     read(): NativeFormProgressSnapshot | undefined;
-    write(args: {
-        expectedRevision: number | null;
-        record: AirtableFieldSet;
-    }): Promise<NativeFormProgressWriteResult>;
+    /** Cancellation is opt-in; legacy calls retain their original result union. */
+    write(
+        args: NativeFormProgressLegacyWriteArgs
+    ): Promise<NativeFormProgressWriteResult>;
+    write(
+        args: NativeFormProgressGuardedWriteArgs
+    ): Promise<NativeFormProgressEligibleWriteResult>;
+    write(
+        args: NativeFormProgressWriteWithEligibility
+    ): Promise<NativeFormProgressEligibleWriteResult>;
+    // Preserve the legacy ReturnType; Parameters gains an optional undefined key.
+    write(
+        args: NativeFormProgressLegacyWriteArgs
+    ): Promise<NativeFormProgressWriteResult>;
     /** Native Discard is unconditional and does not acquire a lock. */
     remove(): boolean;
     /** Preserves another writer; intentionally removes newer same-writer data. */
@@ -69,7 +96,7 @@ const isEnvelope = (value: unknown): value is Envelope => {
     );
 };
 
-/** Native storage-event parsing only; the host owns its conflict latch. */
+/** Pure storage-event parsing; useNativeFormProgress owns the conflict latch. */
 export const parseNativeFormProgressValue = (
     storedValue: string | null
 ): NativeFormProgressSnapshot | undefined => {
@@ -94,7 +121,8 @@ export const parseNativeFormProgressValue = (
  * Compatibility extraction of native Form progress storage at monorepo
  * 25f5efdefaf482dea07af05d54fbeea8e3d92635. Rich JSON values and the native
  * revision protocol are preserved, including operation without Web Locks.
- * The host retains writer-ID generation, conflict state, Restore and Save.
+ * The host retains writer-ID generation, Restore and Save. The optional
+ * useNativeFormProgress hook owns the portable writer/conflict lifecycle.
  * Construction performs no storage I/O and installs no event listener.
  */
 export const createNativeFormProgressStorage = (
@@ -134,9 +162,26 @@ export const createNativeFormProgressStorage = (
         remove();
         return undefined;
     };
-    const write: NativeFormProgressStorage['write'] = async (args) => {
+    function write(
+        args: NativeFormProgressLegacyWriteArgs
+    ): Promise<NativeFormProgressWriteResult>;
+    function write(
+        args: NativeFormProgressGuardedWriteArgs
+    ): Promise<NativeFormProgressEligibleWriteResult>;
+    function write(
+        args: NativeFormProgressWriteWithEligibility
+    ): Promise<NativeFormProgressEligibleWriteResult>;
+    function write(
+        args: NativeFormProgressLegacyWriteArgs
+    ): Promise<NativeFormProgressWriteResult>;
+    async function write(
+        args: NativeFormProgressWriteWithEligibility
+    ): Promise<NativeFormProgressEligibleWriteResult> {
         const lockManager = options.getLocks?.();
-        const writeIfCurrent = (): NativeFormProgressWriteResult => {
+        const writeIfCurrent = (): NativeFormProgressEligibleWriteResult => {
+            // Match the native integration's post-lock admission check before I/O.
+            if (args.isWriteStillEligible?.() === false)
+                return { status: 'cancelled' };
             const currentSnapshot = read();
             const currentRevision = currentSnapshot?.revision ?? null;
             if (currentRevision !== args.expectedRevision)
@@ -172,7 +217,7 @@ export const createNativeFormProgressStorage = (
             warn('write');
             return { status: 'unavailable' };
         }
-    };
+    }
     const removeIfOwned =
         async (): Promise<NativeFormProgressRemovalResult> => {
             const lockManager = options.getLocks?.();

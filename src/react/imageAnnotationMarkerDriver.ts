@@ -18,8 +18,10 @@ export type ImageAnnotationEditorLabels = {
     actions?: Readonly<Record<string, string>>;
 };
 
-
-export type ImageAnnotationMarkerEvents = { render: { dataUrl: string }; close: unknown };
+export type ImageAnnotationMarkerEvents = {
+    render: { dataUrl: string };
+    close: unknown;
+};
 
 /** Internal vendor shape/test seam, never accepted as a public field prop. */
 export interface ImageAnnotationMarkerArea {
@@ -30,8 +32,16 @@ export interface ImageAnnotationMarkerArea {
     renderImageQuality?: number;
     targetRoot: HTMLElement;
     styles: { classNamePrefixBase: string; classNamePrefix: string };
-    addEventListener<K extends keyof ImageAnnotationMarkerEvents>(type: K, listener: (event: ImageAnnotationMarkerEvents[K]) => void): void;
-    removeEventListener<K extends keyof ImageAnnotationMarkerEvents>(type: K, listener: (event: ImageAnnotationMarkerEvents[K]) => void): void;
+    addEventListener(
+        type: 'render',
+        listener: (event: { dataUrl: string }) => void
+    ): void;
+    addEventListener(type: 'close', listener: () => void): void;
+    removeEventListener(
+        type: 'render',
+        listener: (event: { dataUrl: string }) => void
+    ): void;
+    removeEventListener(type: 'close', listener: () => void): void;
     show(): void;
     close(): void;
 }
@@ -44,7 +54,9 @@ export function annotationPngFromDataUrl(dataUrl: string): Blob {
     const prefix = 'data:image/png;base64,';
     if (!dataUrl.startsWith(prefix)) throw new Error('Expected annotation PNG');
     const decoded = atob(dataUrl.slice(prefix.length));
-    const bytes = Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+    const bytes = Uint8Array.from(decoded, (character) =>
+        character.charCodeAt(0)
+    );
     const signature = [137, 80, 78, 71, 13, 10, 26, 10];
     if (!signature.every((byte, index) => bytes[index] === byte)) {
         throw new Error('Invalid annotation PNG');
@@ -53,11 +65,15 @@ export function annotationPngFromDataUrl(dataUrl: string): Blob {
 }
 
 /** Browser-only lazy boundary. Importing this module does not load the vendor/DOM. */
-export async function openImageAnnotationMarkerEditor(input: {
-    image: HTMLImageElement;
-    lease: ImageAnnotationSourceLease;
-    labels: ImageAnnotationEditorLabels;
-}, loadVendor: () => Promise<ImageAnnotationMarkerModule> = () => import('markerjs2')) {
+export async function openImageAnnotationMarkerEditor(
+    input: {
+        image: HTMLImageElement;
+        lease: ImageAnnotationSourceLease;
+        labels: ImageAnnotationEditorLabels;
+    },
+    loadVendor: () => Promise<ImageAnnotationMarkerModule> = () =>
+        import('markerjs2')
+) {
     const { image, lease, labels } = input;
     if (!lease.isCurrent()) return;
     try {
@@ -125,18 +141,27 @@ export async function openImageAnnotationMarkerEditor(input: {
         // markerjs2 2.32.7 has hardcoded toolbar strings, not a locale property.
         // Bridge only this instance's DOM labels; leave vendor globals untouched.
         const root = area.targetRoot.querySelector<HTMLElement>(
-            '.' + area.styles.classNamePrefixBase + '.' + area.styles.classNamePrefix
+            '.' +
+                area.styles.classNamePrefixBase +
+                '.' +
+                area.styles.classNamePrefix
         );
         if (root) {
             root.setAttribute('role', 'dialog');
             root.setAttribute('aria-label', labels.title);
-            const selector = '[data-action], [data-type-name], .' +
-                area.styles.classNamePrefix + 'toolbar-button';
+            const selector =
+                '[data-action], [data-type-name], .' +
+                area.styles.classNamePrefix +
+                'toolbar-button';
             root.querySelectorAll<HTMLElement>(selector).forEach((control) => {
                 const tool = control.getAttribute('data-type-name');
                 const action = control.getAttribute('data-action');
                 const title =
-                    (tool ? Object.entries(labels.tools ?? {}).find(([name]) => name === tool)?.[1] : undefined) ??
+                    (tool
+                        ? Object.entries(labels.tools ?? {}).find(
+                              ([name]) => name === tool
+                          )?.[1]
+                        : undefined) ??
                     (action ? labels.actions?.[action] : undefined) ??
                     control.getAttribute('title') ??
                     labels.moreTools;

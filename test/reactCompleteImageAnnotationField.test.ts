@@ -13,14 +13,28 @@ type Props = ImageAnnotationFieldProps<Upload>;
 
 async function fixture(t: TestContext, patch: Partial<Props> = {}) {
     const window = new Window();
-    const keys = ['window', 'document', 'navigator', 'HTMLElement',
-        'HTMLInputElement', 'HTMLImageElement', 'HTMLButtonElement',
-        'IS_REACT_ACT_ENVIRONMENT'] as const;
-    const originals = keys.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
-    for (const key of keys) Object.defineProperty(globalThis, key, {
-        configurable: true, writable: true,
-        value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key as keyof Window],
-    });
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'HTMLInputElement',
+        'HTMLImageElement',
+        'HTMLButtonElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ] as const;
+    const originals = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    for (const key of keys)
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            writable: true,
+            value:
+                key === 'IS_REACT_ACT_ENVIRONMENT'
+                    ? true
+                    : window[key as keyof Window],
+        });
     const { createRoot } = await import('react-dom/client');
     const container = window.document.createElement('div');
     window.document.body.append(container);
@@ -28,8 +42,13 @@ async function fixture(t: TestContext, patch: Partial<Props> = {}) {
     const token = {};
     let current = token;
     const owner = { token, isCurrent: () => current === token };
-    const created: string[] = [], revoked: string[] = [], errors: unknown[] = [];
-    let uploads = 0, reads = 0, appends = 0, mounted = true;
+    const created: string[] = [],
+        revoked: string[] = [],
+        errors: unknown[] = [];
+    let uploads = 0,
+        reads = 0,
+        appends = 0,
+        mounted = true;
     t.mock.method(URL, 'createObjectURL', () => {
         const url = 'blob:annotation-' + (created.length + 1);
         created.push(url);
@@ -39,60 +58,108 @@ async function fixture(t: TestContext, patch: Partial<Props> = {}) {
     let props: Props = {
         owner,
         storage: {
-            async createTemporaryPng() { uploads++; return { temporary: true }; },
-            async resolveUrl() { reads++; return 'https://synthetic.invalid/output.png'; },
+            async createTemporaryPng() {
+                uploads++;
+                return { temporary: true };
+            },
+            async resolveUrl() {
+                reads++;
+                return 'https://synthetic.invalid/output.png';
+            },
         },
-        appendCurrent() { appends++; return 'appended'; },
-        onError(_phase, error) { errors.push(error); },
+        appendCurrent() {
+            appends++;
+            return 'appended';
+        },
+        onError(_phase, error) {
+            errors.push(error);
+        },
         ...patch,
     };
     const render = async () => {
-        await act(async () => root.render(h(StrictMode, null, h(ImageAnnotationField<Upload>, props))));
+        await act(async () =>
+            root.render(
+                h(StrictMode, null, h(ImageAnnotationField<Upload>, props))
+            )
+        );
     };
-    const update = async (next: Partial<Props>) => { props = { ...props, ...next }; await render(); };
+    const update = async (next: Partial<Props>) => {
+        props = { ...props, ...next };
+        await render();
+    };
     const unmount = async () => {
         if (!mounted) return;
         mounted = false;
         await act(async () => root.unmount());
     };
     t.after(async () => {
-        try { await unmount(); } finally {
+        try {
+            await unmount();
+        } finally {
             t.mock.restoreAll();
             keys.forEach((key, index) => {
                 const descriptor = originals[index];
-                if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+                if (descriptor)
+                    Object.defineProperty(globalThis, key, descriptor);
                 else Reflect.deleteProperty(globalThis, key);
             });
             await window.happyDOM.close();
         }
     });
-    const input = () => { const node = container.querySelector('input'); assert.ok(node); return node; };
+    const input = () => {
+        const node = container.querySelector('input');
+        assert.ok(node);
+        return node;
+    };
     const select = async (node = input(), type = 'image/png') => {
         Object.defineProperty(node, 'files', {
-            configurable: true, value: [new window.File(['synthetic selection'], 'photo.png', { type })],
+            configurable: true,
+            value: [
+                new window.File(['synthetic selection'], 'photo.png', { type }),
+            ],
         });
-        await act(async () => { node.dispatchEvent(new window.Event('change', { bubbles: true })); });
+        await act(async () => {
+            node.dispatchEvent(new window.Event('change', { bubbles: true }));
+        });
     };
     await render();
     return {
-        window, container, input, select, update, unmount,
-        created, revoked, errors,
+        window,
+        container,
+        input,
+        select,
+        update,
+        unmount,
+        created,
+        revoked,
+        errors,
         counts: () => ({ uploads, reads, appends }),
         async owner(next = {}) {
             current = next;
-            await update({ owner: { token: next, isCurrent: () => current === next } });
+            await update({
+                owner: { token: next, isCurrent: () => current === next },
+            });
         },
-        async originalOwner() { current = token; await update({ owner }); },
+        async originalOwner() {
+            current = token;
+            await update({ owner });
+        },
     };
 }
 
 const inertProps: Props = {
     owner: { token: {}, isCurrent: () => false },
     storage: {
-        async createTemporaryPng() { throw new Error('SSR must not allocate'); },
-        async resolveUrl() { throw new Error('SSR must not resolve'); },
+        async createTemporaryPng() {
+            throw new Error('SSR must not allocate');
+        },
+        async resolveUrl() {
+            throw new Error('SSR must not resolve');
+        },
     },
-    appendCurrent() { throw new Error('SSR must not append'); },
+    appendCurrent() {
+        throw new Error('SSR must not append');
+    },
 };
 
 it('renders standalone SSR picker and prominent attribution without vendor/storage work', () => {
@@ -105,7 +172,12 @@ it('renders standalone SSR picker and prominent attribution without vendor/stora
 });
 
 it('uses actual external form/name/help associations and an accessible picker', async (t) => {
-    const f = await fixture(t, { id: 'annotation', name: 'image', form: 'native-save', ariaDescribedBy: 'help' });
+    const f = await fixture(t, {
+        id: 'annotation',
+        name: 'image',
+        form: 'native-save',
+        ariaDescribedBy: 'help',
+    });
     assert.equal(f.input().id, 'annotation');
     assert.equal(f.input().name, 'image');
     assert.equal(f.input().getAttribute('form'), 'native-save');
@@ -118,14 +190,18 @@ it('uses actual external form/name/help associations and an accessible picker', 
 it('file selection creates a source without storage or canonical writes', async (t) => {
     const f = await fixture(t);
     await f.select();
-    assert.equal(f.container.querySelector('img')?.getAttribute('src'), f.created[0]);
+    assert.equal(
+        f.container.querySelector('img')?.getAttribute('src'),
+        f.created[0]
+    );
     assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
 });
 
 it('undefined-to-false policy echoes preserve the source and picker DOM', async (t) => {
     const f = await fixture(t);
     await f.select();
-    const input = f.input(), image = f.container.querySelector('img');
+    const input = f.input(),
+        image = f.container.querySelector('img');
     await f.update({ disabled: false, readOnly: false });
     assert.equal(f.input(), input);
     assert.equal(f.container.querySelector('img'), image);
@@ -186,7 +262,9 @@ it('a late image error cannot clear the replacement source or publish feedback',
     assert.ok(old);
     await f.select();
     const next = f.container.querySelector('img');
-    await act(async () => { old.dispatchEvent(new f.window.Event('error')); });
+    await act(async () => {
+        old.dispatchEvent(new f.window.Event('error'));
+    });
     assert.equal(f.container.querySelector('img'), next);
     assert.deepEqual(f.errors, []);
 });
@@ -203,14 +281,21 @@ it('non-image MIME selection leaves the existing source untouched', async (t) =>
 
 it('focus and untouched blur do not allocate transport or append', async (t) => {
     const f = await fixture(t);
-    await act(async () => { f.input().focus(); f.input().blur(); });
+    await act(async () => {
+        f.input().focus();
+        f.input().blur();
+    });
     assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
 });
 
 it('remote source echoes preserve its mounted image without acquiring URL ownership', async (t) => {
     const f = await fixture(t);
     const token = {};
-    const remote = { token, url: 'data:image/png;base64,iVBORw0KGgo=', filename: 'remote.png' };
+    const remote = {
+        token,
+        url: 'data:image/png;base64,iVBORw0KGgo=',
+        filename: 'remote.png',
+    };
     await f.update({ remoteSource: remote });
     const image = f.container.querySelector('img');
     await f.update({ remoteSource: { ...remote } });
@@ -221,7 +306,11 @@ it('remote source echoes preserve its mounted image without acquiring URL owners
 
 it('a fresh remote source lease for the same URL gets a fresh decode DOM node', async (t) => {
     const f = await fixture(t);
-    const remote = { token: {}, url: 'data:image/png;base64,iVBORw0KGgo=', filename: 'remote.png' };
+    const remote = {
+        token: {},
+        url: 'data:image/png;base64,iVBORw0KGgo=',
+        filename: 'remote.png',
+    };
     await f.update({ remoteSource: remote });
     const old = f.container.querySelector('img');
     await f.update({ remoteSource: { ...remote, token: {} } });
@@ -241,10 +330,13 @@ it('StrictMode unmount releases each local URL once and refuses late feedback', 
     assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
 });
 
-
 it('clearing an older remote request cannot retire the newer local selection', async (t) => {
     const f = await fixture(t);
-    const remote = { token: {}, url: 'data:image/png;base64,iVBORw0KGgo=', filename: 'remote.png' };
+    const remote = {
+        token: {},
+        url: 'data:image/png;base64,iVBORw0KGgo=',
+        filename: 'remote.png',
+    };
     await f.update({ remoteSource: remote });
     await f.select();
     const local = f.container.querySelector('img');

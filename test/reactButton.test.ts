@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { Window } from 'happy-dom';
-import { createElement, StrictMode, act } from 'react';
+import { createElement, StrictMode, act, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -17,6 +17,7 @@ import {
 import { RecoveryJournal } from '../src/forms/recovery.js';
 import { createMiniExtensionsClient } from '../src/runtime/client.js';
 import type { FieldRendererProps } from '../src/ui/rendererRegistry.js';
+import { createBorrowedButtonActionController } from '../src/ui/borrowedButtonActionController.js';
 
 const fixture = (configure: (data: ButtonFieldData) => void = () => {}) => {
     const data: ButtonFieldData = {
@@ -84,6 +85,230 @@ const fixture = (configure: (data: ButtonFieldData) => void = () => {}) => {
 };
 const ModelButton = ({ model }: { model: ButtonFieldModel }) =>
     createElement(ButtonField, useButtonField(model));
+
+it('controlled public Button preserves native labels, links, loading and empty presentation without a model', async () => {
+    const window = new Window();
+    const container = window.document.createElement('div');
+    let actions = 0;
+    try {
+        for (const url of [
+            null,
+            '',
+            '/relative',
+            'HTTPS://example.test',
+            'MAILTO:a@example.test',
+            'tel:123',
+            'example.test',
+        ]) {
+            for (const label of ['', '   ', 'Open action']) {
+                container.innerHTML = renderToStaticMarkup(
+                    createElement(ButtonField, {
+                        mode: 'controlled',
+                        id: 'fld_native_button',
+                        value: { label, url },
+                        config: { openLinkType: '_self', buttonColor: 'red' },
+                        onTriggerWebhook: () => {
+                            actions++;
+                        },
+                    })
+                );
+                const link = container.querySelector('a')!;
+                assert.equal(link.textContent, label);
+                assert.equal(
+                    link.getAttribute('href'),
+                    url == null
+                        ? null
+                        : /^(https?:\/\/|mailto:|tel:)/i.test(url) ||
+                            url.startsWith('/')
+                          ? url
+                          : `https://${url}`
+                );
+                assert.equal(link.target, '_self');
+                assert.equal(link.rel, 'noreferrer');
+                assert.equal(link.id, 'fld_native_button');
+            }
+        }
+        for (const label of ['', '   ', 'Run']) {
+            container.innerHTML = renderToStaticMarkup(
+                createElement(ButtonField, {
+                    mode: 'controlled',
+                    value: { label, url: 'example.test' },
+                    config: { openLinkType: 'triggerWebhookPOST' },
+                    busy: true,
+                    onTriggerWebhook: () => {
+                        actions++;
+                    },
+                })
+            );
+            const button = container.querySelector('button')!;
+            assert.equal(button.type, 'button');
+            assert.equal(button.disabled, true);
+            assert.equal(button.getAttribute('aria-busy'), 'true');
+            assert.ok(container.querySelector('.mx-sdk-button-spinner'));
+            assert.equal(container.querySelector('[role=status]'), null);
+        }
+        container.innerHTML = renderToStaticMarkup(
+            createElement(ButtonField, {
+                mode: 'controlled',
+                value: null,
+                language: 'es',
+            })
+        );
+        assert.ok(container.textContent!.includes('Sin Botón'));
+        assert.equal(container.querySelector('a,button'), null);
+        assert.equal(actions, 0);
+    } finally {
+        await window.happyDOM.close();
+    }
+});
+
+it('controlled Buttons preserve host singleflight, next-click retry and stale allocation settlement', async () => {
+    const window = new Window();
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ] as const;
+    const previous = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    keys.forEach((key) =>
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            writable: true,
+            value:
+                key === 'IS_REACT_ACT_ENVIRONMENT'
+                    ? true
+                    : window[key as keyof Window],
+        })
+    );
+    const container = window.document.createElement('div');
+    window.document.body.append(container);
+    const root = createRoot(container as unknown as HTMLElement);
+    let owner = {},
+        feedback = 'First feedback',
+        calls = 0,
+        submits = 0,
+        rows = 0;
+    const settlements: unknown[] = [],
+        alerts: string[] = [];
+    const allocations: Array<{
+        promise: Promise<boolean>;
+        resolve(value: boolean): void;
+    }> = [];
+    const make = () => {
+        const capturedOwner = owner;
+        return createBorrowedButtonActionController({
+            subscribe: () => () => {},
+            readContext: () => ({
+                owner: capturedOwner,
+                revision: 1,
+                visible: owner === capturedOwner,
+                available: true,
+            }),
+            mayStartNewIntent: () => true,
+            captureIntent: () => ({
+                request: capturedOwner,
+                receipt: capturedOwner,
+            }),
+            allocate: () => {
+                calls++;
+                let resolve!: (value: boolean) => void;
+                const promise = new Promise<boolean>((done) => {
+                    resolve = done;
+                });
+                allocations.push({ promise, resolve });
+                return promise;
+            },
+            settleAllocated: (receipt, result, current) => {
+                settlements.push({ receipt, result });
+                if (current.isCurrent()) alerts.push(feedback);
+            },
+        });
+    };
+    let actor = make();
+    const actors = [actor];
+    const Controlled = () => {
+        const busy = useSyncExternalStore(
+            actor.subscribe,
+            () => actor.getSnapshot().busy
+        );
+        return createElement(ButtonField, {
+            mode: 'controlled',
+            value: { label: 'Run', url: 'synthetic.test' },
+            config: { openLinkType: 'triggerWebhookPOST' },
+            busy,
+            onTriggerWebhook: actor.trigger,
+        });
+    };
+    const tree = () =>
+        createElement(
+            StrictMode,
+            null,
+            createElement(
+                'form',
+                {
+                    onSubmit: (e: import('react').FormEvent) => {
+                        e.preventDefault();
+                        submits++;
+                    },
+                    onClick: () => rows++,
+                },
+                createElement(Controlled),
+                createElement(Controlled)
+            )
+        );
+    try {
+        await act(async () => root.render(tree()));
+        await act(async () => {
+            container
+                .querySelectorAll('button')
+                .forEach((button) => button.click());
+        });
+        assert.equal(calls, 1);
+        assert.ok(
+            [...container.querySelectorAll('button')].every(
+                (button) => button.disabled
+            )
+        );
+        await act(async () => allocations[0].resolve(false));
+        await act(async () => container.querySelector('button')!.click());
+        assert.equal(calls, 2); // Host failures permit an explicit next click.
+        const staleActor = actor;
+        owner = {};
+        actor = make();
+        actors.push(actor);
+        staleActor.dispose();
+        await act(async () => root.render(tree()));
+        await act(async () => container.querySelector('button')!.click());
+        assert.equal(calls, 3);
+        await act(async () => allocations[1].resolve(true));
+        assert.equal(settlements.length, 2);
+        assert.deepEqual(alerts, ['First feedback']);
+        assert.ok(container.querySelector('button')!.disabled);
+        feedback = 'Current configured feedback';
+        await act(async () => allocations[2].resolve(true));
+        assert.deepEqual(alerts, [
+            'First feedback',
+            'Current configured feedback',
+        ]);
+        assert.equal(settlements.length, 3);
+        assert.equal(submits, 0);
+        assert.equal(rows, 0);
+        await act(async () => root.unmount());
+        assert.equal(calls, 3);
+    } finally {
+        actors.forEach((a) => a.dispose());
+        keys.forEach((key, i) => {
+            if (previous[i])
+                Object.defineProperty(globalThis, key, previous[i]!);
+            else Reflect.deleteProperty(globalThis, key);
+        });
+        await window.happyDOM.close();
+    }
+});
 
 it('Button preserves consumer classes in direct and slotted empty states', async () => {
     const window = new Window();

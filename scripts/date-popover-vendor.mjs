@@ -7,7 +7,7 @@ import {
     writeFileSync,
     mkdirSync,
 } from 'node:fs';
-import { dirname, join, resolve, relative } from 'node:path';
+import { dirname, join, resolve, relative, sep } from 'node:path';
 import { build } from 'esbuild';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -90,7 +90,7 @@ export async function bundleDatePopover(root = process.cwd(), capture = false) {
                 ),
                 'Only popup dependencies may be bundled'
             );
-            const key = `${manifest.name}@${manifest.version}/${relative(directory, path)}`;
+            const key = `${manifest.name}@${manifest.version}/${relative(directory, path).split(sep).join('/')}`;
             inputs[key] = hash(readFileSync(path));
             if (packages.has(manifest.name)) continue;
             packages.add(manifest.name);

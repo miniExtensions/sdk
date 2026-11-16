@@ -35,7 +35,7 @@ license links intact:
 SDK_ARCHIVE="/absolute/path/to/miniextensions-sdk-0.1.0-alpha.0.tgz"
 mkdir customer-app
 tar -xzf "$SDK_ARCHIVE" -C customer-app --strip-components=1 \
-  package/examples/browser package/docs package/README.md \
+  package/examples package/docs package/README.md \
   package/LICENSE package/THIRD_PARTY_NOTICES.md
 cd customer-app/examples/browser
 npm install --ignore-scripts --no-audit --no-fund "$SDK_ARCHIVE"
@@ -219,6 +219,11 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+[Count presentation](docs/count.md) preserves the binding-based `CountField`
+contract and adds controlled, host-converted text through the same public
+component. The controlled mode reuses complete readonly text and its CSS;
+the surrounding field shell retains title, help, feedback and form association.
+
 [Single Select presentation](docs/ui.md#react-single-select-presentation) exports
 `SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
 `renderSingleSelectField` slot. It uses a native dropdown with optional
@@ -268,22 +273,35 @@ TXT/CSV/sanitized HTML/image/TIFF/PDF thumbnails and local versioned PDF workers
 known PDF modals use the same canvas leaf. Neither contract grants write authority.
 
 [Last Modified By presentation](docs/ui.md#react-last-modified-by-presentation) exports
-`LastModifiedByField`, `LastModifiedByFieldProps`, `LastModifiedByFieldOptions` and the typed
-`renderLastModifiedByField` slot. It displays the supplied native collaborator name
-with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
-It does not resolve identities, display email or avatar data, or grant writes.
+`LastModifiedByField`, its legacy `LastModifiedByFieldProps` and
+`BindingLastModifiedByFieldProps`, `ControlledLastModifiedByFieldProps`,
+`LastModifiedByFieldOptions` and the typed `renderLastModifiedByField` slot.
+The binding/helper displays the supplied native name with the disabled Text
+control and optional `@miniextensions/sdk/react/text.css`. Explicit
+`mode="controlled"` provides the complete readonly collaborator badge,
+name/email fallback, localized empty label and opt-in avatar policy using
+`@miniextensions/sdk/react/complete-collaborators.css`. It grants no edit owner,
+choices, change callback or picker.
 
 [Created By presentation](docs/ui.md#react-created-by-presentation) exports
 `CreatedByField`, `CreatedByFieldProps`, `CreatedByFieldOptions` and the typed
 `renderCreatedByField` slot. It displays the supplied native collaborator name
 with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
-It does not resolve identities, display email or avatar data, or grant writes.
+The binding/helper does not resolve identities, display email or avatar data, or
+grant writes. Explicit `mode="controlled"` provides the complete readonly
+collaborator badge, supplied name/email fallback and opt-in avatar policy using
+`@miniextensions/sdk/react/complete-collaborators.css`. No edit owner, choices,
+change callback or picker is required or forwarded.
 
 [External Sync Source presentation](docs/ui.md#react-external-sync-source-presentation)
 exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
 `ExternalSyncSourceFieldOptions` and the typed `renderExternalSyncSourceField` slot.
 It displays the supplied SDK string with the disabled Text control and optional
 `@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
+The same field accepts explicit `mode="controlled"` with converted text and
+`language`, reusing complete localized empty/link presentation through
+`@miniextensions/sdk/react/complete-readonly-text.css`. Existing binding props and
+render overrides retain their original disabled-input behavior.
 
 [Formula presentation](docs/ui.md#react-formula-presentation) exports
 `FormulaField`, `FormulaFieldProps`, `FormulaFieldOptions` and the typed
@@ -304,6 +322,12 @@ its separate contract.
 `LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing
 `renderMultipleLookupValuesField` slot. It formats supplied flat native arrays as
 inert text without flattening, hydration or editing. No CSS import is required.
+
+[Complete controlled Lookup](docs/lookup.md) adds `mode: 'controlled'` to the
+same `LookupField` export. It composes SDK readonly rich controls from immutable
+host projections and captured resource/action owners. Import `lookup.css` for
+its complete styles. The pure `/ui` occurrence projector preserves flat-array
+order, multiplicity and original references.
 
 [Barcode presentation](docs/ui.md#react-barcode-presentation) exports `BarcodeField`,
 `BarcodeFieldProps`, `BarcodeFieldOptions` and `renderBarcodeField` for the existing
@@ -356,7 +380,10 @@ and the native editor-slot API remains available.
 computed, read-only slot. It displays the supplied native object's `value` as
 escaped selectable text with whitespace preserved. Native state and stale flags
 remain unchanged; masking precedes value access. No generation, retry, prompt or
-reference inspection, parsing, links, hydration or editing is added.
+reference inspection, parsing or editing is added to the binding renderer.
+Its explicit `mode="controlled"` accepts host-converted text and language, with
+the existing read-only text links, localized empty state, size and layout. Import
+`@miniextensions/sdk/react/complete-readonly-text.css` for that presentation.
 
 [Multiple Attachments adapter](docs/ui.md#react-multiple-attachments-adapter)
 exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for

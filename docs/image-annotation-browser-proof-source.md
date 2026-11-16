@@ -1,5 +1,13 @@
 # Image annotation real-vendor browser proof — source checkpoint
 
+2026-11-16 continuation: normal markerjs2 2.32.7 manifest/lock resolution and
+frozen setup are complete in the independent owned root. The pending-URL witness
+now unmounts the SDK component while its synthetic host authority stays current;
+its snapshot asserts that distinction before and after settlement. The matching
+strict source compile and 40 focused tests pass. These statements do not claim
+executed vendor-browser, package or native acceptance. Historical source and
+custody references below describe the original authored checkpoint.
+
 This is authored, unexecuted qualification source for the existing complete image
 annotation task. It does not establish native Form, upload, Save, or persistence
 acceptance.

@@ -83,10 +83,11 @@ export async function checkRatingConsumer({
             readFileSync(css, 'utf8'),
             /\.mx-sdk-number:focus-visible/
         );
-        assert.throws(
-            () => require.resolve('@miniextensions/sdk/react/rating.css'),
-            { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }
+        const ratingCss = require.resolve(
+            '@miniextensions/sdk/react/rating.css'
         );
+        assert.match(readFileSync(ratingCss, 'utf8'), /\.mx-sdk-rating-icon/);
+        assert.match(readFileSync(ratingCss, 'utf8'), /@media print/);
         for (const format of ['esm', 'cjs']) {
             const load = (name) =>
                 format === 'cjs'

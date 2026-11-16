@@ -986,6 +986,43 @@ Retained handlers fail closed after observed owner/configuration changes,
 including observed A→B→A; unobserved in-place restoration is not detectable.
 The core subpath has no React dependency.
 
+### Parent-record summary cards
+
+`PortalSummaryCards` from `@miniextensions/sdk/react` supplies the complete
+definition-list card UI. Import
+`@miniextensions/sdk/react/portal-summary-cards.css` once. Each readonly
+`PortalSummaryCard` contains `fieldId`, current `fieldName` and an already
+formatted `readable` string. Empty strings retain their cards; values, labels
+and full-value tooltips are inert text. `height` accepts `short` (default),
+`medium`, `tall` and `extra tall`; `hideTitles` hides only titles when true.
+An empty array renders nothing. Layout wraps 320px cards within the container.
+
+Use the pure `/portals` `projectPortalSummaryFields({summaryFieldIds,
+fieldIdsToSchemas})` to select current ID/name pairs. It keeps the first
+configured duplicate position and omits deleted schemas. Map those fields to
+text using the accepted **parent/user record**, its corresponding schema and
+the public `/formulas` `getReadableStringFromAirtableValue` converter. The
+[standalone example](../examples/react-portal-summary-cards/README.md) shows the
+complete public import/format/render path. Native hosts can retain their own
+existing conversion and enriched thrown errors at that text boundary. The
+component adds no fallback or value logging.
+
+The host retains accepted parent/session/config admission, native formatting,
+login and effective-layout gates, original table summary configuration, reads,
+refresh generations, save settlement and warning/Retry UI. Cards do not derive
+aggregates from filtered or paginated Grid rows. Rendering, StrictMode and
+remounts perform no reads, saves or authentication. Supply a fresh array when
+the admitted parent/schema/config changes and omit cards when the host hides
+the summary.
+
+Optional `decorateCard(card, content)` composes host authoring controls around
+the complete SDK card content inside the SDK-owned responsive slot. Omission
+renders the same public presentation. The host keeps settings permissions,
+mode, modal state and command behavior; the decorator must be render-pure.
+This seam introduces no command-retirement guarantee. For native Portal,
+retain default inline-modal `WithSettings` and the outer table field's
+`portalFields / field ID / summaryFields` path.
+
 ### Hosted summary refresh bridge
 
 `refreshPortalSummaryFields` and `PortalSummaryRefreshOptions<RecordType>` from
@@ -1053,3 +1090,10 @@ standalone direct-Save, schema admission and `RecoveryJournal` policy remain in
 force; injecting a draft does not opt a host into those restrictions or grant a
 mutation capability. Existing hosts use the queue directly to preserve their
 supported field policies and native transport.
+
+## Native collection transitions
+
+The additive [native collection kernel](./native-portal-kernel.md) supports host-owned
+first/next/reload transitions. It keeps standalone Collection/ListOwner behavior intact.
+The [actual-native differential corpus](./native-portal-differential.md) records its
+separate execution and native cutover requirements.

@@ -1,0 +1,226 @@
+@import './calendar.css';
+@import './complete-linked-finder.css';
+@import './complete-readonly-text.css';
+@import './text.css';
+@import './html-description.css';
+@import './rich-text.css';
+@import './localized-numeric.css';
+@import './date.css';
+@import './datetime.css';
+@import './complete-phone.css';
+@import './duration.css';
+@import './complete-checkbox.css';
+@import './barcode.css';
+@import './button.css';
+
+/* Complete surface scopes are composed below; each shared leaf keeps its
+   original owning stylesheet above. The grid-only stylesheet stays separate. */
+
+.mx-sdk-portal-calendar {
+    min-width: 0;
+    width: 100%;
+}
+.mx-sdk-portal-calendar__records {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+.mx-sdk-portal-calendar__record {
+    align-items: flex-start;
+    background: var(--mx-sdk-calendar-background, white);
+    border: 1px solid #e5e7eb;
+    border-radius: 0.25rem;
+    display: flex;
+    min-width: 0;
+    position: relative;
+}
+.mx-sdk-portal-calendar__open {
+    background: transparent;
+    border: 0;
+    border-radius: inherit;
+    color: inherit;
+    cursor: pointer;
+    display: block;
+    flex: 1;
+    font: inherit;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+    width: 100%;
+}
+.mx-sdk-portal-calendar__open:disabled,
+.mx-sdk-portal-calendar__remove:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+.mx-sdk-portal-calendar__compact-content {
+    min-width: 0;
+    padding: 0.25rem;
+}
+.mx-sdk-portal-calendar__primary,
+.mx-sdk-portal-calendar__subtitle {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mx-sdk-portal-calendar__primary {
+    font-weight: 500;
+}
+.mx-sdk-portal-calendar__primary[data-empty='true'] {
+    color: #9ca3af;
+}
+.mx-sdk-portal-calendar__subtitle {
+    color: #4b5563;
+}
+.mx-sdk-portal-calendar__remove {
+    align-self: flex-start;
+    background: transparent;
+    border: 0;
+    border-radius: 0.25rem;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.5rem;
+    padding: 0 0.25rem;
+}
+.mx-sdk-portal-calendar__open:focus-visible,
+.mx-sdk-portal-calendar__remove:focus-visible,
+.mx-sdk-portal-calendar__more:focus-visible {
+    outline: 2px solid var(--mx-sdk-calendar-accent, #4f46e5);
+    outline-offset: 2px;
+}
+.mx-sdk-portal-calendar__empty {
+    color: #6b7280;
+    margin: 0;
+}
+.mx-sdk-portal-calendar__more {
+    background: var(--mx-sdk-calendar-background, white);
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.mx-sdk-calendar-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0;
+}
+.mx-sdk-calendar-picker__month {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.mx-sdk-calendar-picker__list {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.mx-sdk-calendar-picker__day-label {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+.mx-sdk-calendar-picker__records {
+    list-style: none;
+    margin: 0;
+    max-height: 32rem;
+    overflow: auto;
+    padding: 0.25rem;
+}
+.mx-sdk-calendar-picker__record {
+    align-items: center;
+    border: 3px solid #e5e7eb;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    outline: none;
+    padding: 0.75rem;
+}
+.mx-sdk-calendar-picker__record[data-selected='true'] {
+    border-color: var(--mx-sdk-calendar-accent, #4f46e5);
+}
+.mx-sdk-calendar-picker__record[data-focus-visible='true'] {
+    outline: 2px solid var(--mx-sdk-calendar-accent, #4f46e5);
+    outline-offset: 2px;
+}
+.mx-sdk-calendar-picker__record[aria-disabled='true'] {
+    cursor: default;
+    opacity: 0.6;
+}
+.mx-sdk-calendar-picker__record-content {
+    min-width: 0;
+    width: 100%;
+}
+.mx-sdk-calendar-picker__primary {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mx-sdk-calendar-picker__primary[data-empty='true'] {
+    color: #6b7280;
+}
+.mx-sdk-calendar-picker__details {
+    color: #4b5563;
+    font-size: 0.875rem;
+}
+.mx-sdk-calendar-picker__rich-details {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    margin: 0.25rem 0 0;
+}
+.mx-sdk-calendar-picker__rich-details > div {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+}
+.mx-sdk-calendar-picker__rich-details dt {
+    font-size: 0.75rem;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.mx-sdk-calendar-picker__rich-details dd {
+    align-items: center;
+    display: flex;
+    margin: 0;
+    min-height: 1.5rem;
+    min-width: 0;
+}
+.mx-sdk-calendar-picker__check {
+    color: var(--mx-sdk-calendar-accent, #4f46e5);
+    font-size: 1.25rem;
+    margin-left: 0.5rem;
+}
+.mx-sdk-calendar-picker__more {
+    background: transparent;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+}
+.mx-sdk-calendar-picker__more:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+@media (min-width: 768px) {
+    .mx-sdk-calendar-picker {
+        flex-direction: row;
+    }
+}

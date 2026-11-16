@@ -1,0 +1,32 @@
+.mx-sdk-form-progress-conflict {
+    box-sizing: border-box;
+    display: flex;
+    width: 100%;
+    margin-bottom: 16px;
+    border-radius: 6px;
+    padding: 16px;
+    background: #fefce8;
+    color: #a16207;
+    font-size: 14px;
+    line-height: 20px;
+    box-shadow:
+        0 1px 3px 0 rgb(0 0 0 / 0.1),
+        0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+.mx-sdk-form-progress-conflict > svg {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    margin-right: 12px;
+    color: #facc15;
+}
+.mx-sdk-form-progress-conflict h3 {
+    margin: 0 0 8px;
+    color: #854d0e;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+}
+.mx-sdk-form-progress-conflict p {
+    margin: 0;
+}

@@ -64,7 +64,7 @@ export function Compositions({ form, portal }: { form: FormRenderScope; portal: 
 }
 `;
 
-/** Installed name-only presentation with synthetic owners and no external transport. */
+/** Installed name-only bindings and complete readonly display; no identity transport. */
 export async function checkCreatedByConsumer({
     consumerDirectory,
     happyDomModulePath,
@@ -965,6 +965,179 @@ export async function checkCreatedByConsumer({
                     assert.equal(portalWrites, 0);
                     assert.deepEqual(detailProps.value, portalCreator);
                 }
+                await act(async () =>
+                    root.render(h(react.CreatedByField, { binding }))
+                );
+                const originalInput = input();
+                assert(originalInput);
+                const originalName = originalInput.value;
+                const ownerBeforeControlled = fields.controller.getState();
+                const controlled = (value, options = {}) =>
+                    h(react.CreatedByField, {
+                        mode: 'controlled',
+                        value,
+                        inputId: 'controlled-creator',
+                        title: 'Created by',
+                        ...options,
+                    });
+                await act(async () => root.render(controlled(nativeCreator)));
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-name')
+                        .textContent,
+                    nativeCreator.name
+                );
+                assert.equal(
+                    container.querySelector('input,button,img,[role=combobox]'),
+                    null
+                );
+                await act(async () =>
+                    root.render(h(react.CreatedByField, { binding }))
+                );
+                assert.equal(input().value, originalName);
+                assert.equal(input().disabled, true);
+                checks++;
+
+                let forbiddenReads = 0;
+                const forbidden = () => {
+                    forbiddenReads++;
+                    throw Error('Creator must not inspect editing authority');
+                };
+                const displayLabels = { empty: 'No creator' };
+                Object.defineProperty(displayLabels, 'remove', {
+                    enumerable: true,
+                    get: forbidden,
+                });
+                const creatorForged = {
+                    mode: 'controlled',
+                    value: nativeCreator,
+                    labels: displayLabels,
+                };
+                for (const key of [
+                    'binding',
+                    'render',
+                    'owner',
+                    'choices',
+                    'onValueChange',
+                    'onChange',
+                    'readOnly',
+                ])
+                    Object.defineProperty(creatorForged, key, {
+                        enumerable: true,
+                        get: forbidden,
+                    });
+                // Call the public hook-free dispatcher before React copies caller props.
+                const projected = react.CreatedByField(creatorForged);
+                await act(async () => root.render(projected));
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-name')
+                        .textContent,
+                    nativeCreator.name
+                );
+                assert.equal(container.querySelector('input,button,img'), null);
+                assert.equal(forbiddenReads, 0);
+                checks++;
+
+                const creator = {
+                    ...nativeCreator,
+                    name: '',
+                    email: 'creator-next@example.invalid',
+                    profilePicUrl: undefined,
+                };
+                await act(async () =>
+                    root.render(
+                        controlled(creator, {
+                            describedBy: 'creator-help',
+                            invalid: true,
+                        })
+                    )
+                );
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-name')
+                        .textContent,
+                    creator.email
+                );
+                assert.equal(
+                    container
+                        .querySelector('[role=group]')
+                        .getAttribute('aria-describedby'),
+                    'creator-help'
+                );
+                assert.equal(
+                    container
+                        .querySelector('[role=group]')
+                        .getAttribute('aria-invalid'),
+                    'true'
+                );
+                await act(async () =>
+                    root.render(
+                        controlled(null, {
+                            labels: { empty: 'Aucun créateur' },
+                        })
+                    )
+                );
+                assert.equal(
+                    container.querySelector('.mx-sdk-collaborator-empty')
+                        .textContent,
+                    'Aucun créateur'
+                );
+                await act(async () =>
+                    root.render(controlled(nativeCreator, { visible: false }))
+                );
+                assert.equal(container.querySelector('[role=group]'), null);
+                checks++;
+
+                let parentEvents = 0,
+                    submits = 0;
+                const creatorTree = (value) =>
+                    h(
+                        'form',
+                        {
+                            onSubmit(event) {
+                                event.preventDefault();
+                                submits++;
+                            },
+                        },
+                        h(
+                            'div',
+                            {
+                                onClick() {
+                                    parentEvents++;
+                                },
+                                onKeyDown() {
+                                    parentEvents++;
+                                },
+                            },
+                            controlled(value)
+                        ),
+                        h('input', {
+                            'aria-label': 'Creator adjacent draft',
+                            defaultValue: 'Keep draft',
+                        })
+                    );
+                await act(async () => root.render(creatorTree(nativeCreator)));
+                const adjacent = container.querySelector('input');
+                adjacent.value = 'Edited draft';
+                const creatorGroup = container.querySelector('[role=group]');
+                for (const name of ['click', 'keydown']) {
+                    const event = new window.Event(name, {
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                    await act(async () => creatorGroup.dispatchEvent(event));
+                    assert.equal(event.defaultPrevented, false);
+                }
+                await act(async () => root.render(creatorTree(null)));
+                assert.equal(container.querySelector('input'), adjacent);
+                assert.equal(adjacent.value, 'Edited draft');
+                assert.equal(parentEvents, 0);
+                assert.equal(submits, 0);
+                assert.equal(writes, 0);
+                assert.equal(requests, 0);
+                assert.deepEqual(
+                    fields.controller.getState(),
+                    ownerBeforeControlled
+                );
+                checks++;
                 await act(async () =>
                     root.render(h(react.CreatedByField, { binding }))
                 );

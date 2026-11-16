@@ -24,11 +24,14 @@ import {
 } from '@miniextensions/sdk/ui';
 import {
     CountField,
+    CompleteFormFieldPresentation,
     FieldRenderer,
     NumberField,
     renderCountField,
 } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/number.css';
+import '@miniextensions/sdk/react/complete-readonly-text.css';
+import '@miniextensions/sdk/react/field-presentation.css';
 import './styles.css';
 
 // Synthetic local data only. Form uses the real read-only owner; Portal grid
@@ -886,6 +889,44 @@ function Card({ index }: { index: number }) {
         )
     );
 }
+function ControlledCountPreview() {
+    const values = [
+        '0',
+        '',
+        '<b>Count source error</b> https://example.invalid/count',
+    ];
+    const [index, setIndex] = useState(0);
+    return h(
+        'section',
+        { className: 'card', id: 'controlled-count-preview' },
+        h('h2', null, 'Controlled native Count'),
+        h(
+            'p',
+            { className: 'note' },
+            'The host supplies converted text; the shared shell owns its title, help and feedback.'
+        ),
+        h(
+            'button',
+            {
+                type: 'button',
+                onClick: () => setIndex((index + 1) % values.length),
+            },
+            'Replace controlled Count'
+        ),
+        h(CompleteFormFieldPresentation, {
+            title: 'Related records',
+            fieldName: 'Count',
+            associationKind: 'non-labelable',
+            formId: 'controlled-count-form',
+            description: '<p>Count supplied by the host.</p>',
+            error:
+                index === 2 ? 'Source feedback stays with this field.' : null,
+            children: () =>
+                h(CountField, { value: values[index], language: 'en' }),
+        })
+    );
+}
+
 function App() {
     const [mount, setMount] = useState(0);
     return h(
@@ -898,6 +939,7 @@ function App() {
             { className: 'intro' },
             'Read-only native values from Form and Portal owners. Metadata decides whether a count is available; the renderer never counts links or changes the value.'
         ),
+        h(ControlledCountPreview),
         h(
             'div',
             { className: 'toolbar' },

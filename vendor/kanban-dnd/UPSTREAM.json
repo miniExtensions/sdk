@@ -1,0 +1,54 @@
+{
+  "purpose": "Private native Kanban DnD closure; React/ReactDOM external optional SDK peers",
+  "packages": {
+    "@dnd-kit/core": {
+      "version": "6.1.0",
+      "license": "MIT",
+      "sourceUrl": "https://registry.npmjs.org/@dnd-kit/core/-/core-6.1.0.tgz",
+      "licenseFiles": {
+        "LICENSE": "537607e3f1533ad2c5b12978967f5ab27f34ffb7e626e321017a7ccca6cc24ff"
+      }
+    },
+    "@dnd-kit/sortable": {
+      "version": "7.0.2",
+      "license": "MIT",
+      "sourceUrl": "https://registry.npmjs.org/@dnd-kit/sortable/-/sortable-7.0.2.tgz",
+      "licenseFiles": {
+        "LICENSE": "537607e3f1533ad2c5b12978967f5ab27f34ffb7e626e321017a7ccca6cc24ff"
+      }
+    },
+    "@dnd-kit/utilities": {
+      "version": "3.2.2",
+      "license": "MIT",
+      "sourceUrl": "https://registry.npmjs.org/@dnd-kit/utilities/-/utilities-3.2.2.tgz",
+      "licenseFiles": {
+        "LICENSE": "537607e3f1533ad2c5b12978967f5ab27f34ffb7e626e321017a7ccca6cc24ff"
+      }
+    },
+    "@dnd-kit/accessibility": {
+      "version": "3.1.1",
+      "license": "MIT",
+      "sourceUrl": "https://registry.npmjs.org/@dnd-kit/accessibility/-/accessibility-3.1.1.tgz",
+      "licenseFiles": {
+        "LICENSE": "537607e3f1533ad2c5b12978967f5ab27f34ffb7e626e321017a7ccca6cc24ff"
+      }
+    },
+    "use-state-with-deps": {
+      "version": "1.1.2",
+      "license": "MIT",
+      "sourceUrl": "https://registry.npmjs.org/use-state-with-deps/-/use-state-with-deps-1.1.2.tgz",
+      "licenseFiles": {
+        "LICENSE": "eee94235617daa94c20c47d0f167ad7ac7afad4ceb6db2894cca00fcd3f69dac"
+      }
+    },
+    "tslib": {
+      "version": "2.9.1",
+      "license": "0BSD",
+      "sourceUrl": "https://registry.npmjs.org/tslib/-/tslib-2.9.1.tgz",
+      "licenseFiles": {
+        "CopyrightNotice.txt": "da16ddb65f8ca390998fb99223d0112498b56b45784d00afd77ff8ce1ac4de8b",
+        "LICENSE.txt": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751"
+      }
+    }
+  }
+}

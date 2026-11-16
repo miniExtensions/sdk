@@ -29,11 +29,7 @@ export type ImageAnnotationAppend = (input: {
     attachment: AnnotatedImage;
 }) => 'appended' | 'retired';
 
-export type ImageAnnotationFailure =
-    | 'decode'
-    | 'editor'
-    | 'render'
-    | 'storage';
+export type ImageAnnotationFailure = 'decode' | 'editor' | 'render' | 'storage';
 
 export type ImageAnnotationSource = {
     url: string;
@@ -90,8 +86,7 @@ export function createImageAnnotationSession<Upload>(ports: {
     };
     const continues = (state: SourceState) =>
         !disposed && active === state && ownerIsCurrent();
-    const editable = (state: SourceState) =>
-        continues(state) && !state.closed;
+    const editable = (state: SourceState) => continues(state) && !state.closed;
     const release = (state: SourceState) => {
         if (!state.source.ownedObjectUrl || state.released) return;
         state.released = true;
@@ -116,7 +111,9 @@ export function createImageAnnotationSession<Upload>(ports: {
         if (continues(state)) ports.onFailure?.(phase, error);
     };
 
-    const beginSource = (source: OwnedSource): ImageAnnotationSourceLease | null => {
+    const beginSource = (
+        source: OwnedSource
+    ): ImageAnnotationSourceLease | null => {
         if (disposed || !ownerIsCurrent()) {
             // The caller allocated local URLs before admission. Own their release.
             if (source.ownedObjectUrl) ports.releaseObjectUrl(source.url);
@@ -157,7 +154,11 @@ export function createImageAnnotationSession<Upload>(ports: {
                     ports.onClose?.(state.token);
                 } catch (error) {
                     // Never interrupt the vendor's close/detach control flow.
-                    try { ports.onFailure?.('editor', error); } catch { /* observer contract is nonthrowing */ }
+                    try {
+                        ports.onFailure?.('editor', error);
+                    } catch {
+                        /* observer contract is nonthrowing */
+                    }
                 }
             }
         };
@@ -167,7 +168,8 @@ export function createImageAnnotationSession<Upload>(ports: {
             source: { url: source.url, filename: source.filename },
             isCurrent: () => editable(state),
             installEditor(disposeEditor) {
-                if (!editable(state) || state.closeEditor !== null) return false;
+                if (!editable(state) || state.closeEditor !== null)
+                    return false;
                 state.closeEditor = disposeEditor;
                 return true;
             },

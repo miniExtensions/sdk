@@ -606,8 +606,68 @@ async function exerciseCanonicalField({
         assert.equal(container.querySelector('output')?.textContent, literal);
         assert.equal(input(), null);
         assert.equal(writes.length, 1);
+        await render({
+            identity: 'canonical-mixed-list',
+            value: 'Sentinel before mixed list',
+        });
+        const mixedEditor = input();
+        await renderCommit(() => {
+            mixedEditor.focus();
+            const paragraph = mixedEditor.querySelector('p');
+            const range = window.document.createRange();
+            range.selectNodeContents(paragraph);
+            const selection = window.document.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            // Synthetic DOM coverage uses the real native-range bridge; this is
+            // separate from the trusted keyboard/clipboard browser acceptance.
+            mixedEditor.dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'v',
+                    code: 'KeyV',
+                    keyCode: 86,
+                    ctrlKey: true,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        });
+        await paste(
+            mixedEditor,
+            '[x] Complete\n[ ] Pending\n\n- Item one\n- Item two'
+        );
+        const mixedStored =
+            '[x] Complete\n[ ] Pending\n\n* Item one\n* Item two\n\n\n';
+        assert.equal(writes.length, 2);
+        assert.equal(writes[1], mixedStored);
+        assert.equal(
+            mixedEditor.textContent,
+            'CompletePendingItem oneItem two'
+        );
+        assert.deepEqual(
+            [...mixedEditor.querySelectorAll('input[type="checkbox"]')].map(
+                (input) => input.checked
+            ),
+            [true, false]
+        );
+        assert.equal(
+            mixedEditor.querySelectorAll('ul:not(.checkbox_list) > li').length,
+            2
+        );
+        await render({
+            identity: 'canonical-mixed-reloaded',
+            value: mixedStored,
+        });
+        assert.equal(input().textContent, 'CompletePendingItem oneItem two');
+        assert.equal(writes.length, 2, 'Reload does not publish a new draft');
+        await renderCommit(() =>
+            root.render(React.createElement(api.RichTextField, { binding }))
+        );
+        assert.equal(subscribers, 1);
+        assert.equal(input(), null);
         return {
             canonical: true,
+            mixedListPaste: true,
             bindingCompatibility: true,
             modeReplacement: true,
             formatted: true,

@@ -9,6 +9,33 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 
+import {
+    CompleteReadOnlyTextField,
+    type CompleteReadOnlyTextFieldProps,
+} from './CompleteReadOnlyTextField.js';
+
+/**
+ * Controlled native Count presentation. The host supplies converted display text,
+ * including any source-specific error or special-value text, and owns field chrome.
+ * This mode has no binding, setter, calculation or transport authority.
+ */
+export type ControlledCountFieldProps = CompleteReadOnlyTextFieldProps & {
+    binding?: never;
+    render?: never;
+};
+
+/** Reuse the complete literal/link and localized empty presentation. */
+export function ControlledCountField(
+    props: ControlledCountFieldProps
+): ReactNode {
+    return createElement(CompleteReadOnlyTextField, {
+        value: props.value,
+        language: props.language,
+        textSize: props.textSize,
+        layout: props.layout,
+        className: props.className,
+    });
+}
 export type CountFieldOptions = NumberFieldOptions;
 
 /** Invalid Count result metadata keeps its accepted blank presentation. */

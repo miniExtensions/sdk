@@ -22,3 +22,5 @@ SDK_COUNT_CHROMIUM=/path/to/chromium node scripts/check-count-browser.mjs
 ```
 
 The proof checks metadata transitions while preserving native `42`, disabled native pointer/keyboard behavior, separately injected input events, actual owner projections, masking from either configuration, supplied feedback, visibility and retirement. The Number neighbor verifies editing, caret position and retained partial drafts. Desktop, focused neighbor, forced-colors and fresh mobile screenshots plus a JSON receipt are written to ignored `dist/count-browser` (or the supplied evidence directory). This is not a backend count-calculation or persistence test.
+
+The controlled native Count card uses `CountField` with host-converted text and the complete field shell. Replace its value to inspect zero, localized empty display and literal/link source errors. The existing binding cards retain their disabled numeric controls. See [the Count API guide](../../docs/count.md) for both ownership contracts.

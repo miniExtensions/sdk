@@ -1,14 +1,66 @@
-.mx-sdk-image-annotation { color: inherit; font: inherit; }
-.mx-sdk-image-annotation > * + * { margin-top: .75rem; }
-.mx-sdk-image-annotation-picker { position: relative; display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: 1.5rem; border: 2px dashed #d1d5db; border-radius: .5rem; }
-.mx-sdk-image-annotation-picker input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.mx-sdk-image-annotation-picker input:disabled { cursor: default; }
-.mx-sdk-image-annotation-picker:focus-within { outline: 2px solid var(--mx-sdk-accent, #4f46e5); outline-offset: 2px; }
-.mx-sdk-image-annotation-picker label, .mx-sdk-image-annotation-picker span { pointer-events: none; }
-.mx-sdk-image-annotation-error { color: #991b1b; }
-.mx-sdk-image-annotation-saving { padding: 1rem; text-align: center; }
-.mx-sdk-image-annotation-credit { display: block; font-size: .875em; }
-.mx-sdk-image-annotation-credit a { color: inherit; text-decoration: underline; }
-.mx-sdk-image-annotation-credit a:focus-visible { outline: 2px solid var(--mx-sdk-accent, #4f46e5); outline-offset: 2px; }
-.mx-sdk-image-annotation-source { position: absolute; left: -10000px; top: 0; pointer-events: none; }
-@media (forced-colors: active) { .mx-sdk-image-annotation-picker { border-color: ButtonText; } }
+.mx-sdk-image-annotation {
+    color: inherit;
+    font: inherit;
+}
+.mx-sdk-image-annotation > * + * {
+    margin-top: 0.75rem;
+}
+.mx-sdk-image-annotation-picker {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    border: 2px dashed #d1d5db;
+    border-radius: 0.5rem;
+}
+.mx-sdk-image-annotation-picker input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+.mx-sdk-image-annotation-picker input:disabled {
+    cursor: default;
+}
+.mx-sdk-image-annotation-picker:focus-within {
+    outline: 2px solid var(--mx-sdk-accent, #4f46e5);
+    outline-offset: 2px;
+}
+.mx-sdk-image-annotation-picker label,
+.mx-sdk-image-annotation-picker span {
+    pointer-events: none;
+}
+.mx-sdk-image-annotation-error {
+    color: #991b1b;
+}
+.mx-sdk-image-annotation-saving {
+    padding: 1rem;
+    text-align: center;
+}
+.mx-sdk-image-annotation-credit {
+    display: block;
+    font-size: 0.875em;
+}
+.mx-sdk-image-annotation-credit a {
+    color: inherit;
+    text-decoration: underline;
+}
+.mx-sdk-image-annotation-credit a:focus-visible {
+    outline: 2px solid var(--mx-sdk-accent, #4f46e5);
+    outline-offset: 2px;
+}
+.mx-sdk-image-annotation-source {
+    position: absolute;
+    left: -10000px;
+    top: 0;
+    pointer-events: none;
+}
+@media (forced-colors: active) {
+    .mx-sdk-image-annotation-picker {
+        border-color: ButtonText;
+    }
+}

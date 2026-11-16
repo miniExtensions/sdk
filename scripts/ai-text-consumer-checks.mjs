@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 const mask = '••••••••';
-export const aiTextConsumerCheckCount = 134;
+export const aiTextConsumerCheckCount = 140;
 
 /** Accepted synthetic native objects shared by installed and browser proofs. */
 export function aiTextLoadedFixture() {
@@ -114,7 +114,7 @@ export function aiTextTypedConsumer({
             : moduleSpecifier;
     return `
 import {createElement,type ReactNode} from 'react';
-import {AiTextField,renderAiTextField,type AiTextFieldProps,type AiTextFieldOptions} from ${JSON.stringify(source)};
+import {AiTextField,renderAiTextField,type AiTextFieldProps,type BindingAiTextFieldProps,type ControlledAiTextFieldProps,type AiTextFieldOptions} from ${JSON.stringify(source)};
 import type {FieldRendererProps,FieldRendererSlots} from '@miniextensions/sdk/ui';
 const options:AiTextFieldOptions={className:'literal-ai-text'};
 // @ts-expect-error Display options grant no setter.
@@ -143,6 +143,17 @@ import {AiTextControl} from '@miniextensions/sdk/react';
 import {AiTextField as privateField} from '@miniextensions/sdk/react/AiTextField';
 export const renderers:FieldRendererSlots<ReactNode>={renderAiTextField:props=>renderAiTextField(props,options)};
 export function Bound(props:AiTextFieldProps):ReactNode {return createElement(AiTextField,{...props,...options});}
+export function BindingCompatibility(props:BindingAiTextFieldProps):ReactNode {return createElement(AiTextField,props);}
+const controlled:ControlledAiTextFieldProps={mode:'controlled',value:'Converted AI Ω',language:'en',textSize:'small',layout:'cell-short'};
+export const Controlled=()=>createElement(AiTextField,controlled);
+// @ts-expect-error Controlled native presentation requires accepted language.
+const missingLanguage:ControlledAiTextFieldProps={mode:'controlled',value:'AI'};
+// @ts-expect-error Supply converted text, not an AI object.
+const rawObject:ControlledAiTextFieldProps={mode:'controlled',value:{state:'generated',value:'AI',isStale:false},language:'en'};
+// @ts-expect-error Controlled display grants no generation action.
+const controlledGenerate:ControlledAiTextFieldProps={mode:'controlled',value:'AI',language:'en',generate:()=>{}};
+// @ts-expect-error Controlled display cannot borrow a binding.
+export const Mixed=(props:AiTextFieldProps)=>createElement(AiTextField,{...props,mode:'controlled',value:'AI',language:'en'});
 export function Override(props:AiTextFieldProps):ReactNode {return createElement(AiTextField,{...props,render:({snapshot})=>String(snapshot.retired)});}
 export function Native(props:FieldRendererProps<'aiText'>,plain:FieldRendererProps<'multilineText'>,formula:FieldRendererProps<'formula'>,rich:FieldRendererProps<'richText'>) {
  const native:{state:'empty'|'loading'|'generated'|'error';value:string;isStale:boolean;errorType?:string}|null|undefined=props.value;
@@ -251,7 +262,8 @@ export async function checkAiTextConsumer({
             value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
         });
     const { createElement: h, act, StrictMode, Fragment } = require('react');
-    const { createRoot } = require('react-dom/client');
+    const { createRoot, hydrateRoot } = require('react-dom/client');
+    const { renderToString } = require('react-dom/server');
     const forbidden =
         'input,textarea,select,button,a,img,canvas,video,audio,iframe,object,embed,svg,strong,b,em,pre,code,[contenteditable=true]';
     let checks = 0;
@@ -999,6 +1011,104 @@ export const importPackage = (name) => import(name);
                 assert.equal(network, 0);
                 assert.equal(protectedReads, 0);
                 checks++;
+                const controlled = (value, language = 'en') =>
+                    h(renderer.AiTextField, {
+                        mode: 'controlled',
+                        value,
+                        language,
+                        textSize: 'small',
+                        layout: 'cell-short',
+                    });
+                const converted =
+                    '<img src=x> AI Ω https://example.test/answer';
+                await act(async () => root.render(controlled(converted)));
+                assert.equal(
+                    container.querySelector('p.read-only-text').textContent,
+                    converted
+                );
+                assert.equal(
+                    container.querySelector('a').getAttribute('href'),
+                    'https://example.test/answer'
+                );
+                assert.equal(
+                    container.querySelector(
+                        'input,button,textarea,select,img,script'
+                    ),
+                    null
+                );
+                assert(
+                    container.querySelector(
+                        '[data-layout="cell-short"] .text-sm'
+                    )
+                );
+                checks++;
+                for (const value of [null, undefined, '']) {
+                    await act(async () => root.render(controlled(value, 'fr')));
+                    assert.equal(
+                        container.querySelector(
+                            '[data-testid="no-value-test-id"]'
+                        ).textContent,
+                        'Pas de Valeur'
+                    );
+                    assert.equal(
+                        container.querySelector('a,input,button'),
+                        null
+                    );
+                }
+                await act(async () =>
+                    root.render(controlled('Replacement AI'))
+                );
+                assert.equal(
+                    container.querySelector('p.read-only-text').textContent,
+                    'Replacement AI'
+                );
+                assert.equal(container.querySelector('a'), null);
+                assert.equal(writes, 0);
+                assert.equal(saves, 0);
+                assert.equal(network, 0);
+                assert.equal(protectedReads, 0);
+                checks++;
+                const hydratedContainer = window.document.createElement('div');
+                hydratedContainer.innerHTML = renderToString(
+                    controlled(converted)
+                );
+                const originalText =
+                    hydratedContainer.querySelector('p.read-only-text');
+                window.document.body.append(hydratedContainer);
+                const errors = [];
+                let hydration;
+                try {
+                    await act(async () => {
+                        hydration = hydrateRoot(
+                            hydratedContainer,
+                            controlled(converted),
+                            {
+                                onRecoverableError: (error) =>
+                                    errors.push(error),
+                            }
+                        );
+                    });
+                    assert.equal(
+                        hydratedContainer.querySelector('p.read-only-text'),
+                        originalText
+                    );
+                    await act(async () =>
+                        hydration.render(controlled(null, 'fr'))
+                    );
+                    assert.equal(
+                        hydratedContainer.querySelector(
+                            '[data-testid="no-value-test-id"]'
+                        ).textContent,
+                        'Pas de Valeur'
+                    );
+                    assert.equal(hydratedContainer.querySelector('a'), null);
+                    assert.deepEqual(errors, []);
+                    assert.equal(network, 0);
+                    checks++;
+                } finally {
+                    if (hydration) await act(async () => hydration.unmount());
+                    hydratedContainer.remove();
+                }
                 formats.push({
                     format,
                     rendererModule:

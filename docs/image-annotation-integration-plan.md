@@ -1,5 +1,13 @@
 # Form annotation integration checkpoint
 
+Current continuation, 2026-11-16: retained candidate `619b46d7` is composed with
+SDK main `dbaa030c`. Normal pnpm 10.28.2 resolution and frozen installation pin
+markerjs2 2.32.7, preserving the retained license and visible attribution.
+The focused strict annotation compile and 40 tests pass. The full local SDK
+typecheck stopped at the unchanged 2 GiB aggregate RSS guard; full CI remains
+required. Package, real-vendor browser, native and hosted qualification remain
+pending. The dated source checkpoints below retain their original context.
+
 Source-only plan for SDK-COMPLETE-ANNOTATION-COMPOSITION. All commands/tests below
 are UNRUN. This is not native acceptance, authority installation or a new ticket.
 
@@ -74,15 +82,15 @@ parent/child/row assemblies; default SDK useId is local presentation identity.
 
 ## Maintained native regression inputs
 
-- components/PublicExtension/Form/ImageAnnotationField/__tests__/ImageAnnotationField.test.tsx
+- components/PublicExtension/Form/ImageAnnotationField/**tests**/ImageAnnotationField.test.tsx
   ed85b873:14 component controls.
-- components/PublicExtension/Form/ImageAnnotationField/__tests__/ImageAnnotationField.lazyInit.test.tsx
+- components/PublicExtension/Form/ImageAnnotationField/**tests**/ImageAnnotationField.lazyInit.test.tsx
   ae0667cc:4 lazy lifecycle controls.
-- components/PublicExtension/Form/__tests__/annotationRefreshOwnership.test.tsx
+- components/PublicExtension/Form/**tests**/annotationRefreshOwnership.test.tsx
   de278763: real Redux/FormExtensionLoader upload/URL retirement and same-owner
   concurrent-addition/neighbor preservation. Observe actual Redux writer bodies,
   not callback completion or a mocked always-valid owner.
-- components/Fields/FieldRenderer/AttachmentsField/__tests__/AttachmentsField.interactions.test.tsx
+- components/Fields/FieldRenderer/AttachmentsField/**tests**/AttachmentsField.interactions.test.tsx
   7eb0bb9e and AttachmentsField.test.tsx 8a9974f9: both entry gates, preview action
   handoff, open/download refusal, retained parent and neighboring field behavior.
 

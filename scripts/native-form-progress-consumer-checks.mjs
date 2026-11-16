@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Script, createContext } from 'node:vm';
 import ts from 'typescript';
+import { assertNativeFormProgressEligibilityParity } from './native-form-progress-eligibility-checks.mjs';
 
 // Exact independent native oracle, not a second hand-written implementation.
 // monorepo@25f5efdefaf482dea07af05d54fbeea8e3d92635
@@ -575,6 +576,72 @@ createNativeFormProgressStorage({...nativeOptions,getLocks:undefined});
 createNativeFormProgressStorage({...nativeOptions,getLocks:()=>undefined});
 const nativeBrowserPorts:NativeFormProgressStorageOptions={shareId:'x',writerId:'w',getStorage:()=>localStorage,getLocks:()=>navigator.locks};
 void [nativeSnapshot,nativeWrite,nativeRemove,nativeCleanup,nativeBrowserPorts,makeNativeFormProgressKey('x'),parseNativeFormProgressValue(null)];
+// A pre-existing structural implementation returning only legacy results remains assignable.
+const legacyImplementation: NativeFormProgressStorage = {
+    read: () => undefined,
+    write: async (_args: {expectedRevision:number|null;record:NativeFormProgressSnapshot['record']}): Promise<NativeFormProgressWriteResult> => ({status:'conflict'}),
+    remove: () => true,
+    removeIfOwned: async (): Promise<NativeFormProgressRemovalResult> => ({status:'removed'}),
+};
+void legacyImplementation;
+// Legacy exhaustive consumers retain the original closed result union.
+function exhaustiveLegacy(result: NativeFormProgressWriteResult): number {
+    switch (result.status) {
+        case 'written': return result.revision;
+        case 'conflict': return -1;
+        case 'unavailable': return -2;
+        default: { const neverResult: never = result; return neverResult; }
+    }
+}
+type LegacyWriteReturn = ReturnType<NativeFormProgressStorage['write']>;
+type LegacyWriteParameters = Parameters<NativeFormProgressStorage['write']>[0];
+const legacyParameters: LegacyWriteParameters = {expectedRevision:null,record:{}};
+const undefinedParameters: LegacyWriteParameters = {expectedRevision:null,record:{},isWriteStillEligible:undefined};
+// @ts-expect-error Parameters retains the legacy argument discriminator
+const guardedParameters: LegacyWriteParameters = {expectedRevision:null,record:{},isWriteStillEligible:()=>false};
+const parametersResult: Promise<NativeFormProgressWriteResult> = nativeProgress.write(legacyParameters);
+void [undefinedParameters,guardedParameters,parametersResult];
+const legacyResult: LegacyWriteReturn = nativeProgress.write({expectedRevision:null,record:{}});
+const legacyPromise: Promise<NativeFormProgressWriteResult> = legacyResult;
+const explicitUndefined: Promise<NativeFormProgressWriteResult> = nativeProgress.write({expectedRevision:null,record:{},isWriteStillEligible:undefined});
+const optedIn = nativeProgress.write({expectedRevision:null,record:{},isWriteStillEligible:()=>false});
+const optionalGuard: (() => boolean) | undefined = Math.random() ? () => false : undefined;
+const optionalResult = nativeProgress.write({expectedRevision:null,record:{},isWriteStillEligible:optionalGuard});
+type LegacyArgs = {expectedRevision:number|null;record:{};isWriteStillEligible?:undefined};
+type GuardedArgs = {expectedRevision:number|null;record:{};isWriteStillEligible:()=>boolean};
+const unionArgs: LegacyArgs | GuardedArgs = Math.random() ? {expectedRevision:null,record:{}} : {expectedRevision:null,record:{},isWriteStillEligible:()=>false};
+const unionResult = nativeProgress.write(unionArgs);
+type OriginalArgs = {expectedRevision:number|null;record:{}};
+function originalShapeUnion(args: OriginalArgs | (OriginalArgs & {isWriteStillEligible:()=>boolean})) {
+    const result = nativeProgress.write(args);
+    // @ts-expect-error the guarded union branch can cancel
+    const unsafe: Promise<NativeFormProgressWriteResult> = result;
+    return unsafe;
+}
+type OptionalArgs = {expectedRevision:number|null;record:{};isWriteStillEligible?: (()=>boolean) | undefined};
+const optionalArgs: OptionalArgs = {expectedRevision:null,record:{},isWriteStillEligible:optionalGuard};
+const optionalArgsResult = nativeProgress.write(optionalArgs);
+const extractedWrite = nativeProgress.write;
+const extractedLegacy: Promise<NativeFormProgressWriteResult> = extractedWrite({expectedRevision:null,record:{}});
+const extractedGuarded = extractedWrite({expectedRevision:null,record:{},isWriteStillEligible:()=>false});
+// @ts-expect-error a misspelled eligibility option must not be silently accepted
+nativeProgress.write({expectedRevision:null,record:{},isWriteStillEligibile:()=>false});
+// @ts-expect-error an optional-property argument may cancel
+const unsafeOptionalArgs: Promise<NativeFormProgressWriteResult> = optionalArgsResult;
+// @ts-expect-error extracting the overloaded method must retain opt-in cancellation
+const unsafeExtracted: Promise<NativeFormProgressWriteResult> = extractedGuarded;
+// @ts-expect-error cancellation must not be erased from opted-in results
+const unsafeOptIn: Promise<NativeFormProgressWriteResult> = optedIn;
+// @ts-expect-error an optional guard may still cause cancellation
+const unsafeOptional: Promise<NativeFormProgressWriteResult> = optionalResult;
+// @ts-expect-error a union with a guarded argument may still cancel
+const unsafeUnion: Promise<NativeFormProgressWriteResult> = unionResult;
+async function observeCancelled() {
+    const result = await optedIn;
+    if (result.status === 'cancelled') return;
+    exhaustiveLegacy(result);
+}
+void [legacyResult,legacyPromise,explicitUndefined,unsafeOptIn,unsafeOptional,unsafeUnion,unsafeOptionalArgs,extractedLegacy,unsafeExtracted,originalShapeUnion,observeCancelled];
 // @ts-expect-error revision expectation must be explicit
 nativeProgress.write({record:{}});
 // @ts-expect-error writer identity belongs to the injected host
@@ -607,8 +674,9 @@ export async function checkNativeFormProgressConsumer({ consumerDirectory }) {
     ]) {
         const checks = await assertNativeFormProgressParity(api);
         assert(checks > 0);
+        assert.equal(await assertNativeFormProgressEligibilityParity(api), 12);
         console.log(
-            `Installed native Form progress ${format}: ${checks} pinned-native parity sequences passed; synthetic storage/locks only, no host latch/Restore/Save integration.`
+            `Installed native Form progress ${format}: ${checks} original pinned-native sequences and PR7699 eligibility parity passed; synthetic storage/locks only, no host latch/Restore/Save integration.`
         );
     }
     return 2;

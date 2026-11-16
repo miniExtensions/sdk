@@ -45,6 +45,7 @@ The generated 64x32 bundled PNG is source fixture data; it has NOT been decoded
 or rendered in a browser by this preparation.
 
 Remaining integration/qualification:
+
 - Complete markerjs2@2.32.7 runtime dependency/lock closure with the normal toolchain;
   no dependency was invented or installed. Public exports/CSS/build/notice and packed
   SSR/type consumer source registrations are prepared, not executed.

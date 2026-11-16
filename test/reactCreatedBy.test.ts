@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
-import { act, createElement as h, StrictMode, type ReactNode } from 'react';
+import {
+    act,
+    createElement as h,
+    StrictMode,
+    type FormEvent,
+    type ReactNode,
+} from 'react';
 import {
     CreatedByField,
+    type ControlledCreatedByFieldProps,
     FieldRenderer,
     TextField,
     renderCreatedByField,
 } from '../src/react/index.js';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
     createFormFieldBindings,
     type FormFieldBinding,
@@ -37,6 +45,213 @@ const person = (name: string): AirtableCollaborator => ({
     email: 'private@example.test',
     name,
     profilePicUrl: 'https://avatar.synthetic.invalid/private.png',
+});
+
+it('controlled creator ignores forged editing capabilities and contains inert events', async (t) => {
+    const f = await fixture(t);
+    let forbiddenReads = 0;
+    const forbidden = () => {
+        forbiddenReads++;
+        throw Error('Computed creator cannot inspect editing capabilities');
+    };
+    const labels = { empty: 'No creator' };
+    Object.defineProperty(labels, 'remove', {
+        enumerable: true,
+        get: forbidden,
+    });
+    const props = {
+        mode: 'controlled',
+        value: person('<b>Literal creator</b>'),
+        labels,
+        title: 'Creator',
+        inputId: 'creator-input',
+        describedBy: 'creator-help creator-error',
+        invalid: true,
+    };
+    for (const key of [
+        'owner',
+        'choices',
+        'onValueChange',
+        'onChange',
+        'readOnly',
+        'binding',
+        'render',
+    ])
+        Object.defineProperty(props, key, { enumerable: true, get: forbidden });
+    let rowEvents = 0,
+        submits = 0;
+    // Enter the hook-free public dispatcher before React copies the caller's props.
+    const field = CreatedByField(
+        props as unknown as ControlledCreatedByFieldProps
+    );
+    await f.render(
+        h(
+            'form',
+            {
+                onSubmit: (event: FormEvent) => {
+                    event.preventDefault();
+                    submits++;
+                },
+            },
+            h(
+                'div',
+                {
+                    onClick: () => rowEvents++,
+                    onAuxClick: () => rowEvents++,
+                    onDoubleClick: () => rowEvents++,
+                    onPointerDown: () => rowEvents++,
+                    onKeyDown: () => rowEvents++,
+                    onKeyUp: () => rowEvents++,
+                },
+                field
+            ),
+            h('input', {
+                'aria-label': 'Adjacent draft',
+                defaultValue: 'Keep draft',
+            })
+        )
+    );
+    const group = f.container.querySelector('[role=group]')!;
+    assert.equal(group.getAttribute('aria-labelledby'), 'creator-input-label');
+    assert.equal(
+        group.getAttribute('aria-describedby'),
+        'creator-help creator-error'
+    );
+    assert.equal(group.getAttribute('aria-invalid'), 'true');
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-name')!.textContent,
+        '<b>Literal creator</b>'
+    );
+    assert.equal(
+        group.querySelector('b,img,input,button,[role=combobox]'),
+        null
+    );
+    for (const name of [
+        'click',
+        'auxclick',
+        'dblclick',
+        'pointerdown',
+        'keydown',
+        'keyup',
+    ]) {
+        const event = new f.window.Event(name, {
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => group.dispatchEvent(event));
+        assert.equal(event.defaultPrevented, false);
+    }
+    assert.equal(rowEvents, 0);
+    assert.equal(submits, 0);
+    assert.equal(forbiddenReads, 0);
+    assert.equal(f.writes(), 0);
+    assert.equal(f.container.querySelector('input')!.value, 'Keep draft');
+});
+
+it('controlled creator replaces identity, avatar policy, labels and visibility without changing the owner value', async (t) => {
+    const f = await fixture(t, {}, person('Stored creator'));
+    const before = f.owner.controller.getState();
+    const initial = person('First creator');
+    const render = (
+        value: AirtableCollaborator | null,
+        empty = 'No creator',
+        visible = true
+    ) =>
+        f.render(
+            h(CreatedByField, {
+                mode: 'controlled',
+                value,
+                visible,
+                title: 'Created by',
+                inputId: 'creator-display',
+                labels: { empty },
+                avatarPolicy: {
+                    type: 'source',
+                    getSource: (url) => ({
+                        src: '/owned-avatar?url=' + encodeURIComponent(url),
+                        sizes: '32px',
+                        loading: 'lazy',
+                    }),
+                },
+            })
+        );
+    await render(initial);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-name')!.textContent,
+        'First creator'
+    );
+    assert.equal(
+        f.container.querySelector('img')!.getAttribute('src'),
+        '/owned-avatar?url=' + encodeURIComponent(initial.profilePicUrl!)
+    );
+    const next = {
+        ...person(''),
+        id: 'usr_next',
+        email: 'creator-next@example.test',
+        profilePicUrl: undefined,
+    };
+    await render(next);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-name')!.textContent,
+        next.email
+    );
+    assert.equal(f.container.querySelector('img'), null);
+    await render(null, 'Aucun créateur');
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-empty')!.textContent,
+        'Aucun créateur'
+    );
+    await render(initial, 'No creator', false);
+    assert.equal(f.container.querySelector('[role=group]'), null);
+    await render(initial);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-name')!.textContent,
+        initial.name
+    );
+    assert.equal(f.container.querySelector('input,button'), null);
+    assert.deepEqual(f.owner.controller.getState(), before);
+    assert.equal(f.writes(), 0);
+});
+
+it('switches the same public creator between binding and controlled presentation without borrowing a write', async (t) => {
+    const f = await fixture(t, {}, person('Stored creator'));
+    const before = f.owner.controller.getState();
+    await f.render(h(CreatedByField, { binding: f.binding }));
+    assert.equal(f.input().value, 'Stored creator');
+    assert.equal(f.input().disabled, true);
+    await f.render(
+        h(CreatedByField, {
+            mode: 'controlled',
+            value: person('Projected creator'),
+        })
+    );
+    assert.equal(f.container.querySelector('input,button'), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-name')!.textContent,
+        'Projected creator'
+    );
+    await f.render(h(CreatedByField, { binding: f.binding }));
+    assert.equal(f.input().value, 'Stored creator');
+    assert.equal(f.input().disabled, true);
+    assert.equal(
+        f.container.querySelector('img,.mx-sdk-collaborator-name'),
+        null
+    );
+    assert.deepEqual(f.owner.controller.getState(), before);
+    assert.equal(f.writes(), 0);
+});
+
+it('server-renders controlled creator literal text without avatar authority or editing UI', () => {
+    const html = renderToStaticMarkup(
+        h(CreatedByField, {
+            mode: 'controlled',
+            value: person('<img src=x>'),
+            title: 'Creator',
+        })
+    );
+    assert(html.includes('&lt;img src=x&gt;'));
+    assert(!/<(?:img|input|button|select|textarea)\b/.test(html));
+    assert(html.includes('role="group"'));
 });
 
 async function fixture(

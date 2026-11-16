@@ -266,8 +266,17 @@ export async function checkFormCaptchaReactMatrix({
                     browser,
                     consumer: root,
                     evidence: {},
+                    output: root,
                 });
                 assert.equal(proof.browser.status, 'passed');
+                const resultBytes = readFileSync(
+                    join(root, 'form-captcha.json')
+                );
+                assert.deepEqual(
+                    JSON.parse(resultBytes.toString()),
+                    proof.browser
+                );
+                proof.browserResultSha256 = sha(resultBytes);
             }
             const require = createRequire(join(root, 'package.json'));
             const css = readFileSync(

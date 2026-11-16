@@ -13,7 +13,7 @@ import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { formCaptchaFixture } from './form-captcha-consumer-checks.mjs';
 
-/** Real local browser/SDK DOM, synthetic provider only; no challenge or backend. */
+/** Real local browser/SDK DOM; output is the owner's existing artifact directory. */
 export async function checkFormCaptchaBrowser({
     browser,
     consumer,
@@ -255,7 +255,7 @@ const root=createRoot(document.querySelector('main'));root.render(h(App));window
                 }
                 if (output)
                     writeFileSync(
-                        output,
+                        join(output, 'form-captcha.json'),
                         JSON.stringify(evidence, null, 2) + '\n'
                     );
             }

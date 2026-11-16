@@ -40,6 +40,7 @@ import type {
     CanonicalPostgresRecordEditingValidation,
     CanonicalPostgresRecordIdentity,
     CanonicalPostgresRelationship,
+    CanonicalPostgresRowObservation,
     CanonicalPostgresSchema,
     CanonicalPostgresSelectQuery,
     CanonicalPostgresSelectResult,
@@ -49,6 +50,8 @@ import type {
     CanonicalPostgresTableReference,
     CanonicalPostgresTextColumnConfig,
     CanonicalPostgresType,
+    CanonicalPostgresUpdateQuery,
+    CanonicalPostgresUpdateResult,
     CanonicalPostgresValue,
 } from './contracts/postgres.generated.js';
 
@@ -81,6 +84,11 @@ export type PostgresConnection = CanonicalPostgresConnection;
 /** Native adapter contracts; these do not add a public Form transport operation. */
 export type PostgresCreateQuery = CanonicalPostgresCreateQuery;
 export type PostgresCreateResult = CanonicalPostgresCreateResult;
+/** Loaded native baselines confer no continuing authorization to edit a row. */
+export type PostgresRowObservation = CanonicalPostgresRowObservation;
+/** Native adapter contracts; these do not add a public Portal save operation. */
+export type PostgresUpdateQuery = CanonicalPostgresUpdateQuery;
+export type PostgresUpdateResult = CanonicalPostgresUpdateResult;
 export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;
 export type PostgresSchema = CanonicalPostgresSchema;

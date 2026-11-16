@@ -248,6 +248,11 @@ const postgresRecordSettingsAliases = [
     'PostgresRecordEditingValidation',
 ];
 const postgresCreateAliases = ['PostgresCreateQuery', 'PostgresCreateResult'];
+const postgresUpdateAliases = [
+    'PostgresRowObservation',
+    'PostgresUpdateQuery',
+    'PostgresUpdateResult',
+];
 const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
 const readConfigurationValidation = () => ({
     ...readPostgresConfigReceipt({ monorepo, revision }),
@@ -271,6 +276,7 @@ const postgresAliases = [
     ...postgresQueryAliases,
     ...postgresRecordSettingsAliases,
     ...postgresCreateAliases,
+    ...postgresUpdateAliases,
     ...postgresAttachmentAliases,
     ...postgresFieldConfigAliases,
 ];
@@ -288,6 +294,9 @@ if (postgresOnly) {
     );
     entryLines.push(
         `import type { ${postgresCreateAliases.join(', ')} } from './types/postgres/create';`
+    );
+    entryLines.push(
+        `import type { ${postgresUpdateAliases.join(', ')} } from './types/postgres/update';`
     );
     entryLines.push(
         `import type { ${postgresAttachmentAliases.join(', ')} } from './types/postgres/attachmentDisplay';`

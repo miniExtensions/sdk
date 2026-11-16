@@ -19,6 +19,7 @@ import type {
     PostgresRelationship,
     PostgresRecord,
     PostgresRecordIdentity,
+    PostgresRowObservation,
     PostgresValue,
     PostgresSource,
     PostgresFilter,
@@ -31,6 +32,8 @@ import type {
     PostgresRecordEditingConfiguration,
     PostgresRecordEditingValidation,
     PostgresTextColumnConfig,
+    PostgresUpdateQuery,
+    PostgresUpdateResult,
 } from '@miniextensions/sdk';
 
 // These remain optional stored settings, not editor-default materialization.
@@ -352,6 +355,160 @@ export const wrongCreateSource: PostgresCreateQuery = {
         baseId: 'appSynthetic',
         tableId: 'tblSynthetic',
     },
+};
+
+const observedId: PostgresField = {
+    name: 'id',
+    ordinal: 2,
+    typeOid: 20,
+    formattedType: 'bigint',
+    notNull: true,
+    hasDefault: false,
+    identity: null,
+    generated: null,
+    description: null,
+    privileges: { select: true, insert: false, update: true },
+};
+export const observation: PostgresRowObservation = {
+    source,
+    table,
+    relationOid: 16400,
+    identifier: {
+        configuration: { type: 'primary-key' },
+        columns: [
+            { name: 'tenant_id', ordinal: 1, typeOid: 25, formattedType: 'text' },
+            { name: 'id', ordinal: 2, typeOid: 20, formattedType: 'bigint' },
+        ],
+    },
+    identity,
+    columns: [
+        {
+            ...observedId,
+            name: 'tenant_id',
+            ordinal: 1,
+            typeOid: 25,
+            formattedType: 'text',
+        },
+        observedId,
+        {
+            ...observedId,
+            name: 'customer_name',
+            ordinal: 3,
+            typeOid: 25,
+            formattedType: 'text',
+            notNull: false,
+        },
+    ],
+    fields: {
+        tenant_id: 'tenant-one',
+        id: '9007199254740993',
+        customer_name: null,
+    },
+};
+export const updateQuery: PostgresUpdateQuery = {
+    source,
+    table,
+    identifier: observation.identifier,
+    identity,
+    changes: [
+        {
+            columnName: 'id',
+            expected: '9007199254740993',
+            value: '9007199254740995',
+        },
+        { columnName: 'customer_name', expected: null, value: '' },
+    ],
+    criteria: { where: filter, orderBy: [sort] },
+    returningColumns: ['tenant_id', 'id', 'customer_name'],
+    displayColumnName: 'customer_name',
+};
+export const unchangedKeyUpdate: PostgresUpdateQuery = {
+    ...updateQuery,
+    criteria: { orderBy: [] },
+    changes: [{ columnName: 'customer_name', expected: '', value: null }],
+};
+export const updated: PostgresUpdateResult = {
+    outcome: 'committed',
+    source,
+    table,
+    observation: {
+        ...observation,
+        identity: {
+            ...identity,
+            values: [
+                { columnName: 'tenant_id', value: 'tenant-one' },
+                { columnName: 'id', value: '9007199254740995' },
+            ],
+        },
+        fields: {
+            ...observation.fields,
+            id: '9007199254740995',
+            customer_name: '',
+        },
+    },
+};
+export const configuredObservation: PostgresRowObservation = {
+    ...observation,
+    identifier: {
+        ...observation.identifier,
+        configuration: {
+            type: 'configured-key',
+            columnNames: ['tenant_id', 'id'],
+            stabilityConfirmed: true,
+        },
+    },
+    identity: { ...identity, type: 'configured-key' },
+};
+export const configuredUpdateQuery: PostgresUpdateQuery = {
+    ...unchangedKeyUpdate,
+    identifier: configuredObservation.identifier,
+    identity: configuredObservation.identity,
+};
+export const unconfirmedUpdateKey: PostgresRowObservation['identifier']['configuration'] = {
+    type: 'configured-key',
+    columnNames: ['tenant_id', 'id'],
+    // @ts-expect-error A configured stable key requires explicit confirmation.
+    stabilityConfirmed: false,
+};
+export const missingUpdateBaseline: PostgresUpdateQuery = {
+    ...updateQuery,
+    // @ts-expect-error A submitted field always includes its observed baseline.
+    changes: [{ columnName: 'customer_name', value: '' }],
+};
+export const undefinedUpdateValue: PostgresUpdateQuery = {
+    ...updateQuery,
+    // @ts-expect-error Undefined is not SQL NULL or omission from the changes array.
+    changes: [{ columnName: 'customer_name', expected: null, value: undefined }],
+};
+export const numericUpdateValue: PostgresUpdateQuery = {
+    ...updateQuery,
+    // @ts-expect-error Updating a native numeric column never coerces a JS number.
+    changes: [{ columnName: 'id', expected: '9007199254740993', value: 1 }],
+};
+export const wrongUpdateSource: PostgresUpdateQuery = {
+    ...updateQuery,
+    source: {
+        // @ts-expect-error Native updates do not consume Airtable source identity.
+        type: 'airtable',
+        baseId: 'appSynthetic',
+        tableId: 'tblSynthetic',
+    },
+};
+export const uncertainUpdate: PostgresUpdateResult = {
+    ...updated,
+    // @ts-expect-error An uncertain write cannot be a committed returned observation.
+    outcome: 'unknown',
+};
+// @ts-expect-error A committed update must include its actual returned observation.
+export const countOnlyUpdate: PostgresUpdateResult = {
+    outcome: 'committed',
+    source,
+    table,
+};
+export const absentUpdateIdentity: PostgresRowObservation = {
+    ...observation,
+    // @ts-expect-error An editable observation cannot invent a missing native key.
+    identity: null,
 };
 export const attachmentReason: PostgresAttachmentDisplayFailure =
     'URL_CREDENTIALS';

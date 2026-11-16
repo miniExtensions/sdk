@@ -38,6 +38,7 @@ export type {
     PostgresRecordEditingValidation,
     PostgresRecordIdentity,
     PostgresRelationship,
+    PostgresRowObservation,
     PostgresSchema,
     PostgresSelectQuery,
     PostgresSelectResult,
@@ -47,6 +48,8 @@ export type {
     PostgresTableReference,
     PostgresTextColumnConfig,
     PostgresType,
+    PostgresUpdateQuery,
+    PostgresUpdateResult,
     PostgresValue,
     SelectFieldChoice,
 } from './types.js';

@@ -413,12 +413,17 @@ Regenerate the snapshot and update the packaged declaration digest when
 adopting API contract changes. Installed consumers need no internal source,
 generator or credentials.
 
-Native PostgreSQL metadata, query/create contracts and record settings have an
-independent generated snapshot, so adding these types does not replace the
-existing operation contracts. Create results describe committed native
+Native PostgreSQL metadata, query/create/update contracts and record settings
+have an independent generated snapshot, so adding these types does not replace
+the existing operation contracts. Create results describe committed native
 `RETURNING` values; these adapter contracts do not add a loaded PostgreSQL Form
-or a new public save operation. Maintainers
-verify it with:
+or a new public save operation. `PostgresRowObservation` carries the native key,
+metadata and field baselines from an authorized read. `PostgresUpdateQuery`
+distinguishes omitted assignments, empty text and SQL NULL, with an expected
+baseline for each submitted field. `PostgresUpdateResult` describes acknowledged
+COMMIT and its actual returned observation, including a changed primary key.
+These types add no public Portal transport or lasting mutation authority.
+Maintainers verify it with:
 
 ```sh
 node scripts/generate-runtime-contracts.mjs --postgres-only --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --verify --check

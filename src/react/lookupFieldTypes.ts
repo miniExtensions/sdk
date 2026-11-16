@@ -15,6 +15,7 @@ import type {
 import type { ControlledButtonFieldProps } from './ButtonField.js';
 import type { ControlledFormulaFieldProps } from './FormulaField.js';
 import type { ControlledRollupFieldProps } from './RollupField.js';
+import type { ControlledRatingFieldProps } from './ControlledRatingField.js';
 import type { CompleteRichTextEditorProps } from './CompleteRichTextEditor.js';
 import type { RuntimeLanguage } from '../runtime/types.js';
 import type { ReadOnlyURLGalleryProps } from './ReadOnlyURLGallery.js';
@@ -160,6 +161,19 @@ export type LookupResultPresentation =
           readonly display: ControlledFormulaFieldProps;
       }
     | { readonly kind: 'rollup'; readonly display: ControlledRollupFieldProps }
+    | {
+          readonly kind: 'ratingField';
+          readonly display: Omit<
+              ControlledRatingFieldProps,
+              | 'onChange'
+              | 'owner'
+              | 'disabled'
+              | 'enableInlineEdit'
+              | 'binding'
+              | 'render'
+              | 'iconInput'
+          >;
+      }
     | {
           readonly kind: 'richText';
           readonly display: Omit<

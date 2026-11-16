@@ -221,6 +221,29 @@ export function isLookupResultPresentation(
             const display = input.display;
             if (!object(display)) return false;
             switch (input.kind) {
+                case 'ratingField':
+                    return (
+                        displayOnly(display) &&
+                        display.mode === 'controlled' &&
+                        (display.value === null || finite(display.value)) &&
+                        finite(display.max) &&
+                        oneOf(display.icon, [
+                            'star',
+                            'heart',
+                            'thumbsUp',
+                            'flag',
+                            'dot',
+                        ]) &&
+                        optionalFlags(display, [
+                            'grid',
+                            'showLabel',
+                            'invalid',
+                        ]) &&
+                        optionalString(display.color) &&
+                        optionalString(display.title) &&
+                        optionalString(display.feedback) &&
+                        textLabels(display.labels)
+                    );
                 case 'text':
                     return (
                         displayOnly(display) &&

@@ -715,6 +715,38 @@ function metadata<Config>(config: Config) {
 }
 const cohorts: [string, LookupResultPresentation, RegExp][] = [
     [
+        'native Rating outside grid',
+        {
+            kind: 'ratingField',
+            display: {
+                mode: 'controlled',
+                value: 8,
+                max: 3,
+                icon: 'heart',
+                color: 'redBright',
+                grid: false,
+                title: 'Rating',
+                labels: { empty: 'No rating' },
+            },
+        },
+        /greater than the maximum allowed/,
+    ],
+    [
+        'native Rating in grid',
+        {
+            kind: 'ratingField',
+            display: {
+                mode: 'controlled',
+                value: 3,
+                max: 5,
+                icon: 'star',
+                grid: true,
+                title: 'Grid Rating',
+            },
+        },
+        /mx-sdk-rating/,
+    ],
+    [
         'text',
         { kind: 'text', display: { value: 'Complete text', language: 'en' } },
         /Complete text/,

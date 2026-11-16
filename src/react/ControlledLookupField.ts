@@ -25,6 +25,7 @@ import {
 } from './CompleteCollaboratorField.js';
 import { ControlledFormulaField } from './FormulaField.js';
 import { ControlledRollupField } from './RollupField.js';
+import { ControlledRatingField } from './ControlledRatingField.js';
 import { CompleteRichTextEditor } from './CompleteRichTextEditor.js';
 import { ReadOnlyURLGallery } from './ReadOnlyURLGallery.js';
 import {
@@ -516,6 +517,14 @@ function Result({
             });
         case 'rollup':
             return h(ControlledRollupField, result.display);
+        case 'ratingField':
+            return h(ControlledRatingField, {
+                ...result.display,
+                disabled: true,
+                enableInlineEdit: false,
+                owner,
+                onChange: noop,
+            });
         case 'richText': {
             const { emptyLabel, language, ...display } = result.display;
             return h(CompleteRichTextEditor, {

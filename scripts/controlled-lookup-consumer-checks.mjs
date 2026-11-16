@@ -43,6 +43,7 @@ const cohorts=[
  ['quill',{kind:'quill',html:'<p><em>Quill content</em></p>'}],
  ['checkbox',{kind:'checkbox',value:true}],
  ['rating',{kind:'rating',value:3,max:5,icon:'heart',color:'#e11d48',label:'3 of 5'}],
+ ['nativeRating',{kind:'ratingField',display:{mode:'controlled',value:8,max:3,icon:'heart',color:'redBright',grid:false,title:'Rating'}}],
  ['phone',{kind:'phone',display:{value:'+1 202 555 0123',emptyLabel:'No phone'}}],
  ['duration',{kind:'duration',display:{value:3661,format:'h:mm:ss'}}],
  ['barcode',{kind:'barcode',display:{value:{text:'ABC-123',type:'qr'},language:'en'}}],
@@ -123,6 +124,7 @@ export function checkControlledLookupReactMatrix({
                 JSON.stringify({
                     private: true,
                     type: 'module',
+                    packageManager: 'pnpm@10.28.2',
                     dependencies: {
                         '@miniextensions/sdk': `file:${archive}`,
                         react: version,
@@ -147,17 +149,14 @@ export function checkControlledLookupReactMatrix({
                     .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
                     .join('\n') + '\n';
             writeFileSync(join(directory, 'pnpm-workspace.yaml'), policyText);
-            assert.equal(run('pnpm', ['--version']).trim(), '10.28.2');
+            const pnpm = (args) => run('corepack', ['pnpm', ...args]);
+            assert.equal(pnpm(['--version']).trim(), '10.28.2');
             for (const [key, value] of Object.entries(policy))
                 assert.deepEqual(
-                    JSON.parse(run('pnpm', ['config', 'get', key, '--json'])),
+                    JSON.parse(pnpm(['config', 'get', key, '--json'])),
                     value
                 );
-            run('pnpm', [
-                'install',
-                '--ignore-scripts',
-                '--strict-peer-dependencies',
-            ]);
+            pnpm(['install', '--ignore-scripts', '--strict-peer-dependencies']);
             assert.equal(
                 readFileSync(join(directory, 'pnpm-workspace.yaml'), 'utf8'),
                 policyText

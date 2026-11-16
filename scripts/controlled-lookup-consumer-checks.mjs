@@ -37,6 +37,9 @@ const h=React.createElement;
 let root,active={},owner={token:active,isCurrent(){return active===this.token;}},identity=0;
 const effects={transport:0,rows:0,submits:0,opens:0,triggerId:null};
 const dataImage='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="12" height="12"%3E%3Crect width="12" height="12" fill="red"/%3E%3C/svg%3E';
+const metadata=config=>({id:'lookup',name:'Lookup',description:null,isComputed:true,isPrimaryField:false,config});
+const numericBase={fieldId:'lookup',title:'Lookup',context:'form',computed:true,dirty:false,pending:false,validation:[],error:null,capability:{type:'readonly'}};
+const numberConfig={type:'number',options:{precision:2}},currencyConfig={type:'currency',options:{precision:2,symbol:'€'}},percentConfig={type:'percent',options:{precision:0}};
 const cohorts=[
  ['text',{kind:'text',display:{value:'Literal <b>text</b>',language:'en'}}],
  ['html',{kind:'html',html:'<strong>Rich HTML</strong><script>unexpected()</script><a href="https://never.example.invalid/">Link</a>'}],
@@ -57,6 +60,23 @@ const cohorts=[
  ['linkedTable',{kind:'linkedCollection',display:{layout:'table',phase:'ready',columns:[{key:'name',title:'Name'}],rows:[{key:'r0',cells:[{key:'name',result:{kind:'literal',text:'Linked row'}}],open:{label:'Open linked row',run(trigger){effects.opens++;effects.triggerId=trigger.id;}}}],labels:{empty:'Empty',loading:'Loading',unavailable:'Unavailable'}}}],
  ['linkedCard',{kind:'linkedCollection',display:{layout:'gallery',phase:'ready',rows:[{key:'card0',card:{status:'present',primary:'Rich card',fields:[{key:'detail',title:'Detail',leaf:{kind:'literal',text:'Card detail'}}],language:'en',layout:'gallery',images:[{id:'first',url:dataImage,filename:'First'},{id:'second',url:dataImage,filename:'Second'}],imageFit:'contain',imageHeight:80,shouldRenderThumbnail:true,thumbnailLocation:'left',fieldsPerCardRow:1,labels:{previousImage:'Previous image',nextImage:'Next image',noImage:'No image'}}}],labels:{empty:'Empty',loading:'Loading',unavailable:'Unavailable'}}}],
 ];
+cohorts.push(
+ ['number',{kind:'numeric',emptyLabel:'Empty',display:{...numericBase,physicalKind:'number',field:metadata(numberConfig),presentation:{type:'physical',config:numberConfig},value:1234.5,displayConfig:{showThousandsSeparator:true,numberSeparator:'space-comma'}}}],
+ ['currency',{kind:'numeric',emptyLabel:'Empty',display:{...numericBase,physicalKind:'currency',field:metadata(currencyConfig),presentation:{type:'physical',config:currencyConfig},value:0,displayConfig:{numberSeparator:'comma-period'}}}],
+ ['percent',{kind:'numeric',emptyLabel:'Empty',display:{...numericBase,physicalKind:'percent',field:metadata(percentConfig),presentation:{type:'physical',config:percentConfig},value:0.25,displayConfig:{showAsProgressBar:true}}}],
+ ['date',{kind:'date',display:{value:'2026-11-16',language:'en',airtableDateConfig:{type:'date',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}}}}],
+ ['dateTime',{kind:'dateTime',display:{value:'2026-11-16T12:30:00.000Z',language:'en',airtableDateConfig:{type:'dateTime',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'},timeFormat:{name:'24hour',format:'HH:mm'},timeZone:'utc'}}}}],
+ ['singleSelect',{kind:'singleSelect',display:{value:'Single choice',choices:[{id:'single',name:'Single choice'}],availableChoices:[{id:'single',name:'Single choice'}],presentation:'dropdown'}}],
+ ['singlePerson',{kind:'singleCollaborator',display:{value:{id:'grace',name:'Grace',email:'hidden@example.invalid'},choices:[],avatarPolicy:{type:'none'}}}],
+ ['button',{kind:'button',accepted:{mode:'controlled',value:{label:'Captured button',url:'https://never.example.invalid/button'},owner:{isCurrent:()=>owner.isCurrent()}}}],
+ ['urlButton',{kind:'urlButton',display:{href:'https://never.example.invalid/borrowed',buttonLabel:'Borrowed URL'}}],
+ ['attachmentImages',{kind:'attachmentImages',images:[{id:'admitted',url:dataImage,filename:'Admitted image'}],empty:'no-values',emptyLabel:'Empty images'}],
+ ['pills',{kind:'pills',items:[{label:'Pill A',backgroundColor:'#dbeafe'}]}],
+ ['linkedPills',{kind:'linkedPills',labels:['Supplied linked label']}],
+ ['suppliedPeople',{kind:'people',items:[{label:'Supplied Person',avatarSource:{src:dataImage,loading:'lazy'}}]}],
+);
+const galleryCard=cohorts.find(([name])=>name==='linkedCard')[1].display.rows[0].card;
+cohorts.push(['linkedList',{kind:'linkedCollection',display:{layout:'list',phase:'ready',rows:[{key:'list0',card:{...galleryCard,primary:'List row',layout:'list'}}],labels:{empty:'Empty',loading:'Loading',unavailable:'Unavailable'}}}]);
 function freezeFacts(value,seen=new Set()){if(value===null||typeof value!=='object'||seen.has(value))return;seen.add(value);for(const child of Object.values(value))freezeFacts(child,seen);Object.freeze(value);}
 freezeFacts(cohorts);
 const suppliedBytes=JSON.stringify(cohorts);
@@ -91,7 +111,7 @@ try{
  console.error=(...args)=>warnings.push(args.map(String).join(' '));await load();const {hydrateRoot}=await import('react-dom/client');
  await React.act(async()=>{root=hydrateRoot(host,element(),{onRecoverableError:error=>errors.push(String(error))});});
  assert.equal(React.version,ssr.react);assert.equal(host.firstElementChild,first);assert.deepEqual(errors,[]);assert.deepEqual(warnings,[]);
- assert.equal(host.querySelectorAll('.mx-sdk-lookup-occurrence').length,cohorts.length);assert(host.querySelector('.mx-sdk-html strong'));assert(host.querySelector('.mx-sdk-quill em'));assert.equal(host.querySelector('script'),null);assert.equal(host.querySelector('input[type=checkbox]').disabled,true);assert.equal(host.querySelectorAll('.mx-sdk-select-badge').length,2);assert(!host.textContent.includes('private@example.invalid'));
+ assert.equal(host.querySelectorAll('.mx-sdk-lookup-occurrence').length,cohorts.length);assert(host.querySelector('.mx-sdk-html strong'));assert(host.querySelector('.mx-sdk-quill em'));assert.equal(host.querySelector('script'),null);assert.equal(host.querySelector('input[type=checkbox]').disabled,true);assert.equal(host.querySelectorAll('.mx-sdk-select-badge').length,3);assert(!host.textContent.includes('private@example.invalid'));for(const text of ['1 234,50','€0.00','25%','2026-11-16','12:30','Single choice','Grace','Captured button','Borrowed URL','Pill A','Supplied linked label','Supplied Person','List row'])assert(host.textContent.includes(text),'Missing installed cohort: '+text);
  const open=Array.from(host.querySelectorAll('button')).find(node=>node.textContent==='Open linked row');assert(open);open.id='actual-open-trigger';await React.act(async()=>open.click());assert.equal(effects.opens,1);assert.equal(effects.triggerId,open.id);
  active=null;const anchor=host.querySelector('.mx-sdk-html a');for(const type of ['click','auxclick']){const event=new window.MouseEvent(type,{bubbles:true,cancelable:true});await React.act(async()=>anchor.dispatchEvent(event));assert.equal(event.defaultPrevented,true);}await React.act(async()=>open.click());assert.equal(effects.opens,1);
  await React.act(async()=>renew({status:'masked'}));assert.match(snapshot().text,/••••••••/);assert.equal(host.querySelector('img,audio,video,iframe'),null);

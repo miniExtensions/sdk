@@ -26,6 +26,7 @@ window.lookupProof={snapshot,retire(){active=null;},initial(){flushSync(()=>rene
 `;
 const observedInput = String.raw`
 window.lookupProof.currentInput=()=>JSON.stringify(state);
+window.lookupProof.markdown=()=>flushSync(()=>renew({status:'ready',result:{kind:'markdown',value:'**Readonly supplied Markdown**',identity:'lookup-markdown-'+identity,emptyLabel:'No value'}}));
 `;
 
 /** Installed public controls, trusted browser inputs, isolated provider-free host. */
@@ -208,7 +209,7 @@ export async function checkControlledLookupBrowser({
             });
             await page.goto(origin + '/?format=' + format);
             await page.waitForFunction(
-                () => window.lookupProof?.snapshot().cohorts.length === 18
+                () => window.lookupProof?.snapshot().cohorts.length === 32
             );
             const record = (name, details = {}) =>
                 evidence.results.push({
@@ -228,7 +229,7 @@ export async function checkControlledLookupBrowser({
             evidence.platform = initial.platform;
             assert.equal(
                 await page.locator('.mx-sdk-lookup-occurrence').count(),
-                18
+                32
             );
             assert.equal(
                 await page.locator('.mx-sdk-html strong').first().textContent(),
@@ -239,7 +240,7 @@ export async function checkControlledLookupBrowser({
                 'Quill content'
             );
             assert.equal(await page.locator('script:not([src])').count(), 0);
-            assert.equal(await page.locator('.mx-sdk-select-badge').count(), 2);
+            assert.equal(await page.locator('.mx-sdk-select-badge').count(), 3);
             assert.equal(
                 await page
                     .locator('.mx-sdk-select-badge')
@@ -247,15 +248,39 @@ export async function checkControlledLookupBrowser({
                     .textContent(),
                 'Urgent'
             );
-            assert.equal(
-                await page.locator('.mx-sdk-collaborator-name').textContent(),
-                'Ada'
+            assert.deepEqual(
+                await page
+                    .locator('.mx-sdk-collaborator-name')
+                    .allTextContents(),
+                ['Ada', 'Grace', 'Supplied Person']
             );
             assert.equal(
                 await page.locator('.mx-sdk-finder-rating svg').count(),
                 5
             );
             assert.equal(await page.locator('.mx-sdk-rating-icon').count(), 3);
+            const progress = await page
+                .locator('.mx-sdk-localized-numeric-progress')
+                .evaluate((node) => {
+                    const fill = node.querySelector(
+                        '.mx-sdk-localized-numeric-fill'
+                    );
+                    const track = node.querySelector(
+                        '.mx-sdk-localized-numeric-track'
+                    );
+                    return {
+                        fill: fill.getBoundingClientRect().width,
+                        track: track.getBoundingClientRect().width,
+                        width: fill.style.width,
+                        text: node.textContent,
+                    };
+                });
+            assert.equal(progress.width, '25%');
+            assert(
+                progress.track > 0 &&
+                    Math.abs(progress.fill / progress.track - 0.25) < 0.02
+            );
+            assert.equal(progress.text, '25%');
             assert.match(initial.text, /greater than the maximum allowed/);
             for (const text of [
                 'Literal <b>text</b>',
@@ -267,6 +292,19 @@ export async function checkControlledLookupBrowser({
                 'Linked row',
                 'Rich card',
                 'Card detail',
+                '1 234,50',
+                '€0.00',
+                '25%',
+                '2026-11-16',
+                '12:30',
+                'Single choice',
+                'Grace',
+                'Captured button',
+                'Borrowed URL',
+                'Pill A',
+                'Supplied linked label',
+                'Supplied Person',
+                'List row',
             ])
                 assert(initial.text.includes(text), 'Missing cohort: ' + text);
             assert.equal(
@@ -302,8 +340,9 @@ export async function checkControlledLookupBrowser({
                 await page.locator('input[type=checkbox]').isDisabled(),
                 true
             );
-            assert(
-                !(await snapshot()).text.includes('private@example.invalid')
+            assert.doesNotMatch(
+                initial.text,
+                /(?:private|hidden)@example\.invalid/
             );
             const paint = await page
                 .locator('.mx-sdk-controlled-lookup')
@@ -318,6 +357,7 @@ export async function checkControlledLookupBrowser({
             record('all rich cohorts, readonly/privacy and scoped paint', {
                 ...paint,
                 leavesPaint,
+                progress,
                 suppliedUnchanged: initial.suppliedUnchanged,
             });
             assert.equal(initial.suppliedUnchanged, true);
@@ -505,6 +545,29 @@ export async function checkControlledLookupBrowser({
                     inputUnchanged: true,
                     ignoredTransientClasses: ['hovering', 'counter-<digits>'],
                 }
+            );
+
+            await page.evaluate(() => window.lookupProof.markdown());
+            await page
+                .locator('.ProseMirror[contenteditable=false] strong')
+                .waitFor();
+            assert.equal(
+                await page.locator('.ProseMirror strong').textContent(),
+                'Readonly supplied Markdown'
+            );
+            const markdownBefore = await richSnapshot();
+            const markdownInput = await page.evaluate(() =>
+                window.lookupProof.currentInput()
+            );
+            await page.locator('.ProseMirror').click();
+            await page.keyboard.type('also refused');
+            assert.deepEqual(await richSnapshot(), markdownBefore);
+            assert.equal(
+                await page.evaluate(() => window.lookupProof.currentInput()),
+                markdownInput
+            );
+            record(
+                'actual reused Markdown readonly presentation and no-effect input'
             );
 
             await page.evaluate(() => window.lookupProof.masked());

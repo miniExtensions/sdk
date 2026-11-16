@@ -68,6 +68,96 @@ function fixture() {
 }
 
 describe('clientless automatic one-shot and canonical allocation receipts', () => {
+    for (const callback of ['read', 'final authority'] as const) {
+        it(`issues at most one permit across reentrant ${callback}`, () => {
+            const f = fixture();
+            f.model.connect(() => {});
+            const request = f.requests[0];
+            const nested: string[] = [];
+            if (callback === 'read') {
+                const original = f.host.read;
+                let entered = false;
+                f.host.read = (scope) => {
+                    if (!entered) {
+                        entered = true;
+                        nested.push(request.admitAllocation().status);
+                    }
+                    return original(scope);
+                };
+            } else {
+                let checks = 0;
+                f.host.isCurrent = () => {
+                    if (++checks === 2)
+                        nested.push(request.admitAllocation().status);
+                    return true;
+                };
+            }
+            const admission = request.admitAllocation();
+            assert.equal(admission.status, 'admitted');
+            assert.deepEqual(nested, ['refused']);
+            assert.equal(request.admitAllocation().status, 'refused');
+        });
+    }
+    for (const status of ['coalesced', 'refused'] as const) {
+        it(`refuses allocation if its last authority callback reports ${status}`, () => {
+            const f = fixture();
+            f.model.connect(() => {});
+            let checks = 0;
+            f.host.isCurrent = () => {
+                if (++checks === 2) f.requests[0].didSettle({ status });
+                return true;
+            };
+            assert.equal(f.requests[0].admitAllocation().status, 'refused');
+            assert.equal(f.model.getSnapshot().allocated, false);
+        });
+    }
+    it('keeps consecutive admitted native error messages current while observing', () => {
+        const f = fixture();
+        f.model.connect(() => {});
+        f.requests[0].didSettle({ status: 'coalesced' });
+        f.update({ saveState: { type: 'error', message: 'First error' } });
+        f.update({ saveState: { type: 'error', message: 'Second error' } });
+        assert.equal(f.model.getSnapshot().message, 'Second error');
+        assert.equal(f.requests.length, 1);
+        assert.equal(f.model.getSnapshot().outcome, null);
+    });
+    it('clears an observed native error when the current operation becomes pending', () => {
+        const f = fixture();
+        f.model.connect(() => {});
+        f.requests[0].didSettle({ status: 'coalesced' });
+        f.update({ saveState: { type: 'error', message: 'Prior error' } });
+        f.update({ saveState: { type: 'pending' } });
+        assert.equal(f.model.getSnapshot().phase, 'observing');
+        assert.equal(f.model.getSnapshot().message, undefined);
+        assert.equal(f.model.getSnapshot().error, undefined);
+        assert.equal(f.requests.length, 1);
+    });
+    it('does not overwrite retirement caused by the committed authority read', () => {
+        const f = fixture();
+        f.host.isCurrent = () => {
+            f.model.retire();
+            return true;
+        };
+        f.model.connect(() => {});
+        assert.equal(f.model.getSnapshot().phase, 'retired');
+        assert.equal(f.requests.length, 0);
+    });
+    it('does not consume an intent after the authority read disconnects the last view', () => {
+        const f = fixture();
+        f.update({ facts: { ...f.frame().facts, preview: true } }, false);
+        const connection = f.model.connect(() => {});
+        f.update({ facts: { ...f.frame().facts, preview: false } }, false);
+        const original = f.host.read;
+        f.host.read = (scope) => {
+            connection.disconnect();
+            f.host.read = original;
+            return original(scope);
+        };
+        connection.refresh();
+        assert.equal(f.requests.length, 0);
+        f.model.connect(() => {});
+        assert.equal(f.requests.length, 1);
+    });
     it('observes a late explicit coalescing result without joining or claiming the primary Save', () => {
         const f = fixture();
         f.model.connect(() => {});

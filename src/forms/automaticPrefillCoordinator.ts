@@ -121,8 +121,10 @@ export function createAutomaticPrefillCoordinator(
             | AutomaticPrefillRequestReceipt['status']
             | 'invalid';
         permit: AutomaticPrefillAllocation | null;
+        admitting: boolean;
         allocated: boolean;
         settled: boolean;
+        observing: boolean;
     };
     let attempt: Attempt | null = null;
     const publish = (change: Partial<AutomaticPrefillState>) => {
@@ -168,7 +170,7 @@ export function createAutomaticPrefillCoordinator(
                 retire();
                 return null;
             }
-            return frame;
+            return retired ? null : frame;
         } catch {
             retire();
             return null;
@@ -184,17 +186,30 @@ export function createAutomaticPrefillCoordinator(
     const refresh = () => {
         if (!active()) return;
         const frame = current();
-        if (!frame) return;
+        if (!frame || !active()) return;
         const decision = evaluateAutomaticPrefill(frame.facts);
         if (decision.mode === 'manual') {
             publish({ phase: 'inactive' });
             return;
         }
         if (attempt) {
-            if (
-                (!attempt.settled || state.phase === 'observing') &&
-                frame.saveState.type === 'error'
-            )
+            if (attempt.observing) {
+                publish(
+                    frame.saveState.type === 'error'
+                        ? {
+                              phase: 'error',
+                              error: 'save-failed',
+                              message: frame.saveState.message,
+                          }
+                        : {
+                              phase: 'observing',
+                              error: undefined,
+                              message: undefined,
+                          }
+                );
+                return;
+            }
+            if (!attempt.settled && frame.saveState.type === 'error')
                 publish({
                     phase: 'error',
                     error: 'save-failed',
@@ -213,8 +228,10 @@ export function createAutomaticPrefillCoordinator(
             intent,
             receipt: 'pending',
             permit: null,
+            admitting: false,
             allocated: false,
             settled: false,
+            observing: frame.saveState.type !== 'idle',
         };
         attempt = own;
         if (frame.saveState.type === 'error') {
@@ -246,17 +263,19 @@ export function createAutomaticPrefillCoordinator(
             admitAllocation() {
                 if (
                     !active() ||
+                    own.admitting ||
                     own.permit ||
                     own.allocated ||
                     own.settled ||
                     (own.receipt !== 'pending' && own.receipt !== 'accepted')
                 )
                     return { status: 'refused' };
-                const latest = current();
-                if (!latest) return { status: 'refused' };
-                const read = latest.read;
-                const eligibility = evaluateAutomaticPrefill(latest.facts);
+                own.admitting = true;
                 try {
+                    const latest = current();
+                    if (!latest) return { status: 'refused' };
+                    const read = latest.read;
+                    const eligibility = evaluateAutomaticPrefill(latest.facts);
                     if (
                         eligibility.mode !== 'automatic' ||
                         !eligibility.eligible ||
@@ -264,17 +283,27 @@ export function createAutomaticPrefillCoordinator(
                         !host.isCurrent(latest)
                     )
                         return { status: 'refused' };
+                    // Every foreign callback can settle, retire, or reenter.
+                    if (
+                        !active() ||
+                        own.permit ||
+                        own.allocated ||
+                        own.settled ||
+                        (own.receipt !== 'pending' &&
+                            own.receipt !== 'accepted')
+                    )
+                        return { status: 'refused' };
+                    const allocation = Object.freeze(
+                        {}
+                    ) as AutomaticPrefillAllocation;
+                    own.permit = allocation;
+                    return { status: 'admitted', allocation, read };
                 } catch {
                     retire();
                     return { status: 'refused' };
+                } finally {
+                    own.admitting = false;
                 }
-                // The final host callback can synchronously retire this view.
-                if (!active()) return { status: 'refused' };
-                const allocation = Object.freeze(
-                    {}
-                ) as AutomaticPrefillAllocation;
-                own.permit = allocation;
-                return { status: 'admitted', allocation, read };
             },
             didAllocate(allocation) {
                 if (own.settled || own.allocated) return;
@@ -291,7 +320,12 @@ export function createAutomaticPrefillCoordinator(
                 if (own.settled) return;
                 own.settled = true;
                 if (outcome.status === 'coalesced' && !own.allocated) {
-                    publish({ phase: retired ? 'retired' : 'observing' });
+                    own.observing = true;
+                    publish({
+                        phase: retired ? 'retired' : 'observing',
+                        error: undefined,
+                        message: undefined,
+                    });
                     return;
                 }
                 if (outcome.status === 'refused' && !own.allocated) {
@@ -339,9 +373,10 @@ export function createAutomaticPrefillCoordinator(
                 own.receipt = receipt.status;
                 if (own.settled) return;
                 if (own.allocated && receipt.status !== 'accepted') fail();
-                else if (receipt.status === 'coalesced')
+                else if (receipt.status === 'coalesced') {
+                    own.observing = true;
                     publish({ phase: retired ? 'retired' : 'observing' });
-                else if (receipt.status === 'refused')
+                } else if (receipt.status === 'refused')
                     publish({
                         phase: retired ? 'retired' : 'error',
                         error: 'host-refused',

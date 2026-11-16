@@ -653,6 +653,7 @@ try {
                 path === 'docs/field-bindings.md' ||
                 path === 'docs/count.md' ||
                 path === 'docs/formula.md' ||
+                path === 'docs/rating.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||

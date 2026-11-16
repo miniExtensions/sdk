@@ -35,6 +35,7 @@ export type AutomaticPrefillAllocationAdmission =
     | { status: 'refused' };
 export type AutomaticPrefillOutcome =
     | { status: 'refused'; message?: string }
+    | { status: 'coalesced'; message?: string }
     | {
           status: 'saved' | 'failed' | 'unknown';
           allocation: AutomaticPrefillAllocation;
@@ -122,7 +123,6 @@ export function createAutomaticPrefillCoordinator(
         permit: AutomaticPrefillAllocation | null;
         allocated: boolean;
         settled: boolean;
-        events: (() => void)[];
     };
     let attempt: Attempt | null = null;
     const publish = (change: Partial<AutomaticPrefillState>) => {
@@ -191,7 +191,10 @@ export function createAutomaticPrefillCoordinator(
             return;
         }
         if (attempt) {
-            if (!attempt.settled && frame.saveState.type === 'error')
+            if (
+                (!attempt.settled || state.phase === 'observing') &&
+                frame.saveState.type === 'error'
+            )
                 publish({
                     phase: 'error',
                     error: 'save-failed',
@@ -212,7 +215,6 @@ export function createAutomaticPrefillCoordinator(
             permit: null,
             allocated: false,
             settled: false,
-            events: [],
         };
         attempt = own;
         if (frame.saveState.type === 'error') {
@@ -239,17 +241,20 @@ export function createAutomaticPrefillCoordinator(
             publish({ phase: 'error', error: 'no-prefills' });
             return;
         }
-        const event = (run: () => void) => {
-            if (own.receipt === 'pending') own.events.push(run);
-            else if (own.receipt === 'accepted') run();
-        };
         const request: AutomaticPrefillRequest = Object.freeze({
             intent,
             admitAllocation() {
-                if (!active() || own.permit || own.allocated || own.settled)
+                if (
+                    !active() ||
+                    own.permit ||
+                    own.allocated ||
+                    own.settled ||
+                    (own.receipt !== 'pending' && own.receipt !== 'accepted')
+                )
                     return { status: 'refused' };
                 const latest = current();
                 if (!latest) return { status: 'refused' };
+                const read = latest.read;
                 const eligibility = evaluateAutomaticPrefill(latest.facts);
                 try {
                     if (
@@ -263,55 +268,60 @@ export function createAutomaticPrefillCoordinator(
                     retire();
                     return { status: 'refused' };
                 }
+                // The final host callback can synchronously retire this view.
+                if (!active()) return { status: 'refused' };
                 const allocation = Object.freeze(
                     {}
                 ) as AutomaticPrefillAllocation;
                 own.permit = allocation;
-                return { status: 'admitted', allocation, read: latest.read };
+                return { status: 'admitted', allocation, read };
             },
             didAllocate(allocation) {
-                event(() => {
-                    if (own.settled || allocation !== own.permit) {
-                        fail();
-                        return;
-                    }
-                    own.allocated = true;
-                    publish({ allocated: true });
-                });
+                if (own.settled || own.allocated) return;
+                if (!own.permit || allocation !== own.permit) {
+                    fail();
+                    return;
+                }
+                // Actual allocation is a fact even if the request wrapper later
+                // throws or returns a contradictory admission result.
+                own.allocated = true;
+                publish({ allocated: true });
             },
             didSettle(outcome) {
-                event(() => {
-                    if (own.settled) return;
-                    own.settled = true;
-                    if (outcome.status === 'refused' && !own.allocated) {
-                        publish({
-                            phase: retired ? 'retired' : 'error',
-                            error: 'host-refused',
-                            message: outcome.message,
-                        });
-                        return;
-                    }
-                    if (
-                        outcome.status === 'refused' ||
-                        !own.allocated ||
-                        outcome.allocation !== own.permit
-                    ) {
-                        fail();
-                        return;
-                    }
+                if (own.settled) return;
+                own.settled = true;
+                if (outcome.status === 'coalesced' && !own.allocated) {
+                    publish({ phase: retired ? 'retired' : 'observing' });
+                    return;
+                }
+                if (outcome.status === 'refused' && !own.allocated) {
                     publish({
-                        phase: retired
-                            ? 'retired'
-                            : outcome.status === 'failed'
-                              ? 'error'
-                              : outcome.status,
-                        outcome: outcome.status,
-                        error:
-                            outcome.status === 'failed'
-                                ? 'save-failed'
-                                : undefined,
+                        phase: retired ? 'retired' : 'error',
+                        error: 'host-refused',
                         message: outcome.message,
                     });
+                    return;
+                }
+                if (
+                    outcome.status === 'refused' ||
+                    outcome.status === 'coalesced' ||
+                    !own.permit ||
+                    !own.allocated ||
+                    outcome.allocation !== own.permit
+                ) {
+                    fail();
+                    return;
+                }
+                publish({
+                    phase: retired
+                        ? 'retired'
+                        : outcome.status === 'failed'
+                          ? 'error'
+                          : outcome.status,
+                    outcome: outcome.status,
+                    error:
+                        outcome.status === 'failed' ? 'save-failed' : undefined,
+                    message: outcome.message,
                 });
             },
         });
@@ -320,15 +330,18 @@ export function createAutomaticPrefillCoordinator(
             publish({ requested: true });
             if (
                 !receipt ||
+                typeof (receipt as { then?: unknown }).then === 'function' ||
                 !['accepted', 'coalesced', 'refused'].includes(receipt.status)
             ) {
                 own.receipt = 'invalid';
-                fail();
+                if (!own.settled) fail();
             } else {
                 own.receipt = receipt.status;
-                if (receipt.status === 'coalesced')
+                if (own.settled) return;
+                if (own.allocated && receipt.status !== 'accepted') fail();
+                else if (receipt.status === 'coalesced')
                     publish({ phase: retired ? 'retired' : 'observing' });
-                if (receipt.status === 'refused')
+                else if (receipt.status === 'refused')
                     publish({
                         phase: retired ? 'retired' : 'error',
                         error: 'host-refused',
@@ -338,10 +351,8 @@ export function createAutomaticPrefillCoordinator(
         } catch {
             publish({ requested: true });
             own.receipt = 'invalid';
-            fail();
+            if (!own.settled) fail();
         }
-        const events = own.events.splice(0);
-        if (own.receipt === 'accepted') for (const run of events) run();
     };
     return {
         getSnapshot: () => state,

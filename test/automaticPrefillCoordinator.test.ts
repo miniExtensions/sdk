@@ -4,6 +4,7 @@ import {
     createAutomaticPrefillCoordinator,
     type AutomaticPrefillFrame,
     type AutomaticPrefillHost,
+    type AutomaticPrefillAllocation,
     type AutomaticPrefillRequest,
     type AutomaticPrefillRequestReceipt,
 } from '../src/forms/automaticPrefillCoordinator.js';
@@ -67,6 +68,132 @@ function fixture() {
 }
 
 describe('clientless automatic one-shot and canonical allocation receipts', () => {
+    it('observes a late explicit coalescing result without joining or claiming the primary Save', () => {
+        const f = fixture();
+        f.model.connect(() => {});
+        f.requests[0].didSettle({ status: 'coalesced' });
+        assert.equal(f.model.getSnapshot().phase, 'observing');
+        assert.equal(f.model.getSnapshot().allocated, false);
+        f.update({ saveState: { type: 'complete' } });
+        assert.equal(f.model.getSnapshot().outcome, null);
+        f.update({ saveState: { type: 'idle' } });
+        assert.equal(f.requests.length, 1);
+    });
+    it('preserves a current native error while observing a coalesced primary', () => {
+        const f = fixture();
+        f.model.connect(() => {});
+        f.requests[0].didSettle({ status: 'coalesced' });
+        f.update({
+            saveState: { type: 'error', message: 'Admitted native message.' },
+        });
+        assert.equal(f.model.getSnapshot().phase, 'error');
+        assert.equal(f.model.getSnapshot().message, 'Admitted native message.');
+        assert.equal(f.model.getSnapshot().outcome, null);
+    });
+    for (const close of ['disconnect', 'retire'] as const) {
+        it(`rechecks activity when the last authority callback causes ${close}`, () => {
+            const f = fixture();
+            const connection = f.model.connect(() => {});
+            let checks = 0;
+            f.host.isCurrent = () => {
+                if (++checks === 2) {
+                    if (close === 'disconnect') connection.disconnect();
+                    else f.model.retire();
+                }
+                return true;
+            };
+            assert.equal(f.requests[0].admitAllocation().status, 'refused');
+        });
+    }
+    it('does not accept a Promise carrying an accepted-looking status as admission', () => {
+        const f = fixture();
+        f.run(
+            () =>
+                Object.assign(Promise.resolve(), {
+                    status: 'accepted',
+                }) as unknown as AutomaticPrefillRequestReceipt
+        );
+        f.model.connect(() => {});
+        assert.equal(f.model.getSnapshot().outcome, 'unknown');
+        assert.equal(f.requests[0].admitAllocation().status, 'refused');
+    });
+    for (const mode of ['throw', 'refused', 'coalesced'] as const) {
+        it(`preserves actual allocation and later tagged settlement after host ${mode}`, () => {
+            const f = fixture();
+            let allocation!: AutomaticPrefillAllocation;
+            f.run((request) => {
+                const admission = request.admitAllocation();
+                assert.equal(admission.status, 'admitted');
+                if (admission.status !== 'admitted')
+                    throw new Error('missing permit');
+                allocation = admission.allocation;
+                request.didAllocate(allocation);
+                if (mode === 'throw')
+                    throw new Error('host failed after actual allocation');
+                return { status: mode };
+            });
+            f.model.connect(() => {});
+            assert.equal(f.model.getSnapshot().allocated, true);
+            assert.equal(f.model.getSnapshot().outcome, 'unknown');
+            f.requests[0].didSettle({ status: 'saved', allocation });
+            assert.equal(f.model.getSnapshot().outcome, 'saved');
+        });
+    }
+    it('retains a synchronous confirmed outcome even when the host subsequently throws', () => {
+        const f = fixture();
+        f.run((request) => {
+            const admission = request.admitAllocation();
+            if (admission.status !== 'admitted')
+                throw new Error('missing permit');
+            request.didAllocate(admission.allocation);
+            request.didSettle({
+                status: 'saved',
+                allocation: admission.allocation,
+            });
+            throw new Error('host failed after settled effect');
+        });
+        f.model.connect(() => {});
+        assert.equal(f.model.getSnapshot().allocated, true);
+        assert.equal(f.model.getSnapshot().outcome, 'saved');
+    });
+    it('keeps a confirmed Saved outcome stable under duplicate allocation notifications', () => {
+        const f = fixture();
+        f.model.connect(() => {});
+        const request = f.requests[0],
+            admission = request.admitAllocation();
+        if (admission.status !== 'admitted') throw new Error('missing permit');
+        request.didAllocate(admission.allocation);
+        request.didSettle({
+            status: 'saved',
+            allocation: admission.allocation,
+        });
+        request.didAllocate(admission.allocation);
+        assert.equal(f.model.getSnapshot().outcome, 'saved');
+        assert.equal(f.model.getSnapshot().phase, 'saved');
+    });
+    for (const receipt of [
+        { status: 'refused' },
+        { status: 'coalesced' },
+        undefined,
+        Promise.resolve({ status: 'accepted' }),
+    ]) {
+        it(`refuses a late allocation gate after ${receipt === undefined ? 'void' : receipt instanceof Promise ? 'Promise' : receipt.status} request admission`, () => {
+            const f = fixture();
+            f.run(() => receipt as unknown as AutomaticPrefillRequestReceipt);
+            f.model.connect(() => {});
+            assert.equal(f.requests[0].admitAllocation().status, 'refused');
+            assert.equal(f.model.getSnapshot().allocated, false);
+        });
+    }
+    it('cannot manufacture allocated/saved using a null ticket without admission', () => {
+        const f = fixture();
+        f.model.connect(() => {});
+        const forged = null as unknown as AutomaticPrefillAllocation;
+        f.requests[0].didAllocate(forged);
+        f.requests[0].didSettle({ status: 'saved', allocation: forged });
+        assert.equal(f.model.getSnapshot().allocated, false);
+        assert.equal(f.model.getSnapshot().outcome, 'unknown');
+    });
     it('is inert before a committed connection', () => {
         const f = fixture();
         assert.equal(f.reads(), 0);

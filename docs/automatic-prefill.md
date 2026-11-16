@@ -40,6 +40,10 @@ or bypass native validation. Record actual native allocation through
 Thunk fulfillment, an untagged loaded success state, a permit, refusal, or an
 unknown outcome does not. Already allocated native effects settle independently
 of view disconnection or retirement; the SDK neither aborts nor replays them.
+An explicit coalescing result may arrive after a queued host request: it observes
+the current native status without joining the primary operation or claiming its
+saved outcome. A later wrapper exception cannot erase actual tagged allocation
+or settlement already reported by native code.
 
 The host supplies only admitted public error text. Preserve native generic-error
 prefix stripping and localized fallback classification in that small translation.

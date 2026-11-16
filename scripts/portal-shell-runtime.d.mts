@@ -24,3 +24,16 @@ export function assertPortalShellSidebarConsumer(
     staleCommits: number;
     bodyRemountsDuringResize: number;
 }>;
+
+export function assertPortalShellPresentationConsumer(
+    input: Omit<Parameters<typeof assertPortalShellConsumer>[0], 'portals'>
+): Promise<{
+    availabilityCases: number;
+    authorityRetirements: number;
+    logoutIntents: number;
+    submitEvents: number;
+    bodyRemountsWhileSelected: number;
+    implicitNetworkRequests: number;
+    synchronousPublications: number;
+    siblingLogoutIntents: number;
+}>;

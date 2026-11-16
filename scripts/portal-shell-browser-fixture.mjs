@@ -1,4 +1,4 @@
-import React, { createElement as h, useState } from 'react';
+import React, { createElement as h, useLayoutEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CompletePortalShell } from '@miniextensions/sdk/react';
 import { resolvePortalShellSelection } from '@miniextensions/sdk/portals';
@@ -70,6 +70,16 @@ function App() {
     }));
     const [mount, setMount] = useState(0);
     const [resizeEnabled, setResizeEnabled] = useState(false);
+    // Synthetic controlled-host publication for committed ownership witnesses.
+    window.fixtureSnapshot = snapshot;
+    window.publishSnapshot = setSnapshot;
+    useLayoutEffect(() => {
+        window.fixtureCommittedSnapshot = snapshot;
+        return () => {
+            if (window.fixtureCommittedSnapshot === snapshot)
+                window.fixtureCommittedSnapshot = null;
+        };
+    }, [snapshot]);
     window.enableSidebarResize = setResizeEnabled;
     const acceptWidth = (change) => {
         if (

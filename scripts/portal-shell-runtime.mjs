@@ -102,6 +102,39 @@ export async function assertPortalShellConsumer({
     assert.match(html, /&lt;Orders&gt;/);
     assert.doesNotMatch(html, /<script|bad\(\)/);
     assert.deepEqual(intents, []);
+    const richHeader = {
+        ...snapshot.header,
+        title: 'Plain header fallback',
+        titleHtml:
+            '<h1>Owned heading</h1><strong>Owned title</strong><script>bad()</script>',
+    };
+    const renderHeader = (header) =>
+        renderToString(
+            h(ui.CompletePortalShell, {
+                snapshot: { ...snapshot, header },
+                onIntent,
+            })
+        );
+    const richMarkup = renderHeader(richHeader);
+    assert.match(richMarkup, /<h1>Owned heading<\/h1>/);
+    assert.match(richMarkup, /<strong>Owned title<\/strong>/);
+    assert.doesNotMatch(richMarkup, /Plain header fallback|<script|bad\(\)/);
+    assert.doesNotMatch(richMarkup, /<h1[^>]*>\s*<div/);
+    for (const titleHtml of ['', '<script>bad()</script>']) {
+        const blank = renderHeader({ ...richHeader, titleHtml });
+        assert.doesNotMatch(blank, /Plain header fallback|<script|bad\(\)/);
+    }
+    const branded = renderHeader({
+        ...richHeader,
+        logoUrl: 'https://example.test/logo.png',
+    });
+    assert.match(branded, /src="https:\/\/example.test\/logo.png"/);
+    assert.match(branded, /<strong>Owned title<\/strong>/);
+    assert.doesNotMatch(
+        renderHeader({ ...richHeader, hidden: true }),
+        /Owned heading|Owned title|Plain header fallback/
+    );
+    assert.deepEqual(intents, []);
     let networks = 0;
     const window = new Window({
         url: 'https://consumer.invalid/portal?viewId=open',
@@ -168,6 +201,31 @@ export async function assertPortalShellConsumer({
     try {
         await render();
         assert.deepEqual(intents, []);
+        const originalHeader = snapshot.header;
+        await update({ header: richHeader });
+        const renderedTitle = container.querySelector(
+            '.mx-sdk-portal-title-html'
+        );
+        assert(renderedTitle);
+        assert.equal(renderedTitle.querySelector('h1').textContent, 'Owned heading');
+        assert.equal(renderedTitle.querySelector('strong').textContent, 'Owned title');
+        assert.equal(renderedTitle.querySelector('script'), null);
+        for (const titleHtml of ['', '<script>bad()</script>']) {
+            await update({ header: { ...richHeader, titleHtml } });
+            assert.equal(
+                container.querySelector('.mx-sdk-portal-title-html').textContent,
+                ''
+            );
+            assert(!container.textContent.includes('Plain header fallback'));
+        }
+        await update({ header: originalHeader });
+        assert.equal(container.querySelector('.mx-sdk-portal-title-html'), null);
+        assert.equal(
+            container.querySelector('.mx-sdk-portal-brand h1').textContent,
+            '<Portal>'
+        );
+        assert.deepEqual(intents, []);
+        assert.equal(networks, 0);
         assert.equal(
             container.querySelector('[aria-current="page"]').textContent,
             'Open orders'

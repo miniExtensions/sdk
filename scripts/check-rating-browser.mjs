@@ -97,6 +97,7 @@ try {
     const inert = async () => {
         assert.equal(
             await page
+                .locator('#legacy-rating-example')
                 .locator(
                     'a,area,iframe,video,img,object,embed,svg,input[type="number"],input[type="range"],progress,meter,[role="progressbar"],[role="slider"],[role="spinbutton"],[role="radiogroup"],[role="radio"]'
                 )
@@ -562,6 +563,78 @@ try {
     assert.equal(await writes(), finalWrites);
     await inert();
     await noGalleryEvents();
+    const controlled = page.locator('#controlled-rating-example');
+    const controlledInput = controlled.getByRole('slider', {
+        name: 'Controlled rating',
+        exact: true,
+    });
+    assert.equal(await controlled.locator('.mx-sdk-rating-icon').count(), 5);
+    assert.equal(await controlledInput.inputValue(), '1');
+    assert.equal(
+        await controlled.locator('#controlled-rating-value').textContent(),
+        'null'
+    );
+    await controlledInput.focus();
+    await controlledInput.press('Home');
+    assert.equal(
+        await controlled.locator('#controlled-rating-value').textContent(),
+        '1'
+    );
+    await controlledInput.press('End');
+    assert.equal(
+        await controlled.locator('#controlled-rating-value').textContent(),
+        '5'
+    );
+    await controlledInput.press('Delete');
+    assert.equal(
+        await controlled.locator('#controlled-rating-value').textContent(),
+        'null'
+    );
+    const controlledChanges = await controlled
+        .locator('#controlled-rating-changes')
+        .textContent();
+    await controlled
+        .getByRole('button', { name: 'Refresh rating to eight' })
+        .click();
+    await controlled
+        .getByRole('button', { name: 'Shrink rating maximum' })
+        .click();
+    assert.equal(
+        await controlled.locator('#controlled-rating-value').textContent(),
+        '8'
+    );
+    assert.equal(
+        await controlled.locator('#controlled-rating-changes').textContent(),
+        controlledChanges
+    );
+    assert.match(
+        await controlled.locator('.mx-sdk-rating-warning').textContent(),
+        /8\/3/
+    );
+    await controlled
+        .getByRole('button', { name: 'Fix it', exact: true })
+        .click();
+    assert.equal(
+        await controlled.locator('#controlled-rating-value').textContent(),
+        '3'
+    );
+    assert.equal(
+        Number(
+            await controlled.locator('#controlled-rating-changes').textContent()
+        ),
+        Number(controlledChanges) + 1
+    );
+    assert.equal(
+        await controlled
+            .locator('.mx-sdk-rating-icon')
+            .first()
+            .evaluate((n) => getComputedStyle(n).width),
+        '24px'
+    );
+    await controlled
+        .getByRole('button', { name: 'Toggle rating readonly' })
+        .click();
+    assert.equal(await controlledInput.isDisabled(), true);
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     writeFileSync(

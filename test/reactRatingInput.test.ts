@@ -13,6 +13,7 @@ import {
     RatingInput,
     FieldRenderer,
     renderRatingField,
+    type ControlledRatingFieldProps,
 } from '../src/react/index.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { createFormFieldRendererHost } from '../src/ui/rendererHosts.js';
@@ -168,6 +169,306 @@ const icon = ({
         'data-focused': String(focused),
         onClick: activate,
     });
+
+const controlledRating = (
+    overrides: Partial<ControlledRatingFieldProps> = {}
+): ControlledRatingFieldProps => ({
+    mode: 'controlled',
+    value: 2,
+    max: 5,
+    icon: 'star',
+    color: 'yellowBright',
+    onChange: () => {},
+    ...overrides,
+});
+
+it('owns configured controlled glyphs and palette without caller-rendered UI', async (t) => {
+    const f = await fixture(t);
+    const paths = new Set<string>();
+    for (const glyph of ['star', 'heart', 'thumbsUp', 'flag', 'dot'] as const) {
+        await f.render(h(RatingField, controlledRating({ icon: glyph })));
+        const svg = f.container.querySelector('svg')!;
+        assert.equal(svg.getAttribute('viewBox'), '0 0 18 18');
+        assert.equal(svg.getAttribute('aria-hidden'), 'true');
+        paths.add(svg.querySelector('path')!.getAttribute('d')!);
+        assert.equal(f.container.querySelectorAll('svg').length, 5);
+    }
+    assert.equal(paths.size, 5);
+    for (const [color, expected] of [
+        ['yellowBright', '#FFBA05'],
+        ['orangeBright', '#D54401'],
+        ['redBright', '#DC043B'],
+        ['pinkBright', '#DD04A8'],
+        ['purpleBright', '#7C37EF'],
+        ['blueBright', '#166EE1'],
+        ['cyanBright', '#39CAFF'],
+        ['tealBright', '#01DDD5'],
+        ['greenBright', '#048A0E'],
+        ['grayBright', '#616670'],
+        ['unknown', 'gray'],
+        ['constructor', 'gray'],
+        ['__proto__', 'gray'],
+    ]) {
+        await f.render(h(RatingField, controlledRating({ color })));
+        const icons = f.container.querySelectorAll('svg path');
+        assert.equal(icons[0]!.getAttribute('fill'), expected);
+        assert.equal(icons[2]!.getAttribute('fill'), '#e5e7eb');
+    }
+});
+
+it('preserves native association, initial keyboard selection, clear and explicit form ownership', async (t) => {
+    const f = await fixture(t);
+    const values: (number | null)[] = [];
+    let submits = 0;
+    const view = (value: number | null) =>
+        h(
+            'form',
+            {
+                id: 'rating-form',
+                onSubmit: (e) => {
+                    e.preventDefault();
+                    submits++;
+                },
+            },
+            h('label', { htmlFor: 'rating-instance' }, 'Priority'),
+            h(
+                RatingField,
+                controlledRating({
+                    value,
+                    id: 'rating-instance',
+                    form: 'rating-form',
+                    describedBy: 'rating-help',
+                    invalid: true,
+                    onChange: (v) => values.push(v),
+                    labels: { empty: 'Sans note' },
+                })
+            )
+        );
+    for (const initial of [null, 0]) {
+        await f.render(view(initial));
+        assert.equal(f.input().id, 'rating-instance');
+        assert.equal(f.input().form?.id, 'rating-form');
+        assert.equal(f.input().getAttribute('aria-describedby'), 'rating-help');
+        assert.equal(f.input().getAttribute('aria-invalid'), 'true');
+        await act(async () =>
+            f.input().dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'Home',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(values.at(-1), 1);
+        await f.render(view(1));
+        await act(async () =>
+            f.input().dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'Delete',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(values.at(-1), null);
+    }
+    assert.equal(submits, 0);
+});
+
+it('keeps refresh and maximum shrink inert until one explicit repair, with no implicit submit', async (t) => {
+    const f = await fixture(t);
+    const values: (number | null)[] = [];
+    let submits = 0;
+    const view = (max: number, disabled = false) =>
+        h(
+            'form',
+            {
+                onSubmit: (e) => {
+                    e.preventDefault();
+                    submits++;
+                },
+            },
+            h(
+                RatingField,
+                controlledRating({
+                    value: 8,
+                    max,
+                    disabled,
+                    onChange: (v) => values.push(v),
+                    labels: {
+                        outOfRange: 'Too high ({value}/{max})',
+                        repair: 'Repair',
+                    },
+                })
+            )
+        );
+    await f.render(view(10));
+    await f.render(view(3));
+    assert.deepEqual(values, []);
+    assert.ok(f.container.textContent?.includes('Too high (8/3)'));
+    const button = f.container.querySelector('button')!;
+    assert.equal(button.type, 'button');
+    assert.equal(button.textContent, 'Repair');
+    await act(async () => button.click());
+    assert.deepEqual(values, [3]);
+    assert.equal(submits, 0);
+    await f.render(view(2, true));
+    assert.equal(f.container.querySelector('button'), null);
+    assert.deepEqual(values, [3]);
+});
+
+it('owns localized readonly empty and grid/print summaries without coercing zero', async (t) => {
+    const f = await fixture(t);
+    const changes: (number | null)[] = [];
+    await f.render(
+        h(
+            RatingField,
+            controlledRating({
+                value: null,
+                disabled: true,
+                labels: { empty: 'Keine Bewertung' },
+                onChange: (v) => changes.push(v),
+            })
+        )
+    );
+    assert.equal(f.input().getAttribute('aria-valuetext'), 'Keine Bewertung');
+    assert.ok(
+        f.container
+            .querySelector('.mx-sdk-rating-empty')
+            ?.textContent?.includes('Keine Bewertung')
+    );
+    await f.render(
+        h(
+            RatingField,
+            controlledRating({
+                value: 0,
+                disabled: true,
+                grid: true,
+                onChange: (v) => changes.push(v),
+            })
+        )
+    );
+    assert.equal(f.container.querySelector('input'), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-rating-sr-only')?.textContent,
+        '(0/5)'
+    );
+    assert.equal(f.container.querySelectorAll('.mx-sdk-rating-icon').length, 5);
+    assert.equal(f.container.querySelector('.mx-sdk-rating-empty'), null);
+    assert.deepEqual(changes, []);
+});
+
+it('consults captured host authority and isolates sibling controlled ratings', async (t) => {
+    const f = await fixture(t);
+    let current = true;
+    const a: (number | null)[] = [],
+        b: (number | null)[] = [];
+    await f.render(
+        h(
+            'div',
+            null,
+            h(
+                RatingField,
+                controlledRating({
+                    id: 'a',
+                    owner: { token: {}, isCurrent: () => current },
+                    onChange: (v) => a.push(v),
+                })
+            ),
+            h(
+                RatingField,
+                controlledRating({
+                    id: 'b',
+                    icon: 'heart',
+                    onChange: (v) => b.push(v),
+                })
+            )
+        )
+    );
+    const fields = f.container.querySelectorAll('.mx-sdk-rating');
+    current = false;
+    await act(async () =>
+        fields[0]!
+            .querySelectorAll('svg')[3]!
+            .dispatchEvent(new f.window.MouseEvent('click', { bubbles: true }))
+    );
+    assert.deepEqual(a, []);
+    current = true;
+    await act(async () =>
+        fields[0]!
+            .querySelectorAll('svg')[3]!
+            .dispatchEvent(new f.window.MouseEvent('click', { bubbles: true }))
+    );
+    assert.deepEqual(a, [4]);
+    assert.deepEqual(b, []);
+    assert.equal(fields[1]!.querySelector('input')!.value, '2');
+});
+
+it('names a controlled input from its hidden title without overriding an external label', async (t) => {
+    const f = await fixture(t);
+    await f.render(h(RatingField, controlledRating({ title: 'Priority' })));
+    assert.equal(f.input().getAttribute('aria-label'), 'Priority');
+    await f.render(
+        h(
+            RatingField,
+            controlledRating({ title: 'Priority', labelledBy: 'host-title' })
+        )
+    );
+    assert.equal(f.input().getAttribute('aria-label'), null);
+    assert.equal(f.input().getAttribute('aria-labelledby'), 'host-title');
+});
+
+for (const transition of ['replace', 'unmount'] as const) {
+    it(`rechecks committed controlled presentation after host authority ${transition}`, async (t) => {
+        const f = await fixture(t);
+        const { flushSync } = await import('react-dom');
+        const old: (number | null)[] = [],
+            next: (number | null)[] = [];
+        const replacement = h(
+            RatingField,
+            controlledRating({ onChange: (v) => next.push(v) })
+        );
+        await f.render(
+            h(
+                RatingField,
+                controlledRating({
+                    onChange: (v) => old.push(v),
+                    owner: {
+                        token: {},
+                        isCurrent: () => {
+                            flushSync(() =>
+                                f.replace(
+                                    transition === 'replace'
+                                        ? replacement
+                                        : null
+                                )
+                            );
+                            return true;
+                        },
+                    },
+                })
+            )
+        );
+        await act(async () =>
+            f.container
+                .querySelectorAll('svg')[3]!
+                .dispatchEvent(
+                    new f.window.MouseEvent('click', { bubbles: true })
+                )
+        );
+        assert.deepEqual(old, []);
+        assert.deepEqual(next, []);
+        await f.render(replacement);
+        await act(async () =>
+            f.container
+                .querySelectorAll('svg')[3]!
+                .dispatchEvent(
+                    new f.window.MouseEvent('click', { bubbles: true })
+                )
+        );
+        assert.deepEqual(next, [4]);
+    });
+}
 
 it('reuses controlled native range/ref/form/ARIA and decorative icons for selection, toggle-clear and keyboard-zero intent', async (t) => {
     const f = await fixture(t);

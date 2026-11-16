@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 export const ratingInputTypedConsumer = `
 import {createElement as ratingElement,createRef as ratingRef} from 'react';
-import {RatingInput,RatingField,renderRatingField,type RatingInputProps,type RatingFieldOptions} from '@miniextensions/sdk/react';
+import {RatingInput,RatingField,renderRatingField,type RatingInputProps,type RatingFieldOptions,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import type {FormFieldBinding as RatingBinding} from '@miniextensions/sdk/forms';
 import type {FieldRendererProps as RatingRendererProps} from '@miniextensions/sdk/ui';
 const ratingProps:RatingInputProps={value:2,max:5,onChange:value=>{const native:number|null=value;void native;},
@@ -14,6 +14,16 @@ const ratingProps:RatingInputProps={value:2,max:5,onChange:value=>{const native:
     warningMessage:state=>'Loaded '+state.value+'/'+state.max,repairLabel:'Repair'};
 ratingElement(RatingInput,{...ratingProps,ref:ratingRef<HTMLInputElement>()});
 declare const ratingBinding:RatingBinding;
+const controlledRating:ControlledRatingFieldProps={mode:'controlled',value:null,max:5,icon:'heart',color:'redBright',
+    onChange:value=>{const native:number|null=value;void native;},id:'rating-natural',form:'host',labels:{empty:'No rating'}};
+ratingElement(RatingField,controlledRating);
+// @ts-expect-error controlled presentation cannot borrow binding authority
+const mixedRating:ControlledRatingFieldProps={...controlledRating,binding:ratingBinding};
+// @ts-expect-error controlled presentation owns its actual icons
+const slottedRating:ControlledRatingFieldProps={...controlledRating,iconInput:{renderIcon:()=>null}};
+// @ts-expect-error legacy binding cannot silently opt into a controlled value
+ratingElement(RatingField,{binding:ratingBinding,value:2,max:5,icon:'star'});
+void mixedRating;void slottedRating;
 declare const ratingRendererProps:RatingRendererProps<'rating'>;
 ratingElement(RatingField,{binding:ratingBinding,iconInput:{renderIcon:ratingProps.renderIcon}});
 renderRatingField(ratingRendererProps,{iconInput:{grid:true}});
@@ -169,6 +179,96 @@ export async function checkRatingInputConsumer({
                         )
                 );
                 assert.deepEqual(changes, [3, null]);
+                const controlled = (value, extra = {}) =>
+                    react.createElement(
+                        react.StrictMode,
+                        null,
+                        react.createElement(
+                            'form',
+                            {
+                                id: 'rating-natural-form',
+                                onSubmit: (e) => {
+                                    e.preventDefault();
+                                    submits++;
+                                },
+                            },
+                            react.createElement(
+                                'label',
+                                { htmlFor: 'rating-natural' },
+                                'Rank'
+                            ),
+                            react.createElement(api.RatingField, {
+                                mode: 'controlled',
+                                value,
+                                max: 3,
+                                icon: 'heart',
+                                color: 'redBright',
+                                onChange: (value) => changes.push(value),
+                                id: 'rating-natural',
+                                form: 'rating-natural-form',
+                                describedBy: 'rating-help',
+                                labels: {
+                                    empty: 'Keine Bewertung',
+                                    repair: 'Repair',
+                                },
+                                ...extra,
+                            })
+                        )
+                    );
+                await react.act(async () => root.render(controlled(8)));
+                assert.equal(
+                    container.querySelectorAll('.mx-sdk-rating-icon').length,
+                    3
+                );
+                assert.equal(
+                    container.querySelector('svg').getAttribute('viewBox'),
+                    '0 0 18 18'
+                );
+                assert.equal(
+                    container.querySelector('svg path').getAttribute('fill'),
+                    '#DC043B'
+                );
+                assert.equal(
+                    container
+                        .querySelector('input')
+                        .getAttribute('aria-describedby'),
+                    'rating-help ' + container.querySelector('p').id
+                );
+                assert.equal(
+                    container.querySelector('input').form.id,
+                    'rating-natural-form'
+                );
+                const naturalRepair = container.querySelector(
+                    '.mx-sdk-rating-repair'
+                );
+                assert.equal(naturalRepair.type, 'button');
+                await react.act(async () => naturalRepair.click());
+                assert.deepEqual(changes, [3, null, 3]);
+                await react.act(async () => root.render(controlled(null)));
+                const naturalInput = container.querySelector('input');
+                assert.equal(
+                    naturalInput.getAttribute('aria-valuetext'),
+                    'Keine Bewertung'
+                );
+                await react.act(async () =>
+                    naturalInput.dispatchEvent(
+                        new window.KeyboardEvent('keydown', {
+                            key: 'Home',
+                            bubbles: true,
+                            cancelable: true,
+                        })
+                    )
+                );
+                assert.deepEqual(changes, [3, null, 3, 1]);
+                await react.act(async () =>
+                    root.render(controlled(null, { disabled: true }))
+                );
+                assert.equal(
+                    container.querySelector('.mx-sdk-rating-empty').textContent,
+                    'Keine Bewertung'
+                );
+                assert.equal(container.querySelector('input').disabled, true);
+                assert.equal(submits, 0);
                 checks++;
             } finally {
                 await react.act(async () => root.unmount());

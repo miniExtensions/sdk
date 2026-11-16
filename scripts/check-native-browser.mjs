@@ -3,6 +3,10 @@ import {
     checkKanbanBrowser,
 } from './kanban-consumer-checks.mjs';
 import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
+import {
+    preparePrintableFormBrowserFixtures,
+    checkPrintableFormBrowser,
+} from './printable-form-browser-checks.mjs';
 import { checkFormCaptchaBrowser } from './form-captcha-browser-checks.mjs';
 import {
     prepareCSVExportBrowserFixtures,
@@ -1559,6 +1563,7 @@ try {
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
+            'scripts/printable-form-browser-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
             'scripts/form-captcha-consumer-checks.mjs',
             'scripts/form-captcha-browser-checks.mjs',
@@ -2006,6 +2011,17 @@ try {
         await prepareKanbanBrowserFixtures({
             temporary,
             archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await preparePrintableFormBrowserFixtures({
+            temporary,
             readArchiveMember,
             installed,
             allowed,
@@ -3005,6 +3021,13 @@ try {
         await run('kanban', async (page, origin) => {
             await checkKanbanBrowser({ page, origin, evidence: report.kanban });
         });
+        await run('printable-form-layout', async (page, origin) => {
+            await page.goto(origin + '/printable-form-layout.html');
+            await checkPrintableFormBrowser({
+                page,
+                evidence: report.printableForm,
+            });
+        });
         await run('csv-export', async (page, origin) => {
             await page.goto(origin + '/csv-export.html');
             await checkCSVExportBrowser({ page, evidence: report.csvExport });
@@ -3989,8 +4012,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, CSV export, Kanban and one-page section groups.
-            28 +
+            // Include complete fields, printable layout, CSV, Kanban and section groups.
+            29 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

@@ -17,6 +17,12 @@
 .mx-sdk-print-title {
     flex-basis: 100%;
 }
+/* Quill's interactive 100% heights create a percentage-height cycle inside
+   readonly field help. Print documents need intrinsic flow for help and value. */
+.mx-sdk-print-document .ql-container,
+.mx-sdk-print-document .ql-editor {
+    height: auto !important;
+}
 .mx-sdk-print-empty {
     color: #6b7280;
     font-style: italic;

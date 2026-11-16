@@ -12,6 +12,11 @@ import '@miniextensions/sdk/react/printable-form.css';
 const owner = Object.freeze({});
 const revision = Object.freeze({});
 const keyboardLease = Object.freeze({});
+const syntheticImage =
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120"><rect width="240" height="120" fill="#2563eb"/><circle cx="120" cy="60" r="35" fill="#fef08a"/></svg>'
+    );
 const document: ReadonlyPrintDocument = {
     language: 'en',
     title: 'Printable Form — synthetic acceptance',
@@ -72,6 +77,64 @@ const document: ReadonlyPrintDocument = {
                     },
                 ],
                 emptyLabel: 'No selection',
+            },
+        },
+        {
+            key: 'images',
+            fieldName: 'Images',
+            title: 'Images',
+            semanticTitle: 'Images',
+            showTitle: true,
+            required: false,
+            sameRow: false,
+            enableSideBySideOnMobile: false,
+            facet: {
+                kind: 'attachments',
+                layout: 'grid',
+                columns: 2,
+                fit: 'contain',
+                thumbnailSize: 'medium',
+                showNames: true,
+                emptyLabel: 'No image',
+                items: [
+                    {
+                        key: 'first',
+                        label: 'First synthetic image',
+                        kind: 'image',
+                        url: syntheticImage,
+                        imageSources: [syntheticImage],
+                    },
+                    {
+                        key: 'duplicate',
+                        label: 'Second synthetic image',
+                        kind: 'image',
+                        url: syntheticImage,
+                        imageSources: [syntheticImage],
+                    },
+                ],
+            },
+        },
+        {
+            key: 'rating',
+            fieldName: 'Configured rating',
+            title: 'Configured rating',
+            semanticTitle: 'Configured rating',
+            showTitle: true,
+            required: false,
+            sameRow: false,
+            enableSideBySideOnMobile: false,
+            facet: {
+                kind: 'rating',
+                icon: 'heart',
+                value: 3,
+                max: 5,
+                color: '#7c3aed',
+                emptyLabel: 'No rating',
+                glyph: {
+                    path: 'M12 21 C10 18 2 13 2 7 C2 0 10 0 12 5 C14 0 22 0 22 7 C22 13 14 18 12 21 Z',
+                    viewBox: '0 0 24 24',
+                    unfilledColor: '#e5e7eb',
+                },
             },
         },
         ...Array.from({ length: 24 }, (_, index) => ({

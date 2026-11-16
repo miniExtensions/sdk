@@ -14,8 +14,15 @@ sorting and offset pagination. Read rows remain native fieldsets without a
 record identity or display label. `PostgresValue` preserves the
 server's text representation as `string | null`, including large numbers,
 timestamps, JSON and arrays; SQL NULL remains distinct from an empty string.
-These additive metadata contracts do not yet enable PostgreSQL Form/Portal
+These native metadata contracts do not yet enable PostgreSQL Form/Portal
 operations or change the existing Airtable runtime contracts.
+
+`PostgresField.collationOid` is required database-local collation metadata.
+Its explicit `null` means a noncollatable column; missing metadata is not NULL.
+Identifier column bindings retain an optional collation only so older saved
+authoring state can load for explicit refresh and rebind. Such a legacy binding
+does not admit a preview or mutation until current metadata is known and matches;
+loading it never silently fills the missing collation or grants write authority.
 
 Record settings contracts require an explicit display column, including when a
 table has a native primary key. A customer-configured identifier also requires

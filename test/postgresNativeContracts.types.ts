@@ -78,6 +78,7 @@ export type PostgresPublicAliasContracts = Assert<
 
 export type PostgresNativeValueContracts = [
     Assert<Equal<PostgresValue, string | null>>,
+    Assert<Equal<PostgresField['collationOid'], number | null>>,
     Assert<Equal<PostgresRecord['identity'], PostgresRecordIdentity | null>>,
     Assert<
         Equal<
@@ -108,6 +109,7 @@ export function acceptedPostgresNativeContracts() {
         ordinal: 3,
         typeOid: 1700,
         formattedType: 'numeric(30,10)',
+        collationOid: null,
         notNull: false,
         hasDefault: false,
         identity: null,
@@ -141,6 +143,7 @@ export function acceptedPostgresNativeContracts() {
                 ordinal: 1,
                 typeOid: 25,
                 formattedType: 'text',
+                collationOid: 16422,
                 notNull: true,
             },
             {
@@ -240,6 +243,28 @@ export function acceptedPostgresNativeContracts() {
         fields: { amount: '1.0000000000' },
     };
     return { connection, database, record, keylessRecord };
+}
+
+export function rejectedPostgresFieldCollationContracts(field: PostgresField) {
+    const { collationOid, ...legacyField } = field;
+    // @ts-expect-error Fresh field metadata must distinguish known SQL NULL from missing metadata.
+    const missingCollation: PostgresField = legacyField;
+    const undefinedCollation: PostgresField = {
+        ...field,
+        // @ts-expect-error Undefined is not a known noncollatable field.
+        collationOid: undefined,
+    };
+    const stringCollation: PostgresField = {
+        ...field,
+        // @ts-expect-error Catalog OIDs are native metadata numbers, not coerced strings.
+        collationOid: '16422',
+    };
+    return {
+        collationOid,
+        missingCollation,
+        undefinedCollation,
+        stringCollation,
+    };
 }
 
 export function rejectedPostgresNativeContracts() {

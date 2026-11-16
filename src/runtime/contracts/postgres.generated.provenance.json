@@ -1,6 +1,6 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "2420c57132d02bfc06f21ba4ce12ab6ba2c4c068",
+    "sourceRevision": "be9bd81cca929213a9522483f6b620852b429dcc",
     "compilerVersion": "5.9.3",
     "generatorSha256": "56170c87548d2ab263428334b06e1f9701bd89e0cd0a2d60480863364ab99e40",
     "contractFamily": "postgres",
@@ -83,7 +83,7 @@
         },
         {
             "path": "types/postgres/identifierBinding.ts",
-            "sha256": "0ae6f1c49cadb5acb15fa4074b6c58fa11b54329e4a8791968bf02cd6735248e"
+            "sha256": "61ac6e98907e8226ac90526f39c7abceb566f1b28fa417140026a3824e7dd3e8"
         },
         {
             "path": "types/postgres/query.ts",
@@ -95,7 +95,7 @@
         },
         {
             "path": "types/postgres/types.ts",
-            "sha256": "d51fb22dc4422919e8d92ed37f58bc90586b94a3a42b6a4b8847ab710bcdaf39"
+            "sha256": "ed82d4507220f3cbeec742170687d3a931f33d2d0b7808579972a452a89ae108"
         },
         {
             "path": "types/postgres/update.ts",
@@ -108,6 +108,6 @@
             "sha256": "293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec"
         }
     ],
-    "declarationCount": 93,
-    "generatedSha256": "779ff5e2e8b032f17a9124bb7108afe4c5915d2a07b9e548c202cae0df6b6ec9"
+    "declarationCount": 96,
+    "generatedSha256": "cd3156194abe01d8467e9ae04cd318cb02d14217b2160fef665f13a28c2d52cf"
 }

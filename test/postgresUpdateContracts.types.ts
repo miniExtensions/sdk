@@ -28,6 +28,7 @@ export function postgresUpdateContracts() {
         ordinal: 1,
         typeOid: 20,
         formattedType: 'bigint',
+        collationOid: null,
         notNull: true,
         hasDefault: false,
         identity: null,
@@ -55,6 +56,7 @@ export function postgresUpdateContracts() {
                     ordinal: 1,
                     typeOid: 20,
                     formattedType: 'bigint',
+                    collationOid: null,
                 },
             ],
         },
@@ -70,6 +72,7 @@ export function postgresUpdateContracts() {
                 ordinal: 2,
                 typeOid: 25,
                 formattedType: 'text',
+                collationOid: 16422,
                 notNull: false,
             },
         ],
@@ -127,6 +130,38 @@ export function postgresUpdateContracts() {
         identifier: configured.identifier,
         identity: configured.identity,
     };
+    // Older saved authoring bindings remain loadable; these values must be
+    // explicitly refreshed/rebound before any preview or mutation is admitted.
+    const legacyPrimaryBindingForRebind: PostgresRowObservation['identifier'] =
+        {
+            configuration: { type: 'primary-key' },
+            columns: [
+                {
+                    name: 'id',
+                    ordinal: 1,
+                    typeOid: 20,
+                    formattedType: 'bigint',
+                },
+            ],
+        };
+    const legacyConfiguredBindingForRebind: PostgresRowObservation['identifier'] =
+        {
+            ...legacyPrimaryBindingForRebind,
+            configuration: {
+                type: 'configured-key',
+                columnNames: ['id'],
+                stabilityConfirmed: true,
+            },
+        };
+    const stringBindingCollation: PostgresRowObservation['identifier']['columns'][number] =
+        {
+            name: 'id',
+            ordinal: 1,
+            typeOid: 20,
+            formattedType: 'bigint',
+            // @ts-expect-error A known collation remains a database-local OID or explicit SQL NULL.
+            collationOid: '16422',
+        };
     const unconfirmed: PostgresRowObservation['identifier']['configuration'] = {
         type: 'configured-key',
         columnNames: ['id'],
@@ -174,6 +209,9 @@ export function postgresUpdateContracts() {
         result,
         configured,
         configuredQuery,
+        legacyPrimaryBindingForRebind,
+        legacyConfiguredBindingForRebind,
+        stringBindingCollation,
         unconfirmed,
         wrongOutcome,
         missingBaseline,

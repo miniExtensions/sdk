@@ -362,6 +362,7 @@ const observedId: PostgresField = {
     ordinal: 2,
     typeOid: 20,
     formattedType: 'bigint',
+    collationOid: null,
     notNull: true,
     hasDefault: false,
     identity: null,
@@ -376,8 +377,20 @@ export const observation: PostgresRowObservation = {
     identifier: {
         configuration: { type: 'primary-key' },
         columns: [
-            { name: 'tenant_id', ordinal: 1, typeOid: 25, formattedType: 'text' },
-            { name: 'id', ordinal: 2, typeOid: 20, formattedType: 'bigint' },
+            {
+                name: 'tenant_id',
+                ordinal: 1,
+                typeOid: 25,
+                formattedType: 'text',
+                collationOid: 16422,
+            },
+            {
+                name: 'id',
+                ordinal: 2,
+                typeOid: 20,
+                formattedType: 'bigint',
+                collationOid: null,
+            },
         ],
     },
     identity,
@@ -388,6 +401,7 @@ export const observation: PostgresRowObservation = {
             ordinal: 1,
             typeOid: 25,
             formattedType: 'text',
+            collationOid: 16422,
         },
         observedId,
         {
@@ -396,6 +410,7 @@ export const observation: PostgresRowObservation = {
             ordinal: 3,
             typeOid: 25,
             formattedType: 'text',
+            collationOid: 16422,
             notNull: false,
         },
     ],
@@ -463,6 +478,44 @@ export const configuredUpdateQuery: PostgresUpdateQuery = {
     ...unchangedKeyUpdate,
     identifier: configuredObservation.identifier,
     identity: configuredObservation.identity,
+};
+// These older saved-authoring shapes are loadable for explicit refresh/rebind.
+// Their missing metadata never establishes valid read/edit or mutation authority.
+export const legacyPrimaryBindingForRebind: PostgresRowObservation['identifier'] = {
+    configuration: { type: 'primary-key' },
+    columns: [
+        { name: 'tenant_id', ordinal: 1, typeOid: 25, formattedType: 'text' },
+        { name: 'id', ordinal: 2, typeOid: 20, formattedType: 'bigint' },
+    ],
+};
+export const legacyConfiguredBindingForRebind: PostgresRowObservation['identifier'] = {
+    ...legacyPrimaryBindingForRebind,
+    configuration: {
+        type: 'configured-key',
+        columnNames: ['tenant_id', 'id'],
+        stabilityConfirmed: true,
+    },
+};
+const { collationOid: knownCollation, ...legacyFieldMetadata } = observedId;
+// @ts-expect-error Fresh discovered fields require known collation metadata.
+export const missingFieldCollation: PostgresField = legacyFieldMetadata;
+export const undefinedFieldCollation: PostgresField = {
+    ...observedId,
+    // @ts-expect-error Undefined cannot stand in for a known noncollatable field.
+    collationOid: undefined,
+};
+export const stringFieldCollation: PostgresField = {
+    ...observedId,
+    // @ts-expect-error Native collation OIDs do not accept string coercion.
+    collationOid: '16422',
+};
+export const stringBindingCollation: PostgresRowObservation['identifier']['columns'][number] = {
+    name: 'id',
+    ordinal: 2,
+    typeOid: 20,
+    formattedType: 'bigint',
+    // @ts-expect-error A present binding collation is an OID or explicit SQL NULL.
+    collationOid: '16422',
 };
 export const unconfirmedUpdateKey: PostgresRowObservation['identifier']['configuration'] = {
     type: 'configured-key',

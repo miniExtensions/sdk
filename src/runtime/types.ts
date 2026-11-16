@@ -30,6 +30,7 @@ import type {
     CanonicalPostgresCreateResult,
     CanonicalPostgresDatabase,
     CanonicalPostgresDateColumnConfig,
+    CanonicalPostgresEnumColumnConfig,
     CanonicalPostgresField,
     CanonicalPostgresFilter,
     CanonicalPostgresIdentifierConfiguration,
@@ -107,6 +108,7 @@ export type PostgresBooleanColumnConfig = CanonicalPostgresBooleanColumnConfig;
 export type PostgresNumericColumnConfig = CanonicalPostgresNumericColumnConfig;
 /** Generated SQL DATE settings only; this adds no date parser or coercion. */
 export type PostgresDateColumnConfig = CanonicalPostgresDateColumnConfig;
+export type PostgresEnumColumnConfig = CanonicalPostgresEnumColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

@@ -1,0 +1,9 @@
+{
+  "name": "@miniextensions/private-portal-sidebar",
+  "version": "6.11.2",
+  "private": true,
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT"
+}

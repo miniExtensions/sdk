@@ -1626,8 +1626,9 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ## re-resizable
 
-The optional Portal sidebar uses the existing resize engine (6.11.2). React and
-React DOM remain the consumer’s peer renderers.
+The optional Portal sidebar ships the unmodified private resize engine closure
+(6.11.2), with frozen source provenance and licenses. React and React DOM remain
+the consumer’s peer renderers.
 
 ```text
 The MIT License (MIT)

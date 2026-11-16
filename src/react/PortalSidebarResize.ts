@@ -8,7 +8,10 @@ import {
     type KeyboardEvent,
     type ReactNode,
 } from 'react';
-import type { Resizable, ResizableProps } from 're-resizable';
+import type {
+    Resizable,
+    ResizableProps,
+} from '../../vendor/portal-sidebar/index.js';
 
 // The vendor declares defaultProps.grid as number[] although the prop is a
 // tuple. Hide only that inaccurate static declaration, preserving its real
@@ -41,7 +44,7 @@ export function PortalSidebarResize(props: {
         let current = true;
         // React 18's vendor main eagerly imports React DOM. Importing the public
         // SDK must leave unrelated hosts free to initialize their own DOM first.
-        void import('re-resizable').then(
+        void import('../../vendor/portal-sidebar/index.js').then(
             (module) => {
                 if (current) setLoaded({ component: module.Resizable });
             },

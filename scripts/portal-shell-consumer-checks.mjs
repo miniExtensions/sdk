@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
     cpSync,
+    existsSync,
     mkdtempSync,
     readFileSync,
     rmSync,
@@ -79,6 +80,18 @@ const sidebar=await assertPortalShellSidebarConsumer({React,ui,Window,createRoot
 console.log(JSON.stringify({format,react:React.version,...result,sidebar}));
 `
         );
+        run('npm', [
+            'install',
+            '--ignore-scripts',
+            '--no-audit',
+            '--no-fund',
+            '--package-lock=false',
+        ]);
+        for (const dependency of ['react', 'react-dom', 'vue', 'happy-dom'])
+            assert(
+                !existsSync(join(directory, 'node_modules', dependency)),
+                `Portal resize engine installed a UI dependency in a non-UI consumer: ${dependency}`
+            );
         for (const version of [
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },

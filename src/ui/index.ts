@@ -389,3 +389,10 @@ export {
     isAttachmentPreviewImage,
     type AttachmentPreviewSource,
 } from './attachmentPreview.js';
+
+export {
+    projectLookupValues,
+    type LookupResultConfig,
+    type LookupValueOccurrence,
+    type LookupValueProjection,
+} from './lookupProjection.js';

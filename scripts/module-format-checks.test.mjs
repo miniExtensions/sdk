@@ -671,6 +671,7 @@ for (const name of [
     'form-captcha',
     'csv-export',
     'kanban',
+    'lookup',
     'checkbox',
     'text',
     'number',

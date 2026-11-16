@@ -15,6 +15,12 @@ import {
 import { AttachmentPreview } from './AttachmentPreview.js';
 import { ActionButton } from './ActionButton.js';
 import { readResourceResponse } from './resourceResponse.js';
+import {
+    resourceOwnerCurrent,
+    resourceOwnerGeneration,
+    watchResourceOwner,
+    type ReadonlyResourceOwner,
+} from './readonlyResourceOwner.js';
 
 /** Explicit display resources; this contract grants no physical-field authority. */
 export type ReadOnlyURLGalleryEntry = AttachmentPreviewSource & {
@@ -38,6 +44,9 @@ export type ReadOnlyURLGalleryLabels = {
 
 export type ReadOnlyURLGalleryProps = {
     entries: readonly ReadOnlyURLGalleryEntry[];
+    /** Optional captured host authority; omitted legacy resources retain behavior. */
+    owner?: ReadonlyResourceOwner;
+    identity?: unknown;
     labels?: Partial<ReadOnlyURLGalleryLabels>;
     isInGrid?: boolean;
     displayMode?: 'thumbnail' | 'icon';
@@ -115,21 +124,31 @@ function replacementIndex(
 
 /** Readonly collection presentation. Selection is local; resources stay explicit. */
 export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
+    const generation = resourceOwnerGeneration(props.owner);
     const [selection, setSelection] = useState({
         entries: props.entries,
+        generation,
+        identity: props.identity,
         index: 0,
         open: false,
     });
     let selected = selection;
-    if (selection.entries !== props.entries) {
+    const replaced =
+        !Object.is(selection.generation, generation) ||
+        !Object.is(selection.identity, props.identity);
+    if (selection.entries !== props.entries || replaced) {
         selected = {
             entries: props.entries,
-            index: replacementIndex(
-                selection.entries,
-                selection.index,
-                props.entries
-            ),
-            open: selection.open && props.entries.length > 0,
+            generation,
+            identity: props.identity,
+            index: replaced
+                ? 0
+                : replacementIndex(
+                      selection.entries,
+                      selection.index,
+                      props.entries
+                  ),
+            open: !replaced && selection.open && props.entries.length > 0,
         };
         setSelection(selected);
     }
@@ -142,18 +161,42 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
             if (live.current === props) live.current = null;
         };
     });
-    const current = () => live.current === props;
+    const currentPresentation = () => live.current === props;
+    const current = () =>
+        currentPresentation() && resourceOwnerCurrent(props.owner);
+    const lifetimeCurrent = () =>
+        live.current !== null &&
+        Object.is(resourceOwnerGeneration(live.current.owner), generation) &&
+        Object.is(live.current.identity, props.identity) &&
+        resourceOwnerCurrent(props.owner);
+    commitEffect(() => {
+        return watchResourceOwner(props.owner, () => {
+            if (
+                live.current !== null &&
+                Object.is(
+                    resourceOwnerGeneration(live.current.owner),
+                    generation
+                ) &&
+                Object.is(live.current.identity, props.identity) &&
+                !resourceOwnerCurrent(props.owner)
+            )
+                setSelection((value) => ({ ...value, open: false }));
+        });
+    }, [props.owner, generation, props.identity]);
     const labels = { ...defaults, ...props.labels };
     const choose = (index: number, open = true) => {
         if (!current() || props.entries.length === 0) return;
         setSelection({
             entries: props.entries,
+            generation,
+            identity: props.identity,
             index: Math.max(0, Math.min(index, props.entries.length - 1)),
             open,
         });
     };
     const close = () => {
-        if (current()) setSelection((value) => ({ ...value, open: false }));
+        if (currentPresentation())
+            setSelection((value) => ({ ...value, open: false }));
     };
     const entry = props.entries[selected.index];
     const occurrence = props.entries
@@ -177,66 +220,68 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
             onDoubleClick: stop,
             onPointerDown: stop,
         },
-        props.entries.length === 0
-            ? h(
-                  'p',
-                  {
-                      className: 'mx-sdk-url-gallery__empty',
-                      'data-testid': 'no-value-test-id',
-                  },
-                  labels.empty
-              )
-            : h(
-                  'ul',
-                  {
-                      className: 'mx-sdk-url-gallery__entries',
-                      'aria-label': labels.attachments,
-                  },
-                  props.entries.map((item, index) =>
-                      h(
-                          'li',
-                          {
-                              key: `${item.id ?? ''}:${index}`,
-                              className: 'mx-sdk-url-gallery__entry',
-                          },
-                          h(
-                              'div',
-                              { className: 'mx-sdk-url-gallery__thumbnail' },
-                              thumbnail(item)
-                          ),
-                          props.hideAttachmentName === false &&
-                              props.isInGrid !== true
-                              ? h(
-                                    'p',
-                                    { className: 'mx-sdk-url-gallery__name' },
-                                    item.filename
-                                )
-                              : null,
-                          props.disableOpenFiles !== true
-                              ? h(
-                                    ActionButton,
-                                    {
-                                        'aria-label': item.url,
-                                        className: 'mx-sdk-url-gallery__open',
-                                        onClick: (event: SyntheticEvent) => {
-                                            contain(event);
-                                            choose(index);
-                                        },
-                                    },
-                                    h(
-                                        'span',
-                                        {
-                                            className:
-                                                'mx-sdk-url-gallery__sr-only',
-                                        },
-                                        labels.openAttachment
-                                    )
-                                )
-                              : null
-                      )
-                  )
-              ),
-        selected.open && entry != null
+        !resourceOwnerCurrent(props.owner)
+            ? h('p', { role: 'status' }, labels.previewNotAvailable)
+            : props.entries.length === 0
+              ? h(
+                    'p',
+                    {
+                        className: 'mx-sdk-url-gallery__empty',
+                        'data-testid': 'no-value-test-id',
+                    },
+                    labels.empty
+                )
+              : h(
+                    'ul',
+                    {
+                        className: 'mx-sdk-url-gallery__entries',
+                        'aria-label': labels.attachments,
+                    },
+                    props.entries.map((item, index) =>
+                        h(
+                            'li',
+                            {
+                                key: `${item.id ?? ''}:${index}`,
+                                className: 'mx-sdk-url-gallery__entry',
+                            },
+                            h(
+                                'div',
+                                { className: 'mx-sdk-url-gallery__thumbnail' },
+                                thumbnail(item)
+                            ),
+                            props.hideAttachmentName === false &&
+                                props.isInGrid !== true
+                                ? h(
+                                      'p',
+                                      { className: 'mx-sdk-url-gallery__name' },
+                                      item.filename
+                                  )
+                                : null,
+                            props.disableOpenFiles !== true
+                                ? h(
+                                      ActionButton,
+                                      {
+                                          'aria-label': item.url,
+                                          className: 'mx-sdk-url-gallery__open',
+                                          onClick: (event: SyntheticEvent) => {
+                                              contain(event);
+                                              choose(index);
+                                          },
+                                      },
+                                      h(
+                                          'span',
+                                          {
+                                              className:
+                                                  'mx-sdk-url-gallery__sr-only',
+                                          },
+                                          labels.openAttachment
+                                      )
+                                  )
+                                : null
+                        )
+                    )
+                ),
+        selected.open && entry != null && resourceOwnerCurrent(props.owner)
             ? h(GalleryDialog, {
                   entry,
                   index: selected.index,
@@ -245,7 +290,10 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
                   labels,
                   disableOpen: props.disableOpenFiles === true,
                   disableDownload: props.disableDownloadFiles === true,
+                  owner: props.owner,
+                  identity: props.identity,
                   current,
+                  lifetimeCurrent,
                   choose,
                   close,
               })
@@ -261,7 +309,10 @@ type DialogProps = {
     labels: ReadOnlyURLGalleryLabels;
     disableOpen: boolean;
     disableDownload: boolean;
+    owner?: ReadonlyResourceOwner;
+    identity?: unknown;
     current(): boolean;
+    lifetimeCurrent(): boolean;
     choose(index: number): void;
     close(): void;
 };
@@ -271,9 +322,14 @@ function GalleryDialog(props: DialogProps): ReactNode {
     const close = useRef<HTMLButtonElement>(null);
     useEffect(() => {
         const previous = dialog.current?.ownerDocument.activeElement;
-        close.current?.focus();
+        if (props.current()) close.current?.focus();
         return () => {
-            if (previous instanceof HTMLElement && previous.isConnected)
+            if (
+                previous instanceof HTMLElement &&
+                previous.isConnected &&
+                ((props.owner === undefined && props.identity === undefined) ||
+                    props.lifetimeCurrent())
+            )
                 previous.focus();
         };
     }, []);
@@ -307,7 +363,7 @@ function GalleryDialog(props: DialogProps): ReactNode {
                     } else if (event.key === 'ArrowRight') {
                         event.preventDefault();
                         props.choose(props.index + 1);
-                    } else if (event.key === 'Tab') {
+                    } else if (event.key === 'Tab' && props.current()) {
                         const nodes = Array.from(
                             dialog.current?.querySelectorAll<HTMLElement>(
                                 'button:not(:disabled), a[href], video, audio, iframe'
@@ -338,6 +394,10 @@ function GalleryDialog(props: DialogProps): ReactNode {
                               target: '_blank',
                               rel: 'noreferrer',
                               onClick: (event: SyntheticEvent) => {
+                                  stop(event);
+                                  if (!props.current()) event.preventDefault();
+                              },
+                              onAuxClick: (event: SyntheticEvent) => {
                                   stop(event);
                                   if (!props.current()) event.preventDefault();
                               },
@@ -383,6 +443,8 @@ function GalleryDialog(props: DialogProps): ReactNode {
                         key: props.mediaKey,
                         attachment: props.entry,
                         labels: props.labels,
+                        owner: props.owner,
+                        identity: props.identity,
                     })
                 ),
                 props.index < props.entries.length - 1
@@ -432,19 +494,23 @@ function DownloadButton(props: DialogProps): ReactNode {
         failed: false,
     });
     const active = useRef<AbortController | null>(null);
+    const releaseActive = useRef<(() => void) | null>(null);
     const live = useRef<DialogProps | null>(null);
     const commitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    const generation = resourceOwnerGeneration(props.owner);
     commitEffect(() => {
         live.current = props;
         if (props.disableDownload)
             setState({ pending: false, percent: 0, failed: false });
         return () => {
             live.current = null;
+            releaseActive.current?.();
+            releaseActive.current = null;
             active.current?.abort();
             active.current = null;
         };
-    }, [props.entry.url, props.disableDownload]);
+    }, [props.entry.url, props.disableDownload, generation, props.identity]);
     // Current callbacks/options may change without replacing the selected URL.
     commitEffect(() => {
         live.current = props;
@@ -465,16 +531,30 @@ function DownloadButton(props: DialogProps): ReactNode {
             return;
         const controller = new AbortController();
         active.current = controller;
+        const capturedOwner = props.owner;
+        const capturedGeneration = generation;
+        const capturedIdentity = props.identity;
         const current = () =>
             active.current === controller &&
             !controller.signal.aborted &&
+            resourceOwnerCurrent(capturedOwner) &&
+            Object.is(
+                resourceOwnerGeneration(live.current?.owner),
+                capturedGeneration
+            ) &&
+            Object.is(live.current?.identity, capturedIdentity) &&
             live.current?.disableDownload !== true &&
             live.current?.current() === true;
+        const unsubscribe = watchResourceOwner(capturedOwner, () =>
+            controller.abort()
+        );
+        releaseActive.current = unsubscribe;
         const document = event.currentTarget.ownerDocument;
         let anchor: HTMLAnchorElement | undefined;
         let objectURL: string | undefined;
         setState({ pending: true, percent: 0, failed: false });
         try {
+            if (!current()) return;
             const response = await fetch(props.entry.url, {
                 signal: controller.signal,
             });
@@ -503,13 +583,16 @@ function DownloadButton(props: DialogProps): ReactNode {
             if (current())
                 setState({ pending: false, percent: 0, failed: true });
         } finally {
+            unsubscribe?.();
+            if (releaseActive.current === unsubscribe)
+                releaseActive.current = null;
             anchor?.removeAttribute('href');
             anchor?.remove();
             if (objectURL != null) URL.revokeObjectURL(objectURL);
             if (active.current === controller) {
+                const settle = current();
                 active.current = null;
-                if (!controller.signal.aborted && live.current != null)
-                    setState((value) => ({ ...value, pending: false }));
+                if (settle) setState((value) => ({ ...value, pending: false }));
             }
         }
     };

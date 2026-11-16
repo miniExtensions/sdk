@@ -1,0 +1,54 @@
+@import './complete-linked-finder.css';
+@import './controlled-select.css';
+@import './complete-readonly-text.css';
+@import './complete-date.css';
+@import './duration.css';
+@import './rating.css';
+@import './readonly-url-gallery.css';
+@import './html-description.css';
+
+.mx-sdk-controlled-lookup {
+    min-width: 0;
+    max-width: 100%;
+    color: inherit;
+    font: inherit;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-lookup-title {
+    margin-block-end: 0.25rem;
+    font-weight: 500;
+}
+.mx-sdk-lookup-sequence,
+.mx-sdk-lookup-occurrence {
+    min-width: 0;
+    max-width: 100%;
+}
+.mx-sdk-lookup-sequence {
+    gap: 0.5rem;
+}
+.mx-sdk-lookup-linked-collection > ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    gap: 0.5rem;
+}
+.mx-sdk-lookup-linked-collection > table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.mx-sdk-lookup-linked-collection th,
+.mx-sdk-lookup-linked-collection td {
+    text-align: start;
+    vertical-align: top;
+    border: 1px solid var(--mx-sdk-finder-border, #d1d5db);
+    padding: 0.5rem;
+}
+.mx-sdk-lookup-linked-collection button:focus-visible {
+    outline: 2px solid var(--mx-sdk-accent, #2563eb);
+    outline-offset: 2px;
+}
+@media print {
+    .mx-sdk-controlled-lookup {
+        overflow: visible;
+    }
+}

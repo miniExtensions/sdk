@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import {
     createLinkedFormRecordProjection,
@@ -26,6 +28,7 @@ const text = (id: string, config: Text['miniExtConfig'] = {}): Text => ({
     },
     miniExtConfig: config,
 });
+
 const condition = (
     id = 'driver',
     value: unknown = 'yes',
@@ -196,7 +199,6 @@ describe('portable linked/two-source Form projection contract', () => {
                 },
             },
             { tbl_links: { type: 'notLoaded' } },
-            { tbl_links: { type: 'loading' } },
             { tbl_links: { type: 'failed', errorMessage: 'synthetic' } },
         ];
         for (const linkedTableLoadingStates of unavailable)
@@ -205,6 +207,24 @@ describe('portable linked/two-source Form projection contract', () => {
                     .data.links,
                 []
             );
+        const loading = { tbl_links: { type: 'loading' as const } };
+        const blocked = createLinkedFormRecordProjection(
+            defaults({ linkedTableLoadingStates: loading })
+        );
+        assert.deepEqual(blocked, {
+            type: 'blocked',
+            code: 'native-loading-boundary',
+            diagnostics: [{ code: 'native-loading-boundary' }],
+        });
+        assert.deepEqual(
+            available(
+                defaults({
+                    linkedTableLoadingStates: loading,
+                    evaluateConditionalFields: false,
+                })
+            ).formRecord.data.links,
+            []
+        );
         const state = loaded.tbl_links;
         assert.equal(state.type, 'loaded');
         if (state.type !== 'loaded') throw new Error('Expected fixture cache.');
@@ -451,4 +471,113 @@ describe('portable linked/two-source Form projection contract', () => {
             'blocked'
         );
     });
+});
+
+const nativeFixture = JSON.parse(
+    readFileSync('test/fixtures/linkedProjection.json', 'utf8')
+) as {
+    provenance: {
+        revision: string;
+        tree: string;
+        installedSdkRevision: string;
+        generatorSha256: string;
+        casesSourceSha256: string;
+        sources: Record<string, string>;
+        bundleInputs: Record<string, string>;
+    };
+    passes: {
+        order: string;
+        cases: {
+            name: string;
+            nativeFallbackReason?: 'native-loading-boundary';
+            input: CreateLinkedFormRecordProjectionInput;
+            expected: {
+                formRecord: RuntimeFormRecord;
+                hiddenFieldIds: string[];
+            };
+        }[];
+    }[];
+};
+describe('actual native linked/two-source projection differential', () => {
+    it('binds cases, generator, native source and installed formula dependency provenance', () => {
+        const provenance = nativeFixture.provenance;
+        assert.equal(
+            provenance.revision,
+            'acc1f942ff9704d469be421de8af251f0a27d220'
+        );
+        assert.equal(
+            provenance.tree,
+            'f9e12725785f98e131085dbc507f675fb6b479d0'
+        );
+        assert.equal(
+            provenance.installedSdkRevision,
+            'bd9d1f42982380069fc6a027650e70eff8127b9a'
+        );
+        for (const [path, expected] of [
+            [
+                'scripts/generate-linked-projection-fixtures.mjs',
+                provenance.generatorSha256,
+            ],
+            [
+                'test/fixtures/linkedProjectionCases.mjs',
+                provenance.casesSourceSha256,
+            ],
+        ])
+            assert.equal(
+                createHash('sha256').update(readFileSync(path)).digest('hex'),
+                expected
+            );
+        assert.equal(Object.keys(provenance.sources).length, 22);
+        assert.ok(
+            provenance.bundleInputs[
+                'installed-sdk/dist/esm/formulas/interpreter/interpreter.js'
+            ]
+        );
+        assert.ok(
+            provenance.bundleInputs[
+                'native/utils/isFieldHiddenByConditionalFields.ts'
+            ]
+        );
+        for (const value of [
+            ...Object.values(provenance.sources),
+            ...Object.values(provenance.bundleInputs),
+        ])
+            assert.match(value, /^[0-9a-f]{64}$/);
+        assert.deepEqual(
+            nativeFixture.passes.map((pass) => pass.order),
+            ['cold-forward', 'warm-forward', 'reverse']
+        );
+        assert.equal(nativeFixture.passes[0].cases.length, 28);
+    });
+    for (const pass of nativeFixture.passes)
+        for (const entry of pass.cases) {
+            it(`matches native ${pass.order}: ${entry.name}`, () => {
+                const before = structuredClone(entry.input);
+                if (entry.nativeFallbackReason) {
+                    assert.deepEqual(
+                        createLinkedFormRecordProjection(entry.input),
+                        {
+                            type: 'blocked',
+                            code: entry.nativeFallbackReason,
+                            diagnostics: [{ code: entry.nativeFallbackReason }],
+                        }
+                    );
+                    assert.equal(
+                        Object.hasOwn(entry.expected.formRecord.data, 'answer'),
+                        false
+                    );
+                } else {
+                    const result = available(entry.input);
+                    assert.deepEqual(
+                        result.formRecord,
+                        entry.expected.formRecord
+                    );
+                    assert.deepEqual(
+                        result.hiddenFieldIds,
+                        entry.expected.hiddenFieldIds
+                    );
+                }
+                assert.deepEqual(entry.input, before);
+            });
+        }
 });

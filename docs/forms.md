@@ -50,8 +50,11 @@ cache, and it does not own the canonical draft, dirty IDs or Save operation.
 
 The result is either `available` with the projected record and ordered hidden
 field IDs, or `blocked` with diagnostics and no partial output. Unsupported
-condition drivers and malformed snapshots block the whole projection. A native
-consumer must invoke its original fallback with the complete original arguments
+condition drivers and malformed snapshots block the whole projection. An
+all-loading context with active visibility also returns
+`blocked/native-loading-boundary`: the native cached empty-identifier path can
+affect scalar visibility and that ambient cache is outside this snapshot. A
+native consumer must invoke its original fallback with the complete original arguments
 outside the SDK exception boundary, so native exceptions retain their behavior.
 Low-level interpreter adapters must use the same captured snapshot. The returned
 record has the broad runtime record type because JSON normalization can change

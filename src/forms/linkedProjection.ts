@@ -60,7 +60,11 @@ export type CreateLinkedFormRecordProjectionInput<
 }>;
 
 export type LinkedFormProjectionDiagnostic = Readonly<{
-    code: 'invalid-snapshot' | 'unsupported-driver' | 'projection-exception';
+    code:
+        | 'invalid-snapshot'
+        | 'unsupported-driver'
+        | 'native-loading-boundary'
+        | 'projection-exception';
 }>;
 
 export type LinkedFormRecordProjection =
@@ -265,29 +269,23 @@ export function createLinkedFormRecordProjection<
                 { ...input.interpreterOptions, legacyRuntime: true }
             );
         const passes = (runner: FormulaRunner): boolean => {
-            let needsLinks = false;
             for (const identifier of new Set(
                 extractIdentifiersFromExpr(runner.expr)
             )) {
                 const field = byId.get(identifier) ?? byName.get(identifier);
                 if (field == null)
                     throw new Error(`Unknown field ${identifier}`);
-                if (field.config.type === 'multipleRecordLinks')
-                    needsLinks = true;
             }
-            const states = Object.values(snapshot.linkedStates);
-            if (
-                needsLinks &&
-                states.length > 0 &&
-                states.every((state) => state.type === 'loading')
-            )
-                return false;
             runner.context = context;
             return !FormulaRunner.isFalsyValue(runner.run());
         };
 
         const hiddenFieldIds: string[] = [];
         let section: RuntimeConditionsDefinition | null = null;
+        const states = Object.values(snapshot.linkedStates);
+        const allTablesLoading =
+            states.length > 0 &&
+            states.every((state) => state.type === 'loading');
         if (input.evaluateConditionalFields !== false) {
             for (const field of snapshot.formFields) {
                 const config = field.miniExtConfig;
@@ -307,6 +305,12 @@ export function createLinkedFormRecordProjection<
                         : null;
                 if (!supported(section) || !supported(own))
                     return blocked('unsupported-driver');
+                // Native's cached empty-identifier path can classify even a
+                // scalar/constant section runner as needing linked states.
+                // That ambient cache is outside this immutable snapshot.
+                // Preserve whole native fallback rather than guess its result.
+                if (allTablesLoading && (section != null || own != null))
+                    return blocked('native-loading-boundary');
                 // Native parses both runners before its short-circuit AND.
                 const sectionRunner = runnerFor(section);
                 const fieldRunner = runnerFor(own);

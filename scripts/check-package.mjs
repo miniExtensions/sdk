@@ -672,6 +672,7 @@ try {
                 path === 'docs/formula.md' ||
                 path === 'docs/rating.md' ||
                 path === 'docs/form-captcha.md' ||
+                path === 'docs/automatic-prefill.md' ||
                 path === 'docs/printable-form.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
@@ -806,6 +807,16 @@ try {
         'dist/cjs/react/rating.css',
         'docs/rating.md',
         'docs/form-captcha.md',
+        'docs/automatic-prefill.md',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/forms/automaticPrefill.js`,
+            `dist/${format}/forms/automaticPrefill.d.ts`,
+            `dist/${format}/forms/automaticPrefillCoordinator.js`,
+            `dist/${format}/forms/automaticPrefillCoordinator.d.ts`,
+            `dist/${format}/react/AutomaticPrefillStatus.js`,
+            `dist/${format}/react/AutomaticPrefillStatus.d.ts`,
+            `dist/${format}/react/automatic-prefill.css`,
+        ]),
         'docs/printable-form.md',
         ...printableStarterFiles,
         ...['esm', 'cjs'].flatMap((format) => [

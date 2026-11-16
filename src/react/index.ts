@@ -3194,6 +3194,11 @@ export {
     type FormCaptchaLabels,
 } from './FormCaptcha.js';
 export {
+    AutomaticPrefillStatus,
+    type AutomaticPrefillStatusProps,
+    type AutomaticPrefillStatusLabels,
+} from './AutomaticPrefillStatus.js';
+export {
     createFormCaptchaProviderRegistry,
     type FormCaptchaToken,
     type FormCaptchaScope,

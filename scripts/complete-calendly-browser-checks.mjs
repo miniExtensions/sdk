@@ -30,8 +30,10 @@ const frameHtml = `<!doctype html><meta name="viewport" content="width=device-wi
 <script>
 window.__calendlyEscapeTrace={keys:[]};
 window.addEventListener('keydown',event=>{if(event.key==='Escape')window.__calendlyEscapeTrace.keys.push({observedAt:'child-window-bubble',trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,activeId:document.activeElement?.id??null});},{passive:true});
-const send=data=>parent.postMessage(data,'*');
-document.querySelector('#schedule').onclick=()=>send({event:'calendly.event_scheduled'});
+window.__calendlyScheduleTrace=[];
+const recordSchedule=(kind,event)=>{if(window.__calendlyScheduleTrace.length<16)window.__calendlyScheduleTrace.push({kind,at:Date.now(),trusted:event?.isTrusted??null,scheduled:event?.data?.event==='calendly.event_scheduled'});};
+const send=data=>{recordSchedule('send',{data});parent.postMessage(data,'*');};
+document.querySelector('#schedule').onclick=event=>{recordSchedule('schedule-click',event);send({event:'calendly.event_scheduled'});};
 document.querySelector('#duplicate').onclick=()=>{send({event:'calendly.event_scheduled'});send({event:'calendly.event_scheduled'});};
 document.querySelector('#invalid').onclick=()=>send(null);
 </script>`;
@@ -93,7 +95,14 @@ window.addEventListener('keydown',event=>{if(event.key==='Escape')escapeTrace.ke
 for(const [name,key] of [['cancel','cancels'],['close','closes']])document.addEventListener(name,event=>{if(event.target?.classList?.contains('mx-sdk-calendly-dialog'))escapeTrace[key].push({observedAt:'parent-document-capture',trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,open:event.target.open,activeTag:document.activeElement?.tagName??null});},{capture:true,passive:true});
 const initial={mounted:true,owner:'A',url:invalidUrls[mode]||'https://calendly.com/__sdk_fixture_only__/one?keep=yes',email:'synthetic+booking@example.test',name:'Synthetic & 東京',enabled:true,booked:false,writer:'initial',title:mode==='french'?null:'Book synthetic',reenter:false,second:true,accent:'#0f766e',hover:'#0d9488',focus:'#14b8a6',reserved:'240px'};
 let observed=initial;
-window.addEventListener('message',()=>messages++);
+const messageTrace=[];
+window.addEventListener('message',event=>{
+ messages++;
+ if(messageTrace.length>=32)return;
+ const first=document.querySelector('[data-fixture-widget="first"] iframe');
+ const second=document.querySelector('[data-fixture-widget="second"] iframe');
+ messageTrace.push({at:Date.now(),scheduled:event.data!=null&&typeof event.data==='object'&&event.data.event==='calendly.event_scheduled',expectedOrigin:event.origin==='https://calendly.com',hasSource:event.source!=null,sourceIsFirst:first!=null&&event.source===first.contentWindow,sourceIsSecond:second!=null&&event.source===second.contentWindow,firstConnected:first?.isConnected??false,secondConnected:second?.isConnected??false,firstDialogOpen:first?.closest('dialog')?.open??false,secondDialogOpen:second?.closest('dialog')?.open??false,writes:writes.length});
+});
 function App(){
  const [state,setState]=useState(initial),latest=useRef(state);latest.current=state;observed=state;
  change=patch=>setState(old=>({...old,...patch}));
@@ -107,7 +116,7 @@ function App(){
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.completeCalendlyProof={
- snapshot:()=>({react:React.version,writes:[...writes],submits,messages,ports,mounted:observed.mounted,owner:observed.owner,enabled:observed.enabled,booked:observed.booked,writer:observed.writer,title:observed.title,reenter:observed.reenter,escape:{keys:[...escapeTrace.keys],cancels:[...escapeTrace.cancels],closes:[...escapeTrace.closes]}}),
+ snapshot:()=>({react:React.version,writes:[...writes],submits,messages,messageTrace:[...messageTrace],ports,mounted:observed.mounted,owner:observed.owner,enabled:observed.enabled,booked:observed.booked,writer:observed.writer,title:observed.title,reenter:observed.reenter,escape:{keys:[...escapeTrace.keys],cancels:[...escapeTrace.cancels],closes:[...escapeTrace.closes]}}),
  change:patch=>change(patch),
  capture(){capturedNode=document.querySelector('[data-fixture-widget="first"] iframe');capturedWindow=capturedNode?.contentWindow;},
  sameFrame:()=>capturedNode===document.querySelector('[data-fixture-widget="first"] iframe'),
@@ -914,6 +923,42 @@ window.completeCalendlyProof={
                 evidence.failureState = await page.evaluate(() =>
                     window.completeCalendlyProof?.snapshot()
                 );
+                try {
+                    evidence.failureFrames = [];
+                    for (const widget of ['first', 'second']) {
+                        const frame = page.locator(
+                            `[data-fixture-widget="${widget}"] iframe`
+                        );
+                        if ((await frame.count()) !== 1) continue;
+                        const source = await frame.getAttribute('src');
+                        const url = source == null ? null : new URL(source);
+                        if (
+                            url?.origin !== 'https://calendly.com' ||
+                            !fixturePaths.has(url.pathname)
+                        )
+                            continue;
+                        evidence.failureFrames.push({
+                            widget,
+                            path: url.pathname,
+                            trace: await bounded(
+                                'complete Calendly fixed-frame diagnostic',
+                                () =>
+                                    page
+                                        .locator(
+                                            `[data-fixture-widget="${widget}"]`
+                                        )
+                                        .frameLocator('iframe')
+                                        .locator('body')
+                                        .evaluate(
+                                            () => window.__calendlyScheduleTrace
+                                        )
+                            ),
+                        });
+                    }
+                } catch (frameCaptureError) {
+                    evidence.failureFrameCaptureError =
+                        frameCaptureError.message;
+                }
                 await page.screenshot({
                     path: join(output, 'complete-calendly-failure.png'),
                     fullPage: true,

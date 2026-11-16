@@ -205,6 +205,285 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         evidence.results.push(
             'one explicit Save, readonly refusal, equal-value owner replacement and current writer'
         );
+
+        // Keep the original formatted Save proof above. These additional cases
+        // exercise native selection through the ordinary public controlled API.
+        await update({ identity: 'metadata-caret:notes', value: 'Alpha Beta' });
+        await editor.waitFor();
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                    'Alpha Beta' &&
+                document.querySelector('.ProseMirror')?.textContent ===
+                    'Alpha Beta'
+        );
+        assert.equal(await page.locator('.ProseMirror').count(), 1);
+        await editor.click();
+        await editor.press(documentKeys.end);
+        await page.waitForFunction(() => {
+            const node = document.querySelector('.ProseMirror');
+            const native = document.getSelection();
+            return (
+                node?.textContent === 'Alpha Beta' &&
+                native?.isCollapsed &&
+                node.contains(native.anchorNode) &&
+                native.anchorNode?.textContent === 'Alpha Beta' &&
+                native.anchorOffset === 10
+            );
+        });
+        for (let step = 0; step < 8; step++) await editor.press('ArrowLeft');
+        const nativeCaret = () =>
+            editor.evaluate((node) => {
+                const native = document.getSelection();
+                return {
+                    active: document.activeElement === node,
+                    contained:
+                        !!native?.anchorNode &&
+                        node.contains(native.anchorNode),
+                    collapsed: native?.isCollapsed,
+                    anchorText: native?.anchorNode?.textContent,
+                    anchorOffset: native?.anchorOffset,
+                    focusOffset: native?.focusOffset,
+                };
+            });
+        const beforeMetadata = await nativeCaret();
+        assert.equal(beforeMetadata.active, true);
+        assert.equal(beforeMetadata.contained, true);
+        assert.equal(beforeMetadata.collapsed, true);
+        assert.equal(beforeMetadata.anchorText, 'Alpha Beta');
+        assert.equal(beforeMetadata.anchorOffset, 2);
+        assert.equal(beforeMetadata.focusOffset, 2);
+        await page.evaluate(() => window.canonicalRichText.remember());
+        const beforeCaretMetadata = await snapshot();
+        await update({ id: 'notes-caret', invalid: false });
+        assert.equal((await nativeCaret()).anchorOffset, 2);
+        await page.locator('#neighbor').click();
+        await update({ id: 'notes-caret-renamed', invalid: true });
+        await editor.focus();
+        await page.keyboard.type('Z');
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                'AlZpha Beta'
+        );
+        const afterCaretMetadata = await snapshot();
+        assert.equal(await editor.innerText(), 'AlZpha Beta');
+        assert.equal(
+            await page.evaluate(() => window.canonicalRichText.same()),
+            true
+        );
+        assert.equal(
+            afterCaretMetadata.writes.length,
+            beforeCaretMetadata.writes.length + 1
+        );
+        assert.deepEqual(afterCaretMetadata.writes.at(-1), {
+            identity: 'metadata-caret:notes',
+            value: 'AlZpha Beta',
+        });
+        assert.equal(afterCaretMetadata.saves.length, 1);
+        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
+        evidence.nativeMetadataCaret = {
+            beforeMetadata,
+            after: await nativeCaret(),
+        };
+        evidence.results.push(
+            'trusted navigation caret survives accessibility updates, metadata blur and refocus with exact insertion'
+        );
+
+        // A real pointer choice at the start must take precedence over the
+        // retained non-start caret. Keep click-to-type adjacent, as above.
+        await update({
+            identity: 'pointer-caret:notes',
+            value: 'Alpha Beta',
+            id: 'notes-pointer',
+            invalid: false,
+        });
+        await editor.waitFor();
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                    'Alpha Beta' &&
+                document.querySelector('.ProseMirror')?.textContent ===
+                    'Alpha Beta'
+        );
+        await editor.click();
+        await editor.press(documentKeys.end);
+        for (let step = 0; step < 8; step++) await editor.press('ArrowLeft');
+        const beforePointerBlur = await nativeCaret();
+        assert.equal(beforePointerBlur.active, true);
+        assert.equal(beforePointerBlur.contained, true);
+        assert.equal(beforePointerBlur.collapsed, true);
+        assert.equal(beforePointerBlur.anchorOffset, 2);
+        assert.equal(beforePointerBlur.focusOffset, 2);
+        await page.evaluate(() => window.canonicalRichText.remember());
+        const beforePointer = await snapshot();
+        await page.locator('#neighbor').click();
+        await update({ id: 'notes-pointer-renamed', invalid: true });
+        const pointerPoint = await editor.evaluate((node) => {
+            const text = node.querySelector('p')?.firstChild;
+            if (
+                text?.nodeType !== Node.TEXT_NODE ||
+                text.textContent !== 'Alpha Beta'
+            )
+                throw new Error(
+                    'Expected the real plain-text editor paragraph'
+                );
+            // This Range measures the first glyph only. It is never installed
+            // in the document Selection; the trusted mouse chooses the caret.
+            const range = document.createRange();
+            range.setStart(text, 0);
+            range.setEnd(text, 1);
+            const rect = range.getBoundingClientRect();
+            if (!(rect.width > 0 && rect.height > 0))
+                throw new Error('Expected a visible first glyph');
+            window.canonicalRichText.pointerGesture = null;
+            node.addEventListener(
+                'pointerdown',
+                (event) => {
+                    window.canonicalRichText.pointerGesture = {
+                        trusted: event.isTrusted,
+                        connected: node.isConnected,
+                    };
+                },
+                { capture: true, once: true }
+            );
+            return {
+                x: rect.left + Math.min(0.5, rect.width / 8),
+                y: rect.top + rect.height / 2,
+            };
+        });
+        await page.mouse.click(pointerPoint.x, pointerPoint.y);
+        await page.keyboard.type('Z');
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                'ZAlpha Beta'
+        );
+        const afterPointer = await snapshot();
+        assert.equal(await editor.innerText(), 'ZAlpha Beta');
+        assert.equal(
+            await page.evaluate(() => window.canonicalRichText.same()),
+            true
+        );
+        assert.equal(
+            afterPointer.writes.length,
+            beforePointer.writes.length + 1
+        );
+        assert.deepEqual(afterPointer.writes.at(-1), {
+            identity: 'pointer-caret:notes',
+            value: 'ZAlpha Beta',
+        });
+        assert.equal(afterPointer.saves.length, 1);
+        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
+        const pointerGesture = await page.evaluate(
+            () => window.canonicalRichText.pointerGesture
+        );
+        assert.deepEqual(pointerGesture, { trusted: true, connected: true });
+        evidence.nativePointerFocus = {
+            beforePointerBlur,
+            pointerPoint,
+            pointerGesture,
+            after: await nativeCaret(),
+        };
+
+        const precedingOwner = await editor.elementHandle();
+        assert(precedingOwner);
+        await update({
+            identity: 'formatted-replacement:notes',
+            value: '**Stored B**\n\n[x] B task',
+        });
+        await editor.waitFor();
+        await editor
+            .locator('strong')
+            .filter({ hasText: 'Stored B' })
+            .waitFor();
+        assert.equal(await editor.locator('input[type=checkbox]').count(), 1);
+        assert.equal(
+            await editor.locator('input[type=checkbox]').isChecked(),
+            true
+        );
+        assert.equal(
+            (await snapshot()).state.value,
+            '**Stored B**\n\n[x] B task'
+        );
+        assert.equal(await editor.locator('strong').innerText(), 'Stored B');
+        assert((await editor.textContent())?.includes('B task'));
+        assert.equal(await page.locator('.ProseMirror').count(), 1);
+        assert.equal(
+            await page.evaluate(() => window.canonicalRichText.same()),
+            false
+        );
+        assert.equal(
+            await precedingOwner.evaluate((node) => node.isConnected),
+            false
+        );
+        await precedingOwner.dispose();
+        await editor.focus();
+        await editor.press('ControlOrMeta+a');
+        const wholeFormattedRange = await editor.evaluate((node) => {
+            const native = document.getSelection();
+            if (
+                document.activeElement !== node ||
+                !native ||
+                native.rangeCount !== 1 ||
+                native.isCollapsed
+            )
+                return false;
+            const range = native.getRangeAt(0);
+            return (
+                node.contains(range.startContainer) &&
+                node.contains(range.endContainer) &&
+                range.cloneContents().textContent === node.textContent
+            );
+        });
+        assert.equal(wholeFormattedRange, true);
+        await page.evaluate(() => window.canonicalRichText.remember());
+        const beforeFirstEdit = await snapshot();
+        assert.equal(beforeFirstEdit.state.value, '**Stored B**\n\n[x] B task');
+        assert.equal(beforeFirstEdit.writes.length, afterPointer.writes.length);
+        await page.keyboard.type('B first edit survives');
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                'B first edit survives'
+        );
+        const afterFirstEdit = await snapshot();
+        const replacementWrites = afterFirstEdit.writes.slice(
+            beforeFirstEdit.writes.length
+        );
+        assert.equal(await editor.innerText(), 'B first edit survives');
+        assert.equal(
+            await editor.locator('strong, em, input[type=checkbox]').count(),
+            0
+        );
+        assert.equal(
+            await page.evaluate(() => window.canonicalRichText.same()),
+            true
+        );
+        assert(replacementWrites.length > 0);
+        assert(
+            replacementWrites.every(
+                (write) => write.identity === 'formatted-replacement:notes'
+            )
+        );
+        assert.deepEqual(replacementWrites.at(-1), {
+            identity: 'formatted-replacement:notes',
+            value: 'B first edit survives',
+        });
+        assert.equal(afterFirstEdit.saves.length, 1);
+        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
+        evidence.formattedReplacementFirstEdit = {
+            wholeFormattedRange,
+            writes: replacementWrites.length,
+            exactText: afterFirstEdit.state.value,
+            sameEditor: await page.evaluate(() =>
+                window.canonicalRichText.same()
+            ),
+        };
+        evidence.results.push(
+            'ready formatted owner accepts trusted select-all and immediate first typing as exact replacement'
+        );
+
         const mixedPayload =
             '[x] Complete\n[ ] Pending\n\n- Item one\n- Item two';
         const mixedStored =

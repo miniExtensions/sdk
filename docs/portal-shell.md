@@ -15,6 +15,63 @@ empty or fully sanitized title stays blank instead of showing `title`. Evaluate
 formula values and choose the native logo/title presentation in the host snapshot;
 the shell does not evaluate formulas or accept a rendered header callback.
 
+For the native resizable desktop sidebar, supply `header.sidebarWidth` and
+`onSidebarWidthCommit`. The shell uses the existing `re-resizable` engine,
+previews the width while dragging, and reports the measured width only at drag
+completion. Width is bounded to 120–600 pixels; absent or nonfinite width uses 288. Without this optional API the existing fixed sidebar is preserved. The
+keyboard separator supports Left/Right in ten-pixel steps and Home/End. Mobile,
+topbar and hidden-header presentations have no resize control.
+
+The width remains canonical in the host. Validate each commit's scope/revision,
+persist once using the existing portal-specific key, and publish the accepted
+width. Revision, callback, owner, layout and mobile changes retire old gestures;
+withdrawal restores the accepted presentation. Unmount discards an unfinished
+gesture. Resizing never emits a navigation intent or remounts the record body.
+The separate optional callback preserves existing `PortalShellIntent` handlers.
+SSR includes the accepted width; the handle appears after mount. The resize
+engine is loaded only for a configured mounted sidebar, so importing the public
+SDK leaves other React hosts free to initialize their own browser environment.
+
+```tsx
+import { createElement } from 'react';
+import {
+    CompletePortalShell,
+    type PortalShellSnapshot,
+    type PortalShellSidebarWidthCommit,
+} from '@miniextensions/sdk/react';
+
+let revision = 1;
+let snapshot: PortalShellSnapshot = {
+    scope: 'portal:user',
+    revision,
+    items: [{ type: 'table', id: 'orders', label: 'Orders' }],
+    selection: { type: 'table', itemId: 'orders', viewId: null },
+    header: { layout: 'sidebar', title: 'Customer portal', sidebarWidth: 288 },
+};
+function acceptWidth(change: PortalShellSidebarWidthCommit) {
+    if (
+        change.scope !== snapshot.scope ||
+        change.revision !== snapshot.revision
+    )
+        return;
+    // Persist through the existing authorized host storage adapter, then publish:
+    snapshot = {
+        ...snapshot,
+        revision: ++revision,
+        header: { ...snapshot.header, sidebarWidth: change.width },
+    };
+}
+createElement(
+    CompletePortalShell,
+    {
+        snapshot,
+        onIntent() {},
+        onSidebarWidthCommit: acceptWidth,
+    },
+    'Host collection'
+);
+```
+
 The host supplies an immutable `PortalShellSnapshot`. Evaluate existing menu and
 custom-view predicates in the host, using its accepted record/configuration and
 the existing condition compiler. Supply only eligible menu items and views;

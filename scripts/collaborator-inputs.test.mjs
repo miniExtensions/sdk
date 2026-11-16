@@ -79,6 +79,10 @@ function fixture(t, format) {
     }
     sdkInput('dist/vendor/phone-number-input/index.cjs', ['esm', 'cjs']);
     sdkInput('dist/vendor/rich-markdown-editor/dist/index.js', ['esm', 'cjs']);
+    const sidebar = sdkInput('dist/vendor/portal-sidebar/index.js', [
+        'esm',
+        'cjs',
+    ]);
     const address = addressFiles.map((name) =>
         sdkInput(`dist/vendor/headlessui-address/${name}`, ['esm', 'cjs'])
     );
@@ -115,6 +119,7 @@ function fixture(t, format) {
         sdkInput,
         pack,
         address,
+        sidebar,
         report,
         creator: creators[format],
         temporary,
@@ -125,6 +130,20 @@ function fixture(t, format) {
 }
 
 for (const format of ['esm', 'cjs']) {
+    test(`${format} Collaborator binds the exact sidebar runtime and rejects changed installed bytes`, async (t) => {
+        const { record, sidebar, beforeBuild, report } = fixture(t, format);
+        await record();
+        const item = report.completeCollaborators[format].bundleInputs.find(
+            (input) =>
+                input.archiveMember ===
+                'package/dist/vendor/portal-sidebar/index.js'
+        );
+        assert(item);
+        assert.equal(item.sha256, hash(readFileSync(sidebar)));
+        beforeBuild(() => writeFileSync(sidebar, 'changed sidebar bytes'));
+        await assert.rejects(record, assert.AssertionError);
+        assert.equal(report.completeCollaborators[format], undefined);
+    });
     test(`${format} Collaborator provenance binds the actual packed CreatedBy member`, async (t) => {
         const { record, creator, report } = fixture(t, format);
         await record();
@@ -197,6 +216,8 @@ for (const format of ['esm', 'cjs']) {
         'dist/vendor/phone-number-input-other/index.js',
         'dist/vendor/headlessui-address-other/combobox.js',
         'dist/vendor/headlessui-address/unreviewed.js',
+        'dist/vendor/portal-sidebar-other/index.js',
+        'dist/vendor/portal-sidebar/unreviewed.js',
     ]) {
         test(`${format} Collaborator provenance rejects ${member} even with matching archive bytes`, async (t) => {
             const { record, sdkInput, pack } = fixture(t, format);

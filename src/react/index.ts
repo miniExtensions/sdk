@@ -3181,6 +3181,7 @@ export type {
     CompletePortalShellProps,
     PortalShellSnapshot,
     PortalShellLabels,
+    PortalShellSidebarWidthCommit,
 } from './CompletePortalShell.js';
 
 export {

@@ -38,6 +38,7 @@ function fixture(t, format) {
     sdkInput(`dist/${format}/react/CompletePortalChart.js`);
     sdkInput('dist/vendor/phone-number-input/index.cjs');
     const rich = sdkInput('dist/vendor/rich-markdown-editor/dist/index.js');
+    const sidebar = sdkInput('dist/vendor/portal-sidebar/index.js');
     const address = ['combobox.js', 'react-peer.js', 'sdk-runtime.js'].map(
         (name) => sdkInput(`dist/vendor/headlessui-address/${name}`)
     );
@@ -63,10 +64,23 @@ function fixture(t, format) {
             chartRoot,
         });
     pack();
-    return { record, sdkInput, pack, rich, address };
+    return { record, sdkInput, pack, rich, address, sidebar };
 }
 
 for (const format of ['esm', 'cjs']) {
+    test(`${format} Chart binds the exact sidebar runtime and rejects changed installed bytes`, (t) => {
+        const { record, sidebar } = fixture(t, format);
+        const receipt = record();
+        assert(
+            receipt.some(
+                (input) =>
+                    input.archiveMember ===
+                    'package/dist/vendor/portal-sidebar/index.js'
+            )
+        );
+        writeFileSync(sidebar, 'changed sidebar bytes');
+        assert.throws(record, assert.AssertionError);
+    });
     test(`${format} Chart provenance accepts the shipped shared closures and binds their bytes to the archive`, (t) => {
         const { record, rich } = fixture(t, format);
         const receipt = record();
@@ -121,6 +135,8 @@ for (const format of ['esm', 'cjs']) {
         'dist/vendor/phone-number-input-other/index.js',
         'dist/vendor/headlessui-address-other/combobox.js',
         'dist/vendor/headlessui-address/unreviewed.js',
+        'dist/vendor/portal-sidebar-other/index.js',
+        'dist/vendor/portal-sidebar/unreviewed.js',
     ]) {
         test(`${format} Chart provenance rejects ${member} even when its archive bytes match`, (t) => {
             const { record, sdkInput, pack } = fixture(t, format);

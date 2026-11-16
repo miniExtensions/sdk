@@ -27,6 +27,7 @@ import { checkCalendarReactMatrix } from './calendar-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
+import { assertPortalSidebarVendor } from './portal-sidebar-vendor-checks.mjs';
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
@@ -708,6 +709,13 @@ try {
                 path.startsWith('dist/vendor/phone-number-input/') ||
                 [
                     'dist/vendor/date-time/index.cjs',
+                    'dist/vendor/portal-sidebar/index.js',
+                    'dist/vendor/portal-sidebar/index.d.ts',
+                    'dist/vendor/portal-sidebar/resizer.d.ts',
+                    'dist/vendor/portal-sidebar/package.json',
+                    'dist/vendor/portal-sidebar/upstream.package.json',
+                    'dist/vendor/portal-sidebar/LICENSE',
+                    'dist/vendor/portal-sidebar/UPSTREAM.json',
                     'dist/vendor/date-time/index.d.cts',
                     'dist/vendor/date-time/LICENSE.txt',
                     'dist/vendor/date-time/ONCLICKOUTSIDE-LICENSE.txt',
@@ -727,6 +735,15 @@ try {
     }
     for (const path of [
         ...documentFiles,
+        ...[
+            'index.js',
+            'index.d.ts',
+            'resizer.d.ts',
+            'package.json',
+            'upstream.package.json',
+            'LICENSE',
+            'UPSTREAM.json',
+        ].map((file) => `dist/vendor/portal-sidebar/${file}`),
         'docs/canonical-form-frame.md',
         'dist/esm/forms/canonicalFrame.js',
         'dist/esm/forms/canonicalFrame.d.ts',
@@ -935,6 +952,7 @@ try {
     );
     assertModuleFormatReceipt(installedPackage);
     assertDateVendor(installedPackage, 'dist/vendor/date-time');
+    assertPortalSidebarVendor(installedPackage, 'dist/vendor/portal-sidebar');
     const installedPhone = assertPhoneVendor(
         join(installedPackage, 'dist/vendor/phone-number-input')
     );

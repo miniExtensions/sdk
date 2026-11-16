@@ -354,8 +354,9 @@ export async function checkControlledLookupBrowser({
                             targetRan: false,
                         };
                         window.lookupBlockedClick = observed;
+                        window.lookupBlockedEvent = event;
                         queueMicrotask(
-                            () => (observed.after = event.defaultPrevented)
+                            () => (observed.microtask = event.defaultPrevented)
                         );
                     },
                     { capture: true, once: true }
@@ -369,12 +370,23 @@ export async function checkControlledLookupBrowser({
                 );
             });
             await staleLink.click();
-            assert.deepEqual(
-                await page.evaluate(() => window.lookupBlockedClick),
-                { trusted: true, before: false, targetRan: false, after: true }
-            );
+            const blockedClick = await page.evaluate(() => {
+                const observed = {
+                    ...window.lookupBlockedClick,
+                    after: window.lookupBlockedEvent.defaultPrevented,
+                };
+                window.lookupBlockedEvent = null;
+                return observed;
+            });
+            assert.equal(blockedClick.trusted, true);
+            assert.equal(blockedClick.before, false);
+            assert.equal(blockedClick.targetRan, false);
+            assert.equal(blockedClick.after, true);
             assert.equal(page.url(), origin + '/?format=' + format);
-            record('stale activation refused before target/default navigation');
+            record(
+                'stale activation refused before target/default navigation',
+                { event: blockedClick }
+            );
 
             await page.evaluate(() => window.lookupProof.cohort('linkedCard'));
             const next = page.getByRole('button', {

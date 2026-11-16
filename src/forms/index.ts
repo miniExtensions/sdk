@@ -77,6 +77,15 @@ export {
     type FlatScalarFormRecordProjection,
 } from './projection.js';
 export {
+    createLinkedFormRecordProjection,
+    type CreateLinkedFormRecordProjectionInput,
+    type LinkedFormRecordProjection,
+    type LinkedFormProjectionDiagnostic,
+    type FormProjectionDriverPair,
+    type FormProjectionLinkedFilters,
+    type FormProjectionLinkedTableStates,
+} from './linkedProjection.js';
+export {
     getEffectiveAttachmentFileLimit,
     getEffectiveAttachmentSizeLimit,
     isAttachmentTypeAllowed,

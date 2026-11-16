@@ -28,6 +28,54 @@ For an application-owned immutable state kernel with native host admission,
 validation and allocation, see [canonical Form frames](canonical-form-frame.md).
 It is an additive SDK-first API; native integration remains a separate milestone.
 
+## Linked and two-source projection candidate
+
+`createLinkedFormRecordProjection` is an additive, synchronous projection
+candidate from `@miniextensions/sdk/forms`. It accepts an explicit
+`compatibility: 'native-form-v1'` snapshot with the complete ordered Form fields,
+physical field metadata, accepted output record, linked loading/cache states and
+conditional linked-record filter pairs. An optional
+`formRecordForConditionEvaluation` supplies a separate authoritative decision
+record; the output still comes from `formRecord`.
+
+The helper JSON-clones the whole output record before making decisions. It
+evaluates section and field conditions against the same unpruned evaluation
+snapshot, then prunes linked selections against supplied loaded cached rows.
+Active filter pairs combine with AND. Selected order and duplicates survive;
+uncached IDs disappear, including under an empty filter entry. Null or blank
+driver pairs skip membership checks but retain cache pruning. Setting
+`evaluateConditionalFields: false` disables visibility pruning while linked
+filtering still runs. The helper reads no store, client, provider or mutable
+cache, and it does not own the canonical draft, dirty IDs or Save operation.
+
+The result is either `available` with the projected record and ordered hidden
+field IDs, or `blocked` with diagnostics and no partial output. Unsupported
+condition drivers and malformed snapshots block the whole projection. An
+accepted capture consists of ordinary objects and arrays with enumerable data
+properties. Accessors, non-enumerable data (except array length), symbols and
+custom or null prototypes return `blocked/invalid-snapshot` before cloning.
+This prevents field-name overrides, cached rows and active filter values from
+silently disappearing during capture. Intentional interpreter hooks are exempt
+from this data-graph check. Their options container still requires enumerable
+data descriptors; hook values are captured without invoking getters. Primitive
+`undefined`, non-finite numbers and `-0`
+retain the documented native JSON output normalization.
+
+An all-loading context with active visibility also returns
+`blocked/native-loading-boundary`: the native cached empty-identifier path can
+affect scalar visibility and that ambient cache is outside this snapshot. A
+native consumer must invoke its original fallback with the complete original
+arguments outside the SDK exception boundary, so native exceptions retain their behavior.
+Low-level interpreter adapters must use the same captured snapshot. The returned
+record has the broad runtime record type because JSON normalization can change
+caller-specific narrowed values and metadata.
+
+This candidate is not yet qualified for native adoption. Contract tests, actual
+native differential witnesses, public packed consumers, store/Form/Review/Save
+acceptance and receiving verification remain delivery gates. The existing
+hosted projection route retains its current fallback boundaries until those
+gates and the separately serialized native integration are complete.
+
 ## Native-compatible progress storage
 
 `createNativeFormProgressStorage` preserves the native browser-local revision

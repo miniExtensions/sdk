@@ -4,9 +4,16 @@
 group disclosures, hidden-header navigation, profile menu, welcome dialog,
 logout confirmation, embedded iframe, styles and accessibility. Import
 `@miniextensions/sdk/react/portal-shell.css` and the existing
-`@miniextensions/sdk/react/html-description.css` for rich HTML descriptions.
+`@miniextensions/sdk/react/html-description.css` for rich HTML titles and descriptions.
 There are no host-rendered menu/header slots. `children` is only the host's
 existing table/collection body.
+
+`header.title` is plain text and is escaped. A host with an existing HTML-title
+configuration may provide `header.titleHtml`; the shell renders it through
+`CompleteHTMLRenderer` and its existing sanitizer and stylesheet. An explicitly
+empty or fully sanitized title stays blank instead of showing `title`. Evaluate
+formula values and choose the native logo/title presentation in the host snapshot;
+the shell does not evaluate formulas or accept a rendered header callback.
 
 The host supplies an immutable `PortalShellSnapshot`. Evaluate existing menu and
 custom-view predicates in the host, using its accepted record/configuration and

@@ -18,13 +18,17 @@ const items:readonly PortalShellMenuItem[]=[{type:'table',id:'orders',label:'Ord
 const snapshot:PortalShellSnapshot={scope:'public:user',revision:1,items,selection:resolvePortalShellSelection({items,phase:'initial',initialSelection:{itemId:'orders'}}),header:{layout:'sidebar',title:'Portal'}};
 const props:CompletePortalShellProps={snapshot,onIntent(intent:PortalShellIntent){if(intent.type==='navigate')console.log(intent.selection.itemId);}};
 createElement(CompletePortalShell,props);
+const richSnapshot:PortalShellSnapshot={...snapshot,header:{...snapshot.header,titleHtml:'<strong>Portal</strong>'}};
+createElement(CompletePortalShell,{...props,snapshot:richSnapshot});
+// @ts-expect-error HTML is a controlled string, never an injected renderer
+const injectedHeader:PortalShellSnapshot={...snapshot,header:{...snapshot.header,titleHtml(){return null;}}};
 // @ts-expect-error SDK owns navigation presentation
 const nativeMenu:CompletePortalShellProps={...props,renderMenu(){return null;}};
 // @ts-expect-error no implicit host record loading API
 const fetcher:CompletePortalShellProps={...props,fetchRecords(){}};
 // @ts-expect-error owner/revision envelope is required
 const unscoped:PortalShellIntent={type:'logout'};
-void nativeMenu;void fetcher;void unscoped;
+void nativeMenu;void fetcher;void unscoped;void injectedHeader;
 `;
 
 export function checkPortalShellReactMatrix({
@@ -144,6 +148,8 @@ console.log(JSON.stringify({format,react:React.version,...result}));
             );
             assert(css.includes('.mx-sdk-portal-shell'));
             assert(css.includes('forced-colors'));
+            assert(css.includes('.mx-sdk-portal-title {'));
+            assert(!css.includes('.mx-sdk-portal-brand h1'));
             run(process.execPath, [
                 '--input-type=module',
                 '-e',

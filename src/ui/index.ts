@@ -389,3 +389,11 @@ export {
     isAttachmentPreviewImage,
     type AttachmentPreviewSource,
 } from './attachmentPreview.js';
+export {
+    captureReadonlyPrintDocument,
+    type ReadonlyPrintDocument,
+    type ReadonlyPrintField,
+    type ReadonlyPrintFacet,
+    type ReadonlyPrintLinkedRecord,
+    type ReadonlyPrintCapture,
+} from './readonlyPrintDocument.js';

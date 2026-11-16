@@ -12,6 +12,7 @@ function field(facet: ReadonlyPrintFacet, key = 'field'): ReadonlyPrintField {
         key,
         fieldName: 'Native name',
         title: 'Configured title',
+        semanticTitle: 'Configured title',
         showTitle: true,
         required: false,
         sameRow: false,

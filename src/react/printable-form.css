@@ -1,0 +1,182 @@
+@import './field-presentation.css';
+@import './complete-readonly-text.css';
+@import './complete-phone.css';
+@import './complete-checkbox.css';
+@import './rating.css';
+@import './rich-text.css';
+@import './html-description.css';
+
+.mx-sdk-print-document {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+    margin: 1rem 0;
+    color: #111827;
+    font-family: sans-serif;
+}
+.mx-sdk-print-title {
+    flex-basis: 100%;
+}
+.mx-sdk-print-empty {
+    color: #6b7280;
+    font-style: italic;
+}
+.mx-sdk-print-pills,
+.mx-sdk-print-people {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+.mx-sdk-print-pill {
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+}
+.mx-sdk-print-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.mx-sdk-print-person img {
+    object-fit: cover;
+    border-radius: 50%;
+}
+.mx-sdk-print-progress {
+    height: 0.5rem;
+    width: 100%;
+    background: #e5e7eb;
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+.mx-sdk-print-progress > div {
+    height: 100%;
+}
+.mx-sdk-print-rating-icons {
+    display: flex;
+    gap: 0.125rem;
+}
+.mx-sdk-print-rating-icons svg {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+.mx-sdk-print-rating-summary {
+    display: none;
+}
+.mx-sdk-print-attachments {
+    display: grid;
+    gap: 0.5rem;
+}
+.mx-sdk-print-attachment {
+    margin: 0;
+    min-width: 0;
+    break-inside: avoid;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-print-attachment img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+}
+.mx-sdk-print-attachments[data-thumbnail-size='small'] img {
+    max-height: 5rem;
+}
+.mx-sdk-print-attachments[data-thumbnail-size='medium'] img {
+    max-height: 10rem;
+}
+.mx-sdk-print-attachments[data-thumbnail-size='large'] img {
+    max-height: 20rem;
+}
+.mx-sdk-print-file-icon {
+    display: inline-block;
+    width: 2.5rem;
+    height: 2.5rem;
+}
+.mx-sdk-print-attachments-icon .mx-sdk-print-attachment {
+    display: flex;
+    align-items: center;
+    height: 3.5rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+.mx-sdk-print-attachments-icon .mx-sdk-print-attachment img,
+.mx-sdk-print-attachments-icon .mx-sdk-print-file-icon {
+    flex: 0 0 3.5rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    max-height: none;
+}
+.mx-sdk-print-attachments-icon figcaption {
+    margin: 0 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mx-sdk-print-records-gallery {
+    display: grid;
+    gap: 0.75rem;
+}
+.mx-sdk-print-record {
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+.mx-sdk-print-record[data-thumbnail-location='right'] {
+    flex-direction: row-reverse;
+}
+.mx-sdk-print-record-thumbnail {
+    flex: 0 0 25%;
+    min-width: 0;
+}
+.mx-sdk-print-record-body {
+    flex: 1;
+    min-width: 0;
+}
+.mx-sdk-print-record h3 {
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+}
+.mx-sdk-print-records-gallery .mx-sdk-print-record {
+    flex-direction: column;
+}
+.mx-sdk-print-sequence-inline {
+    display: inline;
+}
+.mx-sdk-print-sequence-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.mx-sdk-print-sequence-stack > * {
+    display: block;
+}
+@media print {
+    .mx-sdk-print-document {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+    .mx-sdk-print-document .mx-sdk-print-rating-range {
+        display: none;
+    }
+    .mx-sdk-print-rating-summary {
+        display: block;
+    }
+    .mx-sdk-print-document .me-rich-text,
+    .mx-sdk-print-document .mx-sdk-print-html,
+    .mx-sdk-print-document .mx-sdk-print-html > * {
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        contain: none !important;
+    }
+    .mx-sdk-print-document .mx-sdk-print-field:has(.me-rich-text),
+    .mx-sdk-print-document .mx-sdk-print-field:has(.mx-sdk-print-html) {
+        break-inside: auto;
+    }
+}

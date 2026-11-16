@@ -102,6 +102,23 @@ test('valid CJS is parsed without execution and produces a deterministic relativ
     assert.deepEqual(assertModuleFormatReceipt(root), receipt);
 });
 
+test('native require honors a canonical package root reached through a parent alias', (t) => {
+    const { root, manifest } = fixture(t);
+    manifest.exports['./react/button.css'] = './dist/esm/react/button.css';
+    json(root, 'package.json', manifest);
+    write(root, 'dist/esm/react/button.css', '.button { color: red; }');
+    const directory = mkdtempSync(join(tmpdir(), 'sdk-module-parent-alias-'));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const alias = join(directory, 'package');
+    symlinkSync(root, alias, 'dir');
+    const receipt = assertModuleFormats(alias);
+    assert.deepEqual(receipt, assertModuleFormats(root));
+    assert.equal(
+        receipt.entries[0].require.path,
+        './dist/cjs/formulas/index.js'
+    );
+});
+
 test('the exact 787-byte ESM-plus-use-strict entry is refused as CommonJS', (t) => {
     const { root } = fixture(t);
     // Frozen historical bytes; future formula exports must not change this case.
@@ -669,6 +686,7 @@ for (const name of [
     'button',
     'form-group',
     'form-captcha',
+    'printable-form',
     'csv-export',
     'kanban',
     'checkbox',

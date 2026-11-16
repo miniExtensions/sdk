@@ -3188,3 +3188,16 @@ export {
     type RecaptchaV2Options,
     type RecaptchaV2Api,
 } from '../ui/recaptchaV2Provider.js';
+export {
+    ReadonlyPrintDocumentView,
+    prepareReadonlyPrintDocument,
+    type ReadonlyPrintDocumentViewProps,
+} from './ReadonlyPrintDocumentView.js';
+export {
+    captureReadonlyPrintDocument,
+    type ReadonlyPrintDocument,
+    type ReadonlyPrintField,
+    type ReadonlyPrintFacet,
+    type ReadonlyPrintLinkedRecord,
+    type ReadonlyPrintCapture,
+} from '../ui/readonlyPrintDocument.js';

@@ -93,6 +93,7 @@ export type ReadonlyPrintFacet =
           readonly thumbnailHeight?: number;
           readonly showNames: boolean;
           readonly emptyLabel: string;
+          readonly unavailableLabel?: string;
       }
     | {
           readonly kind: 'linkedRecords';
@@ -137,6 +138,7 @@ export type ReadonlyPrintField = {
     readonly key: string;
     readonly fieldName: string;
     readonly title: string;
+    readonly semanticTitle: string;
     readonly showTitle: boolean;
     readonly required: boolean;
     readonly sameRow: boolean;
@@ -146,6 +148,8 @@ export type ReadonlyPrintField = {
         readonly imageUrl: string | null;
         readonly placement: 'top' | 'bottom' | 'tooltip';
         readonly truncate: boolean;
+        readonly readMoreLabel?: string;
+        readonly showLessLabel?: string;
     };
     readonly error?: string | null;
     readonly facet: ReadonlyPrintFacet;
@@ -216,6 +220,7 @@ const fieldRule: Rule = (value) =>
             key: text,
             fieldName: text,
             title: text,
+            semanticTitle: text,
             showTitle: bool,
             required: bool,
             sameRow: bool,
@@ -225,12 +230,16 @@ const fieldRule: Rule = (value) =>
         {
             error: nullable(text),
             description: (item) =>
-                shape(item, {
-                    html: nullable(text),
-                    imageUrl: nullable(text),
-                    placement: oneOf('top', 'bottom', 'tooltip'),
-                    truncate: bool,
-                }),
+                shape(
+                    item,
+                    {
+                        html: nullable(text),
+                        imageUrl: nullable(text),
+                        placement: oneOf('top', 'bottom', 'tooltip'),
+                        truncate: bool,
+                    },
+                    { readMoreLabel: text, showLessLabel: text }
+                ),
         }
     );
 const facetRule: Rule = (value) => {
@@ -354,7 +363,7 @@ const facetRule: Rule = (value) => {
                         })
                     ),
                 },
-                { thumbnailHeight: finite }
+                { thumbnailHeight: finite, unavailableLabel: text }
             );
         case 'linkedRecords':
             return shape(value, {

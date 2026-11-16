@@ -5,6 +5,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type ReactElement,
     type SyntheticEvent,
 } from 'react';
 import {
@@ -79,7 +80,7 @@ export type ImageAnnotationFieldProps<Upload> = {
  */
 export function ImageAnnotationField<Upload>(
     props: ImageAnnotationFieldProps<Upload>
-) {
+): ReactElement {
     const generatedId = useId();
     const id = props.id ?? 'mx-image-annotation-' + generatedId;
     const errorId = id + '-error';

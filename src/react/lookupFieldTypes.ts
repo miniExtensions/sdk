@@ -16,6 +16,7 @@ import type { ControlledButtonFieldProps } from './ButtonField.js';
 import type { ControlledFormulaFieldProps } from './FormulaField.js';
 import type { ControlledRollupFieldProps } from './RollupField.js';
 import type { ControlledRatingFieldProps } from './ControlledRatingField.js';
+import type { CompleteCheckboxFieldProps } from './CompleteCheckboxField.js';
 import type { CompleteRichTextEditorProps } from './CompleteRichTextEditor.js';
 import type { RuntimeLanguage } from '../runtime/types.js';
 import type { ReadOnlyURLGalleryProps } from './ReadOnlyURLGallery.js';
@@ -161,6 +162,13 @@ export type LookupResultPresentation =
           readonly display: ControlledFormulaFieldProps;
       }
     | { readonly kind: 'rollup'; readonly display: ControlledRollupFieldProps }
+    | {
+          readonly kind: 'checkboxField';
+          readonly display: Pick<
+              CompleteCheckboxFieldProps,
+              'value' | 'isInGrid' | 'checkedStateLabel' | 'uncheckedStateLabel'
+          >;
+      }
     | {
           readonly kind: 'ratingField';
           readonly display: Omit<

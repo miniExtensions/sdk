@@ -26,6 +26,7 @@ import {
 import { ControlledFormulaField } from './FormulaField.js';
 import { ControlledRollupField } from './RollupField.js';
 import { ControlledRatingField } from './ControlledRatingField.js';
+import { CompleteCheckboxField } from './CompleteCheckboxField.js';
 import { CompleteRichTextEditor } from './CompleteRichTextEditor.js';
 import { ReadOnlyURLGallery } from './ReadOnlyURLGallery.js';
 import {
@@ -581,6 +582,15 @@ function Result({
             });
         case 'rollup':
             return h(ControlledRollupField, result.display);
+        case 'checkboxField':
+            return h(CompleteCheckboxField, {
+                value: result.display.value,
+                isInGrid: result.display.isInGrid,
+                checkedStateLabel: result.display.checkedStateLabel,
+                uncheckedStateLabel: result.display.uncheckedStateLabel,
+                readOnly: true,
+                onChange: noop,
+            });
         case 'ratingField':
             return h(ControlledRatingField, {
                 ...result.display,

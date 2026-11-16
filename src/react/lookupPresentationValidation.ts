@@ -187,6 +187,7 @@ const writeKeys = [
     'binding',
     'render',
     'onValueChange',
+    'onChange',
     'setValue',
     'publishMetadata',
     'transport',
@@ -314,6 +315,15 @@ export function isLookupResultPresentation(
             const display = input.display;
             if (!object(display)) return false;
             switch (input.kind) {
+                case 'checkboxField':
+                    return (
+                        displayOnly(display) &&
+                        (display.value === null ||
+                            typeof display.value === 'boolean') &&
+                        optionalBoolean(display.isInGrid) &&
+                        optionalString(display.checkedStateLabel) &&
+                        optionalString(display.uncheckedStateLabel)
+                    );
                 case 'ratingField':
                     return (
                         displayOnly(display) &&

@@ -53,6 +53,10 @@ table supplies actual ordered cells; it does not need an invented list card.
 List/gallery cards use the public rich-card projection. Rich values are not
 flattened into generic labels.
 
+Use `checkboxField` with the actual `isInGrid` fact for complete readonly Form
+or Grid Checkbox presentation, and `ratingField` for contextual Rating display.
+Neither presentation accepts a mutation callback or an editor/provider slot.
+
 Canonical value/configuration, localization and formatting/masking policy stay
 with the host. The host passes the original computed status and its existing
 readonly formatting. For rich linked/attachment results it supplies data-only
@@ -72,6 +76,8 @@ are refused after retirement. Already-admitted media cannot be retroactively
 unrequested without a retirement notification; provide `subscribe` when the
 native owner has one. Optional gallery/Word owner support is additive and leaves
 owner-omitted legacy resource behavior intact.
+Replacing a supplied child resource capture also retires its allocated work
+when the parent capture, URL and display identity are unchanged.
 
 Runtime admission rejects malformed flags, sparse/cyclic projections, duplicate
 occurrence keys, undeclared image handlers, editor refs and React elements in

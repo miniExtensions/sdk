@@ -209,7 +209,7 @@ export async function checkControlledLookupBrowser({
             });
             await page.goto(origin + '/?format=' + format);
             await page.waitForFunction(
-                () => window.lookupProof?.snapshot().cohorts.length === 32
+                () => window.lookupProof?.snapshot().cohorts.length === 34
             );
             const record = (name, details = {}) =>
                 evidence.results.push({
@@ -300,7 +300,7 @@ export async function checkControlledLookupBrowser({
             evidence.platform = initial.platform;
             assert.equal(
                 await page.locator('.mx-sdk-lookup-occurrence').count(),
-                32
+                34
             );
             assert.equal(
                 await page.locator('.mx-sdk-html strong').first().textContent(),
@@ -408,8 +408,23 @@ export async function checkControlledLookupBrowser({
                 leavesPaint.every((rect) => rect.width > 0 && rect.height > 0)
             );
             assert.equal(
-                await page.locator('input[type=checkbox]').isDisabled(),
+                await page
+                    .locator('input[type=checkbox]')
+                    .evaluateAll(
+                        (nodes) =>
+                            nodes.length === 2 &&
+                            nodes.every(
+                                (node) =>
+                                    node.disabled &&
+                                    node.readOnly &&
+                                    node.checked
+                            )
+                    ),
                 true
+            );
+            assert.equal(
+                await page.locator('[data-checkbox-grid-value="true"]').count(),
+                1
             );
             assert.doesNotMatch(
                 initial.text,

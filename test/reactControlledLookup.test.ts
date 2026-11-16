@@ -723,6 +723,16 @@ function metadata<Config>(config: Config) {
 }
 const cohorts: [string, LookupResultPresentation, RegExp][] = [
     [
+        'native Checkbox in grid',
+        { kind: 'checkboxField', display: { value: true, isInGrid: true } },
+        /data-checkbox-grid-value="true"/,
+    ],
+    [
+        'native Checkbox outside grid',
+        { kind: 'checkboxField', display: { value: true, isInGrid: false } },
+        /type="checkbox"/,
+    ],
+    [
         'native Rating outside grid',
         {
             kind: 'ratingField',
@@ -1019,7 +1029,7 @@ for (const [name, result, expected] of cohorts)
         freezeFacts(result);
         await f.render(f.props({ status: 'ready', result }));
         assert.match(`${f.text()}\n${f.host.innerHTML}`, expected);
-        if (name === 'checkbox') {
+        if (name === 'checkbox' || name === 'native Checkbox outside grid') {
             const checkbox = f.host.querySelector('input[type="checkbox"]');
             assert.ok(checkbox instanceof f.window.HTMLInputElement);
             assert.equal(checkbox.checked, true);
@@ -1027,6 +1037,15 @@ for (const [name, result, expected] of cohorts)
             assert.equal(checkbox.readOnly, true);
             await f.click(checkbox);
             assert.equal(checkbox.checked, true);
+        }
+        if (name === 'native Checkbox in grid') {
+            assert.equal(f.host.querySelector('input'), null);
+            assert.equal(
+                f.host
+                    .querySelector('[data-checkbox-grid-value]')
+                    ?.getAttribute('data-checkbox-grid-value'),
+                'true'
+            );
         }
         assert.equal(
             f.host
@@ -1058,6 +1077,12 @@ it('rejects nested JSX labels and malformed resource policy before any readonly 
     };
     Reflect.set(rating, 'emptyLabel', sentinel);
     cases.push(['rating empty label', rating]);
+    const checkbox: LookupResultPresentation = {
+        kind: 'checkboxField',
+        display: { value: true, isInGrid: true },
+    };
+    Reflect.set(checkbox.display, 'isInGrid', 'false');
+    cases.push(['Checkbox grid policy flag', checkbox]);
     const numericSource = cohorts.find(
         ([name]) => name === 'computed number'
     )![1];

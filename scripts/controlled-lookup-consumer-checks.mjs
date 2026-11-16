@@ -29,6 +29,8 @@ createElement(LookupField,{...props,binding:{}});
 const writable:LookupResultPresentation={kind:'singleSelect',display:{value:'A',choices:[],availableChoices:[],presentation:'dropdown',onValueChange(){}}};void writable;
 // @ts-expect-error Complete readonly Rich Text exposes no editor handle/ref
 const editor:LookupResultPresentation={kind:'richText',display:{value:'A',emptyLabel:'Empty',language:'en',ref(){}}};void editor;
+// @ts-expect-error Readonly Checkbox facts expose no mutation callback
+const checkbox:LookupResultPresentation={kind:'checkboxField',display:{value:true,isInGrid:true,onChange(){}}};void checkbox;
 `;
 
 /** One synthetic host reused by installed runtime and actual-browser checks. */
@@ -45,6 +47,8 @@ const cohorts=[
  ['html',{kind:'html',html:'<strong>Rich HTML</strong><script>unexpected()</script><a href="https://never.example.invalid/">Link</a>'}],
  ['quill',{kind:'quill',html:'<p><em>Quill content</em></p>'}],
  ['checkbox',{kind:'checkbox',value:true,checkedLabel:'Checked',uncheckedLabel:'Unchecked'}],
+ ['nativeCheckboxGrid',{kind:'checkboxField',display:{value:true,isInGrid:true}}],
+ ['nativeCheckboxForm',{kind:'checkboxField',display:{value:true,isInGrid:false}}],
  ['rating',{kind:'rating',value:3,max:5,icon:'heart',color:'#e11d48',label:'3 of 5'}],
  ['nativeRating',{kind:'ratingField',display:{mode:'controlled',value:8,max:3,icon:'heart',color:'redBright',grid:false,title:'Rating'}}],
  ['phone',{kind:'phone',display:{value:'+1 202 555 0123',emptyLabel:'No phone'}}],

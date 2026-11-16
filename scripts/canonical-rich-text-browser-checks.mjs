@@ -30,35 +30,6 @@ import {flushSync} from 'react-dom';
 import {RichTextField} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
 const writes=[],saves=[];let update,current,previous;
-
-const diagnosticViews=new WeakMap(),diagnosticDocuments=new WeakMap();let diagnosticSequence=0;
-function inspectEditorModel(){
-    const node=document.querySelector('.ProseMirror');
-    // Diagnostic-only read of the exact mounted React editor; no packed source,
-    // renderer, selection, document or input operation is replaced.
-    for(let dom=node,parents=0;dom&&parents<8;dom=dom.parentElement,parents++){
-        const key=Object.keys(dom).find(name=>name.startsWith('__reactFiber$'));
-        if(!key)continue;
-        for(let fiber=dom[key],depth=0;fiber&&depth<64;fiber=fiber.return,depth++){
-            const owner=fiber.stateNode,view=owner?.view;
-            if(view?.dom!==node||typeof owner.isViewCurrent!=='function')continue;
-            const state=view.state,selection=state.selection;
-            if(!diagnosticViews.has(view))diagnosticViews.set(view,++diagnosticSequence);
-            if(!diagnosticDocuments.has(state.doc))diagnosticDocuments.set(state.doc,++diagnosticSequence);
-            const remembered=view.domObserver?.currentSelection;
-            return {
-                available:true,viewId:diagnosticViews.get(view),documentId:diagnosticDocuments.get(state.doc),
-                current:owner.isViewCurrent(view)&&view.sdkIsCurrent?.()===true,
-                connected:node.isConnected,editable:view.editable,focused:view.hasFocus(),
-                composing:view.composing,destroyed:view.isDestroyed,documentText:state.doc.textContent,
-                selection:{anchor:selection.anchor,head:selection.head,from:selection.from,to:selection.to,empty:selection.empty},
-                wallAt:Date.now(),lastFocus:view.input?.lastFocus,lastTouch:view.input?.lastTouch,lastClickAt:view.input?.lastClick?.time,
-                rememberedSelection:remembered?{anchorOffset:remembered.anchorOffset,focusOffset:remembered.focusOffset}:null
-            };
-        }
-    }
-    return {available:false};
-}
 function App(){const [state,setState]=useState({value:'**Bold** and _italic_\\n\\n[ ] task',readOnly:false,identity:'record:notes',id:'notes',invalid:false,sibling:'untouched'});current=state;update=next=>flushSync(()=>setState(old=>({...old,...next})));
 return h('form',{id:'owned-form',onSubmit:event=>{event.preventDefault();saves.push({...state});}},
 h('label',{id:'notes-label',htmlFor:state.id},'Notes'),h('p',{id:'notes-help'},'Markdown details'),h('p',{id:'notes-error'},state.invalid?'Review notes':''),
@@ -66,7 +37,7 @@ h(RichTextField,{value:state.value,onValueChange:value=>{writes.push({identity:s
 h('label',null,'Neighbor',h('input',{id:'neighbor',value:state.sibling,onChange:event=>setState(old=>({...old,sibling:event.target.value}))})),h('button',{type:'submit',id:'save'},'Save'));
 }
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
-window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},unmount:()=>flushSync(()=>app.unmount())};
+window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},unmount:()=>flushSync(()=>app.unmount())};
 `;
     try {
         const entry = join(directory, 'host.mjs');
@@ -264,18 +235,7 @@ window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...cur
         const nativeCaret = () =>
             editor.evaluate((node) => {
                 const native = document.getSelection();
-                const current = window.canonicalRichText.snapshot();
                 return {
-                    value: current.state.value,
-                    identity: current.state.identity,
-                    writes: current.writes.length,
-                    lastWrite: current.writes.at(-1),
-                    saves: current.saves.length,
-                    sameEditor: window.canonicalRichText.same(),
-                    connected: node.isConnected,
-                    at: performance.now(),
-                    model: window.canonicalRichText.inspectEditorModel(),
-                    roots: document.querySelectorAll('.ProseMirror').length,
                     active: document.activeElement === node,
                     contained:
                         !!native?.anchorNode &&
@@ -286,96 +246,7 @@ window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...cur
                     focusOffset: native?.focusOffset,
                 };
             });
-        await editor.evaluate((node) => {
-            const events = [];
-            let truncated = false;
-            const types = [
-                'focus',
-                'blur',
-                'keydown',
-                'beforeinput',
-                'input',
-                'keyup',
-                'pointerdown',
-                'pointerup',
-                'pointercancel',
-                'mousedown',
-                'mouseup',
-                'touchstart',
-                'touchend',
-                'touchcancel',
-            ];
-            const observe = (event, phase) => {
-                if (events.length === 32) {
-                    truncated = true;
-                    return;
-                }
-                const native = document.getSelection();
-                const current = window.canonicalRichText.snapshot();
-                events.push({
-                    type: event.type,
-                    phase,
-                    trusted: event.isTrusted,
-                    key: event.key ?? null,
-                    inputType: event.inputType ?? null,
-                    at: performance.now(),
-                    model: window.canonicalRichText.inspectEditorModel(),
-                    connected: node.isConnected,
-                    active: document.activeElement === node,
-                    activeId: document.activeElement?.id,
-                    anchorInside:
-                        !!native?.anchorNode &&
-                        node.contains(native.anchorNode),
-                    anchorText: native?.anchorNode?.textContent,
-                    anchorOffset: native?.anchorOffset,
-                    focusOffset: native?.focusOffset,
-                    collapsed: native?.isCollapsed,
-                    value: current.state.value,
-                    identity: current.state.identity,
-                    writes: current.writes.length,
-                    lastWrite: current.writes.at(-1),
-                    saves: current.saves.length,
-                });
-            };
-            const capture = (event) => observe(event, 'capture');
-            const bubble = (event) => observe(event, 'bubble');
-            const selectionChange = (event) => {
-                const native = document.getSelection();
-                if (
-                    document.activeElement === node ||
-                    node.contains(native?.anchorNode)
-                )
-                    observe(event, 'document');
-            };
-            for (const type of types)
-                node.addEventListener(type, capture, true);
-            for (const type of ['focus', 'keydown', 'beforeinput'])
-                node.addEventListener(type, bubble);
-            document.addEventListener('selectionchange', selectionChange);
-            window.canonicalRichText.caretObservation = {
-                read: () => ({ events: [...events], truncated }),
-                stop: () => {
-                    for (const type of types)
-                        node.removeEventListener(type, capture, true);
-                    for (const type of ['focus', 'keydown', 'beforeinput'])
-                        node.removeEventListener(type, bubble);
-                    document.removeEventListener(
-                        'selectionchange',
-                        selectionChange
-                    );
-                },
-            };
-        });
-        const caretEvidence = { phases: [] };
-        evidence.nativeMetadataCaret = caretEvidence;
-        const recordCaret = async (phase) => {
-            const selection = await nativeCaret();
-            caretEvidence.phases.push({ phase, ...selection });
-            return selection;
-        };
-        const beforeMetadata = await recordCaret('before-metadata');
-        assert.equal(beforeMetadata.model.available, true);
-        assert.equal(beforeMetadata.model.current, true);
+        const beforeMetadata = await nativeCaret();
         assert.equal(beforeMetadata.active, true);
         assert.equal(beforeMetadata.contained, true);
         assert.equal(beforeMetadata.collapsed, true);
@@ -385,15 +256,11 @@ window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...cur
         await page.evaluate(() => window.canonicalRichText.remember());
         const beforeCaretMetadata = await snapshot();
         await update({ id: 'notes-caret', invalid: false });
-        assert.equal((await recordCaret('focused-attributes')).anchorOffset, 2);
+        assert.equal((await nativeCaret()).anchorOffset, 2);
         await page.locator('#neighbor').click();
         await update({ id: 'notes-caret-renamed', invalid: true });
-        await recordCaret('blurred-attributes');
-        // Keep the original immediate focus-to-input sequence. Synchronous
-        // event observers above record it without an intervening page call.
         await editor.focus();
         await page.keyboard.type('Z');
-        await recordCaret('after-Z');
         await page.waitForFunction(
             () =>
                 window.canonicalRichText.snapshot().state.value ===
@@ -415,16 +282,109 @@ window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...cur
         });
         assert.equal(afterCaretMetadata.saves.length, 1);
         assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
-        caretEvidence.after = await nativeCaret();
-        caretEvidence.events = await page.evaluate(() => {
-            const observer = window.canonicalRichText.caretObservation;
-            const result = observer.read();
-            observer.stop();
-            return result;
-        });
+        evidence.nativeMetadataCaret = {
+            beforeMetadata,
+            after: await nativeCaret(),
+        };
         evidence.results.push(
             'trusted navigation caret survives accessibility updates, metadata blur and refocus with exact insertion'
         );
+
+        // A real pointer choice at the start must take precedence over the
+        // retained non-start caret. Keep click-to-type adjacent, as above.
+        await update({
+            identity: 'pointer-caret:notes',
+            value: 'Alpha Beta',
+            id: 'notes-pointer',
+            invalid: false,
+        });
+        await editor.waitFor();
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                    'Alpha Beta' &&
+                document.querySelector('.ProseMirror')?.textContent ===
+                    'Alpha Beta'
+        );
+        await editor.click();
+        await editor.press(documentKeys.end);
+        for (let step = 0; step < 8; step++) await editor.press('ArrowLeft');
+        const beforePointerBlur = await nativeCaret();
+        assert.equal(beforePointerBlur.active, true);
+        assert.equal(beforePointerBlur.contained, true);
+        assert.equal(beforePointerBlur.collapsed, true);
+        assert.equal(beforePointerBlur.anchorOffset, 2);
+        assert.equal(beforePointerBlur.focusOffset, 2);
+        await page.evaluate(() => window.canonicalRichText.remember());
+        const beforePointer = await snapshot();
+        await page.locator('#neighbor').click();
+        await update({ id: 'notes-pointer-renamed', invalid: true });
+        const pointerPoint = await editor.evaluate((node) => {
+            const text = node.querySelector('p')?.firstChild;
+            if (
+                text?.nodeType !== Node.TEXT_NODE ||
+                text.textContent !== 'Alpha Beta'
+            )
+                throw new Error(
+                    'Expected the real plain-text editor paragraph'
+                );
+            // This Range measures the first glyph only. It is never installed
+            // in the document Selection; the trusted mouse chooses the caret.
+            const range = document.createRange();
+            range.setStart(text, 0);
+            range.setEnd(text, 1);
+            const rect = range.getBoundingClientRect();
+            if (!(rect.width > 0 && rect.height > 0))
+                throw new Error('Expected a visible first glyph');
+            window.canonicalRichText.pointerGesture = null;
+            node.addEventListener(
+                'pointerdown',
+                (event) => {
+                    window.canonicalRichText.pointerGesture = {
+                        trusted: event.isTrusted,
+                        connected: node.isConnected,
+                    };
+                },
+                { capture: true, once: true }
+            );
+            return {
+                x: rect.left + Math.min(0.5, rect.width / 8),
+                y: rect.top + rect.height / 2,
+            };
+        });
+        await page.mouse.click(pointerPoint.x, pointerPoint.y);
+        await page.keyboard.type('Z');
+        await page.waitForFunction(
+            () =>
+                window.canonicalRichText.snapshot().state.value ===
+                'ZAlpha Beta'
+        );
+        const afterPointer = await snapshot();
+        assert.equal(await editor.innerText(), 'ZAlpha Beta');
+        assert.equal(
+            await page.evaluate(() => window.canonicalRichText.same()),
+            true
+        );
+        assert.equal(
+            afterPointer.writes.length,
+            beforePointer.writes.length + 1
+        );
+        assert.deepEqual(afterPointer.writes.at(-1), {
+            identity: 'pointer-caret:notes',
+            value: 'ZAlpha Beta',
+        });
+        assert.equal(afterPointer.saves.length, 1);
+        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
+        const pointerGesture = await page.evaluate(
+            () => window.canonicalRichText.pointerGesture
+        );
+        assert.deepEqual(pointerGesture, { trusted: true, connected: true });
+        evidence.nativePointerFocus = {
+            beforePointerBlur,
+            pointerPoint,
+            pointerGesture,
+            after: await nativeCaret(),
+        };
 
         const precedingOwner = await editor.elementHandle();
         assert(precedingOwner);
@@ -480,10 +440,7 @@ window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...cur
         await page.evaluate(() => window.canonicalRichText.remember());
         const beforeFirstEdit = await snapshot();
         assert.equal(beforeFirstEdit.state.value, '**Stored B**\n\n[x] B task');
-        assert.equal(
-            beforeFirstEdit.writes.length,
-            afterCaretMetadata.writes.length
-        );
+        assert.equal(beforeFirstEdit.writes.length, afterPointer.writes.length);
         await page.keyboard.type('B first edit survives');
         await page.waitForFunction(
             () =>
@@ -609,35 +566,10 @@ window.canonicalRichText={update,inspectEditorModel,snapshot:()=>({state:{...cur
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
-        if (page) {
+        if (page)
             evidence.failureState = await page
                 .evaluate(() => window.canonicalRichText?.snapshot())
                 .catch(() => undefined);
-            evidence.failureSelection = await page
-                .evaluate(() => {
-                    const node = document.querySelector('.ProseMirror');
-                    const native = document.getSelection();
-                    const observer = window.canonicalRichText?.caretObservation;
-                    const events = observer?.read();
-                    observer?.stop();
-                    return {
-                        at: performance.now(),
-                        model: window.canonicalRichText.inspectEditorModel(),
-                        activeId: document.activeElement?.id,
-                        connected: node?.isConnected,
-                        active: document.activeElement === node,
-                        anchorInside:
-                            !!native?.anchorNode &&
-                            !!node?.contains(native.anchorNode),
-                        anchorText: native?.anchorNode?.textContent,
-                        anchorOffset: native?.anchorOffset,
-                        focusOffset: native?.focusOffset,
-                        collapsed: native?.isCollapsed,
-                        events,
-                    };
-                })
-                .catch(() => undefined);
-        }
     } finally {
         for (const [name, cleanup] of [
             [

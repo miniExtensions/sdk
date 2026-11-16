@@ -2591,3 +2591,553 @@ for (const blocked of ['unfocused', 'non-navigation'] as const) {
         }
     });
 }
+
+// UNAPPLIED conditional-focus proposal. DOM range changes below model browser
+// ordering in the real editor; they are not trusted keyboard/pointer acceptance.
+async function focusWitnessProposalFixture(
+    t: TestContext,
+    initial = 'Alpha Beta'
+) {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    const onValueChange = (value: string) => writes.push(value);
+    const render = (overrides: Partial<CompleteRichTextEditorProps> = {}) =>
+        f.render(
+            h(
+                'section',
+                null,
+                h(
+                    'button',
+                    { type: 'button', id: 'witness-neighbor' },
+                    'Neighbor'
+                ),
+                h(CompleteRichTextEditor, {
+                    ref,
+                    identity: 'witness:A',
+                    value: initial,
+                    onValueChange,
+                    ...overrides,
+                })
+            )
+        );
+    await render();
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    const neighbor =
+        f.container.querySelector<HTMLButtonElement>('#witness-neighbor');
+    assert(neighbor);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+    let cleaned = false;
+    const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        pending?.restore();
+        t.mock.timers.reset();
+    };
+    t.after(cleanup);
+    await f.select(view, 3);
+    await act(async () => t.mock.timers.tick(20));
+    pending = deferNativeSelectionChanges(t, f.document);
+    const nativeAt = async (position: number) => {
+        const native = f.document.getSelection();
+        assert(native);
+        const point = view.domAtPos(position);
+        await act(async () => native.collapse(point.node, point.offset));
+    };
+    return {
+        f,
+        ref,
+        editor,
+        view,
+        writes,
+        render,
+        neighbor,
+        pending,
+        nativeAt,
+        cleanup,
+        blur: () => act(async () => neighbor.focus()),
+        focus: () => act(async () => view.dom.focus()),
+    };
+}
+
+function assertWitnessNativePosition(
+    view: Awaited<ReturnType<typeof focusWitnessProposalFixture>>['view'],
+    document: Document,
+    expected: number
+) {
+    const native = document.getSelection();
+    assert(native?.anchorNode);
+    assert(native.focusNode);
+    assert.equal(native.rangeCount, 1);
+    assert.equal(native.isCollapsed, true);
+    assert.equal(
+        view.posAtDOM(native.anchorNode, native.anchorOffset),
+        expected
+    );
+    assert.equal(view.posAtDOM(native.focusNode, native.focusOffset), expected);
+}
+
+function proposalPointer(window: Window, type: string, pointerId: number) {
+    const event = new window.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'pointerId', { value: pointerId });
+    return event as unknown as Event;
+}
+
+for (const route of ['programmatic', 'Tab'] as const) {
+    it(`focus witness: conditionally restores a witnessed retained caret for ${route} focus without a transaction`, async (t) => {
+        const x = await focusWitnessProposalFixture(t);
+        try {
+            const doc = x.view.state.doc;
+            const model = x.view.state.selection;
+            await x.blur();
+            assert.equal(x.f.document.activeElement, x.neighbor);
+            if (route === 'Tab')
+                await act(async () =>
+                    x.neighbor.dispatchEvent(
+                        new x.f.window.KeyboardEvent('keydown', {
+                            key: 'Tab',
+                            keyCode: 9,
+                            bubbles: true,
+                            cancelable: true,
+                        }) as unknown as Event
+                    )
+                );
+            // Model a native focus-created collapse, without a model command.
+            await x.nativeAt(1);
+            assert.equal(x.view.state.selection, model);
+            await x.focus();
+            assertWitnessNativePosition(x.view, x.f.document, 3);
+            assert.equal(x.view.state.selection, model);
+            assert.equal(x.view.state.doc, doc);
+            assert.equal(x.ref.current, x.editor);
+            assert.equal(
+                x.view.dom.classList.contains('ProseMirror-focused'),
+                true
+            );
+            assert.deepEqual(x.writes, []);
+            await act(async () =>
+                x.view.dispatch(x.view.state.tr.insertText('Z'))
+            );
+            assert.equal(x.view.state.doc.textContent, 'AlZpha Beta');
+            assert.deepEqual(x.writes, ['AlZpha Beta']);
+        } finally {
+            x.cleanup();
+        }
+    });
+}
+
+it('focus witness: allows ordinary outside-pointer blur without treating Neighbor as an editor gesture', async (t) => {
+    const x = await focusWitnessProposalFixture(t);
+    try {
+        await act(async () =>
+            x.neighbor.dispatchEvent(
+                new x.f.window.MouseEvent('mousedown', {
+                    bubbles: true,
+                }) as unknown as Event
+            )
+        );
+        await x.blur();
+        await act(async () =>
+            x.neighbor.dispatchEvent(
+                new x.f.window.MouseEvent('mouseup', {
+                    bubbles: true,
+                }) as unknown as Event
+            )
+        );
+        await x.nativeAt(1);
+        await x.focus();
+        assertWitnessNativePosition(x.view, x.f.document, 3);
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+for (const route of ['pointer-to-start', 'Home-before-blur'] as const) {
+    it(`focus witness: refuses a witness for pending ${route} native intent before blur`, async (t) => {
+        const x = await focusWitnessProposalFixture(t);
+        try {
+            if (route === 'pointer-to-start') {
+                await act(async () =>
+                    x.view.dom.dispatchEvent(
+                        new x.f.window.MouseEvent('mousedown', {
+                            bubbles: true,
+                        }) as unknown as Event
+                    )
+                );
+                await act(async () =>
+                    x.view.dom.dispatchEvent(
+                        new x.f.window.MouseEvent('mouseup', {
+                            bubbles: true,
+                        }) as unknown as Event
+                    )
+                );
+            } else
+                await act(async () =>
+                    x.view.dom.dispatchEvent(
+                        new x.f.window.KeyboardEvent('keydown', {
+                            key: 'Home',
+                            keyCode: 36,
+                            bubbles: true,
+                            cancelable: true,
+                        }) as unknown as Event
+                    )
+                );
+            await x.nativeAt(1);
+            assert.equal(x.view.state.selection.head, 3);
+            await x.blur();
+            await x.focus();
+            assertWitnessNativePosition(x.view, x.f.document, 1);
+            assert.equal(x.view.state.selection.head, 3);
+            assert.deepEqual(x.writes, []);
+        } finally {
+            x.cleanup();
+        }
+    });
+}
+
+it('focus witness: cancels a witness on an observed contained native selection change while blurred', async (t) => {
+    const x = await focusWitnessProposalFixture(t);
+    try {
+        await x.blur();
+        await x.nativeAt(1);
+        // Deliver the real external selectionchange listener while still blurred.
+        await act(async () => x.pending.release());
+        assert.equal(x.f.document.activeElement, x.neighbor);
+        await x.focus();
+        assertWitnessNativePosition(x.view, x.f.document, 1);
+        assert.equal(x.view.state.selection.head, 3);
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+it('focus witness: captures descendant pointer intent before an early focus and NodeView stopEvent', async (t) => {
+    const x = await focusWitnessProposalFixture(t, 'Alpha Beta\n\n[x] Task');
+    try {
+        const child = x.view.dom.querySelector<HTMLInputElement>(
+            'input[type=checkbox]'
+        );
+        assert(child);
+        await x.blur();
+        await x.nativeAt(1);
+        child.addEventListener(
+            'mousedown',
+            (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                x.view.dom.focus();
+            },
+            { once: true }
+        );
+        await act(async () =>
+            child.dispatchEvent(
+                new x.f.window.MouseEvent('mousedown', {
+                    bubbles: true,
+                    cancelable: true,
+                }) as unknown as Event
+            )
+        );
+        assertWitnessNativePosition(x.view, x.f.document, 1);
+        assert.equal(x.view.state.selection.head, 3);
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+for (const route of [
+    'active-before-blur',
+    'canceled-after-blur',
+    'multiple-active',
+] as const) {
+    it(`focus witness: conservatively refuses ${route} editor pointer provenance`, async (t) => {
+        const x = await focusWitnessProposalFixture(t);
+        try {
+            if (route === 'canceled-after-blur') await x.blur();
+            await act(async () =>
+                x.view.dom.dispatchEvent(
+                    proposalPointer(x.f.window, 'pointerdown', 7)
+                )
+            );
+            if (route === 'multiple-active') {
+                await act(async () =>
+                    x.view.dom.dispatchEvent(
+                        proposalPointer(x.f.window, 'pointerdown', 8)
+                    )
+                );
+                await act(async () =>
+                    x.neighbor.dispatchEvent(
+                        proposalPointer(x.f.window, 'pointerup', 7)
+                    )
+                );
+            }
+            if (route !== 'canceled-after-blur') await x.blur();
+            await act(async () =>
+                x.neighbor.dispatchEvent(
+                    proposalPointer(x.f.window, 'pointercancel', 7)
+                )
+            );
+            await act(async () =>
+                x.neighbor.dispatchEvent(
+                    proposalPointer(x.f.window, 'pointerup', 8)
+                )
+            );
+            await x.nativeAt(1);
+            await x.focus();
+            assertWitnessNativePosition(x.view, x.f.document, 1);
+            assert.equal(x.view.state.selection.head, 3);
+            assert.deepEqual(x.writes, []);
+        } finally {
+            x.cleanup();
+        }
+    });
+}
+
+it('focus witness: keeps multi-touch refusal after only one touch ends', async (t) => {
+    const x = await focusWitnessProposalFixture(t);
+    const touch = (type: string, changed: number[], remaining: number[]) => {
+        const event = new x.f.window.Event(type, {
+            bubbles: true,
+            cancelable: true,
+        });
+        Object.defineProperties(event, {
+            changedTouches: {
+                value: changed.map((identifier) => ({ identifier })),
+            },
+            touches: { value: remaining.map((identifier) => ({ identifier })) },
+        });
+        return event as unknown as Event;
+    };
+    try {
+        await act(async () =>
+            x.view.dom.dispatchEvent(touch('touchstart', [1, 2], [1, 2]))
+        );
+        await act(async () =>
+            x.neighbor.dispatchEvent(touch('touchend', [1], [2]))
+        );
+        await x.blur();
+        await act(async () =>
+            x.neighbor.dispatchEvent(touch('touchcancel', [2], []))
+        );
+        await x.nativeAt(1);
+        await x.focus();
+        assertWitnessNativePosition(x.view, x.f.document, 1);
+        assert.equal(x.view.state.selection.head, 3);
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+it('focus witness: refuses nested-control focus without consuming it as root editor focus', async (t) => {
+    const x = await focusWitnessProposalFixture(t, 'Alpha Beta\n\n[x] Task');
+    try {
+        const child = x.view.dom.querySelector<HTMLInputElement>(
+            'input[type=checkbox]'
+        );
+        assert(child);
+        await x.blur();
+        await act(async () => child.focus());
+        await x.nativeAt(1);
+        await x.focus();
+        assertWitnessNativePosition(x.view, x.f.document, 1);
+        assert.equal(x.view.state.selection.head, 3);
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+for (const policy of [
+    'readonly',
+    'composition',
+    'AllSelection',
+    'NodeSelection',
+    'range',
+] as const) {
+    it(`focus witness: keeps ${policy} outside conditional focus restoration`, async (t) => {
+        const x = await focusWitnessProposalFixture(t);
+        try {
+            if (policy === 'readonly') await x.render({ readOnly: true });
+            else if (policy === 'composition')
+                await act(async () =>
+                    x.view.dom.dispatchEvent(
+                        new x.f.window.CompositionEvent('compositionstart', {
+                            bubbles: true,
+                        }) as unknown as Event
+                    )
+                );
+            else if (policy === 'AllSelection' || policy === 'NodeSelection')
+                await act(async () =>
+                    x.view.dispatch(
+                        x.view.state.tr.setSelection(
+                            policy === 'AllSelection'
+                                ? new AllSelection(x.view.state.doc)
+                                : NodeSelection.create(x.view.state.doc, 0)
+                        )
+                    )
+                );
+            else await x.f.select(x.view, 3, 5);
+            const previous = x.view.state.selection;
+            await x.blur();
+            await x.nativeAt(1);
+            await x.focus();
+            assert(x.view.state.selection.eq(previous));
+            assertWitnessNativePosition(x.view, x.f.document, 1);
+            assert.deepEqual(x.writes, []);
+        } finally {
+            x.cleanup();
+        }
+    });
+}
+
+for (const replacement of [
+    'selection',
+    'document',
+    'readonly-roundtrip',
+] as const) {
+    it(`focus witness: invalidates a blur witness on ${replacement} replacement`, async (t) => {
+        const x = await focusWitnessProposalFixture(t);
+        try {
+            await x.blur();
+            if (replacement === 'selection')
+                await act(async () =>
+                    x.view.dispatch(
+                        x.view.state.tr.setSelection(
+                            prosemirrorState.TextSelection.create(
+                                x.view.state.doc,
+                                4
+                            )
+                        )
+                    )
+                );
+            else if (replacement === 'document')
+                await act(async () =>
+                    x.view.dispatch(x.view.state.tr.insertText('X', 3))
+                );
+            else {
+                await x.render({ readOnly: true });
+                await x.render({ readOnly: false });
+            }
+            const before = x.view.state;
+            const writes = [...x.writes];
+            await x.nativeAt(1);
+            await x.focus();
+            assertWitnessNativePosition(x.view, x.f.document, 1);
+            assert.equal(x.view.state.doc, before.doc);
+            assert(x.view.state.selection.eq(before.selection));
+            assert.deepEqual(x.writes, writes);
+        } finally {
+            x.cleanup();
+        }
+    });
+}
+
+it('focus witness: retires the witness with its exact owner without leaking to a successor', async (t) => {
+    const x = await focusWitnessProposalFixture(t);
+    try {
+        await x.blur();
+        const old = x.view;
+        await x.render({ identity: 'witness:B', value: 'Successor document' });
+        const successor = await x.f.editor(x.ref);
+        assert.notEqual(successor, x.editor);
+        assert.equal(old.isDestroyed, true);
+        assert.equal(old.dom.isConnected, false);
+        const view = successor.view;
+        await act(async () =>
+            view.dispatch(
+                view.state.tr.setSelection(
+                    prosemirrorState.TextSelection.create(view.state.doc, 3)
+                )
+            )
+        );
+        const point = view.domAtPos(1);
+        const native = x.f.document.getSelection();
+        assert(native);
+        await act(async () => native.collapse(point.node, point.offset));
+        await act(async () =>
+            old.dom.dispatchEvent(
+                proposalPointer(x.f.window, 'pointerdown', 99)
+            )
+        );
+        await act(async () => view.dom.focus());
+        assertWitnessNativePosition(view, x.f.document, 1);
+        assert.equal(view.state.selection.head, 3);
+        assert.equal(view.state.doc.textContent, 'Successor document');
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+// Known indistinguishable history, intentionally NOT claimed as a negative pass:
+// a native range-set to start while blurred followed by focus in the same task
+// before selectionchange is delivered has the same observations as browser focus
+// collapse. This proposal implements retained-caret focus policy only.
+
+it('focus witness: keeps active legacy mouse buttons separate until each matching release', async (t) => {
+    const x = await focusWitnessProposalFixture(t);
+    try {
+        for (const button of [0, 2])
+            await act(async () =>
+                x.view.dom.dispatchEvent(
+                    new x.f.window.MouseEvent('mousedown', {
+                        button,
+                        bubbles: true,
+                    }) as unknown as Event
+                )
+            );
+        await act(async () =>
+            x.neighbor.dispatchEvent(
+                new x.f.window.MouseEvent('mouseup', {
+                    button: 2,
+                    bubbles: true,
+                }) as unknown as Event
+            )
+        );
+        await x.blur();
+        await act(async () =>
+            x.neighbor.dispatchEvent(
+                new x.f.window.MouseEvent('mouseup', {
+                    button: 0,
+                    bubbles: true,
+                }) as unknown as Event
+            )
+        );
+        await x.nativeAt(1);
+        await x.focus();
+        assertWitnessNativePosition(x.view, x.f.document, 1);
+        assert.equal(x.view.state.selection.head, 3);
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});
+
+it('focus witness: retains current stored marks through witnessed model-to-DOM focus restoration', async (t) => {
+    const x = await focusWitnessProposalFixture(t);
+    try {
+        await act(async () =>
+            x.view.dispatch(
+                x.view.state.tr.addStoredMark(
+                    x.view.state.schema.marks.strong!.create()
+                )
+            )
+        );
+        const previous = x.view.state;
+        await x.blur();
+        await x.nativeAt(1);
+        await x.focus();
+        assertWitnessNativePosition(x.view, x.f.document, 3);
+        assert.equal(x.view.state, previous);
+        assert.equal(x.view.state.storedMarks, previous.storedMarks);
+        assert.equal(x.view.state.storedMarks?.[0]?.type.name, 'strong');
+        assert.deepEqual(x.writes, []);
+    } finally {
+        x.cleanup();
+    }
+});

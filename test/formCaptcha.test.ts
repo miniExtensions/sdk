@@ -827,3 +827,174 @@ test('widget expiry/config changes preserve dirty edits and the actual already a
         mounted.dispose();
     }
 });
+
+test('a pending reset cannot reset a newer proof before an async render handle returns', async () => {
+    const f = fixture();
+    let held!: FormCaptchaCallbacks<Proof>;
+    let finish!: (value: FormCaptchaWidgetHandle) => void;
+    let resets = 0;
+    f.update({
+        provider: {
+            load: () => ({
+                render(_node, _options, callbacks) {
+                    held = callbacks;
+                    return new Promise((resolve) => {
+                        finish = resolve;
+                    });
+                },
+            }),
+        },
+    });
+    const mounted = f.mount();
+    await flush();
+    held.change(proof());
+    f.clear();
+    const successor = proof();
+    held.change(successor);
+    finish({
+        reset() {
+            resets++;
+        },
+        remove() {},
+    });
+    await flush();
+    assert.equal(f.read().token.value, successor);
+    assert.equal(resets, 0);
+    f.clear();
+    assert.equal(resets, 1);
+    mounted.dispose();
+});
+
+test('a later refused callback preserves the prior accepted reset obligation', async () => {
+    const f = fixture();
+    let refuse = false;
+    const mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            publish(scope, value) {
+                return refuse
+                    ? { status: 'refused' }
+                    : f.host.publish(scope, value);
+            },
+        },
+        () => {}
+    );
+    await flush();
+    f.widgets[0].callbacks.change(proof());
+    refuse = true;
+    f.widgets[0].callbacks.change(null);
+    assert.equal(f.widgets[0].resets, 0);
+    f.clear();
+    assert.equal(f.widgets[0].resets, 1);
+    mounted.dispose();
+});
+
+test('synchronous subscribers cannot reset an ultimately refused initial publication', async () => {
+    const f = fixture();
+    const mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            publish() {
+                f.clear();
+                return { status: 'refused' };
+            },
+        },
+        () => {}
+    );
+    await flush();
+    f.widgets[0].callbacks.change(null);
+    assert.equal(f.widgets[0].resets, 0);
+    mounted.dispose();
+});
+
+test('post-invalidation successor provenance is rechecked before replacement load', async () => {
+    const f = fixture();
+    const successor = proof();
+    const mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            invalidate() {
+                f.update({
+                    token: {
+                        owner: f.read().owner,
+                        configurationRevision: 3,
+                        revision: {},
+                        value: successor,
+                    },
+                });
+                return { status: 'admitted' };
+            },
+        },
+        (state) => f.states.push(state)
+    );
+    await flush();
+    f.widgets[0].callbacks.change(proof());
+    f.update({ configurationRevision: 2 });
+    await flush();
+    assert.equal(f.read().token.value, successor);
+    assert.equal(f.counts.loads, 1);
+    assert.equal(f.states.at(-1), 'unavailable');
+    mounted.dispose();
+});
+
+test('duplicate notification during refused invalidation cannot retry unchanged canonical admission', async () => {
+    const f = fixture();
+    let attempts = 0;
+    const mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            invalidate() {
+                attempts++;
+                f.update({});
+                return { status: 'refused' };
+            },
+        },
+        () => {}
+    );
+    await flush();
+    f.widgets[0].callbacks.change(proof());
+    f.update({ configurationRevision: 1 });
+    f.update({});
+    f.update({});
+    assert.equal(attempts, 1);
+    assert.equal(f.counts.loads, 1);
+    mounted.dispose();
+});
+
+test('an old unsubscribe that throws after installing newer ports cannot retire the newer owner', async () => {
+    const f = fixture();
+    let mounted!: ReturnType<typeof f.mount>;
+    let stops = 0;
+    const newer = {
+        ...f.host,
+        subscribe() {
+            return () => {
+                stops++;
+            };
+        },
+    };
+    mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            subscribe() {
+                return () => {
+                    mounted.updateHost(newer);
+                    throw Error('old stop failed');
+                };
+            },
+        },
+        () => {}
+    );
+    await flush();
+    assert.throws(() => mounted.updateHost({ ...f.host }), /old stop failed/);
+    f.widgets[0].callbacks.change(proof());
+    assert.equal(f.counts.writes, 1);
+    assert.equal(f.widgets[0].removes, 0);
+    mounted.dispose();
+    assert.equal(stops, 1);
+});

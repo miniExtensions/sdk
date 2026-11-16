@@ -189,6 +189,7 @@ export async function checkFormCaptchaReactMatrix({
             },
         };
         const policy = {
+            nodeLinker: 'hoisted',
             minimumReleaseAge: 2880,
             minimumReleaseAgeExclude: [],
             blockExoticSubdeps: true,

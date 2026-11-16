@@ -145,6 +145,9 @@ type Instance<T, Options> = FormCaptchaScope & {
     pendingReset: boolean;
     resetting: boolean;
     publication: number;
+    activePublications: number;
+    admittedPublication: number;
+    consumedPublication: number;
 };
 
 function open<T, O>(snapshot: FormCaptchaSnapshot<T, O>) {
@@ -164,6 +167,13 @@ export function mountFormCaptcha<T, Options>(
     let instance: Instance<T, Options> | undefined;
     let previous: FormCaptchaScope | undefined;
     let failed: FormCaptchaScope | undefined;
+    let blockedInvalidation:
+        | {
+              scope: FormCaptchaScope;
+              tokenScope: FormCaptchaScope;
+              tokenRevision: unknown;
+          }
+        | undefined;
     let syncing = false;
     let again = false;
     let state: FormCaptchaState | undefined;
@@ -198,7 +208,7 @@ export function mountFormCaptcha<T, Options>(
             hostRevision !== authorityRevision
         )
             return false;
-        if (same(current, snapshot) && open(snapshot)) return true;
+        if (same(current, snapshot) && open(snapshot)) return snapshot;
         retire(current);
         sync();
         return false;
@@ -212,7 +222,18 @@ export function mountFormCaptcha<T, Options>(
         }
     }
     function reset(current: Instance<T, Options>) {
-        if (!current.pendingReset || !current.handle || !valid(current)) return;
+        if (
+            !current.pendingReset ||
+            !current.handle ||
+            current.activePublications
+        )
+            return;
+        const snapshot = valid(current);
+        if (!snapshot) return;
+        if (snapshot.token.value !== null) {
+            current.pendingReset = false;
+            return;
+        }
         current.pendingReset = false;
         current.resetting = true;
         try {
@@ -227,29 +248,40 @@ export function mountFormCaptcha<T, Options>(
         // Arm before publication: canonical subscribers may synchronously reenter.
         current.armed = true;
         const publication = ++current.publication;
-        const receipt = host.publish(
-            {
-                owner: current.owner,
-                configurationRevision: current.configurationRevision,
-            },
-            value
-        );
+        current.activePublications++;
+        let receipt: FormCaptchaAdmission | undefined;
+        try {
+            receipt = host.publish(
+                {
+                    owner: current.owner,
+                    configurationRevision: current.configurationRevision,
+                },
+                value
+            );
+        } finally {
+            current.activePublications--;
+            if (receipt?.status === 'admitted')
+                current.admittedPublication = Math.max(
+                    current.admittedPublication,
+                    publication
+                );
+            current.armed =
+                current.activePublications > 0 ||
+                current.admittedPublication > current.consumedPublication;
+        }
         if (!valid(current)) return false;
-        if (
-            receipt.status !== 'admitted' &&
-            current.publication === publication
-        )
-            current.armed = false;
         sync();
-        return receipt.status === 'admitted' && valid(current);
+        return receipt.status === 'admitted' && !!valid(current);
     }
     function failure(current: Instance<T, Options>, cause: unknown) {
         if (!valid(current)) return;
+        const failedIntent = hostRevision;
         failed = {
             owner: current.owner,
             configurationRevision: current.configurationRevision,
         };
         retire(current);
+        if (disposed || hostRevision !== failedIntent || instance) return;
         show('unavailable');
         const authority = host;
         const snapshot = authority.read();
@@ -301,7 +333,7 @@ export function mountFormCaptcha<T, Options>(
                 }
                 current.handle = handle;
                 show('ready');
-                reset(current);
+                sync();
             },
             (cause) => failure(current, cause)
         );
@@ -340,8 +372,13 @@ export function mountFormCaptcha<T, Options>(
                     continue;
                 }
                 if (instance) {
+                    if (snapshot.token.value !== null)
+                        instance.pendingReset = false;
+                    if (instance.activePublications) continue;
                     if (instance.armed && snapshot.token.value === null) {
                         instance.armed = false;
+                        instance.consumedPublication =
+                            instance.admittedPublication;
                         instance.pendingReset = true;
                     }
                     reset(instance);
@@ -364,6 +401,15 @@ export function mountFormCaptcha<T, Options>(
                         snapshot.configurationRevision
                 ) {
                     if (
+                        blockedInvalidation &&
+                        same(blockedInvalidation.scope, snapshot) &&
+                        blockedInvalidation.tokenRevision === token.revision &&
+                        same(blockedInvalidation.tokenScope, token)
+                    ) {
+                        show('unavailable');
+                        continue;
+                    }
+                    if (
                         !Number.isSafeInteger(token.configurationRevision) ||
                         token.configurationRevision < 0 ||
                         token.configurationRevision >
@@ -373,6 +419,7 @@ export function mountFormCaptcha<T, Options>(
                         continue;
                     }
                     const before = snapshot;
+                    const authorityRevision = hostRevision;
                     const receipt = host.invalidate(
                         {
                             owner: token.owner,
@@ -382,6 +429,10 @@ export function mountFormCaptcha<T, Options>(
                     );
                     snapshot = host.read();
                     if (disposed) break;
+                    if (hostRevision !== authorityRevision) {
+                        again = true;
+                        continue;
+                    }
                     if (!same(before, snapshot) || !open(snapshot)) {
                         again = true;
                         continue;
@@ -391,9 +442,25 @@ export function mountFormCaptcha<T, Options>(
                         (snapshot.token.value !== null &&
                             same(snapshot.token, token))
                     ) {
+                        blockedInvalidation = {
+                            scope: {
+                                owner: before.owner,
+                                configurationRevision:
+                                    before.configurationRevision,
+                            },
+                            tokenScope: {
+                                owner: token.owner,
+                                configurationRevision:
+                                    token.configurationRevision,
+                            },
+                            tokenRevision: token.revision,
+                        };
                         show('unavailable');
                         continue;
                     }
+                    // Re-evaluate all provenance against the latest canonical frame.
+                    again = true;
+                    continue;
                 }
                 const ownedContainer =
                     container.ownerDocument.createElement('div');
@@ -409,8 +476,15 @@ export function mountFormCaptcha<T, Options>(
                     pendingReset: false,
                     resetting: false,
                     publication: 0,
+                    activePublications: 0,
+                    admittedPublication: 0,
+                    consumedPublication: 0,
                 };
-                previous = current;
+                previous = {
+                    owner: current.owner,
+                    configurationRevision: current.configurationRevision,
+                };
+                blockedInvalidation = undefined;
                 failed = undefined;
                 instance = current;
                 container.append(ownedContainer);
@@ -437,7 +511,7 @@ export function mountFormCaptcha<T, Options>(
         try {
             previousUnsubscribe?.();
         } catch (cause) {
-            if (instance) retire(instance);
+            if (hostRevision === intent && instance) retire(instance);
             throw cause;
         }
         if (disposed || hostRevision !== intent) return;

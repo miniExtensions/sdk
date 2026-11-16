@@ -41,7 +41,11 @@ export async function assertPortalShellSidebarConsumer({
         );
     const ssr = renderToString(element());
     assert.match(ssr, /--mx-portal-sidebar-width:384px/);
-    assert.match(ssr, /role="separator"/);
+    assert.doesNotMatch(
+        ssr,
+        /role="separator"/,
+        'SSR keeps canonical width without loading a DOM resize engine'
+    );
     const renderWidth = (sidebarWidth, extra = {}) =>
         renderToString(
             h(ui.CompletePortalShell, {

@@ -4,14 +4,15 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    useState,
     type KeyboardEvent,
 } from 'react';
-import { Resizable, type ResizableProps } from 're-resizable';
+import type { Resizable, ResizableProps } from 're-resizable';
 
 // The vendor declares defaultProps.grid as number[] although the prop is a
 // tuple. Hide only that inaccurate static declaration, preserving its real
 // constructor, instance, callbacks and runtime engine without a wrapper.
-const ResizeEngine: new (props: ResizableProps) => Resizable = Resizable;
+type EngineConstructor = new (props: ResizableProps) => Resizable;
 
 export type PortalShellSidebarWidthCommit = Readonly<{
     scope: string;
@@ -32,6 +33,25 @@ export function PortalSidebarResize(props: {
     onCommit: (change: PortalShellSidebarWidthCommit) => void;
     onPreview: (width: number) => void;
 }) {
+    const [loaded, setLoaded] = useState<
+        { component: EngineConstructor } | { error: unknown } | null
+    >(null);
+    useEffect(() => {
+        let current = true;
+        // React 18's vendor main eagerly imports React DOM. Importing the public
+        // SDK must leave unrelated hosts free to initialize their own DOM first.
+        void import('re-resizable').then(
+            (module) => {
+                if (current) setLoaded({ component: module.Resizable });
+            },
+            (error: unknown) => {
+                if (current) setLoaded({ error });
+            }
+        );
+        return () => {
+            current = false;
+        };
+    }, []);
     const token = useMemo(
         () => ({
             scope: props.scope,
@@ -87,7 +107,10 @@ export function PortalSidebarResize(props: {
         gesture.current = null;
         commit(width);
     }
-    return h(ResizeEngine, {
+    if (loaded && 'error' in loaded) throw loaded.error;
+    // SSR retains canonical width; the resize handle hydrates after mount.
+    if (!loaded) return null;
+    return h(loaded.component, {
         ref: engine,
         size: { width: props.width, height: '100%' },
         minWidth: 120,

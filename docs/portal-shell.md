@@ -28,6 +28,9 @@ width. Revision, callback, owner, layout and mobile changes retire old gestures;
 withdrawal restores the accepted presentation. Unmount discards an unfinished
 gesture. Resizing never emits a navigation intent or remounts the record body.
 The separate optional callback preserves existing `PortalShellIntent` handlers.
+SSR includes the accepted width; the handle appears after mount. The resize
+engine is loaded only for a configured mounted sidebar, so importing the public
+SDK leaves other React hosts free to initialize their own browser environment.
 
 ```tsx
 import { createElement } from 'react';

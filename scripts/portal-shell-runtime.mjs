@@ -207,19 +207,29 @@ export async function assertPortalShellConsumer({
             '.mx-sdk-portal-title-html'
         );
         assert(renderedTitle);
-        assert.equal(renderedTitle.querySelector('h1').textContent, 'Owned heading');
-        assert.equal(renderedTitle.querySelector('strong').textContent, 'Owned title');
+        assert.equal(
+            renderedTitle.querySelector('h1').textContent,
+            'Owned heading'
+        );
+        assert.equal(
+            renderedTitle.querySelector('strong').textContent,
+            'Owned title'
+        );
         assert.equal(renderedTitle.querySelector('script'), null);
         for (const titleHtml of ['', '<script>bad()</script>']) {
             await update({ header: { ...richHeader, titleHtml } });
             assert.equal(
-                container.querySelector('.mx-sdk-portal-title-html').textContent,
+                container.querySelector('.mx-sdk-portal-title-html')
+                    .textContent,
                 ''
             );
             assert(!container.textContent.includes('Plain header fallback'));
         }
         await update({ header: originalHeader });
-        assert.equal(container.querySelector('.mx-sdk-portal-title-html'), null);
+        assert.equal(
+            container.querySelector('.mx-sdk-portal-title-html'),
+            null
+        );
         assert.equal(
             container.querySelector('.mx-sdk-portal-brand h1').textContent,
             '<Portal>'

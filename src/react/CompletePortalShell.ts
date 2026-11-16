@@ -18,7 +18,10 @@ import {
     type PortalShellMenuItem,
     type PortalShellSelection,
 } from '../portals/shell.js';
-import { CompleteQuillHTMLRenderer } from './html/index.js';
+import {
+    CompleteHTMLRenderer,
+    CompleteQuillHTMLRenderer,
+} from './html/index.js';
 
 export type PortalShellSnapshot = Readonly<{
     /** Changes when the accepted portal/user owner changes. Never include credentials. */
@@ -31,6 +34,8 @@ export type PortalShellSnapshot = Readonly<{
         layout: 'sidebar' | 'topbar';
         hidden?: boolean;
         title: string;
+        /** Native HTML title, sanitized by the stock renderer. Empty stays blank. */
+        titleHtml?: string;
         descriptionHtml?: string;
         logoUrl?: string;
     }>;
@@ -601,7 +606,16 @@ function Shell(props: CompletePortalShellProps) {
                       h(
                           'div',
                           null,
-                          h('h1', null, snapshot.header.title),
+                          snapshot.header.titleHtml != null
+                              ? h(CompleteHTMLRenderer, {
+                                    html: snapshot.header.titleHtml,
+                                    className: 'mx-sdk-portal-title-html',
+                                })
+                              : h(
+                                    'h1',
+                                    { className: 'mx-sdk-portal-title' },
+                                    snapshot.header.title
+                                ),
                           snapshot.header.descriptionHtml
                               ? h(CompleteQuillHTMLRenderer, {
                                     html: snapshot.header.descriptionHtml,

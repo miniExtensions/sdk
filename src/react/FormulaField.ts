@@ -22,6 +22,7 @@ import {
     ReadOnlyURLGallery,
     type ReadOnlyURLGalleryProps,
 } from './ReadOnlyURLGallery.js';
+import type { ReadonlyResourceOwner } from './readonlyResourceOwner.js';
 
 /** Accepted native result/configuration facts. This contract grants no writes,
  * computes no formula, and never accepts a UI renderer or fabricated binding. */
@@ -52,6 +53,8 @@ export type ControlledFormulaFieldProps = Pick<
     >;
     /** Ordered entries admitted by the host's existing HTTP(S) extractor. */
     gallery?: ReadOnlyURLGalleryProps;
+    /** Captured native lifetime; formula metadata and URLs grant no authority. */
+    resource?: { owner?: ReadonlyResourceOwner; identity?: unknown };
 } & (
         | {
               isValid: false;
@@ -139,6 +142,9 @@ export function ControlledFormulaField(
                 : createElement(ReadOnlyURLGallery, {
                       ...props.gallery,
                       entries: props.gallery?.entries ?? [],
+                      owner: props.gallery?.owner ?? props.resource?.owner,
+                      identity:
+                          props.gallery?.identity ?? props.resource?.identity,
                   });
     } else if (props.displayAsButton) {
         content = createElement(SingleLineTextField, {
@@ -148,7 +154,7 @@ export function ControlledFormulaField(
             displayAsButton: true,
             validButtonLabel: props.validUrlButtonLabel,
             invalidButtonLabel: props.invalidUrlButtonLabel,
-            resource: { labels: props.buttonLabels },
+            resource: { ...props.resource, labels: props.buttonLabels },
         });
     } else if (props.formattingFailed)
         content = formulaError(unexpectedFormula);

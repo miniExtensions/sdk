@@ -249,6 +249,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-portal-chart',
         'attachment-preview',
         'readonly-url-gallery',
+        'lookup',
         'complete-address',
         'address-field',
         'single-line-text',

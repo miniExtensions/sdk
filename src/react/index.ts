@@ -268,6 +268,20 @@ export {
 } from './SingleSelectField.js';
 import { LookupControl, type LookupFieldOptions } from './LookupField.js';
 export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
+import { ControlledLookupField } from './ControlledLookupField.js';
+import type { ControlledLookupFieldProps } from './lookupFieldTypes.js';
+export type {
+    ControlledLookupFieldProps,
+    LookupPresentationOwner,
+    LookupPresentationState,
+    LookupResultPresentation,
+    LookupReadonlyCardLeaf,
+    LookupReadonlyCardProjection,
+    LookupReadonlyLinkedRow,
+    LookupReadonlyLinkedCardRow,
+    LookupReadonlyLinkedGridRow,
+    LookupReadonlyLinkedCollection,
+} from './lookupFieldTypes.js';
 import {
     RollupControl,
     ControlledRollupField,
@@ -1258,8 +1272,17 @@ export function FormulaField(props: FormulaFieldInputProps): ReactNode {
         : createElement(BindingFormulaField, props);
 }
 export type LookupFieldProps = FieldProps & LookupFieldOptions;
+export type LookupFieldInputProps =
+    | (LookupFieldProps & { mode?: never })
+    | ControlledLookupFieldProps;
+/** Complete controlled results are additive; binding/slot results stay inert. */
+export function LookupField(props: LookupFieldInputProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledLookupField, props)
+        : createElement(BindingLookupField, props);
+}
 /** Present the accepted Lookup array without borrowing binding or linked actions. */
-export function LookupField({
+function BindingLookupField({
     binding,
     render,
     className,

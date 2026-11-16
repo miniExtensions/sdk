@@ -118,8 +118,8 @@ const defaults = (
 });
 const available = (input: CreateLinkedFormRecordProjectionInput) => {
     const result = createLinkedFormRecordProjection(input);
+    if (result.type !== 'available') assert.fail(`Blocked: ${result.code}`);
     assert.equal(result.type, 'available');
-    if (result.type !== 'available') throw new Error(`Blocked: ${result.code}`);
     return result;
 };
 
@@ -341,7 +341,7 @@ describe('portable linked/two-source Form projection contract', () => {
         assert.equal(Number.isNaN(formRecord.data.notFinite), true);
     });
 
-    it('does not run a formula to calculate a supplied computed scalar', () => {
+    it('uses a supplied computed scalar without calculating its unavailable referenced fields', () => {
         const computed = {
             ...text('driver').airtableField,
             isComputed: true,
@@ -349,7 +349,7 @@ describe('portable linked/two-source Form projection contract', () => {
                 type: 'formula' as const,
                 options: {
                     isValid: true,
-                    formula: 'THIS_MUST_NOT_RUN()',
+                    referencedFieldIds: ['unavailable-source'],
                     result: { type: 'singleLineText' as const, options: null },
                 },
             },

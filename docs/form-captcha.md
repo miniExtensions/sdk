@@ -83,6 +83,21 @@ React parent does not rerender.
 
 ## Provider resources
 
+`createRecaptchaV2Provider({registry, scope, configuration, load})` is the
+SDK-owned visible reCAPTCHA v2 adapter. `load` supplies the accepted external
+provider API (`render` and ID-scoped `reset`); it does not render native JSX.
+The SDK maps its change/expiry/error callbacks, retains the exact widget ID
+(including zero), resets that ID and clears only its isolated mount on removal.
+Native consumers supply provider configuration and the admitted script/API
+loader, rather than a second widget implementation. Script URLs, keys and
+provider account/domain setup remain deployment-owned.
+
+This first-party MIT adapter adds no third-party React wrapper dependency. Its
+v2 boundary matches the visible render/reset surface inspected in native's
+locked `react-google-recaptcha@2.1.0`; it does not upgrade that package, copy its
+class lifecycle, expose invisible execution or remove shared globals. Synthetic
+API-port tests establish SDK behavior, not actual remote provider behavior.
+
 `FormCaptchaProvider.load()` returns (or asynchronously resolves) a renderer.
 `render(container, options, callbacks)` returns (or resolves) an exact widget
 handle with `reset()` and `remove()`. Each render receives its own detachable

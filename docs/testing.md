@@ -12,6 +12,10 @@ while widget events leave its request, abort signal and newer dirty draft intact
 including cold SSR gates, hydration, StrictMode, cosmetic rerenders and sibling
 cleanup. The source test imports the specific component; the packed consumer
 checks import the actual public React barrel in both module formats.
+`test/recaptchaV2Provider.test.ts` exercises the real SDK-owned visible v2
+adapter with a synthetic external API, including widget ID zero, callback
+mapping, failure cleanup and sibling-ID preservation. Packed consumers exercise
+that exported adapter too; no third-party React wrapper is installed or upgraded.
 
 The mandatory package check registers `form-captcha-consumer-checks.mjs` for
 fresh React18/19, ESM/CJS, strict positive/negative types, CSS, cold SSR,

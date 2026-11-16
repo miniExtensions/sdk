@@ -3183,3 +3183,8 @@ export {
     type FormCaptchaHost,
     type FormCaptchaState,
 } from '../ui/formCaptcha.js';
+export {
+    createRecaptchaV2Provider,
+    type RecaptchaV2Options,
+    type RecaptchaV2Api,
+} from '../ui/recaptchaV2Provider.js';

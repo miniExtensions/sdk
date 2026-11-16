@@ -12,7 +12,7 @@ const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 export const formCaptchaTypedConsumer = `
 import {createElement} from 'react';
-import {FormCaptcha,createFormCaptchaProviderRegistry,type FormCaptchaHost,type FormCaptchaProps,type FormCaptchaProvider} from '@miniextensions/sdk/react';
+import {FormCaptcha,createFormCaptchaProviderRegistry,createRecaptchaV2Provider,type RecaptchaV2Options,type FormCaptchaHost,type FormCaptchaProps,type FormCaptchaProvider} from '@miniextensions/sdk/react';
 type Proof={synthetic:true};type Options={theme:string};
 declare const host:FormCaptchaHost<Proof,Options>;
 createElement(FormCaptcha<Proof,Options>,{mode:'controlled',host,labels:{loading:'Cargando',unavailable:'No disponible'}});
@@ -33,6 +33,10 @@ host.setVerified(true);
 // @ts-expect-error publication admission is synchronous
 const asynchronous:FormCaptchaHost<Proof,Options>={...host,publish:async()=>({status:'admitted'})};
 void mixed;void missing;void asynchronous;void provider;
+const visible=createRecaptchaV2Provider<Proof>({registry,scope:{},configuration:{},load:()=>({render(container,options){options.callback({synthetic:true});return 0;},reset(id){const owned:number=id;void owned;}})});
+// @ts-expect-error visible widget cannot silently enable invisible execution
+const invisible:RecaptchaV2Options={sitekey:'synthetic-config',size:'invisible'};
+void visible;void invisible;
 `;
 
 /** Synthetic host only. No provider script, challenge, network or real proof. */
@@ -308,6 +312,7 @@ async function runtime(root, happyDomModulePath) {
                   );
         assert.equal(typeof api.FormCaptcha, 'function');
         assert.equal(typeof api.createFormCaptchaProviderRegistry, 'function');
+        assert.equal(typeof api.createRecaptchaV2Provider, 'function');
         const f = formCaptchaFixture(undefined);
         const tree = () =>
             React.createElement(
@@ -353,6 +358,50 @@ async function runtime(root, happyDomModulePath) {
             assert.equal(closed.counts().loads, 0);
         }
         const window = new Window();
+        let adapterCallbacks;
+        const resets = [];
+        let portLoads = 0;
+        const concrete = api.createRecaptchaV2Provider({
+            registry: api.createFormCaptchaProviderRegistry(),
+            scope: {},
+            configuration: {},
+            load() {
+                portLoads++;
+                return {
+                    render(node, options) {
+                        adapterCallbacks = options;
+                        node.append(window.document.createElement('span'));
+                        return 0;
+                    },
+                    reset(id) {
+                        resets.push(id);
+                        adapterCallbacks.callback(null);
+                    },
+                };
+            },
+        });
+        const concreteRenderer = await concrete.load();
+        assert.equal(await concrete.load(), concreteRenderer);
+        assert.equal(portLoads, 1);
+        const concreteMount = window.document.createElement('div');
+        const concreteChanges = [];
+        const handle = await concreteRenderer.render(
+            concreteMount,
+            { sitekey: 'synthetic-config', size: 'compact' },
+            {
+                change: (value) => concreteChanges.push(value),
+                expired() {},
+                error() {},
+            }
+        );
+        adapterCallbacks.callback({ synthetic: true });
+        handle.reset();
+        handle.remove();
+        handle.remove();
+        adapterCallbacks.callback(null);
+        assert.deepEqual(resets, [0, 0]);
+        assert.equal(concreteChanges.length, 2);
+        assert.equal(concreteMount.childNodes.length, 0);
         // The synthetic provider's document is supplied only for client execution.
         const client = formCaptchaFixture(window.document);
         const clientTree = () =>

@@ -2351,7 +2351,10 @@ it('keeps actual platform select-all through the first typed key on a formatted 
         // HappyDOM omits legacy charCode from the constructor. Supply only
         // that missing browser event property; the editor's input stays real.
         Object.defineProperty(press, 'charCode', { value: 88 });
-        assert.equal(press.charCode, 88);
+        assert.equal(
+            Object.getOwnPropertyDescriptor(press, 'charCode')?.value,
+            88
+        );
         await act(async () => {
             view.dom.dispatchEvent(down as unknown as Event);
             view.dom.dispatchEvent(press as unknown as Event);

@@ -35,7 +35,7 @@ const editor:LookupResultPresentation={kind:'richText',display:{value:'A',emptyL
 export const controlledLookupAssembly = String.raw`
 const h=React.createElement;
 let root,active={},owner={token:active,isCurrent(){return active===this.token;}},identity=0;
-const effects={writes:0,transport:0,rows:0,submits:0,opens:0,triggerId:null};
+const effects={transport:0,rows:0,submits:0,opens:0,triggerId:null};
 const dataImage='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="12" height="12"%3E%3Crect width="12" height="12" fill="red"/%3E%3C/svg%3E';
 const cohorts=[
  ['text',{kind:'text',display:{value:'Literal <b>text</b>',language:'en'}}],
@@ -57,11 +57,14 @@ const cohorts=[
  ['linkedTable',{kind:'linkedCollection',display:{layout:'table',phase:'ready',columns:[{key:'name',title:'Name'}],rows:[{key:'r0',cells:[{key:'name',result:{kind:'literal',text:'Linked row'}}],open:{label:'Open linked row',run(trigger){effects.opens++;effects.triggerId=trigger.id;}}}],labels:{empty:'Empty',loading:'Loading',unavailable:'Unavailable'}}}],
  ['linkedCard',{kind:'linkedCollection',display:{layout:'gallery',phase:'ready',rows:[{key:'card0',card:{status:'present',primary:'Rich card',fields:[{key:'detail',title:'Detail',leaf:{kind:'literal',text:'Card detail'}}],language:'en',layout:'gallery',images:[{id:'first',url:dataImage,filename:'First'},{id:'second',url:dataImage,filename:'Second'}],imageFit:'contain',imageHeight:80,shouldRenderThumbnail:true,thumbnailLocation:'left',fieldsPerCardRow:1,labels:{previousImage:'Previous image',nextImage:'Next image',noImage:'No image'}}}],labels:{empty:'Empty',loading:'Loading',unavailable:'Unavailable'}}}],
 ];
+function freezeFacts(value,seen=new Set()){if(value===null||typeof value!=='object'||seen.has(value))return;seen.add(value);for(const child of Object.values(value))freezeFacts(child,seen);Object.freeze(value);}
+freezeFacts(cohorts);
+const suppliedBytes=JSON.stringify(cohorts);
 let state={status:'ready',result:{kind:'sequence',leaves:cohorts.map(([key,result])=>({key,result}))}};
 function element(){return h(React.StrictMode,null,h('form',{id:'lookup-form',onSubmit(event){event.preventDefault();effects.submits++;}},h('button',{type:'button',id:'before'},'Before Lookup'),h('div',{onClick(){effects.rows++;},onKeyDown(){effects.rows++;}},h(api.LookupField,{mode:'controlled',owner,identity,state,title:'Computed Lookup',showTitle:true,inputId:'lookup',language:'en'})),h('button',{type:'button',id:'after'},'After Lookup')));}
 function rerender(){root.render(element());}
 function renew(next=state){active={};owner={token:active,isCurrent(){return active===this.token;}};identity++;state=next;rerender();}
-function snapshot(){return {effects:{...effects},ownerCurrent:owner.isCurrent(),text:document.querySelector('#lookup')?.textContent??'',cohorts:cohorts.map(([name])=>name)};}
+function snapshot(){return {effects:{...effects},ownerCurrent:owner.isCurrent(),text:document.querySelector('#lookup')?.textContent??'',cohorts:cohorts.map(([name])=>name),suppliedUnchanged:JSON.stringify(cohorts)===suppliedBytes,react:React.version,platform:navigator.platform};}
 `;
 
 export const controlledLookupRuntimeConsumer =
@@ -82,7 +85,7 @@ const ssr=JSON.parse(execFileSync(process.execPath,[fileURLToPath(import.meta.ur
 const {Window}=await import(pathToFileURL(process.argv[3]));let requests=0;
 const window=new Window({url:'https://lookup.invalid/',settings:{fetch:{interceptor:{beforeAsyncRequest(){requests++;throw Error('Unexpected Lookup request');},beforeSyncRequest(){requests++;throw Error('Unexpected Lookup request');}}}}});
 const keys=['window','document','navigator','Node','Element','HTMLElement','HTMLInputElement','HTMLTextAreaElement','MutationObserver','ResizeObserver','getComputedStyle','fetch','IS_REACT_ACT_ENVIRONMENT'];const saved=keys.map(key=>Object.getOwnPropertyDescriptor(globalThis,key));
-for(const key of keys){let value=key==='IS_REACT_ACT_ENVIRONMENT'?true:key==='fetch'?async()=>{requests++;throw Error('Unexpected Lookup transport');}:window[key];if(key==='getComputedStyle')value=value.bind(window);Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
+for(const key of keys){let value=key==='IS_REACT_ACT_ENVIRONMENT'?true:key==='fetch'?async()=>{requests++;effects.transport++;throw Error('Unexpected Lookup transport');}:window[key];if(key==='getComputedStyle')value=value.bind(window);Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
 const host=document.createElement('main');document.body.append(host);host.innerHTML=ssr.html;const first=host.firstElementChild,errors=[],warnings=[],old=console.error;
 try{
  console.error=(...args)=>warnings.push(args.map(String).join(' '));await load();const {hydrateRoot}=await import('react-dom/client');
@@ -94,8 +97,8 @@ try{
  await React.act(async()=>renew({status:'masked'}));assert.match(snapshot().text,/••••••••/);assert.equal(host.querySelector('img,audio,video,iframe'),null);
  await React.act(async()=>renew({status:'ready',result:{kind:'literal',text:'Successor'}}));assert.equal(snapshot().text,'Computed LookupSuccessor');
  await React.act(async()=>renew({status:'ready',result:{kind:'sequence',leaves:[{key:'same',result:{kind:'literal',text:'Private'}},{key:'same',result:{kind:'literal',text:'Private'}}]}}));assert.match(snapshot().text,/Unavailable/);assert(!snapshot().text.includes('Private'));
- assert.equal(effects.writes,0);assert.equal(effects.transport,0);assert.equal(effects.rows,0);assert.equal(effects.submits,0);assert.equal(requests,0);assert.deepEqual(errors,[]);assert.deepEqual(warnings,[]);
- await React.act(async()=>root.unmount());root=undefined;assert.equal(host.childElementCount,0);console.log(JSON.stringify({format,react:React.version,cohorts:cohorts.length,ssr:true,hydration:true,errors:0,warnings:0,requests,effects,cleanup:'completed'}));
+ assert.equal(snapshot().suppliedUnchanged,true);assert.equal(effects.transport,0);assert.equal(effects.rows,0);assert.equal(effects.submits,0);assert.equal(requests,0);assert.deepEqual(errors,[]);assert.deepEqual(warnings,[]);
+ await React.act(async()=>root.unmount());root=undefined;assert.equal(host.childElementCount,0);console.log(JSON.stringify({format,react:React.version,cohorts:cohorts.length,ssr:true,hydration:true,errors:0,warnings:0,requests,effects,suppliedUnchanged:snapshot().suppliedUnchanged,cleanup:'completed'}));
 }finally{try{if(root)await React.act(async()=>root.unmount());}finally{console.error=old;keys.forEach((key,index)=>saved[index]?Object.defineProperty(globalThis,key,saved[index]):Reflect.deleteProperty(globalThis,key));await window.happyDOM.close();}}
 `;
 
@@ -230,6 +233,7 @@ export function checkControlledLookupReactMatrix({
                 assert.equal(result.react, version);
                 assert.equal(result.cleanup, 'completed');
                 assert.equal(result.errors, 0);
+                assert.equal(result.suppliedUnchanged, true);
                 const entry =
                     format === 'esm'
                         ? "import {LookupField} from '@miniextensions/sdk/react';import {projectLookupValues} from '@miniextensions/sdk/ui';import '@miniextensions/sdk/react/lookup.css';console.log(LookupField,projectLookupValues);"

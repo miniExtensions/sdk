@@ -84,3 +84,13 @@ The installed package check covers React 18/19, ESM/CJS, cold SSR, hydration,
 strict public types and CSS/browser bundling. Focused source tests separately
 exercise the real readonly Rich Text runtime, document rendering and cancellation.
 Actual browser and native acceptance remain distinct qualification stages.
+
+The normal browser umbrella includes `controlled-lookup-browser-checks.mjs`.
+For a focused device run, `pnpm check:lookup:browser --archive <exact-tgz>
+--receipt <focused-artifact-receipt.json> --output <new-directory> --chromium
+<installed-executable>` runs that same helper serially on both React versions.
+The receipt must identify the exact clean checkout commit/tree and archive hash
+and explicitly state `stage: focused-lookup-only` / `completePackage: false`.
+Use the normal resource guard on a shared device. The focused command preserves
+the dependency maturity policy, sandbox, loopback-only allowlist and cleanup; it
+does not replace the complete package/browser or native acceptance gates.

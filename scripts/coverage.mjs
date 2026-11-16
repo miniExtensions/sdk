@@ -1,4 +1,5 @@
 import { assertDateVendor } from './date-vendor-checks.mjs';
+import { assertPortalSidebarVendor } from './portal-sidebar-vendor-checks.mjs';
 import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -18,6 +19,7 @@ import {
 const root = fileURLToPath(new URL('../', import.meta.url));
 await assertAddressCombobox();
 assertDateVendor(root);
+assertPortalSidebarVendor(root);
 const require = createRequire(import.meta.url);
 const output = 'dist/coverage-test';
 const mode = process.argv[2] ?? 'all';
@@ -72,6 +74,11 @@ await cp(
 await cp(
     path.join(root, 'vendor/date-time'),
     path.join(root, output, 'vendor/date-time'),
+    { recursive: true }
+);
+await cp(
+    path.join(root, 'vendor/portal-sidebar'),
+    path.join(root, output, 'vendor/portal-sidebar'),
     { recursive: true }
 );
 const groups = { unit: [], component: [] };

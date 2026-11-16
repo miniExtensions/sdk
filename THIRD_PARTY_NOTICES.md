@@ -349,7 +349,7 @@ THE SOFTWARE.
 
 ## Heroicons
 
-The numeric, controlled Rating and complete readonly-text empty-state symbols retain the native NoSymbol icon, FormValidationSummary retains the native XCircle icon, and readonly Finder attachments retain the native solid Play and Document icons, from [Heroicons](https://github.com/tailwindlabs/heroicons).
+The numeric, controlled Rating and complete readonly-text empty-state symbols retain the native NoSymbol icon, FormValidationSummary retains the native XCircle icon, readonly Finder attachments retain the native solid Play and Document icons, and the Portal shell retains the native UserCircle and ArrowRightStartOnRectangle outlines, from [Heroicons](https://github.com/tailwindlabs/heroicons).
 
 ```text
 MIT License
@@ -1623,3 +1623,68 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
+
+## re-resizable
+
+The optional Portal sidebar ships the unmodified private resize engine closure
+(6.11.2), with frozen source provenance and licenses. React and React DOM remain
+the consumer’s peer renderers.
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2018 @bokuweb
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## markerjs2 2.32.7 — image annotation
+
+The explicitly host-authorized image annotation driver lazily imports the pinned
+markerjs2 2.32.7 runtime dependency. The vendor backlink is not removed, and ImageAnnotationField keeps
+additional prominent public attribution to https://markerjs.com. No commercial
+license exemption or license activation is assumed.
+
+Source: https://github.com/ailon/markerjs2/tree/6a4e32f7384666032d5ea178dd7a984f3d395d49
+
+marker.js 2 Linkware License
+
+Copyright (c) 2020 Alan Mendelevich
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+1. The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+2. Link back to the Software website displayed during operation of the Software
+   or an equivalent prominent public attribution must be retained. Alternative
+   commercial licenses can be obtained to remove this clause.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

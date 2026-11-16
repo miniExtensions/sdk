@@ -1,0 +1,29 @@
+{
+  "package": "re-resizable",
+  "version": "6.11.2",
+  "source": "https://github.com/bokuweb/react-resizable-box",
+  "registryTarball": "https://registry.npmjs.org/re-resizable/-/re-resizable-6.11.2.tgz",
+  "integrity": "sha512-2xI2P3OHs5qw7K0Ud1aLILK6MQxW50TcO+DetD9eIV58j84TqYeHoZcL9H4GXFXXIh7afhH8mv5iUCXII7OW7A==",
+  "releasedUTC": "2025-02-24T23:34:39.020Z",
+  "runtimeEntry": "lib/index.es5.js",
+  "externalPeers": [
+    "react",
+    "react-dom",
+    "react/jsx-runtime"
+  ],
+  "files": {
+    "index.js": "lib/index.es5.js",
+    "index.d.ts": "lib/index.d.ts",
+    "resizer.d.ts": "lib/resizer.d.ts",
+    "LICENSE": "LICENSE",
+    "upstream.package.json": "package.json"
+  },
+  "sha256": {
+    "LICENSE": "ccff072c393e25ef1466f6206e87eba6dfab128cab2697b7d247767cea506658",
+    "index.js": "051e56db20d3d0e0b18db45e25bcf9ce5e450cd64bb184e23cdda22e85ce1d61",
+    "resizer.d.ts": "51be228ebfa38f9becf290a3ee150343f5cc8050b8d2a2899c7c4c026d74df71",
+    "package.json": "22a0fbf1ac73ff06d00b2ff434553bb46cfe2a8f210616f1481b1284673b07d5",
+    "index.d.ts": "aa5b8b738978b89adf301110fc4e6b0ef0f545eb6c74ef3019312183cbf68d11",
+    "upstream.package.json": "6394facc78efe6d40a0e899e0fe7ab2a0662296d1797128525d5dc906a6f0860"
+  }
+}

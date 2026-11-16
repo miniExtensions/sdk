@@ -3,12 +3,20 @@ import {
     useEffect,
     useLayoutEffect,
     useId,
+    useMemo,
     useRef,
     useState,
     type ReactNode,
     type KeyboardEvent,
     type MouseEvent,
+    type CSSProperties,
 } from 'react';
+import {
+    PortalSidebarResize,
+    portalSidebarWidth,
+    type PortalShellSidebarWidthCommit,
+} from './PortalSidebarResize.js';
+export type { PortalShellSidebarWidthCommit } from './PortalSidebarResize.js';
 import {
     flattenPortalShellMenu,
     portalShellSelectionsEqual,
@@ -21,6 +29,7 @@ import {
 import {
     CompleteHTMLRenderer,
     CompleteQuillHTMLRenderer,
+    CompleteTruncatedDescription,
 } from './html/index.js';
 
 export type PortalShellSnapshot = Readonly<{
@@ -36,7 +45,18 @@ export type PortalShellSnapshot = Readonly<{
         title: string;
         /** Native HTML title, sanitized by the stock renderer. Empty stays blank. */
         titleHtml?: string;
+        /** Optional host-owned desktop sidebar width in pixels (120–600). */
+        sidebarWidth?: number;
         descriptionHtml?: string;
+        /** Omission retains the existing untruncated header description. */
+        descriptionOptions?: Readonly<{
+            placement?: 'header' | 'navigation';
+            truncate?: boolean;
+            /** Stable content identity; do not use the presentation revision. */
+            resetKey?: string;
+        }>;
+        /** Layout placement uses sidebar footers and a 640px topbar breakpoint. */
+        actionsPlacement?: 'header' | 'layout';
         logoUrl?: string;
     }>;
     hideMenuItems?: boolean;
@@ -44,6 +64,8 @@ export type PortalShellSnapshot = Readonly<{
         name: string;
         settingsEnabled?: boolean;
         logoutEnabled?: boolean;
+        /** Omission/menu retains the existing text dropdown. Icon/text use direct single actions. */
+        presentation?: 'menu' | 'icon' | 'text';
     }>;
     searchAgainEnabled?: boolean;
     welcome?: Readonly<{
@@ -67,8 +89,11 @@ export type PortalShellLabels = {
     empty: string;
     externalLink: string;
     searchAgain: string;
+    readMore?: string;
+    showLess?: string;
+    resizeSidebar?: string;
 };
-const defaultLabels: PortalShellLabels = {
+const defaultLabels: Required<PortalShellLabels> = {
     navigation: 'Portal navigation',
     openNavigation: 'Open navigation',
     closeNavigation: 'Close navigation',
@@ -82,10 +107,15 @@ const defaultLabels: PortalShellLabels = {
     empty: 'No views available',
     externalLink: 'opens in a new tab',
     searchAgain: 'Search again',
+    readMore: 'Read more',
+    showLess: 'Show less',
+    resizeSidebar: 'Resize sidebar',
 };
 export type CompletePortalShellProps = {
     snapshot: PortalShellSnapshot;
     onIntent: (intent: PortalShellIntent) => void;
+    /** End-only resize notification. The host validates the envelope and persists. */
+    onSidebarWidthCommit?: (change: PortalShellSidebarWidthCommit) => void;
     /** The host-owned table/collection body. Menus, header, embed and dialogs are SDK-owned. */
     children?: ReactNode;
     labels?: Partial<PortalShellLabels>;
@@ -138,6 +168,28 @@ function trapFocus(event: KeyboardEvent<HTMLElement>) {
         event.preventDefault();
         first.focus();
     }
+}
+/** Fixed native Heroicons outlines; MIT notice is retained in THIRD_PARTY_NOTICES.md. */
+function UserIcon({ logout = false }: { logout?: boolean }) {
+    return h(
+        'svg',
+        {
+            xmlns: 'http://www.w3.org/2000/svg',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            strokeWidth: 1.5,
+            stroke: 'currentColor',
+            'aria-hidden': true,
+            className: 'mx-sdk-portal-user-icon',
+        },
+        h('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            d: logout
+                ? 'M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9'
+                : 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+        })
+    );
 }
 function Dialog(props: {
     title: string;
@@ -202,11 +254,45 @@ function Shell(props: CompletePortalShellProps) {
         (item) => item.id === selection?.itemId
     );
     const [mobile, setMobile] = useState(false),
-        [open, setOpen] = useState(false),
-        [logout, setLogout] = useState(false);
+        [open, setOpen] = useState(false);
+    // A committed replacement allocates a distinct confirmation owner even
+    // when a previous snapshot/callback pair returns after A-B-A.
+    const logoutAuthority = useMemo(
+        () => ({ snapshot, onIntent: props.onIntent }),
+        [snapshot, props.onIntent]
+    );
+    const committedLogoutAuthority = useRef<typeof logoutAuthority | null>(
+            null
+        ),
+        activeLogoutAuthority = useRef<typeof logoutAuthority | null>(null);
+    const [logoutRequest, setLogoutRequest] = useState<
+        typeof logoutAuthority | null
+    >(null);
+    const logout = logoutRequest === logoutAuthority;
     const toggle = useRef<HTMLButtonElement>(null),
         nav = useRef<HTMLDivElement>(null),
-        main = useRef<HTMLElement>(null);
+        main = useRef<HTMLElement>(null),
+        container = useRef<HTMLDivElement>(null);
+    const controlledSidebar =
+        snapshot.header.layout === 'sidebar' &&
+        !snapshot.header.hidden &&
+        (snapshot.header.sidebarWidth !== undefined ||
+            props.onSidebarWidthCommit !== undefined);
+    const layoutActions = snapshot.header.actionsPlacement === 'layout';
+    const mobileLimit =
+        layoutActions && snapshot.header.layout === 'topbar' ? 639 : 1023;
+    const actionsInNavigation =
+        layoutActions &&
+        !snapshot.header.hidden &&
+        (snapshot.header.layout === 'sidebar' || mobile);
+    const showNavigation =
+        (!snapshot.hideMenuItems && items.length > 0) ||
+        (!snapshot.header.hidden &&
+            (layoutActions ||
+                (snapshot.header.descriptionOptions?.placement ===
+                    'navigation' &&
+                    snapshot.header.descriptionHtml != null)));
+    const sidebarWidth = portalSidebarWidth(snapshot.header.sidebarWidth);
     const commandToken = { snapshot, onIntent: props.onIntent };
     const accepted = useRef<typeof commandToken | null>(null);
     const pending = useRef<{
@@ -222,16 +308,49 @@ function Shell(props: CompletePortalShellProps) {
             if (accepted.current === commandToken) accepted.current = null;
         };
     });
+    useCommitEffect(() => {
+        committedLogoutAuthority.current = logoutAuthority;
+        if (activeLogoutAuthority.current !== logoutAuthority)
+            activeLogoutAuthority.current = null;
+        setLogoutRequest((request) =>
+            request &&
+            (request !== logoutAuthority ||
+                activeLogoutAuthority.current !== logoutAuthority)
+                ? null
+                : request
+        );
+        return () => {
+            if (committedLogoutAuthority.current === logoutAuthority)
+                committedLogoutAuthority.current = null;
+            if (activeLogoutAuthority.current === logoutAuthority)
+                activeLogoutAuthority.current = null;
+        };
+    }, [logoutAuthority]);
+    useCommitEffect(() => {
+        // Preview writes are imperative so dragging never remounts host content.
+        // React may otherwise skip an equal style value when resize is withdrawn.
+        if (controlledSidebar)
+            container.current?.style.setProperty(
+                '--mx-portal-sidebar-width',
+                `${sidebarWidth}px`
+            );
+    }, [
+        controlledSidebar,
+        sidebarWidth,
+        snapshot.revision,
+        props.onSidebarWidthCommit,
+        mobile,
+    ]);
     useEffect(() => {
         const query = main.current?.ownerDocument.defaultView?.matchMedia(
-            '(max-width: 1023px)'
+            `(max-width: ${mobileLimit}px)`
         );
         if (!query) return;
         const change = () => setMobile(query.matches);
         change();
         query.addEventListener('change', change);
         return () => query.removeEventListener('change', change);
-    }, []);
+    }, [mobileLimit]);
     useEffect(() => {
         if (!overlay || !open) return;
         (nav.current && visibleControls(nav.current)[0])?.focus();
@@ -241,7 +360,6 @@ function Shell(props: CompletePortalShellProps) {
     }, [overlay, open]);
     useEffect(() => {
         setOpen(false);
-        setLogout(false);
     }, [snapshot.scope, snapshot.revision]);
     useEffect(() => {
         const document = main.current?.ownerDocument;
@@ -288,6 +406,37 @@ function Shell(props: CompletePortalShellProps) {
             scope: snapshot.scope,
             revision: snapshot.revision,
         });
+    }
+    function beginLogout() {
+        if (
+            accepted.current !== commandToken ||
+            committedLogoutAuthority.current !== logoutAuthority ||
+            !snapshot.user?.logoutEnabled
+        )
+            return;
+        activeLogoutAuthority.current = logoutAuthority;
+        setLogoutRequest(logoutAuthority);
+    }
+    function closeLogout() {
+        if (activeLogoutAuthority.current === logoutRequest)
+            activeLogoutAuthority.current = null;
+        setLogoutRequest((current) =>
+            current === logoutRequest ? null : current
+        );
+    }
+    function confirmLogout() {
+        if (
+            logoutRequest !== logoutAuthority ||
+            committedLogoutAuthority.current !== logoutAuthority ||
+            activeLogoutAuthority.current !== logoutAuthority ||
+            accepted.current !== commandToken ||
+            !snapshot.user?.logoutEnabled
+        )
+            return;
+        // Consume before host publication, including synchronous replacement.
+        activeLogoutAuthority.current = null;
+        setLogoutRequest(null);
+        emit({ type: 'logout' });
     }
     const close = () => setOpen(false);
     function navigate(next: PortalShellSelection, source: HTMLElement) {
@@ -486,6 +635,58 @@ function Shell(props: CompletePortalShellProps) {
         );
     }
     const user = snapshot.user;
+    const configuredUser =
+        user?.presentation === 'icon' || user?.presentation === 'text';
+    const userLabel =
+        user?.presentation === 'icon'
+            ? h(UserIcon)
+            : configuredUser
+              ? user?.name
+              : user?.name || labels.userMenu;
+    const directUserAction =
+        user &&
+        configuredUser &&
+        Boolean(user.settingsEnabled) !== Boolean(user.logoutEnabled)
+            ? h(
+                  'button',
+                  {
+                      type: 'button',
+                      className: 'mx-sdk-portal-user-direct',
+                      'aria-label': user.logoutEnabled
+                          ? labels.logout
+                          : user.presentation === 'icon' || user.name === ''
+                            ? labels.settings
+                            : undefined,
+                      onClick: () => {
+                          if (user.settingsEnabled)
+                              emit({ type: 'user-settings' });
+                          else beginLogout();
+                      },
+                  },
+                  user.settingsEnabled
+                      ? userLabel
+                      : h(UserIcon, { logout: true })
+              )
+            : null;
+    const descriptionOptions = snapshot.header.descriptionOptions;
+    const descriptionInNavigation =
+        descriptionOptions?.placement === 'navigation';
+    const description = (
+        descriptionOptions
+            ? snapshot.header.descriptionHtml != null
+            : Boolean(snapshot.header.descriptionHtml)
+    )
+        ? descriptionOptions?.truncate
+            ? h(CompleteTruncatedDescription, {
+                  html: snapshot.header.descriptionHtml!,
+                  resetKey: descriptionOptions.resetKey,
+                  readMoreLabel: labels.readMore,
+                  showLessLabel: labels.showLess,
+              })
+            : h(CompleteQuillHTMLRenderer, {
+                  html: snapshot.header.descriptionHtml!,
+              })
+        : null;
     const actions = h(
         'div',
         { className: 'mx-sdk-portal-actions' },
@@ -499,82 +700,91 @@ function Shell(props: CompletePortalShellProps) {
                   labels.searchAgain
               )
             : null,
-        user && (user.settingsEnabled || user.logoutEnabled)
-            ? h(
-                  'details',
-                  {
-                      className: 'mx-sdk-portal-user',
-                      onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
-                          if (event.key === 'Escape') {
-                              event.currentTarget.removeAttribute('open');
-                              event.currentTarget
-                                  .querySelector('summary')
-                                  ?.focus();
-                          }
+        directUserAction ??
+            (user && (user.settingsEnabled || user.logoutEnabled)
+                ? h(
+                      'details',
+                      {
+                          className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
+                          onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                              if (event.key === 'Escape') {
+                                  event.currentTarget.removeAttribute('open');
+                                  event.currentTarget
+                                      .querySelector('summary')
+                                      ?.focus();
+                              }
+                          },
                       },
-                  },
-                  h(
-                      'summary',
-                      { 'aria-label': labels.userMenu },
-                      user.name || labels.userMenu
-                  ),
-                  h(
-                      'div',
-                      null,
-                      user.settingsEnabled
-                          ? h(
-                                'button',
-                                {
-                                    type: 'button',
-                                    onClick: (
-                                        event: MouseEvent<HTMLElement>
-                                    ) => {
-                                        event.currentTarget
-                                            .closest('details')
-                                            ?.removeAttribute('open');
-                                        event.currentTarget
-                                            .closest('details')
-                                            ?.querySelector('summary')
-                                            ?.focus();
-                                        emit({ type: 'user-settings' });
+                      h(
+                          'summary',
+                          { 'aria-label': labels.userMenu },
+                          userLabel
+                      ),
+                      h(
+                          'div',
+                          null,
+                          user.settingsEnabled
+                              ? h(
+                                    'button',
+                                    {
+                                        type: 'button',
+                                        onClick: (
+                                            event: MouseEvent<HTMLElement>
+                                        ) => {
+                                            event.currentTarget
+                                                .closest('details')
+                                                ?.removeAttribute('open');
+                                            event.currentTarget
+                                                .closest('details')
+                                                ?.querySelector('summary')
+                                                ?.focus();
+                                            emit({ type: 'user-settings' });
+                                        },
                                     },
-                                },
-                                labels.settings
-                            )
-                          : null,
-                      user.logoutEnabled
-                          ? h(
-                                'button',
-                                {
-                                    type: 'button',
-                                    onClick: (
-                                        event: MouseEvent<HTMLElement>
-                                    ) => {
-                                        event.currentTarget
-                                            .closest('details')
-                                            ?.removeAttribute('open');
-                                        event.currentTarget
-                                            .closest('details')
-                                            ?.querySelector('summary')
-                                            ?.focus();
-                                        setLogout(true);
+                                    labels.settings
+                                )
+                              : null,
+                          user.logoutEnabled
+                              ? h(
+                                    'button',
+                                    {
+                                        type: 'button',
+                                        onClick: (
+                                            event: MouseEvent<HTMLElement>
+                                        ) => {
+                                            event.currentTarget
+                                                .closest('details')
+                                                ?.removeAttribute('open');
+                                            event.currentTarget
+                                                .closest('details')
+                                                ?.querySelector('summary')
+                                                ?.focus();
+                                            beginLogout();
+                                        },
                                     },
-                                },
-                                labels.logout
-                            )
-                          : null
+                                    labels.logout
+                                )
+                              : null
+                      )
                   )
-              )
-            : null
+                : null)
     );
     const welcome = snapshot.welcome;
     return h(
         'div',
         {
+            ref: container,
+            style: controlledSidebar
+                ? ({
+                      '--mx-portal-sidebar-width': `${sidebarWidth}px`,
+                  } as CSSProperties)
+                : undefined,
             className: [
                 'mx-sdk-portal-shell',
                 `mx-sdk-portal-shell--${snapshot.header.layout}`,
                 snapshot.header.hidden ? 'mx-sdk-portal-shell--hidden' : '',
+                controlledSidebar ? 'mx-sdk-portal-shell--resizable' : '',
+                layoutActions ? 'mx-sdk-portal-shell--layout-actions' : '',
                 props.className,
             ]
                 .filter(Boolean)
@@ -616,15 +826,11 @@ function Shell(props: CompletePortalShellProps) {
                                     { className: 'mx-sdk-portal-title' },
                                     snapshot.header.title
                                 ),
-                          snapshot.header.descriptionHtml
-                              ? h(CompleteQuillHTMLRenderer, {
-                                    html: snapshot.header.descriptionHtml,
-                                })
-                              : null
+                          descriptionInNavigation ? null : description
                       )
                   )
                 : null,
-            !snapshot.hideMenuItems && items.length > 0
+            showNavigation
                 ? h(
                       'button',
                       {
@@ -638,9 +844,9 @@ function Shell(props: CompletePortalShellProps) {
                       open ? labels.closeNavigation : labels.openNavigation
                   )
                 : null,
-            actions
+            actionsInNavigation ? null : actions
         ),
-        !snapshot.hideMenuItems && items.length > 0
+        showNavigation
             ? h(
                   'div',
                   {
@@ -671,13 +877,36 @@ function Shell(props: CompletePortalShellProps) {
                                 labels.closeNavigation
                             )
                           : null,
-                      h('nav', { 'aria-label': labels.navigation }, menu(items))
+                      h(
+                          'nav',
+                          { 'aria-label': labels.navigation },
+                          snapshot.hideMenuItems ? null : menu(items),
+                          descriptionInNavigation && !snapshot.header.hidden
+                              ? description
+                              : null
+                      ),
+                      actionsInNavigation ? actions : null
                   )
               )
+            : null,
+        controlledSidebar && !mobile && props.onSidebarWidthCommit
+            ? h(PortalSidebarResize, {
+                  scope: snapshot.scope,
+                  revision: snapshot.revision,
+                  width: sidebarWidth,
+                  label: labels.resizeSidebar,
+                  onCommit: props.onSidebarWidthCommit,
+                  onPreview: (width) =>
+                      container.current?.style.setProperty(
+                          '--mx-portal-sidebar-width',
+                          `${width}px`
+                      ),
+              })
             : null,
         h(
             'main',
             {
+                key: 'host-content',
                 ref: main,
                 id: mainId,
                 tabIndex: -1,
@@ -725,23 +954,20 @@ function Shell(props: CompletePortalShellProps) {
         logout && user?.logoutEnabled
             ? h(Dialog, {
                   title: labels.confirmLogout,
-                  onClose: () => setLogout(false),
+                  onClose: closeLogout,
                   children: h(
                       'div',
                       { className: 'mx-sdk-portal-dialog-actions' },
                       h(
                           'button',
-                          { type: 'button', onClick: () => setLogout(false) },
+                          { type: 'button', onClick: closeLogout },
                           labels.cancel
                       ),
                       h(
                           'button',
                           {
                               type: 'button',
-                              onClick: () => {
-                                  setLogout(false);
-                                  emit({ type: 'logout' });
-                              },
+                              onClick: confirmLogout,
                           },
                           labels.logout
                       )

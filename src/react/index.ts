@@ -90,6 +90,25 @@ export {
     type RecoverableImageProps,
 } from './RecoverableImage.js';
 export {
+    ImageAnnotationField,
+    CompleteImageAnnotationField,
+    type ImageAnnotationFieldProps,
+    type ImageAnnotationFieldLabels,
+    type ImageAnnotationRequest,
+} from './CompleteImageAnnotationField.js';
+export type {
+    ImageAnnotationOwner,
+    ImageAnnotationStorage,
+    ImageAnnotationAppend,
+    ImageAnnotationSource,
+    ImageAnnotationFailure,
+    AnnotatedImage,
+} from './imageAnnotationSession.js';
+export type {
+    ImageAnnotationTool,
+    ImageAnnotationEditorLabels,
+} from './imageAnnotationMarkerDriver.js';
+export {
     NativeRichTextEditor,
     type NativeRichTextEditorHandle,
     type NativeRichTextEditorRenderProps,
@@ -3181,6 +3200,7 @@ export type {
     CompletePortalShellProps,
     PortalShellSnapshot,
     PortalShellLabels,
+    PortalShellSidebarWidthCommit,
 } from './CompletePortalShell.js';
 
 export {

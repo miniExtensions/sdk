@@ -1,4 +1,4 @@
-import React, { createElement as h, useState } from 'react';
+import React, { createElement as h, useLayoutEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CompletePortalShell } from '@miniextensions/sdk/react';
 import { resolvePortalShellSelection } from '@miniextensions/sdk/portals';
@@ -43,6 +43,7 @@ window.proof = {
     reads: [],
     dismissals: [],
     mounts: 0,
+    sidebarWidths: [],
 };
 function App() {
     const [snapshot, setSnapshot] = useState(() => ({
@@ -68,6 +69,31 @@ function App() {
         searchAgainEnabled: true,
     }));
     const [mount, setMount] = useState(0);
+    const [resizeEnabled, setResizeEnabled] = useState(false);
+    // Synthetic controlled-host publication for committed ownership witnesses.
+    window.fixtureSnapshot = snapshot;
+    window.publishSnapshot = setSnapshot;
+    useLayoutEffect(() => {
+        window.fixtureCommittedSnapshot = snapshot;
+        return () => {
+            if (window.fixtureCommittedSnapshot === snapshot)
+                window.fixtureCommittedSnapshot = null;
+        };
+    }, [snapshot]);
+    window.enableSidebarResize = setResizeEnabled;
+    const acceptWidth = (change) => {
+        if (
+            change.scope !== snapshot.scope ||
+            change.revision !== snapshot.revision
+        )
+            throw Error('Stale sidebar width commit');
+        window.proof.sidebarWidths.push(change);
+        setSnapshot((value) => ({
+            ...value,
+            revision: value.revision + 1,
+            header: { ...value.header, sidebarWidth: change.width },
+        }));
+    };
     const command = (intent) => {
         if (
             intent.scope !== snapshot.scope ||
@@ -109,7 +135,12 @@ function App() {
     };
     return h(
         CompletePortalShell,
-        { key: mount, snapshot, onIntent: command },
+        {
+            key: mount,
+            snapshot,
+            onIntent: command,
+            onSidebarWidthCommit: resizeEnabled ? acceptWidth : undefined,
+        },
         h(
             'article',
             null,

@@ -701,6 +701,7 @@ for (const name of [
     'complete-calendly',
     'complete-record-comments',
     'complete-verification',
+    'complete-image-annotation',
     'complete-barcode-scanner',
     'complete-portal-chart',
     'attachment-preview',

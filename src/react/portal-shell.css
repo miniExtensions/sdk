@@ -4,6 +4,7 @@
     --mx-portal-selected: #e0e7ff;
     --mx-portal-foreground: #111827;
     box-sizing: border-box;
+    position: relative;
     display: grid;
     grid-template: auto 1fr / minmax(15rem, 18rem) minmax(0, 1fr);
     min-height: 100dvh;
@@ -29,6 +30,22 @@
     padding: 0.6rem 0.75rem;
     background: var(--mx-portal-background);
     text-align: start;
+}
+.mx-sdk-portal-shell .mx-sdk-portal-sidebar-handle {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+}
+@media (min-width: 1024px) {
+    .mx-sdk-portal-shell--resizable {
+        grid-template-columns: var(--mx-portal-sidebar-width) minmax(0, 1fr);
+    }
 }
 .mx-sdk-portal-shell :is(button, a, summary):focus-visible {
     outline: 3px solid #4338ca;
@@ -263,6 +280,9 @@
     background: var(--mx-portal-background);
 }
 @media (max-width: 1023px) {
+    .mx-sdk-portal-sidebar-resize {
+        display: none;
+    }
     .mx-sdk-portal-shell {
         grid-template: auto 1fr / minmax(0, 1fr);
     }
@@ -311,5 +331,87 @@
     }
     .mx-sdk-portal-dialog {
         border: 2px solid CanvasText;
+    }
+}
+
+/* Opt-in configured layout; legacy header placement keeps its existing rules. */
+.mx-sdk-portal-user-icon {
+    display: inline-block;
+    width: 1.5rem;
+    height: 1.5rem;
+    vertical-align: middle;
+}
+.mx-sdk-portal-user--icon > summary {
+    list-style: none;
+}
+.mx-sdk-portal-user--icon > summary::-webkit-details-marker {
+    display: none;
+}
+.mx-sdk-portal-shell--layout-actions .mx-sdk-portal-navigation {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+.mx-sdk-portal-shell--layout-actions .mx-sdk-portal-navigation[hidden] {
+    display: none;
+}
+.mx-sdk-portal-shell--layout-actions .mx-sdk-portal-navigation > nav {
+    flex: 1;
+}
+.mx-sdk-portal-shell--layout-actions
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions {
+    margin-top: 1rem;
+    flex-direction: column;
+    align-items: stretch;
+}
+.mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions {
+    min-height: 12.5rem;
+    justify-content: center;
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        ) {
+        grid-template: auto auto 1fr / minmax(0, 1fr);
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        .mx-sdk-portal-toggle {
+        display: none;
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        > .mx-sdk-portal-navigation-wrap {
+        display: block;
+        position: static;
+        inset: auto;
+        grid-row: 2;
+        background: var(--mx-portal-background);
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        .mx-sdk-portal-navigation {
+        width: 100%;
+        height: auto;
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        .mx-sdk-portal-navigation
+        > nav
+        > ul {
+        flex-direction: row;
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        > .mx-sdk-portal-content {
+        grid-row: 3;
     }
 }

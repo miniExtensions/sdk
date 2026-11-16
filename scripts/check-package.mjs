@@ -27,6 +27,7 @@ import { checkCalendarReactMatrix } from './calendar-consumer-checks.mjs';
 import { checkCompleteDateReactMatrix } from './complete-date-consumer-checks.mjs';
 import { checkRecordCommentsReactMatrix } from './complete-record-comments-consumer-checks.mjs';
 import { assertDateVendor } from './date-vendor-checks.mjs';
+import { assertPortalSidebarVendor } from './portal-sidebar-vendor-checks.mjs';
 import { assertSourcePackageBuild } from './source-package-checks.mjs';
 import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
@@ -152,6 +153,7 @@ import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
 import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
+import { checkImageAnnotationReactMatrix } from './image-annotation-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -687,6 +689,9 @@ try {
                 path === 'docs/csv-export.md' ||
                 path === 'docs/kanban.md' ||
                 path === 'docs/customer-chat.md' ||
+                path === 'docs/image-annotation-markerjs2-license.txt' ||
+                path === 'examples/react-image-annotation/README.md' ||
+                path === 'examples/react-image-annotation/main.ts' ||
                 path === 'docs/complete-collaborators.md' ||
                 path === 'docs/controlled-select.md' ||
                 path === 'docs/form-completion.md' ||
@@ -708,6 +713,13 @@ try {
                 path.startsWith('dist/vendor/phone-number-input/') ||
                 [
                     'dist/vendor/date-time/index.cjs',
+                    'dist/vendor/portal-sidebar/index.js',
+                    'dist/vendor/portal-sidebar/index.d.ts',
+                    'dist/vendor/portal-sidebar/resizer.d.ts',
+                    'dist/vendor/portal-sidebar/package.json',
+                    'dist/vendor/portal-sidebar/upstream.package.json',
+                    'dist/vendor/portal-sidebar/LICENSE',
+                    'dist/vendor/portal-sidebar/UPSTREAM.json',
                     'dist/vendor/date-time/index.d.cts',
                     'dist/vendor/date-time/LICENSE.txt',
                     'dist/vendor/date-time/ONCLICKOUTSIDE-LICENSE.txt',
@@ -727,6 +739,15 @@ try {
     }
     for (const path of [
         ...documentFiles,
+        ...[
+            'index.js',
+            'index.d.ts',
+            'resizer.d.ts',
+            'package.json',
+            'upstream.package.json',
+            'LICENSE',
+            'UPSTREAM.json',
+        ].map((file) => `dist/vendor/portal-sidebar/${file}`),
         'docs/canonical-form-frame.md',
         'dist/esm/forms/canonicalFrame.js',
         'dist/esm/forms/canonicalFrame.d.ts',
@@ -749,6 +770,9 @@ try {
         'dist/esm/react/single-line-text.css',
         'dist/cjs/react/single-line-text.css',
         'docs/customer-chat.md',
+        'docs/image-annotation-markerjs2-license.txt',
+        'examples/react-image-annotation/README.md',
+        'examples/react-image-annotation/main.ts',
         'dist/esm/react/complete-date.css',
         'dist/cjs/react/complete-date.css',
         'dist/esm/react/calendar.css',
@@ -866,6 +890,8 @@ try {
         'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
+        'dist/esm/react/complete-image-annotation.css',
+        'dist/cjs/react/complete-image-annotation.css',
         'dist/esm/react/complete-readonly-text.css',
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
@@ -935,6 +961,7 @@ try {
     );
     assertModuleFormatReceipt(installedPackage);
     assertDateVendor(installedPackage, 'dist/vendor/date-time');
+    assertPortalSidebarVendor(installedPackage, 'dist/vendor/portal-sidebar');
     const installedPhone = assertPhoneVendor(
         join(installedPackage, 'dist/vendor/phone-number-input')
     );
@@ -3868,6 +3895,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(verificationMatrix.versions.length, 2);
     assert.equal(verificationMatrix.cleanup, 'completed');
+    const annotationMatrix = checkImageAnnotationReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(annotationMatrix.versions.length, 2);
+    assert.equal(annotationMatrix.cleanup, 'completed');
     const headerMatrix = checkFormHeaderReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

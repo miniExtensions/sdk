@@ -37,6 +37,236 @@ const report = {
     profiles: [],
 };
 let browser, server;
+async function configuredPresentation(browser, origin, label) {
+    const page = await browser.newPage({
+        viewport: { width: 1280, height: 900 },
+    });
+    const errors = [],
+        external = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    await page.route('**/*', (route) => {
+        if (new URL(route.request().url()).origin === origin)
+            return route.continue();
+        external.push(route.request().url());
+        return route.abort();
+    });
+    const configure = (patch) =>
+        page.evaluate((patch) => window.configure(patch), patch);
+    try {
+        await page.goto(origin);
+        await page
+            .getByRole('heading', { name: '<Customer Portal>' })
+            .waitFor();
+        await configure({
+            header: {
+                layout: 'sidebar',
+                title: 'Configured Portal',
+                actionsPlacement: 'layout',
+                descriptionHtml: Array.from(
+                    { length: 10 },
+                    (_, i) => `<p>Owned description line ${i}</p>`
+                ).join(''),
+                descriptionOptions: {
+                    placement: 'navigation',
+                    truncate: true,
+                    resetKey: 'portal',
+                },
+            },
+            user: {
+                name: 'Configured member',
+                settingsEnabled: true,
+                logoutEnabled: true,
+                presentation: 'text',
+            },
+        });
+        const footer = page.locator(
+            '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+        );
+        await footer.getByRole('button', { name: 'Search again' }).waitFor();
+        assert.equal(await page.locator('.mx-sdk-portal-actions').count(), 1);
+        await page.evaluate(() => {
+            window.configuredBody = document.querySelector('article');
+        });
+        await page.getByRole('button', { name: 'Read more' }).click();
+        await page.getByRole('button', { name: 'Show less' }).waitFor();
+        await page.setViewportSize({ width: 1023, height: 800 });
+        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await footer.getByRole('button', { name: 'Search again' }).waitFor();
+        await page.getByRole('button', { name: 'Show less' }).waitFor();
+        await page.keyboard.press('Escape');
+        await page.setViewportSize({ width: 1024, height: 800 });
+        await page.getByRole('button', { name: 'Show less' }).waitFor();
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Open navigation' })
+                .isVisible(),
+            false
+        );
+        assert.equal(
+            await page.evaluate(
+                () =>
+                    window.configuredBody === document.querySelector('article')
+            ),
+            true
+        );
+        await configure({ hideMenuItems: true });
+        await footer.getByRole('button', { name: 'Search again' }).waitFor();
+        assert.equal(
+            await page.locator('.mx-sdk-portal-menu button').count(),
+            0
+        );
+        await configure({ items: [], hideMenuItems: false });
+        await footer.getByRole('button', { name: 'Search again' }).waitFor();
+        await page.getByRole('button', { name: 'Show less' }).waitFor();
+        await page.evaluate(() =>
+            window.configure({
+                items: window.fixtureItems,
+                header: {
+                    layout: 'topbar',
+                    title: 'Configured Portal',
+                    actionsPlacement: 'layout',
+                },
+            })
+        );
+        await page.setViewportSize({ width: 640, height: 800 });
+        await page
+            .locator('.mx-sdk-portal-header > .mx-sdk-portal-actions')
+            .getByRole('button', { name: 'Search again' })
+            .waitFor();
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Open navigation' })
+                .isVisible(),
+            false
+        );
+        assert.equal(
+            await page
+                .locator('.mx-sdk-portal-navigation-wrap')
+                .evaluate((node) => getComputedStyle(node).position),
+            'static'
+        );
+        await page.setViewportSize({ width: 639, height: 800 });
+        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await footer.getByRole('button', { name: 'Search again' }).waitFor();
+        await page.keyboard.press('Escape');
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await configure({
+            user: {
+                name: 'Configured member',
+                presentation: 'text',
+                settingsEnabled: true,
+                logoutEnabled: false,
+            },
+        });
+        const direct = page.locator('.mx-sdk-portal-user-direct');
+        await direct.waitFor();
+        assert.equal(await direct.textContent(), 'Configured member');
+        await direct.click();
+        await configure({
+            user: {
+                name: 'Configured member',
+                presentation: 'text',
+                settingsEnabled: false,
+                logoutEnabled: true,
+            },
+        });
+        const directLogout = page.getByRole('button', {
+            name: 'Log out',
+            exact: true,
+        });
+        await directLogout.locator('svg').waitFor();
+        await directLogout.click();
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(
+            await page.evaluate(
+                () =>
+                    window.proof.intents.filter((i) => i.type === 'logout')
+                        .length
+            ),
+            0
+        );
+        await configure({
+            user: {
+                name: 'Configured member',
+                presentation: 'icon',
+                settingsEnabled: true,
+                logoutEnabled: true,
+            },
+        });
+        const menu = page.locator('.mx-sdk-portal-user');
+        await menu.locator('summary').click();
+        await menu
+            .getByRole('button', { name: 'Log out', exact: true })
+            .click();
+        await page.getByRole('dialog').waitFor();
+        await page.evaluate(() => {
+            window.ownerA = window.fixtureSnapshot;
+            window.publishSnapshot({
+                ...window.ownerA,
+                user: { ...window.ownerA.user, logoutEnabled: false },
+            });
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        await page.waitForFunction(
+            () => window.fixtureCommittedSnapshot !== window.ownerA
+        );
+        await page.evaluate(() => window.publishSnapshot(window.ownerA));
+        await page.waitForFunction(
+            () => window.fixtureCommittedSnapshot === window.ownerA
+        );
+        assert.equal(
+            await page.getByRole('dialog').count(),
+            0,
+            'Committed A-B-A cannot revive a confirmation'
+        );
+        await menu.locator('summary').click();
+        await menu
+            .getByRole('button', { name: 'Log out', exact: true })
+            .click();
+        await page
+            .getByRole('dialog')
+            .getByRole('button', { name: 'Log out', exact: true })
+            .click();
+        assert.equal(
+            await page.evaluate(
+                () =>
+                    window.proof.intents.filter((i) => i.type === 'logout')
+                        .length
+            ),
+            1
+        );
+        assert.equal(
+            await page.evaluate(
+                () =>
+                    window.proof.intents.filter(
+                        (i) => i.type === 'user-settings'
+                    ).length
+            ),
+            1
+        );
+        assert.deepEqual(errors, []);
+        assert.deepEqual(external, []);
+        return {
+            sidebar1023And1024: 'passed',
+            topbar639And640: 'passed',
+            emptyAndHiddenMenus: 'passed',
+            descriptionExpansion: 'passed',
+            directActions: 'passed',
+            committedLogoutRetirement: 'passed',
+            cleanup: 'completed',
+        };
+    } catch (error) {
+        await page
+            .screenshot({
+                path: join(output, `configured-${label}.png`),
+                fullPage: true,
+            })
+            .catch(() => {});
+        throw error;
+    } finally {
+        await page.close();
+    }
+}
 try {
     let archive;
     if (process.env.SDK_NATIVE_PACKAGE_DIR) {
@@ -86,6 +316,7 @@ try {
     });
     await new Promise((done) => server.listen(0, '127.0.0.1', done));
     const origin = `http://127.0.0.1:${server.address().port}`;
+    report.localhostURL = origin;
     browser = await chromium.launch({
         ...(process.env.SDK_NATIVE_CHROMIUM
             ? { executablePath: process.env.SDK_NATIVE_CHROMIUM }
@@ -264,6 +495,116 @@ try {
                         .evaluate((node) => getComputedStyle(node).fontSize),
                     '20px'
                 );
+                assert.deepEqual(await counts(), beforeHeader);
+                await page.evaluate(() => window.enableSidebarResize(true));
+                await configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: '<Customer Portal>',
+                        sidebarWidth: 384,
+                    },
+                });
+                const separator = page.getByRole('separator', {
+                    name: 'Resize sidebar',
+                });
+                await separator.waitFor();
+                const measuredSidebar = () =>
+                    page
+                        .locator('main')
+                        .evaluate((node) => node.getBoundingClientRect().left);
+                assert.equal(await measuredSidebar(), 384);
+                await page.evaluate(() => {
+                    window.resizeBody = document.querySelector('main article');
+                });
+                const drag = async (target, beforeRelease) => {
+                    const bounds = await separator.boundingBox();
+                    assert(bounds);
+                    await page.mouse.move(
+                        bounds.x + bounds.width / 2,
+                        bounds.y + 30
+                    );
+                    await page.mouse.down();
+                    await page.mouse.move(target, bounds.y + 30, { steps: 4 });
+                    if (beforeRelease) await beforeRelease();
+                    await page.mouse.up();
+                    await page.waitForTimeout(50);
+                };
+                await drag(484, async () => {
+                    assert.equal(await measuredSidebar(), 484);
+                    assert.equal(
+                        await page.evaluate(
+                            () => window.proof.sidebarWidths.length
+                        ),
+                        0
+                    );
+                });
+                assert.equal(await measuredSidebar(), 484);
+                await drag(1300);
+                assert.equal(await measuredSidebar(), 600);
+                await drag(0);
+                assert.equal(await measuredSidebar(), 120);
+                await separator.focus();
+                await page.keyboard.press('Home');
+                await page.keyboard.press('End');
+                await page.keyboard.press('ArrowLeft');
+                assert.equal(await measuredSidebar(), 590);
+                assert.equal(
+                    await page.evaluate(
+                        () => window.proof.sidebarWidths.length
+                    ),
+                    6
+                );
+                assert.equal(
+                    await page.evaluate(
+                        () =>
+                            window.resizeBody ===
+                            document.querySelector('main article')
+                    ),
+                    true
+                );
+                await drag(500, async () => {
+                    await configure({
+                        header: {
+                            layout: 'sidebar',
+                            title: '<Customer Portal>',
+                            sidebarWidth: 300,
+                        },
+                    });
+                });
+                assert.equal(await measuredSidebar(), 300);
+                assert.equal(
+                    await page.evaluate(
+                        () => window.proof.sidebarWidths.length
+                    ),
+                    6,
+                    'New revision retires an allocated drag'
+                );
+                await drag(400, async () => {
+                    await page.evaluate(() =>
+                        window.enableSidebarResize(false)
+                    );
+                    await page.waitForTimeout(50);
+                    assert.equal(await measuredSidebar(), 300);
+                });
+                assert.equal(
+                    await page.evaluate(
+                        () => window.proof.sidebarWidths.length
+                    ),
+                    6
+                );
+                await page.setViewportSize({ width: 390, height: 844 });
+                await page.evaluate(() => window.enableSidebarResize(true));
+                await page.waitForTimeout(50);
+                assert.equal(await separator.count(), 0);
+                await page.setViewportSize({ width: 1440, height: 1000 });
+                await page.evaluate(() => window.enableSidebarResize(false));
+                await configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: '<Customer Portal>',
+                        descriptionHtml: '<p>Owned SDK shell</p>',
+                    },
+                });
                 assert.deepEqual(await counts(), beforeHeader);
                 await summary('Orders').click();
                 await button('Done orders').hover();
@@ -570,6 +911,12 @@ try {
                     errors,
                     externalDestinations: external.length,
                     desktopMobileKeyboardAndForcedColors: 'passed',
+                    sidebarEndOnlyBoundsRetirementAndBodyIdentity: 'passed',
+                    configuredPresentation: await configuredPresentation(
+                        browser,
+                        origin,
+                        `${react}-${format}`
+                    ),
                 });
             } catch (error) {
                 await page.screenshot({

@@ -1,5 +1,764 @@
 import assert from 'node:assert/strict';
 
+/** Configured native presentation through the public component and real intent boundary. */
+export async function assertPortalShellPresentationConsumer({
+    React,
+    ui,
+    Window,
+    createRoot,
+    renderToString,
+}) {
+    const h = React.createElement;
+    let snapshot = {
+        scope: 'configured:member',
+        revision: 1,
+        items: [{ type: 'table', id: 'records', label: 'Records' }],
+        selection: { type: 'table', itemId: 'records', viewId: null },
+        header: { layout: 'sidebar', title: 'Portal' },
+        user: { name: 'Member', settingsEnabled: true, logoutEnabled: true },
+        searchAgainEnabled: true,
+    };
+    const intents = [];
+    let synchronousPublication = false,
+        synchronousPublications = 0;
+    const firstCallback = (intent) => {
+        intents.push({ callback: 'first', ...intent });
+        if (synchronousPublication && intent.type === 'logout') {
+            synchronousPublications++;
+            snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+            root.render(element());
+        }
+    };
+    const secondCallback = (intent) =>
+        intents.push({ callback: 'second', ...intent });
+    let onIntent = firstCallback;
+    const element = () =>
+        h(
+            React.StrictMode,
+            null,
+            h(
+                ui.CompletePortalShell,
+                {
+                    snapshot,
+                    onIntent,
+                    labels: {
+                        readMore: 'More details',
+                        showLess: 'Fewer details',
+                    },
+                },
+                h('input', {
+                    'aria-label': 'Host draft',
+                    defaultValue: 'initial',
+                })
+            )
+        );
+    const legacy = renderToString(element());
+    assert.match(legacy, /<summary[^>]*>Member<\/summary>/);
+    assert.doesNotMatch(legacy, /mx-sdk-portal-shell--layout-actions/);
+    assert.deepEqual(intents, [], 'SSR never allocates host effects');
+    let networks = 0;
+    const window = new Window({
+        url: 'https://configured.invalid/',
+        settings: {
+            disableIframePageLoading: true,
+            fetch: {
+                interceptor: {
+                    beforeAsyncRequest() {
+                        networks++;
+                        throw Error('Unexpected provider request');
+                    },
+                    beforeSyncRequest() {
+                        networks++;
+                        throw Error('Unexpected provider request');
+                    },
+                },
+            },
+        },
+    });
+    window.happyDOM.setWindowSize({ width: 1280, height: 900 });
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ];
+    const originals = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    for (const key of keys)
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
+        });
+    const container = window.document.createElement('form');
+    let submits = 0;
+    container.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submits++;
+    });
+    window.document.body.append(container);
+    let root = createRoot(container);
+    const siblingContainer = window.document.createElement('div');
+    window.document.body.append(siblingContainer);
+    const siblingRoot = createRoot(siblingContainer),
+        siblingIntents = [];
+    const siblingSnapshot = { ...snapshot, scope: 'configured:sibling' };
+    const siblingIntent = (intent) => siblingIntents.push(intent);
+    const render = () => React.act(async () => root.render(element()));
+    const click = (node) =>
+        React.act(async () => {
+            assert(node);
+            node.click();
+        });
+    const dialog = () => container.querySelector('[role="dialog"]');
+    const namedButton = (parent, text) =>
+        [...parent.querySelectorAll('button')].find(
+            (n) => n.textContent === text
+        );
+    const openLogout = async () => {
+        const details = container.querySelector('.mx-sdk-portal-user');
+        if (details) {
+            await click(details.querySelector('summary'));
+            await click(namedButton(details, 'Log out'));
+        } else await click(container.querySelector('[aria-label="Log out"]'));
+        assert(dialog(), 'A fresh current opener must work');
+        return namedButton(dialog(), 'Log out');
+    };
+    let availabilityCases = 0,
+        authorityRetirements = 0;
+    try {
+        await render();
+        await React.act(async () =>
+            siblingRoot.render(
+                h(
+                    React.StrictMode,
+                    null,
+                    h(ui.CompletePortalShell, {
+                        snapshot: siblingSnapshot,
+                        onIntent: siblingIntent,
+                    })
+                )
+            )
+        );
+        const siblingDetails = siblingContainer.querySelector(
+            '.mx-sdk-portal-user'
+        );
+        await click(siblingDetails.querySelector('summary'));
+        await click(namedButton(siblingDetails, 'Log out'));
+        const siblingDialog = siblingContainer.querySelector('[role="dialog"]');
+        assert(siblingDialog);
+        let body = container.querySelector('input');
+        body.value = 'legitimate draft';
+        const configuredHeader = {
+            ...snapshot.header,
+            actionsPlacement: 'layout',
+        };
+        for (const presentation of ['icon', 'text']) {
+            for (const [settingsEnabled, logoutEnabled] of [
+                [true, false],
+                [false, true],
+                [true, true],
+                [false, false],
+            ]) {
+                snapshot = {
+                    ...snapshot,
+                    header: configuredHeader,
+                    user: {
+                        name: '',
+                        presentation,
+                        settingsEnabled,
+                        logoutEnabled,
+                    },
+                };
+                await render();
+                const footer = container.querySelector(
+                    '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+                );
+                assert(
+                    footer,
+                    'The whole configured action group belongs in the sidebar footer'
+                );
+                assert.equal(
+                    container.querySelectorAll('.mx-sdk-portal-actions').length,
+                    1
+                );
+                assert.equal(
+                    Boolean(footer.querySelector('details')),
+                    settingsEnabled && logoutEnabled
+                );
+                const direct = footer.querySelector(
+                    '.mx-sdk-portal-user-direct'
+                );
+                assert.equal(
+                    Boolean(direct),
+                    settingsEnabled !== logoutEnabled
+                );
+                if (direct && logoutEnabled)
+                    assert(
+                        direct.querySelector('svg'),
+                        'Logout-only remains an icon in text mode'
+                    );
+                if (direct && settingsEnabled && presentation === 'text')
+                    assert.equal(
+                        direct.textContent,
+                        '',
+                        'Empty field-derived labels stay blank'
+                    );
+                availabilityCases++;
+            }
+        }
+        snapshot = {
+            ...snapshot,
+            hideMenuItems: true,
+            header: configuredHeader,
+        };
+        await render();
+        assert(
+            container.querySelector(
+                '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+            )
+        );
+        assert.equal(
+            container.querySelectorAll('.mx-sdk-portal-menu button').length,
+            0,
+            'Hidden rows do not swallow utility actions'
+        );
+        assert.equal(container.querySelector('input'), body);
+        assert.equal(body.value, 'legitimate draft');
+        snapshot = {
+            ...snapshot,
+            items: [],
+            hideMenuItems: false,
+            header: {
+                ...configuredHeader,
+                descriptionHtml: '<p>Owned description</p>',
+                descriptionOptions: {
+                    placement: 'navigation',
+                    truncate: true,
+                    resetKey: 'portal',
+                },
+            },
+        };
+        await render();
+        assert(
+            container.querySelector('nav .mx-sdk-description__toggle'),
+            'Empty menus retain the configured description'
+        );
+        await click(namedButton(container, 'More details'));
+        assert(namedButton(container, 'Fewer details'));
+        snapshot = { ...snapshot, revision: 2 };
+        await render();
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 1023, height: 800 })
+        );
+        assert(
+            namedButton(container, 'Fewer details'),
+            'Resize/revision does not reset description expansion'
+        );
+        snapshot = {
+            ...snapshot,
+            header: {
+                ...snapshot.header,
+                descriptionOptions: {
+                    ...snapshot.header.descriptionOptions,
+                    resetKey: 'next',
+                },
+            },
+        };
+        await render();
+        assert(
+            namedButton(container, 'More details'),
+            'Explicit content identity resets disclosure'
+        );
+        // Navigation placement is independent from both menu rows and footer options.
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, actionsPlacement: 'header' },
+        };
+        await render();
+        assert(container.querySelector('nav .mx-sdk-description__toggle'));
+        snapshot = {
+            ...snapshot,
+            items: [{ type: 'table', id: 'records', label: 'Records' }],
+            header: {
+                layout: 'topbar',
+                title: 'Portal',
+                actionsPlacement: 'layout',
+            },
+            user: {
+                name: 'Member',
+                settingsEnabled: true,
+                logoutEnabled: true,
+                presentation: 'text',
+            },
+        };
+        await render();
+        // Empty selection legitimately replaced the host body. From this
+        // restored selection onward, presentation/authority changes must not.
+        body = container.querySelector('input');
+        body.value = 'legitimate draft';
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 639, height: 800 })
+        );
+        assert(
+            container.querySelector(
+                '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+            )
+        );
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 640, height: 800 })
+        );
+        assert(
+            container.querySelector(
+                '.mx-sdk-portal-header > .mx-sdk-portal-actions'
+            )
+        );
+        assert.equal(
+            container
+                .querySelector('.mx-sdk-portal-navigation')
+                .hasAttribute('hidden'),
+            false
+        );
+        // The boolean baseline revives a confirmation after these committed A-B-A transitions.
+        const ownerA = snapshot;
+        let obsolete = await openLogout();
+        snapshot = {
+            ...ownerA,
+            user: { ...ownerA.user, logoutEnabled: false },
+        };
+        await render();
+        assert.equal(dialog(), null);
+        snapshot = ownerA;
+        await render();
+        assert.equal(dialog(), null);
+        await click(obsolete);
+        assert.equal(intents.length, 0);
+        authorityRetirements++;
+        obsolete = await openLogout();
+        onIntent = secondCallback;
+        await render();
+        assert.equal(dialog(), null);
+        onIntent = firstCallback;
+        await render();
+        assert.equal(dialog(), null);
+        await click(obsolete);
+        assert.equal(intents.length, 0);
+        authorityRetirements++;
+        // Same current owner survives internal renders and can confirm exactly once.
+        const confirm = await openLogout();
+        synchronousPublication = true;
+        await React.act(async () => {
+            confirm.click();
+            confirm.click();
+        });
+        synchronousPublication = false;
+        assert.equal(intents.filter((i) => i.type === 'logout').length, 1);
+        assert.equal(intents[0].callback, 'first');
+        assert.equal(synchronousPublications, 1);
+        snapshot = { ...ownerA, revision: 3 };
+        onIntent = secondCallback;
+        await render();
+        await click(await openLogout());
+        assert.equal(intents.filter((i) => i.type === 'logout').length, 2);
+        assert.equal(intents[1].callback, 'second');
+        assert.equal(container.querySelector('input'), body);
+        assert.equal(body.value, 'legitimate draft');
+        assert.equal(
+            siblingContainer.querySelector('[role="dialog"]'),
+            siblingDialog
+        );
+        await click(namedButton(siblingDialog, 'Log out'));
+        assert.deepEqual(siblingIntents, [
+            { type: 'logout', scope: 'configured:sibling', revision: 1 },
+        ]);
+        snapshot = { ...snapshot, revision: 4 };
+        await render();
+        obsolete = await openLogout();
+        await React.act(async () => root.unmount());
+        root = null;
+        await click(obsolete);
+        authorityRetirements++;
+        assert.equal(intents.length, 2);
+        assert.equal(submits, 0);
+        assert.equal(networks, 0);
+        return {
+            availabilityCases,
+            authorityRetirements,
+            logoutIntents: 2,
+            submitEvents: submits,
+            bodyRemountsWhileSelected: 0,
+            implicitNetworkRequests: networks,
+            synchronousPublications,
+            siblingLogoutIntents: siblingIntents.length,
+        };
+    } finally {
+        if (root) await React.act(async () => root.unmount());
+        await React.act(async () => siblingRoot.unmount());
+        keys.forEach((key, index) => {
+            if (originals[index])
+                Object.defineProperty(globalThis, key, originals[index]);
+            else Reflect.deleteProperty(globalThis, key);
+        });
+        await window.happyDOM.close();
+    }
+}
+
+/** Exercise the stock resize engine, never a replacement drag implementation. */
+export async function assertPortalShellSidebarConsumer({
+    React,
+    ui,
+    Window,
+    createRoot,
+    renderToString,
+}) {
+    const h = React.createElement;
+    let snapshot = {
+        scope: 'sidebar:user',
+        revision: 1,
+        items: [{ type: 'table', id: 'orders', label: 'Orders' }],
+        selection: { type: 'table', itemId: 'orders', viewId: null },
+        header: { layout: 'sidebar', title: 'Portal', sidebarWidth: 384 },
+    };
+    const changes = [],
+        intents = [];
+    let onSidebarWidthCommit = (change) => changes.push(change);
+    const onIntent = (intent) => intents.push(intent);
+    let bodyMounts = 0,
+        bodyUnmounts = 0;
+    function Body() {
+        React.useEffect(() => {
+            bodyMounts++;
+            return () => bodyUnmounts++;
+        }, []);
+        return h('button', { type: 'button' }, 'Host record');
+    }
+    const element = () =>
+        h(
+            React.StrictMode,
+            null,
+            h(
+                ui.CompletePortalShell,
+                { snapshot, onIntent, onSidebarWidthCommit },
+                h(Body)
+            )
+        );
+    const ssr = renderToString(element());
+    assert.match(ssr, /--mx-portal-sidebar-width:384px/);
+    assert.doesNotMatch(
+        ssr,
+        /role="separator"/,
+        'SSR keeps canonical width without loading a DOM resize engine'
+    );
+    const renderWidth = (sidebarWidth, extra = {}) =>
+        renderToString(
+            h(ui.CompletePortalShell, {
+                snapshot: {
+                    ...snapshot,
+                    header: { ...snapshot.header, sidebarWidth },
+                },
+                onIntent,
+                ...extra,
+            })
+        );
+    assert.doesNotMatch(
+        renderWidth(undefined),
+        /role="separator"|--mx-portal-sidebar-width/
+    );
+    assert.match(
+        renderWidth(undefined, { onSidebarWidthCommit }),
+        /--mx-portal-sidebar-width:288px/
+    );
+    for (const [input, expected] of [
+        [0, 120],
+        [900, 600],
+        [NaN, 288],
+        [Infinity, 288],
+    ]) {
+        assert.match(
+            renderWidth(input),
+            new RegExp(`--mx-portal-sidebar-width:${expected}px`)
+        );
+    }
+    assert.deepEqual(changes, []);
+    assert.deepEqual(intents, []);
+    const window = new Window({ url: 'https://consumer.invalid/portal' });
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ];
+    const originals = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    keys.forEach((key) =>
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
+        })
+    );
+    const container = window.document.createElement('div');
+    window.document.body.append(container);
+    const root = createRoot(container);
+    let mounted = true;
+    const render = () => React.act(async () => root.render(element()));
+    const handle = () => container.querySelector('[role="separator"]');
+    const width = () =>
+        container
+            .querySelector('.mx-sdk-portal-shell')
+            .style.getPropertyValue('--mx-portal-sidebar-width');
+    const mouse = (node, type, x) =>
+        React.act(async () =>
+            node.dispatchEvent(
+                new window.MouseEvent(type, {
+                    clientX: x,
+                    clientY: 30,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+    const start = async () => {
+        const box = container.querySelector('.mx-sdk-portal-sidebar-resize');
+        assert(box);
+        assert(handle());
+        // happy-dom has no physical layout. Read only this engine's own written width;
+        // the installed Chromium checks separately cover actual pixel geometry.
+        Object.defineProperty(box, 'offsetWidth', {
+            configurable: true,
+            get: () => parseFloat(box.style.width) || 0,
+        });
+        Object.defineProperty(box, 'offsetHeight', {
+            configurable: true,
+            get: () => 240,
+        });
+        await mouse(handle(), 'mousedown', 384);
+    };
+    const key = (value) =>
+        React.act(async () =>
+            handle().dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: value,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+    try {
+        await render();
+        assert.equal(handle().getAttribute('aria-valuenow'), '384');
+        assert.equal(handle().getAttribute('aria-valuemin'), '120');
+        assert.equal(handle().getAttribute('aria-valuemax'), '600');
+        assert.equal(handle().getAttribute('type'), 'button');
+        const body = container.querySelector('main button'),
+            mounts = bodyMounts,
+            unmounts = bodyUnmounts;
+        await start();
+        await mouse(window, 'mousemove', 484);
+        assert.equal(width(), '484px');
+        assert.deepEqual(changes, []);
+        await mouse(window, 'mouseup', 484);
+        assert.deepEqual(changes, [
+            { scope: snapshot.scope, revision: 1, width: 484 },
+        ]);
+        assert.equal(
+            width(),
+            '384px',
+            'Unaccepted preview must return to the canonical host width'
+        );
+        for (const [x, expected] of [
+            [1800, 600],
+            [-500, 120],
+        ]) {
+            await start();
+            await mouse(window, 'mousemove', x);
+            await mouse(window, 'mouseup', x);
+            assert.equal(changes.at(-1).width, expected);
+        }
+        await key('ArrowRight');
+        assert.equal(changes.at(-1).width, 394);
+        await key('ArrowLeft');
+        assert.equal(changes.at(-1).width, 374);
+        await key('Home');
+        assert.equal(changes.at(-1).width, 120);
+        await key('End');
+        assert.equal(changes.at(-1).width, 600);
+        const beforeOtherKey = changes.length;
+        await key('Enter');
+        assert.equal(changes.length, beforeOtherKey);
+        assert.equal(container.querySelector('main button'), body);
+        assert.equal(bodyMounts, mounts);
+        assert.equal(bodyUnmounts, unmounts);
+        const count = changes.length;
+        await start();
+        await mouse(window, 'mousemove', 484);
+        snapshot = { ...snapshot, revision: 2 };
+        await render();
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            count,
+            'A new accepted revision retires an old drag'
+        );
+        assert.equal(width(), '384px');
+        await start();
+        const firstCallback = onSidebarWidthCommit;
+        onSidebarWidthCommit = () => {
+            throw Error('Replacement must not inherit an allocated drag');
+        };
+        await render();
+        onSidebarWidthCommit = firstCallback;
+        await render();
+        await mouse(window, 'mousemove', 484);
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            count,
+            'Callback A-B-A never revives the old gesture'
+        );
+        await start();
+        await mouse(window, 'mousemove', 484);
+        onSidebarWidthCommit = undefined;
+        await render();
+        assert.equal(handle(), null);
+        assert.equal(
+            width(),
+            '384px',
+            'Withdrawing the resize callback restores canonical presentation'
+        );
+        onSidebarWidthCommit = firstCallback;
+        await render();
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            count,
+            'Disable/re-enable does not allocate the old drag to a new control'
+        );
+        await start();
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 500, height: 800 })
+        );
+        assert.equal(
+            handle(),
+            null,
+            'Mobile drawer has no desktop resize control'
+        );
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 1280, height: 800 })
+        );
+        await mouse(window, 'mouseup', 484);
+        assert.equal(changes.length, count);
+        await start();
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, hidden: true },
+        };
+        await render();
+        assert.equal(handle(), null);
+        await mouse(window, 'mouseup', 484);
+        assert.equal(changes.length, count);
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, hidden: false, layout: 'topbar' },
+        };
+        await render();
+        assert.equal(handle(), null);
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, layout: 'sidebar' },
+        };
+        await render();
+        await start();
+        await mouse(window, 'mousemove', 434);
+        await mouse(window, 'mouseup', 434);
+        assert.equal(
+            changes.length,
+            count + 1,
+            'The unchanged current owner can still complete a new drag'
+        );
+        assert.equal(changes.at(-1).width, 434);
+        onSidebarWidthCommit = (change) => {
+            assert.equal(change.scope, snapshot.scope);
+            assert.equal(change.revision, snapshot.revision);
+            changes.push(change);
+            snapshot = {
+                ...snapshot,
+                revision: snapshot.revision + 1,
+                header: { ...snapshot.header, sidebarWidth: change.width },
+            };
+            root.render(element());
+        };
+        await render();
+        handle().focus();
+        for (const [action, expected] of [
+            ['ArrowRight', 394],
+            ['End', 600],
+            ['ArrowLeft', 590],
+        ]) {
+            const focused = window.document.activeElement;
+            await React.act(async () =>
+                focused.dispatchEvent(
+                    new window.KeyboardEvent('keydown', {
+                        key: action,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.equal(changes.at(-1).width, expected);
+            assert.equal(
+                window.document.activeElement === handle(),
+                true,
+                'Accepted keyboard width keeps focus for the next key'
+            );
+        }
+        assert.equal(
+            changes.length,
+            count + 4,
+            'Each accepted keyboard action commits exactly once'
+        );
+        onSidebarWidthCommit = firstCallback;
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, sidebarWidth: 384 },
+        };
+        await render();
+        const completed = changes.length;
+        await start();
+        await mouse(window, 'mousemove', 484);
+        await React.act(async () => root.unmount());
+        mounted = false;
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            completed,
+            'Unmount does not settle an unfinished gesture'
+        );
+        assert.deepEqual(
+            intents,
+            [],
+            'Resizing never navigates, logs out or reads records'
+        );
+        assert.equal(window.localStorage.length, 0);
+        assert.equal(window.sessionStorage.length, 0);
+        return {
+            endOnlyCommits: completed,
+            staleCommits: 0,
+            bodyRemountsDuringResize: 0,
+        };
+    } finally {
+        if (mounted) await React.act(async () => root.unmount());
+        keys.forEach((key, index) => {
+            if (originals[index])
+                Object.defineProperty(globalThis, key, originals[index]);
+            else Reflect.deleteProperty(globalThis, key);
+        });
+        await window.happyDOM.close();
+    }
+}
+
 export async function assertPortalShellConsumer({
     React,
     ui,

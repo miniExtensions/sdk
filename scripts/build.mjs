@@ -1,6 +1,7 @@
 import { bundleKanban } from './kanban-bundle.mjs';
 import { build as bundle } from 'esbuild';
 import { assertDateVendor } from './date-vendor-checks.mjs';
+import { assertPortalSidebarVendor } from './portal-sidebar-vendor-checks.mjs';
 import { copyDocumentAssets } from './document-preview-assets.mjs';
 import { bundleDocumentPDF } from './document-pdf-bundle.mjs';
 import { bundleDatePopover } from './date-popover-vendor.mjs';
@@ -58,6 +59,7 @@ const compiler = require.resolve('typescript/bin/tsc');
 assertRichTextVendor();
 assertPhoneVendor();
 assertDateVendor();
+assertPortalSidebarVendor();
 
 for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
     rmSync(directory, { recursive: true, force: true });
@@ -70,6 +72,9 @@ cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
     filter: richTextRuntimeFilter,
 });
 cpSync('vendor/date-time', 'dist/vendor/date-time', { recursive: true });
+cpSync('vendor/portal-sidebar', 'dist/vendor/portal-sidebar', {
+    recursive: true,
+});
 copyDocumentAssets();
 cpSync('vendor/headlessui-address', 'dist/vendor/headlessui-address', {
     recursive: true,
@@ -361,6 +366,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-calendly',
         'complete-record-comments',
         'complete-verification',
+        'complete-image-annotation',
         'complete-barcode-scanner',
         'barcode',
         'complete-portal-chart',

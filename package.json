@@ -223,6 +223,7 @@
         "docs/count.md",
         "docs/formula.md",
         "docs/rating.md",
+        "docs/form-captcha.md",
         "docs/portals.md",
         "docs/native-portal-kernel.md",
         "docs/native-portal-differential.md",

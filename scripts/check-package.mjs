@@ -659,6 +659,7 @@ try {
                 path === 'docs/count.md' ||
                 path === 'docs/formula.md' ||
                 path === 'docs/rating.md' ||
+                path === 'docs/form-captcha.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||
@@ -770,6 +771,13 @@ try {
         'dist/esm/react/rating.css',
         'dist/cjs/react/rating.css',
         'docs/rating.md',
+        'docs/form-captcha.md',
+        'dist/esm/react/form-captcha.css',
+        'dist/cjs/react/form-captcha.css',
+        'dist/esm/react/FormCaptcha.js',
+        'dist/cjs/react/FormCaptcha.js',
+        'dist/esm/ui/recaptchaV2Provider.js',
+        'dist/cjs/ui/recaptchaV2Provider.js',
         'dist/esm/react/localized-numeric.css',
         'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/complete-duration.css',

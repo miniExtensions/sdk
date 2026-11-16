@@ -1,6 +1,6 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "26e46b8ae5ecaeab0f34beb282ebfef393a5cd22",
+    "sourceRevision": "6a98b7a680cfdff7f5f2d5ca552a9c1110662ccc",
     "compilerVersion": "5.9.3",
     "generatorSha256": "0a431dd8f1074548754f39ff592044f965357f241bb7c6823b667e88c9e132d1",
     "contractFamily": "postgres",
@@ -141,5 +141,5 @@
         }
     ],
     "declarationCount": 97,
-    "generatedSha256": "fda1fad36eb86dd129428444c5611685471d9c3240f4b146e144b54fdd4a3397"
+    "generatedSha256": "962c49fc3457c3340c93082cf9920fb91c496dbc38cdf393c54ce16fa531bab2"
 }

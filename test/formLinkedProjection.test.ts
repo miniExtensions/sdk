@@ -482,6 +482,154 @@ describe('portable linked/two-source Form projection contract', () => {
     });
 });
 
+describe('lossless linked projection snapshot admission', () => {
+    const refused = (input: CreateLinkedFormRecordProjectionInput) => {
+        assert.deepEqual(createLinkedFormRecordProjection(input), {
+            type: 'blocked',
+            code: 'invalid-snapshot',
+            diagnostics: [{ code: 'invalid-snapshot' }],
+        });
+    };
+
+    it('refuses a non-enumerable native name override instead of returning a different available projection', () => {
+        const input = structuredClone(defaults());
+        Reflect.set(input.airtableFields[0], 'name', 'Native driver');
+        Reflect.set(input.formFields[0].airtableField, 'name', 'Native driver');
+        Reflect.set(input.formRecord.data, 'driver', 'no');
+        Object.defineProperty(input.formRecord.data, 'Native driver', {
+            value: 'yes',
+            enumerable: false,
+        });
+        assert.equal(input.formRecord.data.driver, 'no');
+        assert.equal(input.formRecord.data['Native driver'], 'yes');
+        refused(input);
+        assert.equal(
+            Object.getOwnPropertyDescriptor(
+                input.formRecord.data,
+                'Native driver'
+            )?.enumerable,
+            false
+        );
+    });
+
+    it('refuses a non-enumerable active pair value before capture could make it inert', () => {
+        const input = structuredClone(defaults());
+        const pair =
+            input.conditionalLinkedRecordFieldIdsToFilteringValues.links?.first;
+        assert.ok(pair);
+        Reflect.set(pair, 'recordId', 'missing');
+        Object.defineProperty(pair, 'stringValue', {
+            value: 'One',
+            enumerable: false,
+        });
+        refused(input);
+        assert.equal(pair.stringValue, 'One');
+    });
+
+    it('refuses a non-enumerable cached row before selected IDs could silently disappear', () => {
+        const input = structuredClone(defaults());
+        const state = input.linkedTableLoadingStates.tbl_links;
+        if (state?.type !== 'loaded') assert.fail('Expected loaded fixture');
+        const records = state.data.state.recordIdsToAirtableRecords;
+        Object.defineProperty(records, 'rec_b', {
+            value: records.rec_b,
+            enumerable: false,
+        });
+        refused(input);
+        refused({
+            ...input,
+            interpreterOptions: {
+                resolveFieldReference: () => ({
+                    nativeValue: 'yes',
+                    toPrimitive: () => 'yes',
+                }),
+            },
+        });
+        assert.equal(records.rec_b?.id, 'rec_b');
+    });
+
+    it('refuses input/data accessors without consuming them', () => {
+        for (const key of ['compatibility', 'data'] as const) {
+            const input = structuredClone(defaults());
+            let reads = 0;
+            Object.defineProperty(
+                key === 'data' ? input.formRecord : input,
+                key,
+                {
+                    enumerable: true,
+                    get: () => {
+                        reads++;
+                        throw new Error('Accessor must remain unconsumed');
+                    },
+                }
+            );
+            refused(input);
+            assert.equal(reads, 0);
+        }
+    });
+
+    it('refuses custom/null prototypes while keeping caller objects intact', () => {
+        for (const target of ['record', 'array'] as const) {
+            const input = structuredClone(defaults());
+            const value =
+                target === 'record'
+                    ? input.formRecord.data
+                    : input.formRecord.data.links;
+            assert.ok(value != null && typeof value === 'object');
+            const prototype =
+                target === 'record' ? null : Object.create(Array.prototype);
+            Object.setPrototypeOf(value, prototype);
+            refused(input);
+            assert.equal(Object.getPrototypeOf(value), prototype);
+        }
+    });
+
+    it('refuses option getters before they can introduce capture loss after validation', () => {
+        const input = structuredClone(defaults());
+        const pair =
+            input.conditionalLinkedRecordFieldIdsToFilteringValues.links?.first;
+        assert.ok(pair);
+        let reads = 0;
+        const options: NonNullable<
+            CreateLinkedFormRecordProjectionInput['interpreterOptions']
+        > = {};
+        Object.defineProperty(options, 'resolveFieldReference', {
+            enumerable: true,
+            get: () => {
+                reads++;
+                Reflect.set(pair, 'recordId', 'missing');
+                Object.defineProperty(pair, 'stringValue', {
+                    value: 'One',
+                    enumerable: false,
+                });
+                return undefined;
+            },
+        });
+        refused({ ...input, interpreterOptions: options });
+        assert.equal(reads, 0);
+        assert.equal(
+            Object.getOwnPropertyDescriptor(pair, 'stringValue')?.enumerable,
+            true
+        );
+    });
+
+    it('retains deliberate low-level interpreter hooks outside the serialized-data check', () => {
+        let calls = 0;
+        const result = available(
+            defaults({
+                interpreterOptions: {
+                    resolveFieldReference: () => {
+                        calls++;
+                        return { nativeValue: 'yes', toPrimitive: () => 'yes' };
+                    },
+                },
+            })
+        );
+        assert.equal(result.formRecord.data.answer, 'keep');
+        assert.ok(calls > 0);
+    });
+});
+
 const nativeFixture = JSON.parse(
     readFileSync('test/fixtures/linkedProjection.json', 'utf8')
 ) as {

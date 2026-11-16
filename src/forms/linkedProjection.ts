@@ -83,6 +83,69 @@ export type LinkedFormRecordProjection =
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
 
+/** Structured cloning must not silently change native property lookup. */
+function canCaptureSnapshot(
+    value: unknown,
+    seen = new WeakSet<object>(),
+    inputRoot = false
+): boolean {
+    if (typeof value === 'function' || typeof value === 'symbol') return false;
+    if (value == null || typeof value !== 'object') return true;
+    if (seen.has(value)) return true;
+    const prototype = Object.getPrototypeOf(value);
+    if (
+        Array.isArray(value)
+            ? prototype !== Array.prototype
+            : prototype !== Object.prototype
+    )
+        return false;
+    seen.add(value);
+    return Reflect.ownKeys(value).every((key) => {
+        if (typeof key === 'symbol') return false;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (
+            descriptor == null ||
+            !('value' in descriptor) ||
+            (!descriptor.enumerable &&
+                !(Array.isArray(value) && key === 'length'))
+        )
+            return false;
+        // These intentional low-level hooks are not serialized data. Capture
+        // their option values once below; never walk Moment/function objects.
+        if (inputRoot && key === 'interpreterOptions') return true;
+        return canCaptureSnapshot(descriptor.value, seen);
+    });
+}
+
+function captureInterpreterOptions(
+    value: unknown
+): { options: FormulaInterpreterOptions | undefined } | null {
+    if (value == null) return { options: undefined };
+    if (
+        typeof value !== 'object' ||
+        Object.getPrototypeOf(value) !== Object.prototype
+    )
+        return null;
+    const options: FormulaInterpreterOptions = {};
+    for (const key of Reflect.ownKeys(value)) {
+        if (typeof key === 'symbol') return null;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (
+            descriptor == null ||
+            !('value' in descriptor) ||
+            !descriptor.enumerable
+        )
+            return null;
+        // Copy descriptor values without consuming a getter or walking the
+        // deliberate function/Moment values. This precedes graph validation.
+        Object.defineProperty(options, key, {
+            value: descriptor.value,
+            enumerable: true,
+        });
+    }
+    return { options };
+}
+
 // These are condition drivers, not a restriction on retained output values.
 // Other driver families retain the consumer's whole original native fallback.
 const driverTypes = new Set([
@@ -126,10 +189,28 @@ export function createLinkedFormRecordProjection<
         code,
         diagnostics: [{ code }],
     });
-    if (input == null || input.compatibility !== 'native-form-v1')
-        return blocked('invalid-snapshot');
+    if (input == null) return blocked('invalid-snapshot');
 
     try {
+        const optionsDescriptor = Object.getOwnPropertyDescriptor(
+            input,
+            'interpreterOptions'
+        );
+        if (
+            optionsDescriptor != null &&
+            (!('value' in optionsDescriptor) || !optionsDescriptor.enumerable)
+        )
+            return blocked('invalid-snapshot');
+        const capturedOptions = captureInterpreterOptions(
+            optionsDescriptor?.value
+        );
+        if (capturedOptions == null) return blocked('invalid-snapshot');
+        if (
+            !canCaptureSnapshot(input, new WeakSet<object>(), true) ||
+            input.compatibility !== 'native-form-v1'
+        )
+            return blocked('invalid-snapshot');
+        const interpreterOptions = capturedOptions.options;
         // Native projection clones the whole output before evaluating conditions.
         // Preserve omission, non-finite numbers, -0 and metadata JSON behavior.
         const output: RuntimeFormRecord = JSON.parse(
@@ -266,7 +347,7 @@ export function createLinkedFormRecordProjection<
                     snapshot.airtableFields
                 ).formula,
                 false,
-                { ...input.interpreterOptions, legacyRuntime: true }
+                { ...interpreterOptions, legacyRuntime: true }
             );
         const passes = (runner: FormulaRunner): boolean => {
             for (const identifier of new Set(

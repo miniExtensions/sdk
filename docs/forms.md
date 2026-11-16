@@ -51,11 +51,21 @@ cache, and it does not own the canonical draft, dirty IDs or Save operation.
 The result is either `available` with the projected record and ordered hidden
 field IDs, or `blocked` with diagnostics and no partial output. Unsupported
 condition drivers and malformed snapshots block the whole projection. An
-all-loading context with active visibility also returns
+accepted capture consists of ordinary objects and arrays with enumerable data
+properties. Accessors, non-enumerable data (except array length), symbols and
+custom or null prototypes return `blocked/invalid-snapshot` before cloning.
+This prevents field-name overrides, cached rows and active filter values from
+silently disappearing during capture. Intentional interpreter hooks are exempt
+from this data-graph check. Their options container still requires enumerable
+data descriptors; hook values are captured without invoking getters. Primitive
+`undefined`, non-finite numbers and `-0`
+retain the documented native JSON output normalization.
+
+An all-loading context with active visibility also returns
 `blocked/native-loading-boundary`: the native cached empty-identifier path can
 affect scalar visibility and that ambient cache is outside this snapshot. A
-native consumer must invoke its original fallback with the complete original arguments
-outside the SDK exception boundary, so native exceptions retain their behavior.
+native consumer must invoke its original fallback with the complete original
+arguments outside the SDK exception boundary, so native exceptions retain their behavior.
 Low-level interpreter adapters must use the same captured snapshot. The returned
 record has the broad runtime record type because JSON normalization can change
 caller-specific narrowed values and metadata.

@@ -1,5 +1,356 @@
 import assert from 'node:assert/strict';
 
+/** Exercise the stock resize engine, never a replacement drag implementation. */
+export async function assertPortalShellSidebarConsumer({
+    React,
+    ui,
+    Window,
+    createRoot,
+    renderToString,
+}) {
+    const h = React.createElement;
+    let snapshot = {
+        scope: 'sidebar:user',
+        revision: 1,
+        items: [{ type: 'table', id: 'orders', label: 'Orders' }],
+        selection: { type: 'table', itemId: 'orders', viewId: null },
+        header: { layout: 'sidebar', title: 'Portal', sidebarWidth: 384 },
+    };
+    const changes = [],
+        intents = [];
+    let onSidebarWidthCommit = (change) => changes.push(change);
+    const onIntent = (intent) => intents.push(intent);
+    let bodyMounts = 0,
+        bodyUnmounts = 0;
+    function Body() {
+        React.useEffect(() => {
+            bodyMounts++;
+            return () => bodyUnmounts++;
+        }, []);
+        return h('button', { type: 'button' }, 'Host record');
+    }
+    const element = () =>
+        h(
+            React.StrictMode,
+            null,
+            h(
+                ui.CompletePortalShell,
+                { snapshot, onIntent, onSidebarWidthCommit },
+                h(Body)
+            )
+        );
+    const ssr = renderToString(element());
+    assert.match(ssr, /--mx-portal-sidebar-width:384px/);
+    assert.match(ssr, /role="separator"/);
+    const renderWidth = (sidebarWidth, extra = {}) =>
+        renderToString(
+            h(ui.CompletePortalShell, {
+                snapshot: {
+                    ...snapshot,
+                    header: { ...snapshot.header, sidebarWidth },
+                },
+                onIntent,
+                ...extra,
+            })
+        );
+    assert.doesNotMatch(
+        renderWidth(undefined),
+        /role="separator"|--mx-portal-sidebar-width/
+    );
+    assert.match(
+        renderWidth(undefined, { onSidebarWidthCommit }),
+        /--mx-portal-sidebar-width:288px/
+    );
+    for (const [input, expected] of [
+        [0, 120],
+        [900, 600],
+        [NaN, 288],
+        [Infinity, 288],
+    ]) {
+        assert.match(
+            renderWidth(input),
+            new RegExp(`--mx-portal-sidebar-width:${expected}px`)
+        );
+    }
+    assert.deepEqual(changes, []);
+    assert.deepEqual(intents, []);
+    const window = new Window({ url: 'https://consumer.invalid/portal' });
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ];
+    const originals = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    keys.forEach((key) =>
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
+        })
+    );
+    const container = window.document.createElement('div');
+    window.document.body.append(container);
+    const root = createRoot(container);
+    let mounted = true;
+    const render = () => React.act(async () => root.render(element()));
+    const handle = () => container.querySelector('[role="separator"]');
+    const width = () =>
+        container
+            .querySelector('.mx-sdk-portal-shell')
+            .style.getPropertyValue('--mx-portal-sidebar-width');
+    const mouse = (node, type, x) =>
+        React.act(async () =>
+            node.dispatchEvent(
+                new window.MouseEvent(type, {
+                    clientX: x,
+                    clientY: 30,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+    const start = async () => {
+        const box = container.querySelector('.mx-sdk-portal-sidebar-resize');
+        assert(box);
+        assert(handle());
+        // happy-dom has no physical layout. Read only this engine's own written width;
+        // the installed Chromium checks separately cover actual pixel geometry.
+        Object.defineProperty(box, 'offsetWidth', {
+            configurable: true,
+            get: () => parseFloat(box.style.width) || 0,
+        });
+        Object.defineProperty(box, 'offsetHeight', {
+            configurable: true,
+            get: () => 240,
+        });
+        await mouse(handle(), 'mousedown', 384);
+    };
+    const key = (value) =>
+        React.act(async () =>
+            handle().dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: value,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+    try {
+        await render();
+        assert.equal(handle().getAttribute('aria-valuenow'), '384');
+        assert.equal(handle().getAttribute('aria-valuemin'), '120');
+        assert.equal(handle().getAttribute('aria-valuemax'), '600');
+        assert.equal(handle().getAttribute('type'), 'button');
+        const body = container.querySelector('main button'),
+            mounts = bodyMounts,
+            unmounts = bodyUnmounts;
+        await start();
+        await mouse(window, 'mousemove', 484);
+        assert.equal(width(), '484px');
+        assert.deepEqual(changes, []);
+        await mouse(window, 'mouseup', 484);
+        assert.deepEqual(changes, [
+            { scope: snapshot.scope, revision: 1, width: 484 },
+        ]);
+        assert.equal(
+            width(),
+            '384px',
+            'Unaccepted preview must return to the canonical host width'
+        );
+        for (const [x, expected] of [
+            [1800, 600],
+            [-500, 120],
+        ]) {
+            await start();
+            await mouse(window, 'mousemove', x);
+            await mouse(window, 'mouseup', x);
+            assert.equal(changes.at(-1).width, expected);
+        }
+        await key('ArrowRight');
+        assert.equal(changes.at(-1).width, 394);
+        await key('ArrowLeft');
+        assert.equal(changes.at(-1).width, 374);
+        await key('Home');
+        assert.equal(changes.at(-1).width, 120);
+        await key('End');
+        assert.equal(changes.at(-1).width, 600);
+        const beforeOtherKey = changes.length;
+        await key('Enter');
+        assert.equal(changes.length, beforeOtherKey);
+        assert.equal(container.querySelector('main button'), body);
+        assert.equal(bodyMounts, mounts);
+        assert.equal(bodyUnmounts, unmounts);
+        const count = changes.length;
+        await start();
+        await mouse(window, 'mousemove', 484);
+        snapshot = { ...snapshot, revision: 2 };
+        await render();
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            count,
+            'A new accepted revision retires an old drag'
+        );
+        assert.equal(width(), '384px');
+        await start();
+        const firstCallback = onSidebarWidthCommit;
+        onSidebarWidthCommit = () => {
+            throw Error('Replacement must not inherit an allocated drag');
+        };
+        await render();
+        onSidebarWidthCommit = firstCallback;
+        await render();
+        await mouse(window, 'mousemove', 484);
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            count,
+            'Callback A-B-A never revives the old gesture'
+        );
+        await start();
+        await mouse(window, 'mousemove', 484);
+        onSidebarWidthCommit = undefined;
+        await render();
+        assert.equal(handle(), null);
+        assert.equal(
+            width(),
+            '384px',
+            'Withdrawing the resize callback restores canonical presentation'
+        );
+        onSidebarWidthCommit = firstCallback;
+        await render();
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            count,
+            'Disable/re-enable does not allocate the old drag to a new control'
+        );
+        await start();
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 500, height: 800 })
+        );
+        assert.equal(
+            handle(),
+            null,
+            'Mobile drawer has no desktop resize control'
+        );
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 1280, height: 800 })
+        );
+        await mouse(window, 'mouseup', 484);
+        assert.equal(changes.length, count);
+        await start();
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, hidden: true },
+        };
+        await render();
+        assert.equal(handle(), null);
+        await mouse(window, 'mouseup', 484);
+        assert.equal(changes.length, count);
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, hidden: false, layout: 'topbar' },
+        };
+        await render();
+        assert.equal(handle(), null);
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, layout: 'sidebar' },
+        };
+        await render();
+        await start();
+        await mouse(window, 'mousemove', 434);
+        await mouse(window, 'mouseup', 434);
+        assert.equal(
+            changes.length,
+            count + 1,
+            'The unchanged current owner can still complete a new drag'
+        );
+        assert.equal(changes.at(-1).width, 434);
+        onSidebarWidthCommit = (change) => {
+            assert.equal(change.scope, snapshot.scope);
+            assert.equal(change.revision, snapshot.revision);
+            changes.push(change);
+            snapshot = {
+                ...snapshot,
+                revision: snapshot.revision + 1,
+                header: { ...snapshot.header, sidebarWidth: change.width },
+            };
+            root.render(element());
+        };
+        await render();
+        handle().focus();
+        for (const [action, expected] of [
+            ['ArrowRight', 394],
+            ['End', 600],
+            ['ArrowLeft', 590],
+        ]) {
+            const focused = window.document.activeElement;
+            await React.act(async () =>
+                focused.dispatchEvent(
+                    new window.KeyboardEvent('keydown', {
+                        key: action,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.equal(changes.at(-1).width, expected);
+            assert.equal(
+                window.document.activeElement === handle(),
+                true,
+                'Accepted keyboard width keeps focus for the next key'
+            );
+        }
+        assert.equal(
+            changes.length,
+            count + 4,
+            'Each accepted keyboard action commits exactly once'
+        );
+        onSidebarWidthCommit = firstCallback;
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, sidebarWidth: 384 },
+        };
+        await render();
+        const completed = changes.length;
+        await start();
+        await mouse(window, 'mousemove', 484);
+        await React.act(async () => root.unmount());
+        mounted = false;
+        await mouse(window, 'mouseup', 484);
+        assert.equal(
+            changes.length,
+            completed,
+            'Unmount does not settle an unfinished gesture'
+        );
+        assert.deepEqual(
+            intents,
+            [],
+            'Resizing never navigates, logs out or reads records'
+        );
+        assert.equal(window.localStorage.length, 0);
+        assert.equal(window.sessionStorage.length, 0);
+        return {
+            endOnlyCommits: completed,
+            staleCommits: 0,
+            bodyRemountsDuringResize: 0,
+        };
+    } finally {
+        if (mounted) await React.act(async () => root.unmount());
+        keys.forEach((key, index) => {
+            if (originals[index])
+                Object.defineProperty(globalThis, key, originals[index]);
+            else Reflect.deleteProperty(globalThis, key);
+        });
+        await window.happyDOM.close();
+    }
+}
+
 export async function assertPortalShellConsumer({
     React,
     ui,

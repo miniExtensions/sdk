@@ -40,6 +40,12 @@ const person = (value: unknown) =>
     string(value.email) &&
     (value.profilePicUrl === undefined || string(value.profilePicUrl));
 const image = (value: unknown) => object(value) && string(value.url);
+const finderImage = (value: unknown) =>
+    image(value) &&
+    object(value) &&
+    optionalString(value.id) &&
+    optionalString(value.filename) &&
+    textValue(value.largeUrl);
 const optionalBoolean = (value: unknown) =>
     value === undefined || typeof value === 'boolean';
 const optionalString = (value: unknown) => value === undefined || string(value);
@@ -65,6 +71,67 @@ const avatarPolicy = (value: unknown) =>
             (value.type === 'direct' && dense(value.allowedOrigins, string)) ||
             (value.type === 'source' &&
                 typeof value.getSource === 'function')));
+
+const readonlyText = (value: Record<string, unknown>) =>
+    optionalString(value.emptyLabel) &&
+    optionalString(value.className) &&
+    (value.textSize === undefined ||
+        oneOf(value.textSize, ['small', 'medium', 'large', 'very large'])) &&
+    (value.layout === undefined ||
+        oneOf(value.layout, [
+            'default',
+            'linked-list',
+            'cell-short',
+            'cell-medium',
+            'cell-tall',
+            'cell-extra-tall',
+            'cell-fit-content',
+        ]));
+
+function documentOptions(value: unknown): boolean {
+    if (!object(value) || !object(value.source) || !textLabels(value.labels))
+        return false;
+    const source = value.source;
+    return (
+        ((source.kind === 'uri' && optionalString(source.mimeType)) ||
+            (source.kind === 'bytes' &&
+                Object.hasOwn(source, 'revision') &&
+                string(source.mimeType) &&
+                source.bytes instanceof Uint8Array)) &&
+        ((value.pdfWorkerUrl === undefined &&
+            value.pdfResourceBaseUrl === undefined) ||
+            (string(value.pdfWorkerUrl) && string(value.pdfResourceBaseUrl)))
+    );
+}
+
+function attachmentOptions(value: unknown): boolean {
+    return (
+        value === undefined ||
+        (object(value) &&
+            optionalFlags(value, [
+                'isInGrid',
+                'hideAttachmentName',
+                'disableOpenFiles',
+                'disableDownloadFiles',
+            ]) &&
+            (value.displayMode === undefined ||
+                oneOf(value.displayMode, ['thumbnail', 'icon'])) &&
+            (value.thumbnailSize === undefined ||
+                oneOf(value.thumbnailSize, ['small', 'medium', 'large'])) &&
+            (value.thumbFitType === undefined ||
+                oneOf(value.thumbFitType, ['cover', 'contain'])) &&
+            (value.documentPreview === undefined ||
+                documentOptions(value.documentPreview)))
+    );
+}
+
+const resource = (value: unknown) =>
+    value === undefined ||
+    (object(value) &&
+        owner(value.owner) &&
+        optionalBoolean(value.inert) &&
+        textLabels(value.labels) &&
+        attachmentOptions(value.attachmentOptions));
 
 /** Image descriptors cannot smuggle DOM event handlers into a readonly leaf. */
 export function isLookupImageSource(value: unknown): boolean {
@@ -171,7 +238,10 @@ export function isLookupResultPresentation(
                     );
                 case 'checkbox':
                     return (
-                        input.value === null || typeof input.value === 'boolean'
+                        (input.value === null ||
+                            typeof input.value === 'boolean') &&
+                        string(input.checkedLabel) &&
+                        string(input.uncheckedLabel)
                     );
                 case 'rating':
                     return (
@@ -179,12 +249,17 @@ export function isLookupResultPresentation(
                         finite(input.max) &&
                         string(input.icon) &&
                         string(input.color) &&
-                        string(input.label)
+                        string(input.label) &&
+                        optionalString(input.emptyLabel)
                     );
                 case 'pills':
                     return dense(
                         input.items,
-                        (item) => object(item) && string(item.label)
+                        (item) =>
+                            object(item) &&
+                            string(item.label) &&
+                            optionalString(item.color) &&
+                            optionalString(item.backgroundColor)
                     );
                 case 'linkedPills':
                     return dense(input.labels, string);
@@ -194,13 +269,14 @@ export function isLookupResultPresentation(
                         (item) =>
                             object(item) &&
                             string(item.label) &&
-                            (item.avatar === undefined || image(item.avatar)) &&
+                            (item.avatar === undefined ||
+                                finderImage(item.avatar)) &&
                             (item.avatarSource === undefined ||
                                 isLookupImageSource(item.avatarSource))
                     );
                 case 'attachmentImages':
                     return (
-                        dense(input.images, image) &&
+                        dense(input.images, finderImage) &&
                         oneOf(input.empty, ['none', 'no-values']) &&
                         string(input.emptyLabel)
                     );
@@ -208,6 +284,23 @@ export function isLookupResultPresentation(
                     return (
                         object(input.accepted) &&
                         input.accepted.mode === 'controlled' &&
+                        optionalFlags(input.accepted, ['busy', 'disabled']) &&
+                        textLabels(input.accepted.messages) &&
+                        optionalString(input.accepted.loadingLabel) &&
+                        (input.accepted.config === undefined ||
+                            (object(input.accepted.config) &&
+                                (input.accepted.config.openLinkType ===
+                                    undefined ||
+                                    oneOf(input.accepted.config.openLinkType, [
+                                        '_self',
+                                        '_blank',
+                                        '_parent',
+                                        'triggerWebhookGET',
+                                        'triggerWebhookPOST',
+                                    ])) &&
+                                optionalString(
+                                    input.accepted.config.buttonColor
+                                ))) &&
                         owner(input.accepted.owner) &&
                         (input.accepted.onTriggerWebhook === undefined ||
                             typeof input.accepted.onTriggerWebhook ===
@@ -248,25 +341,26 @@ export function isLookupResultPresentation(
                     return (
                         displayOnly(display) &&
                         textValue(display.value) &&
-                        optionalString(display.emptyLabel)
+                        readonlyText(display)
                     );
                 case 'singleLine':
                     return (
                         display.mode === 'readOnly' &&
                         displayOnly(display) &&
+                        readonlyText(display) &&
                         optionalFlags(display, [
                             'displayAsButton',
                             'displayAsAttachments',
                             'obscurePassword',
                         ]) &&
                         textValue(display.value) &&
-                        (display.resource === undefined ||
-                            (object(display.resource) &&
-                                owner(display.resource.owner) &&
-                                textLabels(display.resource.labels)))
+                        textValue(display.validButtonLabel) &&
+                        textValue(display.invalidButtonLabel) &&
+                        resource(display.resource)
                     );
                 case 'numeric': {
                     if (
+                        !string(input.emptyLabel) ||
                         !object(display.capability) ||
                         display.capability.type !== 'readonly' ||
                         !oneOf(display.physicalKind, [
@@ -316,7 +410,24 @@ export function isLookupResultPresentation(
                 case 'dateTime':
                     return (
                         textValue(display.value) &&
-                        object(display.airtableDateConfig)
+                        object(display.airtableDateConfig) &&
+                        display.airtableDateConfig.type === input.kind &&
+                        object(display.airtableDateConfig.options) &&
+                        object(display.airtableDateConfig.options.dateFormat) &&
+                        string(
+                            display.airtableDateConfig.options.dateFormat.format
+                        ) &&
+                        (input.kind === 'date' ||
+                            (object(
+                                display.airtableDateConfig.options.timeFormat
+                            ) &&
+                                string(
+                                    display.airtableDateConfig.options
+                                        .timeFormat.format
+                                ) &&
+                                string(
+                                    display.airtableDateConfig.options.timeZone
+                                )))
                     );
                 case 'phone':
                     return (
@@ -324,6 +435,7 @@ export function isLookupResultPresentation(
                     );
                 case 'duration':
                     return (
+                        readonlyText(display) &&
                         isDurationFormat(display.format) &&
                         (display.value == null ||
                             (finite(display.value) &&
@@ -337,6 +449,8 @@ export function isLookupResultPresentation(
                 case 'urlButton':
                     return (
                         textValue(display.href) &&
+                        textValue(display.buttonLabel) &&
+                        optionalBoolean(display.inert) &&
                         owner(display.owner) &&
                         textLabels(display.labels)
                     );
@@ -360,8 +474,13 @@ export function isLookupResultPresentation(
                             (row) =>
                                 string(row.label) &&
                                 string(row.openLabel) &&
+                                optionalString(row.imageUnavailableLabel) &&
                                 dense(row.imageSources, string) &&
-                                oneOf(row.icon, ['play', 'document'])
+                                oneOf(row.icon, ['play', 'document']) &&
+                                (row.document === undefined ||
+                                    (object(row.document) &&
+                                        string(row.document.uri) &&
+                                        documentOptions(row.document.options)))
                         )
                     );
                 case 'singleSelect':
@@ -393,7 +512,15 @@ export function isLookupResultPresentation(
                     return (
                         display.mode === 'controlled' &&
                         displayOnly(display) &&
+                        readonlyText(display) &&
                         textLabels(display.buttonLabels) &&
+                        textValue(display.validUrlButtonLabel) &&
+                        textValue(display.invalidUrlButtonLabel) &&
+                        (display.select === undefined ||
+                            (object(display.select) &&
+                                dense(display.select.choices, choice) &&
+                                choiceLabels(display.select.labels) &&
+                                optionalBoolean(display.select.isInGrid))) &&
                         optionalFlags(display, [
                             'obscurePassword',
                             'renderFormulaAsHTML',
@@ -403,9 +530,7 @@ export function isLookupResultPresentation(
                         ]) &&
                         (display.gallery === undefined ||
                             gallery(display.gallery)) &&
-                        (display.resource === undefined ||
-                            (object(display.resource) &&
-                                owner(display.resource.owner))) &&
+                        resource(display.resource) &&
                         typeof display.isValid === 'boolean' &&
                         (!display.isValid ||
                             display.obscurePassword === true ||
@@ -416,6 +541,7 @@ export function isLookupResultPresentation(
                     return (
                         display.mode === 'controlled' &&
                         displayOnly(display) &&
+                        readonlyText(display) &&
                         typeof display.isValid === 'boolean' &&
                         (!display.isValid || textValue(display.value))
                     );
@@ -435,9 +561,12 @@ export function isLookupResultPresentation(
                         !string(display.labels.empty) ||
                         !string(display.labels.loading) ||
                         !string(display.labels.unavailable) ||
+                        !optionalString(display.labels.loadMore) ||
+                        !textValue(display.error) ||
                         !oneOf(display.phase, ['loading', 'ready', 'error']) ||
                         (display.loadMore !== undefined &&
                             (!object(display.loadMore) ||
+                                typeof display.loadMore.busy !== 'boolean' ||
                                 typeof display.loadMore.run !== 'function'))
                     )
                         return false;
@@ -490,7 +619,7 @@ export function isLookupResultPresentation(
                             string(card.labels.nextImage) &&
                             string(card.labels.noImage) &&
                             optionalString(card.labels.viewImage) &&
-                            dense(card.images, image)
+                            dense(card.images, finderImage)
                         );
                     });
                 }

@@ -565,8 +565,16 @@ it('fences stale inline HTML links while preserving the canonical sanitizer poli
         ),
         null
     );
+    const currentContextMenu = new f.window.MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => {
+        link.dispatchEvent(currentContextMenu);
+    });
+    assert.equal(currentContextMenu.defaultPrevented, false);
     await f.first.retire(false);
-    for (const type of ['click', 'auxclick']) {
+    for (const type of ['click', 'auxclick', 'contextmenu']) {
         const event = new f.window.MouseEvent(type, {
             bubbles: true,
             cancelable: true,
@@ -1031,3 +1039,279 @@ for (const [name, result, expected] of cohorts)
             /data-select-remove|data-collaborator-remove/
         );
     });
+
+it('rejects nested JSX labels and malformed resource policy before any readonly child mounts', async (t) => {
+    const f = await fixture(t);
+    let renders = 0;
+    const sentinel = h(() => {
+        renders++;
+        return h('span', null, 'Undeclared native renderer');
+    });
+    const cases: [string, LookupResultPresentation][] = [];
+    const rating: LookupResultPresentation = {
+        kind: 'rating',
+        value: null,
+        max: 5,
+        icon: 'star',
+        color: 'gold',
+        label: 'Rating',
+    };
+    Reflect.set(rating, 'emptyLabel', sentinel);
+    cases.push(['rating empty label', rating]);
+    const numericSource = cohorts.find(
+        ([name]) => name === 'computed number'
+    )![1];
+    assert.equal(numericSource.kind, 'numeric');
+    if (numericSource.kind !== 'numeric')
+        throw Error('Numeric fixture missing');
+    const numeric = structuredClone(numericSource);
+    numeric.display.value = null;
+    Reflect.set(numeric, 'emptyLabel', sentinel);
+    cases.push(['numeric empty label', numeric]);
+    const duration: LookupResultPresentation = {
+        kind: 'duration',
+        display: { value: null, format: 'h:mm:ss', language: 'en' },
+    };
+    Reflect.set(duration.display, 'emptyLabel', sentinel);
+    cases.push(['duration empty label', duration]);
+    const rollup: LookupResultPresentation = {
+        kind: 'rollup',
+        display: {
+            mode: 'controlled',
+            isValid: true,
+            value: null,
+            language: 'en',
+        },
+    };
+    Reflect.set(rollup.display, 'emptyLabel', sentinel);
+    cases.push(['rollup empty label', rollup]);
+    const button: LookupResultPresentation = {
+        kind: 'button',
+        accepted: { mode: 'controlled', value: null, messages: {} },
+    };
+    Reflect.set(button.accepted.messages!, 'noValue', sentinel);
+    cases.push(['button empty label', button]);
+    const busyButton: LookupResultPresentation = {
+        kind: 'button',
+        accepted: {
+            mode: 'controlled',
+            value: { label: 'Webhook', url: 'https://never.example.invalid/' },
+            busy: true,
+            config: { openLinkType: 'triggerWebhookPOST' },
+            onTriggerWebhook: () => {
+                throw Error('No action expected');
+            },
+        },
+    };
+    Reflect.set(busyButton.accepted, 'loadingLabel', sentinel);
+    cases.push(['button loading label', busyButton]);
+    const option = { id: 'supplied', name: 'Supplied' };
+    Reflect.set(option, 'displayName', sentinel);
+    cases.push([
+        'Formula Select display name',
+        {
+            kind: 'formula',
+            display: {
+                mode: 'controlled',
+                language: 'en',
+                isValid: true,
+                resultType: 'singleSelect',
+                value: 'Supplied',
+                formattedValue: 'Supplied',
+                select: { choices: [option] },
+            },
+        },
+    ]);
+    const attachmentOptions = { disableDownloadFiles: true };
+    Reflect.set(attachmentOptions, 'disableDownloadFiles', 'true');
+    cases.push([
+        'attachment suppression flag',
+        {
+            kind: 'singleLine',
+            display: {
+                mode: 'readOnly',
+                language: 'en',
+                value: 'https://never.example.invalid/file',
+                displayAsAttachments: true,
+                resource: { attachmentOptions },
+            },
+        },
+    ]);
+    const documentOptions = { source: { kind: 'uri' as const }, labels: {} };
+    Reflect.set(documentOptions.labels, 'loading', sentinel);
+    cases.push([
+        'document renderer label',
+        {
+            kind: 'attachmentCollection',
+            display: {
+                rows: [
+                    {
+                        key: 'doc',
+                        label: 'Document',
+                        openLabel: 'Open',
+                        imageSources: [],
+                        icon: 'document',
+                        document: {
+                            uri: 'https://never.example.invalid/file',
+                            options: documentOptions,
+                        },
+                    },
+                ],
+                layout: 'grid',
+                columns: 2,
+                fit: 'contain',
+                showNames: true,
+                owner: { isCurrent: () => true },
+                labels: {
+                    attachments: 'Attachments',
+                    retry: 'Retry',
+                    imageUnavailable: 'Missing image',
+                },
+            },
+        },
+    ]);
+    const wrongDate: LookupResultPresentation = {
+        kind: 'date',
+        display: {
+            language: 'en',
+            value: '2026-11-16',
+            airtableDateConfig: dateConfig,
+        },
+    };
+    Reflect.set(wrongDate.display, 'airtableDateConfig', dateTimeConfig);
+    cases.push(['date/config kind mismatch', wrongDate]);
+    const malformedImage = { url: 'https://never.example.invalid/image' };
+    Reflect.set(malformedImage, 'largeUrl', 42);
+    cases.push([
+        'carousel fallback source',
+        {
+            kind: 'attachmentImages',
+            images: [malformedImage],
+            empty: 'none',
+            emptyLabel: 'No image',
+        },
+    ]);
+    const wrongButton: LookupResultPresentation = {
+        kind: 'button',
+        accepted: {
+            mode: 'controlled',
+            value: { label: 'Button', url: 'https://never.example.invalid/' },
+            config: {},
+        },
+    };
+    Reflect.set(
+        wrongButton.accepted.config!,
+        'openLinkType',
+        'otherWebhookMode'
+    );
+    cases.push(['undeclared webhook mode', wrongButton]);
+    for (const [name, result] of cases) {
+        await f.render(f.props({ status: 'ready', result }));
+        assert.equal(f.text(), 'Unavailable', name);
+        assert.doesNotMatch(f.text(), /Undeclared native renderer/, name);
+    }
+    assert.equal(renders, 0);
+});
+
+it('rejects outer presentation JSX and malformed subscriptions before child effects', async (t) => {
+    const f = await fixture(t);
+    let renders = 0;
+    const sentinel = h(() => {
+        renders++;
+        return 'Undeclared native renderer';
+    });
+    for (const key of ['title', 'empty', 'invalidResult', 'unavailable']) {
+        const input = f.props(literal('Private result'));
+        if (key === 'title') {
+            input.showTitle = true;
+            Reflect.set(input, key, sentinel);
+        } else {
+            input.labels = {};
+            Reflect.set(input.labels, key, sentinel);
+        }
+        await f.render(input);
+        assert.equal(f.text(), 'Unavailable', key);
+    }
+    const malformed = { token: {}, isCurrent: () => true };
+    Reflect.set(malformed, 'subscribe', 'not a subscription');
+    await f.render(f.props(literal('Private result'), malformed));
+    assert.equal(f.text(), 'Unavailable');
+    assert.equal(renders, 0);
+});
+
+it('retires an allocated download when only its child resource capture changes', async (t) => {
+    const f = await fixture(t);
+    let settle: ((value: Response) => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const fetch = t.mock.method(
+        globalThis,
+        'fetch',
+        async (
+            _input: Parameters<typeof globalThis.fetch>[0],
+            options?: RequestInit
+        ) => {
+            signal = options?.signal ?? undefined;
+            return new Promise<Response>((resolve) => {
+                settle = resolve;
+            });
+        }
+    );
+    const publish = t.mock.method(
+        URL,
+        'createObjectURL',
+        () => 'blob:unexpected-lookup-download'
+    );
+    const childA = { token: {}, isCurrent: () => true };
+    const childB = { token: {}, isCurrent: () => true };
+    const resultFor = (owner: typeof childA): LookupPresentationState => ({
+        status: 'ready',
+        result: {
+            kind: 'singleLine',
+            display: {
+                mode: 'readOnly',
+                language: 'en',
+                value: 'https://resource.example.invalid/file.jpg',
+                displayAsAttachments: true,
+                resource: {
+                    owner,
+                    identity: 'same-resource',
+                    attachmentOptions: { displayMode: 'icon' },
+                },
+            },
+        },
+    });
+    await f.render(f.props(resultFor(childA)));
+    const open = f.host.querySelector(
+        'button[aria-label="https://resource.example.invalid/file.jpg"]'
+    );
+    assert.ok(open instanceof f.window.HTMLButtonElement, f.host.innerHTML);
+    await f.click(open);
+    const download = [...f.host.querySelectorAll('button')].find(
+        (node) => node.textContent?.trim() === 'Download'
+    );
+    assert.ok(download, f.host.innerHTML);
+    await f.click(download);
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.ok(signal);
+    assert.equal(signal.aborted, false);
+    await f.render(f.props(resultFor(childA)));
+    assert.equal(
+        signal.aborted,
+        false,
+        'equivalent child capture preserves its allocated operation'
+    );
+    await f.render(f.props(resultFor(childB)));
+    assert.equal(
+        signal.aborted,
+        true,
+        'new child capture retires the old allocation with the parent unchanged'
+    );
+    await act(async () => {
+        settle!(
+            new Response(new Uint8Array([65]), {
+                headers: { 'Content-Type': 'application/octet-stream' },
+            })
+        );
+    });
+    assert.equal(publish.mock.callCount(), 0);
+});

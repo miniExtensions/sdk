@@ -30,6 +30,7 @@ import { CompleteRichTextEditor } from './CompleteRichTextEditor.js';
 import { ReadOnlyURLGallery } from './ReadOnlyURLGallery.js';
 import {
     resourceOwnerCurrent,
+    resourceOwnerGeneration,
     watchResourceOwner,
     type ReadonlyResourceOwner,
 } from './readonlyResourceOwner.js';
@@ -55,7 +56,11 @@ const invalidResult =
 function capturedOwnerCurrent(owner: LookupPresentationOwner): boolean {
     try {
         return (
-            owner != null && owner.token != null && resourceOwnerCurrent(owner)
+            owner != null &&
+            owner.token != null &&
+            (owner.subscribe === undefined ||
+                typeof owner.subscribe === 'function') &&
+            resourceOwnerCurrent(owner)
         );
     } catch {
         return false;
@@ -70,12 +75,52 @@ function ownerToken(owner: LookupPresentationOwner): unknown {
     }
 }
 
+// Each UI capture owns its pair generations. Object child captures remain weak;
+// opaque primitive generations are retained only for this parent lease.
+const composedGenerations = new WeakMap<
+    object,
+    {
+        objects: WeakMap<object, object>;
+        primitives: Map<unknown, object>;
+    }
+>();
+function togetherGeneration(
+    parent: LookupPresentationOwner,
+    child: ReadonlyResourceOwner
+): object {
+    const parentKey =
+        parent.token !== null &&
+        (typeof parent.token === 'object' || typeof parent.token === 'function')
+            ? parent.token
+            : parent;
+    let children = composedGenerations.get(parentKey);
+    if (!children) {
+        children = { objects: new WeakMap(), primitives: new Map() };
+        composedGenerations.set(parentKey, children);
+    }
+    const generation = resourceOwnerGeneration(child);
+    const table =
+        generation !== null &&
+        (typeof generation === 'object' || typeof generation === 'function')
+            ? children.objects
+            : children.primitives;
+    let token = table.get(generation as object);
+    if (!token) {
+        token = {};
+        table.set(generation as object, token);
+    }
+    return token;
+}
+
 function together(
     parent: LookupPresentationOwner,
     child?: ReadonlyResourceOwner
 ): LookupPresentationOwner {
     return {
-        token: parent.token,
+        token:
+            child === undefined
+                ? parent.token
+                : togetherGeneration(parent, child),
         isCurrent: () =>
             capturedOwnerCurrent(parent) && resourceOwnerCurrent(child),
         subscribe(listener) {
@@ -202,6 +247,25 @@ function scopedAvatarPolicy(
 }
 
 const validResult = isLookupResultPresentation;
+
+function validPresentationMetadata(props: ControlledLookupFieldProps): boolean {
+    try {
+        return (
+            (props.title === undefined || typeof props.title === 'string') &&
+            (props.showTitle === undefined ||
+                typeof props.showTitle === 'boolean') &&
+            (props.labels === undefined ||
+                (props.labels !== null &&
+                    typeof props.labels === 'object' &&
+                    ['empty', 'unavailable', 'invalidResult'].every((key) => {
+                        const value = Reflect.get(props.labels!, key);
+                        return value === undefined || typeof value === 'string';
+                    })))
+        );
+    } catch {
+        return false;
+    }
+}
 
 function presentationState(input: unknown): LookupPresentationState {
     try {
@@ -624,11 +688,15 @@ export function ControlledLookupField(
         }),
         [capture, committed, props.owner]
     );
-    const available = capturedOwnerCurrent(owner);
+    const metadataValid = validPresentationMetadata(props);
+    const labels = metadataValid ? props.labels : undefined;
+    const title = metadataValid ? props.title : undefined;
+    const showTitle = metadataValid && props.showTitle === true;
+    const available = metadataValid && capturedOwnerCurrent(owner);
     const state = available
         ? presentationState(props.state)
         : { status: 'unavailable' as const };
-    const label = props.labels?.unavailable ?? unavailable;
+    const label = labels?.unavailable ?? unavailable;
     let content: ReactNode;
     switch (state?.status) {
         case 'masked':
@@ -641,14 +709,14 @@ export function ControlledLookupField(
             content = h(CompleteReadOnlyTextField, {
                 value: null,
                 language: props.language ?? 'en',
-                emptyLabel: props.labels?.empty,
+                emptyLabel: labels?.empty,
             });
             break;
         case 'invalid-result':
             content = h(
                 'p',
                 { role: 'alert', 'aria-label': 'error-message' },
-                props.labels?.invalidResult ?? invalidResult
+                labels?.invalidResult ?? invalidResult
             );
             break;
         case 'native-error':
@@ -701,8 +769,7 @@ export function ControlledLookupField(
                 .filter(Boolean)
                 .join(' '),
             'aria-labelledby':
-                props.labelledBy ??
-                (props.showTitle && props.title ? titleId : undefined),
+                props.labelledBy ?? (showTitle && title ? titleId : undefined),
             'aria-describedby':
                 [props.describedBy, feedback ? feedbackId : undefined]
                     .filter(Boolean)
@@ -715,6 +782,7 @@ export function ControlledLookupField(
                 ),
             onClickCapture: guardResourceAction,
             onAuxClickCapture: guardResourceAction,
+            onContextMenuCapture: guardResourceAction,
             onKeyDownCapture: guardResourceAction,
             onErrorCapture: (event: SyntheticEvent) => {
                 // Do not advance an obsolete image to another resource URL.
@@ -727,12 +795,8 @@ export function ControlledLookupField(
             onKeyDown: (event: SyntheticEvent) => event.stopPropagation(),
             onKeyUp: (event: SyntheticEvent) => event.stopPropagation(),
         },
-        props.showTitle && props.title
-            ? h(
-                  'div',
-                  { id: titleId, className: 'mx-sdk-lookup-title' },
-                  props.title
-              )
+        showTitle && title
+            ? h('div', { id: titleId, className: 'mx-sdk-lookup-title' }, title)
             : null,
         h(
             ResultBoundary,

@@ -220,6 +220,77 @@ export async function checkControlledLookupBrowser({
                 });
             const snapshot = () =>
                 page.evaluate(() => window.lookupProof.snapshot());
+            const checkContextMenu = async (retired) => {
+                const anchor = page.locator('.mx-sdk-html a');
+                const before = await snapshot();
+                await anchor.evaluate((node) => {
+                    const main = document.querySelector('main');
+                    const observed = { targetRan: false };
+                    let captured;
+                    const start = (event) => {
+                        if (event.target !== node) return;
+                        captured = event;
+                        Object.assign(observed, {
+                            trusted: event.isTrusted,
+                            button: event.button,
+                            before: event.defaultPrevented,
+                        });
+                    };
+                    const safety = (event) => {
+                        if (event.target !== node) return;
+                        // React's delegated capture listener was installed on
+                        // this same mount before this safety observer. Record
+                        // SDK prevention before suppressing the native menu.
+                        observed.beforeHarness = event.defaultPrevented;
+                        event.preventDefault();
+                    };
+                    const target = () => (observed.targetRan = true);
+                    document.addEventListener('contextmenu', start, true);
+                    main.addEventListener('contextmenu', safety, true);
+                    node.addEventListener('contextmenu', target);
+                    window.lookupContextMenu = () => ({
+                        ...observed,
+                        after: captured?.defaultPrevented,
+                    });
+                    window.lookupContextMenuCleanup = () => {
+                        document.removeEventListener(
+                            'contextmenu',
+                            start,
+                            true
+                        );
+                        main.removeEventListener('contextmenu', safety, true);
+                        node.removeEventListener('contextmenu', target);
+                        captured = null;
+                        delete window.lookupContextMenu;
+                        delete window.lookupContextMenuCleanup;
+                    };
+                });
+                try {
+                    await anchor.click({ button: 'right' });
+                    const event = await page.evaluate(() =>
+                        window.lookupContextMenu()
+                    );
+                    assert.equal(event.trusted, true);
+                    assert.equal(event.button, 2);
+                    assert.equal(event.before, false);
+                    assert.equal(event.beforeHarness, retired);
+                    assert.equal(event.targetRan, !retired);
+                    assert.equal(event.after, true);
+                    assert.equal(page.url(), origin + '/?format=' + format);
+                    assert.equal(context.pages().length, 1);
+                    assert.deepEqual(await snapshot(), before);
+                    record(
+                        retired
+                            ? 'stale context-menu navigation refused by SDK before safety cancellation'
+                            : 'current context menu admitted; harness suppresses native menu',
+                        { event }
+                    );
+                } finally {
+                    await page.evaluate(() =>
+                        window.lookupContextMenuCleanup?.()
+                    );
+                }
+            };
             const initial = await snapshot();
             if (evidence.react !== undefined)
                 assert.equal(initial.react, evidence.react);
@@ -366,6 +437,8 @@ export async function checkControlledLookupBrowser({
                 fullPage: true,
             });
 
+            await checkContextMenu(false);
+
             const open = page.getByRole('button', {
                 name: 'Open linked row',
                 exact: true,
@@ -431,6 +504,7 @@ export async function checkControlledLookupBrowser({
                 'stale activation refused before target/default navigation',
                 { event: blockedClick }
             );
+            await checkContextMenu(true);
 
             await page.evaluate(() => window.lookupProof.cohort('linkedCard'));
             const next = page.getByRole('button', {

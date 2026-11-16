@@ -158,6 +158,21 @@ const root=createRoot(document.querySelector('main'));root.render(h(App));window
         await page.evaluate(() => window.captchaProof.fixture.clear());
         assert.equal(
             await page.evaluate(
+                () =>
+                    window.captchaProof.fixture.events.filter(
+                        (event) => event === 'error'
+                    ).length
+            ),
+            1
+        );
+        assert.equal(
+            await page.evaluate(
+                () => window.captchaProof.fixture.read().verified
+            ),
+            false
+        );
+        assert.equal(
+            await page.evaluate(
                 () => window.captchaProof.fixture.widgets.at(-1).resets
             ),
             1

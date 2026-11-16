@@ -81,6 +81,7 @@ export function formCaptchaFixture(document) {
                                 widget.resets++;
                                 callbacks.change(null);
                                 callbacks.expired();
+                                callbacks.error({ synthetic: true });
                             },
                             remove() {
                                 widget.removes++;
@@ -479,9 +480,17 @@ async function runtime(root, happyDomModulePath) {
             );
             assert.equal(client.read().token.value, accepted);
             assert.equal(client.read().verified, false);
+            const errorsBeforeReset = client.events.filter(
+                (event) => event === 'error'
+            ).length;
             await React.act(async () => client.clear());
             assert.equal(widget.resets, 1);
             assert.equal(client.counts().writes, 1);
+            assert.equal(
+                client.events.filter((event) => event === 'error').length,
+                errorsBeforeReset + 1
+            );
+            assert.equal(client.read().verified, false);
             await React.act(async () => widget.node.click());
             await React.act(async () =>
                 client.update({

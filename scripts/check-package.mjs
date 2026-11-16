@@ -12,6 +12,7 @@ import {
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
+import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
@@ -3296,6 +3297,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(controlledRatingProof.profiles.length, 2);
     assert.equal(controlledRatingProof.cleanup, 'completed');
+    const formCaptchaProof = await checkFormCaptchaReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(formCaptchaProof.profiles.length, 2);
+    assert.equal(formCaptchaProof.cleanup, 'completed');
+    console.log(
+        'Installed Form CAPTCHA React18/19 ESM/CJS/types/CSS/SSR/hydration and synthetic lifecycle checks passed. Native integration remains separate.'
+    );
     console.log(
         `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );

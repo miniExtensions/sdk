@@ -223,6 +223,7 @@ for (const format of ['esm', 'cjs']) {
         'rating',
         'localized-numeric',
         'form-tracking',
+        'form-captcha',
         'form-group',
         'csv-export',
         'kanban',

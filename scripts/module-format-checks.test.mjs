@@ -668,6 +668,7 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
 for (const name of [
     'button',
     'form-group',
+    'form-captcha',
     'csv-export',
     'kanban',
     'checkbox',

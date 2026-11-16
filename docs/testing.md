@@ -1,5 +1,31 @@
 # Source test coverage
 
+## Form CAPTCHA SDK checkpoint
+
+`test/formCaptcha.test.ts` covers canonical publication/refusal, initial/later
+null and synchronous reset reentry, expiry/error distinction, owner/config ABA,
+guarded old-token invalidation including remount/successor publication, delayed
+load/render retirement, gates, sibling widgets and host-port cleanup reentry.
+The actual FormController preservation case holds an allocated synthetic Save
+while widget events leave its request, abort signal and newer dirty draft intact.
+`test/reactFormCaptcha.test.ts` mounts the actual widget and inert preview,
+including cold SSR gates, hydration, StrictMode, cosmetic rerenders and sibling
+cleanup. The source test imports the specific component; the packed consumer
+checks import the actual public React barrel in both module formats.
+
+The mandatory package check registers `form-captcha-consumer-checks.mjs` for
+fresh React18/19, ESM/CJS, strict positive/negative types, CSS, cold SSR,
+hydration and lifecycle checks. Its consumer installs verify pnpm10.28.2,
+minimumReleaseAge2880, empty age exclusions, exotic-subdependency refusal,
+strict peers and disabled lifecycle scripts before installation. Synthetic proof
+objects and local DOM providers are the only challenge doubles. Registration or
+authorship is not executed proof. Native footer/Redux/Save/retained-child
+integration remains Blocked and requires a separate qualified checkpoint.
+`form-captcha-browser-checks.mjs` also joins the existing packed Chromium owner
+for trusted Tab/Enter, canonical reset/config retirement and localized inert
+preview geometry. It binds actual installed SDK inputs and stylesheet bytes,
+refuses external requests, and closes only its own page/context/server/files.
+
 ## Portal parent-record summary cards
 
 `test/portalSummaryFields.test.ts` covers current schema names, configured order,

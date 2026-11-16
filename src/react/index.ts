@@ -3164,3 +3164,22 @@ export {
     FormSubmitButton,
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
+export {
+    FormCaptcha,
+    type FormCaptchaProps,
+    type FormCaptchaLabels,
+} from './FormCaptcha.js';
+export {
+    createFormCaptchaProviderRegistry,
+    type FormCaptchaToken,
+    type FormCaptchaScope,
+    type FormCaptchaAdmission,
+    type FormCaptchaCallbacks,
+    type FormCaptchaWidgetHandle,
+    type FormCaptchaRenderer,
+    type FormCaptchaProvider,
+    type FormCaptchaSnapshot,
+    type FormCaptchaNotice,
+    type FormCaptchaHost,
+    type FormCaptchaState,
+} from '../ui/formCaptcha.js';

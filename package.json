@@ -87,6 +87,7 @@
             }
         },
         "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
+        "./react/form-captcha.css": "./dist/esm/react/form-captcha.css",
         "./react/form-group.css": "./dist/esm/react/form-group.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",

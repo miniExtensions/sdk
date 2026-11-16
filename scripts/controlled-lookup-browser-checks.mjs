@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+    mkdtempSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
@@ -25,6 +31,7 @@ export async function checkControlledLookupBrowser({
     consumer,
     evidence,
     output,
+    readArchiveMember,
 }) {
     Object.assign(evidence, {
         status: 'running',
@@ -56,6 +63,35 @@ export async function checkControlledLookupBrowser({
             installed = realpathSync(
                 join(root, 'node_modules/@miniextensions/sdk')
             );
+        assert.equal(
+            typeof readArchiveMember,
+            'function',
+            'Exact admitted archive reader required'
+        );
+        evidence.archiveInputs = {};
+        for (const format of ['esm', 'cjs']) {
+            for (const name of [
+                'react/index.js',
+                'react/ControlledLookupField.js',
+                'react/lookupPresentationValidation.js',
+                'react/readonlyResourceOwner.js',
+                'react/ReadOnlyURLGallery.js',
+                'react/AttachmentPreview.js',
+                'react/FormulaField.js',
+                'react/lookupFieldTypes.d.ts',
+                'react/lookup.css',
+                'ui/lookupProjection.js',
+            ]) {
+                const member = 'dist/' + format + '/' + name;
+                const actual = readFileSync(join(installed, member));
+                assert(
+                    actual.equals(readArchiveMember('package/' + member)),
+                    'Installed Lookup input differs from admitted archive: ' +
+                        member
+                );
+                evidence.archiveInputs[member] = sha(actual);
+            }
+        }
         directory = mkdtempSync(join(root, '.controlled-lookup-proof-'));
         const assets = new Map();
         for (const format of ['esm', 'cjs']) {

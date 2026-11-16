@@ -15,6 +15,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright';
+import { stop as stopBuildService } from 'esbuild';
+import { createArchiveMemberReader } from './package-checks.mjs';
 import { checkControlledLookupBrowser } from './controlled-lookup-browser-checks.mjs';
 
 const args = new Map();
@@ -77,6 +79,10 @@ try {
         'Require a clean committed harness/source checkout'
     );
     regular(executablePath);
+    const readArchiveMember = createArchiveMemberReader({
+        archivePath: archive,
+        expectedSha256: receipt.package.sha256,
+    });
     report.source = receipt.source;
     report.package = receipt.package;
     report.harness = {
@@ -115,6 +121,7 @@ try {
             })
         );
         const policy = {
+            nodeLinker: 'hoisted',
             minimumReleaseAge: 2880,
             minimumReleaseAgeExclude: [],
             blockExoticSubdeps: true,
@@ -158,6 +165,7 @@ try {
             consumer,
             evidence: profile,
             output: profileOutput,
+            readArchiveMember,
         });
         assert.equal(profile.status, 'passed');
         assert.equal(sha(regular(archive)), receipt.package.sha256);
@@ -171,6 +179,8 @@ try {
     report.status = 'failed';
     report.error = error.message;
 } finally {
+    stopBuildService();
+    report.cleanup.bundler = 'completed';
     try {
         if (browser) {
             let timer;

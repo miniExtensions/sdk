@@ -2284,6 +2284,7 @@ try {
             consumer: temporary,
             evidence: report.controlledLookup,
             output,
+            readArchiveMember,
         });
         report.externalSyncSourceControlled = {};
         await checkExternalSyncSourceControlledBrowser({

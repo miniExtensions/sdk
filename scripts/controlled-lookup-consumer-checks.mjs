@@ -141,6 +141,7 @@ export function checkControlledLookupReactMatrix({
                 })
             );
             const policy = {
+                nodeLinker: 'hoisted',
                 minimumReleaseAge: 2880,
                 minimumReleaseAgeExclude: [],
                 blockExoticSubdeps: true,

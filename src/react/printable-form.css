@@ -156,7 +156,38 @@
 .mx-sdk-print-sequence-stack > * {
     display: block;
 }
+.mx-sdk-print-controls button,
+.mx-sdk-print-job-controls button {
+    font: inherit;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid currentColor;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+.mx-sdk-print-controls button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+.mx-sdk-print-job-controls {
+    position: fixed;
+    z-index: 2147483647;
+    inset: auto 1rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    background: white;
+    color: #111827;
+    box-shadow: 0 2px 12px #0002;
+}
 @media print {
+    .mx-sdk-print-controls,
+    .mx-sdk-print-job-controls {
+        display: none;
+    }
     .mx-sdk-print-document {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;

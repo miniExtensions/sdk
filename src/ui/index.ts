@@ -397,3 +397,25 @@ export {
     type ReadonlyPrintLinkedRecord,
     type ReadonlyPrintCapture,
 } from './readonlyPrintDocument.js';
+export {
+    createPrintableFormAdmission,
+    getDocumentPrintableFormAdmission,
+    createPrintableFormController,
+    type PrintableFormScope,
+    type PrintableFormAuthority,
+    type PrintableFormSource,
+    type PrintableFormAdmission,
+    type PrintableFormPhase,
+    type PrintableFormJobSnapshot,
+    type PrintableFormJob,
+    type PrintableFormInvocation,
+    type PrintableFormPreparedDocument,
+    type PrintableFormEngine,
+    type PrintableFormRequest,
+    type PrintableFormControllerSnapshot,
+    type PrintableFormController,
+} from './printableForm.js';
+export {
+    preparePrintableDOM,
+    type PrintableDOMOptions,
+} from './printableDOM.js';

@@ -3201,3 +3201,13 @@ export {
     type ReadonlyPrintLinkedRecord,
     type ReadonlyPrintCapture,
 } from '../ui/readonlyPrintDocument.js';
+export {
+    PrintableForm,
+    type PrintableFormHandle,
+    type PrintableFormProps,
+} from './PrintableForm.js';
+export { createBrowserPrintableFormEngine } from './printableFormEngine.js';
+export {
+    PrintableFormJobControls,
+    type PrintableFormJobLabels,
+} from './PrintableFormJobControls.js';

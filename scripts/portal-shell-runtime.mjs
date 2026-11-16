@@ -1,5 +1,409 @@
 import assert from 'node:assert/strict';
 
+/** Configured native presentation through the public component and real intent boundary. */
+export async function assertPortalShellPresentationConsumer({
+    React,
+    ui,
+    Window,
+    createRoot,
+    renderToString,
+}) {
+    const h = React.createElement;
+    let snapshot = {
+        scope: 'configured:member',
+        revision: 1,
+        items: [{ type: 'table', id: 'records', label: 'Records' }],
+        selection: { type: 'table', itemId: 'records', viewId: null },
+        header: { layout: 'sidebar', title: 'Portal' },
+        user: { name: 'Member', settingsEnabled: true, logoutEnabled: true },
+        searchAgainEnabled: true,
+    };
+    const intents = [];
+    let synchronousPublication = false,
+        synchronousPublications = 0;
+    const firstCallback = (intent) => {
+        intents.push({ callback: 'first', ...intent });
+        if (synchronousPublication && intent.type === 'logout') {
+            synchronousPublications++;
+            snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+            root.render(element());
+        }
+    };
+    const secondCallback = (intent) =>
+        intents.push({ callback: 'second', ...intent });
+    let onIntent = firstCallback;
+    const element = () =>
+        h(
+            React.StrictMode,
+            null,
+            h(
+                ui.CompletePortalShell,
+                {
+                    snapshot,
+                    onIntent,
+                    labels: {
+                        readMore: 'More details',
+                        showLess: 'Fewer details',
+                    },
+                },
+                h('input', {
+                    'aria-label': 'Host draft',
+                    defaultValue: 'initial',
+                })
+            )
+        );
+    const legacy = renderToString(element());
+    assert.match(legacy, /<summary[^>]*>Member<\/summary>/);
+    assert.doesNotMatch(legacy, /mx-sdk-portal-shell--layout-actions/);
+    assert.deepEqual(intents, [], 'SSR never allocates host effects');
+    let networks = 0;
+    const window = new Window({
+        url: 'https://configured.invalid/',
+        settings: {
+            disableIframePageLoading: true,
+            fetch: {
+                interceptor: {
+                    beforeAsyncRequest() {
+                        networks++;
+                        throw Error('Unexpected provider request');
+                    },
+                    beforeSyncRequest() {
+                        networks++;
+                        throw Error('Unexpected provider request');
+                    },
+                },
+            },
+        },
+    });
+    window.happyDOM.setWindowSize({ width: 1280, height: 900 });
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ];
+    const originals = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    for (const key of keys)
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
+        });
+    const container = window.document.createElement('form');
+    let submits = 0;
+    container.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submits++;
+    });
+    window.document.body.append(container);
+    let root = createRoot(container);
+    const siblingContainer = window.document.createElement('div');
+    window.document.body.append(siblingContainer);
+    const siblingRoot = createRoot(siblingContainer),
+        siblingIntents = [];
+    const siblingSnapshot = { ...snapshot, scope: 'configured:sibling' };
+    const siblingIntent = (intent) => siblingIntents.push(intent);
+    const render = () => React.act(async () => root.render(element()));
+    const click = (node) =>
+        React.act(async () => {
+            assert(node);
+            node.click();
+        });
+    const dialog = () => container.querySelector('[role="dialog"]');
+    const namedButton = (parent, text) =>
+        [...parent.querySelectorAll('button')].find(
+            (n) => n.textContent === text
+        );
+    const openLogout = async () => {
+        const details = container.querySelector('.mx-sdk-portal-user');
+        if (details) {
+            await click(details.querySelector('summary'));
+            await click(namedButton(details, 'Log out'));
+        } else await click(container.querySelector('[aria-label="Log out"]'));
+        assert(dialog(), 'A fresh current opener must work');
+        return namedButton(dialog(), 'Log out');
+    };
+    let availabilityCases = 0,
+        authorityRetirements = 0;
+    try {
+        await render();
+        await React.act(async () =>
+            siblingRoot.render(
+                h(
+                    React.StrictMode,
+                    null,
+                    h(ui.CompletePortalShell, {
+                        snapshot: siblingSnapshot,
+                        onIntent: siblingIntent,
+                    })
+                )
+            )
+        );
+        const siblingDetails = siblingContainer.querySelector(
+            '.mx-sdk-portal-user'
+        );
+        await click(siblingDetails.querySelector('summary'));
+        await click(namedButton(siblingDetails, 'Log out'));
+        const siblingDialog = siblingContainer.querySelector('[role="dialog"]');
+        assert(siblingDialog);
+        let body = container.querySelector('input');
+        body.value = 'legitimate draft';
+        const configuredHeader = {
+            ...snapshot.header,
+            actionsPlacement: 'layout',
+        };
+        for (const presentation of ['icon', 'text']) {
+            for (const [settingsEnabled, logoutEnabled] of [
+                [true, false],
+                [false, true],
+                [true, true],
+                [false, false],
+            ]) {
+                snapshot = {
+                    ...snapshot,
+                    header: configuredHeader,
+                    user: {
+                        name: '',
+                        presentation,
+                        settingsEnabled,
+                        logoutEnabled,
+                    },
+                };
+                await render();
+                const footer = container.querySelector(
+                    '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+                );
+                assert(
+                    footer,
+                    'The whole configured action group belongs in the sidebar footer'
+                );
+                assert.equal(
+                    container.querySelectorAll('.mx-sdk-portal-actions').length,
+                    1
+                );
+                assert.equal(
+                    Boolean(footer.querySelector('details')),
+                    settingsEnabled && logoutEnabled
+                );
+                const direct = footer.querySelector(
+                    '.mx-sdk-portal-user-direct'
+                );
+                assert.equal(
+                    Boolean(direct),
+                    settingsEnabled !== logoutEnabled
+                );
+                if (direct && logoutEnabled)
+                    assert(
+                        direct.querySelector('svg'),
+                        'Logout-only remains an icon in text mode'
+                    );
+                if (direct && settingsEnabled && presentation === 'text')
+                    assert.equal(
+                        direct.textContent,
+                        '',
+                        'Empty field-derived labels stay blank'
+                    );
+                availabilityCases++;
+            }
+        }
+        snapshot = {
+            ...snapshot,
+            hideMenuItems: true,
+            header: configuredHeader,
+        };
+        await render();
+        assert(
+            container.querySelector(
+                '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+            )
+        );
+        assert.equal(
+            container.querySelectorAll('.mx-sdk-portal-menu button').length,
+            0,
+            'Hidden rows do not swallow utility actions'
+        );
+        assert.equal(container.querySelector('input'), body);
+        assert.equal(body.value, 'legitimate draft');
+        snapshot = {
+            ...snapshot,
+            items: [],
+            hideMenuItems: false,
+            header: {
+                ...configuredHeader,
+                descriptionHtml: '<p>Owned description</p>',
+                descriptionOptions: {
+                    placement: 'navigation',
+                    truncate: true,
+                    resetKey: 'portal',
+                },
+            },
+        };
+        await render();
+        assert(
+            container.querySelector('nav .mx-sdk-description__toggle'),
+            'Empty menus retain the configured description'
+        );
+        await click(namedButton(container, 'More details'));
+        assert(namedButton(container, 'Fewer details'));
+        snapshot = { ...snapshot, revision: 2 };
+        await render();
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 1023, height: 800 })
+        );
+        assert(
+            namedButton(container, 'Fewer details'),
+            'Resize/revision does not reset description expansion'
+        );
+        snapshot = {
+            ...snapshot,
+            header: {
+                ...snapshot.header,
+                descriptionOptions: {
+                    ...snapshot.header.descriptionOptions,
+                    resetKey: 'next',
+                },
+            },
+        };
+        await render();
+        assert(
+            namedButton(container, 'More details'),
+            'Explicit content identity resets disclosure'
+        );
+        // Navigation placement is independent from both menu rows and footer options.
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, actionsPlacement: 'header' },
+        };
+        await render();
+        assert(container.querySelector('nav .mx-sdk-description__toggle'));
+        snapshot = {
+            ...snapshot,
+            items: [{ type: 'table', id: 'records', label: 'Records' }],
+            header: {
+                layout: 'topbar',
+                title: 'Portal',
+                actionsPlacement: 'layout',
+            },
+            user: {
+                name: 'Member',
+                settingsEnabled: true,
+                logoutEnabled: true,
+                presentation: 'text',
+            },
+        };
+        await render();
+        // Empty selection legitimately replaced the host body. From this
+        // restored selection onward, presentation/authority changes must not.
+        body = container.querySelector('input');
+        body.value = 'legitimate draft';
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 639, height: 800 })
+        );
+        assert(
+            container.querySelector(
+                '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+            )
+        );
+        await React.act(async () =>
+            window.happyDOM.setWindowSize({ width: 640, height: 800 })
+        );
+        assert(
+            container.querySelector(
+                '.mx-sdk-portal-header > .mx-sdk-portal-actions'
+            )
+        );
+        assert.equal(
+            container
+                .querySelector('.mx-sdk-portal-navigation')
+                .hasAttribute('hidden'),
+            false
+        );
+        // The boolean baseline revives a confirmation after these committed A-B-A transitions.
+        const ownerA = snapshot;
+        let obsolete = await openLogout();
+        snapshot = {
+            ...ownerA,
+            user: { ...ownerA.user, logoutEnabled: false },
+        };
+        await render();
+        assert.equal(dialog(), null);
+        snapshot = ownerA;
+        await render();
+        assert.equal(dialog(), null);
+        await click(obsolete);
+        assert.equal(intents.length, 0);
+        authorityRetirements++;
+        obsolete = await openLogout();
+        onIntent = secondCallback;
+        await render();
+        assert.equal(dialog(), null);
+        onIntent = firstCallback;
+        await render();
+        assert.equal(dialog(), null);
+        await click(obsolete);
+        assert.equal(intents.length, 0);
+        authorityRetirements++;
+        // Same current owner survives internal renders and can confirm exactly once.
+        const confirm = await openLogout();
+        synchronousPublication = true;
+        await React.act(async () => {
+            confirm.click();
+            confirm.click();
+        });
+        synchronousPublication = false;
+        assert.equal(intents.filter((i) => i.type === 'logout').length, 1);
+        assert.equal(intents[0].callback, 'first');
+        assert.equal(synchronousPublications, 1);
+        snapshot = { ...ownerA, revision: 3 };
+        onIntent = secondCallback;
+        await render();
+        await click(await openLogout());
+        assert.equal(intents.filter((i) => i.type === 'logout').length, 2);
+        assert.equal(intents[1].callback, 'second');
+        assert.equal(container.querySelector('input'), body);
+        assert.equal(body.value, 'legitimate draft');
+        assert.equal(
+            siblingContainer.querySelector('[role="dialog"]'),
+            siblingDialog
+        );
+        await click(namedButton(siblingDialog, 'Log out'));
+        assert.deepEqual(siblingIntents, [
+            { type: 'logout', scope: 'configured:sibling', revision: 1 },
+        ]);
+        snapshot = { ...snapshot, revision: 4 };
+        await render();
+        obsolete = await openLogout();
+        await React.act(async () => root.unmount());
+        root = null;
+        await click(obsolete);
+        authorityRetirements++;
+        assert.equal(intents.length, 2);
+        assert.equal(submits, 0);
+        assert.equal(networks, 0);
+        return {
+            availabilityCases,
+            authorityRetirements,
+            logoutIntents: 2,
+            submitEvents: submits,
+            bodyRemountsWhileSelected: 0,
+            implicitNetworkRequests: networks,
+            synchronousPublications,
+            siblingLogoutIntents: siblingIntents.length,
+        };
+    } finally {
+        if (root) await React.act(async () => root.unmount());
+        await React.act(async () => siblingRoot.unmount());
+        keys.forEach((key, index) => {
+            if (originals[index])
+                Object.defineProperty(globalThis, key, originals[index]);
+            else Reflect.deleteProperty(globalThis, key);
+        });
+        await window.happyDOM.close();
+    }
+}
+
 /** Exercise the stock resize engine, never a replacement drag implementation. */
 export async function assertPortalShellSidebarConsumer({
     React,

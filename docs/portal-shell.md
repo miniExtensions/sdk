@@ -210,3 +210,75 @@ behavior, not native adoption or deployment acceptance. Native integration must
 reconcile PortalView's shared hunks, preserve its landed condition compiler,
 wire exactly one existing navigation/storage/query path, and run native and
 permitted actual-deployment regressions before the whole ticket is Done.
+
+## Configured descriptions and actions
+
+All presentation options are additive. Omission retains the text user menu,
+header actions, untruncated header description and 1024px responsive breakpoint.
+
+`header.actionsPlacement: 'layout'` places the whole Search Again/user group
+after sidebar navigation. Topbars keep it in the header from 640px upward and
+put it after mobile menu rows below 640px. Sidebar navigation uses 1024px.
+Empty menus retain the configured container; `hideMenuItems` withholds menu
+rows without discarding explicitly placed utility actions or descriptions.
+The native adapter still decides which headerless controls are available.
+
+`descriptionOptions.placement: 'navigation'` places the existing HTML source
+after menu rows. `truncate: true` reuses `CompleteTruncatedDescription` and its
+measurement, sanitization and disclosure lifecycle. HTML or explicit `resetKey`
+changes reset expansion; resize and presentation revision changes do not.
+Keep `resetKey` stable for the same content. Labels `readMore` and `showLess`
+are optional. An explicit empty description stays blank.
+
+Explicit user `presentation: 'icon' | 'text'` uses the configured native
+availability branches: settings-only is a direct icon/text control, logout-only
+is a direct icon, both actions use a dropdown and neither produces a user
+control. An empty text name remains blank. Omission or `'menu'` preserves the
+existing text dropdown and name fallback.
+
+```tsx
+import { createElement } from 'react';
+import {
+    CompletePortalShell,
+    type PortalShellSnapshot,
+} from '@miniextensions/sdk/react';
+
+const snapshot: PortalShellSnapshot = {
+    scope: 'example:member',
+    revision: 1,
+    items: [],
+    selection: null,
+    header: {
+        layout: 'sidebar',
+        title: 'Portal',
+        actionsPlacement: 'layout',
+        descriptionHtml: '<p>Welcome to your portal.</p>',
+        descriptionOptions: {
+            placement: 'navigation',
+            truncate: true,
+            resetKey: 'portal-description',
+        },
+    },
+    user: {
+        name: 'Member',
+        settingsEnabled: true,
+        logoutEnabled: true,
+        presentation: 'icon',
+    },
+};
+const shell = createElement(CompletePortalShell, {
+    snapshot,
+    onIntent(intent) {
+        console.log(intent.type, intent.scope, intent.revision);
+    },
+    labels: { readMore: 'Read more', showLess: 'Show less' },
+});
+void shell;
+```
+
+Logout confirmation is owned by the committed immutable snapshot and intent
+callback. Replacing either retires an old confirmation permanently, including
+A→B→A; a fresh current control can open another. Internal renders with the same
+snapshot and callback retain it. Confirmation is consumed before dispatch, so
+synchronous host publication cannot duplicate logout. This retires UI admission
+before a host intent; it does not cancel or replay already allocated host work.

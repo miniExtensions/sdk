@@ -276,6 +276,56 @@ test('two mounted public controls route only exact lowercase Ctrl+p to the selec
     );
 });
 
+test('public controls refuse asynchronous currentness for explicit and keyboard requests', async (t) => {
+    const b = await browser(t);
+    const f = source();
+    // JavaScript hosts can violate the declared synchronous port. Preserve the
+    // controller's runtime refusal instead of turning a Promise into true.
+    f.port.isCurrent = () => Promise.resolve(false) as unknown as boolean;
+    const admission = createPrintableFormAdmission();
+    admission.setKeyboardOwner(null, f.lease);
+    const ref = createRef<PrintableFormHandle>();
+    await act(async () =>
+        b.root.render(
+            h(
+                StrictMode,
+                null,
+                h(PrintableForm, {
+                    ref,
+                    source: f.port,
+                    admission,
+                    labels,
+                })
+            )
+        )
+    );
+    let receipt: PrintableFormRequest | undefined;
+    await act(async () => {
+        receipt = ref.current!.request();
+        await turn();
+    });
+    assert.deepEqual(receipt, { status: 'refused', reason: 'retired' });
+    const gesture = new b.window.KeyboardEvent('keydown', {
+        key: 'p',
+        ctrlKey: true,
+        cancelable: true,
+    });
+    await act(async () => {
+        b.window.document.dispatchEvent(gesture);
+        await turn();
+    });
+    assert.equal(gesture.defaultPrevented, false);
+    assert.equal(f.captures, 0);
+    assert.equal(b.prints, 0);
+    assert.equal(
+        b.window.document.querySelectorAll('[data-mx-sdk-print-frame]').length,
+        0
+    );
+    const grant = admission.tryAcquire();
+    assert.ok(grant);
+    assert.equal(admission.release(grant), true);
+});
+
 test('whole native fallback retains its actual readonly DOM with the same busy admission and independent SDK controls', async (t) => {
     const b = await browser(t);
     const owner = {};

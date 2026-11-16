@@ -297,12 +297,12 @@ export async function checkPrintableFormReactMatrix({
                         maxBuffer: 8 * 1024 * 1024,
                     }
                 );
-                assert.match(output, /# tests 42\b/);
-                assert.match(output, /# pass 42\b/);
+                assert.match(output, /# tests 43\b/);
+                assert.match(output, /# pass 43\b/);
                 assert.match(output, /# fail 0\b/);
                 formats.push({
                     format,
-                    tests: 42,
+                    tests: 43,
                     originalAssertions: true,
                     publicEntries: true,
                     outputSha256: sha(output),

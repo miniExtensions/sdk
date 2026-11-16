@@ -85,7 +85,7 @@ export const PrintableForm: ForwardRefExoticComponent<
                             : null,
                     isCurrent: (scope) =>
                         committed.current === stamp &&
-                        props.source.isCurrent(scope) &&
+                        props.source.isCurrent(scope) === true &&
                         committed.current === stamp,
                     capture: (scope) => props.source.capture(scope),
                 },
@@ -111,7 +111,7 @@ export const PrintableForm: ForwardRefExoticComponent<
                             authority.keyboardLease,
                             admission.keyboardOwner()
                         ) ||
-                        !props.source.isCurrent(authority.scope)
+                        props.source.isCurrent(authority.scope) !== true
                     )
                         return;
                     const receipt = owned.request('keyboard');

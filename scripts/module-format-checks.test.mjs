@@ -689,6 +689,7 @@ for (const name of [
     'printable-form',
     'csv-export',
     'kanban',
+    'lookup',
     'checkbox',
     'text',
     'number',

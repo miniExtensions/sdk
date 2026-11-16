@@ -13,6 +13,7 @@ import {
     checkCSVExportBrowser,
 } from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
+import { checkControlledLookupBrowser } from './controlled-lookup-browser-checks.mjs';
 import {
     checkExternalSyncSourceControlledBrowser,
     checkAiTextControlledBrowser,
@@ -1565,6 +1566,8 @@ try {
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/printable-form-browser-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
+            'scripts/controlled-lookup-consumer-checks.mjs',
+            'scripts/controlled-lookup-browser-checks.mjs',
             'scripts/form-captcha-consumer-checks.mjs',
             'scripts/form-captcha-browser-checks.mjs',
             'scripts/csv-export-consumer-checks.mjs',
@@ -2290,6 +2293,14 @@ try {
             consumer: temporary,
             evidence: report.controlledSelect,
             output,
+        });
+        report.controlledLookup = {};
+        await checkControlledLookupBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.controlledLookup,
+            output,
+            readArchiveMember,
         });
         report.externalSyncSourceControlled = {};
         await checkExternalSyncSourceControlledBrowser({

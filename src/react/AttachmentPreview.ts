@@ -5,6 +5,12 @@ import {
     classifyAttachmentPreview,
     type AttachmentPreviewSource,
 } from '../ui/attachmentPreview.js';
+import {
+    resourceOwnerCurrent,
+    resourceOwnerGeneration,
+    watchResourceOwner,
+    type ReadonlyResourceOwner,
+} from './readonlyResourceOwner.js';
 
 export type AttachmentPreviewLabels = {
     attachments: string;
@@ -15,41 +21,82 @@ export type AttachmentPreviewProps = {
     /** An explicitly supplied media URL. No label-only facet URL recovery. */
     attachment: AttachmentPreviewSource;
     labels?: Partial<AttachmentPreviewLabels>;
+    owner?: ReadonlyResourceOwner;
+    identity?: unknown;
 };
 
 /** Complete media presentation; the caller retains navigation and attachments. */
 export function AttachmentPreview({
     attachment,
     labels,
+    owner,
+    identity,
 }: AttachmentPreviewProps): React.ReactElement {
     const docContainerRef = useRef<HTMLDivElement>(null);
     const { isImage, isHEIC, isVideo, isAudio, isWordDocument, isPdf } =
         classifyAttachmentPreview(attachment);
+    const generation = resourceOwnerGeneration(owner);
 
     useEffect(() => {
         const host = docContainerRef.current;
-        if (!isWordDocument || host == null) return;
+        if (!isWordDocument || host == null || !resourceOwnerCurrent(owner))
+            return;
         // The vendor may still write after retirement. Only this detachable
         // lifetime target is handed to it, never the retained React host.
         const container = document.createElement('div');
-        host.appendChild(container);
+        // Owned documents publish only after their captured renderer settles.
+        // Legacy callers retain their existing incremental presentation.
+        if (owner === undefined) host.appendChild(container);
         let retired = false;
+        const controller = new AbortController();
+        const current = () =>
+            !retired &&
+            !controller.signal.aborted &&
+            resourceOwnerCurrent(owner);
+        const unsubscribe = watchResourceOwner(owner, () => {
+            retired = true;
+            controller.abort();
+            container.remove();
+        });
         const loadDocument = async () => {
             try {
-                const response = await fetch(attachment.url);
+                if (!current()) return;
+                const response =
+                    owner === undefined
+                        ? await fetch(attachment.url)
+                        : await fetch(attachment.url, {
+                              signal: controller.signal,
+                          });
+                if (owner !== undefined && !current()) {
+                    await response.body?.cancel();
+                    return;
+                }
                 const blob = await response.blob();
-                if (retired) return;
+                if (!current()) return;
                 await renderAsync(blob, container);
+                if (current() && owner !== undefined)
+                    host.appendChild(container);
+                else if (!current()) container.remove();
             } catch (error) {
-                if (!retired) console.error('Error rendering document:', error);
+                if (current())
+                    console.error('Error rendering document:', error);
             }
         };
         void loadDocument();
         return () => {
             retired = true;
+            unsubscribe?.();
+            controller.abort();
             container.remove();
         };
-    }, [attachment.url, isWordDocument]);
+    }, [attachment.url, isWordDocument, generation, identity]);
+
+    if (!resourceOwnerCurrent(owner))
+        return h(
+            'p',
+            { role: 'status' },
+            labels?.previewNotAvailable ?? 'Preview Not Available'
+        );
 
     if (isHEIC && attachment.thumbnails?.full != null) {
         return h('img', {

@@ -323,6 +323,12 @@ its separate contract.
 `renderMultipleLookupValuesField` slot. It formats supplied flat native arrays as
 inert text without flattening, hydration or editing. No CSS import is required.
 
+[Complete controlled Lookup](docs/lookup.md) adds `mode: 'controlled'` to the
+same `LookupField` export. It composes SDK readonly rich controls from immutable
+host projections and captured resource/action owners. Import `lookup.css` for
+its complete styles. The pure `/ui` occurrence projector preserves flat-array
+order, multiplicity and original references.
+
 [Barcode presentation](docs/ui.md#react-barcode-presentation) exports `BarcodeField`,
 `BarcodeFieldProps`, `BarcodeFieldOptions` and `renderBarcodeField` for the existing
 physical slot. It displays supplied text while preserving the native object and

@@ -80,6 +80,11 @@ async function fixture(t: TestContext) {
         open,
         index,
         preview,
+        unmount: async () => {
+            const current = root;
+            root = undefined;
+            await act(async () => current?.unmount());
+        },
         submits: () => submits,
     };
 }
@@ -366,4 +371,261 @@ it('retires the real public video and pending Word leaf on navigation and empty 
     );
     await f.render({ entries: [entry('recovered')] });
     assert.equal(f.host.querySelector('[role="dialog"]'), null);
+});
+
+it('denies revoked connected actions while preserving Close and suppressing obsolete focus', async (t) => {
+    const f = await fixture(t);
+    let valid = true;
+    const owner = { token: {}, isCurrent: () => valid };
+    const requests = t.mock.method(globalThis, 'fetch', async () => {
+        throw Error('No revoked resource request');
+    });
+    await f.render({
+        entries: [entry('first'), entry('second')],
+        owner,
+        identity: 'owned',
+    });
+    const opener = f.host.querySelector('button')!;
+    opener.focus();
+    await f.open(0);
+    valid = false; // No render or notification: retained controls must recheck.
+    const link = f.host.querySelector('.mx-sdk-url-gallery__actions a')!;
+    for (const type of ['click', 'auxclick']) {
+        const event = new f.window.MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            link.dispatchEvent(event);
+        });
+        assert.equal(event.defaultPrevented, true);
+    }
+    await f.click('button[aria-label="Next"]');
+    assert.equal(f.index(), '1 / 2');
+    const download = Array.from(f.host.querySelectorAll('button')).find(
+        (node) => node.textContent === 'Download'
+    )!;
+    await act(async () => download.click());
+    assert.equal(requests.mock.callCount(), 0);
+    const close = Array.from(f.host.querySelectorAll('button')).find(
+        (node) => node.textContent === 'Close'
+    )!;
+    await act(async () => close.click());
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    assert.notEqual(f.window.document.activeElement, opener);
+    assert.equal(f.submits(), 0);
+});
+
+it('never upgrades a deferred same-URL download into a replacement owner', async (t) => {
+    const f = await fixture(t);
+    let current = 1,
+        clicks = 0;
+    const pending: {
+        resolve(response: Response): void;
+        signal: AbortSignal;
+    }[] = [];
+    t.mock.method(URL, 'createObjectURL', () => 'blob:owned-gallery');
+    t.mock.method(URL, 'revokeObjectURL', () => {});
+    t.mock.method(f.window.HTMLAnchorElement.prototype, 'click', () => {
+        clicks++;
+    });
+    t.mock.method(
+        globalThis,
+        'fetch',
+        async (_url: string | URL | Request, options?: RequestInit) =>
+            new Promise<Response>((resolve) =>
+                pending.push({
+                    resolve,
+                    signal: options!.signal as AbortSignal,
+                })
+            )
+    );
+    const entries = [entry('same')];
+    const owner = (generation: number) => ({
+        token: {},
+        isCurrent: () => current === generation,
+    });
+    const a = owner(1),
+        b = owner(2),
+        a2 = owner(3);
+    const download = async () => {
+        const button = Array.from(f.host.querySelectorAll('button')).find(
+            (node) => node.textContent === 'Download'
+        )!;
+        assert.ok(button);
+        await act(async () => button.click());
+    };
+    await f.render({ entries, owner: a, identity: 'same-record' });
+    await f.open(0);
+    await download();
+    current = 2;
+    await f.render({ entries, owner: b, identity: 'same-record' });
+    assert.equal(pending[0].signal.aborted, true);
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    await f.open(0);
+    await download();
+    await act(async () =>
+        pending[0].resolve(new Response(new Uint8Array([1])))
+    );
+    assert.equal(clicks, 0);
+    assert.match(f.host.textContent ?? '', /0%/);
+    await act(async () =>
+        pending[1].resolve(new Response(new Uint8Array([2])))
+    );
+    assert.equal(clicks, 1);
+    current = 3;
+    await f.render({ entries, owner: a2, identity: 'same-record' });
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    assert.equal(a.isCurrent(), false);
+    await f.open(0);
+    await download();
+    await act(async () =>
+        pending[2].resolve(new Response(new Uint8Array([3])))
+    );
+    assert.equal(clicks, 2);
+    assert.equal(f.host.ownerDocument.querySelector('a[download]'), null);
+    assert.equal(f.submits(), 0);
+});
+
+it('aborts subscribed retirement and ignores obsolete notifications after same-owner reconciliation', async (t) => {
+    const f = await fixture(t);
+    let current = true;
+    const listeners = new Set<() => void>();
+    const retained: (() => void)[] = [];
+    const owner = {
+        token: {},
+        isCurrent: () => current,
+        subscribe(listener: () => void) {
+            listeners.add(listener);
+            retained.push(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+    let signal: AbortSignal | undefined;
+    let resolve!: (response: Response) => void;
+    t.mock.method(
+        globalThis,
+        'fetch',
+        async (_url: string | URL | Request, options?: RequestInit) => {
+            signal = options?.signal as AbortSignal;
+            return new Promise<Response>((done) => {
+                resolve = done;
+            });
+        }
+    );
+    await f.render({
+        entries: [entry('same'), entry('same')],
+        owner,
+        identity: 'a',
+    });
+    await f.open(1);
+    await f.render({
+        entries: [entry('same'), entry('same'), entry('other')],
+        owner,
+        identity: 'a',
+    });
+    assert.equal(f.index(), '2 / 3');
+    const button = Array.from(f.host.querySelectorAll('button')).find(
+        (node) => node.textContent === 'Download'
+    )!;
+    await act(async () => button.click());
+    current = false;
+    await act(async () => {
+        for (const listener of [...listeners]) listener();
+    });
+    assert.equal(signal?.aborted, true);
+    assert.equal(listeners.size, 0);
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    await act(async () => resolve(new Response(new Uint8Array([1]))));
+    const successor = { token: {}, isCurrent: () => true };
+    await f.render({
+        entries: [entry('successor')],
+        owner: successor,
+        identity: 'b',
+    });
+    await f.open(0);
+    await act(async () => {
+        for (const listener of retained) listener();
+    });
+    assert.ok(f.host.querySelector('[role="dialog"]'));
+    assert.equal(f.submits(), 0);
+});
+
+it('preserves legacy external focus return on full gallery unmount', async (t) => {
+    const f = await fixture(t);
+    const external = f.window.document.createElement('button');
+    f.window.document.body.append(external);
+    await f.render({ entries: [entry('legacy')] });
+    external.focus();
+    await f.open(0);
+    assert.notEqual(f.window.document.activeElement, external);
+    await f.unmount();
+    assert.equal(f.window.document.activeElement, external);
+});
+
+it('keeps a same-owner pending resource through reorder and releases listeners on unmount before settlement', async (t) => {
+    const f = await fixture(t);
+    const listeners = new Set<() => void>();
+    const owner = {
+        token: {},
+        isCurrent: () => true,
+        subscribe(listener: () => void) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+    const pending: {
+        resolve(response: Response): void;
+        signal: AbortSignal;
+    }[] = [];
+    let clicks = 0;
+    t.mock.method(URL, 'createObjectURL', () => 'blob:reconciled-gallery');
+    t.mock.method(URL, 'revokeObjectURL', () => {});
+    t.mock.method(f.window.HTMLAnchorElement.prototype, 'click', () => {
+        clicks++;
+    });
+    t.mock.method(
+        globalThis,
+        'fetch',
+        async (_url: string | URL | Request, options?: RequestInit) =>
+            new Promise<Response>((resolve) =>
+                pending.push({
+                    resolve,
+                    signal: options!.signal as AbortSignal,
+                })
+            )
+    );
+    const download = async () => {
+        const button = Array.from(f.host.querySelectorAll('button')).find(
+            (node) => node.textContent === 'Download'
+        )!;
+        await act(async () => button.click());
+    };
+    await f.render({
+        entries: [entry('same'), entry('middle'), entry('same')],
+        owner,
+        identity: 'a',
+    });
+    await f.open(2);
+    await download();
+    await f.render({
+        entries: [entry('same'), entry('same'), entry('middle')],
+        owner,
+        identity: 'a',
+    });
+    assert.equal(f.index(), '2 / 3');
+    assert.equal(pending[0].signal.aborted, false);
+    await act(async () =>
+        pending[0].resolve(new Response(new Uint8Array([1])))
+    );
+    assert.equal(clicks, 1);
+    await download();
+    assert.equal(listeners.size, 2);
+    await f.unmount();
+    assert.equal(pending[1].signal.aborted, true);
+    assert.equal(listeners.size, 0);
+    await act(async () =>
+        pending[1].resolve(new Response(new Uint8Array([2])))
+    );
+    assert.equal(clicks, 1);
 });

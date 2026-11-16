@@ -33,6 +33,7 @@ import { checkCompleteAddressReactMatrix } from './complete-address-consumer-che
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
 import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
+import { checkControlledLookupReactMatrix } from './controlled-lookup-consumer-checks.mjs';
 import { checkFieldPresentationReactMatrix } from './field-presentation-consumer-checks.mjs';
 import { checkFormCompletionReactMatrix } from './form-completion-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
@@ -693,6 +694,7 @@ try {
                 path === 'docs/form-submit.md' ||
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
+                path === 'docs/lookup.md' ||
                 headerStarterFiles.includes(path) ||
                 linkedFinderStarterFiles.includes(path) ||
                 summaryCardsStarterFiles.includes(path) ||
@@ -773,6 +775,9 @@ try {
         'dist/cjs/react/single-select.css',
         'dist/esm/react/controlled-select.css',
         'dist/cjs/react/controlled-select.css',
+        'dist/esm/react/lookup.css',
+        'dist/cjs/react/lookup.css',
+        'docs/lookup.md',
         'docs/controlled-select.md',
         'dist/esm/react/rich-text.css',
         'dist/cjs/react/rich-text.css',
@@ -3712,6 +3717,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(collaboratorMatrix.profiles.length, 4);
     assert.equal(collaboratorMatrix.cleanup, 'completed');
+    const controlledLookupMatrix = checkControlledLookupReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(controlledLookupMatrix.profiles.length, 4);
+    assert.equal(controlledLookupMatrix.cleanup, 'completed');
     const htmlDescriptionMatrix = checkHTMLDescriptionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

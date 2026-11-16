@@ -423,3 +423,10 @@ export {
     preparePrintableDOM,
     type PrintableDOMOptions,
 } from './printableDOM.js';
+
+export {
+    projectLookupValues,
+    type LookupResultConfig,
+    type LookupValueOccurrence,
+    type LookupValueProjection,
+} from './lookupProjection.js';

@@ -25,7 +25,12 @@ export type KanbanCard = Readonly<{
     accessibleLabel: string;
     projection: LinkedFinderCardProjection;
     /** Current native admission only; data/config do not grant these actions. */
-    open?: Readonly<{ label: string; activate: () => void }> | null;
+    open?: Readonly<{
+        label: string;
+        activate: () => void;
+        /** Register the current interactive source button; cleanup retires only that registration. */
+        registerTrigger?: (element: HTMLButtonElement) => () => void;
+    }> | null;
     unlink?: Readonly<{
         label: string;
         description: string;
@@ -47,7 +52,23 @@ export type KanbanProps<OriginalRecord, LoggedInRecord> = Readonly<{
     className?: string;
     label: string;
 }>;
-function Card({ card }: { card: KanbanCard }): ReactElement {
+function Card({
+    card,
+    interactive,
+}: {
+    card: KanbanCard;
+    interactive: boolean;
+}): ReactElement {
+    const register = interactive ? card.open?.registerTrigger : undefined;
+    const openRef = useMemo(() => {
+        let dispose: (() => void) | undefined;
+        return (element: HTMLButtonElement | null) => {
+            const previous = dispose;
+            dispose = undefined;
+            previous?.();
+            if (element && register) dispose = register(element);
+        };
+    }, [register]);
     return h(
         'div',
         {
@@ -67,6 +88,7 @@ function Card({ card }: { card: KanbanCard }): ReactElement {
         card.open
             ? h('button', {
                   type: 'button',
+                  ref: openRef,
                   className: 'mx-sdk-kanban-open',
                   onClick: card.open.activate,
                   'aria-label': card.open.label,
@@ -172,11 +194,14 @@ function KanbanSurface<OriginalRecord, LoggedInRecord>(
             overlayClassName: props.className,
             scrollable: true,
             onRecordUpdate: update,
-            renderItem: (id) => {
+            renderItem: (id, presentation) => {
                 const card = cards.get(String(id));
                 if (!card)
                     throw new Error('Missing admitted Kanban card projection');
-                return h(Card, { card });
+                return h(Card, {
+                    card,
+                    interactive: presentation?.interactive ?? true,
+                });
             },
         })
     );

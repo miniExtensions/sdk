@@ -5,9 +5,13 @@ import type {
 } from '@dnd-kit/core';
 import type { Transform } from '@dnd-kit/utilities';
 import { claimKanbanCursor } from './cursor.js';
-export type RenderItemFunc = (recordId: UniqueIdentifier) => React.ReactElement;
+export type RenderItemFunc = (
+    recordId: UniqueIdentifier,
+    presentation?: Readonly<{ interactive: boolean }>
+) => React.ReactElement;
 type Props = React.HTMLAttributes<HTMLDivElement> & {
     dragOverlay?: boolean;
+    interactive?: boolean;
     color?: string;
     disabled?: boolean;
     dragging?: boolean;
@@ -28,6 +32,7 @@ export const Item = React.memo(
     React.forwardRef<HTMLLIElement, Props>(function Item(
         {
             dragOverlay,
+            interactive,
             color,
             disabled,
             dragging,
@@ -92,7 +97,9 @@ export const Item = React.memo(
                     'data-kanban-record': String(value),
                     tabIndex: !handle ? 0 : undefined,
                 },
-                renderItem(value)
+                renderItem(value, {
+                    interactive: !dragOverlay && interactive !== false,
+                })
             )
         );
     })

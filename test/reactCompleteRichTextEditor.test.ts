@@ -1825,3 +1825,302 @@ it('keeps a selected inline-code URL literal through the vendor code-mark query'
     assert.deepEqual(writes, ['Alpha `https://example.com/path`']);
     assert.equal(ref.current, editor);
 });
+
+for (const reverse of [false, true]) {
+    for (const code of [
+        { name: 'indented code', initial: '    Alpha Beta', fence: false },
+        {
+            name: 'fenced Markdown',
+            initial: '```\nAlpha Beta\n```',
+            fence: false,
+        },
+        { name: 'menu code node', initial: 'Alpha Beta', fence: true },
+    ]) {
+        it(`reconciles pending native ${reverse ? 'reverse' : 'forward'} selection before ${code.name} URL paste`, async (t) => {
+            const f = await completeRichTextFixture(t);
+            const ref = createRef<NativeRichTextEditorHandle>();
+            const adjacentRef = createRef<NativeRichTextEditorHandle>();
+            const writes: string[] = [];
+            const adjacentWrites: string[] = [];
+            await f.render(
+                h(
+                    'section',
+                    null,
+                    h(ControlledCompleteEditor, {
+                        editorRef: ref,
+                        writes,
+                        initial: code.initial,
+                    }),
+                    h(ControlledCompleteEditor, {
+                        editorRef: adjacentRef,
+                        writes: adjacentWrites,
+                        initial: 'Adjacent document',
+                    })
+                )
+            );
+            const editor = await f.editor(ref);
+            const { view } = editor;
+            const adjacent = await f.editor(adjacentRef);
+            const adjacentDocument = adjacent.view.state.doc.toJSON();
+            if (code.fence) {
+                await act(async () =>
+                    view.dispatch(
+                        view.state.tr.setBlockType(
+                            0,
+                            view.state.doc.content.size,
+                            view.state.schema.nodes.code_fence,
+                            { language: null }
+                        )
+                    )
+                );
+            }
+            t.mock.timers.enable({ apis: ['setTimeout'] });
+            try {
+                await f.select(view, 8, 11);
+                await act(async () => t.mock.timers.tick(20));
+            } finally {
+                t.mock.timers.reset();
+            }
+            const pending = deferNativeSelectionChanges(t, f.document);
+            try {
+                const selection = f.document.getSelection();
+                assert(selection);
+                const anchor = view.domAtPos(reverse ? 11 : 7);
+                const head = view.domAtPos(reverse ? 7 : 11);
+                await act(async () =>
+                    selection.setBaseAndExtent(
+                        anchor.node,
+                        anchor.offset,
+                        head.node,
+                        head.offset
+                    )
+                );
+                assert(pending.pending() > 0);
+                assert.equal(selection.toString(), 'Beta');
+                assert.equal(
+                    view.state.doc.textBetween(
+                        view.state.selection.from,
+                        view.state.selection.to
+                    ),
+                    'eta'
+                );
+                writes.length = 0;
+                const url = 'https://example.invalid/selected-code';
+                const event = await f.paste(view, { 'text/plain': url });
+                assert.equal(event.defaultPrevented, true);
+                assert.equal(view.state.doc.textContent, 'Alpha ' + url);
+                assert.equal(
+                    view.state.doc.firstChild?.type.name,
+                    code.fence ? 'code_fence' : 'code_block'
+                );
+                assert.equal(view.dom.querySelector('a'), null);
+                assert.deepEqual(writes, ['```\nAlpha ' + url + '\n```\n\n\n']);
+                assert.equal(ref.current, editor);
+                assert.deepEqual(
+                    adjacent.view.state.doc.toJSON(),
+                    adjacentDocument
+                );
+                assert.deepEqual(adjacentWrites, []);
+                await act(async () => pending.release());
+                assert.equal(writes.length, 1);
+            } finally {
+                pending.restore();
+            }
+        });
+    }
+}
+
+it('replaces a whole code node selection before native paste without retaining its first character', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '```\nreplace_me\n```',
+        })
+    );
+    const { view } = await f.editor(ref);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+        await f.select(view, 2, 11);
+        await act(async () => t.mock.timers.tick(20));
+    } finally {
+        t.mock.timers.reset();
+    }
+    const pending = deferNativeSelectionChanges(t, f.document);
+    try {
+        const selection = f.document.getSelection();
+        assert(selection);
+        const anchor = view.domAtPos(11),
+            head = view.domAtPos(1);
+        await act(async () =>
+            selection.setBaseAndExtent(
+                anchor.node,
+                anchor.offset,
+                head.node,
+                head.offset
+            )
+        );
+        assert.equal(selection.toString(), 'replace_me');
+        assert.equal(
+            view.state.doc.textBetween(
+                view.state.selection.from,
+                view.state.selection.to
+            ),
+            'eplace_me'
+        );
+        writes.length = 0;
+        const event = await f.paste(view, {
+            'text/plain': 'https://example.invalid/whole-code',
+        });
+        assert.equal(event.defaultPrevented, true);
+        assert.equal(
+            view.state.doc.textContent,
+            'https://example.invalid/whole-code'
+        );
+        assert.equal(view.dom.querySelector('a'), null);
+        assert.equal(writes.length, 1);
+    } finally {
+        pending.restore();
+    }
+});
+
+it('reconciles native selection before clipboard parsing chooses its code or HTML context', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '    Code\n\nAlpha Beta',
+        })
+    );
+    const { view } = await f.editor(ref);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+        await f.select(view, 1);
+        await act(async () => t.mock.timers.tick(20));
+    } finally {
+        t.mock.timers.reset();
+    }
+    assert.equal(view.state.selection.$head.parent.type.spec.code, true);
+    let start = -1;
+    view.state.doc.descendants((node, pos) => {
+        if (node.isText && node.text === 'Alpha Beta') start = pos + 6;
+    });
+    assert(start > 0);
+    const pending = deferNativeSelectionChanges(t, f.document);
+    try {
+        const selection = f.document.getSelection();
+        assert(selection);
+        const anchor = view.domAtPos(start),
+            head = view.domAtPos(start + 4);
+        await act(async () =>
+            selection.setBaseAndExtent(
+                anchor.node,
+                anchor.offset,
+                head.node,
+                head.offset
+            )
+        );
+        assert.equal(selection.toString(), 'Beta');
+        assert.equal(view.state.selection.$head.parent.type.spec.code, true);
+        writes.length = 0;
+        await f.paste(view, {
+            'text/plain': 'Replacement',
+            'text/html': '<strong>Replacement</strong>',
+        });
+        assert.equal(view.state.doc.firstChild?.textContent, 'Code');
+        assert.equal(
+            view.state.doc.lastChild?.textContent,
+            'Alpha Replacement'
+        );
+        assert.equal(
+            view.dom.querySelector('strong')?.textContent,
+            'Replacement'
+        );
+        assert.equal(writes.length, 1);
+    } finally {
+        pending.restore();
+    }
+});
+
+for (const transition of ['owner', 'policy'] as const) {
+    it(`cancels native paste when selection publication replaces its ${transition}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        let replaceOwner: (() => void) | undefined;
+        function OwnedEditor() {
+            const [owner, setOwner] = useState(1);
+            replaceOwner = () => setOwner(2);
+            return h(CompleteRichTextEditor, {
+                ref,
+                identity: String(owner),
+                value: owner === 1 ? 'Original details' : 'Successor document',
+                onValueChange: (value) => writes.push(value),
+            });
+        }
+        await f.render(h(OwnedEditor));
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        try {
+            await f.select(view, 1, 4);
+            await act(async () => t.mock.timers.tick(20));
+        } finally {
+            t.mock.timers.reset();
+        }
+        const publish = view.props.dispatchTransaction,
+            replace = replaceOwner;
+        assert(publish);
+        assert(replace);
+        view.setProps({
+            dispatchTransaction(transaction) {
+                publish.call(view, transaction);
+                if (transaction.selectionSet && !transaction.docChanged) {
+                    if (transition === 'owner') flushSync(replace);
+                    else view.setProps({ editable: () => false });
+                }
+            },
+        });
+        const held = deferNativeSelectionChanges(t, f.document);
+        try {
+            const selection = f.document.getSelection();
+            assert(selection);
+            const anchor = view.domAtPos(1),
+                head = view.domAtPos(9);
+            await act(async () =>
+                selection.setBaseAndExtent(
+                    anchor.node,
+                    anchor.offset,
+                    head.node,
+                    head.offset
+                )
+            );
+            const event = await f.paste(view, {
+                'text/plain': 'https://example.invalid/retired-paste',
+            });
+            assert.equal(event.defaultPrevented, true);
+            assert.deepEqual(writes, []);
+            if (transition === 'owner') {
+                const successor = await f.editor(ref);
+                assert.notEqual(successor, editor);
+                assert.equal(view.isDestroyed, true);
+                assert.equal(
+                    successor.view.state.doc.textContent,
+                    'Successor document'
+                );
+            } else {
+                assert.equal(ref.current, editor);
+                assert.equal(view.editable, false);
+                assert.equal(view.state.doc.textContent, 'Original details');
+            }
+        } finally {
+            held.restore();
+        }
+    });
+}

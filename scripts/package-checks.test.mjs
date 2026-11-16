@@ -791,6 +791,47 @@ test('public distribution rejects changed PostgreSQL declaration bytes', async (
     );
 });
 
+test('public PostgreSQL declarations reject schema dependencies even with matching public hashes', async (t) => {
+    for (const dependency of [
+        'import type { ZodTypeAny } from "zod";\n',
+        'type Schema = import("zod").ZodTypeAny;\n',
+        'export type { ZodTypeAny } from "zod";\n',
+        '/// <reference types="zod" />\n',
+    ]) {
+        await t.test(dependency.trim(), async (t) => {
+            const fixture = await postgresDistributionFixture(t);
+            const declaration =
+                dependency +
+                (await readFile(
+                    join(
+                        fixture.root,
+                        'dist/esm/runtime/contracts/postgres.generated.d.ts'
+                    ),
+                    'utf8'
+                ));
+            const provenance = {
+                ...fixture.nativeProvenance,
+                contractDeclarationsSha256: createHash('sha256')
+                    .update(declaration)
+                    .digest('hex'),
+            };
+            for (const format of ['esm', 'cjs']) {
+                const prefix = `dist/${format}/runtime/contracts/postgres.generated`;
+                await write(fixture.root, prefix + '.d.ts', declaration);
+                await write(
+                    fixture.root,
+                    prefix + '.provenance.json',
+                    JSON.stringify(provenance)
+                );
+            }
+            await assert.rejects(
+                fixture.check(),
+                /PostgreSQL declarations cannot import schemas or external modules/
+            );
+        });
+    }
+});
+
 test('public distribution rejects PostgreSQL runtime code beyond type declarations', async (t) => {
     const fixture = await postgresDistributionFixture(t);
     await write(

@@ -42,6 +42,7 @@ export type {
     PostgresSource,
     PostgresTable,
     PostgresTableReference,
+    PostgresTextColumnConfig,
     PostgresType,
     PostgresValue,
     SelectFieldChoice,

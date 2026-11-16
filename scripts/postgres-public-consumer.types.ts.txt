@@ -27,7 +27,65 @@ import type {
     PostgresRecordDisplayConfiguration,
     PostgresRecordEditingConfiguration,
     PostgresRecordEditingValidation,
+    PostgresTextColumnConfig,
 } from '@miniextensions/sdk';
+
+// These remain optional stored settings, not editor-default materialization.
+export const absentTextConfig: PostgresTextColumnConfig = {};
+export const textConfig: PostgresTextColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+    displayAs: 'attachments-public-urls',
+    placeholderText: '',
+    characterLimit: 0,
+    preserveTrailingWhitespace: false,
+};
+export const undefinedTextConfig: PostgresTextColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+    displayAs: undefined,
+    placeholderText: undefined,
+    characterLimit: undefined,
+    preserveTrailingWhitespace: undefined,
+};
+export const textModes: PostgresTextColumnConfig[] = [
+    { descriptionStyle: 'top', displayAs: 'text' },
+    { descriptionStyle: 'bottom' },
+];
+textConfig.title = 'A changed title';
+delete textConfig.title;
+export const wrongBooleanConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Settings booleans do not accept string coercion.
+    readOnly: 'false',
+};
+export const wrongNumberConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Settings numbers do not accept string coercion.
+    characterLimit: '0',
+};
+export const wrongDisplayConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error URL display is a literal option, never upload admission.
+    displayAs: 'upload',
+};
+export const wrongDescriptionConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Only authored description placements belong to storage.
+    descriptionStyle: 'side',
+};
+export const nullTextConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error An absent optional setting is different from SQL NULL.
+    title: null,
+};
+export const unknownTextConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Unauthored settings cannot enter a fresh config literal.
+    uploadFile: false,
+};
 
 export type NativeMetadataExports = [
     PostgresConnection,

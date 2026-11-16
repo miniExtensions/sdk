@@ -244,6 +244,10 @@ const postgresRecordSettingsAliases = [
 ];
 const postgresCreateAliases = ['PostgresCreateQuery', 'PostgresCreateResult'];
 const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
+const postgresFieldConfigAliases = ['PostgresTextColumnConfig'];
+const postgresFieldConfigSource = 'types/generated/postgres/field-config.ts';
+const postgresFieldConfigProvenance =
+    'types/generated/postgres/field-config.provenance.json';
 const postgresRuntimeExports = [
     'parsePostgresAttachmentDisplay',
     'PostgresAttachmentDisplayError',
@@ -255,6 +259,7 @@ const postgresAliases = [
     ...postgresRecordSettingsAliases,
     ...postgresCreateAliases,
     ...postgresAttachmentAliases,
+    ...postgresFieldConfigAliases,
 ];
 let corsValidation = null;
 let canonicalCorsPolicyPath;
@@ -273,6 +278,9 @@ if (postgresOnly) {
     );
     entryLines.push(
         `import type { ${postgresAttachmentAliases.join(', ')} } from './types/postgres/attachmentDisplay';`
+    );
+    entryLines.push(
+        `import type { ${postgresFieldConfigAliases.join(', ')} } from './${postgresFieldConfigSource.replace(/\.ts$/, '')}';`
     );
     for (const name of postgresAliases)
         entryLines.push(`export type Canonical${name} = ${name};`);
@@ -773,6 +781,13 @@ if (postgresOnly) {
 
 // Provenance covers contract declarations and canonical procedure construction,
 // not unrelated files that the compiler happens to load from the app router.
+if (postgresOnly) {
+    // z.infer resolves through mapped Zod declarations. Pin the authored-schema
+    // output and its generation receipt even if those mapped symbols no longer
+    // retain a declaration in the canonical generated source file.
+    sourceFiles.add(postgresFieldConfigSource);
+    sourceFiles.add(postgresFieldConfigProvenance);
+}
 for (const [, module] of selectedV1)
     sourceFiles.add(`types/api/types/${module}.ts`);
 if (!postgresOnly) {

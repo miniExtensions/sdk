@@ -44,6 +44,7 @@ import type {
     CanonicalPostgresSource,
     CanonicalPostgresTable,
     CanonicalPostgresTableReference,
+    CanonicalPostgresTextColumnConfig,
     CanonicalPostgresType,
     CanonicalPostgresValue,
 } from './contracts/postgres.generated.js';
@@ -87,6 +88,8 @@ export type PostgresType = CanonicalPostgresType;
 export type PostgresRelationship = CanonicalPostgresRelationship;
 export type PostgresRecord = CanonicalPostgresRecord;
 export type PostgresValue = CanonicalPostgresValue;
+/** Generated scalar storage only; no schema validator or Form admission. */
+export type PostgresTextColumnConfig = CanonicalPostgresTextColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

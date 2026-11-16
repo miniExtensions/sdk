@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import ts from 'typescript';
 
 const operationFields = [
     'operation',
@@ -226,6 +227,35 @@ export async function assertPublicDistribution(
                 )
             ),
             'PostgreSQL module formats have different contract declarations'
+        );
+        // Native contracts are the compiler-resolved portable shape, not Zod
+        // schemas or declarations that require the private source repository.
+        const nativeSource = ts.createSourceFile(
+            'postgres.generated.d.ts',
+            nativeDeclarations.toString('utf8'),
+            ts.ScriptTarget.Latest,
+            true,
+            ts.ScriptKind.TS
+        );
+        let importsModule = false;
+        const inspect = (node) => {
+            if (
+                ts.isImportDeclaration(node) ||
+                ts.isImportEqualsDeclaration(node) ||
+                ts.isImportTypeNode(node) ||
+                (ts.isExportDeclaration(node) && node.moduleSpecifier != null)
+            )
+                importsModule = true;
+            ts.forEachChild(node, inspect);
+        };
+        inspect(nativeSource);
+        assert(
+            nativeSource.parseDiagnostics.length === 0 &&
+                nativeSource.referencedFiles.length === 0 &&
+                nativeSource.typeReferenceDirectives.length === 0 &&
+                nativeSource.libReferenceDirectives.length === 0 &&
+                !importsModule,
+            'PostgreSQL declarations cannot import schemas or external modules'
         );
         const nativeDigest = sha256(nativeDeclarations);
         for (const format of ['esm', 'cjs']) {

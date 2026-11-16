@@ -435,6 +435,14 @@ module formats ship `runtime/contracts/postgres.generated.d.ts` with public
 declaration provenance. Private source revisions and source paths remain in the
 repository's internal manifest.
 
+`PostgresTextColumnConfig` is the portable inferred type of the application's
+generated scalar text-column storage schema, which comes from its authored
+settings. Optional settings stay absent unless supplied; explicit false, zero,
+empty strings and undefined retain their canonical types. No Zod import or
+schema validator ships with this type. Runtime constraints such as finite,
+nonnegative integer limits still belong to the application's schema; this
+export does not enable public Form loading, saving or submission.
+
 `parsePostgresAttachmentDisplay` projects stored text into read-only URL strings.
 Literal commas separate absolute HTTP(S) URLs; use `%2C` for a comma inside one
 URL. Spaces around entries are ignored. Quoted entries, backslash escaping,

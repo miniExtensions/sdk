@@ -1884,6 +1884,7 @@ new Parser([]).parse({maxDepth:'48'});
             '--moduleResolution',
             moduleResolution,
             exactOptionalFilename,
+            postgresMetadataFilename,
         ]);
     }
 

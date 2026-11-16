@@ -313,8 +313,7 @@ export function mountFormCaptcha<T, Options>(
                     notify(current, { kind: 'expired' });
             },
             error: (cause) => {
-                if (!current.resetting)
-                    notify(current, { kind: 'error', cause });
+                notify(current, { kind: 'error', cause });
             },
         };
         let rendered:

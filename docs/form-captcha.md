@@ -125,6 +125,8 @@ including accepted null. Initial canonical null does not reset. A subsequent
 canonical null consumes the latch before resetting exactly once. Synchronous
 callbacks produced by reset do not rearm it. If render emits before its handle
 returns, the reset waits for that exact current handle.
+Errors from the current instance still notify during reset; notification neither
+arms the latch nor publishes canonical state. Retired errors remain inert.
 
 ## Native checkpoint still remaining
 

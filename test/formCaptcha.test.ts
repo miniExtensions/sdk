@@ -1084,3 +1084,22 @@ test('canonical same-value comparison admits an exact opaque NaN token receipt b
     assert.equal(f.counts.loads, 2);
     mounted.dispose();
 });
+
+test('a current reset-time provider error only notifies without rearming or changing verification', async () => {
+    const f = fixture();
+    const mounted = f.mount();
+    await flush();
+    const widget = f.widgets[0];
+    const cause = {};
+    f.onReset(() => widget.callbacks.error(cause));
+    widget.callbacks.change(proof());
+    f.clear();
+    assert.deepEqual(f.notices, [{ kind: 'error', cause }]);
+    assert.equal(widget.resets, 1);
+    assert.equal(f.counts.writes, 1);
+    assert.equal(f.read().token.value, null);
+    assert.equal(f.read().verified, false);
+    f.clear();
+    assert.equal(widget.resets, 1);
+    mounted.dispose();
+});

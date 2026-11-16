@@ -10,6 +10,7 @@ import type {
     PostgresCreateQuery,
     PostgresCreateResult,
     PostgresDatabase,
+    PostgresDateColumnConfig,
     PostgresSchema,
     PostgresTable,
     PostgresTableReference,
@@ -25,6 +26,7 @@ import type {
     PostgresSelectQuery,
     PostgresSelectResult,
     PostgresIdentifierConfiguration,
+    PostgresNumericColumnConfig,
     PostgresRecordDisplayConfiguration,
     PostgresRecordEditingConfiguration,
     PostgresRecordEditingValidation,
@@ -138,6 +140,94 @@ export const textWhitespaceOnBoolean: PostgresBooleanColumnConfig = {
 export const unfinishedBooleanStyle: PostgresBooleanColumnConfig = {
     // @ts-expect-error This scalar storage checkpoint does not include checkbox styles.
     checkboxStyle: 'switch',
+};
+
+export const absentNumericConfig: PostgresNumericColumnConfig = {};
+export const numericConfig: PostgresNumericColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedNumericConfig: PostgresNumericColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const numericDescriptionStyles: PostgresNumericColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+numericConfig.title = 'A native numeric field';
+delete numericConfig.title;
+export const numericBooleanCoercion: PostgresNumericColumnConfig = {
+    // @ts-expect-error Native numeric text does not coerce a settings boolean.
+    required: '0',
+};
+export const numericSqlNull: PostgresNumericColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    title: null,
+};
+export const numericTextDisplay: PostgresNumericColumnConfig = {
+    // @ts-expect-error Numeric columns do not offer text/attachment display.
+    displayAs: 'attachments-public-urls',
+};
+export const numericPrecision: PostgresNumericColumnConfig = {
+    // @ts-expect-error Common stored settings do not format native numeric values.
+    decimalPlaces: 2,
+};
+export const numericCheckbox: PostgresNumericColumnConfig = {
+    // @ts-expect-error Numeric settings have no checkbox style.
+    checkboxStyle: 'switch',
+};
+
+export const absentDateConfig: PostgresDateColumnConfig = {};
+export const dateConfig: PostgresDateColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedDateConfig: PostgresDateColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const dateDescriptionStyles: PostgresDateColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+dateConfig.title = 'A native SQL DATE field';
+delete dateConfig.title;
+export const dateBooleanCoercion: PostgresDateColumnConfig = {
+    // @ts-expect-error Stored boolean settings do not accept string coercion.
+    readOnly: 'false',
+};
+export const dateSqlNull: PostgresDateColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    required: null,
+};
+export const dateTextPlaceholder: PostgresDateColumnConfig = {
+    // @ts-expect-error Text placeholders are not common SQL DATE settings.
+    placeholderText: '',
+};
+export const dateFormat: PostgresDateColumnConfig = {
+    // @ts-expect-error These settings add no date-format option or parser.
+    dateFormat: 'YYYY-MM-DD',
+};
+export const dateTimeZone: PostgresDateColumnConfig = {
+    // @ts-expect-error SQL DATE settings do not introduce a time zone.
+    timeZone: 'UTC',
 };
 
 export type NativeMetadataExports = [

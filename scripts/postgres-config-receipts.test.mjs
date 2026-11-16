@@ -30,28 +30,39 @@ const historicalInputs = [
     'types/scripts/postgres-configs/emit.ts',
     'types/scripts/postgres-configs/generate.ts',
 ].sort();
-const family = (kind) => ({
-    kind,
-    schemaName:
-        kind === 'text'
-            ? 'postgresTextColumnConfigSchema'
-            : 'postgresBooleanColumnConfigSchema',
-    typeName:
-        kind === 'text'
-            ? 'PostgresTextColumnConfig'
-            : 'PostgresBooleanColumnConfig',
-    storageProjectionSha256: hash(`synthetic ${kind} projection`),
-    storageReadiness: 'complete',
-    editorPending: [
-        {
-            code: 'editor-rule-pending',
-            settingId: 'readOnly',
-            rule: 'visibility',
-        },
+const identities = {
+    text: ['postgresTextColumnConfigSchema', 'PostgresTextColumnConfig'],
+    boolean: [
+        'postgresBooleanColumnConfigSchema',
+        'PostgresBooleanColumnConfig',
     ],
-});
+    numeric: [
+        'postgresNumericColumnConfigSchema',
+        'PostgresNumericColumnConfig',
+    ],
+    date: ['postgresDateColumnConfigSchema', 'PostgresDateColumnConfig'],
+};
+const family = (kind) => {
+    assert(Object.hasOwn(identities, kind));
+    const [schemaName, typeName] = identities[kind];
+    return {
+        kind,
+        schemaName,
+        typeName,
+        storageProjectionSha256: hash(`synthetic ${kind} projection`),
+        storageReadiness: 'complete',
+        editorPending: [
+            {
+                code: 'editor-rule-pending',
+                settingId: 'readOnly',
+                rule: 'visibility',
+            },
+        ],
+    };
+};
 
 function fixture(version) {
+    assert([1, 2, 3].includes(version));
     const paths =
         version === 1
             ? historicalInputs
@@ -59,6 +70,13 @@ function fixture(version) {
                   ...historicalInputs,
                   'types/extensions/postgres/booleanColumnFieldDefinitions.ts',
                   'types/postgres/columnTypes.ts',
+                  ...(version === 3
+                      ? [
+                            'types/extensions/postgres/commonColumnFieldDefinitions.ts',
+                            'types/extensions/postgres/dateColumnFieldDefinitions.ts',
+                            'types/extensions/postgres/numericColumnFieldDefinitions.ts',
+                        ]
+                      : []),
               ].sort();
     const inputs = new Map(
         paths.map((name) => [name, Buffer.from(`synthetic input: ${name}\n`)])
@@ -88,7 +106,15 @@ function fixture(version) {
                   storageReadiness: text.storageReadiness,
                   editorPending: text.editorPending,
               }
-            : { families: [text, family('boolean')] }),
+            : {
+                  families: [
+                      text,
+                      family('boolean'),
+                      ...(version === 3
+                          ? [family('numeric'), family('date')]
+                          : []),
+                  ],
+              }),
         runtimeAdmission: 'pending',
         toolchain: { prettier: '3.6.2' },
         generated: {
@@ -134,9 +160,56 @@ test('v2 configuration receipts require text and Boolean, with deterministic ali
     assert.deepEqual(value.readPaths, value.paths);
 });
 
+test('v3 configuration receipts bind all four families and the complete shared-factory closure', () => {
+    const value = fixture(3);
+    value.receipt.families.reverse();
+    const verified = value.verify();
+    assert.deepEqual(verified.aliases, [
+        'PostgresTextColumnConfig',
+        'PostgresBooleanColumnConfig',
+        'PostgresNumericColumnConfig',
+        'PostgresDateColumnConfig',
+    ]);
+    assert.equal(verified.receiptVersion, 3);
+    assert.deepEqual(value.readPaths, value.paths);
+});
+
+test("receipt versions cannot substitute later families or another version's source closure", async (t) => {
+    for (const kind of ['numeric', 'date'])
+        await t.test(`v2 refuses the known ${kind} family`, () => {
+            const value = fixture(2);
+            value.receipt.families[1] = family(kind);
+            assert.throws(value.verify, /family-identity/);
+            assert.deepEqual(value.readPaths, []);
+        });
+    for (const [from, to] of [
+        [2, 3],
+        [3, 2],
+    ]) {
+        await t.test(`relabel v${from} as v${to}`, () => {
+            const value = fixture(from);
+            value.receipt.formatVersion = to;
+            assert.throws(value.verify, /families/);
+            assert.deepEqual(value.readPaths, []);
+        });
+        await t.test(
+            `v${to} refuses the rehashed v${from} source closure`,
+            () => {
+                const value = fixture(to);
+                value.receipt.sources = fixture(from).receipt.sources;
+                value.receipt.sourceSnapshotSha256 = hash(
+                    JSON.stringify(value.receipt.sources)
+                );
+                assert.throws(value.verify, /source-membership/);
+                assert.deepEqual(value.readPaths, []);
+            }
+        );
+    }
+});
+
 test('configuration receipts refuse unreviewed versions, family identities and admission', async (t) => {
     for (const [name, mutate, reason] of [
-        ['version', (r) => (r.formatVersion = 3), 'format-version'],
+        ['version', (r) => (r.formatVersion = 4), 'format-version'],
         [
             'contract',
             (r) => (r.contract = 'postgres-text-column-config'),
@@ -189,12 +262,13 @@ test('configuration receipts refuse unreviewed versions, family identities and a
             'editor-pending',
         ],
     ]) {
-        await t.test(name, () => {
-            const value = fixture(2);
-            mutate(value.receipt);
-            assert.throws(value.verify, new RegExp(reason));
-            assert.deepEqual(value.readPaths, []);
-        });
+        for (const version of [2, 3])
+            await t.test(`v${version}: ${name}`, () => {
+                const value = fixture(version);
+                mutate(value.receipt);
+                assert.throws(value.verify, new RegExp(reason));
+                assert.deepEqual(value.readPaths, []);
+            });
     }
 });
 
@@ -214,15 +288,16 @@ test('configuration receipts refuse missing, reordered or unsafe source membersh
             (r) => (r.sources[0].path = postgresFieldConfigProvenance),
         ],
     ]) {
-        await t.test(name, () => {
-            const value = fixture(2);
-            mutate(value.receipt);
-            value.receipt.sourceSnapshotSha256 = hash(
-                JSON.stringify(value.receipt.sources)
-            );
-            assert.throws(value.verify, /sources|source-membership/);
-            assert.deepEqual(value.readPaths, []);
-        });
+        for (const version of [2, 3])
+            await t.test(`v${version}: ${name}`, () => {
+                const value = fixture(version);
+                mutate(value.receipt);
+                value.receipt.sourceSnapshotSha256 = hash(
+                    JSON.stringify(value.receipt.sources)
+                );
+                assert.throws(value.verify, /sources|source-membership/);
+                assert.deepEqual(value.readPaths, []);
+            });
     }
 });
 
@@ -249,16 +324,17 @@ test('configuration receipts bind source snapshots, individual inputs and genera
             'generated-integrity',
         ],
     ]) {
-        await t.test(name, () => {
-            const value = fixture(2);
-            mutate(value);
-            assert.throws(value.verify, new RegExp(reason));
-        });
+        for (const version of [2, 3])
+            await t.test(`v${version}: ${name}`, () => {
+                const value = fixture(version);
+                mutate(value);
+                assert.throws(value.verify, new RegExp(reason));
+            });
     }
 });
 
 test('build provenance binds the validator and both canonical configuration inputs without source access', async (t) => {
-    for (const version of [1, 2]) {
+    for (const version of [1, 2, 3]) {
         await t.test(`version ${version}`, () => {
             const verified = fixture(version).verify();
             const validatorSha256 = hash('synthetic validator bytes');
@@ -277,6 +353,9 @@ test('build provenance binds the validator and both canonical configuration inpu
                 configurationValidation: { ...verified, validatorSha256 },
             };
             assertPostgresConfigReceiptProvenance(internal, validatorSha256);
+            const commonAlias = structuredClone(internal);
+            commonAlias.aliases.unshift('PostgresValue');
+            assertPostgresConfigReceiptProvenance(commonAlias, validatorSha256);
             assert.throws(
                 () =>
                     assertPostgresConfigReceiptProvenance(
@@ -295,6 +374,42 @@ test('build provenance binds the validator and both canonical configuration inpu
                     ),
                 /alias-provenance/
             );
+            const duplicateAlias = structuredClone(internal);
+            duplicateAlias.aliases.push(verified.aliases[0]);
+            assert.throws(
+                () =>
+                    assertPostgresConfigReceiptProvenance(
+                        duplicateAlias,
+                        validatorSha256
+                    ),
+                /alias-provenance/
+            );
+            for (const [, typeName] of Object.values(identities)) {
+                if (verified.aliases.includes(typeName)) continue;
+                const expanded = structuredClone(internal);
+                expanded.aliases.push(typeName);
+                assert.throws(
+                    () =>
+                        assertPostgresConfigReceiptProvenance(
+                            expanded,
+                            validatorSha256
+                        ),
+                    /alias-provenance/
+                );
+            }
+            if (version !== 1) {
+                const reordered = structuredClone(internal);
+                reordered.aliases.reverse();
+                reordered.configurationValidation.aliases.reverse();
+                assert.throws(
+                    () =>
+                        assertPostgresConfigReceiptProvenance(
+                            reordered,
+                            validatorSha256
+                        ),
+                    /alias-provenance/
+                );
+            }
             const driftedInput = structuredClone(internal);
             driftedInput.sources[0].sha256 = hash('changed schema');
             assert.throws(
@@ -310,51 +425,56 @@ test('build provenance binds the validator and both canonical configuration inpu
 });
 
 test('canonical configuration inputs must match the selected Git revision before verification', async (t) => {
-    const root = mkdtempSync(path.join(tmpdir(), 'sdk-config-receipt-git-'));
-    t.after(() => rmSync(root, { recursive: true, force: true }));
-    const value = fixture(2);
-    const write = (relative, bytes) => {
-        const file = path.join(root, relative);
-        mkdirSync(path.dirname(file), { recursive: true });
-        writeFileSync(file, bytes);
-    };
-    for (const [name, bytes] of value.inputs) write(name, bytes);
-    write(postgresFieldConfigSource, value.generatedBytes);
-    write(postgresFieldConfigProvenance, JSON.stringify(value.receipt));
-    const git = (...args) =>
-        execFileSync('git', args, {
-            cwd: root,
-            encoding: 'utf8',
-            timeout: 10_000,
+    for (const version of [2, 3])
+        await t.test(`version ${version}`, (t) => {
+            const root = mkdtempSync(
+                path.join(tmpdir(), 'sdk-config-receipt-git-')
+            );
+            t.after(() => rmSync(root, { recursive: true, force: true }));
+            const value = fixture(version);
+            const write = (relative, bytes) => {
+                const file = path.join(root, relative);
+                mkdirSync(path.dirname(file), { recursive: true });
+                writeFileSync(file, bytes);
+            };
+            for (const [name, bytes] of value.inputs) write(name, bytes);
+            write(postgresFieldConfigSource, value.generatedBytes);
+            write(postgresFieldConfigProvenance, JSON.stringify(value.receipt));
+            const git = (...args) =>
+                execFileSync('git', args, {
+                    cwd: root,
+                    encoding: 'utf8',
+                    timeout: 10_000,
+                });
+            git('init', '--quiet');
+            git('add', '.');
+            git(
+                '-c',
+                'user.name=SDK synthetic fixture',
+                '-c',
+                'user.email=sdk-fixture@example.invalid',
+                '-c',
+                'commit.gpgsign=false',
+                'commit',
+                '--quiet',
+                '-m',
+                'synthetic receipt inputs'
+            );
+            const revision = git('rev-parse', 'HEAD').trim();
+            assert.deepEqual(
+                readPostgresConfigReceipt({ monorepo: root, revision }),
+                value.verify()
+            );
+            write(postgresFieldConfigProvenance, '{}');
+            assert.throws(
+                () => readPostgresConfigReceipt({ monorepo: root, revision }),
+                /canonical-source-drift/
+            );
+            write(postgresFieldConfigProvenance, JSON.stringify(value.receipt));
+            write(value.paths[0], 'changed uncommitted input');
+            assert.throws(
+                () => readPostgresConfigReceipt({ monorepo: root, revision }),
+                /canonical-source-drift/
+            );
         });
-    git('init', '--quiet');
-    git('add', '.');
-    git(
-        '-c',
-        'user.name=SDK synthetic fixture',
-        '-c',
-        'user.email=sdk-fixture@example.invalid',
-        '-c',
-        'commit.gpgsign=false',
-        'commit',
-        '--quiet',
-        '-m',
-        'synthetic receipt inputs'
-    );
-    const revision = git('rev-parse', 'HEAD').trim();
-    assert.deepEqual(
-        readPostgresConfigReceipt({ monorepo: root, revision }),
-        value.verify()
-    );
-    write(postgresFieldConfigProvenance, '{}');
-    assert.throws(
-        () => readPostgresConfigReceipt({ monorepo: root, revision }),
-        /canonical-source-drift/
-    );
-    write(postgresFieldConfigProvenance, JSON.stringify(value.receipt));
-    write(value.paths[0], 'changed uncommitted input');
-    assert.throws(
-        () => readPostgresConfigReceipt({ monorepo: root, revision }),
-        /canonical-source-drift/
-    );
 });

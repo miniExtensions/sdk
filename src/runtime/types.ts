@@ -29,9 +29,11 @@ import type {
     CanonicalPostgresCreateQuery,
     CanonicalPostgresCreateResult,
     CanonicalPostgresDatabase,
+    CanonicalPostgresDateColumnConfig,
     CanonicalPostgresField,
     CanonicalPostgresFilter,
     CanonicalPostgresIdentifierConfiguration,
+    CanonicalPostgresNumericColumnConfig,
     CanonicalPostgresRecord,
     CanonicalPostgresRecordDisplayConfiguration,
     CanonicalPostgresRecordEditingConfiguration,
@@ -93,6 +95,10 @@ export type PostgresValue = CanonicalPostgresValue;
 export type PostgresTextColumnConfig = CanonicalPostgresTextColumnConfig;
 /** Generated Boolean-column settings only; native values remain text/NULL. */
 export type PostgresBooleanColumnConfig = CanonicalPostgresBooleanColumnConfig;
+/** Generated numeric-column settings only; native values stay lossless text. */
+export type PostgresNumericColumnConfig = CanonicalPostgresNumericColumnConfig;
+/** Generated SQL DATE settings only; this adds no date parser or coercion. */
+export type PostgresDateColumnConfig = CanonicalPostgresDateColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

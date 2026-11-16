@@ -435,20 +435,25 @@ module formats ship `runtime/contracts/postgres.generated.d.ts` with public
 declaration provenance. Private source revisions and source paths remain in the
 repository's internal manifest.
 
-`PostgresTextColumnConfig` and `PostgresBooleanColumnConfig` are portable inferred
+`PostgresTextColumnConfig`, `PostgresBooleanColumnConfig`,
+`PostgresNumericColumnConfig` and `PostgresDateColumnConfig` are portable inferred
 types of the application's generated scalar column storage schemas, which come
 from its authored settings. Optional settings stay absent unless supplied;
 explicit false, zero, empty strings and undefined retain their canonical types.
-Boolean settings omit text-only display, attachment, placeholder, character and
-whitespace controls. No Zod import, schema validator or Boolean value decoder
-ships with these types. Runtime constraints such as finite, nonnegative integer
+Boolean, numeric and SQL DATE settings expose the common controls and omit
+text-only display, attachment, placeholder, character and whitespace controls.
+They add no numeric formatting, date format, time zone or checkbox-style setting.
+Native numeric and SQL DATE values remain text/NULL. No Zod import, schema
+validator or value parser/decoder ships with these configuration types.
+Runtime constraints such as finite, nonnegative integer
 limits still belong to the application's schema; these exports do not enable
-public Form loading, saving or submission.
+public Form loading, saving or submission, or define Required submission rules.
 
 Native maintainer generation verifies the canonical configuration receipt,
 generated schema and complete versioned source-hash closure. Historical v1
 receipts contribute the text family; v2 requires exactly the text and Boolean
-families. The private native manifest binds the receipt validator's bytes, and
+families; v3 requires exactly text, Boolean, numeric and SQL DATE. The private
+native manifest binds the receipt validator's bytes, and
 build checks verify that binding without opening the canonical checkout.
 Ordinary SDK CI still uses committed portable declarations and SDK dependencies.
 

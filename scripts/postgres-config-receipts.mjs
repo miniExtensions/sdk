@@ -18,6 +18,17 @@ const booleanFamily = {
     schemaName: 'postgresBooleanColumnConfigSchema',
     typeName: 'PostgresBooleanColumnConfig',
 };
+const numericFamily = {
+    kind: 'numeric',
+    schemaName: 'postgresNumericColumnConfigSchema',
+    typeName: 'PostgresNumericColumnConfig',
+};
+const dateFamily = {
+    kind: 'date',
+    schemaName: 'postgresDateColumnConfigSchema',
+    typeName: 'PostgresDateColumnConfig',
+};
+const allFamilies = [textFamily, booleanFamily, numericFamily, dateFamily];
 const historicalSources = [
     '.prettierrc',
     'package.json',
@@ -34,11 +45,22 @@ const historicalSources = [
     'types/scripts/postgres-configs/emit.ts',
     'types/scripts/postgres-configs/generate.ts',
 ].sort();
-const currentSources = [
+const booleanSources = [
     ...historicalSources,
     'types/extensions/postgres/booleanColumnFieldDefinitions.ts',
     'types/postgres/columnTypes.ts',
 ].sort();
+const numericDateSources = [
+    ...booleanSources,
+    'types/extensions/postgres/commonColumnFieldDefinitions.ts',
+    'types/extensions/postgres/dateColumnFieldDefinitions.ts',
+    'types/extensions/postgres/numericColumnFieldDefinitions.ts',
+].sort();
+const receiptVersions = new Map([
+    [1, { families: [textFamily], sources: historicalSources }],
+    [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
+    [3, { families: allFamilies, sources: numericDateSources }],
+]);
 const sharedReceiptKeys = [
     'formatVersion',
     'contract',
@@ -128,9 +150,10 @@ export function verifyPostgresConfigReceipt({
         requireReceipt(false, 'json');
     }
     requireReceipt(
-        record(receipt) && [1, 2].includes(receipt.formatVersion),
+        record(receipt) && receiptVersions.has(receipt.formatVersion),
         'format-version'
     );
+    const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
     requireReceipt(
         exactKeys(receipt, [
@@ -167,10 +190,11 @@ export function verifyPostgresConfigReceipt({
     let families;
     if (historical) {
         validateStorageReadiness(receipt);
-        families = [textFamily];
+        families = version.families;
     } else {
         requireReceipt(
-            Array.isArray(receipt.families) && receipt.families.length === 2,
+            Array.isArray(receipt.families) &&
+                receipt.families.length === version.families.length,
             'families'
         );
         const seen = new Set();
@@ -186,7 +210,7 @@ export function verifyPostgresConfigReceipt({
                 ]),
                 'family-fields'
             );
-            const allowed = [textFamily, booleanFamily].find(
+            const allowed = version.families.find(
                 (candidate) => candidate.kind === family.kind
             );
             requireReceipt(
@@ -199,9 +223,12 @@ export function verifyPostgresConfigReceipt({
             seen.add(family.kind);
             validateStorageReadiness(family);
         }
-        requireReceipt(seen.has('text') && seen.has('boolean'), 'families');
+        requireReceipt(
+            version.families.every((family) => seen.has(family.kind)),
+            'families'
+        );
         // Metadata order never controls generated import names or alias order.
-        families = [textFamily, booleanFamily];
+        families = version.families;
     }
     requireReceipt(
         Array.isArray(receipt.sources) &&
@@ -213,7 +240,7 @@ export function verifyPostgresConfigReceipt({
             ),
         'sources'
     );
-    const expectedSources = historical ? historicalSources : currentSources;
+    const expectedSources = version.sources;
     requireReceipt(
         JSON.stringify(receipt.sources.map((source) => source.path)) ===
             JSON.stringify(expectedSources),
@@ -290,7 +317,7 @@ export function assertPostgresConfigReceiptProvenance(
             'sourceSnapshotSha256',
             'validatorSha256',
         ]) &&
-            [1, 2].includes(proof.receiptVersion) &&
+            receiptVersions.has(proof.receiptVersion) &&
             digest(proof.sourceSnapshotSha256) &&
             digest(proof.validatorSha256) &&
             proof.validatorSha256 === validatorSha256 &&
@@ -298,15 +325,15 @@ export function assertPostgresConfigReceiptProvenance(
             Array.isArray(internal.sources),
         'validator-provenance'
     );
-    const aliases =
-        proof.receiptVersion === 1
-            ? [textFamily.typeName]
-            : [textFamily.typeName, booleanFamily.typeName];
+    const aliases = receiptVersions
+        .get(proof.receiptVersion)
+        .families.map((family) => family.typeName);
+    const knownAliases = allFamilies.map((family) => family.typeName);
     requireReceipt(
         JSON.stringify(proof.aliases) === JSON.stringify(aliases) &&
-            aliases.every((name) => internal.aliases.includes(name)) &&
-            internal.aliases.includes(booleanFamily.typeName) ===
-                (proof.receiptVersion === 2),
+            JSON.stringify(
+                internal.aliases.filter((name) => knownAliases.includes(name))
+            ) === JSON.stringify(aliases),
         'alias-provenance'
     );
     for (const [relative, hash] of [

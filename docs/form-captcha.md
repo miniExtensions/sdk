@@ -48,6 +48,8 @@ must be a pure, current read. The host snapshot contains:
 - An opaque `owner` lease. Every accepted session/context replacement, including
   A→B→A, uses a fresh lease. Display labels, callback function identity and React
   render identity are not owner identity.
+  Opaque stamps use `Object.is` identity (including stable `NaN` stamps); host
+  admission must use the same identity comparison rather than coercion.
 - A nonnegative safe-integer `configurationRevision`, monotonically advancing
   within that lease for every accepted effective provider/script/render option
   change, including configuration A→B→A. Equal sitekeys cannot detect ABA.

@@ -98,7 +98,12 @@ export function createFormCaptchaProviderRegistry() {
                 load() {
                     const existing = resources.get(request.scope);
                     if (existing) {
-                        if (existing.configuration !== request.configuration)
+                        if (
+                            !Object.is(
+                                existing.configuration,
+                                request.configuration
+                            )
+                        )
                             throw new Error(
                                 'Conflicting CAPTCHA provider configuration'
                             );
@@ -184,7 +189,7 @@ export function mountFormCaptcha<T, Options>(
         }
     };
     const same = (a: FormCaptchaScope, b: FormCaptchaScope) =>
-        a.owner === b.owner &&
+        Object.is(a.owner, b.owner) &&
         a.configurationRevision === b.configurationRevision;
     function retire(current: Instance<T, Options>) {
         if (current.retired) return;
@@ -386,7 +391,7 @@ export function mountFormCaptcha<T, Options>(
                 }
                 if (
                     previous &&
-                    previous.owner === snapshot.owner &&
+                    Object.is(previous.owner, snapshot.owner) &&
                     snapshot.configurationRevision <
                         previous.configurationRevision
                 ) {
@@ -396,7 +401,7 @@ export function mountFormCaptcha<T, Options>(
                 const token = snapshot.token;
                 if (
                     token.value !== null &&
-                    token.owner === snapshot.owner &&
+                    Object.is(token.owner, snapshot.owner) &&
                     token.configurationRevision !==
                         snapshot.configurationRevision
                 ) {

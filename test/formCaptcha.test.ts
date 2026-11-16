@@ -98,7 +98,7 @@ function fixture() {
         for (const listener of [...listeners]) listener();
     };
     const current = (scope: FormCaptchaScope) =>
-        scope.owner === snapshot.owner &&
+        Object.is(scope.owner, snapshot.owner) &&
         scope.configurationRevision === snapshot.configurationRevision &&
         snapshot.enabled &&
         snapshot.editable &&
@@ -128,8 +128,8 @@ function fixture() {
             invalidations++;
             beforeInvalidate?.();
             if (
-                snapshot.owner !== scope.owner ||
-                snapshot.token.owner !== scope.owner ||
+                !Object.is(snapshot.owner, scope.owner) ||
+                !Object.is(snapshot.token.owner, scope.owner) ||
                 snapshot.token.configurationRevision !==
                     scope.configurationRevision ||
                 snapshot.token.revision !== expected.revision
@@ -997,4 +997,52 @@ test('an old unsubscribe that throws after installing newer ports cannot retire 
     assert.equal(f.widgets[0].removes, 0);
     mounted.dispose();
     assert.equal(stops, 1);
+});
+
+test('opaque NaN owner stamps mount once, publish and invalidate without a retirement loop', async () => {
+    const f = fixture();
+    f.update({ owner: NaN, token: { ...f.read().token, owner: NaN } });
+    let reads = 0;
+    const mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            read() {
+                assert.ok(++reads < 100, 'finite owner reads');
+                return f.read();
+            },
+        },
+        (state) => f.states.push(state)
+    );
+    await flush();
+    assert.equal(f.counts.loads, 1);
+    assert.equal(f.states.at(-1), 'ready');
+    f.widgets[0].callbacks.change(proof());
+    assert.equal(f.counts.writes, 1);
+    f.update({ configurationRevision: 1 });
+    await flush();
+    assert.equal(f.counts.invalidations, 1);
+    assert.equal(f.read().token.value, null);
+    assert.equal(f.counts.loads, 2);
+    mounted.dispose();
+});
+
+test('opaque NaN loader configuration uses stable identity rather than conflicting with itself', async () => {
+    const registry = createFormCaptchaProviderRegistry();
+    let loads = 0;
+    const provider = registry.provider({
+        scope: {},
+        configuration: NaN,
+        load() {
+            loads++;
+            return {
+                render() {
+                    throw Error('no render');
+                },
+            };
+        },
+    });
+    assert.equal(provider.load(), provider.load());
+    await provider.load();
+    assert.equal(loads, 1);
 });

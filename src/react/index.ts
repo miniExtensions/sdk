@@ -268,6 +268,20 @@ export {
 } from './SingleSelectField.js';
 import { LookupControl, type LookupFieldOptions } from './LookupField.js';
 export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
+import { ControlledLookupField } from './ControlledLookupField.js';
+import type { ControlledLookupFieldProps } from './lookupFieldTypes.js';
+export type {
+    ControlledLookupFieldProps,
+    LookupPresentationOwner,
+    LookupPresentationState,
+    LookupResultPresentation,
+    LookupReadonlyCardLeaf,
+    LookupReadonlyCardProjection,
+    LookupReadonlyLinkedRow,
+    LookupReadonlyLinkedCardRow,
+    LookupReadonlyLinkedGridRow,
+    LookupReadonlyLinkedCollection,
+} from './lookupFieldTypes.js';
 import {
     RollupControl,
     ControlledRollupField,
@@ -447,6 +461,11 @@ import {
     renderOwnedRatingInput,
     type RatingFieldOptions,
 } from './RatingField.js';
+import {
+    ControlledRatingField,
+    type ControlledRatingFieldProps,
+} from './ControlledRatingField.js';
+export type { ControlledRatingFieldProps } from './ControlledRatingField.js';
 export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
 export {
     renderPercentField,
@@ -1253,8 +1272,17 @@ export function FormulaField(props: FormulaFieldInputProps): ReactNode {
         : createElement(BindingFormulaField, props);
 }
 export type LookupFieldProps = FieldProps & LookupFieldOptions;
+export type LookupFieldInputProps =
+    | (LookupFieldProps & { mode?: never })
+    | ControlledLookupFieldProps;
+/** Complete controlled results are additive; binding/slot results stay inert. */
+export function LookupField(props: LookupFieldInputProps): ReactNode {
+    return props.mode === 'controlled'
+        ? createElement(ControlledLookupField, props)
+        : createElement(BindingLookupField, props);
+}
 /** Present the accepted Lookup array without borrowing binding or linked actions. */
-export function LookupField({
+function BindingLookupField({
     binding,
     render,
     className,
@@ -1605,9 +1633,16 @@ export function NumberField(props: NumberComponentProps): ReactNode {
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
-export type RatingFieldProps = NumberFieldProps & RatingFieldOptions;
+export type RatingFieldProps = NumberFieldProps &
+    RatingFieldOptions & { mode?: never };
+type RatingComponentProps = RatingFieldProps | ControlledRatingFieldProps;
 /** Native numeric rating drafts stay with the accepted scalar owner. */
-export function RatingField(props: RatingFieldProps): ReactNode {
+export function RatingField(props: RatingFieldProps): ReactNode;
+export function RatingField(props: ControlledRatingFieldProps): ReactNode;
+export function RatingField(props: RatingComponentProps): ReactNode;
+export function RatingField(props: RatingComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return createElement(ControlledRatingField, props);
     return props.iconInput
         ? createElement(BoundIconRatingField, props)
         : createElement(NumberField, props);
@@ -3152,3 +3187,54 @@ export {
     FormSubmitButton,
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
+export {
+    FormCaptcha,
+    type FormCaptchaProps,
+    type FormCaptchaLabels,
+} from './FormCaptcha.js';
+export {
+    createFormCaptchaProviderRegistry,
+    type FormCaptchaToken,
+    type FormCaptchaScope,
+    type FormCaptchaAdmission,
+    type FormCaptchaCallbacks,
+    type FormCaptchaWidgetHandle,
+    type FormCaptchaRenderer,
+    type FormCaptchaProvider,
+    type FormCaptchaSnapshot,
+    type FormCaptchaNotice,
+    type FormCaptchaHost,
+    type FormCaptchaState,
+} from '../ui/formCaptcha.js';
+export {
+    createRecaptchaV2Provider,
+    type RecaptchaV2Options,
+    type RecaptchaV2Api,
+} from '../ui/recaptchaV2Provider.js';
+export {
+    ReadonlyPrintDocumentView,
+    prepareReadonlyPrintDocument,
+    type ReadonlyPrintDocumentViewProps,
+} from './ReadonlyPrintDocumentView.js';
+export {
+    captureReadonlyPrintDocument,
+    type ReadonlyPrintDocument,
+    type ReadonlyPrintField,
+    type ReadonlyPrintFacet,
+    type ReadonlyPrintLinkedRecord,
+    type ReadonlyPrintCapture,
+} from '../ui/readonlyPrintDocument.js';
+export {
+    PrintableForm,
+    type PrintableFormHandle,
+    type PrintableFormProps,
+} from './PrintableForm.js';
+export {
+    createBrowserPrintableFormEngine,
+    createBrowserReadonlyDOMPrintEngine,
+} from './printableFormEngine.js';
+export {
+    PrintableFormJobControls,
+    PrintableFormPreparationControls,
+    type PrintableFormJobLabels,
+} from './PrintableFormJobControls.js';

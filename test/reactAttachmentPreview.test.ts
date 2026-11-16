@@ -369,6 +369,119 @@ it('keeps video controls and disposes only the retained video on teardown', asyn
     assert.equal(f.submits(), 0);
 });
 
+it('publishes the actual owned DOCX only while current and retains ordinary same-owner rerenders', async (t) => {
+    const f = await fixture(t);
+    let current = true;
+    const listeners = new Set<() => void>();
+    const owner = {
+        token: {},
+        isCurrent: () => current,
+        subscribe(listener: () => void) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+    const fetch = t.mock.method(globalThis, 'fetch', async () =>
+        f.response('B')
+    );
+    await f.render(
+        h(
+            StrictMode,
+            null,
+            h(AttachmentPreview, {
+                attachment: source('B'),
+                owner,
+                identity: 'owned-B',
+            })
+        )
+    );
+    await f.ready('Controlled attachment B');
+    assert.ok(f.host.querySelector('img'));
+    assert.match(f.host.textContent, /AttachmentSmoke/);
+    const document = f.host.querySelector('.docx-wrapper');
+    const requests = fetch.mock.callCount();
+    assert.ok(document);
+    await f.render(
+        h(
+            StrictMode,
+            null,
+            h(AttachmentPreview, {
+                attachment: { ...source('B'), filename: 'Same capture' },
+                owner,
+                identity: 'owned-B',
+            })
+        )
+    );
+    assert.equal(f.host.querySelector('.docx-wrapper'), document);
+    assert.equal(fetch.mock.callCount(), requests);
+    current = false;
+    await act(async () => {
+        for (const listener of [...listeners]) listener();
+    });
+    assert.equal(listeners.size, 0);
+    assert.equal(f.host.querySelector('.docx-wrapper'), null);
+    assert.equal(f.host.querySelector('img'), null);
+    assert.doesNotMatch(f.host.textContent, /Controlled attachment B/);
+    assert.equal(f.submits(), 0);
+});
+
+it('cancels a revoked owned Word response before reading or publishing its bytes', async (t) => {
+    const f = await fixture(t);
+    let current = true,
+        blobReads = 0,
+        cancellations = 0;
+    const listeners = new Set<() => void>();
+    const owner = {
+        token: {},
+        isCurrent: () => current,
+        subscribe(listener: () => void) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+    const pending = deferred<Response>();
+    let signal: AbortSignal | undefined;
+    t.mock.method(
+        globalThis,
+        'fetch',
+        async (_input: Parameters<typeof fetch>[0], options?: RequestInit) => {
+            signal = options?.signal as AbortSignal;
+            return pending.promise;
+        }
+    );
+    await f.render(
+        h(AttachmentPreview, {
+            attachment: source('A'),
+            owner,
+            identity: 'owned-A',
+        })
+    );
+    current = false;
+    await act(async () => {
+        for (const listener of [...listeners]) listener();
+    });
+    assert.equal(signal?.aborted, true);
+    assert.equal(listeners.size, 0);
+    await act(async () =>
+        pending.resolve({
+            body: {
+                cancel: async () => {
+                    cancellations++;
+                },
+            },
+            blob: async () => {
+                blobReads++;
+                return new f.window.Blob([bytes('A')]);
+            },
+        } as unknown as Response)
+    );
+    assert.equal(cancellations, 1);
+    assert.equal(blobReads, 0);
+    assert.equal(f.host.querySelector('.docx-wrapper'), null);
+    assert.equal(f.assets.length, 0);
+    assert.equal(f.submits(), 0);
+});
+
 for (const strict of [false, true]) {
     for (const [kind, extension] of [
         ['video', 'mp4'],

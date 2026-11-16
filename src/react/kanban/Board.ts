@@ -584,6 +584,7 @@ export function MultipleContainers({
                     }),
                     color: getColor(item),
                     wrapperStyle: wrapperStyle({ index }),
+                    interactive: false,
                     renderItem: renderItem,
                 })
             ),

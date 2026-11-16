@@ -45,6 +45,14 @@ Column drag handles are not newly enabled: the native frame did not attach them.
 The standalone frame uses 300px columns and preserves the native empty-column
 keyboard target offset (20px,74px); browser geometry must qualify this composition.
 
+For native focus return, an admitted Open action may supply
+`registerTrigger(element)`, returning an identity-scoped disposer. The SDK
+registers only the current interactive source button. Loader fallback cards and
+drag overlays do not register a trigger. The host keeps the accepted child-open
+and dismissal lifetime, waits for a current registration after an epoch change,
+and retires pending focus when that presentation owner is replaced. This port
+does not admit an action or grant data access.
+
 ## Category operation ports
 
 `createKanbanCategoryOperation(capture)` captures the original native record,

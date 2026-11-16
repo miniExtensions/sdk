@@ -3617,6 +3617,11 @@ required. Default markup preserves line breaks and wraps long text. Core and
 
 ## React Lookup presentation
 
+[Complete controlled Lookup](lookup.md) accepts immutable host-supplied rich
+presentations and actual captured owners through `LookupField` with
+`mode: 'controlled'`. It includes the pure ordered occurrence projector, complete
+readonly controls and `lookup.css`. The binding API below remains supported.
+
 The optional `/react` entry exports `LookupField`, `LookupFieldProps`,
 `LookupFieldOptions` and `renderLookupField`. The physical field kind remains
 `multipleLookupValues`; it retains the existing `renderMultipleLookupValuesField`

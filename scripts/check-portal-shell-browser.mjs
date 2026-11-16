@@ -202,6 +202,69 @@ try {
                     await page.evaluate(() => window.unsafe),
                     undefined
                 );
+                const beforeHeader = await counts();
+                await configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: 'Plain header fallback',
+                        titleHtml:
+                            '<h1>Owned HTML heading</h1><script>window.unsafe=true</script>',
+                    },
+                });
+                const richHeading = page.getByRole('heading', {
+                    name: 'Owned HTML heading',
+                });
+                await richHeading.waitFor();
+                assert.equal(
+                    await richHeading.evaluate(
+                        (node) => getComputedStyle(node).fontSize
+                    ),
+                    '24px'
+                );
+                assert.equal(
+                    await page.locator('.mx-sdk-portal-title').count(),
+                    0
+                );
+                assert.equal(
+                    await page.getByText('Plain header fallback').count(),
+                    0
+                );
+                assert.equal(
+                    await page.evaluate(() => window.unsafe),
+                    undefined
+                );
+                for (const titleHtml of [
+                    '',
+                    '<script>window.unsafe=true</script>',
+                ]) {
+                    await configure({
+                        header: {
+                            layout: 'sidebar',
+                            title: 'Plain header fallback',
+                            titleHtml,
+                        },
+                    });
+                    assert.equal(
+                        await page
+                            .locator('.mx-sdk-portal-brand')
+                            .textContent(),
+                        ''
+                    );
+                }
+                await configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: '<Customer Portal>',
+                        descriptionHtml: '<p>Owned SDK shell</p>',
+                    },
+                });
+                assert.equal(
+                    await page
+                        .locator('.mx-sdk-portal-title')
+                        .evaluate((node) => getComputedStyle(node).fontSize),
+                    '20px'
+                );
+                assert.deepEqual(await counts(), beforeHeader);
                 await summary('Orders').click();
                 await button('Done orders').hover();
                 await button('Done orders').focus();

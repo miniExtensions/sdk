@@ -52,7 +52,7 @@
     min-width: 0;
     overflow-wrap: anywhere;
 }
-.mx-sdk-portal-brand h1 {
+.mx-sdk-portal-title {
     margin: 0;
     font-size: 1.25rem;
 }

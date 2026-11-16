@@ -4,10 +4,16 @@ import {
 } from './kanban-consumer-checks.mjs';
 import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
 import {
+    preparePrintableFormBrowserFixtures,
+    checkPrintableFormBrowser,
+} from './printable-form-browser-checks.mjs';
+import { checkFormCaptchaBrowser } from './form-captcha-browser-checks.mjs';
+import {
     prepareCSVExportBrowserFixtures,
     checkCSVExportBrowser,
 } from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
+import { checkControlledLookupBrowser } from './controlled-lookup-browser-checks.mjs';
 import {
     checkExternalSyncSourceControlledBrowser,
     checkAiTextControlledBrowser,
@@ -1558,7 +1564,12 @@ try {
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
+            'scripts/printable-form-browser-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
+            'scripts/controlled-lookup-consumer-checks.mjs',
+            'scripts/controlled-lookup-browser-checks.mjs',
+            'scripts/form-captcha-consumer-checks.mjs',
+            'scripts/form-captcha-browser-checks.mjs',
             'scripts/csv-export-consumer-checks.mjs',
             'scripts/kanban-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
@@ -2012,6 +2023,17 @@ try {
             regular,
             hash,
         });
+        await preparePrintableFormBrowserFixtures({
+            temporary,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         await prepareCSVExportBrowserFixtures({
             temporary,
             archive,
@@ -2272,6 +2294,14 @@ try {
             evidence: report.controlledSelect,
             output,
         });
+        report.controlledLookup = {};
+        await checkControlledLookupBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.controlledLookup,
+            output,
+            readArchiveMember,
+        });
         report.externalSyncSourceControlled = {};
         await checkExternalSyncSourceControlledBrowser({
             browser,
@@ -2355,6 +2385,13 @@ try {
             });
         }
         report.formSubmit = {};
+        report.formCaptcha = {};
+        await checkFormCaptchaBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formCaptcha,
+            output,
+        });
         await checkFormSubmitBrowser({
             browser,
             consumer: temporary,
@@ -2994,6 +3031,13 @@ try {
         });
         await run('kanban', async (page, origin) => {
             await checkKanbanBrowser({ page, origin, evidence: report.kanban });
+        });
+        await run('printable-form-layout', async (page, origin) => {
+            await page.goto(origin + '/printable-form-layout.html');
+            await checkPrintableFormBrowser({
+                page,
+                evidence: report.printableForm,
+            });
         });
         await run('csv-export', async (page, origin) => {
             await page.goto(origin + '/csv-export.html');
@@ -3979,8 +4023,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, CSV export, Kanban and one-page section groups.
-            28 +
+            // Include complete fields, printable layout, CSV, Kanban and section groups.
+            29 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

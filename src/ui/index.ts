@@ -389,3 +389,44 @@ export {
     isAttachmentPreviewImage,
     type AttachmentPreviewSource,
 } from './attachmentPreview.js';
+export {
+    captureReadonlyPrintDocument,
+    type ReadonlyPrintDocument,
+    type ReadonlyPrintField,
+    type ReadonlyPrintFacet,
+    type ReadonlyPrintLinkedRecord,
+    type ReadonlyPrintCapture,
+} from './readonlyPrintDocument.js';
+export {
+    createPrintableFormAdmission,
+    getDocumentPrintableFormAdmission,
+    createPrintableFormController,
+    createReadonlyDOMPrintController,
+    type ReadonlyDOMPrintRoot,
+    type ReadonlyDOMPrintSource,
+    type ReadonlyDOMPrintEngine,
+    type PrintableFormScope,
+    type PrintableFormAuthority,
+    type PrintableFormSource,
+    type PrintableFormAdmission,
+    type PrintableFormPhase,
+    type PrintableFormJobSnapshot,
+    type PrintableFormJob,
+    type PrintableFormInvocation,
+    type PrintableFormPreparedDocument,
+    type PrintableFormEngine,
+    type PrintableFormRequest,
+    type PrintableFormControllerSnapshot,
+    type PrintableFormController,
+} from './printableForm.js';
+export {
+    preparePrintableDOM,
+    type PrintableDOMOptions,
+} from './printableDOM.js';
+
+export {
+    projectLookupValues,
+    type LookupResultConfig,
+    type LookupValueOccurrence,
+    type LookupValueProjection,
+} from './lookupProjection.js';

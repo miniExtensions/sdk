@@ -1,6 +1,6 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "6a98b7a680cfdff7f5f2d5ca552a9c1110662ccc",
+    "sourceRevision": "9d8e810937a4e481e1d76078c98ea315d1999dca",
     "compilerVersion": "5.9.3",
     "generatorSha256": "0a431dd8f1074548754f39ff592044f965357f241bb7c6823b667e88c9e132d1",
     "contractFamily": "postgres",
@@ -46,9 +46,9 @@
             "PostgresDateColumnConfig",
             "PostgresEnumColumnConfig"
         ],
-        "receiptSourceSha256": "bf2a2c644218e91b0a0cbbfdd5a6aba58f0c20cf4bd55ed5b4f39e868dbaafd8",
+        "receiptSourceSha256": "ff51d4b27fe63f931e973aaafb889d7c7682529aa6aef547ab66cac77e78c6c6",
         "schemaSourceSha256": "e1727e75722b676527fbc8382cbc36aee1d4daa20323fbbcf8496ac2a2e299af",
-        "sourceSnapshotSha256": "8bc214776b524003ee5ab9dc435cf4f93f579aefc43724c20d99bf5e35e14f65",
+        "sourceSnapshotSha256": "508a9178d488d81ae4872b13eb43eb94bd39509cfa985535e633c219ad9f00fe",
         "presentation": {
             "kind": "text-column-presentation",
             "sourcePath": "types/extensions/postgres/textColumnPresentation.ts",
@@ -95,7 +95,7 @@
         },
         {
             "path": "types/generated/postgres/field-config.provenance.json",
-            "sha256": "bf2a2c644218e91b0a0cbbfdd5a6aba58f0c20cf4bd55ed5b4f39e868dbaafd8"
+            "sha256": "ff51d4b27fe63f931e973aaafb889d7c7682529aa6aef547ab66cac77e78c6c6"
         },
         {
             "path": "types/generated/postgres/field-config.ts",
@@ -141,5 +141,5 @@
         }
     ],
     "declarationCount": 97,
-    "generatedSha256": "962c49fc3457c3340c93082cf9920fb91c496dbc38cdf393c54ce16fa531bab2"
+    "generatedSha256": "599b65dcd0470ff7a2d02038e6004e40db9edec8bc1deabea8aaf9d466811714"
 }

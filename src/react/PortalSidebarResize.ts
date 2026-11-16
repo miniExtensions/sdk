@@ -6,6 +6,7 @@ import {
     useRef,
     useState,
     type KeyboardEvent,
+    type ReactNode,
 } from 'react';
 import type { Resizable, ResizableProps } from 're-resizable';
 
@@ -32,7 +33,7 @@ export function PortalSidebarResize(props: {
     label: string;
     onCommit: (change: PortalShellSidebarWidthCommit) => void;
     onPreview: (width: number) => void;
-}) {
+}): ReactNode {
     const [loaded, setLoaded] = useState<
         { component: EngineConstructor } | { error: unknown } | null
     >(null);

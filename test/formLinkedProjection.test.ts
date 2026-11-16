@@ -225,6 +225,15 @@ describe('portable linked/two-source Form projection contract', () => {
             ).formRecord.data.links,
             []
         );
+        const noVisibility = available(
+            defaults({
+                linkedTableLoadingStates: loading,
+                formFields: [text('driver'), text('answer'), links],
+            })
+        );
+        assert.equal(noVisibility.formRecord.data.answer, 'keep');
+        assert.deepEqual(noVisibility.hiddenFieldIds, []);
+        assert.deepEqual(noVisibility.formRecord.data.links, []);
         const state = loaded.tbl_links;
         assert.equal(state.type, 'loaded');
         if (state.type !== 'loaded') throw new Error('Expected fixture cache.');

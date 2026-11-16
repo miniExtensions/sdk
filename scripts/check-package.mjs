@@ -390,6 +390,10 @@ import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkFormSaveIdentityConsumer } from './form-save-identity-consumer-checks.mjs';
 import {
+    checkLinkedProjectionConsumer,
+    linkedProjectionTypedConsumer,
+} from './linked-projection-consumer-checks.mjs';
+import {
     checkFormSaveCoordinatorConsumer,
     formSaveCoordinatorTypedConsumer,
 } from './form-save-coordinator-consumer-checks.mjs';
@@ -1597,6 +1601,7 @@ export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, clien
     linked.destroy(); model.destroy(); native.destroy();
 }
 ${formSaveCoordinatorTypedConsumer}
+${linkedProjectionTypedConsumer}
 import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
 import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, checkIfFormUrlIsValid, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
 const formUrlValid: boolean = checkIfFormUrlIsValid('example.test');
@@ -4134,6 +4139,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     run,
                 }),
                 2
+            );
+            assert.deepEqual(
+                checkLinkedProjectionConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    run,
+                }),
+                { formats: 2, comparisons: 156, refusals: 12 }
             );
             const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
                 consumerDirectory: temporaryDirectory,

@@ -77,6 +77,9 @@ importers:
       markdown-it-emoji:
         specifier: 2.0.2
         version: 2.0.2
+      markerjs2:
+        specifier: 2.32.7
+        version: 2.32.7
       moment:
         specifier: 2.31.0
         version: 2.31.0
@@ -1327,6 +1330,9 @@ packages:
   markdown-it@14.3.3:
     resolution: {integrity: sha512-L//tDAkjTjJCU6pBUSBTgs3Kg4InVaZuUZog/b6V12UKhcDQ7S78877ibbCanRExwPuYP1CZD7Gd2dxSy1GXRg==}
     hasBin: true
+
+  markerjs2@2.32.7:
+    resolution: {integrity: sha512-HeFRZjmc43DOG3lSQp92z49cq2oCYpYn2pX++SkJAW1Dij4xJtRquVRf+cXeSZQWDX3ufns1Ry/bGk+zveP7rA==}
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -2795,6 +2801,8 @@ snapshots:
       mdurl: 2.1.0
       punycode.js: 2.3.1
       uc.micro: 2.1.0
+
+  markerjs2@2.32.7: {}
 
   math-intrinsics@1.1.0: {}
 

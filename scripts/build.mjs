@@ -250,6 +250,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-calendly',
         'complete-record-comments',
         'complete-verification',
+        'complete-image-annotation',
         'complete-barcode-scanner',
         'barcode',
         'complete-portal-chart',

@@ -209,6 +209,208 @@ test('same-count config replacement updates chrome, order, errors, semantic iden
     );
 });
 
+test('admitted physical and rich facts preserve readonly formatting, literal labels and resource policy', async (t) => {
+    const document = doc(
+        field('notice', {
+            kind: 'notice',
+            state: 'unavailable',
+            label: 'Unavailable display fact',
+        }),
+        field('phone', {
+            kind: 'phone',
+            value: '+1 (555) 010-0200',
+            emptyLabel: 'No phone',
+        }),
+        field('progress', {
+            kind: 'numeric',
+            text: '37,5 %',
+            emptyLabel: 'No number',
+            progress: { fraction: 0.375, color: '#123456' },
+        }),
+        field('zero', {
+            kind: 'numeric',
+            text: '0.00%',
+            emptyLabel: 'No number',
+            progress: { fraction: 0, color: '#123456' },
+        }),
+        field('html', {
+            kind: 'html',
+            value: '<p><strong>Retained HTML</strong><script>unsafe()</script></p>',
+            height: 120,
+            emptyLabel: 'No HTML',
+        }),
+        field('people', {
+            kind: 'people',
+            items: [
+                {
+                    label: 'Ava <literal>',
+                    avatarUrl: 'https://example.test/avatar.png',
+                },
+                { label: 'Ava <literal>' },
+            ],
+            emptyLabel: 'No people',
+        }),
+        field('checkbox', {
+            kind: 'checkbox',
+            value: false,
+            checkedLabel: 'Checked',
+            uncheckedLabel: 'Unchecked',
+        }),
+        field('barcode', {
+            kind: 'barcode',
+            text: 'CODE<literal>',
+            barcodeType: 'CODE128',
+            emptyLabel: 'No code',
+        }),
+        field('linked-resource', {
+            kind: 'resource',
+            href: '#admitted-resource',
+            label: 'Admitted resource',
+        }),
+        field('static-resource', {
+            kind: 'resource',
+            href: null,
+            label: 'Resource without navigation',
+        })
+    );
+    const original = JSON.stringify(document);
+    const f = await mount(t, h(ReadonlyPrintDocumentView, { document }));
+    assert.equal(
+        f.container.querySelector('[data-print-state=unavailable]')
+            ?.textContent,
+        'Unavailable display fact'
+    );
+    assert.equal(
+        f.container.querySelector('a[href^="tel:"]')?.getAttribute('href'),
+        'tel:+1 (555) 010-0200'
+    );
+    const progress = Array.from(
+        f.container.querySelectorAll('[role=progressbar]')
+    );
+    assert.deepEqual(
+        progress.map((element) => element.getAttribute('aria-valuenow')),
+        ['37.5', '0']
+    );
+    assert.equal(
+        progress[0]?.firstElementChild
+            ?.getAttribute('style')
+            ?.includes('width: 37.5%'),
+        true
+    );
+    assert.match(f.container.textContent ?? '', /37,5 %.*0\.00%/s);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-print-html')?.getAttribute('style'),
+        'height: 120px;'
+    );
+    assert.equal(
+        f.container.querySelector('.mx-sdk-print-html strong')?.textContent,
+        'Retained HTML'
+    );
+    assert.equal(f.container.querySelector('script'), null);
+    assert.equal(f.container.textContent?.includes('unsafe()'), false);
+    assert.deepEqual(
+        Array.from(f.container.querySelectorAll('.mx-sdk-print-person')).map(
+            (element) => element.textContent
+        ),
+        ['Ava <literal>', 'Ava <literal>']
+    );
+    assert.equal(
+        f.container
+            .querySelector('.mx-sdk-print-person img[loading=eager]')
+            ?.getAttribute('src'),
+        'https://example.test/avatar.png'
+    );
+    const checkbox = f.container.querySelector('input[type=checkbox]');
+    assert.equal(checkbox?.hasAttribute('disabled'), true);
+    assert.equal(checkbox?.getAttribute('aria-checked'), 'false');
+    assert.equal(checkbox?.hasAttribute('checked'), false);
+    assert.match(f.container.textContent ?? '', /CODE<literal>/);
+    assert.equal(
+        f.container.querySelector('a[href="#admitted-resource"]')?.textContent,
+        'Admitted resource'
+    );
+    assert.equal(
+        f.container.querySelector('span.mx-sdk-print-resource')?.textContent,
+        'Resource without navigation'
+    );
+    assert.equal(
+        f.container.querySelector('button,[contenteditable=true]'),
+        null
+    );
+    assert.equal(JSON.stringify(document), original);
+});
+
+test('empty admitted facets retain host labels without fabricated values or interactive resources', async (t) => {
+    const document = doc(
+        field('phone', {
+            kind: 'phone',
+            value: null,
+            emptyLabel: 'Empty phone',
+        }),
+        field('numeric', {
+            kind: 'numeric',
+            text: null,
+            emptyLabel: 'Empty number',
+            progress: { fraction: 0.5, color: '#123456' },
+        }),
+        field('html', { kind: 'html', value: null, emptyLabel: 'Empty HTML' }),
+        field('quill', { kind: 'quill', value: '', emptyLabel: 'Empty Quill' }),
+        field('pills', {
+            kind: 'pills',
+            items: [],
+            emptyLabel: 'Empty choices',
+        }),
+        field('people', {
+            kind: 'people',
+            items: [],
+            emptyLabel: 'Empty people',
+        }),
+        field('attachments', {
+            kind: 'attachments',
+            items: [],
+            layout: 'grid',
+            columns: 2,
+            fit: 'contain',
+            thumbnailSize: 'small',
+            showNames: true,
+            emptyLabel: 'Empty files',
+        }),
+        field('linked', {
+            kind: 'linkedRecords',
+            records: [],
+            layout: 'list',
+            thumbnailLocation: 'left',
+            columns: 1,
+            emptyLabel: 'Empty records',
+        }),
+        field('sequence', {
+            kind: 'sequence',
+            items: [],
+            layout: 'wrap',
+            emptyLabel: 'Empty sequence',
+        })
+    );
+    const f = await mount(t, h(ReadonlyPrintDocumentView, { document }));
+    for (const label of [
+        'Empty phone',
+        'Empty number',
+        'Empty HTML',
+        'Empty Quill',
+        'Empty choices',
+        'Empty people',
+        'Empty files',
+        'Empty records',
+        'Empty sequence',
+    ])
+        assert.equal(f.container.textContent?.includes(label), true, label);
+    assert.equal(
+        f.container.querySelector(
+            'a,img,button,input,[role=progressbar],[contenteditable=true]'
+        ),
+        null
+    );
+});
+
 test('recursive rich print collections retain all occurrences and state without action controls', async (t) => {
     const media: Extract<ReadonlyPrintFacet, { kind: 'attachments' }> = {
         kind: 'attachments',

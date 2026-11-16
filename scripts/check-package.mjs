@@ -3359,7 +3359,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(printableProof.profiles.length, 2);
     assert.equal(printableProof.cleanup, 'completed');
     console.log(
-        'Installed Printable Form React18/19 public ESM/CJS, types, CSS, SSR and 172 original runtime tests passed. Actual browser print preview/Cancel remains separate.'
+        'Installed Printable Form React18/19 public ESM/CJS, types, CSS, SSR and 180 original runtime tests passed. Actual browser print preview/Cancel remains separate.'
     );
     console.log(
         'Installed Form CAPTCHA React18/19 ESM/CJS/types/CSS/SSR/hydration and synthetic lifecycle checks passed. Native integration remains separate.'

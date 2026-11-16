@@ -22,6 +22,7 @@ export type {
     AirtableRecord,
     AirtableValue,
     PostgresAttachmentDisplayFailure,
+    PostgresBooleanColumnConfig,
     PostgresConnection,
     PostgresCreateQuery,
     PostgresCreateResult,

@@ -30,6 +30,7 @@ import {
     publicPostgresRuntimeArtifacts,
 } from './distribution-checks.mjs';
 import { postgresRuntimeOutputHashes } from './postgres-runtime-artifacts.mjs';
+import { assertPostgresConfigReceiptProvenance } from './postgres-config-receipts.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -186,6 +187,19 @@ for (const name of ['generated', 'postgres.generated']) {
     );
     let runtimeArtifacts;
     if (name === 'postgres.generated') {
+        assertPostgresConfigReceiptProvenance(
+            internal,
+            createHash('sha256')
+                .update(
+                    readFileSync(
+                        new URL(
+                            './postgres-config-receipts.mjs',
+                            import.meta.url
+                        )
+                    )
+                )
+                .digest('hex')
+        );
         runtimeArtifacts = publicPostgresRuntimeArtifacts(
             internal.runtimeArtifacts
         );

@@ -435,13 +435,22 @@ module formats ship `runtime/contracts/postgres.generated.d.ts` with public
 declaration provenance. Private source revisions and source paths remain in the
 repository's internal manifest.
 
-`PostgresTextColumnConfig` is the portable inferred type of the application's
-generated scalar text-column storage schema, which comes from its authored
-settings. Optional settings stay absent unless supplied; explicit false, zero,
-empty strings and undefined retain their canonical types. No Zod import or
-schema validator ships with this type. Runtime constraints such as finite,
-nonnegative integer limits still belong to the application's schema; this
-export does not enable public Form loading, saving or submission.
+`PostgresTextColumnConfig` and `PostgresBooleanColumnConfig` are portable inferred
+types of the application's generated scalar column storage schemas, which come
+from its authored settings. Optional settings stay absent unless supplied;
+explicit false, zero, empty strings and undefined retain their canonical types.
+Boolean settings omit text-only display, attachment, placeholder, character and
+whitespace controls. No Zod import, schema validator or Boolean value decoder
+ships with these types. Runtime constraints such as finite, nonnegative integer
+limits still belong to the application's schema; these exports do not enable
+public Form loading, saving or submission.
+
+Native maintainer generation verifies the canonical configuration receipt,
+generated schema and complete versioned source-hash closure. Historical v1
+receipts contribute the text family; v2 requires exactly the text and Boolean
+families. The private native manifest binds the receipt validator's bytes, and
+build checks verify that binding without opening the canonical checkout.
+Ordinary SDK CI still uses committed portable declarations and SDK dependencies.
 
 `parsePostgresAttachmentDisplay` projects stored text into read-only URL strings.
 Literal commas separate absolute HTTP(S) URLs; use `%2C` for a comma inside one

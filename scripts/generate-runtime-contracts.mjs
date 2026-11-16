@@ -6,6 +6,11 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import prettier from 'prettier';
 import {
+    postgresFieldConfigSource,
+    postgresFieldConfigProvenance,
+    readPostgresConfigReceipt,
+} from './postgres-config-receipts.mjs';
+import {
     postgresAttachmentRuntimeModule,
     postgresAttachmentRuntimeSource,
     postgresRuntimeOutputHashes,
@@ -244,10 +249,18 @@ const postgresRecordSettingsAliases = [
 ];
 const postgresCreateAliases = ['PostgresCreateQuery', 'PostgresCreateResult'];
 const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
-const postgresFieldConfigAliases = ['PostgresTextColumnConfig'];
-const postgresFieldConfigSource = 'types/generated/postgres/field-config.ts';
-const postgresFieldConfigProvenance =
-    'types/generated/postgres/field-config.provenance.json';
+const readConfigurationValidation = () => ({
+    ...readPostgresConfigReceipt({ monorepo, revision }),
+    validatorSha256: hash(
+        readFileSync(new URL('./postgres-config-receipts.mjs', import.meta.url))
+    ),
+});
+// Historical receipts contribute text only; current receipts add Boolean.
+// Default operation generation never reads canonical configuration inputs.
+const configurationValidation = postgresOnly
+    ? readConfigurationValidation()
+    : null;
+const postgresFieldConfigAliases = configurationValidation?.aliases ?? [];
 const postgresRuntimeExports = [
     'parsePostgresAttachmentDisplay',
     'PostgresAttachmentDisplayError',
@@ -833,7 +846,7 @@ const dependencies = [...externalFiles]
         ),
         sha256: hash(readFileSync(file)),
     }));
-const provenance =
+const serializedProvenance =
     JSON.stringify(
         {
             sourceRepository: 'miniExtensions/monorepo',
@@ -844,6 +857,7 @@ const provenance =
                 ? {
                       contractFamily: 'postgres',
                       aliases: postgresAliases,
+                      configurationValidation,
                       runtimeArtifacts,
                   }
                 : {
@@ -871,6 +885,29 @@ const provenance =
         null,
         4
     ) + '\n';
+const provenance = postgresOnly
+    ? await prettier.format(serializedProvenance, {
+          ...JSON.parse(
+              readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8')
+          ),
+          parser: 'json',
+      })
+    : serializedProvenance;
+// Formatting can yield. Revalidate the captured canonical bytes and receipt
+// closure after the final await; output checking/writes below are synchronous.
+for (const source of sources)
+    if (hash(readFileSync(path.join(monorepo, source.path))) !== source.sha256)
+        throw new Error(
+            `Canonical source changed during generation: ${source.path}`
+        );
+if (
+    postgresOnly &&
+    JSON.stringify(readConfigurationValidation()) !==
+        JSON.stringify(configurationValidation)
+)
+    throw new Error(
+        'Canonical PostgreSQL configuration inputs changed during generation.'
+    );
 if (check) {
     const recordedGenerated = readFileSync(generatedFile, 'utf8');
     const recordedProvenance = readFileSync(provenanceFile, 'utf8');

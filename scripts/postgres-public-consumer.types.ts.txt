@@ -5,6 +5,7 @@ import {
 } from '@miniextensions/sdk';
 import type {
     PostgresAttachmentDisplayFailure,
+    PostgresBooleanColumnConfig,
     PostgresConnection,
     PostgresCreateQuery,
     PostgresCreateResult,
@@ -85,6 +86,58 @@ export const nullTextConfig: PostgresTextColumnConfig = {
 export const unknownTextConfig: PostgresTextColumnConfig = {
     // @ts-expect-error Unauthored settings cannot enter a fresh config literal.
     uploadFile: false,
+};
+
+export const absentBooleanConfig: PostgresBooleanColumnConfig = {};
+export const booleanConfig: PostgresBooleanColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedBooleanConfig: PostgresBooleanColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const booleanDescriptionStyles: PostgresBooleanColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+booleanConfig.title = 'A Boolean field';
+delete booleanConfig.title;
+export const wrongBooleanSetting: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Native database text is not a settings boolean.
+    readOnly: 't',
+};
+export const nullBooleanSetting: PostgresBooleanColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    required: null,
+};
+export const textDisplayOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Boolean settings do not offer text or attachment display.
+    displayAs: 'attachments-public-urls',
+};
+export const textPlaceholderOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Placeholder text belongs to text-column settings.
+    placeholderText: '',
+};
+export const textLimitOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Character limits belong to text-column settings.
+    characterLimit: 0,
+};
+export const textWhitespaceOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Whitespace policy belongs to text-column settings.
+    preserveTrailingWhitespace: false,
+};
+export const unfinishedBooleanStyle: PostgresBooleanColumnConfig = {
+    // @ts-expect-error This scalar storage checkpoint does not include checkbox styles.
+    checkboxStyle: 'switch',
 };
 
 export type NativeMetadataExports = [

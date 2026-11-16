@@ -31,6 +31,7 @@ import {
     postgresRuntimeOutputHashes,
 } from './postgres-runtime-artifacts.mjs';
 import './postgres-runtime-artifacts.test.mjs';
+import './postgres-config-receipts.test.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import {
     assertCollaboratorNeighborTarget,
@@ -927,6 +928,11 @@ test('public distribution rejects private or expanded PostgreSQL metadata receip
             /Unexpected PostgreSQL public provenance fields/,
         ],
         ['aliases', [], /lost native aliases/],
+        [
+            'configurationValidation',
+            { validatorSha256: 'synthetic private validator' },
+            /Unexpected PostgreSQL public provenance fields/,
+        ],
         [
             'operations',
             [{ operation: 'forms.save' }],

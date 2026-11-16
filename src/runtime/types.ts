@@ -24,6 +24,7 @@ import type {
 } from './contracts/generated.js';
 import type {
     CanonicalPostgresAttachmentDisplayFailure,
+    CanonicalPostgresBooleanColumnConfig,
     CanonicalPostgresConnection,
     CanonicalPostgresCreateQuery,
     CanonicalPostgresCreateResult,
@@ -90,6 +91,8 @@ export type PostgresRecord = CanonicalPostgresRecord;
 export type PostgresValue = CanonicalPostgresValue;
 /** Generated scalar storage only; no schema validator or Form admission. */
 export type PostgresTextColumnConfig = CanonicalPostgresTextColumnConfig;
+/** Generated Boolean-column settings only; native values remain text/NULL. */
+export type PostgresBooleanColumnConfig = CanonicalPostgresBooleanColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

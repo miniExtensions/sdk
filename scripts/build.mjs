@@ -224,6 +224,7 @@ for (const format of ['esm', 'cjs']) {
         'localized-numeric',
         'form-tracking',
         'form-captcha',
+        'printable-form',
         'form-group',
         'csv-export',
         'kanban',

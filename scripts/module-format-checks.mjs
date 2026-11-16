@@ -206,6 +206,7 @@ export function assertModuleFormats(root) {
                 './react/complete-record-comments.css',
                 './react/form-tracking.css',
                 './react/form-captcha.css',
+                './react/printable-form.css',
                 './react/form-group.css',
                 './react/csv-export.css',
                 './react/kanban.css',
@@ -248,7 +249,7 @@ export function assertModuleFormats(root) {
             );
             assert.equal(
                 require.resolve(manifest.name + subpath.slice(1)),
-                file
+                fs.realpathSync(file)
             );
             const bytes = readFileSync(file);
             entries.push({
@@ -292,7 +293,10 @@ export function assertModuleFormats(root) {
                         manifest.name +
                             (subpath === '.' ? '' : subpath.slice(1))
                     ),
-                    file,
+                    // Node resolves real paths, including OS-provided parent
+                    // aliases such as macOS /var -> /private/var. Package-owned
+                    // symlinks are still refused by the regular-file/tree checks.
+                    fs.realpathSync(file),
                     'Native require resolution must select the declared CommonJS entry'
                 );
             }

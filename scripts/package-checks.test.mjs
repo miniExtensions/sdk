@@ -34,6 +34,7 @@ import './browser-rich-text-zoom.test.mjs';
 import './browser-rich-text-focus.test.mjs';
 import './portal-chart-inputs.test.mjs';
 import './collaborator-inputs.test.mjs';
+import './source-package-checks.test.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,

@@ -20,6 +20,53 @@ function declarationFiles(root) {
         .sort();
 }
 
+/** Failure-only metadata; compiler messages and absolute paths stay private. */
+export function sourcePackageFailureReceipt(result, ownedSourcePaths) {
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    const diagnostics = [];
+    for (const match of output.matchAll(
+        /^(.+?)\((\d+),(\d+)\): error (TS\d{4,6}):/gm
+    )) {
+        const path = match[1].replaceAll('\\', '/');
+        const start = path.lastIndexOf('/src/');
+        const relative = start < 0 ? path : path.slice(start + 1);
+        if (!ownedSourcePaths.has(relative)) continue;
+        diagnostics.push({
+            code: match[4],
+            path: relative,
+            line: Number(match[2]),
+            column: Number(match[3]),
+        });
+        if (diagnostics.length === 8) break;
+    }
+    return {
+        status: result.status,
+        signal: ['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGABRT'].includes(
+            result.signal
+        )
+            ? result.signal
+            : null,
+        codes: [...new Set(output.match(/\bTS\d{4,6}\b/g) ?? [])].slice(0, 8),
+        stages: [
+            ...new Set(
+                [
+                    ...output.matchAll(
+                        /"project":"(tsconfig(?:\.cjs)?\.json)"/g
+                    ),
+                ].map((match) => match[1])
+            ),
+        ],
+        failures: [
+            ...new Set(
+                output.match(
+                    /\b(?:ENOSPC|ENOMEM|EACCES|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|ERR_ASSERTION)\b/g
+                ) ?? []
+            ),
+        ],
+        diagnostics,
+    };
+}
+
 /** Git preparation compiles source beneath node_modules, unlike a checkout. */
 export function assertSourcePackageBuild(root) {
     const temporary = realpathSync(
@@ -62,9 +109,26 @@ export function assertSourcePackageBuild(root) {
             maxBuffer: 1024 * 1024,
         });
         assert.ifError(result.error);
-        // A failed preparation stays failed; do not forward captured compiler
-        // output or retry with weaker declaration/module/vendor settings.
-        assert.equal(result.status, 0, 'SDK source package build failed');
+        // A failed preparation stays failed. Emit bounded codes/owned source
+        // positions, never raw compiler messages or weaker compiler settings.
+        const ownedSources = new Set(
+            readdirSync(join(root, 'src'), {
+                recursive: true,
+                withFileTypes: true,
+            })
+                .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+                .map((entry) =>
+                    relative(
+                        root,
+                        join(entry.parentPath, entry.name)
+                    ).replaceAll('\\', '/')
+                )
+        );
+        assert.equal(
+            result.status,
+            0,
+            `SDK source package build failed: ${JSON.stringify(sourcePackageFailureReceipt(result, ownedSources))}`
+        );
         let declarations = 0;
         for (const format of ['esm', 'cjs']) {
             const built = join(nested, 'dist', format);

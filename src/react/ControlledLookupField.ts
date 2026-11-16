@@ -639,25 +639,20 @@ export function ControlledLookupField(
     const committedEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
     const token = ownerToken(props.owner);
-    const [scope, setScope] = useState({
-        token,
-        identity: props.identity,
-        serial: 0,
-        retired: false,
-    });
-    let capture = scope;
-    if (
-        !Object.is(scope.token, token) ||
-        !Object.is(scope.identity, props.identity)
-    ) {
-        capture = {
+    // Keep prop-derived capture identity out of a state update queue. A host
+    // external-store update can run at a different priority from retirement;
+    // rebasing those updates must not repeatedly create a new committed lease.
+    const nextSerial = useRef(0);
+    const capture = useMemo(
+        () => ({
             token,
             identity: props.identity,
-            serial: scope.serial + 1,
+            serial: nextSerial.current++,
             retired: false,
-        };
-        setScope(capture);
-    }
+        }),
+        [token, props.identity]
+    );
+    const [, updateRetirement] = useState(0);
     // A replayed UI lease is distinct from the host capture. Recreating this
     // lease never renews native authority: every callback also checks its host.
     const [committed, setCommitted] = useState(() => ({ capture, token: {} }));
@@ -676,11 +671,9 @@ export function ControlledLookupField(
     committedEffect(
         () =>
             watchResourceOwner(props.owner, () => {
-                setScope((previous) =>
-                    previous === capture && !previous.retired
-                        ? { ...previous, retired: true }
-                        : previous
-                );
+                if (capture.retired) return;
+                capture.retired = true;
+                updateRetirement((previous) => previous + 1);
             }),
         [props.owner, capture]
     );

@@ -34,6 +34,7 @@ export function ControlledCountField(
         textSize: props.textSize,
         layout: props.layout,
         className: props.className,
+        emptyLabel: props.emptyLabel,
     });
 }
 export type CountFieldOptions = NumberFieldOptions;

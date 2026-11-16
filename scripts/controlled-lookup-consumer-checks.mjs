@@ -89,6 +89,14 @@ function element(){return h(React.StrictMode,null,h('form',{id:'lookup-form',onS
 function rerender(){root.render(element());}
 function renew(next=state){active={};owner={token:active,isCurrent(){return active===this.token;}};identity++;state=next;rerender();}
 function snapshot(){return {effects:{...effects},ownerCurrent:owner.isCurrent(),text:document.querySelector('#lookup')?.textContent??'',cohorts:cohorts.map(([name])=>name),suppliedUnchanged:JSON.stringify(cohorts)===suppliedBytes,react:React.version,platform:navigator.platform};}
+function createExternalCaptureScenario(){
+ const retiredListeners=new Set(),hostListeners=new Set();let current=true;
+ const unavailableOwner={token:{},isCurrent:()=>false},admittedOwner={token:{},isCurrent:()=>current,subscribe(listener){retiredListeners.add(listener);return()=>retiredListeners.delete(listener);}};
+ let externalOwner=unavailableOwner;
+ const subscribeHost=listener=>{hostListeners.add(listener);return()=>hostListeners.delete(listener);};
+ function ExternalHost(){const captured=React.useSyncExternalStore(subscribeHost,()=>externalOwner);return h(api.LookupField,{mode:'controlled',owner:captured,identity:captured.token,state:{status:'ready',result:{kind:'literal',text:'Subscribed installed capture'}}});}
+ return {start(){root.render(h(React.StrictMode,null,h(ExternalHost)));},admit(){externalOwner=admittedOwner;for(const listener of [...hostListeners])listener();},retire(){current=false;externalOwner=unavailableOwner;for(const listener of [...retiredListeners])listener();for(const listener of [...hostListeners])listener();},recover(){externalOwner={token:{},isCurrent:()=>true};for(const listener of [...hostListeners])listener();},snapshot(){return {text:document.querySelector('main')?.textContent??'',retiredSubscriptions:retiredListeners.size,hostSubscriptions:hostListeners.size,oldCurrent:admittedOwner.isCurrent()};}};
+}
 `;
 
 export const controlledLookupRuntimeConsumer =
@@ -121,8 +129,12 @@ try{
  await React.act(async()=>renew({status:'masked'}));assert.match(snapshot().text,/••••••••/);assert.equal(host.querySelector('img,audio,video,iframe'),null);
  await React.act(async()=>renew({status:'ready',result:{kind:'literal',text:'Successor'}}));assert.equal(snapshot().text,'Computed LookupSuccessor');
  await React.act(async()=>renew({status:'ready',result:{kind:'sequence',leaves:[{key:'same',result:{kind:'literal',text:'Private'}},{key:'same',result:{kind:'literal',text:'Private'}}]}}));assert.match(snapshot().text,/Unavailable/);assert(!snapshot().text.includes('Private'));
+ const external=createExternalCaptureScenario();await React.act(async()=>external.start());
+ await React.act(async()=>external.admit());assert.match(host.textContent,/Subscribed installed capture/);
+ await React.act(async()=>external.retire());assert.match(host.textContent,/Unavailable/);assert(!host.textContent.includes('Subscribed installed capture'));assert.equal(external.snapshot().retiredSubscriptions,0);
+ await React.act(async()=>external.recover());assert.match(host.textContent,/Subscribed installed capture/);assert.equal(external.snapshot().oldCurrent,false);
  assert.equal(snapshot().suppliedUnchanged,true);assert.equal(effects.transport,0);assert.equal(effects.rows,0);assert.equal(effects.submits,0);assert.equal(requests,0);assert.deepEqual(errors,[]);assert.deepEqual(warnings,[]);
- await React.act(async()=>root.unmount());root=undefined;assert.equal(host.childElementCount,0);console.log(JSON.stringify({format,react:React.version,cohorts:cohorts.length,ssr:true,hydration:true,errors:0,warnings:0,requests,effects,suppliedUnchanged:snapshot().suppliedUnchanged,cleanup:'completed'}));
+ await React.act(async()=>root.unmount());root=undefined;assert.equal(host.childElementCount,0);assert.equal(external.snapshot().hostSubscriptions,0);console.log(JSON.stringify({format,react:React.version,cohorts:cohorts.length,externalStoreRetirement:true,ssr:true,hydration:true,errors:0,warnings:0,requests,effects,suppliedUnchanged:snapshot().suppliedUnchanged,cleanup:'completed'}));
 }finally{try{if(root)await React.act(async()=>root.unmount());}finally{console.error=old;keys.forEach((key,index)=>saved[index]?Object.defineProperty(globalThis,key,saved[index]):Reflect.deleteProperty(globalThis,key));await window.happyDOM.close();}}
 `;
 

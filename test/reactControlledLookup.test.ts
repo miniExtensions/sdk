@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
-import { act, createElement as h, StrictMode } from 'react';
+import {
+    act,
+    createElement as h,
+    StrictMode,
+    useSyncExternalStore,
+    type ReactNode,
+} from 'react';
 import type { Root } from 'react-dom/client';
 import {
     LookupField,
@@ -102,7 +108,7 @@ async function fixture(t: TestContext) {
     const first = capture();
     const props = (
         state: LookupPresentationState,
-        owner = first.owner
+        owner: LookupPresentationOwner = first.owner
     ): ControlledLookupFieldProps => ({
         mode: 'controlled',
         state,
@@ -142,6 +148,7 @@ async function fixture(t: TestContext) {
         capture,
         props,
         render,
+        renderTree: (node: ReactNode) => act(async () => root?.render(node)),
         click,
         text: () => host.textContent ?? '',
     };
@@ -174,6 +181,52 @@ it('retires once for initially stale and notified owners', async (t) => {
     assert.match(f.text(), /Unavailable/);
     assert.doesNotMatch(f.text(), /Current/);
     assert.equal(next.listeners.size, 0);
+});
+
+it('retires without an update loop when an external host replaces the capture synchronously', async (t) => {
+    const f = await fixture(t);
+    let current = true;
+    const retiredListeners = new Set<() => void>();
+    const hostListeners = new Set<() => void>();
+    const unavailable = { token: {}, isCurrent: () => false };
+    const admitted = {
+        token: {},
+        isCurrent: () => current,
+        subscribe(listener: () => void) {
+            retiredListeners.add(listener);
+            return () => retiredListeners.delete(listener);
+        },
+    };
+    let snapshot: LookupPresentationOwner = unavailable;
+    const subscribe = (listener: () => void) => {
+        hostListeners.add(listener);
+        return () => hostListeners.delete(listener);
+    };
+    function Host() {
+        const owner = useSyncExternalStore(subscribe, () => snapshot);
+        return h(LookupField, f.props(literal('External capture'), owner));
+    }
+    await f.renderTree(h(Host));
+    await act(async () => {
+        snapshot = admitted;
+        for (const listener of [...hostListeners]) listener();
+    });
+    assert.match(f.text(), /External capture/);
+    await act(async () => {
+        current = false;
+        snapshot = unavailable;
+        for (const listener of [...retiredListeners]) listener();
+        for (const listener of [...hostListeners]) listener();
+    });
+    assert.match(f.text(), /Unavailable/);
+    assert.doesNotMatch(f.text(), /External capture/);
+    assert.equal(retiredListeners.size, 0);
+    await act(async () => {
+        snapshot = { token: {}, isCurrent: () => true };
+        for (const listener of [...hostListeners]) listener();
+    });
+    assert.match(f.text(), /External capture/);
+    assert.equal(admitted.isCurrent(), false);
 });
 
 it('contains readonly row interaction and never reads a concealed projection', async (t) => {

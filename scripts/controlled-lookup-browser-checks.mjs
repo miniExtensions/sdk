@@ -23,6 +23,12 @@ if(navigator.sendBeacon)navigator.sendBeacon=function(){effects.transport++;retu
 flushSync(()=>rerender());
 const initial=()=>({status:'ready',result:{kind:'sequence',leaves:cohorts.map(([key,result])=>({key,result}))}});
 window.lookupProof={snapshot,retire(){active=null;},initial(){flushSync(()=>renew(initial()));},cohort(name){const result=cohorts.find(([key])=>key===name)?.[1];if(!result)throw Error('Unknown cohort');flushSync(()=>renew({status:'ready',result}));},masked(){flushSync(()=>renew({status:'masked'}));},successor(){flushSync(()=>renew({status:'ready',result:{kind:'literal',text:'Successor canonical value'}}));},invalid(){flushSync(()=>renew({status:'ready',result:{kind:'sequence',leaves:[{key:'duplicate',result:{kind:'literal',text:'Private value'}},{key:'duplicate',result:{kind:'literal',text:'Private value'}}]}}));},richText(){flushSync(()=>renew({status:'ready',result:{kind:'richText',display:{identity:'owned-readonly-'+identity,value:['**Readonly rich content**','','[x] Supplied checked item'].join(String.fromCharCode(10)),emptyLabel:'No rich value',language:'en'}}}));},unmount(){flushSync(()=>root.unmount());}};
+const externalCapture=createExternalCaptureScenario();
+window.lookupProof.externalStart=()=>flushSync(()=>externalCapture.start());
+window.lookupProof.externalAdmit=()=>externalCapture.admit();
+window.lookupProof.externalRetire=()=>externalCapture.retire();
+window.lookupProof.externalRecover=()=>externalCapture.recover();
+window.lookupProof.externalSnapshot=()=>externalCapture.snapshot();
 `;
 const observedInput = String.raw`
 window.lookupProof.currentInput=()=>JSON.stringify(state);
@@ -694,12 +700,53 @@ export async function checkControlledLookupBrowser({
                 ...final.effects,
                 suppliedUnchanged: final.suppliedUnchanged,
             });
+            await page.evaluate(() => window.lookupProof.externalStart());
+            await page.getByText('Unavailable', { exact: true }).waitFor();
+            await page.evaluate(() => window.lookupProof.externalAdmit());
+            await page
+                .getByText('Subscribed installed capture', { exact: true })
+                .waitFor();
+            await page.evaluate(() => window.lookupProof.externalRetire());
+            await page.getByText('Unavailable', { exact: true }).waitFor();
+            const retiredCapture = await page.evaluate(() =>
+                window.lookupProof.externalSnapshot()
+            );
+            assert.equal(retiredCapture.retiredSubscriptions, 0);
+            assert.equal(retiredCapture.oldCurrent, false);
+            assert(
+                !retiredCapture.text.includes('Subscribed installed capture')
+            );
+            await page.evaluate(() => window.lookupProof.externalRecover());
+            await page
+                .getByText('Subscribed installed capture', { exact: true })
+                .waitFor();
+            assert.equal(
+                (
+                    await page.evaluate(() =>
+                        window.lookupProof.externalSnapshot()
+                    )
+                ).oldCurrent,
+                false
+            );
+            for (const name of ['transport', 'rows', 'submits'])
+                assert.equal((await snapshot()).effects[name], 0);
+            record(
+                'external-store retirement, unavailable successor and fresh recovery'
+            );
             await page.screenshot({
                 path: join(output, 'controlled-lookup-' + format + '.png'),
                 fullPage: true,
             });
             await page.evaluate(() => window.lookupProof.unmount());
             assert.equal(await page.locator('main > *').count(), 0);
+            assert.equal(
+                (
+                    await page.evaluate(() =>
+                        window.lookupProof.externalSnapshot()
+                    )
+                ).hostSubscriptions,
+                0
+            );
             record('full unmount cleanup');
             await context.close();
             context = null;

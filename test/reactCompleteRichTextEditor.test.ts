@@ -2124,3 +2124,467 @@ for (const transition of ['owner', 'policy'] as const) {
         }
     });
 }
+
+for (const released of [false, true]) {
+    it(`keeps a native caret through changed accessibility attributes with selectionchange ${released ? 'released' : 'pending'}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        const render = (invalid = false) =>
+            f.render(
+                h(CompleteRichTextEditor, {
+                    ref,
+                    value: 'Alpha Beta',
+                    id: 'notes',
+                    ariaInvalid: invalid,
+                    onValueChange: (value) => writes.push(value),
+                })
+            );
+        await render();
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        const input = view.dom;
+        const doc = view.state.doc.toJSON();
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+        try {
+            await f.select(view, 4);
+            await act(async () => t.mock.timers.tick(20));
+            pending = deferNativeSelectionChanges(t, f.document);
+            const selection = f.document.getSelection();
+            assert(selection);
+            const caret = view.domAtPos(3);
+            await act(async () => selection.collapse(caret.node, caret.offset));
+            assert.equal(view.state.selection.head, 4);
+            assert.equal(
+                view.posAtDOM(selection.anchorNode!, selection.anchorOffset),
+                3
+            );
+            if (released) await act(async () => pending!.release());
+            await render(true);
+            assert.equal(ref.current, editor);
+            assert.equal(editor.view, view);
+            assert.equal(view.dom, input);
+            assert.deepEqual(view.state.doc.toJSON(), doc);
+            assert.equal(view.state.selection.head, 3);
+            assert.equal(
+                view.posAtDOM(selection.anchorNode!, selection.anchorOffset),
+                3
+            );
+            assert.equal(input.getAttribute('aria-invalid'), 'true');
+            assert.deepEqual(writes, []);
+            await act(async () => pending!.release());
+            await act(async () => view.dispatch(view.state.tr.insertText('Z')));
+            assert.equal(view.state.doc.textContent, 'AlZpha Beta');
+            assert.deepEqual(writes, ['AlZpha Beta']);
+        } finally {
+            pending?.restore();
+            t.mock.timers.reset();
+        }
+    });
+}
+
+for (const key of ['ArrowLeft', 'Home', 'End', 'PageUp']) {
+    it(`publishes the post-default native ${key} caret before metadata blur and refocus`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        const render = (title: string) =>
+            f.render(
+                h(
+                    'section',
+                    null,
+                    h('label', { id: 'notes-label' }, title),
+                    h(CompleteRichTextEditor, {
+                        ref,
+                        value: 'Alpha Beta',
+                        ariaLabelledBy: 'notes-label',
+                        onValueChange: (value) => writes.push(value),
+                    })
+                )
+            );
+        await render('Custom Rich title');
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        const input = view.dom;
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+        try {
+            await f.select(view, 4);
+            await act(async () => t.mock.timers.tick(20));
+            pending = deferNativeSelectionChanges(t, f.document);
+            // DOM range movement models the browser default after keydown.
+            // It is intentionally not trusted keyboard acceptance.
+            const selection = f.document.getSelection();
+            assert(selection);
+            const caret = view.domAtPos(3);
+            await act(async () => selection.collapse(caret.node, caret.offset));
+            assert.equal(view.state.selection.head, 4);
+            const up = new f.window.KeyboardEvent('keyup', {
+                key,
+                bubbles: true,
+                cancelable: true,
+            });
+            await act(async () => input.dispatchEvent(up as unknown as Event));
+            assert.equal(view.state.selection.head, 3);
+            assert.equal(up.defaultPrevented, false);
+            await act(async () => input.blur());
+            await render('Metadata Rich');
+            await act(async () => input.focus());
+            await act(async () => t.mock.timers.tick(20));
+            assert.equal(ref.current, editor);
+            assert.equal(editor.view, view);
+            assert.equal(view.dom, input);
+            assert.equal(
+                view.posAtDOM(selection.anchorNode!, selection.anchorOffset),
+                3
+            );
+            assert.equal(view.state.selection.head, 3);
+            assert.deepEqual(writes, []);
+            await act(async () => pending!.release());
+            await act(async () => view.dispatch(view.state.tr.insertText('Z')));
+            assert.equal(view.state.doc.textContent, 'AlZpha Beta');
+            assert.deepEqual(writes, ['AlZpha Beta']);
+        } finally {
+            pending?.restore();
+            t.mock.timers.reset();
+        }
+    });
+}
+
+for (const blocked of ['composition', 'foreign-range', 'readonly'] as const) {
+    it(`does not admit a navigation keyup selection during ${blocked}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        await f.render(
+            h(CompleteRichTextEditor, {
+                ref,
+                value: 'Alpha Beta',
+                readOnly: blocked === 'readonly',
+                onValueChange: (value) => writes.push(value),
+            })
+        );
+        const { view } = await f.editor(ref);
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+        try {
+            await f.select(view, 4);
+            await act(async () => t.mock.timers.tick(20));
+            pending = deferNativeSelectionChanges(t, f.document);
+            const selection = f.document.getSelection();
+            assert(selection);
+            const outside = f.document.createTextNode('Other control');
+            f.document.body.append(outside);
+            const caret =
+                blocked === 'foreign-range'
+                    ? { node: outside, offset: 2 }
+                    : view.domAtPos(3);
+            await act(async () => selection.collapse(caret.node, caret.offset));
+            const previous = view.state.selection;
+            const up = new f.window.KeyboardEvent('keyup', {
+                key: 'ArrowLeft',
+                bubbles: true,
+                cancelable: true,
+                isComposing: blocked === 'composition',
+            });
+            await act(async () =>
+                view.dom.dispatchEvent(up as unknown as Event)
+            );
+            assert(view.state.selection.eq(previous));
+            assert.deepEqual(writes, []);
+            assert.equal(up.defaultPrevented, false);
+            outside.remove();
+        } finally {
+            pending?.restore();
+            t.mock.timers.reset();
+        }
+    });
+}
+
+it('keeps actual platform select-all through the first typed key on a formatted replacement owner', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(CompleteRichTextEditor, {
+            ref,
+            identity: 'record-B',
+            value: '**Stored B**\n\n[x] B task',
+            onValueChange: (value) => writes.push(value),
+        })
+    );
+    const { view } = await f.editor(ref);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+        await f.select(view, 1);
+        await act(async () => t.mock.timers.tick(20));
+        const mac = /Mac|iP(hone|[oa]d)/.test(f.window.navigator.platform);
+        const selectAll = new f.window.KeyboardEvent('keydown', {
+            key: 'a',
+            code: 'KeyA',
+            keyCode: 65,
+            ctrlKey: !mac,
+            metaKey: mac,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () =>
+            view.dom.dispatchEvent(selectAll as unknown as Event)
+        );
+        assert.equal(selectAll.defaultPrevented, true);
+        assert(view.state.selection instanceof AllSelection);
+        const down = new f.window.KeyboardEvent('keydown', {
+            key: 'X',
+            code: 'KeyX',
+            keyCode: 88,
+            bubbles: true,
+            cancelable: true,
+        });
+        const press = new f.window.KeyboardEvent('keypress', {
+            key: 'X',
+            code: 'KeyX',
+            keyCode: 88,
+            bubbles: true,
+            cancelable: true,
+        });
+        // HappyDOM omits legacy charCode from the constructor. Supply only
+        // that missing browser event property; the editor's input stays real.
+        Object.defineProperty(press, 'charCode', { value: 88 });
+        assert.equal(press.charCode, 88);
+        await act(async () => {
+            view.dom.dispatchEvent(down as unknown as Event);
+            view.dom.dispatchEvent(press as unknown as Event);
+        });
+        assert.equal(press.defaultPrevented, true);
+        assert.equal(view.state.doc.textContent, 'X');
+        assert.deepEqual(writes, ['X']);
+    } finally {
+        t.mock.timers.reset();
+    }
+});
+
+it('updates readonly accessibility metadata without importing a pending native caret', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    const render = (readOnly = false) =>
+        f.render(
+            h(CompleteRichTextEditor, {
+                ref,
+                value: 'Alpha Beta',
+                readOnly,
+                ariaInvalid: readOnly,
+                onValueChange: (value) => writes.push(value),
+            })
+        );
+    await render();
+    const { view } = await f.editor(ref);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+    try {
+        await f.select(view, 4);
+        await act(async () => t.mock.timers.tick(20));
+        pending = deferNativeSelectionChanges(t, f.document);
+        const selection = f.document.getSelection();
+        assert(selection);
+        const caret = view.domAtPos(3);
+        await act(async () => selection.collapse(caret.node, caret.offset));
+        await render(true);
+        assert.equal(view.editable, false);
+        assert.equal(view.dom.getAttribute('aria-invalid'), 'true');
+        assert.equal(view.state.selection.head, 4);
+        assert.equal(view.state.doc.textContent, 'Alpha Beta');
+        assert.deepEqual(writes, []);
+    } finally {
+        pending?.restore();
+        t.mock.timers.reset();
+    }
+});
+
+for (const transition of ['owner', 'policy'] as const) {
+    it(`aborts captured-view attributes when native selection publication replaces its ${transition}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        let replaceOwner: (() => void) | undefined;
+        function OwnedEditor() {
+            const [owner, setOwner] = useState(1);
+            replaceOwner = () => setOwner(2);
+            return h(CompleteRichTextEditor, {
+                ref,
+                identity: String(owner),
+                ariaInvalid: false,
+                value: owner === 1 ? 'Original details' : 'Successor document',
+                onValueChange: (value) => writes.push(value),
+            });
+        }
+        await f.render(h(OwnedEditor));
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        try {
+            await f.select(view, 4);
+            await act(async () => t.mock.timers.tick(20));
+        } finally {
+            t.mock.timers.reset();
+        }
+        const publish = view.props.dispatchTransaction,
+            replace = replaceOwner;
+        assert(publish);
+        assert(replace);
+        view.setProps({
+            dispatchTransaction(transaction) {
+                publish.call(view, transaction);
+                if (transaction.selectionSet && !transaction.docChanged) {
+                    if (transition === 'owner') flushSync(replace);
+                    else view.setProps({ editable: () => false });
+                }
+            },
+        });
+        const pending = deferNativeSelectionChanges(t, f.document);
+        try {
+            const selection = f.document.getSelection();
+            assert(selection);
+            const caret = view.domAtPos(3);
+            await act(async () => selection.collapse(caret.node, caret.offset));
+            const { setEditorAttributes } = await import(
+                '../src/react/completeRichTextRuntime.js'
+            );
+            await act(async () =>
+                setEditorAttributes(editor, { 'aria-invalid': 'true' })
+            );
+            assert.deepEqual(writes, []);
+            if (transition === 'owner') {
+                const successor = await f.editor(ref);
+                assert.notEqual(successor, editor);
+                assert.equal(view.isDestroyed, true);
+                assert.equal(
+                    successor.view.state.doc.textContent,
+                    'Successor document'
+                );
+                assert.equal(
+                    successor.view.dom.getAttribute('aria-invalid'),
+                    'false'
+                );
+            } else {
+                assert.equal(ref.current, editor);
+                assert.equal(view.editable, false);
+                assert.equal(view.dom.getAttribute('aria-invalid'), 'false');
+            }
+        } finally {
+            pending.restore();
+        }
+    });
+}
+
+it('retains reverse navigation ranges and equal-caret stored marks', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(CompleteRichTextEditor, {
+            ref,
+            value: 'Alpha Beta',
+            onValueChange: (value) => writes.push(value),
+        })
+    );
+    const { view } = await f.editor(ref);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+    try {
+        await f.select(view, 1);
+        await act(async () => t.mock.timers.tick(20));
+        pending = deferNativeSelectionChanges(t, f.document);
+        const selection = f.document.getSelection();
+        assert(selection);
+        const anchor = view.domAtPos(9),
+            head = view.domAtPos(3);
+        await act(async () =>
+            selection.setBaseAndExtent(
+                anchor.node,
+                anchor.offset,
+                head.node,
+                head.offset
+            )
+        );
+        const up = new f.window.KeyboardEvent('keyup', {
+            key: 'ArrowLeft',
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => view.dom.dispatchEvent(up as unknown as Event));
+        assert.equal(view.state.selection.anchor, 9);
+        assert.equal(view.state.selection.head, 3);
+        assert.equal(up.defaultPrevented, false);
+        await act(async () => pending!.release());
+        await f.select(view, 3);
+        await act(async () =>
+            view.dispatch(
+                view.state.tr.setStoredMarks([
+                    view.state.schema.marks.strong!.create(),
+                ])
+            )
+        );
+        const previous = view.state;
+        await act(async () =>
+            view.dom.dispatchEvent(
+                new f.window.KeyboardEvent('keyup', {
+                    key: 'ArrowLeft',
+                    bubbles: true,
+                    cancelable: true,
+                }) as unknown as Event
+            )
+        );
+        assert.equal(view.state, previous);
+        assert.equal(view.state.storedMarks?.[0]?.type.name, 'strong');
+        assert.deepEqual(writes, []);
+    } finally {
+        pending?.restore();
+        t.mock.timers.reset();
+    }
+});
+
+for (const blocked of ['unfocused', 'non-navigation'] as const) {
+    it(`declines native caret import for ${blocked} keyup`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        await f.render(
+            h(CompleteRichTextEditor, {
+                ref,
+                value: 'Alpha Beta',
+                onValueChange: (value) => writes.push(value),
+            })
+        );
+        const { view } = await f.editor(ref);
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
+        try {
+            await f.select(view, 4);
+            await act(async () => t.mock.timers.tick(20));
+            pending = deferNativeSelectionChanges(t, f.document);
+            if (blocked === 'unfocused') await act(async () => view.dom.blur());
+            const selection = f.document.getSelection();
+            assert(selection);
+            const caret = view.domAtPos(3);
+            await act(async () => selection.collapse(caret.node, caret.offset));
+            const previous = view.state.selection;
+            const up = new f.window.KeyboardEvent('keyup', {
+                key: blocked === 'non-navigation' ? 'z' : 'ArrowLeft',
+                bubbles: true,
+                cancelable: true,
+            });
+            await act(async () =>
+                view.dom.dispatchEvent(up as unknown as Event)
+            );
+            assert(view.state.selection.eq(previous));
+            assert.equal(up.defaultPrevented, false);
+            assert.deepEqual(writes, []);
+        } finally {
+            pending?.restore();
+            t.mock.timers.reset();
+        }
+    });
+}

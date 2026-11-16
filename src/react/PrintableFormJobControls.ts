@@ -1,4 +1,8 @@
-import { createElement as h, useSyncExternalStore } from 'react';
+import {
+    createElement as h,
+    useSyncExternalStore,
+    type ReactElement,
+} from 'react';
 import type { PrintableFormJob } from '../ui/printableForm.js';
 
 export type PrintableFormJobLabels = {
@@ -15,7 +19,7 @@ export function PrintableFormJobControls({
 }: {
     job: PrintableFormJob;
     labels: PrintableFormJobLabels;
-}) {
+}): ReactElement | null {
     const state = useSyncExternalStore(
         job.subscribe,
         job.getSnapshot,

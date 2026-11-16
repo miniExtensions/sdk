@@ -9,7 +9,28 @@ import { resolvePortalShellSelection } from '../src/portals/shell.js';
 import {
     assertPortalShellConsumer,
     assertPortalShellSidebarConsumer,
+    assertPortalShellPresentationConsumer,
 } from '../scripts/portal-shell-runtime.mjs';
+
+it('configured shell presentation preserves native availability/layout/disclosure and retires committed logout authority', async () => {
+    const result = await assertPortalShellPresentationConsumer({
+        React,
+        ui: { CompletePortalShell },
+        Window,
+        createRoot,
+        renderToString,
+    });
+    assert.deepEqual(result, {
+        availabilityCases: 8,
+        authorityRetirements: 3,
+        logoutIntents: 2,
+        submitEvents: 0,
+        bodyRemountsWhileSelected: 0,
+        implicitNetworkRequests: 0,
+        synchronousPublications: 1,
+        siblingLogoutIntents: 1,
+    });
+});
 
 it('controlled sidebar reuses the native resize engine with end-only current-owner commits and stable record body', async () => {
     const result = await assertPortalShellSidebarConsumer({

@@ -333,3 +333,85 @@
         border: 2px solid CanvasText;
     }
 }
+
+/* Opt-in configured layout; legacy header placement keeps its existing rules. */
+.mx-sdk-portal-user-icon {
+    display: inline-block;
+    width: 1.5rem;
+    height: 1.5rem;
+    vertical-align: middle;
+}
+.mx-sdk-portal-user--icon > summary {
+    list-style: none;
+}
+.mx-sdk-portal-user--icon > summary::-webkit-details-marker {
+    display: none;
+}
+.mx-sdk-portal-shell--layout-actions .mx-sdk-portal-navigation {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+.mx-sdk-portal-shell--layout-actions .mx-sdk-portal-navigation[hidden] {
+    display: none;
+}
+.mx-sdk-portal-shell--layout-actions .mx-sdk-portal-navigation > nav {
+    flex: 1;
+}
+.mx-sdk-portal-shell--layout-actions
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions {
+    margin-top: 1rem;
+    flex-direction: column;
+    align-items: stretch;
+}
+.mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions {
+    min-height: 12.5rem;
+    justify-content: center;
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        ) {
+        grid-template: auto auto 1fr / minmax(0, 1fr);
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        .mx-sdk-portal-toggle {
+        display: none;
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        > .mx-sdk-portal-navigation-wrap {
+        display: block;
+        position: static;
+        inset: auto;
+        grid-row: 2;
+        background: var(--mx-portal-background);
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        .mx-sdk-portal-navigation {
+        width: 100%;
+        height: auto;
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        .mx-sdk-portal-navigation
+        > nav
+        > ul {
+        flex-direction: row;
+    }
+    .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
+            .mx-sdk-portal-shell--hidden
+        )
+        > .mx-sdk-portal-content {
+        grid-row: 3;
+    }
+}

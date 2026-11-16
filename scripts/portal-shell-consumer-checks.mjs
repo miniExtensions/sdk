@@ -23,6 +23,10 @@ const richSnapshot:PortalShellSnapshot={...snapshot,header:{...snapshot.header,t
 createElement(CompletePortalShell,{...props,snapshot:richSnapshot});
 const resizable:CompletePortalShellProps={...props,snapshot:{...snapshot,header:{...snapshot.header,sidebarWidth:384}},onSidebarWidthCommit(change){console.log(change.scope,change.revision,change.width.toFixed(0));}};
 createElement(CompletePortalShell,resizable);
+const configured:PortalShellSnapshot={...snapshot,header:{...snapshot.header,actionsPlacement:'layout',descriptionHtml:'<p>Details</p>',descriptionOptions:{placement:'navigation',truncate:true,resetKey:'portal'}},user:{name:'',settingsEnabled:true,logoutEnabled:true,presentation:'icon'}};
+createElement(CompletePortalShell,{...props,snapshot:configured,labels:{readMore:'More details',showLess:'Fewer details'}});
+// @ts-expect-error description content is controlled; no host-rendered replacement
+const injectedDescription:PortalShellSnapshot={...snapshot,header:{...snapshot.header,descriptionOptions:{render(){return null;}}}};
 // @ts-expect-error only controlled numeric widths, never CSS or a native renderer
 const invalidWidth:PortalShellSnapshot={...snapshot,header:{...snapshot.header,sidebarWidth:'20rem'}};
 // @ts-expect-error HTML is a controlled string, never an injected renderer
@@ -33,7 +37,7 @@ const nativeMenu:CompletePortalShellProps={...props,renderMenu(){return null;}};
 const fetcher:CompletePortalShellProps={...props,fetchRecords(){}};
 // @ts-expect-error owner/revision envelope is required
 const unscoped:PortalShellIntent={type:'logout'};
-void nativeMenu;void fetcher;void unscoped;void injectedHeader;void invalidWidth;
+void nativeMenu;void fetcher;void unscoped;void injectedHeader;void invalidWidth;void injectedDescription;
 `;
 
 export function checkPortalShellReactMatrix({
@@ -68,7 +72,7 @@ export function checkPortalShellReactMatrix({
             String.raw`
 import assert from 'node:assert/strict';import{createRequire}from'node:module';
 import React from'react';import{createRoot}from'react-dom/client';import{renderToString}from'react-dom/server';
-import{assertPortalShellConsumer,assertPortalShellSidebarConsumer}from'./scenarios.mjs';
+import{assertPortalShellConsumer,assertPortalShellSidebarConsumer,assertPortalShellPresentationConsumer}from'./scenarios.mjs';
 const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
@@ -77,7 +81,9 @@ assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined'
 const{Window}=require(process.argv[3]);
 const result=await assertPortalShellConsumer({React,ui,portals,Window,createRoot,renderToString});
 const sidebar=await assertPortalShellSidebarConsumer({React,ui,Window,createRoot,renderToString});
-console.log(JSON.stringify({format,react:React.version,...result,sidebar}));
+const presentation=await assertPortalShellPresentationConsumer({React,ui,Window,createRoot,renderToString});
+assert.deepEqual(presentation,{availabilityCases:8,authorityRetirements:3,logoutIntents:2,submitEvents:0,bodyRemountsWhileSelected:0,implicitNetworkRequests:0,synchronousPublications:1,siblingLogoutIntents:1});
+console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation}));
 `
         );
         run('npm', [

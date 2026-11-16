@@ -7,6 +7,8 @@ export type PrintableDOMOptions = {
     /** A preparation deadline only. It never interprets a print invocation. */
     readonly preparationTimeoutMs?: number;
     readonly title?: string;
+    /** Preserve a whole native fallback, without claiming SDK media parity. */
+    readonly embeddedContent?: 'refuse' | 'retain-native';
 };
 
 function preparationScope(options: PrintableDOMOptions) {
@@ -23,7 +25,7 @@ function preparationScope(options: PrintableDOMOptions) {
         check() {
             if (
                 abort.signal.aborted ||
-                !options.isCurrent() ||
+                options.isCurrent() !== true ||
                 abort.signal.aborted
             )
                 throw new Error('Print preparation retired');
@@ -172,11 +174,17 @@ export async function preparePrintableDOM(
         scope.check();
         // Embedded browsing contexts and playing media need a separately
         // admitted print representation; never silently print a blank player.
-        if (source.querySelector('iframe,audio,video'))
+        if (
+            options.embeddedContent !== 'retain-native' &&
+            source.querySelector('iframe,audio,video')
+        )
             throw new Error('Unsupported print content');
         await waitForContent(source, scope);
         scope.check();
-        if (source.querySelector('iframe,audio,video'))
+        if (
+            options.embeddedContent !== 'retain-native' &&
+            source.querySelector('iframe,audio,video')
+        )
             throw new Error('Unsupported print content');
         frame = host.createElement('iframe');
         frame.title = options.title ?? 'Printable document';

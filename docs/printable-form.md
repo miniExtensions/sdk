@@ -51,6 +51,15 @@ runtime dependency or peer override is needed. Browser rendering, media and prin
 dialog acceptance still require real browser qualification. Unsupported embedded
 players/frames fail the stage rather than producing an unqualified blank player.
 
+The separate `createReadonlyDOMPrintController` and
+`createBrowserReadonlyDOMPrintEngine` recipe retains an unsupported whole native
+readonly layout. It shares document admission, owner/read fences and exact-root
+release with the SDK job, including retirement during synchronous capture.
+Embedded native content remains native fallback and is not SDK media-parity
+evidence. The fallback does not replace individual SDK fields or create a second
+Form/store. Its host must retain the exact readonly root through preparation and
+supply an idempotent release callback; capture failures clean their own resources.
+
 `afterPrintObserved` is only a browser lifecycle notification. `invoked` records
 entry into the print method, while `unknown` conservatively retains an uncertain
 invocation. Neither proves hardcopy, cancellation or dialog closure. The retained

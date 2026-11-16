@@ -3206,7 +3206,10 @@ export {
     type PrintableFormHandle,
     type PrintableFormProps,
 } from './PrintableForm.js';
-export { createBrowserPrintableFormEngine } from './printableFormEngine.js';
+export {
+    createBrowserPrintableFormEngine,
+    createBrowserReadonlyDOMPrintEngine,
+} from './printableFormEngine.js';
 export {
     PrintableFormJobControls,
     type PrintableFormJobLabels,

@@ -129,6 +129,27 @@ export type PrintableFormController = {
     subscribe(changed: () => void): () => void;
     retire(): void;
 };
+type PrintCapture<T> =
+    | { readonly status: 'accepted'; readonly document: T }
+    | Extract<ReadonlyPrintCapture, { status: 'refused' }>;
+type PrintSource<T> = Omit<PrintableFormSource, 'capture'> & {
+    capture(expected: PrintableFormScope): PrintCapture<T>;
+};
+type PrintEngine<T> = {
+    prepare(
+        document: T,
+        context: Parameters<PrintableFormEngine['prepare']>[1]
+    ): Promise<PrintableFormPreparedDocument>;
+};
+
+/** Whole legacy readonly fallback only; never a field slot in the SDK document. */
+export type ReadonlyDOMPrintRoot = {
+    readonly element: HTMLElement;
+    /** Retain the exact borrowed root until this idempotent release. */
+    release(): void | Promise<void>;
+};
+export type ReadonlyDOMPrintSource = PrintSource<ReadonlyDOMPrintRoot>;
+export type ReadonlyDOMPrintEngine = PrintEngine<ReadonlyDOMPrintRoot>;
 type Job = {
     grant: object;
     authority: PrintableFormAuthority;
@@ -138,6 +159,7 @@ type Job = {
     snapshot: PrintableFormJobSnapshot;
     listeners: Set<() => void>;
     prepared: PrintableFormPreparedDocument | null;
+    releaseCapture: (() => void | Promise<void>) | null;
     preparePending: boolean;
     invokePending: boolean;
     didInvoke: boolean;
@@ -147,14 +169,18 @@ type Job = {
 };
 
 /** Retained print lifetime only; no canonical Form values, queue or Save authority. */
-export function createPrintableFormController({
+function createPrintController<T>({
     source,
     admission,
     engine,
+    validate,
+    releaseCapture,
 }: {
-    source: PrintableFormSource;
+    source: PrintSource<T>;
     admission: PrintableFormAdmission;
-    engine: PrintableFormEngine;
+    engine: PrintEngine<T>;
+    validate(input: T): PrintCapture<T>;
+    releaseCapture?: (input: T) => void | Promise<void>;
 }): PrintableFormController {
     let retired = false;
     let active: Job | null = null;
@@ -172,7 +198,7 @@ export function createPrintableFormController({
                 !admission.owns(job.grant)
             )
                 return false;
-            if (!source.isCurrent(job.authority.scope)) return false;
+            if (source.isCurrent(job.authority.scope) !== true) return false;
             const now = source.readAuthority();
             return (
                 now !== null &&
@@ -190,7 +216,7 @@ export function createPrintableFormController({
                           admission.keyboardOwner(),
                           now.keyboardLease
                       )) &&
-                source.isCurrent(job.authority.scope) &&
+                source.isCurrent(job.authority.scope) === true &&
                 // Host predicates may synchronously publish or retire this job.
                 !retired &&
                 active === job &&
@@ -227,6 +253,7 @@ export function createPrintableFormController({
         }
         job.cleaned = true;
         job.prepared = null;
+        job.releaseCapture = null;
         if (active === job) {
             active = null;
             snapshot = Object.freeze({ job: null, outcome: job.phase });
@@ -241,6 +268,7 @@ export function createPrintableFormController({
         if (job.cleanup) return job.cleanup;
         const operation = Promise.resolve().then(async () => {
             try {
+                await job.releaseCapture?.();
                 await job.prepared?.dispose();
             } catch {
                 job.phase = 'unknown';
@@ -315,7 +343,7 @@ export function createPrintableFormController({
         }
         return { status: job.phase === 'invoked' ? 'invoked' : 'unknown' };
     };
-    const run = async (job: Job, document: ReadonlyPrintDocument) => {
+    const run = async (job: Job, document: T) => {
         try {
             if (!current(job)) {
                 job.preparePending = false;
@@ -433,6 +461,7 @@ export function createPrintableFormController({
                 }),
                 listeners: new Set(),
                 prepared: null,
+                releaseCapture: null,
                 preparePending: true,
                 invokePending: false,
                 didInvoke: false,
@@ -454,7 +483,8 @@ export function createPrintableFormController({
                         ? 'cancelled-before-invoke'
                         : 'failed-before-invoke';
                 job.preparePending = false;
-                release(job);
+                if (job.releaseCapture) void clean(job);
+                else release(job);
                 return {
                     status: 'refused',
                     reason,
@@ -463,7 +493,7 @@ export function createPrintableFormController({
             };
             if (!publish(job) || !current(job) || job.phase !== 'capturing')
                 return refuse('retired');
-            let captured: ReadonlyPrintCapture;
+            let captured: PrintCapture<T>;
             try {
                 captured = source.capture(authority.scope);
             } catch {
@@ -471,7 +501,14 @@ export function createPrintableFormController({
             }
             if (captured.status !== 'accepted')
                 return refuse(captured.reason, captured.fieldKey);
-            captured = captureReadonlyPrintDocument(captured.document);
+            const input = captured.document;
+            if (releaseCapture)
+                job.releaseCapture = () => releaseCapture(input);
+            try {
+                captured = validate(input);
+            } catch {
+                return refuse('invalid-document');
+            }
             if (captured.status !== 'accepted')
                 return refuse(captured.reason, captured.fieldKey);
             if (!current(job) || job.phase !== 'capturing')
@@ -502,4 +539,42 @@ export function createPrintableFormController({
         },
     };
     return controller;
+}
+
+/** The complete SDK renderer consumes only detached whitelisted display data. */
+export function createPrintableFormController(options: {
+    source: PrintableFormSource;
+    admission: PrintableFormAdmission;
+    engine: PrintableFormEngine;
+}): PrintableFormController {
+    return createPrintController({
+        ...options,
+        validate: captureReadonlyPrintDocument,
+    });
+}
+
+/** A separately admitted whole-native fallback shares the same job protections. */
+export function createReadonlyDOMPrintController(options: {
+    source: ReadonlyDOMPrintSource;
+    admission: PrintableFormAdmission;
+    engine: ReadonlyDOMPrintEngine;
+}): PrintableFormController {
+    return createPrintController({
+        ...options,
+        validate(input) {
+            return input?.element?.nodeType === 1 &&
+                typeof input.release === 'function'
+                ? {
+                      status: 'accepted',
+                      document: Object.freeze({
+                          element: input.element,
+                          release: input.release,
+                      }),
+                  }
+                : { status: 'refused', reason: 'invalid-document' };
+        },
+        releaseCapture: (input) => {
+            if (typeof input?.release === 'function') return input.release();
+        },
+    });
 }

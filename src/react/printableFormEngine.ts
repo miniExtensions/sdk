@@ -4,7 +4,10 @@ import {
     useLayoutEffect,
     type ReactNode,
 } from 'react';
-import type { PrintableFormEngine } from '../ui/printableForm.js';
+import type {
+    PrintableFormEngine,
+    ReadonlyDOMPrintEngine,
+} from '../ui/printableForm.js';
 import { preparePrintableDOM } from '../ui/printableDOM.js';
 import {
     prepareReadonlyPrintDocument,
@@ -29,6 +32,74 @@ class PrintBoundary extends Component<
     render() {
         return this.state.failed ? null : this.props.children;
     }
+}
+
+/** Separate whole-native fallback: the SDK owns engine/controls, never field slots. */
+export function createBrowserReadonlyDOMPrintEngine(
+    ownerDocument: Document,
+    labels: PrintableFormJobLabels
+): ReadonlyDOMPrintEngine {
+    return {
+        async prepare(captured, context) {
+            const abort = new AbortController();
+            const unsubscribe = context.job.subscribe(() => {
+                if (
+                    context.job.getSnapshot().phase ===
+                    'cancelled-before-invoke'
+                )
+                    abort.abort();
+            });
+            let disposeControls: (() => void) | null = null;
+            let prepared: Awaited<
+                ReturnType<typeof preparePrintableDOM>
+            > | null = null;
+            try {
+                const { createRoot } = await import('react-dom/client');
+                if (!context.isCurrent())
+                    throw new Error('Print owner retired');
+                const container = ownerDocument.createElement('div');
+                container.dataset.mxSdkPrintJob = '';
+                ownerDocument.body.append(container);
+                let root;
+                try {
+                    root = createRoot(container);
+                } catch {
+                    container.remove();
+                    throw new Error('Print controls unavailable');
+                }
+                disposeControls = () => {
+                    root.unmount();
+                    container.remove();
+                };
+                root.render(
+                    h(PrintableFormJobControls, { job: context.job, labels })
+                );
+                prepared = await preparePrintableDOM(captured.element, {
+                    isCurrent: context.isCurrent,
+                    afterPrint: context.afterPrint,
+                    signal: abort.signal,
+                    embeddedContent: 'retain-native',
+                });
+                const frame = prepared;
+                return {
+                    invoke: (boundary) => frame.invoke(boundary),
+                    async dispose() {
+                        await frame.dispose();
+                        unsubscribe();
+                        abort.abort();
+                        disposeControls?.();
+                        disposeControls = null;
+                    },
+                };
+            } catch {
+                await prepared?.dispose();
+                unsubscribe();
+                abort.abort();
+                disposeControls?.();
+                throw new Error('Print preparation failed');
+            }
+        },
+    };
 }
 function Committed({ ready }: { ready(): void }) {
     useLayoutEffect(ready, [ready]);

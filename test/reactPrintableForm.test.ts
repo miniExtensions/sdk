@@ -9,9 +9,11 @@ import {
 } from '../src/react/PrintableForm.js';
 import {
     createPrintableFormAdmission,
+    createReadonlyDOMPrintController,
     type PrintableFormSource,
     type PrintableFormRequest,
 } from '../src/ui/printableForm.js';
+import { createBrowserReadonlyDOMPrintEngine } from '../src/react/printableFormEngine.js';
 
 const labels = {
     print: 'Print document',
@@ -271,4 +273,156 @@ test('two mounted public controls route only exact lowercase Ctrl+p to the selec
         b.window.document.querySelectorAll('[data-mx-sdk-print-frame]').length,
         0
     );
+});
+
+test('whole native fallback retains its actual readonly DOM with the same busy admission and independent SDK controls', async (t) => {
+    const b = await browser(t);
+    const owner = {};
+    const revision = {};
+    const admission = createPrintableFormAdmission();
+    const native = b.window.document.createElement('section');
+    native.innerHTML =
+        '<h2>Complete native layout</h2><input value="Native readonly value" readonly><iframe title="Native retained media"></iframe>';
+    b.window.document.body.append(native);
+    let released = 0;
+    const fallback = createReadonlyDOMPrintController({
+        admission,
+        source: {
+            readAuthority: () => ({
+                scope: { owner, revision },
+                explicitAllowed: true,
+                keyboardAllowed: false,
+                keyboardLease: null,
+            }),
+            isCurrent: (scope) =>
+                scope.owner === owner && scope.revision === revision,
+            capture: () => ({
+                status: 'accepted',
+                document: {
+                    element: native as unknown as HTMLElement,
+                    release() {
+                        released++;
+                        native.remove();
+                    },
+                },
+            }),
+        },
+        engine: createBrowserReadonlyDOMPrintEngine(
+            b.window.document as unknown as Document,
+            labels
+        ),
+    });
+    let request: PrintableFormRequest | undefined;
+    await act(async () => {
+        request = fallback.request();
+        await turn();
+    });
+    if (request?.status !== 'admitted')
+        throw new Error('Expected native fallback');
+    assert.equal(request.job.getSnapshot().phase, 'invoked');
+    assert.equal(b.prints, 1);
+    assert.equal(released, 0);
+    assert.deepEqual(fallback.request(), { status: 'busy' });
+    const frame = b.window.document.querySelector(
+        'iframe[data-mx-sdk-print-frame]'
+    ) as unknown as HTMLIFrameElement;
+    assert.match(
+        frame.contentDocument!.body.textContent ?? '',
+        /Complete native layout/
+    );
+    assert.equal(
+        frame.contentDocument!.querySelector('input')!.value,
+        'Native readonly value'
+    );
+    assert.equal(
+        frame.contentDocument!.querySelector('iframe')!.title,
+        'Native retained media'
+    );
+    assert.equal(
+        frame.contentDocument!.querySelector('.mx-sdk-print-document'),
+        null
+    );
+    await act(async () => fallback.retire());
+    assert.equal(request.job.getSnapshot().phase, 'unknown');
+    assert.equal(native.isConnected, true);
+    const controls = b.window.document.querySelector(
+        '.mx-sdk-print-job-controls'
+    )!;
+    await act(async () => {
+        controls.querySelector('button')!.click();
+        await turn();
+    });
+    assert.equal(released, 1);
+    assert.equal(native.isConnected, false);
+    assert.equal(frame.isConnected, false);
+    assert.equal(
+        b.window.document.querySelector('[data-mx-sdk-print-job]'),
+        null
+    );
+});
+
+test('a native root captured during retirement holds busy until its asynchronous release drains', async (t) => {
+    const b = await browser(t);
+    const admission = createPrintableFormAdmission();
+    const owner = {};
+    const revision = {};
+    let current = true;
+    let prepared = 0;
+    let releases = 0;
+    let releaseDone!: () => void;
+    const pendingRelease = new Promise<void>((resolve) => {
+        releaseDone = resolve;
+    });
+    const native = b.window.document.createElement('div');
+    b.window.document.body.append(native);
+    const fallback = createReadonlyDOMPrintController({
+        admission,
+        source: {
+            readAuthority: () => ({
+                scope: { owner, revision },
+                explicitAllowed: true,
+                keyboardAllowed: false,
+                keyboardLease: null,
+            }),
+            isCurrent: () => current,
+            capture() {
+                current = false;
+                return {
+                    status: 'accepted',
+                    document: {
+                        element: native as unknown as HTMLElement,
+                        release() {
+                            releases++;
+                            native.remove();
+                            return pendingRelease;
+                        },
+                    },
+                };
+            },
+        },
+        engine: {
+            async prepare() {
+                prepared++;
+                throw new Error('No stale preparation');
+            },
+        },
+    });
+    assert.deepEqual(fallback.request(), {
+        status: 'refused',
+        reason: 'retired',
+    });
+    assert.equal(prepared, 0);
+    assert.equal(admission.tryAcquire(), null);
+    await act(async () => {
+        await turn();
+    });
+    assert.equal(releases, 1);
+    assert.equal(admission.tryAcquire(), null);
+    releaseDone();
+    await act(async () => {
+        await turn();
+    });
+    assert.ok(admission.tryAcquire());
+    assert.equal(native.isConnected, false);
+    assert.equal(b.prints, 0);
 });

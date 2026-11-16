@@ -566,6 +566,15 @@ const headerStarterFiles = completionStarterFiles.map((path) =>
     path.replace('react-form-completion/', 'react-form-header/')
 );
 
+const printableStarterFiles = [
+    'README.md',
+    'main.ts',
+    'index.html',
+    'dev.mjs',
+    'build.mjs',
+    'tsconfig.json',
+].map((path) => `examples/react-printable-form/${path}`);
+
 const linkedFinderStarterFiles = [
     'README.md',
     'main.ts',
@@ -660,6 +669,7 @@ try {
                 path === 'docs/formula.md' ||
                 path === 'docs/rating.md' ||
                 path === 'docs/form-captcha.md' ||
+                path === 'docs/printable-form.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||
@@ -686,6 +696,7 @@ try {
                 linkedFinderStarterFiles.includes(path) ||
                 summaryCardsStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
+                printableStarterFiles.includes(path) ||
                 browserStarterFiles.includes(path) ||
                 documentFiles.has(path) ||
                 path.startsWith('dist/esm/') ||
@@ -772,6 +783,28 @@ try {
         'dist/cjs/react/rating.css',
         'docs/rating.md',
         'docs/form-captcha.md',
+        'docs/printable-form.md',
+        ...printableStarterFiles,
+        ...['esm', 'cjs'].flatMap((format) => [
+            ...[
+                'ReadonlyPrintDocumentView',
+                'PrintableForm',
+                'PrintableFormJobControls',
+                'printableFormEngine',
+            ].flatMap((name) => [
+                `dist/${format}/react/${name}.js`,
+                `dist/${format}/react/${name}.d.ts`,
+            ]),
+            ...[
+                'readonlyPrintDocument',
+                'printableForm',
+                'printableDOM',
+            ].flatMap((name) => [
+                `dist/${format}/ui/${name}.js`,
+                `dist/${format}/ui/${name}.d.ts`,
+            ]),
+            `dist/${format}/react/printable-form.css`,
+        ]),
         'dist/esm/react/form-captcha.css',
         'dist/cjs/react/form-captcha.css',
         'dist/esm/react/FormCaptcha.js',

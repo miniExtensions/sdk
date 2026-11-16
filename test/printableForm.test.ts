@@ -397,3 +397,14 @@ test('capture failure is bounded, releases synchronous admission and cannot publ
     assert.ok(grant);
     assert.equal(admission.release(grant), true);
 });
+
+test('an asynchronous currentness predicate is refused rather than treated as synchronous admission', () => {
+    const f = fixture();
+    f.source.isCurrent = () => Promise.resolve(false) as unknown as boolean;
+    assert.deepEqual(f.controller.request(), {
+        status: 'refused',
+        reason: 'retired',
+    });
+    assert.equal(f.captures, 0);
+    assert.equal(f.documents.length, 0);
+});

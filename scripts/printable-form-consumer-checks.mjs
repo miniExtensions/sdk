@@ -205,6 +205,8 @@ export async function checkPrintableFormReactMatrix({
                 );
             }
             const require = createRequire(join(root, 'package.json'));
+            assert.equal(require('react').version, version);
+            assert.equal(require('react-dom').version, version);
             const css = readFileSync(
                 require.resolve('@miniextensions/sdk/react/printable-form.css')
             );
@@ -282,7 +284,12 @@ export async function checkPrintableFormReactMatrix({
                     }
                 const output = execFileSync(
                     process.execPath,
-                    ['--test', '--test-concurrency=1', ...tests],
+                    [
+                        '--test',
+                        '--test-reporter=tap',
+                        '--test-concurrency=1',
+                        ...tests,
+                    ],
                     {
                         cwd: root,
                         encoding: 'utf8',

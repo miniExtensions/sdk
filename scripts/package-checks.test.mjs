@@ -45,6 +45,7 @@ import {
     postgresRuntimeRegistrySha256,
 } from './postgres-runtime-artifact-registry.mjs';
 import './postgres-config-receipts.test.mjs';
+import './postgres-form-access-receipts.test.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import {
     assertCollaboratorNeighborTarget,
@@ -808,6 +809,37 @@ async function postgresDistributionFixture(
 test('public distribution accepts separate PostgreSQL metadata provenance', async (t) => {
     const fixture = await postgresDistributionFixture(t);
     await fixture.check();
+});
+
+test('archive checks require the independent Form access proof for its new alias', async (t) => {
+    const fixture = await postgresDistributionFixture(t);
+    fixture.postgres.aliases.push('PostgresFormRecordAccess');
+    await assert.rejects(
+        fixture.check,
+        /Invalid canonical PostgreSQL Form access receipt: validator-provenance/
+    );
+});
+
+test('archive checks reject a Form access validator substitution before accepting declarations', async (t) => {
+    const fixture = await postgresDistributionFixture(t);
+    const canonical = JSON.parse(
+        await readFile(
+            new URL(
+                '../src/runtime/contracts/postgres.generated.provenance.json',
+                import.meta.url
+            ),
+            'utf8'
+        )
+    );
+    fixture.postgres.aliases.push('PostgresFormRecordAccess');
+    fixture.postgres.formAccessValidation = {
+        ...canonical.formAccessValidation,
+        validatorSha256: '0'.repeat(64),
+    };
+    await assert.rejects(
+        fixture.check,
+        /Invalid canonical PostgreSQL Form access receipt: validator-provenance/
+    );
 });
 
 for (const receiptVersion of [4, 5])

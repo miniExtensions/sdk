@@ -19,6 +19,7 @@ import type {
     PostgresTable,
     PostgresTableReference,
     PostgresField,
+    PostgresFormRecordAccess,
     PostgresType,
     PostgresRelationship,
     PostgresRecord,
@@ -757,3 +758,31 @@ export const numericCoercion: PostgresValue = 9007199254740993;
 export const temporalCoercion: PostgresValue = new Date();
 // @ts-expect-error Native identities do not become Airtable record IDs.
 export const airtableIdentity: PostgresRecordIdentity = 'rec_example';
+
+
+// Saved private access intent is a type-only contract, independently of public Form admission.
+declare const savedFormIdentifier: PostgresRowObservation['identifier'];
+export const editOnlyFormAccess: PostgresFormRecordAccess = {
+    disableCreatingRecords: true,
+    disableAccessingExistingRecords: false,
+    identifier: savedFormIdentifier,
+};
+export const disabledFormAccess: PostgresFormRecordAccess = { disableAccessingExistingRecords: true };
+export const dormantFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: true, identifier: savedFormIdentifier };
+// @ts-expect-error Enabling editing requires a saved identifier.
+export const missingFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: false };
+// @ts-expect-error A present native access object cannot silently turn editing on.
+export const unspecifiedFormAccess: PostgresFormRecordAccess = {};
+// @ts-expect-error Absence belongs to the containing optional access property.
+export const absentFormAccess: PostgresFormRecordAccess = undefined;
+export function inspectFormAccess(access: PostgresFormRecordAccess) {
+    if (access.disableAccessingExistingRecords === false) {
+        const identifier: PostgresRowObservation['identifier'] = access.identifier;
+        return identifier.configuration;
+    }
+    return access.identifier?.configuration;
+}
+
+// @ts-expect-error Enabled editing cannot use SQL NULL as an identifier.
+export const nullFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: false, identifier: null };
+export const explicitlyAbsentDormantIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: true, identifier: undefined };

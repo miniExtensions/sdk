@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import ts from 'typescript';
+import { assertPostgresFormAccessReceiptProvenance } from './postgres-form-access-receipts.mjs';
 import {
     assertPostgresRuntimeArtifactSet,
     assertPostgresRuntimeEmitter,
@@ -274,6 +275,19 @@ export async function assertPublicDistribution(
             'dist/esm/runtime/contracts/postgres.generated.d.ts'
         );
         assert(nativeDeclarations, 'Missing PostgreSQL contract declarations');
+        assertPostgresFormAccessReceiptProvenance(
+            postgres,
+            sha256(
+                await readFile(
+                    new URL(
+                        './postgres-form-access-receipts.mjs',
+                        import.meta.url
+                    )
+                )
+            ),
+            nativeDeclarations
+        );
+
         assert(
             nativeDeclarations.equals(
                 contents.get(

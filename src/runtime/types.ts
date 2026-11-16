@@ -32,6 +32,7 @@ import type {
     CanonicalPostgresDateColumnConfig,
     CanonicalPostgresEnumColumnConfig,
     CanonicalPostgresField,
+    CanonicalPostgresFormRecordAccess,
     CanonicalPostgresFilter,
     CanonicalPostgresIdentifierConfiguration,
     CanonicalPostgresNumericColumnConfig,
@@ -90,6 +91,8 @@ export type PostgresRowObservation = CanonicalPostgresRowObservation;
 /** Native adapter contracts; these do not add a public Portal save operation. */
 export type PostgresUpdateQuery = CanonicalPostgresUpdateQuery;
 export type PostgresUpdateResult = CanonicalPostgresUpdateResult;
+/** Saved private Form access intent; current database/workspace checks still apply. No public transport admission. */
+export type PostgresFormRecordAccess = CanonicalPostgresFormRecordAccess;
 export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;
 export type PostgresSchema = CanonicalPostgresSchema;

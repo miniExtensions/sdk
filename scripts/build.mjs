@@ -37,6 +37,7 @@ import {
     assertPostgresRuntimeRegistryProvenance,
 } from './postgres-runtime-artifact-registry.mjs';
 import { assertPostgresConfigReceiptProvenance } from './postgres-config-receipts.mjs';
+import { assertPostgresFormAccessReceiptProvenance } from './postgres-form-access-receipts.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -193,6 +194,20 @@ for (const name of ['generated', 'postgres.generated']) {
     );
     let runtimeArtifacts;
     if (name === 'postgres.generated') {
+        assertPostgresFormAccessReceiptProvenance(
+            internal,
+            createHash('sha256')
+                .update(
+                    readFileSync(
+                        new URL(
+                            './postgres-form-access-receipts.mjs',
+                            import.meta.url
+                        )
+                    )
+                )
+                .digest('hex'),
+            declarations
+        );
         assertPostgresRuntimeRegistryProvenance(internal);
         assertPostgresConfigReceiptProvenance(
             internal,

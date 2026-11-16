@@ -11,6 +11,11 @@ import {
     readPostgresConfigReceipt,
 } from './postgres-config-receipts.mjs';
 import {
+    postgresFormAccessSource,
+    postgresFormAccessProvenance,
+    readPostgresFormAccessReceipt,
+} from './postgres-form-access-receipts.mjs';
+import {
     postgresRuntimeArtifactSpecifications,
     postgresRuntimeRegistrySha256,
 } from './postgres-runtime-artifact-registry.mjs';
@@ -263,6 +268,24 @@ const readConfigurationValidation = () => ({
 const configurationValidation = postgresOnly
     ? readConfigurationValidation()
     : null;
+const readFormAccessValidation = () => {
+    const receipt = readPostgresFormAccessReceipt({ monorepo, revision });
+    return receipt == null
+        ? null
+        : {
+              ...receipt,
+              validatorSha256: hash(
+                  readFileSync(
+                      new URL(
+                          './postgres-form-access-receipts.mjs',
+                          import.meta.url
+                      )
+                  )
+              ),
+          };
+};
+const formAccessValidation = postgresOnly ? readFormAccessValidation() : null;
+const postgresFormAccessAliases = formAccessValidation?.aliases ?? [];
 const postgresFieldConfigAliases = configurationValidation?.aliases ?? [];
 const postgresRuntimeSpecifications = postgresOnly
     ? postgresRuntimeArtifactSpecifications(configurationValidation)
@@ -287,6 +310,7 @@ const postgresAliases = [
     ...postgresUpdateAliases,
     ...postgresAttachmentAliases,
     ...postgresFieldConfigAliases,
+    ...postgresFormAccessAliases,
 ];
 let corsValidation = null;
 let canonicalCorsPolicyPath;
@@ -312,6 +336,10 @@ if (postgresOnly) {
     entryLines.push(
         `import type { ${postgresFieldConfigAliases.join(', ')} } from './${postgresFieldConfigSource.replace(/\.ts$/, '')}';`
     );
+    if (formAccessValidation != null)
+        entryLines.push(
+            `import type { ${postgresFormAccessAliases.join(', ')} } from './${postgresFormAccessSource.replace(/\.ts$/, '')}';`
+        );
     for (const name of postgresAliases)
         entryLines.push(`export type Canonical${name} = ${name};`);
 } else {
@@ -822,6 +850,10 @@ if (postgresOnly) {
     // retain a declaration in the canonical generated source file.
     sourceFiles.add(postgresFieldConfigSource);
     sourceFiles.add(postgresFieldConfigProvenance);
+    if (formAccessValidation != null) {
+        sourceFiles.add(postgresFormAccessSource);
+        sourceFiles.add(postgresFormAccessProvenance);
+    }
 }
 for (const [, module] of selectedV1)
     sourceFiles.add(`types/api/types/${module}.ts`);
@@ -880,6 +912,9 @@ const serializedProvenance =
                       contractFamily: 'postgres',
                       aliases: postgresAliases,
                       configurationValidation,
+                      ...(formAccessValidation == null
+                          ? {}
+                          : { formAccessValidation }),
                       runtimeRegistrySha256,
                       runtimeArtifacts,
                   }
@@ -930,6 +965,14 @@ if (
 )
     throw new Error(
         'Canonical PostgreSQL configuration inputs changed during generation.'
+    );
+if (
+    postgresOnly &&
+    JSON.stringify(readFormAccessValidation()) !==
+        JSON.stringify(formAccessValidation)
+)
+    throw new Error(
+        'Canonical PostgreSQL Form access inputs changed during generation.'
     );
 if (
     postgresOnly &&

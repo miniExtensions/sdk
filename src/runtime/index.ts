@@ -36,6 +36,7 @@ export type {
     PostgresDateColumnConfig,
     PostgresEnumColumnConfig,
     PostgresField,
+    PostgresFormRecordAccess,
     PostgresFilter,
     PostgresIdentifierConfiguration,
     PostgresNumericColumnConfig,

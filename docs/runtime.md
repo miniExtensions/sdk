@@ -17,6 +17,15 @@ timestamps, JSON and arrays; SQL NULL remains distinct from an empty string.
 These native metadata contracts do not yet enable PostgreSQL Form/Portal
 operations or change the existing Airtable runtime contracts.
 
+`PostgresFormRecordAccess` describes saved private Form access intent using the
+existing inverse creation/editing flags. With editing disabled, an identifier
+may be retained without supplying editing authority. With editing enabled, the
+type requires an explicit native identifier binding. The containing Form may
+omit access entirely to retain creation/read preview with editing off. Current
+workspace membership, saved revision, native metadata and database grants still
+authorize each operation. This type-only export adds no schema validator,
+resolver, public-session operation or lasting row-mutation capability.
+
 `PostgresField.collationOid` is required database-local collation metadata.
 Its explicit `null` means a noncollatable column; missing metadata is not NULL.
 Identifier column bindings retain an optional collation only so older saved

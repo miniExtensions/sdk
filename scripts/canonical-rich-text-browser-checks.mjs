@@ -235,7 +235,17 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         const nativeCaret = () =>
             editor.evaluate((node) => {
                 const native = document.getSelection();
+                const current = window.canonicalRichText.snapshot();
                 return {
+                    value: current.state.value,
+                    identity: current.state.identity,
+                    writes: current.writes.length,
+                    lastWrite: current.writes.at(-1),
+                    saves: current.saves.length,
+                    sameEditor: window.canonicalRichText.same(),
+                    connected: node.isConnected,
+                    at: performance.now(),
+                    roots: document.querySelectorAll('.ProseMirror').length,
                     active: document.activeElement === node,
                     contained:
                         !!native?.anchorNode &&
@@ -246,7 +256,65 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                     focusOffset: native?.focusOffset,
                 };
             });
-        const beforeMetadata = await nativeCaret();
+        await editor.evaluate((node) => {
+            const events = [];
+            let truncated = false;
+            const types = [
+                'focus',
+                'blur',
+                'keydown',
+                'beforeinput',
+                'input',
+                'keyup',
+            ];
+            const capture = (event) => {
+                if (events.length === 32) {
+                    truncated = true;
+                    return;
+                }
+                const native = document.getSelection();
+                const current = window.canonicalRichText.snapshot();
+                events.push({
+                    type: event.type,
+                    trusted: event.isTrusted,
+                    key: event.key ?? null,
+                    inputType: event.inputType ?? null,
+                    at: performance.now(),
+                    connected: node.isConnected,
+                    active: document.activeElement === node,
+                    activeId: document.activeElement?.id,
+                    anchorInside:
+                        !!native?.anchorNode &&
+                        node.contains(native.anchorNode),
+                    anchorText: native?.anchorNode?.textContent,
+                    anchorOffset: native?.anchorOffset,
+                    focusOffset: native?.focusOffset,
+                    collapsed: native?.isCollapsed,
+                    value: current.state.value,
+                    identity: current.state.identity,
+                    writes: current.writes.length,
+                    lastWrite: current.writes.at(-1),
+                    saves: current.saves.length,
+                });
+            };
+            for (const type of types)
+                node.addEventListener(type, capture, true);
+            window.canonicalRichText.caretObservation = {
+                read: () => ({ events: [...events], truncated }),
+                stop: () => {
+                    for (const type of types)
+                        node.removeEventListener(type, capture, true);
+                },
+            };
+        });
+        const caretEvidence = { phases: [] };
+        evidence.nativeMetadataCaret = caretEvidence;
+        const recordCaret = async (phase) => {
+            const selection = await nativeCaret();
+            caretEvidence.phases.push({ phase, ...selection });
+            return selection;
+        };
+        const beforeMetadata = await recordCaret('before-metadata');
         assert.equal(beforeMetadata.active, true);
         assert.equal(beforeMetadata.contained, true);
         assert.equal(beforeMetadata.collapsed, true);
@@ -256,11 +324,15 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         await page.evaluate(() => window.canonicalRichText.remember());
         const beforeCaretMetadata = await snapshot();
         await update({ id: 'notes-caret', invalid: false });
-        assert.equal((await nativeCaret()).anchorOffset, 2);
+        assert.equal((await recordCaret('focused-attributes')).anchorOffset, 2);
         await page.locator('#neighbor').click();
         await update({ id: 'notes-caret-renamed', invalid: true });
+        await recordCaret('blurred-attributes');
+        // Keep the original immediate focus-to-input sequence. Synchronous
+        // event observers above record it without an intervening page call.
         await editor.focus();
         await page.keyboard.type('Z');
+        await recordCaret('after-Z');
         await page.waitForFunction(
             () =>
                 window.canonicalRichText.snapshot().state.value ===
@@ -282,10 +354,13 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         });
         assert.equal(afterCaretMetadata.saves.length, 1);
         assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
-        evidence.nativeMetadataCaret = {
-            beforeMetadata,
-            after: await nativeCaret(),
-        };
+        caretEvidence.after = await nativeCaret();
+        caretEvidence.events = await page.evaluate(() => {
+            const observer = window.canonicalRichText.caretObservation;
+            const result = observer.read();
+            observer.stop();
+            return result;
+        });
         evidence.results.push(
             'trusted navigation caret survives accessibility updates, metadata blur and refocus with exact insertion'
         );
@@ -473,10 +548,34 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
-        if (page)
+        if (page) {
             evidence.failureState = await page
                 .evaluate(() => window.canonicalRichText?.snapshot())
                 .catch(() => undefined);
+            evidence.failureSelection = await page
+                .evaluate(() => {
+                    const node = document.querySelector('.ProseMirror');
+                    const native = document.getSelection();
+                    const observer = window.canonicalRichText?.caretObservation;
+                    const events = observer?.read();
+                    observer?.stop();
+                    return {
+                        at: performance.now(),
+                        activeId: document.activeElement?.id,
+                        connected: node?.isConnected,
+                        active: document.activeElement === node,
+                        anchorInside:
+                            !!native?.anchorNode &&
+                            !!node?.contains(native.anchorNode),
+                        anchorText: native?.anchorNode?.textContent,
+                        anchorOffset: native?.anchorOffset,
+                        focusOffset: native?.focusOffset,
+                        collapsed: native?.isCollapsed,
+                        events,
+                    };
+                })
+                .catch(() => undefined);
+        }
     } finally {
         for (const [name, cleanup] of [
             [

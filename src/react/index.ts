@@ -447,6 +447,11 @@ import {
     renderOwnedRatingInput,
     type RatingFieldOptions,
 } from './RatingField.js';
+import {
+    ControlledRatingField,
+    type ControlledRatingFieldProps,
+} from './ControlledRatingField.js';
+export type { ControlledRatingFieldProps } from './ControlledRatingField.js';
 export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
 export {
     renderPercentField,
@@ -1605,9 +1610,16 @@ export function NumberField(props: NumberComponentProps): ReactNode {
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
-export type RatingFieldProps = NumberFieldProps & RatingFieldOptions;
+export type RatingFieldProps = NumberFieldProps &
+    RatingFieldOptions & { mode?: never };
+type RatingComponentProps = RatingFieldProps | ControlledRatingFieldProps;
 /** Native numeric rating drafts stay with the accepted scalar owner. */
-export function RatingField(props: RatingFieldProps): ReactNode {
+export function RatingField(props: RatingFieldProps): ReactNode;
+export function RatingField(props: ControlledRatingFieldProps): ReactNode;
+export function RatingField(props: RatingComponentProps): ReactNode;
+export function RatingField(props: RatingComponentProps): ReactNode {
+    if (props.mode === 'controlled')
+        return createElement(ControlledRatingField, props);
     return props.iconInput
         ? createElement(BoundIconRatingField, props)
         : createElement(NumberField, props);

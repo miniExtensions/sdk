@@ -220,6 +220,7 @@ for (const format of ['esm', 'cjs']) {
         'checkbox',
         'text',
         'number',
+        'rating',
         'localized-numeric',
         'form-tracking',
         'form-group',

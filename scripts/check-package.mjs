@@ -11,6 +11,7 @@ import {
 } from './native-portal-kernel-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
+import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
@@ -760,6 +761,9 @@ try {
         'dist/cjs/react/text.css',
         'dist/esm/react/number.css',
         'dist/cjs/react/number.css',
+        'dist/esm/react/rating.css',
+        'dist/cjs/react/rating.css',
+        'docs/rating.md',
         'dist/esm/react/localized-numeric.css',
         'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/complete-duration.css',
@@ -3279,6 +3283,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(ratingProof.checks, 24);
+    const controlledRatingProof = await checkControlledRatingReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(controlledRatingProof.profiles.length, 2);
+    assert.equal(controlledRatingProof.cleanup, 'completed');
     console.log(
         `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );

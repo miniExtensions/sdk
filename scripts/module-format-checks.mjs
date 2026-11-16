@@ -189,6 +189,7 @@ export function assertModuleFormats(root) {
                 './react/text.css',
                 './react/single-line-text.css',
                 './react/number.css',
+                './react/rating.css',
                 './react/localized-numeric.css',
                 './react/complete-phone.css',
                 './react/complete-readonly-text.css',

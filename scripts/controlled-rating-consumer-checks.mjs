@@ -90,7 +90,7 @@ export async function checkControlledRatingReactMatrix({
                         'node,react',
                         path,
                     ],
-                    { cwd: root, stdio: 'pipe' }
+                    { cwd: root, stdio: 'pipe', timeout: 120000 }
                 );
             }
             const proof = JSON.parse(
@@ -102,6 +102,7 @@ export async function checkControlledRatingReactMatrix({
             );
             assert.equal(proof.formats.length, 2);
             assert.equal(proof.inputChecks, 2);
+            assert.equal(proof.reactVersion, version);
             const require = createRequire(join(root, 'package.json'));
             const css = readFileSync(
                 require.resolve('@miniextensions/sdk/react/rating.css')
@@ -161,7 +162,17 @@ async function runtime(root, happyDomModulePath) {
                     onChange: (value) => changes.push(value),
                 })
             );
-        const html = renderToString(tree());
+        const serverWarnings = [];
+        const previousServerError = console.error;
+        let html;
+        try {
+            console.error = (...args) =>
+                serverWarnings.push(args.map(String).join(' '));
+            html = renderToString(tree());
+        } finally {
+            console.error = previousServerError;
+        }
+        assert.deepEqual(serverWarnings, []);
         assert.match(html, /mx-sdk-rating-icon/);
         assert.match(html, /hydrated-rating/);
         assert.deepEqual(changes, []);
@@ -191,8 +202,12 @@ async function runtime(root, happyDomModulePath) {
             .querySelector('input')
             .getAttribute('aria-describedby');
         const errors = [];
+        const warnings = [];
+        const previousError = console.error;
         let hydrated;
         try {
+            console.error = (...args) =>
+                warnings.push(args.map(String).join(' '));
             const { hydrateRoot } = require('react-dom/client');
             await React.act(async () => {
                 hydrated = hydrateRoot(container, tree(), {
@@ -200,6 +215,7 @@ async function runtime(root, happyDomModulePath) {
                 });
             });
             assert.deepEqual(errors, []);
+            assert.deepEqual(warnings, []);
             assert.deepEqual(changes, []);
             assert.equal(
                 container
@@ -227,6 +243,7 @@ async function runtime(root, happyDomModulePath) {
                 postHydrationRepair: true,
             });
         } finally {
+            console.error = previousError;
             if (hydrated) await React.act(async () => hydrated.unmount());
             keys.forEach((key, i) =>
                 saved[i]
@@ -240,7 +257,7 @@ async function runtime(root, happyDomModulePath) {
         consumerDirectory: root,
         happyDomModulePath,
     });
-    return { formats, inputChecks };
+    return { reactVersion: React.version, formats, inputChecks };
 }
 
 if (

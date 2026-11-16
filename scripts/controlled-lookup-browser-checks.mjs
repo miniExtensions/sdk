@@ -447,11 +447,19 @@ export async function checkControlledLookupBrowser({
             const richCheck = page.locator('.ProseMirror input[type=checkbox]');
             assert.equal(await richCheck.count(), 1);
             assert.equal(await richCheck.isChecked(), true);
-            if (!(await richCheck.isDisabled())) {
-                await richCheck.click();
-                assert.equal(await richCheck.isChecked(), true);
-            }
             const before = await page.locator('.ProseMirror').innerHTML();
+            // Readonly editor hit testing intentionally targets this visible
+            // native affordance above its underlying checkbox input.
+            await page
+                .locator(
+                    '.ProseMirror li[data-type=checkbox_item] > span[contenteditable=false]'
+                )
+                .click();
+            assert.equal(await richCheck.isChecked(), true);
+            assert.equal(
+                await page.locator('.ProseMirror').innerHTML(),
+                before
+            );
             await page.locator('.ProseMirror').click();
             await page.keyboard.type('must not write');
             assert.equal(

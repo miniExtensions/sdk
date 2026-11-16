@@ -12,6 +12,7 @@ import {
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
+import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
@@ -658,6 +659,7 @@ try {
                 path === 'docs/count.md' ||
                 path === 'docs/formula.md' ||
                 path === 'docs/rating.md' ||
+                path === 'docs/form-captcha.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||
@@ -769,6 +771,13 @@ try {
         'dist/esm/react/rating.css',
         'dist/cjs/react/rating.css',
         'docs/rating.md',
+        'docs/form-captcha.md',
+        'dist/esm/react/form-captcha.css',
+        'dist/cjs/react/form-captcha.css',
+        'dist/esm/react/FormCaptcha.js',
+        'dist/cjs/react/FormCaptcha.js',
+        'dist/esm/ui/recaptchaV2Provider.js',
+        'dist/cjs/ui/recaptchaV2Provider.js',
         'dist/esm/react/localized-numeric.css',
         'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/complete-duration.css',
@@ -3296,6 +3305,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(controlledRatingProof.profiles.length, 2);
     assert.equal(controlledRatingProof.cleanup, 'completed');
+    const formCaptchaProof = await checkFormCaptchaReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(formCaptchaProof.profiles.length, 2);
+    assert.equal(formCaptchaProof.cleanup, 'completed');
+    console.log(
+        'Installed Form CAPTCHA React18/19 ESM/CJS/types/CSS/SSR/hydration and synthetic lifecycle checks passed. Native integration remains separate.'
+    );
     console.log(
         `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );

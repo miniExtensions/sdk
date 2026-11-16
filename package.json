@@ -87,6 +87,7 @@
             }
         },
         "./react/form-tracking.css": "./dist/esm/react/form-tracking.css",
+        "./react/form-captcha.css": "./dist/esm/react/form-captcha.css",
         "./react/form-group.css": "./dist/esm/react/form-group.css",
         "./react/complete-phone.css": "./dist/esm/react/complete-phone.css",
         "./react/button.css": "./dist/esm/react/button.css",
@@ -222,6 +223,7 @@
         "docs/count.md",
         "docs/formula.md",
         "docs/rating.md",
+        "docs/form-captcha.md",
         "docs/portals.md",
         "docs/native-portal-kernel.md",
         "docs/native-portal-differential.md",

@@ -50,6 +50,7 @@ export function KanbanBoard(props: KanbanBoardProps): ReactElement {
                               h(Item, {
                                   key: id,
                                   value: id,
+                                  interactive: false,
                                   renderItem: props.renderItem,
                               })
                           ),

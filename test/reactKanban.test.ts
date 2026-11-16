@@ -1021,3 +1021,67 @@ it('preserves native keyboard rectangle selection and empty-container offsets wi
     );
     assert.equal(ignored.defaultPrevented, false);
 });
+
+it('registers only interactive source Open buttons across overlay and policy retirement', async (t) => {
+    const f = await fixture(t),
+        props = kanbanFixtureProps();
+    const active = new Set<HTMLButtonElement>();
+    const first = props.cards[0];
+    assert.ok(first);
+    props.cards = [
+        {
+            ...first,
+            open: {
+                label: 'Open registered project',
+                activate: () => {},
+                registerTrigger: (element) => {
+                    assert.ok(
+                        f.container.querySelector('[data-kanban-ready="true"]')
+                    );
+                    active.add(element);
+                    return () => {
+                        active.delete(element);
+                    };
+                },
+            },
+        },
+        props.cards[1],
+    ];
+    await f.render(h(BoundKanban, props));
+    assert.equal(active.size, 1);
+    const original = [...active][0];
+    assert.ok(original?.isConnected);
+    const draggable = f.container.querySelector('[data-kanban-record="a"]');
+    assert.ok(draggable instanceof f.window.HTMLElement);
+    await act(async () => {
+        draggable.focus();
+        draggable.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: ' ',
+                code: 'Space',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.ok(f.window.document.querySelector('.mx-sdk-kanban-item-overlay'));
+    assert.equal(active.size, 1);
+    assert.equal([...active][0], original);
+    await act(async () => {
+        f.window.document.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                code: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    await f.render(h(BoundKanban, { ...props, modalOpen: true }));
+    assert.equal(active.size, 1);
+    assert.equal(original.isConnected, false);
+    assert.notEqual([...active][0], original);
+    await f.render(null);
+    assert.equal(active.size, 0);
+    f.unchangedEffects();
+});

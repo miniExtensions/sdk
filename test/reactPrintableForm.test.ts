@@ -14,6 +14,7 @@ import {
     type PrintableFormRequest,
 } from '../src/ui/printableForm.js';
 import { createBrowserReadonlyDOMPrintEngine } from '../src/react/printableFormEngine.js';
+import { PrintableFormPreparationControls } from '../src/react/PrintableFormJobControls.js';
 
 const labels = {
     print: 'Print document',
@@ -425,4 +426,60 @@ test('a native root captured during retirement holds busy until its asynchronous
     assert.ok(admission.tryAcquire());
     assert.equal(native.isConnected, false);
     assert.equal(b.prints, 0);
+});
+
+test('shared preparation controls cancel the real native engine and release its exact retained root', async (t) => {
+    const b = await browser(t);
+    const admission = createPrintableFormAdmission();
+    const f = source();
+    const native = b.window.document.createElement('div');
+    native.setAttribute('aria-busy', 'true');
+    native.textContent = 'Native media is still preparing';
+    b.window.document.body.append(native);
+    let released = 0;
+    const controller = createReadonlyDOMPrintController({
+        admission,
+        source: {
+            ...f.port,
+            capture: () => ({
+                status: 'accepted',
+                document: {
+                    element: native as unknown as HTMLElement,
+                    release() {
+                        released++;
+                        native.remove();
+                    },
+                },
+            }),
+        },
+        engine: createBrowserReadonlyDOMPrintEngine(
+            b.window.document as unknown as Document,
+            labels
+        ),
+    });
+    await act(async () => {
+        b.root.render(
+            h(PrintableFormPreparationControls, { controller, labels })
+        );
+        assert.equal(controller.request().status, 'admitted');
+        await turn();
+    });
+    const controls = b.container.querySelector('button');
+    assert.equal(controls?.textContent, labels.cancel);
+    assert.equal(admission.tryAcquire(), null);
+    await act(async () => {
+        controls!.click();
+        await turn();
+    });
+    assert.equal(released, 1);
+    assert.equal(native.isConnected, false);
+    assert.equal(b.prints, 0);
+    assert.equal(controller.getSnapshot().job, null);
+    assert.equal(controller.getSnapshot().outcome, 'cancelled-before-invoke');
+    assert.equal(
+        b.window.document.querySelector('[data-mx-sdk-print-job]'),
+        null
+    );
+    assert.ok(admission.tryAcquire());
+    controller.retire();
 });

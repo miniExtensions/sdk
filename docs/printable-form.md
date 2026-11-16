@@ -30,6 +30,12 @@ whole SDK document. The native integration may retain a whole native fallback;
 it must use the same document admission and lifecycle protections. Passing a
 native whole-field renderer is not required by the public component.
 
+`PrintableFormPreparationControls` provides the same bounded preparation,
+Cancel and failure UI for either controller recipe. The browser engines retain
+their separate post-invocation acknowledgement controls after parent retirement.
+When using the shared preparation component, pass only `invoked`, `unknown` and
+`done` labels to the engine to avoid a second preparation control.
+
 Use `getDocumentPrintableFormAdmission(actualDocument)` for every SDK/native
 print route in that document. The host explicitly selects a keyboard lease with
 `setKeyboardOwner(expectedLease, nextLease)`. Mounted order and

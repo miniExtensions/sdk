@@ -21,6 +21,7 @@ import {
     type PrintableFormSource,
 } from '../ui/printableForm.js';
 import { createBrowserPrintableFormEngine } from './printableFormEngine.js';
+import { PrintableFormPreparationControls } from './PrintableFormJobControls.js';
 
 export type PrintableFormHandle = {
     request(origin?: 'explicit' | 'keyboard'): PrintableFormRequest;
@@ -91,7 +92,11 @@ export const PrintableForm: ForwardRefExoticComponent<
                 admission,
                 engine:
                     props.engine ??
-                    createBrowserPrintableFormEngine(document, props.labels),
+                    createBrowserPrintableFormEngine(document, {
+                        invoked: props.labels.invoked,
+                        unknown: props.labels.unknown,
+                        done: props.labels.done,
+                    }),
             });
             setController(owned);
             currentController.current = owned;
@@ -145,16 +150,6 @@ export const PrintableForm: ForwardRefExoticComponent<
             () => idle
         );
         const job = state.job;
-        const status = useSyncExternalStore(
-            job?.subscribe ?? noopSubscribe,
-            job?.getSnapshot ?? (() => null),
-            () => null
-        );
-        const phase = status?.phase;
-        const preparing =
-            phase === 'capturing' ||
-            phase === 'preparing' ||
-            phase === 'invoking';
         return h(
             'div',
             { className: 'mx-sdk-print-controls' },
@@ -169,35 +164,10 @@ export const PrintableForm: ForwardRefExoticComponent<
                       props.labels.print
                   )
                 : null,
-            job && status && preparing
-                ? h(
-                      'div',
-                      { role: 'status' },
-                      h(
-                          'span',
-                          null,
-                          preparing
-                              ? props.labels.preparing
-                              : phase === 'invoked'
-                                ? props.labels.invoked
-                                : phase === 'unknown'
-                                  ? props.labels.unknown
-                                  : props.labels.failed
-                      ),
-                      phase === 'capturing' || phase === 'preparing'
-                          ? h(
-                                'button',
-                                {
-                                    type: 'button',
-                                    onClick: () => job.cancelBeforeInvocation(),
-                                },
-                                props.labels.cancel
-                            )
-                          : null
-                  )
-                : state.outcome === 'failed-before-invoke'
-                  ? h('span', { role: 'status' }, props.labels.failed)
-                  : null
+            h(PrintableFormPreparationControls, {
+                controller,
+                labels: props.labels,
+            })
         );
     }
 );

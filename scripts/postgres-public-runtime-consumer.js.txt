@@ -1,0 +1,38 @@
+const {
+    parsePostgresAttachmentDisplay,
+    PostgresAttachmentDisplayError,
+    POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
+} = SDK;
+assert.equal(typeof parsePostgresAttachmentDisplay, 'function');
+assert.match(POSTGRES_ATTACHMENT_DISPLAY_SYNTAX, /%2C/);
+const original = 'HTTPS://example.invalid/a%2Cb.pdf?signature=a%2Fb%3D';
+assert.deepEqual(
+    parsePostgresAttachmentDisplay(
+        ` ${original}, https://example.invalid/second `
+    ),
+    [original, 'https://example.invalid/second']
+);
+assert.deepEqual(parsePostgresAttachmentDisplay(null), []);
+for (const [value, reason, index] of [
+    ['https://example.invalid/ok,', 'EMPTY_ENTRY', 1],
+    [
+        'https://example.invalid/ok,https://user:private@example.invalid/a',
+        'URL_CREDENTIALS',
+        1,
+    ],
+    ['https:example.invalid', 'MALFORMED_URL', 0],
+    ['https://example.invalid/%ZZ', 'MALFORMED_URL', 0],
+    [42, 'NOT_TEXT', 0],
+]) {
+    assert.throws(
+        () => parsePostgresAttachmentDisplay(value),
+        (error) => {
+            assert(error instanceof PostgresAttachmentDisplayError);
+            assert(error instanceof Error);
+            assert.equal(error.reason, reason);
+            assert.equal(error.index, index);
+            assert(!error.message.includes('example.invalid'));
+            return true;
+        }
+    );
+}

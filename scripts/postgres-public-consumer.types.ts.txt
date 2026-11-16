@@ -1,5 +1,13 @@
+import {
+    parsePostgresAttachmentDisplay,
+    PostgresAttachmentDisplayError,
+    POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
+} from '@miniextensions/sdk';
 import type {
+    PostgresAttachmentDisplayFailure,
     PostgresConnection,
+    PostgresCreateQuery,
+    PostgresCreateResult,
     PostgresDatabase,
     PostgresSchema,
     PostgresTable,
@@ -112,6 +120,55 @@ export const result: PostgresSelectResult = {
     rows: [record.fields],
     page: { limit: 25, offset: 0, hasMore: false, nextOffset: null },
 };
+
+export const createQuery: PostgresCreateQuery = {
+    source,
+    table,
+    values: [
+        { columnName: 'amount', value: '12345678901234567890.1234567890' },
+        { columnName: 'nullable', value: null },
+    ],
+    returningColumns: ['id', 'customer_name'],
+    displayColumnName: 'customer_name',
+};
+export const created: PostgresCreateResult = {
+    outcome: 'committed',
+    source,
+    table,
+    columns: [],
+    fields: { id: '9007199254740993', customer_name: 'Synthetic customer' },
+};
+export const countOnly: PostgresCreateResult = {
+    ...created,
+    // @ts-expect-error Create results are committed native RETURNING values.
+    outcome: 'count-only',
+};
+export const wrongCreateSource: PostgresCreateQuery = {
+    ...createQuery,
+    source: {
+        // @ts-expect-error Native create cannot cross to an Airtable source.
+        type: 'airtable',
+        baseId: 'appSynthetic',
+        tableId: 'tblSynthetic',
+    },
+};
+export const attachmentReason: PostgresAttachmentDisplayFailure =
+    'URL_CREDENTIALS';
+export const attachmentError = new PostgresAttachmentDisplayError(
+    1,
+    attachmentReason
+);
+export const attachmentURLs: readonly string[] = parsePostgresAttachmentDisplay(
+    'https://example.invalid/a%2Cb.pdf'
+);
+export const attachmentGrammar: string = POSTGRES_ATTACHMENT_DISPLAY_SYNTAX;
+// @ts-expect-error Public URL projections cannot become mutable attachment values.
+attachmentURLs.push('https://example.invalid/upload');
+// @ts-expect-error Native display values are stored text or SQL NULL.
+parsePostgresAttachmentDisplay([{ url: 'https://example.invalid/a.pdf' }]);
+// @ts-expect-error Failure reasons remain a finite canonical union.
+export const unknownAttachmentReason: PostgresAttachmentDisplayFailure =
+    'UPLOAD_FAILED';
 
 export const displayConfiguration: PostgresRecordDisplayConfiguration = {
     source,

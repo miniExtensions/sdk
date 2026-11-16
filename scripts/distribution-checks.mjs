@@ -69,6 +69,41 @@ function exactKeys(value, keys) {
     );
 }
 
+/** The public receipt identifies outputs without canonical source locations. */
+export function publicPostgresRuntimeArtifacts(artifacts) {
+    assert(
+        Array.isArray(artifacts) && artifacts.length === 1,
+        'Missing PostgreSQL display runtime provenance'
+    );
+    return artifacts.map((artifact) => {
+        assert(
+            artifact.module === 'postgresAttachmentDisplay.generated',
+            'Unexpected PostgreSQL runtime module'
+        );
+        assert(
+            exactKeys(artifact.moduleSha256, ['esm', 'cjs']),
+            'Invalid PostgreSQL runtime module hashes'
+        );
+        for (const value of [
+            artifact.emitterSha256,
+            artifact.generatedSha256,
+            artifact.declarationsSha256,
+            ...Object.values(artifact.moduleSha256),
+        ])
+            assert(
+                typeof value === 'string' && /^[a-f0-9]{64}$/.test(value),
+                'Invalid PostgreSQL runtime digest'
+            );
+        return {
+            module: artifact.module,
+            emitterSha256: artifact.emitterSha256,
+            generatedSha256: artifact.generatedSha256,
+            moduleSha256: { ...artifact.moduleSha256 },
+            declarationsSha256: artifact.declarationsSha256,
+        };
+    });
+}
+
 // Called after archive-to-install byte verification, so this examines the
 // actual customer TGZ rather than a checkout or independently repacked tree.
 export async function assertPublicDistribution(
@@ -203,6 +238,7 @@ export async function assertPublicDistribution(
                     ...provenanceFields,
                     'contractFamily',
                     'aliases',
+                    'runtimeArtifacts',
                 ]),
                 'Unexpected PostgreSQL public provenance fields'
             );
@@ -249,6 +285,33 @@ export async function assertPublicDistribution(
                     publicModuleHashes[format],
                 'PostgreSQL runtime bytes changed beyond the private comment'
             );
+            const expectedRuntime = publicPostgresRuntimeArtifacts(
+                postgres.runtimeArtifacts
+            );
+            assert(
+                JSON.stringify(provenance.runtimeArtifacts) ===
+                    JSON.stringify(expectedRuntime),
+                'PostgreSQL public runtime provenance differs from recorded outputs'
+            );
+            for (const artifact of expectedRuntime) {
+                const runtimePrefix = `dist/${format}/runtime/contracts/${artifact.module}`;
+                const runtimeModule = contents.get(runtimePrefix + '.js');
+                const runtimeDeclarations = contents.get(
+                    runtimePrefix + '.d.ts'
+                );
+                assert(
+                    runtimeModule && runtimeDeclarations,
+                    'Missing packaged PostgreSQL display runtime'
+                );
+                assert(
+                    sha256(runtimeModule) === artifact.moduleSha256[format],
+                    'PostgreSQL display runtime bytes differ from recorded outputs'
+                );
+                assert(
+                    sha256(runtimeDeclarations) === artifact.declarationsSha256,
+                    'PostgreSQL display runtime declarations differ from recorded outputs'
+                );
+            }
         }
     }
     assert(

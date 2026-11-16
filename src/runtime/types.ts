@@ -23,7 +23,10 @@ import type {
     CanonicalSelectFieldChoice,
 } from './contracts/generated.js';
 import type {
+    CanonicalPostgresAttachmentDisplayFailure,
     CanonicalPostgresConnection,
+    CanonicalPostgresCreateQuery,
+    CanonicalPostgresCreateResult,
     CanonicalPostgresDatabase,
     CanonicalPostgresField,
     CanonicalPostgresFilter,
@@ -68,7 +71,12 @@ export type AirtableFieldSet = CanonicalAirtableFieldSet;
 export type AirtableRecord = CanonicalAirtableRecord;
 export type AirtableValue = CanonicalAirtableValue;
 /** Native PostgreSQL metadata and wire values; these do not imply a loaded Form. */
+export type PostgresAttachmentDisplayFailure =
+    CanonicalPostgresAttachmentDisplayFailure;
 export type PostgresConnection = CanonicalPostgresConnection;
+/** Native adapter contracts; these do not add a public Form transport operation. */
+export type PostgresCreateQuery = CanonicalPostgresCreateQuery;
+export type PostgresCreateResult = CanonicalPostgresCreateResult;
 export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;
 export type PostgresSchema = CanonicalPostgresSchema;

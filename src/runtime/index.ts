@@ -10,13 +10,21 @@ export {
     withLoginToken,
 } from './session.js';
 export { AirtableFieldType } from '../formulas/types.js';
+export {
+    parsePostgresAttachmentDisplay,
+    PostgresAttachmentDisplayError,
+    POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
+} from './contracts/postgresAttachmentDisplay.generated.js';
 export type {
     AirtableAttachment,
     AirtableBarcodeValue,
     AirtableCollaborator,
     AirtableRecord,
     AirtableValue,
+    PostgresAttachmentDisplayFailure,
     PostgresConnection,
+    PostgresCreateQuery,
+    PostgresCreateResult,
     PostgresDatabase,
     PostgresField,
     PostgresFilter,

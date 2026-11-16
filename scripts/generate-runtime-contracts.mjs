@@ -5,6 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import prettier from 'prettier';
+import {
+    postgresAttachmentRuntimeModule,
+    postgresAttachmentRuntimeSource,
+    postgresRuntimeOutputHashes,
+    rewritePostgresAttachmentRuntime,
+} from './postgres-runtime-artifacts.mjs';
 
 // This is a transport map, not a second definition of any API payload.
 const v1 = [
@@ -236,10 +242,19 @@ const postgresRecordSettingsAliases = [
     'PostgresRecordEditingConfiguration',
     'PostgresRecordEditingValidation',
 ];
+const postgresCreateAliases = ['PostgresCreateQuery', 'PostgresCreateResult'];
+const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
+const postgresRuntimeExports = [
+    'parsePostgresAttachmentDisplay',
+    'PostgresAttachmentDisplayError',
+    'POSTGRES_ATTACHMENT_DISPLAY_SYNTAX',
+];
 const postgresAliases = [
     ...postgresModelAliases,
     ...postgresQueryAliases,
     ...postgresRecordSettingsAliases,
+    ...postgresCreateAliases,
+    ...postgresAttachmentAliases,
 ];
 let corsValidation = null;
 let canonicalCorsPolicyPath;
@@ -252,6 +267,12 @@ if (postgresOnly) {
     );
     entryLines.push(
         `import type { ${postgresRecordSettingsAliases.join(', ')} } from './types/postgres/recordSettings';`
+    );
+    entryLines.push(
+        `import type { ${postgresCreateAliases.join(', ')} } from './types/postgres/create';`
+    );
+    entryLines.push(
+        `import type { ${postgresAttachmentAliases.join(', ')} } from './types/postgres/attachmentDisplay';`
     );
     for (const name of postgresAliases)
         entryLines.push(`export type Canonical${name} = ${name};`);
@@ -410,6 +431,35 @@ const canonicalFromGenerated${name}: ${sourceType} = generated${name};
                 `type Verify${name} = AssertContract<EquivalentContract<${sourceType}, ${generatedType}>>;`
             );
     }
+    if (postgresOnly) {
+        const runtimeModule = path
+            .relative(
+                monorepo,
+                path.join(
+                    outputDirectory,
+                    `${postgresAttachmentRuntimeModule}.ts`
+                )
+            )
+            .split(path.sep)
+            .join('/')
+            .replace(/\.ts$/, '');
+        entryLines.push(
+            "import type * as CanonicalDisplayRuntime from './types/postgres/attachmentDisplay';",
+            `import type * as GeneratedDisplayRuntime from ${JSON.stringify(runtimeModule)};`
+        );
+        for (const name of postgresRuntimeExports) {
+            entryLines.push(`
+declare const canonicalRuntime${name}: typeof CanonicalDisplayRuntime.${name};
+declare const generatedRuntime${name}: typeof GeneratedDisplayRuntime.${name};
+const generatedRuntimeFromCanonical${name}: typeof GeneratedDisplayRuntime.${name} = canonicalRuntime${name};
+const canonicalRuntimeFromGenerated${name}: typeof CanonicalDisplayRuntime.${name} = generatedRuntime${name};
+`);
+            if (!diagnose)
+                entryLines.push(
+                    `type VerifyRuntime${name} = AssertContract<EquivalentContract<typeof CanonicalDisplayRuntime.${name}, typeof GeneratedDisplayRuntime.${name}>>;`
+                );
+        }
+    }
 }
 
 const configuration = ts.readConfigFile(
@@ -465,11 +515,16 @@ if (diagnose) {
             sourceRevision: revision,
             operationCount: operationAliases.length,
             ...(postgresOnly
-                ? { nativeAliasCount: postgresAliases.length }
+                ? {
+                      nativeAliasCount: postgresAliases.length,
+                      nativeRuntimeExportCount: postgresRuntimeExports.length,
+                  }
                 : {}),
             bidirectionalAssignmentPairsVerified:
                 operationAliases.length * 2 +
-                (postgresOnly ? postgresAliases.length : 0),
+                (postgresOnly
+                    ? postgresAliases.length + postgresRuntimeExports.length
+                    : 0),
         })
     );
     process.exit(0);
@@ -692,6 +747,30 @@ const generated = await prettier.format(
 // mode still validates the entry before checking or writing either artifact.
 assertSemanticEntry();
 
+let generatedRuntime = null;
+const runtimeArtifacts = [];
+if (postgresOnly) {
+    const canonicalRuntime = readFileSync(
+        path.join(monorepo, postgresAttachmentRuntimeSource)
+    );
+    sourceFiles.add(postgresAttachmentRuntimeSource);
+    generatedRuntime = await rewritePostgresAttachmentRuntime(
+        canonicalRuntime.toString('utf8'),
+        JSON.parse(readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8'))
+    );
+    runtimeArtifacts.push({
+        module: postgresAttachmentRuntimeModule,
+        sourcePath: postgresAttachmentRuntimeSource,
+        sourceSha256: hash(canonicalRuntime),
+        emitterSha256: hash(
+            readFileSync(
+                new URL('./postgres-runtime-artifacts.mjs', import.meta.url)
+            )
+        ),
+        ...postgresRuntimeOutputHashes(generatedRuntime),
+    });
+}
+
 // Provenance covers contract declarations and canonical procedure construction,
 // not unrelated files that the compiler happens to load from the app router.
 for (const [, module] of selectedV1)
@@ -747,7 +826,11 @@ const provenance =
             compilerVersion: ts.version,
             generatorSha256: hash(readFileSync(fileURLToPath(import.meta.url))),
             ...(postgresOnly
-                ? { contractFamily: 'postgres', aliases: postgresAliases }
+                ? {
+                      contractFamily: 'postgres',
+                      aliases: postgresAliases,
+                      runtimeArtifacts,
+                  }
                 : {
                       corsValidation: {
                           ...corsValidation,
@@ -761,8 +844,9 @@ const provenance =
                           ),
                       },
                   }),
-            transport:
-                'plain JSON; canonical enum literals; no runtime code or imports',
+            transport: postgresOnly
+                ? 'plain JSON contracts; canonical enum literals; separate generated presentation runtime'
+                : 'plain JSON; canonical enum literals; no runtime code or imports',
             ...(!postgresOnly ? { operations: operationAliases } : {}),
             sources,
             dependencies,
@@ -803,10 +887,23 @@ if (check) {
                 })
         );
     }
+    if (
+        generatedRuntime != null &&
+        readFileSync(
+            path.join(outputDirectory, `${postgresAttachmentRuntimeModule}.ts`),
+            'utf8'
+        ) !== generatedRuntime
+    )
+        throw new Error('Generated PostgreSQL display runtime is stale.');
 } else {
     mkdirSync(outputDirectory, { recursive: true });
     writeFileSync(generatedFile, generated);
     writeFileSync(provenanceFile, provenance);
+    if (generatedRuntime != null)
+        writeFileSync(
+            path.join(outputDirectory, `${postgresAttachmentRuntimeModule}.ts`),
+            generatedRuntime
+        );
 }
 console.log(
     JSON.stringify({

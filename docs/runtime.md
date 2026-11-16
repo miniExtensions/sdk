@@ -413,8 +413,11 @@ Regenerate the snapshot and update the packaged declaration digest when
 adopting API contract changes. Installed consumers need no internal source,
 generator or credentials.
 
-Native PostgreSQL metadata has an independent generated snapshot, so adding
-these types does not replace the existing operation contracts. Maintainers
+Native PostgreSQL metadata, query/create contracts and record settings have an
+independent generated snapshot, so adding these types does not replace the
+existing operation contracts. Create results describe committed native
+`RETURNING` values; these adapter contracts do not add a loaded PostgreSQL Form
+or a new public save operation. Maintainers
 verify it with:
 
 ```sh
@@ -423,10 +426,25 @@ node scripts/generate-runtime-contracts.mjs --postgres-only --monorepo /path/to/
 
 Omit `--verify --check` to generate it. This mode reads only the canonical native
 models and uses the same compiler, source-hash and bidirectional contract checks;
-it generates no API operations and does not run transport CORS checks. Both
+it generates no API operations and does not run transport CORS checks. It also
+relocates the authored attachment-display parser into a portable runtime module
+using an AST import rewrite. The private manifest binds canonical source bytes,
+generated TypeScript, the emitter and expected ESM/CommonJS/declaration outputs;
+build and installed-package checks verify those outputs independently. Both
 module formats ship `runtime/contracts/postgres.generated.d.ts` with public
 declaration provenance. Private source revisions and source paths remain in the
 repository's internal manifest.
+
+`parsePostgresAttachmentDisplay` projects stored text into read-only URL strings.
+Literal commas separate absolute HTTP(S) URLs; use `%2C` for a comma inside one
+URL. Spaces around entries are ignored. Quoted entries, backslash escaping,
+empty entries, malformed URLs and URL credentials fail with a
+`PostgresAttachmentDisplayError` carrying a zero-based `index` and canonical
+`reason`, without echoing the URL. SQL NULL and blank text project to an empty
+list. `POSTGRES_ATTACHMENT_DISPLAY_SYNTAX` exposes the same authored grammar.
+The parser preserves URL bytes and stored text, performs no network access and
+does not verify reachability or public access. It grants no upload, mutation,
+file-hosting or generated attachment capability.
 
 ## Portal tables, search, and pagination
 

@@ -25,7 +25,11 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { compilerMetadata, fingerprint } from './build-metadata.mjs';
 import { withCommonJsSource } from './commonjs-source.mjs';
-import { publicContractDependencies } from './distribution-checks.mjs';
+import {
+    publicContractDependencies,
+    publicPostgresRuntimeArtifacts,
+} from './distribution-checks.mjs';
+import { postgresRuntimeOutputHashes } from './postgres-runtime-artifacts.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -180,12 +184,75 @@ for (const name of ['generated', 'postgres.generated']) {
         ),
         'Module formats must distribute identical contract declarations'
     );
+    let runtimeArtifacts;
+    if (name === 'postgres.generated') {
+        runtimeArtifacts = publicPostgresRuntimeArtifacts(
+            internal.runtimeArtifacts
+        );
+        for (const [index, artifact] of runtimeArtifacts.entries()) {
+            const recorded = internal.runtimeArtifacts[index];
+            const source = readFileSync(
+                `src/runtime/contracts/${artifact.module}.ts`,
+                'utf8'
+            );
+            const expected = postgresRuntimeOutputHashes(source);
+            assert.deepEqual(
+                {
+                    generatedSha256: artifact.generatedSha256,
+                    moduleSha256: artifact.moduleSha256,
+                    declarationsSha256: artifact.declarationsSha256,
+                },
+                expected,
+                'Generated PostgreSQL display runtime is stale'
+            );
+            assert.equal(
+                artifact.emitterSha256,
+                createHash('sha256')
+                    .update(
+                        readFileSync(
+                            new URL(
+                                './postgres-runtime-artifacts.mjs',
+                                import.meta.url
+                            )
+                        )
+                    )
+                    .digest('hex'),
+                'PostgreSQL runtime emitter provenance is stale'
+            );
+            assert(
+                internal.sources.some(
+                    ({ path, sha256 }) =>
+                        path === recorded.sourcePath &&
+                        sha256 === recorded.sourceSha256
+                ),
+                'PostgreSQL runtime source is not bound to canonical provenance'
+            );
+            for (const format of ['esm', 'cjs']) {
+                const prefix = `dist/${format}/runtime/contracts/${artifact.module}`;
+                assert.equal(
+                    createHash('sha256')
+                        .update(readFileSync(prefix + '.js'))
+                        .digest('hex'),
+                    artifact.moduleSha256[format],
+                    'Compiled PostgreSQL display runtime differs from generated output'
+                );
+                assert.equal(
+                    createHash('sha256')
+                        .update(readFileSync(prefix + '.d.ts'))
+                        .digest('hex'),
+                    artifact.declarationsSha256,
+                    'Compiled PostgreSQL display runtime declarations differ from generated output'
+                );
+            }
+        }
+    }
     const publicProvenance = {
         schemaVersion: 1,
         ...(name === 'postgres.generated'
             ? {
                   contractFamily: internal.contractFamily,
                   aliases: internal.aliases,
+                  runtimeArtifacts,
               }
             : {}),
         compilerVersion: internal.compilerVersion,

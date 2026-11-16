@@ -1891,6 +1891,25 @@ new Parser([]).parse({maxDepth:'48'});
         'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent; native progress also checked with exact optional properties.'
     );
 
+    const postgresRuntimeConsumer = readFileSync(
+        'scripts/postgres-public-runtime-consumer.js.txt',
+        'utf8'
+    );
+    for (const format of ['esm', 'cjs']) {
+        const filename =
+            format === 'esm'
+                ? 'postgres-runtime-consumer.mjs'
+                : 'postgres-runtime-consumer.cjs';
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            (format === 'esm'
+                ? "import assert from 'node:assert/strict';\nimport * as SDK from '@miniextensions/sdk';\n"
+                : "const assert = require('node:assert/strict');\nconst SDK = require('@miniextensions/sdk');\n") +
+                postgresRuntimeConsumer
+        );
+        run(process.execPath, [filename]);
+    }
+
     const bundled = await build({
         entryPoints: [join(temporaryDirectory, 'consumer.mjs')],
         bundle: true,

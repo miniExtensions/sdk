@@ -24,6 +24,9 @@ flushSync(()=>rerender());
 const initial=()=>({status:'ready',result:{kind:'sequence',leaves:cohorts.map(([key,result])=>({key,result}))}});
 window.lookupProof={snapshot,retire(){active=null;},initial(){flushSync(()=>renew(initial()));},cohort(name){const result=cohorts.find(([key])=>key===name)?.[1];if(!result)throw Error('Unknown cohort');flushSync(()=>renew({status:'ready',result}));},masked(){flushSync(()=>renew({status:'masked'}));},successor(){flushSync(()=>renew({status:'ready',result:{kind:'literal',text:'Successor canonical value'}}));},invalid(){flushSync(()=>renew({status:'ready',result:{kind:'sequence',leaves:[{key:'duplicate',result:{kind:'literal',text:'Private value'}},{key:'duplicate',result:{kind:'literal',text:'Private value'}}]}}));},richText(){flushSync(()=>renew({status:'ready',result:{kind:'richText',display:{identity:'owned-readonly-'+identity,value:['**Readonly rich content**','','[x] Supplied checked item'].join(String.fromCharCode(10)),emptyLabel:'No rich value',language:'en'}}}));},unmount(){flushSync(()=>root.unmount());}};
 `;
+const observedInput = String.raw`
+window.lookupProof.currentInput=()=>JSON.stringify(state);
+`;
 
 /** Installed public controls, trusted browser inputs, isolated provider-free host. */
 export async function checkControlledLookupBrowser({
@@ -99,7 +102,8 @@ export async function checkControlledLookupBrowser({
                 format === 'esm'
                     ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';"
                     : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');";
-            const source = imports + controlledLookupAssembly + host;
+            const source =
+                imports + controlledLookupAssembly + host + observedInput;
             const entry = join(directory, format + '.js');
             writeFileSync(entry, source);
             const bundle = await build({
@@ -447,7 +451,32 @@ export async function checkControlledLookupBrowser({
             const richCheck = page.locator('.ProseMirror input[type=checkbox]');
             assert.equal(await richCheck.count(), 1);
             assert.equal(await richCheck.isChecked(), true);
-            const before = await page.locator('.ProseMirror').innerHTML();
+            const richSnapshot = () =>
+                page.locator('.ProseMirror').evaluate((node) => {
+                    const copy = node.cloneNode(true);
+                    for (const item of copy.querySelectorAll('[class]')) {
+                        for (const name of [...item.classList]) {
+                            // Native ListItem decorations, not stored document data.
+                            if (
+                                name === 'hovering' ||
+                                /^counter-\d+$/.test(name)
+                            )
+                                item.classList.remove(name);
+                        }
+                        if (item.classList.length === 0)
+                            item.removeAttribute('class');
+                    }
+                    return {
+                        html: copy.innerHTML,
+                        checked: [
+                            ...node.querySelectorAll('input[type=checkbox]'),
+                        ].map((input) => input.checked),
+                    };
+                });
+            const before = await richSnapshot();
+            const inputBefore = await page.evaluate(() =>
+                window.lookupProof.currentInput()
+            );
             // Readonly editor hit testing intentionally targets this visible
             // native affordance above its underlying checkbox input.
             await page
@@ -456,18 +485,26 @@ export async function checkControlledLookupBrowser({
                 )
                 .click();
             assert.equal(await richCheck.isChecked(), true);
+            assert.deepEqual(await richSnapshot(), before);
             assert.equal(
-                await page.locator('.ProseMirror').innerHTML(),
-                before
+                await page.evaluate(() => window.lookupProof.currentInput()),
+                inputBefore
             );
             await page.locator('.ProseMirror').click();
             await page.keyboard.type('must not write');
+            assert.deepEqual(await richSnapshot(), before);
             assert.equal(
-                await page.locator('.ProseMirror').innerHTML(),
-                before
+                await page.evaluate(() => window.lookupProof.currentInput()),
+                inputBefore
             );
             record(
-                'actual readonly rich-text runtime and trusted no-write typing'
+                'actual readonly rich-text runtime and trusted no-write typing',
+                {
+                    checked: before.checked,
+                    documentSha256: sha(before.html),
+                    inputUnchanged: true,
+                    ignoredTransientClasses: ['hovering', 'counter-<digits>'],
+                }
             );
 
             await page.evaluate(() => window.lookupProof.masked());

@@ -104,7 +104,7 @@ export function formCaptchaFixture(document) {
         },
         publish(scope, value) {
             if (
-                scope.owner !== snapshot.owner ||
+                !Object.is(scope.owner, snapshot.owner) ||
                 scope.configurationRevision !==
                     snapshot.configurationRevision ||
                 !snapshot.enabled ||
@@ -123,11 +123,11 @@ export function formCaptchaFixture(document) {
         },
         invalidate(scope, expected) {
             if (
-                snapshot.owner !== scope.owner ||
-                snapshot.token.owner !== scope.owner ||
+                !Object.is(snapshot.owner, scope.owner) ||
+                !Object.is(snapshot.token.owner, scope.owner) ||
                 snapshot.token.configurationRevision !==
                     scope.configurationRevision ||
-                snapshot.token.revision !== expected.revision
+                !Object.is(snapshot.token.revision, expected.revision)
             )
                 return { status: 'refused' };
             invalidations++;

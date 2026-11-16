@@ -408,7 +408,10 @@ export function mountFormCaptcha<T, Options>(
                     if (
                         blockedInvalidation &&
                         same(blockedInvalidation.scope, snapshot) &&
-                        blockedInvalidation.tokenRevision === token.revision &&
+                        Object.is(
+                            blockedInvalidation.tokenRevision,
+                            token.revision
+                        ) &&
                         same(blockedInvalidation.tokenScope, token)
                     ) {
                         show('unavailable');

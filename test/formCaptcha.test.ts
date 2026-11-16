@@ -132,7 +132,7 @@ function fixture() {
                 !Object.is(snapshot.token.owner, scope.owner) ||
                 snapshot.token.configurationRevision !==
                     scope.configurationRevision ||
-                snapshot.token.revision !== expected.revision
+                !Object.is(snapshot.token.revision, expected.revision)
             )
                 return { status: 'refused' };
             order.push('invalidate');
@@ -1045,4 +1045,42 @@ test('opaque NaN loader configuration uses stable identity rather than conflicti
     assert.equal(provider.load(), provider.load());
     await provider.load();
     assert.equal(loads, 1);
+});
+
+test('a stable opaque NaN token receipt cannot retry a refused invalidation on duplicate notifications', async () => {
+    const f = fixture();
+    f.update({ token: { ...f.read().token, value: proof(), revision: NaN } });
+    let attempts = 0;
+    const mounted = mountFormCaptcha(
+        fakeContainer(),
+        {
+            ...f.host,
+            invalidate() {
+                assert.ok(++attempts < 5, 'finite invalidation attempts');
+                f.update({});
+                return { status: 'refused' };
+            },
+        },
+        () => {}
+    );
+    await flush();
+    f.update({ configurationRevision: 1 });
+    f.update({});
+    f.update({});
+    assert.equal(attempts, 1);
+    assert.equal(f.counts.loads, 1);
+    mounted.dispose();
+});
+
+test('canonical same-value comparison admits an exact opaque NaN token receipt before replacement', async () => {
+    const f = fixture();
+    f.update({ token: { ...f.read().token, value: proof(), revision: NaN } });
+    const mounted = f.mount();
+    await flush();
+    f.update({ configurationRevision: 1 });
+    await flush();
+    assert.equal(f.counts.invalidations, 1);
+    assert.equal(f.read().token.value, null);
+    assert.equal(f.counts.loads, 2);
+    mounted.dispose();
 });

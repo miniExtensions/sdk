@@ -57,6 +57,8 @@ must be a pure, current read. The host snapshot contains:
 - The current canonical `token` receipt: `value`, opaque `revision`, `owner` and
   `configurationRevision` provenance. This receipt is compare authority, not a
   second SDK token store.
+  Each canonical publication or clear issues a fresh revision, including when
+  proof bytes repeat, so an old receipt cannot acquire successor authority.
 
 `publish(scope, value)` returns synchronous `{status:'admitted'}` or
 `{status:'refused'}`. It must atomically check the captured owner, configuration

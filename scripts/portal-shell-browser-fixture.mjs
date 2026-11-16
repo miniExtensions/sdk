@@ -43,6 +43,7 @@ window.proof = {
     reads: [],
     dismissals: [],
     mounts: 0,
+    sidebarWidths: [],
 };
 function App() {
     const [snapshot, setSnapshot] = useState(() => ({
@@ -68,6 +69,21 @@ function App() {
         searchAgainEnabled: true,
     }));
     const [mount, setMount] = useState(0);
+    const [resizeEnabled, setResizeEnabled] = useState(false);
+    window.enableSidebarResize = setResizeEnabled;
+    const acceptWidth = (change) => {
+        if (
+            change.scope !== snapshot.scope ||
+            change.revision !== snapshot.revision
+        )
+            throw Error('Stale sidebar width commit');
+        window.proof.sidebarWidths.push(change);
+        setSnapshot((value) => ({
+            ...value,
+            revision: value.revision + 1,
+            header: { ...value.header, sidebarWidth: change.width },
+        }));
+    };
     const command = (intent) => {
         if (
             intent.scope !== snapshot.scope ||
@@ -109,7 +125,12 @@ function App() {
     };
     return h(
         CompletePortalShell,
-        { key: mount, snapshot, onIntent: command },
+        {
+            key: mount,
+            snapshot,
+            onIntent: command,
+            onSidebarWidthCommit: resizeEnabled ? acceptWidth : undefined,
+        },
         h(
             'article',
             null,

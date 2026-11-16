@@ -8,7 +8,14 @@ import {
     type ReactNode,
     type KeyboardEvent,
     type MouseEvent,
+    type CSSProperties,
 } from 'react';
+import {
+    PortalSidebarResize,
+    portalSidebarWidth,
+    type PortalShellSidebarWidthCommit,
+} from './PortalSidebarResize.js';
+export type { PortalShellSidebarWidthCommit } from './PortalSidebarResize.js';
 import {
     flattenPortalShellMenu,
     portalShellSelectionsEqual,
@@ -36,6 +43,8 @@ export type PortalShellSnapshot = Readonly<{
         title: string;
         /** Native HTML title, sanitized by the stock renderer. Empty stays blank. */
         titleHtml?: string;
+        /** Optional host-owned desktop sidebar width in pixels (120–600). */
+        sidebarWidth?: number;
         descriptionHtml?: string;
         logoUrl?: string;
     }>;
@@ -67,8 +76,9 @@ export type PortalShellLabels = {
     empty: string;
     externalLink: string;
     searchAgain: string;
+    resizeSidebar?: string;
 };
-const defaultLabels: PortalShellLabels = {
+const defaultLabels: Required<PortalShellLabels> = {
     navigation: 'Portal navigation',
     openNavigation: 'Open navigation',
     closeNavigation: 'Close navigation',
@@ -82,10 +92,13 @@ const defaultLabels: PortalShellLabels = {
     empty: 'No views available',
     externalLink: 'opens in a new tab',
     searchAgain: 'Search again',
+    resizeSidebar: 'Resize sidebar',
 };
 export type CompletePortalShellProps = {
     snapshot: PortalShellSnapshot;
     onIntent: (intent: PortalShellIntent) => void;
+    /** End-only resize notification. The host validates the envelope and persists. */
+    onSidebarWidthCommit?: (change: PortalShellSidebarWidthCommit) => void;
     /** The host-owned table/collection body. Menus, header, embed and dialogs are SDK-owned. */
     children?: ReactNode;
     labels?: Partial<PortalShellLabels>;
@@ -206,7 +219,14 @@ function Shell(props: CompletePortalShellProps) {
         [logout, setLogout] = useState(false);
     const toggle = useRef<HTMLButtonElement>(null),
         nav = useRef<HTMLDivElement>(null),
-        main = useRef<HTMLElement>(null);
+        main = useRef<HTMLElement>(null),
+        container = useRef<HTMLDivElement>(null);
+    const controlledSidebar =
+        snapshot.header.layout === 'sidebar' &&
+        !snapshot.header.hidden &&
+        (snapshot.header.sidebarWidth !== undefined ||
+            props.onSidebarWidthCommit !== undefined);
+    const sidebarWidth = portalSidebarWidth(snapshot.header.sidebarWidth);
     const commandToken = { snapshot, onIntent: props.onIntent };
     const accepted = useRef<typeof commandToken | null>(null);
     const pending = useRef<{
@@ -222,6 +242,21 @@ function Shell(props: CompletePortalShellProps) {
             if (accepted.current === commandToken) accepted.current = null;
         };
     });
+    useCommitEffect(() => {
+        // Preview writes are imperative so dragging never remounts host content.
+        // React may otherwise skip an equal style value when resize is withdrawn.
+        if (controlledSidebar)
+            container.current?.style.setProperty(
+                '--mx-portal-sidebar-width',
+                `${sidebarWidth}px`
+            );
+    }, [
+        controlledSidebar,
+        sidebarWidth,
+        snapshot.revision,
+        props.onSidebarWidthCommit,
+        mobile,
+    ]);
     useEffect(() => {
         const query = main.current?.ownerDocument.defaultView?.matchMedia(
             '(max-width: 1023px)'
@@ -571,10 +606,17 @@ function Shell(props: CompletePortalShellProps) {
     return h(
         'div',
         {
+            ref: container,
+            style: controlledSidebar
+                ? ({
+                      '--mx-portal-sidebar-width': `${sidebarWidth}px`,
+                  } as CSSProperties)
+                : undefined,
             className: [
                 'mx-sdk-portal-shell',
                 `mx-sdk-portal-shell--${snapshot.header.layout}`,
                 snapshot.header.hidden ? 'mx-sdk-portal-shell--hidden' : '',
+                controlledSidebar ? 'mx-sdk-portal-shell--resizable' : '',
                 props.className,
             ]
                 .filter(Boolean)
@@ -675,9 +717,24 @@ function Shell(props: CompletePortalShellProps) {
                   )
               )
             : null,
+        controlledSidebar && !mobile && props.onSidebarWidthCommit
+            ? h(PortalSidebarResize, {
+                  scope: snapshot.scope,
+                  revision: snapshot.revision,
+                  width: sidebarWidth,
+                  label: labels.resizeSidebar,
+                  onCommit: props.onSidebarWidthCommit,
+                  onPreview: (width) =>
+                      container.current?.style.setProperty(
+                          '--mx-portal-sidebar-width',
+                          `${width}px`
+                      ),
+              })
+            : null,
         h(
             'main',
             {
+                key: 'host-content',
                 ref: main,
                 id: mainId,
                 tabIndex: -1,

@@ -270,9 +270,8 @@ export function recordPortalChartInputs({
         };
         if (within(installed, path)) {
             // The ordinary React barrel also reaches the existing private
-            // Phone, Rich Text, and Address closures, shared by ESM/CJS.
-            // Bind their shipped bytes too. Address admits only its three
-            // runtime files, never another vendor, source alias, or format.
+            // Phone, Rich Text, Address and lazy sidebar closures, shared by
+            // ESM/CJS. Bind only their admitted runtime bytes to this archive.
             const packagePath = relative(installed, path).replaceAll('\\', '/');
             assert(
                 within(join(installed, 'dist', format), path) ||
@@ -288,6 +287,7 @@ export function recordPortalChartInputs({
                         'dist/vendor/headlessui-address/combobox.js',
                         'dist/vendor/headlessui-address/react-peer.js',
                         'dist/vendor/headlessui-address/sdk-runtime.js',
+                        'dist/vendor/portal-sidebar/index.js',
                     ].includes(packagePath),
                 `Chart browser imported a source alias or wrong SDK format: ${packagePath}`
             );

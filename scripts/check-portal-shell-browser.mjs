@@ -86,6 +86,7 @@ try {
     });
     await new Promise((done) => server.listen(0, '127.0.0.1', done));
     const origin = `http://127.0.0.1:${server.address().port}`;
+    report.localhostURL = origin;
     browser = await chromium.launch({
         ...(process.env.SDK_NATIVE_CHROMIUM
             ? { executablePath: process.env.SDK_NATIVE_CHROMIUM }
@@ -264,6 +265,116 @@ try {
                         .evaluate((node) => getComputedStyle(node).fontSize),
                     '20px'
                 );
+                assert.deepEqual(await counts(), beforeHeader);
+                await page.evaluate(() => window.enableSidebarResize(true));
+                await configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: '<Customer Portal>',
+                        sidebarWidth: 384,
+                    },
+                });
+                const separator = page.getByRole('separator', {
+                    name: 'Resize sidebar',
+                });
+                await separator.waitFor();
+                const measuredSidebar = () =>
+                    page
+                        .locator('main')
+                        .evaluate((node) => node.getBoundingClientRect().left);
+                assert.equal(await measuredSidebar(), 384);
+                await page.evaluate(() => {
+                    window.resizeBody = document.querySelector('main article');
+                });
+                const drag = async (target, beforeRelease) => {
+                    const bounds = await separator.boundingBox();
+                    assert(bounds);
+                    await page.mouse.move(
+                        bounds.x + bounds.width / 2,
+                        bounds.y + 30
+                    );
+                    await page.mouse.down();
+                    await page.mouse.move(target, bounds.y + 30, { steps: 4 });
+                    if (beforeRelease) await beforeRelease();
+                    await page.mouse.up();
+                    await page.waitForTimeout(50);
+                };
+                await drag(484, async () => {
+                    assert.equal(await measuredSidebar(), 484);
+                    assert.equal(
+                        await page.evaluate(
+                            () => window.proof.sidebarWidths.length
+                        ),
+                        0
+                    );
+                });
+                assert.equal(await measuredSidebar(), 484);
+                await drag(1300);
+                assert.equal(await measuredSidebar(), 600);
+                await drag(0);
+                assert.equal(await measuredSidebar(), 120);
+                await separator.focus();
+                await page.keyboard.press('Home');
+                await page.keyboard.press('End');
+                await page.keyboard.press('ArrowLeft');
+                assert.equal(await measuredSidebar(), 590);
+                assert.equal(
+                    await page.evaluate(
+                        () => window.proof.sidebarWidths.length
+                    ),
+                    6
+                );
+                assert.equal(
+                    await page.evaluate(
+                        () =>
+                            window.resizeBody ===
+                            document.querySelector('main article')
+                    ),
+                    true
+                );
+                await drag(500, async () => {
+                    await configure({
+                        header: {
+                            layout: 'sidebar',
+                            title: '<Customer Portal>',
+                            sidebarWidth: 300,
+                        },
+                    });
+                });
+                assert.equal(await measuredSidebar(), 300);
+                assert.equal(
+                    await page.evaluate(
+                        () => window.proof.sidebarWidths.length
+                    ),
+                    6,
+                    'New revision retires an allocated drag'
+                );
+                await drag(400, async () => {
+                    await page.evaluate(() =>
+                        window.enableSidebarResize(false)
+                    );
+                    await page.waitForTimeout(50);
+                    assert.equal(await measuredSidebar(), 300);
+                });
+                assert.equal(
+                    await page.evaluate(
+                        () => window.proof.sidebarWidths.length
+                    ),
+                    6
+                );
+                await page.setViewportSize({ width: 390, height: 844 });
+                await page.evaluate(() => window.enableSidebarResize(true));
+                await page.waitForTimeout(50);
+                assert.equal(await separator.count(), 0);
+                await page.setViewportSize({ width: 1440, height: 1000 });
+                await page.evaluate(() => window.enableSidebarResize(false));
+                await configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: '<Customer Portal>',
+                        descriptionHtml: '<p>Owned SDK shell</p>',
+                    },
+                });
                 assert.deepEqual(await counts(), beforeHeader);
                 await summary('Orders').click();
                 await button('Done orders').hover();
@@ -570,6 +681,7 @@ try {
                     errors,
                     externalDestinations: external.length,
                     desktopMobileKeyboardAndForcedColors: 'passed',
+                    sidebarEndOnlyBoundsRetirementAndBodyIdentity: 'passed',
                 });
             } catch (error) {
                 await page.screenshot({

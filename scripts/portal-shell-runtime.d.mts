@@ -16,3 +16,11 @@ export function assertPortalShellConsumer(input: {
     implicitNetworkRequests: number;
     ssrEffects: number;
 }>;
+
+export function assertPortalShellSidebarConsumer(
+    input: Omit<Parameters<typeof assertPortalShellConsumer>[0], 'portals'>
+): Promise<{
+    endOnlyCommits: number;
+    staleCommits: number;
+    bodyRemountsDuringResize: number;
+}>;

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
     cpSync,
+    existsSync,
     mkdtempSync,
     readFileSync,
     rmSync,
@@ -20,6 +21,10 @@ const props:CompletePortalShellProps={snapshot,onIntent(intent:PortalShellIntent
 createElement(CompletePortalShell,props);
 const richSnapshot:PortalShellSnapshot={...snapshot,header:{...snapshot.header,titleHtml:'<strong>Portal</strong>'}};
 createElement(CompletePortalShell,{...props,snapshot:richSnapshot});
+const resizable:CompletePortalShellProps={...props,snapshot:{...snapshot,header:{...snapshot.header,sidebarWidth:384}},onSidebarWidthCommit(change){console.log(change.scope,change.revision,change.width.toFixed(0));}};
+createElement(CompletePortalShell,resizable);
+// @ts-expect-error only controlled numeric widths, never CSS or a native renderer
+const invalidWidth:PortalShellSnapshot={...snapshot,header:{...snapshot.header,sidebarWidth:'20rem'}};
 // @ts-expect-error HTML is a controlled string, never an injected renderer
 const injectedHeader:PortalShellSnapshot={...snapshot,header:{...snapshot.header,titleHtml(){return null;}}};
 // @ts-expect-error SDK owns navigation presentation
@@ -28,7 +33,7 @@ const nativeMenu:CompletePortalShellProps={...props,renderMenu(){return null;}};
 const fetcher:CompletePortalShellProps={...props,fetchRecords(){}};
 // @ts-expect-error owner/revision envelope is required
 const unscoped:PortalShellIntent={type:'logout'};
-void nativeMenu;void fetcher;void unscoped;void injectedHeader;
+void nativeMenu;void fetcher;void unscoped;void injectedHeader;void invalidWidth;
 `;
 
 export function checkPortalShellReactMatrix({
@@ -63,7 +68,7 @@ export function checkPortalShellReactMatrix({
             String.raw`
 import assert from 'node:assert/strict';import{createRequire}from'node:module';
 import React from'react';import{createRoot}from'react-dom/client';import{renderToString}from'react-dom/server';
-import{assertPortalShellConsumer}from'./scenarios.mjs';
+import{assertPortalShellConsumer,assertPortalShellSidebarConsumer}from'./scenarios.mjs';
 const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
@@ -71,9 +76,22 @@ const portals=format==='esm'?await import('@miniextensions/sdk/portals'):require
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const{Window}=require(process.argv[3]);
 const result=await assertPortalShellConsumer({React,ui,portals,Window,createRoot,renderToString});
-console.log(JSON.stringify({format,react:React.version,...result}));
+const sidebar=await assertPortalShellSidebarConsumer({React,ui,Window,createRoot,renderToString});
+console.log(JSON.stringify({format,react:React.version,...result,sidebar}));
 `
         );
+        run('npm', [
+            'install',
+            '--ignore-scripts',
+            '--no-audit',
+            '--no-fund',
+            '--package-lock=false',
+        ]);
+        for (const dependency of ['react', 'react-dom', 'vue', 'happy-dom'])
+            assert(
+                !existsSync(join(directory, 'node_modules', dependency)),
+                `Portal resize engine installed a UI dependency in a non-UI consumer: ${dependency}`
+            );
         for (const version of [
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
@@ -134,6 +152,11 @@ console.log(JSON.stringify({format,react:React.version,...result}));
                 assert.equal(result.react, version.react);
                 assert.equal(result.navigationIntents, 4);
                 assert.equal(result.implicitNetworkRequests, 0);
+                assert.deepEqual(result.sidebar, {
+                    endOnlyCommits: 11,
+                    staleCommits: 0,
+                    bodyRemountsDuringResize: 0,
+                });
                 formats.push(result);
             }
             const css = readFileSync(

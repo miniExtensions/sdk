@@ -1,3 +1,4 @@
+import { assertPostgresCopyPlanningReceiptProvenance } from './postgres-copy-planning-receipts.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -278,6 +279,18 @@ export async function assertPublicDistribution(
         );
         assert(nativeDeclarations, 'Missing PostgreSQL contract declarations');
         assertPostgresConfigDeclarationInventory(postgres, nativeDeclarations);
+        assertPostgresCopyPlanningReceiptProvenance(
+            postgres,
+            sha256(
+                await readFile(
+                    new URL(
+                        './postgres-copy-planning-receipts.mjs',
+                        import.meta.url
+                    )
+                )
+            ),
+            nativeDeclarations
+        );
         assertPostgresFormAccessReceiptProvenance(
             postgres,
             sha256(

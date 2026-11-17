@@ -1,3 +1,9 @@
+import {
+    postgresCopyPlanningSource,
+    postgresCopyPlanningProvenance,
+    postgresCopyPlanningDraftSource,
+    readPostgresCopyPlanningReceipt,
+} from './postgres-copy-planning-receipts.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -262,6 +268,26 @@ const postgresUpdateAliases = [
 const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
 // Existing private member authoring schemas, not public runtime operations.
 // Keep their source/type/state correlation rather than inventing SDK models.
+const readCopyPlanningValidation = () => {
+    const receipt = readPostgresCopyPlanningReceipt({ monorepo, revision });
+    return receipt == null
+        ? null
+        : {
+              ...receipt,
+              validatorSha256: hash(
+                  readFileSync(
+                      new URL(
+                          './postgres-copy-planning-receipts.mjs',
+                          import.meta.url
+                      )
+                  )
+              ),
+          };
+};
+const copyPlanningValidation = postgresOnly
+    ? readCopyPlanningValidation()
+    : null;
+const postgresCopyPlanningConfigAliases = copyPlanningValidation?.aliases ?? [];
 const postgresAuthoringContracts = [
     {
         source: 'types/postgres/relationships.ts',
@@ -296,6 +322,19 @@ const postgresAuthoringContracts = [
             'PostgresPortalDraft',
         ],
     },
+    ...(copyPlanningValidation == null
+        ? []
+        : [
+              {
+                  source: postgresCopyPlanningDraftSource,
+                  aliases: [
+                      'PostgresCopyFieldValueDraftState',
+                      'PostgresCopyFieldValueDraft',
+                      'PostgresCopyFieldValuePlanMapping',
+                      'PostgresCopyFieldValuePlan',
+                  ],
+              },
+          ]),
     {
         source: 'types/extensions/postgres/nativeDraft.ts',
         aliases: ['PostgresNativeDraft'],
@@ -358,6 +397,7 @@ const postgresAliases = [
     ...postgresAttachmentAliases,
     ...postgresFieldConfigAliases,
     ...postgresFormAccessAliases,
+    ...postgresCopyPlanningConfigAliases,
     ...postgresAuthoringAliases,
 ];
 let corsValidation = null;
@@ -387,6 +427,10 @@ if (postgresOnly) {
     if (formAccessValidation != null)
         entryLines.push(
             `import type { ${postgresFormAccessAliases.join(', ')} } from './${postgresFormAccessSource.replace(/\.ts$/, '')}';`
+        );
+    if (copyPlanningValidation != null)
+        entryLines.push(
+            `import type { ${postgresCopyPlanningConfigAliases.join(', ')} } from './${postgresCopyPlanningSource.replace(/\.ts$/, '')}';`
         );
     for (const { source, aliases } of postgresAuthoringContracts)
         entryLines.push(
@@ -913,6 +957,11 @@ if (postgresOnly) {
     sourceFiles.add(
         'types/extensions/postgres/relationshipFieldDefinitions.ts'
     );
+    if (copyPlanningValidation != null) {
+        sourceFiles.add(postgresCopyPlanningSource);
+        sourceFiles.add(postgresCopyPlanningProvenance);
+        sourceFiles.add(postgresCopyPlanningDraftSource);
+    }
     if (formAccessValidation != null) {
         sourceFiles.add(postgresFormAccessSource);
         sourceFiles.add(postgresFormAccessProvenance);
@@ -975,6 +1024,9 @@ const serializedProvenance =
                       contractFamily: 'postgres',
                       aliases: postgresAliases,
                       configurationValidation,
+                      ...(copyPlanningValidation == null
+                          ? {}
+                          : { copyPlanningValidation }),
                       ...(formAccessValidation == null
                           ? {}
                           : { formAccessValidation }),
@@ -1036,6 +1088,14 @@ if (
 )
     throw new Error(
         'Canonical PostgreSQL Form access inputs changed during generation.'
+    );
+if (
+    postgresOnly &&
+    JSON.stringify(readCopyPlanningValidation()) !==
+        JSON.stringify(copyPlanningValidation)
+)
+    throw new Error(
+        'Canonical Copy planning inputs changed during generation.'
     );
 if (
     postgresOnly &&

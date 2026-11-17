@@ -47,6 +47,7 @@ import {
 } from './postgres-runtime-artifact-registry.mjs';
 import './postgres-config-receipts.test.mjs';
 import './postgres-form-access-receipts.test.mjs';
+import './postgres-copy-planning-receipts.test.mjs';
 import './postgres-contract-declarations.test.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import {

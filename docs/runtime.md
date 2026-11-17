@@ -1223,3 +1223,11 @@ distinct. Required needs a submitted nonempty answer; `\x` deliberately submits
 zero bytes. Returned bytes use canonical `\x` hex independently of the role's
 `bytea_output` setting. BYTEA does not inherit text normalization, public-URL
 attachment display, upload controls or array-input admission.
+
+Native Copy Field Value authoring uses its existing extension type and a generated
+ordered source/destination mapping. Its private read plan carries exact stored
+values and current destination metadata with `executionAdmission: 'pending'`.
+`valuePolicy: 'exact-native-values'` preserves SQL NULL, empty text, whitespace
+and false as explicit source values that replace the destination. Omitted
+assignments remain distinct; PostgreSQL owns assignment casts and constraints.
+These types do not admit scheduling or expose a new public runtime operation.

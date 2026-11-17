@@ -49,6 +49,11 @@ import type {
     CanonicalPostgresIdentifierConfiguration,
     CanonicalPostgresNumericColumnConfig,
     CanonicalPostgresNativeDraft,
+    CanonicalPostgresCopyPlanningConfig,
+    CanonicalPostgresCopyFieldValueDraftState,
+    CanonicalPostgresCopyFieldValueDraft,
+    CanonicalPostgresCopyFieldValuePlanMapping,
+    CanonicalPostgresCopyFieldValuePlan,
     CanonicalPostgresPortalTab,
     CanonicalPostgresPortalDraftState,
     CanonicalPostgresPortalDraft,
@@ -490,3 +495,11 @@ export type MiniExtensionsClient = {
         ): Promise<void>;
     };
 };
+
+export type PostgresCopyPlanningConfig = CanonicalPostgresCopyPlanningConfig;
+export type PostgresCopyFieldValueDraftState =
+    CanonicalPostgresCopyFieldValueDraftState;
+export type PostgresCopyFieldValueDraft = CanonicalPostgresCopyFieldValueDraft;
+export type PostgresCopyFieldValuePlanMapping =
+    CanonicalPostgresCopyFieldValuePlanMapping;
+export type PostgresCopyFieldValuePlan = CanonicalPostgresCopyFieldValuePlan;

@@ -1,3 +1,4 @@
+import { assertPostgresCopyPlanningReceiptProvenance } from './postgres-copy-planning-receipts.mjs';
 import { bundleKanban } from './kanban-bundle.mjs';
 import { bundlePortalMap } from './portal-map-vendor-checks.mjs';
 import { build as bundle } from 'esbuild';
@@ -202,6 +203,20 @@ for (const name of ['generated', 'postgres.generated']) {
     );
     let runtimeArtifacts;
     if (name === 'postgres.generated') {
+        assertPostgresCopyPlanningReceiptProvenance(
+            internal,
+            createHash('sha256')
+                .update(
+                    readFileSync(
+                        new URL(
+                            './postgres-copy-planning-receipts.mjs',
+                            import.meta.url
+                        )
+                    )
+                )
+                .digest('hex'),
+            declarations
+        );
         assertPostgresFormAccessReceiptProvenance(
             internal,
             createHash('sha256')

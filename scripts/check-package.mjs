@@ -11,6 +11,7 @@ import {
     nativePortalKernelTypedConsumer,
 } from './native-portal-kernel-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
+import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -697,6 +698,7 @@ try {
                 path === 'docs/single-line-text.md' ||
                 path === 'docs/csv-export.md' ||
                 path === 'docs/kanban.md' ||
+                path === 'docs/portal-gallery.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/image-annotation-markerjs2-license.txt' ||
                 path === 'examples/react-image-annotation/README.md' ||
@@ -895,6 +897,8 @@ try {
         'dist/cjs/react/complete-portal-chart.css',
         'dist/esm/react/portal-summary-cards.css',
         'dist/cjs/react/portal-summary-cards.css',
+        'dist/esm/react/portal-gallery.css',
+        'dist/cjs/react/portal-gallery.css',
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
@@ -915,6 +919,7 @@ try {
         'dist/esm/react/csv-export.css',
         'dist/cjs/react/csv-export.css',
         'docs/kanban.md',
+        'docs/portal-gallery.md',
         'dist/esm/react/kanban.css',
         'dist/cjs/react/kanban.css',
         ...headerStarterFiles,
@@ -4762,6 +4767,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
     }
+    const galleryProof = await checkPortalGalleryReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(galleryProof.tests, 48);
+    console.log(
+        'Installed Portal Gallery React18/19 ESM/CJS/types/SSR/styles and source lifecycle assertions passed.',
+        galleryProof
+    );
     const additionalRuntimeChecks = await checkAdditionalRuntimeOperations({
         consumerDirectory: temporaryDirectory,
     });

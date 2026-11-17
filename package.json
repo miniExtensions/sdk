@@ -199,6 +199,7 @@
                 "default": "./dist/cjs/customer-chat/intercom.js"
             }
         },
+        "./react/portal-gallery.css": "./dist/esm/react/portal-gallery.css",
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
         "./react/portal-map.css": "./dist/esm/react/portal-map.css",
@@ -294,6 +295,7 @@
         "docs/customer-chat.md",
         "docs/csv-export.md",
         "docs/kanban.md",
+        "docs/portal-gallery.md",
         "docs/portal-shell.md",
         "docs/portal-map.md"
     ],

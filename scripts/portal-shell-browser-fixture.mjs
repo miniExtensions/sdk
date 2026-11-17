@@ -214,7 +214,11 @@ function App() {
                 null,
                 `Selected: ${snapshot.selection?.itemId}/${snapshot.selection?.viewId ?? ''}`
             ),
-            h('button', { type: 'button' }, 'Record action')
+            h(
+                'button',
+                { type: 'button', className: 'fixture-native-action' },
+                'Record action'
+            )
         )
     );
 }

@@ -186,6 +186,107 @@ export async function assertPortalShellNavigationConsumer({
     );
     assert.match(empty, /Owned native error/);
     assert.doesNotMatch(empty, /<iframe/);
+    const captured = {
+        type: 'embedded',
+        itemId: 'guide',
+        url: 'https://example.invalid/captured',
+    };
+    for (const items of [
+        [
+            {
+                type: 'external',
+                id: 'guide',
+                label: 'Current external',
+                url: 'https://example.invalid/current',
+            },
+        ],
+        [],
+    ]) {
+        const markup = renderToString(
+            h(ui.CompletePortalShell, {
+                snapshot: { ...snapshot, items, selection: captured },
+                onIntent: (request) => ordinary.push(request),
+            })
+        );
+        assert.match(markup, /src="https:\/\/example\.invalid\/captured"/);
+    }
+    for (const url of [
+        'http://example.invalid',
+        'javascript:alert(1)',
+        'https://user:secret@example.invalid',
+    ]) {
+        const markup = renderToString(
+            h(ui.CompletePortalShell, {
+                snapshot: {
+                    ...snapshot,
+                    items: [],
+                    selection: { ...captured, url },
+                },
+                onIntent: (request) => ordinary.push(request),
+            })
+        );
+        assert.doesNotMatch(markup, /<iframe/);
+    }
+    const nativeError = h('p', null, 'Accepted native error owner');
+    for (const selection of [
+        { ...captured, itemId: ' ' },
+        { ...captured, itemId: 0 },
+        { type: 'table', itemId: ' ', viewId: 'pending-native' },
+        { type: 'table', itemId: 'orders', viewId: 5 },
+    ]) {
+        const markup = renderToString(
+            h(
+                ui.CompletePortalShell,
+                {
+                    snapshot: { ...snapshot, selection },
+                    onIntent: (request) => ordinary.push(request),
+                },
+                nativeError
+            )
+        );
+        assert.doesNotMatch(markup, /<iframe/);
+        assert.doesNotMatch(markup, /Accepted native error owner/);
+    }
+    const missingTable = {
+        type: 'table',
+        itemId: 'retiring-native-table',
+        viewId: 'pending-native',
+    };
+    assert.match(
+        renderToString(
+            h(
+                ui.CompletePortalShell,
+                {
+                    snapshot: {
+                        ...snapshot,
+                        items: [],
+                        selection: missingTable,
+                    },
+                    onIntent: (request) => ordinary.push(request),
+                },
+                nativeError
+            )
+        ),
+        /Accepted native error owner/
+    );
+    assert.doesNotMatch(
+        renderToString(
+            h(
+                ui.CompletePortalShell,
+                {
+                    snapshot: {
+                        ...snapshot,
+                        items: [],
+                        selection: missingTable,
+                        selectionPolicy: 'resolve',
+                    },
+                    onIntent: (request) => ordinary.push(request),
+                },
+                nativeError
+            )
+        ),
+        /Accepted native error owner/
+    );
     assert.deepEqual(activations, []);
     assert.deepEqual(hovers, []);
     assert.deepEqual(ordinary, []);
@@ -559,6 +660,33 @@ export async function assertPortalShellNavigationConsumer({
         assert(frame);
         assert.equal(frame.getAttribute('referrerpolicy'), null);
         assert.equal(frame.getAttribute('allow'), null);
+        for (const items of [
+            fullItems.map((item) =>
+                item.id === 'guide'
+                    ? {
+                          type: 'external',
+                          id: 'guide',
+                          label: 'Current external',
+                          url: 'https://example.invalid/current',
+                      }
+                    : item
+            ),
+            fullItems.filter((item) => item.id !== 'guide'),
+        ]) {
+            snapshot = { ...snapshot, revision: snapshot.revision + 1, items };
+            await render();
+            assert.equal(container.querySelector('iframe'), frame);
+            assert.equal(frame.getAttribute('src'), captured.url);
+            assert.equal(activations.length, 6);
+            assert.equal(ordinary.length, 1);
+        }
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            items: fullItems,
+        };
+        await render();
+        assert.equal(container.querySelector('iframe'), frame);
         snapshot = {
             ...snapshot,
             revision: snapshot.revision + 1,
@@ -692,6 +820,7 @@ export async function assertPortalShellNavigationConsumer({
             externalLinkClosure: 'passed',
             tabExitHandoff: 'passed',
             accountKeyboardAndMobileTrap: 'passed',
+            hostSelectionAcrossMenuDrift: 'passed',
         };
     } finally {
         try {

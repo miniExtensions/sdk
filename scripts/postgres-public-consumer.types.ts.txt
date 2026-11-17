@@ -343,6 +343,7 @@ export const table: PostgresTableReference = {
     tableName: 'Order Items',
 };
 export const identity: PostgresRecordIdentity = {
+    formatVersion: 1 as const,
     type: 'primary-key',
     values: [
         { columnName: 'tenant_id', value: 'tenant-one' },
@@ -465,6 +466,7 @@ const observedId: PostgresField = {
     privileges: { select: true, insert: false, update: true },
 };
 export const observation: PostgresRowObservation = {
+    formatVersion: 1 as const,
     source,
     table,
     relationOid: 16400,
@@ -515,6 +517,7 @@ export const observation: PostgresRowObservation = {
     },
 };
 export const updateQuery: PostgresUpdateQuery = {
+    formatVersion: 1 as const,
     source,
     table,
     identifier: observation.identifier,
@@ -988,3 +991,54 @@ export const temporalAttachmentSetting: PostgresConfiguredColumn = {
     // @ts-expect-error Attachment presentation belongs to configured text columns.
     config: { displayAs: 'attachments-public-urls' },
 };
+
+// Ephemeral observations cannot silently upgrade previously formatted values.
+type VersionAssert<T extends true> = T;
+type InvalidObservedVersion<T, V> = Omit<T, 'formatVersion'> & {
+    formatVersion: V;
+} extends T
+    ? false
+    : true;
+export type PostgresObservedValueVersions = [
+    VersionAssert<
+        Omit<
+            PostgresRowObservation,
+            'formatVersion'
+        > extends PostgresRowObservation
+            ? false
+            : true
+    >,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, undefined>>,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, 0>>,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, 2>>,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, '1'>>,
+    VersionAssert<
+        Omit<PostgresUpdateQuery, 'formatVersion'> extends PostgresUpdateQuery
+            ? false
+            : true
+    >,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, undefined>>,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, 0>>,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, 2>>,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, '1'>>,
+    VersionAssert<
+        Omit<
+            PostgresRowObservation['identity'],
+            'formatVersion'
+        > extends PostgresRowObservation['identity']
+            ? false
+            : true
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], undefined>
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], 0>
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], 2>
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], '1'>
+    >,
+];

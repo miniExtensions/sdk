@@ -218,6 +218,7 @@ export function acceptedPostgresNativeContracts() {
         ],
     };
     const identity: PostgresRecordIdentity = {
+        formatVersion: 1 as const,
         type: 'primary-key',
         values: [
             { columnName: 'tenant_id', value: 'tenant_example' },
@@ -279,6 +280,7 @@ export function rejectedPostgresNativeContracts() {
     // @ts-expect-error A timestamp must not become a JavaScript Date.
     const date: PostgresValue = new Date(0);
     const identity: PostgresRecordIdentity = {
+        formatVersion: 1 as const,
         type: 'primary-key',
         values: [
             {
@@ -289,6 +291,7 @@ export function rejectedPostgresNativeContracts() {
         ],
     };
     const inventedIdentity: PostgresRecordIdentity = {
+        formatVersion: 1 as const,
         // @ts-expect-error Row numbers and ctid are not stable record identities.
         type: 'ctid',
         values: [],

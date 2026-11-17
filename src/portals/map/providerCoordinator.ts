@@ -36,6 +36,8 @@ export type PortalMapEffectiveProviderConfiguration = Readonly<{
     mapIds: readonly string[];
     nonce: string;
     authReferrerPolicy: 'origin';
+    /** Portable admission policy: no automatic vendor retries. */
+    retries: 0;
     url: 'https://maps.googleapis.com/maps/api/js';
 }>;
 
@@ -78,7 +80,9 @@ export type PortalMapProviderRealm =
       };
 
 export type PortalMapProviderDriver = {
-    inspectRealm: () => PortalMapProviderRealm;
+    inspectRealm: (
+        configuration: PortalMapEffectiveProviderConfiguration
+    ) => PortalMapProviderRealm;
     createLoader: (configuration: PortalMapEffectiveProviderConfiguration) => {
         load: () => Promise<void>;
     };
@@ -117,6 +121,54 @@ export type PortalMapProviderCoordinator = {
     ) => () => void;
     release: (lease: PortalMapProviderLease) => boolean;
 };
+
+/** Immutable authorized request publication; reuse through ordinary row updates. */
+export type PortalMapProviderBinding = Readonly<{
+    owner: PortalMapProviderOwner;
+    coordinator: PortalMapProviderCoordinator;
+    acquire: () => PortalMapProviderAcquisition;
+}>;
+
+export function bindPortalMapProvider(
+    coordinator: PortalMapProviderCoordinator,
+    owner: PortalMapProviderOwner,
+    configuration: PortalMapProviderConfiguration
+): PortalMapProviderBinding {
+    const input = capturePortalMapProviderConfiguration(configuration);
+    return Object.freeze({
+        owner,
+        coordinator,
+        acquire: () =>
+            input == null
+                ? Object.freeze({
+                      kind: 'refused' as const,
+                      code: 'invalid-configuration' as const,
+                  })
+                : coordinator.acquire(owner, input),
+    });
+}
+
+/** Internal pure snapshot shared by request bindings and explicit host attestations. */
+export function capturePortalMapProviderConfiguration(
+    configuration: PortalMapProviderConfiguration
+): Readonly<PortalMapProviderConfiguration> | null {
+    const captured = normalize(configuration);
+    // No provider operation occurs here. In particular, render/SSR may publish
+    // this immutable binding without constructing or inspecting a loader.
+    return captured == null
+        ? null
+        : Object.freeze({
+              apiKey: captured.apiKey,
+              id: captured.id,
+              version: captured.version,
+              language: captured.language,
+              region: captured.region,
+              libraries: captured.libraries,
+              mapIds: captured.mapIds,
+              nonce: captured.nonce,
+              authReferrerPolicy: captured.authReferrerPolicy,
+          });
+}
 
 const libraries = new Set<string>([
     'core',
@@ -203,6 +255,7 @@ function normalize(
             libraries: Object.freeze(copiedLibraries),
             mapIds: Object.freeze(copiedMapIds),
             authReferrerPolicy: authReferrerPolicy || 'origin',
+            retries: 0,
             url: 'https://maps.googleapis.com/maps/api/js',
         });
     } catch {
@@ -222,6 +275,7 @@ function equal(
         left.region === right.region &&
         left.nonce === right.nonce &&
         left.authReferrerPolicy === right.authReferrerPolicy &&
+        left.retries === right.retries &&
         left.url === right.url &&
         left.libraries.length === right.libraries.length &&
         left.libraries.every(
@@ -325,7 +379,7 @@ export function createPortalMapProviderCoordinator(
             if (initializing) return refuse('provider-failed');
             initializing = true;
             try {
-                const realm = driver.inspectRealm();
+                const realm = driver.inspectRealm(captured);
                 if (!current(owner)) return refuse('owner-retired');
                 if (realm.kind === 'unmanaged-provider')
                     return refuse('unmanaged-provider');

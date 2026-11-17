@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
     createPortalMapProviderCoordinator,
     createPortalMapProviderOwnerScope,
+    bindPortalMapProvider,
     type PortalMapProviderAcquisition,
     type PortalMapProviderConfiguration,
     type PortalMapProviderCoordinator,
@@ -49,6 +50,7 @@ function fixture() {
         createLoader: (captured) => {
             constructors++;
             assert.equal(captured.apiKey, key);
+            assert.equal(captured.retries, 0);
             assert.ok(Object.isFrozen(captured));
             assert.ok(Object.isFrozen(captured.libraries));
             assert.ok(Object.isFrozen(captured.mapIds));
@@ -483,4 +485,23 @@ test('a subscriber releasing another exact lease suppresses its queued publicati
     assert.equal(callsB, 0);
     assert.equal(f.coordinator.getSnapshot(a).status, 'ready');
     assert.equal(f.coordinator.getSnapshot(b).status, 'released');
+});
+
+test('immutable request binding captures private options before later mutation and performs no eager load', () => {
+    const f = fixture();
+    const scope = createPortalMapProviderOwnerScope();
+    const options = { apiKey: key, libraries: ['maps' as const] };
+    const binding = bindPortalMapProvider(
+        f.coordinator,
+        scope.capture(),
+        options
+    );
+    options.apiKey = 'changed-after-publication';
+    options.libraries.length = 0;
+    assert.deepEqual(f.counts(), { constructors: 0, loads: 0, inspections: 0 });
+    accepted(binding.acquire());
+    assert.equal(f.counts().constructors, 1);
+    assert.equal(JSON.stringify(binding).includes(key), false);
+    scope.retire();
+    refused(binding.acquire(), 'owner-retired');
 });

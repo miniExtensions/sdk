@@ -141,7 +141,10 @@ export type {
 export {
     createPortalMapProviderCoordinator,
     createPortalMapProviderOwnerScope,
+    bindPortalMapProvider,
 } from './map/providerCoordinator.js';
+export { getPortalMapCoordinates } from './map/coordinates.js';
+export type { PortalMapCoordinates } from './map/coordinates.js';
 export type {
     PortalMapLibrary,
     PortalMapProviderConfiguration,
@@ -154,4 +157,5 @@ export type {
     PortalMapProviderAcquisition,
     PortalMapProviderSnapshot,
     PortalMapProviderCoordinator,
+    PortalMapProviderBinding,
 } from './map/providerCoordinator.js';

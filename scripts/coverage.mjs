@@ -7,6 +7,7 @@ import { readdir, readFile, rm, mkdir, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkCoverage } from './coverage-policy.mjs';
+import { bundlePortalMap } from './portal-map-vendor-checks.mjs';
 import {
     assertRichTextVendor,
     richTextRuntimeFilter,
@@ -59,6 +60,15 @@ run(require.resolve('typescript/bin/tsc'), [
     '--outDir',
     output,
 ]);
+await bundlePortalMap(root, {
+    sourceEntry: `${output}/src/react/map/GoogleMapsRuntime.js`,
+    outputs: [
+        {
+            format: 'esm',
+            child: `${output}/src/react/map/GoogleMapsRuntime.js`,
+        },
+    ],
+});
 await cp(
     path.join(root, 'vendor/headlessui-address'),
     path.join(root, output, 'vendor/headlessui-address'),

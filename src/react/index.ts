@@ -136,6 +136,8 @@ export {
     CompleteVerificationScreen,
     type CompleteVerificationScreenProps,
     type CompleteVerificationScreenLabels,
+    type CompleteVerificationErrorPart,
+    type CompleteVerificationErrorPresentation,
 } from './CompleteVerificationScreen.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';

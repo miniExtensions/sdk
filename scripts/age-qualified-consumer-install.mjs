@@ -114,15 +114,28 @@ export function installAgeQualifiedConsumer({
         sdkSpec?.startsWith('file:'),
         'Consumer must install the actual packed SDK'
     );
+    const archivePath = realpathSync(resolve(root, sdkSpec.slice(5)));
+    const sdkCopies = ['@miniextensions/sdk'];
     for (const [name, version] of Object.entries(dependencies)) {
         if (name === '@miniextensions/sdk') continue;
+        if (version.startsWith('file:')) {
+            // The HTML isolation proof deliberately installs a second actual
+            // copy. Admit only a named SDK alias of this exact local archive.
+            assert.match(name, /^@miniextensions\/sdk-[a-z0-9-]+$/);
+            assert.equal(
+                realpathSync(resolve(root, version.slice(5))),
+                archivePath,
+                'SDK alias must use the exact admitted archive'
+            );
+            sdkCopies.push(name);
+            continue;
+        }
         assert.match(
             version,
             /^(?:npm:(?:@[^/@]+\/)?[^/@]+@)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/,
             'Consumer dependencies require exact registry versions'
         );
     }
-    const archivePath = realpathSync(resolve(root, sdkSpec.slice(5)));
     assert(lstatSync(archivePath).isFile());
     const archive = readFileSync(archivePath);
     const integrity = `sha512-${createHash('sha512').update(archive).digest('base64')}`;
@@ -196,9 +209,6 @@ export function installAgeQualifiedConsumer({
         lock.toString().includes(integrity),
         'pnpm lock omitted SDK archive integrity'
     );
-    const installed = join(modules, '@miniextensions/sdk');
-    assert(lstatSync(installed).isDirectory());
-    assert.equal(realpathSync(installed), installed);
     const expected = mkdtempSync(join(root, 'sdk-archive-proof-'));
     try {
         const members = execFileSync('tar', ['-tzf', '-'], {
@@ -221,13 +231,18 @@ export function installAgeQualifiedConsumer({
             '@miniextensions/sdk'
         );
         const expectedFiles = files(expectedRoot);
-        assert.deepEqual(files(installed), expectedFiles);
-        for (const path of expectedFiles)
-            assert.deepEqual(
-                readFileSync(join(installed, path)),
-                readFileSync(join(expectedRoot, path)),
-                `Installed SDK archive bytes differ: ${path}`
-            );
+        for (const name of sdkCopies) {
+            const installed = join(modules, name);
+            assert(lstatSync(installed).isDirectory());
+            assert.equal(realpathSync(installed), installed);
+            assert.deepEqual(files(installed), expectedFiles);
+            for (const path of expectedFiles)
+                assert.deepEqual(
+                    readFileSync(join(installed, path)),
+                    readFileSync(join(expectedRoot, path)),
+                    `Installed SDK archive bytes differ: ${name}/${path}`
+                );
+        }
         const receipt = {
             manifestSha256: sha(readFileSync(join(root, 'package.json'))),
             minimumReleaseAge: 2880,
@@ -235,6 +250,7 @@ export function installAgeQualifiedConsumer({
             lockSha256: sha(lock),
             archiveSha256: sha(archive),
             files: expectedFiles.length,
+            sdkCopies,
             earlierNpmLockPreserved: npmLock !== null,
         };
         receipts.push(receipt);

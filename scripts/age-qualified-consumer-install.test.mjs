@@ -23,7 +23,13 @@ import {
 
 function fixture(
     t,
-    { policy = {}, version = '10.28.2', afterInstall, npmLock = false } = {}
+    {
+        policy = {},
+        version = '10.28.2',
+        afterInstall,
+        npmLock = false,
+        alias = false,
+    } = {}
 ) {
     const root = realpathSync(
         mkdtempSync(join(tmpdir(), 'sdk-consumer-age-test-'))
@@ -56,6 +62,13 @@ function fixture(
             },
         })
     );
+    if (alias) {
+        const path = join(directory, 'package.json');
+        const manifest = JSON.parse(readFileSync(path, 'utf8'));
+        manifest.dependencies['@miniextensions/sdk-html-second-copy'] =
+            `file:${archive}`;
+        writeFileSync(path, JSON.stringify(manifest));
+    }
     if (npmLock)
         writeFileSync(
             join(directory, 'package-lock.json'),
@@ -83,6 +96,15 @@ function fixture(
         installs++;
         mkdirSync(join(installed, '..'), { recursive: true });
         cpSync(source, installed, { recursive: true });
+        if (alias)
+            cpSync(
+                source,
+                join(
+                    directory,
+                    'node_modules/@miniextensions/sdk-html-second-copy'
+                ),
+                { recursive: true }
+            );
         writeFileSync(
             join(directory, 'pnpm-lock.yaml'),
             `lockfileVersion: '9.0'\npackages:\n  '@miniextensions/sdk@file:${archive}':\n    resolution: {integrity: ${integrity}, tarball: 'file:${archive}'}\n`
@@ -250,6 +272,31 @@ test('consumer refuses a direct exotic dependency before install', (t) => {
     assert.throws(
         () => installAgeQualifiedConsumer(f),
         /exact registry versions/
+    );
+    assert.equal(f.installs, 0);
+});
+
+test('consumer verifies a deliberate second named SDK archive copy', (t) => {
+    const f = fixture(t, { alias: true });
+    const receipt = installAgeQualifiedConsumer(f);
+    assert.deepEqual(receipt.sdkCopies, [
+        '@miniextensions/sdk',
+        '@miniextensions/sdk-html-second-copy',
+    ]);
+    assert.equal(f.installs, 1);
+});
+test('consumer refuses a different archive under an SDK alias before install', (t) => {
+    const f = fixture(t, { alias: true });
+    const other = join(f.directory, 'other.tgz');
+    writeFileSync(other, readFileSync(f.archive));
+    const manifestPath = join(f.directory, 'package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.dependencies['@miniextensions/sdk-html-second-copy'] =
+        `file:${other}`;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    assert.throws(
+        () => installAgeQualifiedConsumer(f),
+        /exact admitted archive/
     );
     assert.equal(f.installs, 0);
 });

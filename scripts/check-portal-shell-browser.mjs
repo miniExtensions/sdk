@@ -505,6 +505,14 @@ async function configuredPresentation(browser, origin, label) {
         );
         assert.equal(await page.evaluate(() => window.proof.intents.length), 2);
         await configure({ settings: undefined });
+        await page.waitForFunction(() => {
+            const committed = window.fixtureCommittedSnapshot;
+            return (
+                committed != null &&
+                committed === window.fixtureSnapshot &&
+                committed.settings === undefined
+            );
+        });
         assert.equal(await page.locator('.mx-sdk-portal-settings').count(), 0);
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);

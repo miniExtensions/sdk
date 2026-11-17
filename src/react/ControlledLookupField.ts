@@ -565,6 +565,8 @@ function Result({
                 return h(CompleteReadOnlyTextField, {
                     value: '••••••••',
                     language: result.display.language,
+                    textSize: result.display.textSize,
+                    layout: result.display.layout,
                 });
             return h(ControlledFormulaField, {
                 ...result.display,
@@ -576,8 +578,15 @@ function Result({
                 gallery: {
                     ...result.display.gallery,
                     entries: result.display.gallery?.entries ?? [],
-                    owner: together(owner, result.display.gallery?.owner),
-                    identity: result.display.gallery?.identity ?? identity,
+                    owner: together(
+                        owner,
+                        result.display.gallery?.owner ??
+                            result.display.resource?.owner
+                    ),
+                    identity:
+                        result.display.gallery?.identity ??
+                        result.display.resource?.identity ??
+                        identity,
                 },
             });
         case 'rollup':

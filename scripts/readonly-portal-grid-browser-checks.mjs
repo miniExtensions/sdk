@@ -124,6 +124,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         );
     };
     const results = [];
+    evidence.results = results;
     await page.waitForFunction(
         () => window.__nativeProbe?.snapshot().committed > 0
     );
@@ -520,6 +521,17 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         const touch = await touchPage.evaluate(() =>
             window.__nativeProbe.snapshot()
         );
+        const settledTouchHeader = await touchHeader.evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            inlineWidth: node.style.width,
+            boundsWidth: node.getBoundingClientRect().width,
+        }));
+        evidence.touchObservation = {
+            before: initialTouchWidth,
+            provisional: provisionalTouchWidth,
+            header: settledTouchHeader,
+            snapshot: touch,
+        };
         assert(
             touch.pointers.some(
                 (event) => event.type === 'touch' && event.trusted
@@ -528,10 +540,9 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         assert.equal(touch.widths[0].width, touch.widths[0].measuredAtCommit);
         assert(touch.widths[0].width > initialTouchWidth);
         assert(
-            Math.abs(
-                touch.widths[0].width -
-                    (await touchHeader.evaluate((n) => n.clientWidth))
-            ) <= 1
+            Math.abs(touch.widths[0].width - settledTouchHeader.clientWidth) <=
+                1,
+            JSON.stringify(evidence.touchObservation)
         );
         assert.equal(touch.canonicalUnchanged, true);
         assert.deepEqual(touch.errors, []);

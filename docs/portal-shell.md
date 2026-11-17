@@ -51,6 +51,12 @@ behavior and resets disclosures on reopening. Per-table/group `sidebarInitiallyE
 chooses their initial mobile/sidebar state independently. An admitted unresolved
 group may use `keepEmpty:true`; omission retains existing empty-group filtering.
 
+`header.showBrandInNavigation:true` repeats the configured literal/HTML/logo brand
+inside an open overlay drawer. It reuses the existing sanitized title renderer
+and optional title-settings control without repeating the header description.
+Hidden headers and inline desktop navigation do not render this copy. Omission
+retains header-only branding and creates no host, storage or provider work.
+
 View metadata `badge` and finite `layout` retain configured indicators and native
 layout icons. Omitted layout renders no icon; explicit null uses the grid icon.
 Icons are shown in sidebar/mobile presentation; desktop topbar retains the badge.

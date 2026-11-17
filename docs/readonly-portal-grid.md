@@ -66,3 +66,5 @@ The maintained Chromium category additionally checks real geometry, trusted
 pointer/touch/keyboard controls and browser selection. Neither is evidence of a
 native borrowed-route rollout, native preference persistence or child admission;
 those require the real native adapter and its separate checks and cleanup.
+
+Canonical column widths are client widths (padding included, borders excluded). The presenter converts them to the current CSS box model before rendering, so ordinary one-pixel keyboard moves, motionless pointer settlement, host echoes and remounts cannot drift by the header border.

@@ -4784,7 +4784,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     assert.equal(gridProof.profiles.length, 4);
-    assert.equal(gridProof.tests, 72);
+    assert.equal(gridProof.tests, 80);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

@@ -23,11 +23,8 @@ assert(
     !existsSync(join(output, 'receipt.json')),
     'Retained proof must not be overwritten'
 );
-const temporary = realpathSync(
-    mkdtempSync(join(tmpdir(), 'sdk-readonly-list-browser-'))
-);
+let temporary;
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const require = createRequire(import.meta.url);
 const run = (command, args, options = {}) =>
     execFileSync(command, args, {
         cwd: temporary,
@@ -43,6 +40,9 @@ const report = {
 };
 let browser;
 try {
+    temporary = realpathSync(
+        mkdtempSync(join(tmpdir(), 'sdk-readonly-list-browser-'))
+    );
     const executablePath = realpathSync(process.env.SDK_NATIVE_CHROMIUM ?? '');
     assert(
         lstatSync(executablePath).isFile(),
@@ -130,8 +130,10 @@ try {
         await browser.close();
         report.cleanup.browserClosed = true;
     }
-    rmSync(temporary, { recursive: true });
-    report.cleanup.temporaryRemoved = true;
+    if (temporary) {
+        rmSync(temporary, { recursive: true });
+        report.cleanup.temporaryRemoved = true;
+    }
     writeFileSync(
         join(output, 'receipt.json'),
         JSON.stringify(report, null, 2) + '\n'

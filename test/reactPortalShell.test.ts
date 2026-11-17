@@ -33,6 +33,7 @@ it('optional host activation and pointer notifications preserve native owners, m
         preservedIframe: true,
         externalLinkClosure: 'passed',
         tabExitHandoff: 'passed',
+        accountKeyboardAndMobileTrap: 'passed',
     });
 });
 

@@ -15,4 +15,5 @@ export function assertPortalShellNavigationConsumer(input: {
     preservedIframe: boolean;
     externalLinkClosure: 'passed';
     tabExitHandoff: 'passed';
+    accountKeyboardAndMobileTrap: 'passed';
 }>;

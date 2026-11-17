@@ -255,6 +255,17 @@ export async function assertPortalShellNavigationConsumer({
                 })
             )
         );
+    const press = async (node, key, shiftKey = false) => {
+        assert(node);
+        const event = new window.KeyboardEvent('keydown', {
+            key,
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        });
+        await React.act(async () => node.dispatchEvent(event));
+        return event;
+    };
     try {
         await render();
         const body = container.querySelector('input');
@@ -577,6 +588,91 @@ export async function assertPortalShellNavigationConsumer({
             container.querySelector('iframe').getAttribute('allow'),
             'fullscreen'
         );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            user: {
+                name: 'Member',
+                settingsEnabled: true,
+                logoutEnabled: true,
+                presentation: 'text',
+            },
+        };
+        await render();
+        const account = container.querySelector('.mx-sdk-portal-user');
+        const accountTrigger = account.querySelector('summary');
+        await press(accountTrigger, 'ArrowDown');
+        assert.equal(account.open, true);
+        assert.equal(window.document.activeElement, named('User settings'));
+        await press(named('User settings'), 'End');
+        assert.equal(window.document.activeElement, named('Log out'));
+        await press(named('Log out'), 'Home');
+        assert.equal(window.document.activeElement, named('User settings'));
+        await press(named('User settings'), 'ArrowUp');
+        assert.equal(window.document.activeElement, named('Log out'));
+        await press(named('Log out'), 'Escape');
+        assert.equal(account.open, false);
+        assert.equal(window.document.activeElement, accountTrigger);
+        await press(accountTrigger, 'ArrowUp');
+        assert.equal(window.document.activeElement, named('Log out'));
+        const cancelledTab = new window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            bubbles: true,
+            cancelable: true,
+        });
+        cancelledTab.preventDefault();
+        await React.act(async () =>
+            named('Log out').dispatchEvent(cancelledTab)
+        );
+        assert.equal(
+            account.open,
+            true,
+            'A child-owned cancelled Tab keeps its menu'
+        );
+        assert.equal(window.document.activeElement, named('Log out'));
+        const accountTab = await press(named('Log out'), 'Tab');
+        assert.equal(account.open, false);
+        assert.equal(accountTab.defaultPrevented, false);
+        assert.equal(window.document.activeElement, accountTrigger);
+        await press(accountTrigger, 'ArrowDown');
+        await click(container);
+        assert.equal(
+            account.open,
+            false,
+            'An outside click closes the account menu'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: { ...snapshot.header, layout: 'topbar' },
+        };
+        await React.act(async () => {
+            window.happyDOM.setWindowSize({ width: 639, height: 800 });
+            root.render(element());
+        });
+        await click(named('Open navigation'));
+        const drawer = container.querySelector(
+            '.mx-sdk-portal-navigation[role="dialog"]'
+        );
+        assert(drawer);
+        const mobileAccount = drawer.querySelector('.mx-sdk-portal-user');
+        const mobileTrigger = mobileAccount.querySelector('summary');
+        await press(mobileTrigger, 'ArrowDown');
+        const mobileTab = await press(named('User settings'), 'Tab');
+        assert.equal(mobileAccount.open, false);
+        assert.equal(
+            mobileTab.defaultPrevented,
+            true,
+            'Only the actual mobile boundary wrap cancels Tab'
+        );
+        assert(drawer.contains(window.document.activeElement));
+        assert.notEqual(window.document.activeElement, mobileTrigger);
+        assert.equal(
+            ordinary.length,
+            1,
+            'Keyboard/menu closure never opens account or auth operations'
+        );
+        assert.equal(hovers.length, 4);
         await React.act(async () => root.unmount());
         mounted = false;
         assert.equal(activations.length, 6);
@@ -595,6 +691,7 @@ export async function assertPortalShellNavigationConsumer({
             preservedIframe: true,
             externalLinkClosure: 'passed',
             tabExitHandoff: 'passed',
+            accountKeyboardAndMobileTrap: 'passed',
         };
     } finally {
         try {

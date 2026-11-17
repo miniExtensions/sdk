@@ -592,6 +592,133 @@ export async function assertPortalShellNavigationConsumer({
             2,
             'Visible flat topbar-mobile rows do not prefetch'
         );
+        const originalBrandHeader = snapshot.header;
+        const brandBefore = [
+            activations.length,
+            hovers.length,
+            ordinary.length,
+            settings.length,
+        ];
+        let brandDrawer = container.querySelector(
+            '.mx-sdk-portal-navigation[role="dialog"]'
+        );
+        assert(brandDrawer);
+        assert.equal(
+            brandDrawer.querySelector('.mx-sdk-portal-brand') === null,
+            true,
+            'Default consumers retain header-only branding'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: {
+                ...snapshot.header,
+                showBrandInNavigation: true,
+                title: 'Member Portal <literal>',
+            },
+        };
+        await render();
+        brandDrawer = container.querySelector(
+            '.mx-sdk-portal-navigation[role="dialog"]'
+        );
+        assert.equal(
+            brandDrawer?.querySelector('.mx-sdk-portal-title')?.textContent,
+            'Member Portal <literal>',
+            'Configured native drawer retains its literal title'
+        );
+        assert.equal(brandDrawer.querySelector('literal') === null, true);
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: {
+                ...snapshot.header,
+                titleHtml:
+                    '<strong>Configured member</strong><script>throw Error("unsafe")</script>',
+            },
+        };
+        await render();
+        assert.equal(
+            brandDrawer.querySelector('.mx-sdk-portal-title-html strong')
+                ?.textContent,
+            'Configured member'
+        );
+        assert.equal(brandDrawer.querySelector('script') === null, true);
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: {
+                ...snapshot.header,
+                titleHtml: '',
+                logoUrl: 'https://example.invalid/configured-logo.svg',
+            },
+        };
+        await render();
+        assert.equal(
+            brandDrawer
+                .querySelector('.mx-sdk-portal-logo')
+                ?.getAttribute('src'),
+            'https://example.invalid/configured-logo.svg'
+        );
+        assert.equal(
+            brandDrawer.querySelector('h1') === null,
+            true,
+            'Logo projection does not invent a blank title'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: { ...snapshot.header, hidden: true },
+        };
+        await render();
+        await click(named('Open navigation'));
+        brandDrawer = container.querySelector(
+            '.mx-sdk-portal-navigation[role="dialog"]'
+        );
+        assert(brandDrawer);
+        assert.equal(
+            brandDrawer.querySelector('.mx-sdk-portal-brand') === null,
+            true,
+            'Hidden-header navigation never revives branding'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: { ...originalBrandHeader, showBrandInNavigation: true },
+        };
+        await React.act(async () => {
+            // Happy DOM starts a newly subscribed MediaQueryList's previous
+            // match at false. Publish the current narrow viewport first so
+            // this real resize can notify its true-to-false transition.
+            window.dispatchEvent(new window.Event('resize'));
+            window.happyDOM.setWindowSize({ width: 1280, height: 800 });
+            root.render(element());
+        });
+        assert.equal(
+            container.querySelector(
+                '.mx-sdk-portal-navigation .mx-sdk-portal-brand'
+            ) === null,
+            true,
+            'Inline desktop navigation does not duplicate branding'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: originalBrandHeader,
+        };
+        await React.act(async () => {
+            window.happyDOM.setWindowSize({ width: 639, height: 800 });
+            root.render(element());
+        });
+        assert.deepEqual(
+            [
+                activations.length,
+                hovers.length,
+                ordinary.length,
+                settings.length,
+            ],
+            brandBefore,
+            'Brand presentation never creates host/settings work'
+        );
         snapshot = {
             ...snapshot,
             revision: snapshot.revision + 1,
@@ -1035,6 +1162,7 @@ export async function assertPortalShellNavigationConsumer({
             closedNavigationKeyboard: 'passed',
             liveNavigationRevision: 'passed',
             editorDirectionalFocus: 'passed',
+            navigationBrand: 'passed',
         };
     } finally {
         try {

@@ -448,6 +448,159 @@ async function navigationCompatibility(browser, origin, label) {
             })),
             { activations: 3, storage: 3, reads: 0 }
         );
+        const brandOriginal = await page.evaluate(() => ({
+            header: window.fixtureSnapshot.header,
+            items: window.fixtureSnapshot.items,
+        }));
+        const brandViewport = page.viewportSize();
+        const brandBefore = await page.evaluate(() => [
+            window.proof.activations.length,
+            window.proof.intents.length,
+            window.proof.hovers.length,
+            window.proof.reads.length,
+        ]);
+        await page.setViewportSize({ width: 375, height: 812 });
+        await configureCommitted({
+            header: {
+                ...brandOriginal.header,
+                layout: 'topbar',
+                hidden: false,
+                showBrandInNavigation: false,
+                title: 'Member Portal <literal>',
+                titleHtml: undefined,
+                logoUrl: undefined,
+                descriptionHtml: '<p>Outer header help</p>',
+                descriptionOptions: { placement: 'header' },
+            },
+            items: [{ type: 'table', id: 'people', label: 'People' }],
+        });
+        const brandToggle = page.getByRole('button', {
+            name: 'Open navigation',
+            exact: true,
+        });
+        await brandToggle.click();
+        const brandDrawer = page.getByRole('dialog', {
+            name: 'Portal navigation',
+            exact: true,
+        });
+        await brandDrawer.waitFor();
+        assert.equal(
+            await brandDrawer.locator('.mx-sdk-portal-brand').count(),
+            0,
+            'Default stays header-only'
+        );
+        const brandHeader = await page.evaluate(
+            () => window.fixtureSnapshot.header
+        );
+        await configureCommitted({
+            header: { ...brandHeader, showBrandInNavigation: true },
+        });
+        await brandDrawer
+            .getByRole('heading', {
+                name: 'Member Portal <literal>',
+                exact: true,
+            })
+            .waitFor();
+        assert.equal(await brandDrawer.locator('literal').count(), 0);
+        assert.equal(
+            await brandDrawer
+                .getByText('Outer header help', { exact: true })
+                .count(),
+            0,
+            'Header description is not repeated'
+        );
+        await configureCommitted({
+            header: {
+                ...brandHeader,
+                showBrandInNavigation: true,
+                titleHtml:
+                    '<strong>Configured member</strong><script>throw Error("unsafe")</script>',
+            },
+        });
+        assert.equal(
+            await brandDrawer
+                .locator('.mx-sdk-portal-title-html strong')
+                .textContent(),
+            'Configured member'
+        );
+        assert.equal(await brandDrawer.locator('script').count(), 0);
+        const brandLogo =
+            'data:image/svg+xml,' +
+            encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#183c5a"/></svg>'
+            );
+        await configureCommitted({
+            header: {
+                ...brandHeader,
+                showBrandInNavigation: true,
+                titleHtml: '',
+                logoUrl: brandLogo,
+            },
+        });
+        const logo = brandDrawer.locator('.mx-sdk-portal-logo');
+        await logo.waitFor();
+        assert.equal(await logo.getAttribute('src'), brandLogo);
+        assert.equal(await brandDrawer.getByRole('heading').count(), 0);
+        const logoBounds = await logo.boundingBox();
+        assert(
+            logoBounds &&
+                logoBounds.width > 0 &&
+                logoBounds.width <= 80 &&
+                logoBounds.height > 0 &&
+                logoBounds.height <= 64
+        );
+        await configureCommitted({
+            header: {
+                ...brandHeader,
+                showBrandInNavigation: true,
+                hidden: true,
+            },
+        });
+        await brandDrawer.waitFor({ state: 'detached' });
+        await brandToggle.click();
+        await brandDrawer.waitFor();
+        assert.equal(
+            await brandDrawer.locator('.mx-sdk-portal-brand').count(),
+            0,
+            'Hidden header remains unbranded'
+        );
+        assert.equal(
+            await page
+                .locator('.mx-sdk-portal-header .mx-sdk-portal-brand')
+                .count(),
+            0
+        );
+        await page.keyboard.press('Escape');
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await configureCommitted({
+            header: {
+                ...brandHeader,
+                showBrandInNavigation: true,
+                hidden: false,
+            },
+        });
+        await page
+            .getByRole('navigation', { name: 'Portal navigation', exact: true })
+            .waitFor();
+        assert.equal(
+            await page
+                .locator('.mx-sdk-portal-navigation .mx-sdk-portal-brand')
+                .count(),
+            0,
+            'Inline desktop navigation stays unbranded'
+        );
+        await configureCommitted(brandOriginal);
+        await page.setViewportSize(brandViewport);
+        assert.deepEqual(
+            await page.evaluate(() => [
+                window.proof.activations.length,
+                window.proof.intents.length,
+                window.proof.hovers.length,
+                window.proof.reads.length,
+            ]),
+            brandBefore,
+            'Brand presentation creates no host work'
+        );
         const keyboardBefore = await page.evaluate(() => [
             window.proof.activations.length,
             window.proof.intents.length,
@@ -774,6 +927,7 @@ async function navigationCompatibility(browser, origin, label) {
             editorDirectionalAndTabFocus: 'passed',
             focusedRemovalAndOutsideOwnership: 'passed',
             keyboardActivationAndReturnFocus: 'passed',
+            mobileNavigationBrand: 'passed',
             cleanup: 'completed',
         };
     } catch (error) {

@@ -38,6 +38,7 @@ it('optional host activation and pointer notifications preserve native owners, m
         closedNavigationKeyboard: 'passed',
         liveNavigationRevision: 'passed',
         editorDirectionalFocus: 'passed',
+        navigationBrand: 'passed',
     });
 });
 

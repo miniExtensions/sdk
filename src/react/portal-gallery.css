@@ -1,0 +1,170 @@
+@import './complete-linked-finder.css';
+@import './html-description.css';
+
+.mx-sdk-portal-gallery {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.mx-sdk-portal-gallery *,
+.mx-sdk-portal-gallery *::before,
+.mx-sdk-portal-gallery *::after {
+    box-sizing: border-box;
+}
+.mx-sdk-portal-gallery-grid {
+    --mx-sdk-gallery-columns: 5;
+    --mx-sdk-gallery-gap: 16px;
+    display: grid;
+    list-style: none;
+    margin: 0;
+    padding: 0 0 2rem;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(
+        auto-fill,
+        minmax(
+            max(
+                200px,
+                calc(
+                    (
+                            100% - (var(--mx-sdk-gallery-columns) - 1) *
+                                var(--mx-sdk-gallery-gap)
+                        ) /
+                        var(--mx-sdk-gallery-columns)
+                )
+            ),
+            1fr
+        )
+    );
+    gap: var(--mx-sdk-gallery-gap);
+}
+.mx-sdk-portal-gallery-fixed {
+    max-width: 56rem;
+    margin-inline: auto;
+}
+.mx-sdk-portal-gallery-empty {
+    grid-column: 1 / -1;
+}
+.mx-sdk-portal-gallery-row {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+.mx-sdk-portal-gallery-card-content {
+    height: 100%;
+    overflow: hidden;
+    border: 3px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    color: #1f2937;
+    box-shadow: 0 1px 3px #0002;
+}
+.mx-sdk-portal-gallery-open {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    border: 3px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+}
+.mx-sdk-portal-gallery-open:hover,
+.mx-sdk-portal-gallery-open:focus-visible {
+    border-color: rgb(var(--theme-500, 99 102 241));
+    outline: none;
+}
+.mx-sdk-portal-gallery-card-content a,
+.mx-sdk-portal-gallery-card-content button {
+    position: relative;
+    z-index: 2;
+}
+.mx-sdk-portal-gallery-card-content .mx-sdk-finder-carousel > button {
+    display: none;
+}
+.mx-sdk-portal-gallery-review {
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    z-index: 3;
+}
+.mx-sdk-portal-gallery-unlink {
+    position: absolute;
+    right: -8px;
+    top: -8px;
+    z-index: 3;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 50%;
+    padding: 2px;
+    background: #6b7280;
+    color: white;
+    cursor: pointer;
+    opacity: 0;
+}
+.mx-sdk-portal-gallery-row:hover .mx-sdk-portal-gallery-unlink,
+.mx-sdk-portal-gallery-unlink:focus-visible,
+.mx-sdk-portal-gallery-unlink[aria-busy='true'] {
+    opacity: 1;
+}
+.mx-sdk-portal-gallery-unlink:disabled {
+    cursor: default;
+}
+.mx-sdk-portal-gallery-paging {
+    display: flex;
+    align-items: flex-start;
+    padding-block: 1rem;
+}
+.mx-sdk-portal-gallery-reloading {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    background: #ffffff80;
+}
+.mx-sdk-portal-gallery-load-more {
+    border: 0;
+    background: transparent;
+    color: rgb(var(--theme-500, 99 102 241));
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+}
+.mx-sdk-portal-gallery-load-more:hover {
+    text-decoration: underline;
+}
+.mx-sdk-portal-gallery-load-more:focus-visible {
+    outline-offset: 3px;
+}
+.mx-sdk-portal-gallery-spinner {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: mx-sdk-portal-gallery-spin 1s linear infinite;
+}
+@keyframes mx-sdk-portal-gallery-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mx-sdk-portal-gallery-spinner {
+        animation: none;
+    }
+}

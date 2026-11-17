@@ -3348,8 +3348,17 @@ export {
     type LinkedFinderMapCardProjection,
     type LinkedFinderCardField,
     type LinkedFinderCardLeaf,
+    type LinkedFinderAttachmentThumbnail,
     type LinkedFinderPill,
 } from './LinkedFinderCard.js';
+export {
+    PortalGallery,
+    resolvePortalGalleryColumns,
+    type PortalGalleryColumns,
+    type PortalGalleryRow,
+    type PortalGalleryContent,
+    type PortalGalleryProps,
+} from './PortalGallery.js';
 export { Kanban, type KanbanProps, type KanbanCard } from './Kanban.js';
 export {
     PortalMap,

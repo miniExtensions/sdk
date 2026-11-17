@@ -4,6 +4,7 @@ import {
     useRef,
     useState,
     type ReactNode,
+    type ReactElement,
     type MouseEvent,
 } from 'react';
 import { RecoverableImage } from './RecoverableImage.js';
@@ -47,7 +48,7 @@ const current = (owner: LinkedFinderAttachmentCollectionProps['owner']) => {
     }
 };
 const stop = (event: { stopPropagation(): void }) => event.stopPropagation();
-function Icon({ play }: { play: boolean }) {
+function Icon({ play }: { play: boolean }): ReactElement {
     // Native Heroicons solid Play/Document geometry; MIT, see THIRD_PARTY_NOTICES.
     return h(
         'svg',
@@ -74,6 +75,8 @@ function Icon({ play }: { play: boolean }) {
               ]
     );
 }
+// Shared inert geometry; this grants no collection or preview capability.
+export { Icon as LinkedFinderAttachmentIcon };
 function Thumbnail({
     row,
     view,

@@ -61,6 +61,8 @@ export type PortalShellSnapshot = Readonly<{
     header: Readonly<{
         layout: 'sidebar' | 'topbar';
         hidden?: boolean;
+        /** Repeat configured branding inside an open overlay drawer. Omission retains header-only branding. */
+        showBrandInNavigation?: boolean;
         title: string;
         /** Native HTML title, sanitized by the stock renderer. Empty stays blank. */
         titleHtml?: string;
@@ -1345,6 +1347,45 @@ function Shell(props: CompletePortalShellProps) {
         )
     );
     const welcome = snapshot.welcome;
+    const brand = (includeDescription: boolean) =>
+        !snapshot.header.hidden
+            ? h(
+                  'div',
+                  {
+                      className: `mx-sdk-portal-brand${
+                          props.onOpenSettings &&
+                          snapshot.settings?.title?.trim()
+                              ? ' mx-sdk-portal-configurable'
+                              : ''
+                      }`,
+                  },
+                  snapshot.header.logoUrl
+                      ? h('img', {
+                            src: snapshot.header.logoUrl,
+                            alt: '',
+                            className: 'mx-sdk-portal-logo',
+                        })
+                      : null,
+                  h(
+                      'div',
+                      null,
+                      snapshot.header.titleHtml != null
+                          ? h(CompleteHTMLRenderer, {
+                                html: snapshot.header.titleHtml,
+                                className: 'mx-sdk-portal-title-html',
+                            })
+                          : h(
+                                'h1',
+                                { className: 'mx-sdk-portal-title' },
+                                snapshot.header.title
+                            ),
+                      includeDescription && !descriptionInNavigation
+                          ? description
+                          : null
+                  ),
+                  settingsButton({ type: 'title' }, snapshot.settings?.title)
+              )
+            : null;
     return h(
         'div',
         {
@@ -1377,45 +1418,7 @@ function Shell(props: CompletePortalShellProps) {
         h(
             'header',
             { className: 'mx-sdk-portal-header' },
-            !snapshot.header.hidden
-                ? h(
-                      'div',
-                      {
-                          className: `mx-sdk-portal-brand${
-                              props.onOpenSettings &&
-                              snapshot.settings?.title?.trim()
-                                  ? ' mx-sdk-portal-configurable'
-                                  : ''
-                          }`,
-                      },
-                      snapshot.header.logoUrl
-                          ? h('img', {
-                                src: snapshot.header.logoUrl,
-                                alt: '',
-                                className: 'mx-sdk-portal-logo',
-                            })
-                          : null,
-                      h(
-                          'div',
-                          null,
-                          snapshot.header.titleHtml != null
-                              ? h(CompleteHTMLRenderer, {
-                                    html: snapshot.header.titleHtml,
-                                    className: 'mx-sdk-portal-title-html',
-                                })
-                              : h(
-                                    'h1',
-                                    { className: 'mx-sdk-portal-title' },
-                                    snapshot.header.title
-                                ),
-                          descriptionInNavigation ? null : description
-                      ),
-                      settingsButton(
-                          { type: 'title' },
-                          snapshot.settings?.title
-                      )
-                  )
-                : null,
+            brand(true),
             showNavigation
                 ? h(
                       'button',
@@ -1493,6 +1496,9 @@ function Shell(props: CompletePortalShellProps) {
                                 { type: 'button', onClick: close },
                                 labels.closeNavigation
                             )
+                          : null,
+                      overlay && snapshot.header.showBrandInNavigation
+                          ? brand(false)
                           : null,
                       h(
                           'nav',

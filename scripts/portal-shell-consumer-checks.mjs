@@ -34,7 +34,7 @@ const invalidSettings:PortalShellSettingsRequest={scope:'x',revision:1,target:{t
 void editor;void invalidSettings;
 const hostMenuItem:PortalShellMenuItem={type:'table',id:'orders',label:'Orders',sidebarInitiallyExpanded:true,views:[{id:'open',label:'Open',layout:'calendar',badge:true},{id:'done',label:'Done',layout:null}]};
 const retainedGroup:PortalShellMenuItem={type:'group',id:'external',label:'External',keepEmpty:true,items:[]};
-const hostNavigation:CompletePortalShellProps={...props,snapshot:{...snapshot,items:[hostMenuItem,retainedGroup],selectionPolicy:'host',header:{...snapshot.header,menuInteraction:'menu'},embed:{preserveElement:true,fullscreen:false,referrerPolicy:'browser-default'},settings:{items:[{itemId:'orders',label:'Edit orders',includeViews:false,visibleIn:'sidebar'}]}},onSelectionActivate(request:PortalShellSelectionActivation){console.log(request.scope,request.revision,request.selection.itemId);},onItemHover(request:PortalShellItemHoverRequest){console.log(request.scope,request.revision,request.itemId,request.viewId);}};
+const hostNavigation:CompletePortalShellProps={...props,snapshot:{...snapshot,items:[hostMenuItem,retainedGroup],selectionPolicy:'host',header:{...snapshot.header,menuInteraction:'menu',showBrandInNavigation:true},embed:{preserveElement:true,fullscreen:false,referrerPolicy:'browser-default'},settings:{items:[{itemId:'orders',label:'Edit orders',includeViews:false,visibleIn:'sidebar'}]}},onSelectionActivate(request:PortalShellSelectionActivation){console.log(request.scope,request.revision,request.selection.itemId);},onItemHover(request:PortalShellItemHoverRequest){console.log(request.scope,request.revision,request.itemId,request.viewId);}};
 createElement(CompletePortalShell,hostNavigation);
 // @ts-expect-error finite layout metadata, never a host-rendered icon
 const unknownLayout:PortalShellMenuItem={type:'table',id:'x',label:'x',views:[{id:'v',label:'v',layout:'custom-renderer'}]};
@@ -53,7 +53,9 @@ const nativeMenu:CompletePortalShellProps={...props,renderMenu(){return null;}};
 const fetcher:CompletePortalShellProps={...props,fetchRecords(){}};
 // @ts-expect-error owner/revision envelope is required
 const unscoped:PortalShellIntent={type:'logout'};
-void nativeMenu;void fetcher;void unscoped;void injectedHeader;void invalidWidth;void injectedDescription;
+// @ts-expect-error drawer branding is a controlled switch, never a host renderer
+const injectedBrand:PortalShellSnapshot={...snapshot,header:{...snapshot.header,showBrandInNavigation(){return null;}}};
+void nativeMenu;void fetcher;void unscoped;void injectedHeader;void invalidWidth;void injectedDescription;void injectedBrand;
 `;
 
 export function checkPortalShellReactMatrix({
@@ -107,7 +109,7 @@ assert.deepEqual(presentation,{availabilityCases:8,authorityRetirements:3,logout
 const settings=await assertPortalShellSettingsConsumer({React,ui,Window,createRoot,renderToString});
 assert.deepEqual(settings,{settingsRequests:11,siblingRequests:1,ordinaryIntents:0,submitEvents:0,implicitNetworkRequests:0,precommitAdmission:'rejected'});
 const navigation=await assertPortalShellNavigationConsumer({React,ui,Window,createRoot,renderToString});
-assert.deepEqual(navigation,{activations:6,legacyNavigationIntents:1,hoverNotifications:4,settingsRequests:1,precommitAdmission:'rejected',providerRequests:0,submitEvents:0,preservedIframe:true,externalLinkClosure:'passed',tabExitHandoff:'passed',accountKeyboardAndMobileTrap:'passed',hostSelectionAcrossMenuDrift:'passed',closedNavigationKeyboard:'passed',liveNavigationRevision:'passed',editorDirectionalFocus:'passed'});
+assert.deepEqual(navigation,{activations:6,legacyNavigationIntents:1,hoverNotifications:4,settingsRequests:1,precommitAdmission:'rejected',providerRequests:0,submitEvents:0,preservedIframe:true,externalLinkClosure:'passed',tabExitHandoff:'passed',accountKeyboardAndMobileTrap:'passed',hostSelectionAcrossMenuDrift:'passed',closedNavigationKeyboard:'passed',liveNavigationRevision:'passed',editorDirectionalFocus:'passed',navigationBrand:'passed'});
 console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation,settings,navigation}));
 `
         );

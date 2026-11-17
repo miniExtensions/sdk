@@ -20,4 +20,5 @@ export function assertPortalShellNavigationConsumer(input: {
     closedNavigationKeyboard: 'passed';
     liveNavigationRevision: 'passed';
     editorDirectionalFocus: 'passed';
+    navigationBrand: 'passed';
 }>;

@@ -214,12 +214,16 @@ export async function checkPortalMapBrowser({
         const originalInventory = packedInventory(sdk);
         mkdirSync(duplicate);
         duplicateDirectory = duplicate; // retain ownership even if copying fails midway
-        cpSync(sdk, duplicate, {
-            recursive: true,
-            dereference: false,
-            force: false,
-            errorOnExist: true,
-        });
+        // Keep the atomic ownership claim while copying only to absent children.
+        // Node 24 refuses an existing root with these no-overwrite options.
+        for (const entry of readdirSync(sdk)) {
+            cpSync(join(sdk, entry), join(duplicate, entry), {
+                recursive: true,
+                dereference: false,
+                force: false,
+                errorOnExist: true,
+            });
+        }
         const duplicateInventory = packedInventory(duplicate);
         assert.equal(duplicateInventory.sha256, originalInventory.sha256);
         assert.equal(

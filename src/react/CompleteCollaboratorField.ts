@@ -8,6 +8,7 @@ import {
     useRef,
     useState,
     type KeyboardEvent,
+    type MouseEvent,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
@@ -88,6 +89,8 @@ export type CompleteSingleCollaboratorFieldProps<
 > = CommonProps<T> & {
     value: T | null;
     onValueChange(value: T | null): void;
+    /** Let an editable host cell receive a primary click on this readonly display. */
+    allowReadonlyClickThrough?: boolean;
 };
 
 export type CompleteMultipleCollaboratorsFieldProps<
@@ -97,11 +100,15 @@ export type CompleteMultipleCollaboratorsFieldProps<
     onValueChange(value: T[]): void;
 };
 
-type ControlProps<T extends CompleteCollaborator> = CommonProps<T> & {
-    value: readonly T[];
-    onValueChange(value: T[]): void;
-    single: boolean;
-};
+type ControlProps<T extends CompleteCollaborator> = CommonProps<T> &
+    Pick<
+        CompleteSingleCollaboratorFieldProps<T>,
+        'allowReadonlyClickThrough'
+    > & {
+        value: readonly T[];
+        onValueChange(value: T[]): void;
+        single: boolean;
+    };
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 const sameValues = <T>(a: readonly T[], b: readonly T[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);
@@ -406,6 +413,11 @@ function CollaboratorControl<T extends CompleteCollaborator>(
     }, [props.readOnly, props.disabled]);
     if (loadError) throw loadError.error;
     const labels = props.labels;
+    const allowReadonlyClickThrough =
+        props.single &&
+        props.readOnly === true &&
+        props.disabled !== true &&
+        props.allowReadonlyClickThrough === true;
     return h(
         'div',
         {
@@ -424,7 +436,14 @@ function CollaboratorControl<T extends CompleteCollaborator>(
             className: ['mx-sdk-complete-collaborators', props.className]
                 .filter(Boolean)
                 .join(' '),
-            onClick: stop,
+            onClick: (event: MouseEvent) => {
+                if (
+                    !allowReadonlyClickThrough ||
+                    event.button !== 0 ||
+                    event.defaultPrevented
+                )
+                    stop(event);
+            },
             onAuxClick: stop,
             onDoubleClick: stop,
             onPointerDown: stop,

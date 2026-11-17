@@ -39,16 +39,20 @@ window.open=()=>{effects.opens++;return null;};
 if(navigator.sendBeacon)navigator.sendBeacon=()=>{effects.requests++;return false;};
 document.addEventListener('submit',event=>{event.preventDefault();effects.submits++;});
 const image='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="20" height="20"%3E%3Crect width="20" height="20" fill="red"/%3E%3C/svg%3E';
+let galleryResource;const galleryResources=[];
+function captureGalleryResource(){let live=true;const subscribers=new Set();const capture={owner:{token:{},isCurrent:()=>live,subscribe(listener){subscribers.add(listener);return()=>subscribers.delete(listener);}},subscribers,retire(notify=true){live=false;if(notify)flushSync(()=>{for(const listener of [...subscribers])listener();});}};galleryResources.push(capture);return capture;}
 function show(props){last=props;flushSync(()=>root.render(h(React.StrictMode,null,h('form',null,h('input',{id:'neighbor',defaultValue:'Preserved draft'}),h('button',{type:'button',id:'before'},'Before computed'),h(api.ComputedField,props),h('button',{type:'button',id:'after'},'After computed')))));}
 const valid=extra=>({mode:'controlled',language:'en',isValid:true,resultType:'singleLineText',value:'Answer',formattedValue:'Answer',...extra});
 window.computedProof={
  initial(){flushSync(()=>root.render(computedElement()));},
  formula(mode){const extra=mode==='select'?{resultType:'singleSelect',value:'Ready',select:{choices:[{id:'ready',name:'Ready',displayName:'Ready label'}]},renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:mode==='html'?{value:'<strong>Painted HTML</strong><a href="https://never.example.invalid/">Forbidden navigation</a><script>bad()</script>',renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:(mode==='gallery'||mode==='gallery-closed')?{value:'admitted resources',renderFormulaAsAttachment:true,gallery:{entries:[{id:'one',url:image,type:'image/svg+xml',filename:'First'},{id:'two',url:image,type:'image/svg+xml',filename:'Second'}],disableOpenFiles:mode==='gallery-closed',disableDownloadFiles:true,labels:{attachments:'Computed media'}}}:mode==='masked'?{obscurePassword:true,textSize:'large',value:'PRIVATE'}:mode==='invalid'?{isValid:false}:{};show({...base,kind:'formula',display:valid(extra)});},
  rollup(value){show({...base,kind:'rollup',display:{mode:'controlled',language:'en',isValid:true,value}});},
+ gallerySuccessor(names){galleryResource?.retire();galleryResource=captureGalleryResource();show({...base,kind:'formula',display:valid({value:names.join(' '),renderFormulaAsAttachment:true,gallery:{entries:names.map(name=>({id:name,url:image+'#'+name,type:'image/svg+xml',filename:name})),disableDownloadFiles:true},resource:{owner:galleryResource.owner,identity:galleryResource.owner.token}})});},
+ retireGalleryOnNextContextMenu(){document.addEventListener('contextmenu',event=>{const target=event.target instanceof Element?event.target.closest('a'):null;if(!target)throw Error('Expected owned gallery Open link');galleryResource.retire(false);staleEvent=event;staleAction={trusted:event.isTrusted,connected:target.isConnected,beforeDefaultPrevented:event.defaultPrevented};},{capture:true,once:true});},
  retire(notify=true){current=false;if(notify)flushSync(()=>{for(const listener of [...listeners])listener();});},
  retireOnNextLinkClick(){document.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest('a'):null;if(!target)throw Error('Expected owned HTML link action');current=false;staleEvent=event;staleAction={trusted:event.isTrusted,connected:target.isConnected,beforeDefaultPrevented:event.defaultPrevented};},{capture:true,once:true});},
  echo(){current=true;show(last);},
- snapshot(){if(staleEvent){staleAction.finalDefaultPrevented=staleEvent.defaultPrevented;staleEvent=undefined;}return{react:React.version,platform:navigator.platform,text:main.textContent,effects:{...effects},canonical:JSON.stringify(canonical),draft:document.querySelector('#neighbor')?.value,subscriptions:listeners.size,staleAction};},
+ snapshot(){if(staleEvent){staleAction.finalDefaultPrevented=staleEvent.defaultPrevented;staleEvent=undefined;}return{react:React.version,platform:navigator.platform,text:main.textContent,effects:{...effects},canonical:JSON.stringify(canonical),draft:document.querySelector('#neighbor')?.value,subscriptions:listeners.size,resourceSubscriptions:galleryResources.reduce((sum,capture)=>sum+capture.subscribers.size,0),staleAction};},
  unmount(){staleEvent=undefined;flushSync(()=>root.unmount());}
 };window.computedProof.initial();
 `;
@@ -320,6 +324,81 @@ export async function checkComputedBrowser({
                 /Replacement/
             );
             record('keyboard reopen then physical-kind resource retirement');
+            for (const [name, successor, selected] of [
+                ['retain', ['C'], 'C'],
+                ['replace', ['A'], 'A'],
+                ['reorder', ['C', 'A', 'B'], 'C'],
+            ]) {
+                await page.evaluate(() =>
+                    window.computedProof.gallerySuccessor(['A', 'B', 'C'])
+                );
+                await page
+                    .locator('.mx-sdk-url-gallery li button')
+                    .nth(2)
+                    .click();
+                await page
+                    .locator('[role="dialog"]')
+                    .waitFor({ state: 'visible' });
+                await page.evaluate(
+                    (entries) => window.computedProof.gallerySuccessor(entries),
+                    successor
+                );
+                await page.waitForFunction(
+                    (filename) =>
+                        document.querySelector('.mx-sdk-url-gallery__filename')
+                            ?.textContent === filename,
+                    selected
+                );
+                assert.equal(
+                    await page
+                        .locator('.mx-sdk-url-gallery__position')
+                        .textContent(),
+                    `1 / ${successor.length}`,
+                    name
+                );
+                const href = await page
+                    .getByRole('link', { name: 'Open', exact: true })
+                    .getAttribute('href');
+                assert.equal(
+                    href,
+                    await page
+                        .locator('.mx-sdk-url-gallery li button')
+                        .first()
+                        .getAttribute('aria-label')
+                );
+                assert(href.endsWith('#' + selected));
+                await page.keyboard.press('Escape');
+                await page
+                    .locator('[role="dialog"]')
+                    .waitFor({ state: 'hidden' });
+            }
+            record(
+                'trusted gallery retain replace reorder across strict resource successors'
+            );
+            await page.evaluate(() =>
+                window.computedProof.gallerySuccessor(['A'])
+            );
+            await page.locator('.mx-sdk-url-gallery li button').click();
+            await page.evaluate(() =>
+                window.computedProof.retireGalleryOnNextContextMenu()
+            );
+            await page
+                .getByRole('link', { name: 'Open', exact: true })
+                .click({ button: 'right' });
+            const staleGalleryAction = await page.evaluate(
+                () => window.computedProof.snapshot().staleAction
+            );
+            assert.deepEqual(staleGalleryAction, {
+                trusted: true,
+                connected: true,
+                beforeDefaultPrevented: false,
+                finalDefaultPrevented: true,
+            });
+            evidence[format + 'StaleGalleryAction'] = staleGalleryAction;
+            assert.equal(page.url(), origin + '/?format=' + format);
+            record(
+                'trusted retired-gallery context menu is prevented before default action'
+            );
             await page.evaluate(() => window.computedProof.formula('masked'));
             assert.match(await page.locator('main').textContent(), /••••••••/);
             assert.doesNotMatch(
@@ -390,6 +469,11 @@ export async function checkComputedBrowser({
             assert.equal(
                 (await page.evaluate(() => window.computedProof.snapshot()))
                     .subscriptions,
+                0
+            );
+            assert.equal(
+                (await page.evaluate(() => window.computedProof.snapshot()))
+                    .resourceSubscriptions,
                 0
             );
             record('canonical sibling no-effects and full unmount cleanup');

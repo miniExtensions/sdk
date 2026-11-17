@@ -151,6 +151,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     const amount = page.locator('th[data-field-id="amount"]');
     const handle = amount.getByRole('separator');
     const beforeWidth = (await snapshot()).widths.length;
+    const initialMouseWidth = await amount.evaluate((node) => node.clientWidth);
     const box = await handle.boundingBox();
     assert(box);
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -158,6 +159,15 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     await page.mouse.move(box.x + box.width / 2 + 47, box.y + box.height / 2, {
         steps: 8,
     });
+    await page.waitForFunction(
+        (width) =>
+            document.querySelector('th[data-field-id="amount"]').clientWidth >
+            width,
+        initialMouseWidth
+    );
+    const provisionalMouseWidth = await amount.evaluate(
+        (node) => node.clientWidth
+    );
     await page.mouse.up();
     await page.waitForFunction(
         (n) => window.__nativeProbe.snapshot().widths.length === n + 1,
@@ -165,6 +175,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     );
     let end = await snapshot();
     assert.equal(end.widths.at(-1).scope, 'original');
+    assert(end.widths.at(-1).width > initialMouseWidth);
     assert.equal(end.widths.at(-1).width, end.widths.at(-1).measuredAtCommit);
     assert(
         Math.abs(
@@ -175,19 +186,35 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     const ordinaryWidth = end.widths.at(-1).width;
     results.push({
         group: 'trusted pointer resize and measured canonical width',
+        before: initialMouseWidth,
+        provisional: provisionalMouseWidth,
         width: ordinaryWidth,
         passed: true,
     });
 
     await handle.focus();
+    const initialKeyboardWidth = await amount.evaluate(
+        (node) => node.clientWidth
+    );
     await page.keyboard.down('Shift');
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.down('ArrowRight');
+    await page.waitForFunction(
+        (width) =>
+            document.querySelector('th[data-field-id="amount"]').clientWidth >
+            width,
+        initialKeyboardWidth
+    );
+    const provisionalKeyboardWidth = await amount.evaluate(
+        (node) => node.clientWidth
+    );
+    await page.keyboard.up('ArrowRight');
     await page.keyboard.up('Shift');
     await page.waitForFunction(
         (n) => window.__nativeProbe.snapshot().widths.length === n + 1,
         beforeWidth + 1
     );
     end = await snapshot();
+    assert(end.widths.at(-1).width > initialKeyboardWidth);
     assert.equal(end.widths.at(-1).width, end.widths.at(-1).measuredAtCommit);
     assert(
         Math.abs(
@@ -202,6 +229,8 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal((await snapshot()).widths.length, beforeCancel);
     results.push({
         group: 'trusted keyboard resize and Escape cancellation',
+        before: initialKeyboardWidth,
+        provisional: provisionalKeyboardWidth,
         passed: true,
     });
 
@@ -435,7 +464,10 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         hasTouch: true,
         viewport: { width: 1200, height: 900 },
     });
-    let touchProtocol;
+    touchContext.setDefaultTimeout(5000);
+    const touchCleanup = {};
+    evidence.touchCleanup = touchCleanup;
+    let touchProtocol, touchFailure;
     try {
         const origin = new URL(page.url()).origin;
         await touchContext.route('**/*', (route) =>
@@ -449,6 +481,9 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
             () => window.__nativeProbe?.snapshot().committed > 0
         );
         const touchHeader = touchPage.locator('th[data-field-id="amount"]');
+        const initialTouchWidth = await touchHeader.evaluate(
+            (node) => node.clientWidth
+        );
         const touchHandle = await touchHeader
             .getByRole('separator')
             .boundingBox();
@@ -466,6 +501,15 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
             type: 'touchMove',
             touchPoints: [{ ...point, x: point.x + 40 }],
         });
+        await touchPage.waitForFunction(
+            (width) =>
+                document.querySelector('th[data-field-id="amount"]')
+                    .clientWidth > width,
+            initialTouchWidth
+        );
+        const provisionalTouchWidth = await touchHeader.evaluate(
+            (node) => node.clientWidth
+        );
         await touchProtocol.send('Input.dispatchTouchEvent', {
             type: 'touchEnd',
             touchPoints: [],
@@ -482,6 +526,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
             )
         );
         assert.equal(touch.widths[0].width, touch.widths[0].measuredAtCommit);
+        assert(touch.widths[0].width > initialTouchWidth);
         assert(
             Math.abs(
                 touch.widths[0].width -
@@ -494,29 +539,46 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         results.push({
             group: 'trusted touch resize and measured settlement',
             events: touch.pointers,
+            before: initialTouchWidth,
+            provisional: provisionalTouchWidth,
             width: touch.widths[0].width,
             passed: true,
         });
+    } catch (error) {
+        touchFailure = error;
     } finally {
-        if (touchProtocol) await touchProtocol.detach();
-        let timer;
-        try {
-            await Promise.race([
-                touchContext.close(),
-                new Promise((_, reject) => {
-                    timer = setTimeout(
-                        () =>
-                            reject(
-                                Error('Grid touch context cleanup timed out')
-                            ),
-                        5000
-                    );
-                }),
-            ]);
-        } finally {
-            clearTimeout(timer);
+        for (const [name, action] of [
+            ['protocol', () => touchProtocol?.detach()],
+            ['context', () => touchContext.close()],
+        ]) {
+            let timer;
+            try {
+                await Promise.race([
+                    action(),
+                    new Promise((_, reject) => {
+                        timer = setTimeout(
+                            () =>
+                                reject(
+                                    Error(
+                                        'Grid touch ' +
+                                            name +
+                                            ' cleanup timed out'
+                                    )
+                                ),
+                            5000
+                        );
+                    }),
+                ]);
+                touchCleanup[name] = 'completed';
+            } catch (error) {
+                touchCleanup[name] = { error: error.message };
+                touchFailure ??= error;
+            } finally {
+                clearTimeout(timer);
+            }
         }
     }
+    if (touchFailure) throw touchFailure;
 
     await patch({ empty: true });
     assert.equal(await page.locator('thead th').count(), 4);

@@ -64,17 +64,56 @@ export function PortalMapCard({
     useCommittedEffect(() => {
         committed.current = receipt;
         let dispose: (() => void) | undefined;
-        if (button.current && receipt.open?.registerTrigger && live()) {
-            dispose = receipt.open.registerTrigger(button.current);
-            if (!live()) {
-                dispose();
-                dispose = undefined;
+        let observer: MutationObserver | undefined;
+        let retired = false;
+        let attempted = false;
+        const element = button.current;
+        const registerTrigger = receipt.open?.registerTrigger;
+        const stopWaiting = () => {
+            observer?.disconnect();
+            observer = undefined;
+        };
+        if (element && registerTrigger && live()) {
+            const sameLiveButton = () =>
+                !retired && live() && button.current === element;
+            const registerConnected = () => {
+                if (attempted) return;
+                if (!sameLiveButton()) {
+                    retired = true;
+                    stopWaiting();
+                    return;
+                }
+                if (!element.isConnected) return;
+                attempted = true;
+                stopWaiting();
+                const release = registerTrigger(element);
+                if (!sameLiveButton() || !element.isConnected) release();
+                else dispose = release;
+            };
+            if (element.isConnected) registerConnected();
+            else {
+                // OverlayView can attach its real portal container after this effect.
+                // Observe only this button's document until that same button connects.
+                const Observer =
+                    element.ownerDocument.defaultView?.MutationObserver;
+                if (Observer) {
+                    observer = new Observer(registerConnected);
+                    observer.observe(element.ownerDocument, {
+                        childList: true,
+                        subtree: true,
+                    });
+                    registerConnected();
+                }
             }
         }
         return () => {
+            retired = true;
             if (committed.current === receipt) committed.current = null;
+            stopWaiting();
             // This disposer belongs only to the captured registration, not a record-ID lookup.
-            dispose?.();
+            const release = dispose;
+            dispose = undefined;
+            release?.();
         };
     }, [receipt]);
     return h(

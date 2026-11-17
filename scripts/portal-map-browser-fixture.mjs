@@ -153,6 +153,7 @@ function makeRoot(name, selected = configuration, copy = 'primary', hydration = 
     const registerTrigger = element => {
         stats.triggerRegistrations++;
         if (!(element instanceof HTMLButtonElement)) throw Error('Actual SDK trigger required');
+        if (!element.isConnected) throw Error('Connected SDK trigger required');
         let released = false;
         return () => { if (!released) { released = true; stats.triggerReleases++; } };
     };

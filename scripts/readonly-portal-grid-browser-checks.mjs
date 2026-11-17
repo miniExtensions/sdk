@@ -14,7 +14,7 @@ import{ReadonlyPortalGrid,CompleteReadOnlyTextField}from'@miniextensions/sdk/rea
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
-window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}));
+window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
 const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text'}].map(Object.freeze));
 const leaf=value=>h(CompleteReadOnlyTextField,{value,language:'en'});

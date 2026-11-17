@@ -355,6 +355,82 @@ it('retires cancelled, replaced and stale drags without preference writes', asyn
     f.unchangedEffects();
 });
 
+it('retires width authority withdrawn mid-gesture without reviving it on restoration', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const changes: unknown[] = [];
+    const props = model({
+        onColumnWidthCommit: (change) => changes.push(change),
+    });
+    await f.render(h(ReadonlyPortalGrid, props));
+    const th = header(f);
+    const handle = th.querySelector('[role="separator"]');
+    assert.ok(handle);
+    await pointer(f, handle, 'pointerdown', 20);
+    await pointer(f, f.window.document, 'pointermove', 40);
+    await f.render(
+        h(ReadonlyPortalGrid, { ...props, onColumnWidthCommit: undefined })
+    );
+    assert.equal(th.querySelector('[role="separator"]'), null);
+    await pointer(f, f.window.document, 'pointerup', 40);
+    assert.deepEqual(
+        changes,
+        [],
+        'Withdrawn authority cannot receive the old gesture'
+    );
+    await f.render(h(ReadonlyPortalGrid, props));
+    await pointer(f, f.window.document, 'pointerup', 40);
+    assert.deepEqual(
+        changes,
+        [],
+        'Restoring a port cannot revive a retired gesture'
+    );
+
+    const restored = th.querySelector('[role="separator"]');
+    assert.ok(restored);
+    await pointer(f, restored, 'pointerdown', 20);
+    await f.render(
+        h(ReadonlyPortalGrid, { ...props, labels: { empty: 'Still empty' } })
+    );
+    await pointer(f, f.window.document, 'pointermove', 40);
+    await pointer(f, f.window.document, 'pointerup', 40);
+    assert.equal(
+        changes.length,
+        1,
+        'A same-current ordinary rerender preserves the admitted gesture'
+    );
+
+    await act(async () =>
+        restored.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'ArrowRight',
+                bubbles: true,
+                cancelable: true,
+            })
+        )
+    );
+    await f.render(
+        h(ReadonlyPortalGrid, { ...props, onColumnWidthCommit: undefined })
+    );
+    await f.render(h(ReadonlyPortalGrid, props));
+    const last = th.querySelector('[role="separator"]');
+    assert.ok(last);
+    await act(async () =>
+        last.dispatchEvent(
+            new f.window.KeyboardEvent('keyup', {
+                key: 'ArrowRight',
+                bubbles: true,
+                cancelable: true,
+            })
+        )
+    );
+    assert.equal(
+        changes.length,
+        1,
+        'Withdrawn keyboard authority stays retired after restoration'
+    );
+    f.unchangedEffects();
+});
+
 it('supports keyboard resize with measured settlement and Escape cancellation', async (t) => {
     const f = await htmlPresentationFixture(t);
     const changes: unknown[] = [];

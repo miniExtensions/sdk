@@ -2,6 +2,7 @@ import {
     createElement as h,
     useEffect,
     useId,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -168,6 +169,7 @@ function GridHeader({
     const header = useRef<HTMLTableCellElement>(null);
     const stopDrag = useRef<(() => void) | null>(null);
     const keyboardMove = useRef(false);
+    const commitPort = useRef(onCommit);
     const [localWidth, setLocalWidth] = useState(() => admittedWidth(width));
 
     useEffect(() => {
@@ -185,11 +187,12 @@ function GridHeader({
 
     const settle = () => {
         const cell = header.current;
-        if (!cell?.isConnected || !current(isCurrent)) return;
+        const commit = commitPort.current;
+        if (!commit || !cell?.isConnected || !current(isCurrent)) return;
         const measured = cell.clientWidth;
         if (!Number.isFinite(measured)) return;
         setLocalWidth(measured);
-        onCommit?.({ fieldId: column.fieldId, width: measured });
+        commit({ fieldId: column.fieldId, width: measured });
     };
     const cancel = () => {
         stopDrag.current?.();
@@ -197,6 +200,12 @@ function GridHeader({
         keyboardMove.current = false;
         setLocalWidth(admittedWidth(width));
     };
+    const commitEffect =
+        typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    commitEffect(() => {
+        commitPort.current = onCommit;
+        if (!onCommit) cancel();
+    }, [onCommit]);
     const start = (event: ReactPointerEvent<HTMLSpanElement>) => {
         const cell = header.current;
         if (!onCommit || !cell || !current(isCurrent) || event.button !== 0)

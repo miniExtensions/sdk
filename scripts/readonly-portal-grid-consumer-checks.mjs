@@ -167,8 +167,8 @@ export async function checkReadonlyPortalGridReactMatrix({
                     testName,
                 ]);
                 for (const [name, count] of [
-                    ['tests', 13],
-                    ['pass', 13],
+                    ['tests', 14],
+                    ['pass', 14],
                     ['fail', 0],
                     ['skipped', 0],
                     ['cancelled', 0],
@@ -177,7 +177,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 profiles.push({
                     react,
                     format,
-                    tests: 13,
+                    tests: 14,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -223,7 +223,7 @@ export async function checkReadonlyPortalGridReactMatrix({
             completedProfile = {
                 react,
                 profiles: 2,
-                tests: 26,
+                tests: 28,
                 strictTypes: ['ESM', 'CJS', 'Bundler'],
                 styles: 'owned table, controls and cell geometry',
                 ...receipt,
@@ -235,5 +235,5 @@ export async function checkReadonlyPortalGridReactMatrix({
             JSON.stringify({ ...completedProfile, cleanup: 'completed' })
         );
     }
-    return { profiles, tests: 52, archiveSha256 };
+    return { profiles, tests: 56, archiveSha256 };
 }

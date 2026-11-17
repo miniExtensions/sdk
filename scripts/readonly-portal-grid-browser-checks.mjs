@@ -15,7 +15,7 @@ import'@miniextensions/sdk/react/readonly-portal-grid.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
-for(const type of ['click','auxclick','contextmenu'])document.addEventListener(type,event=>{if(!(event.target instanceof Element)||!event.target.closest('[role="tooltip"] a'))return;const item={type,button:event.button,trusted:event.isTrusted,atCapture:event.defaultPrevented,final:null};headerEvents.push(item);queueMicrotask(()=>{item.final=event.defaultPrevented;});},{capture:true});
+for(const type of ['click','auxclick','contextmenu'])document.addEventListener(type,event=>{if(!(event.target instanceof Element)||!event.target.closest('[role="tooltip"] a'))return;const item={type,button:event.button,trusted:event.isTrusted,atCapture:event.defaultPrevented,microtask:null,final:null};headerEvents.push(item);queueMicrotask(()=>{item.microtask=event.defaultPrevented;});setTimeout(()=>{item.final=event.defaultPrevented;},0);},{capture:true});
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
 const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text',description:'<p><strong>Useful header</strong><a href="/stale-help-link">Help link</a><script>window.__headerUnsafe=true</script></p>',descriptionImageUrl:'/grid-header-help.svg'}].map(Object.freeze));
 const leaf=value=>h(CompleteReadOnlyTextField,{value,language:'en'});
@@ -364,7 +364,13 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     });
     await staleLink.click({ button: 'middle' });
     await staleLink.click({ button: 'right' });
+    await page.waitForFunction(() =>
+        window.__nativeProbe
+            .snapshot()
+            .headerEvents.every((event) => event.final !== null)
+    );
     const linkEvents = (await snapshot()).headerEvents;
+    evidence.retiredHeaderDefaults = linkEvents;
     assert(
         linkEvents.some(
             (event) => event.type === 'auxclick' && event.button === 1
@@ -386,7 +392,6 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         ),
         'Every native middle/right-click default must be cancelled, including a platform right-button auxclick'
     );
-    evidence.retiredHeaderDefaults = linkEvents;
     await staleLink.click();
     assert.equal(
         page.url(),

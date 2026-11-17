@@ -331,6 +331,78 @@ it('reuses the description image failure latch and retires its popup with the ad
     f.unchangedEffects();
 });
 
+it('refuses stale header focus/hover/click and portaled image retry/link activation before rerender', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    let live = true;
+    const props = model({
+        isCurrent: () => live,
+        preview: true,
+        columns: [
+            { fieldId: 'primary', title: 'Name' },
+            {
+                fieldId: 'value',
+                title: 'Value',
+                description:
+                    '<p><a href="https://example.invalid/stale-help">Help link</a></p>',
+                descriptionImageUrl:
+                    'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E',
+            },
+        ],
+    });
+    await f.render(h(ReadonlyPortalGrid, props));
+    const trigger = f.container.querySelector(
+        'button[aria-label="Field description for Value"]'
+    );
+    assert.ok(trigger instanceof f.window.HTMLButtonElement);
+    live = false;
+    await act(async () => trigger.focus());
+    await f.click(trigger);
+    await act(async () =>
+        trigger.dispatchEvent(
+            new f.window.MouseEvent('mouseover', { bubbles: true })
+        )
+    );
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]') === null,
+        true,
+        'Retired header cannot activate a tooltip'
+    );
+    assert.equal(
+        f.window.document.body.querySelector('img') === null,
+        true,
+        'Retired header cannot load an image'
+    );
+    live = true;
+    await act(async () => {
+        trigger.blur();
+        trigger.focus();
+    });
+    const img = f.window.document.body.querySelector('img');
+    assert.ok(img);
+    await f.imageEvent(img, 'error');
+    const retry = [...f.window.document.body.querySelectorAll('button')].find(
+        (n) => n.textContent === 'Try again'
+    );
+    const link = f.window.document.body.querySelector('[role="tooltip"] a');
+    assert.ok(retry);
+    assert.ok(link instanceof f.window.HTMLAnchorElement);
+    live = false;
+    await f.click(retry);
+    assert.equal(
+        f.window.document.body.querySelector('img') === null,
+        true,
+        'Retired popup cannot retry its image'
+    );
+    await f.click(link);
+    f.unchangedEffects();
+    live = true;
+    await f.render(h(ReadonlyPortalGrid, { ...props, revision: 2 }));
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+});
+
 it('delegates Open with the actual trigger and refuses retained stale/ABA intents', async (t) => {
     const f = await htmlPresentationFixture(t);
     let epoch = 1;

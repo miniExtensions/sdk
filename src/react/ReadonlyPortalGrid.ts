@@ -270,6 +270,11 @@ function GridHeader({
             (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 10 : 1);
         setLocalWidth((previous) => (previous ?? measured) + delta);
     };
+    const admitHeaderEvent = (event: SyntheticEvent) => {
+        if (current(isCurrent)) return;
+        event.preventDefault();
+        event.stopPropagation();
+    };
 
     return h(
         'th',
@@ -282,7 +287,20 @@ function GridHeader({
         },
         h(
             'div',
-            { className: 'mx-sdk-readonly-grid__heading' },
+            {
+                className: 'mx-sdk-readonly-grid__heading',
+                onFocusCapture: admitHeaderEvent,
+                onClickCapture: admitHeaderEvent,
+                onMouseOverCapture: admitHeaderEvent,
+                onPointerDownCapture: admitHeaderEvent,
+                onKeyDownCapture: (
+                    event: ReactKeyboardEvent<HTMLDivElement>
+                ) => {
+                    // A retired control must still allow focus to leave and help to close.
+                    if (event.key !== 'Tab' && event.key !== 'Escape')
+                        admitHeaderEvent(event);
+                },
+            },
             headerIcon(column.icon),
             h(CompleteFormFieldPresentation, {
                 title: column.title,

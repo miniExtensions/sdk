@@ -16,7 +16,7 @@ const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'D
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
-const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text',description:'<p><strong>Useful header</strong><script>window.__headerUnsafe=true</script></p>',descriptionImageUrl:'/grid-header-help.svg'}].map(Object.freeze));
+const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text',description:'<p><strong>Useful header</strong><a href="/stale-help-link">Help link</a><script>window.__headerUnsafe=true</script></p>',descriptionImageUrl:'/grid-header-help.svg'}].map(Object.freeze));
 const leaf=value=>h(CompleteReadOnlyTextField,{value,language:'en'});
 document.querySelector('#child-close').onclick=()=>{document.querySelector('#child').close();if(returnCheck?.()&&activeTrigger?.isConnected)activeTrigger.focus();};
 function App(){const[state,set]=useState({scope:'original',revision:1,ready:true,live:true,copy:false,height:'short',empty:false,hidden:{original:{name:true}},widths:{original:{name:'180',amount:180,notes:220}}});
@@ -343,6 +343,28 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         passed: true,
     });
 
+    await description.focus();
+    await help.waitFor({ state: 'visible' });
+    const currentUrl = page.url();
+    await page.evaluate(() => window.__nativeProbe.retire());
+    await help.getByRole('link', { name: 'Help link', exact: true }).click();
+    assert.equal(
+        page.url(),
+        currentUrl,
+        'A retired portaled link cannot navigate'
+    );
+    await page.keyboard.press('Escape');
+    await help.waitFor({ state: 'detached' });
+    await description.focus();
+    await description.click();
+    await description.hover();
+    assert.equal(await help.count(), 0);
+    assert.equal(await page.locator('[role="tooltip"] img').count(), 0);
+    results.push({
+        group: 'retained stale header focus/hover/click and portaled link refusal',
+        passed: true,
+    });
+    await patch({ revision: 4 });
     const beforeStale = await snapshot();
     const staleBox = await handle.boundingBox();
     assert(staleBox);
@@ -356,13 +378,13 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         .click();
     assert.equal((await snapshot()).widths.length, beforeStale.widths.length);
     assert.equal((await snapshot()).opens.length, beforeStale.opens.length);
-    await patch({ revision: 4 });
+    await patch({ revision: 5 });
     const abaBox = await handle.boundingBox();
     assert(abaBox);
     await page.mouse.move(abaBox.x + 8, abaBox.y + 4);
     await page.mouse.down();
-    await patch({ scope: 'custom', revision: 5 });
-    await patch({ scope: 'original', revision: 6 });
+    await patch({ scope: 'custom', revision: 6 });
+    await patch({ scope: 'original', revision: 7 });
     await page.mouse.up();
     assert.equal((await snapshot()).widths.length, beforeStale.widths.length);
     results.push({ group: 'stale and A-B-A drag/Open refusal', passed: true });

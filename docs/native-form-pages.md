@@ -174,8 +174,8 @@ native bindings to implement live Review.
 under the maintained 48-hour dependency policy for React 18.3.1 and 19.2.0. It
 checks public ESM/CommonJS declarations, negative authority boundaries, this
 guide's imports, the packaged CSS and HTML closure, and browser bundles. It runs
-the same 27 lifecycle/presentation cases in each of four installed profiles
-(108 test cases), plus four SSR/hydration consumers with 13 checkpoints each.
+the same 31 lifecycle/presentation cases in each of four installed profiles
+(124 test cases), plus four SSR/hydration consumers with 13 checkpoints each.
 Those consumers exercise real dialog focus, the host form's Next route, live
 Review updates, one-shot Confirm, post-confirm host allocation and retirement,
 with no network or storage effects. Consumer directories are removed afterward.
@@ -195,3 +195,7 @@ panel as `children`; it does not receive a draft, validation callback or Save
 capability. The native Form adapter uses its existing modal primitive so linked
 child and attachment dialogs remain interactive above Review. Standalone
 consumers use the built-in accessible HTML dialog by default.
+
+Rows may provide `labelId` to preserve an existing host label relationship; the
+host must keep those IDs unique in its document. Otherwise, the SDK generates
+an instance-scoped label ID and associates each readonly value with that label.

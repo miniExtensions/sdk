@@ -14,6 +14,8 @@ import {
 
 export type FormReviewItem = {
     id: string;
+    /** Preserve an existing host label identity when embedding native leaves. */
+    labelId?: string;
     title: string;
     semanticTitle: string;
     /** Already admitted readonly leaf presentation, never a draft or Save capability. */
@@ -212,7 +214,8 @@ export function CompleteFormReview(
                       'dl',
                       { className: 'mx-sdk-form-review-list' },
                       props.items.map((item, index) => {
-                          const labelId = `${instanceId}-field-${index}`;
+                          const labelId =
+                              item.labelId ?? `${instanceId}-field-${index}`;
                           return h(
                               Fragment,
                               { key: item.id },

@@ -315,6 +315,7 @@ it('updates live readonly leaves without dispatch and retains semantic hidden ti
             items: [
                 {
                     id: 'name',
+                    labelId: 'native-name-review-label',
                     title: '',
                     semanticTitle: 'Name',
                     value: h('strong', null, 'Latest value'),
@@ -339,6 +340,7 @@ it('updates live readonly leaves without dispatch and retains semantic hidden ti
     );
     const hiddenTitle = f.host.querySelector('dt');
     assert.equal(hiddenTitle?.textContent, 'Name');
+    assert.equal(hiddenTitle?.id, 'native-name-review-label');
     assert.ok(
         hiddenTitle?.classList.contains('mx-sdk-form-review-label--hidden')
     );

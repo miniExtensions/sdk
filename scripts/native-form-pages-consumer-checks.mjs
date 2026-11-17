@@ -24,7 +24,7 @@ import type {FormPageOwner} from '@miniextensions/sdk/forms';
 import '@miniextensions/sdk/react/form-pages.css';
 const owner={},configuration={};
 const pages:readonly NativeFormPageDescriptor[]=[{title:'First',description:null,fieldIds:['answer'],hidden:false}];
-const items:readonly FormReviewItem[]=[{id:'answer',title:'Answer',semanticTitle:'Answer',value:createElement('strong',null,'Accepted value')}];
+const items:readonly FormReviewItem[]=[{id:'answer',labelId:'existing-answer-review-label',title:'Answer',semanticTitle:'Answer',value:createElement('strong',null,'Accepted value')}];
 const publication:NativeFormPagesPublication<FormReviewItem>={owner,configuration,pages,multiple:true,reviewItems:items,isCurrent:()=>true,onNext({pageIndex,advance}){void pageIndex;advance();},onBack(index){void index;}};
 const controller:NativeFormPages<FormReviewItem>=createNativeFormPages(publication);
 const snapshot:NativeFormPagesSnapshot<FormReviewItem>=controller.getSnapshot();

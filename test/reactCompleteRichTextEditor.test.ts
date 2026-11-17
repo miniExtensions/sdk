@@ -2130,17 +2130,21 @@ for (const released of [false, true]) {
         const f = await completeRichTextFixture(t);
         const ref = createRef<NativeRichTextEditorHandle>();
         const writes: string[] = [];
-        const render = (invalid = false) =>
-            f.render(
-                h(CompleteRichTextEditor, {
-                    ref,
-                    value: 'Alpha Beta',
-                    id: 'notes',
-                    ariaInvalid: invalid,
-                    onValueChange: (value) => writes.push(value),
-                })
-            );
-        await render();
+        let markInvalid: (() => void) | undefined;
+        function EditorFixture() {
+            const [invalid, setInvalid] = useState(false);
+            markInvalid = () => setInvalid(true);
+            return h(CompleteRichTextEditor, {
+                ref,
+                value: 'Alpha Beta',
+                id: 'notes',
+                ariaInvalid: invalid,
+                onValueChange: (value) => writes.push(value),
+            });
+        }
+        await f.render(h(EditorFixture));
+        const invalidate = markInvalid;
+        assert(invalidate);
         const editor = await f.editor(ref);
         const { view } = editor;
         const input = view.dom;
@@ -2150,30 +2154,39 @@ for (const released of [false, true]) {
         try {
             await f.select(view, 4);
             await act(async () => t.mock.timers.tick(20));
-            pending = deferNativeSelectionChanges(t, f.document);
+            const heldSelection = deferNativeSelectionChanges(t, f.document);
+            pending = heldSelection;
             const selection = f.document.getSelection();
             assert(selection);
             const caret = view.domAtPos(3);
-            await act(async () => selection.collapse(caret.node, caret.offset));
-            assert.equal(view.state.selection.head, 4);
-            assert.equal(
-                view.posAtDOM(selection.anchorNode!, selection.anchorOffset),
-                3
-            );
-            if (released) await act(async () => pending!.release());
-            await render(true);
+            await act(() => {
+                // Keep the native move and React commit in the same turn.
+                // The DOM observer can flush independently of selectionchange.
+                selection.collapse(caret.node, caret.offset);
+                assert(heldSelection.pending() > 0);
+                assert.equal(view.state.selection.head, 4);
+                assert.equal(
+                    view.posAtDOM(
+                        selection.anchorNode!,
+                        selection.anchorOffset
+                    ),
+                    3
+                );
+                if (released) heldSelection.release();
+                flushSync(invalidate);
+                assert.equal(view.state.selection.head, 3);
+                assert.equal(input.getAttribute('aria-invalid'), 'true');
+            });
             assert.equal(ref.current, editor);
             assert.equal(editor.view, view);
             assert.equal(view.dom, input);
             assert.deepEqual(view.state.doc.toJSON(), doc);
-            assert.equal(view.state.selection.head, 3);
             assert.equal(
                 view.posAtDOM(selection.anchorNode!, selection.anchorOffset),
                 3
             );
-            assert.equal(input.getAttribute('aria-invalid'), 'true');
             assert.deepEqual(writes, []);
-            await act(async () => pending!.release());
+            await act(async () => heldSelection.release());
             await act(async () => view.dispatch(view.state.tr.insertText('Z')));
             assert.equal(view.state.doc.textContent, 'AlZpha Beta');
             assert.deepEqual(writes, ['AlZpha Beta']);

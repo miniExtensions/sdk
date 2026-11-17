@@ -563,6 +563,107 @@ it('preserves legacy external focus return on full gallery unmount', async (t) =
     assert.equal(f.window.document.activeElement, external);
 });
 
+it('reconciles a selected occurrence across resource replacement only while its parent selection lease remains current', async (t) => {
+    const f = await fixture(t);
+    const lifetime = () => {
+        let current = true;
+        const listeners = new Set<() => void>();
+        return {
+            owner: {
+                token: {},
+                isCurrent: () => current,
+                subscribe(listener: () => void) {
+                    listeners.add(listener);
+                    return () => listeners.delete(listener);
+                },
+            },
+            invalidate() {
+                current = false;
+            },
+            async retire() {
+                await act(async () => {
+                    current = false;
+                    for (const listener of [...listeners]) listener();
+                });
+            },
+            listeners,
+        };
+    };
+    const parent = lifetime();
+    let resource = lifetime();
+    const a = entry('A'),
+        b = entry('B'),
+        c = entry('C');
+    await f.render({
+        entries: [a, b, c],
+        selectionOwner: parent.owner,
+        owner: resource.owner,
+    });
+    await f.open(2);
+    assert.equal(f.index(), '3 / 3');
+    const oldOpen = f.host.querySelector('a[target="_blank"]')!;
+    resource.invalidate();
+    assert.equal(oldOpen.isConnected, true);
+    const staleMenu = new f.window.MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+    });
+    oldOpen.dispatchEvent(staleMenu);
+    assert.equal(staleMenu.defaultPrevented, true);
+    const staleClick = new f.window.MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+    });
+    oldOpen.dispatchEvent(staleClick);
+    assert.equal(staleClick.defaultPrevented, true);
+    await resource.retire();
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    for (const [entries, expected] of [
+        [[c], '1 / 1'],
+        [[a], '1 / 1'],
+        [[a, c, b], '1 / 3'],
+    ] as const) {
+        resource = lifetime();
+        await f.render({
+            entries,
+            selectionOwner: parent.owner,
+            owner: resource.owner,
+        });
+        assert.equal(f.index(), expected);
+        assert.equal(
+            f.host.querySelector('a[target="_blank"]')?.getAttribute('href'),
+            entries[0]!.url
+        );
+        await resource.retire();
+        assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    }
+    resource = lifetime();
+    await f.render({
+        entries: [c, a, b],
+        selectionOwner: parent.owner,
+        owner: resource.owner,
+    });
+    assert.ok(f.host.querySelector('[role="dialog"]'));
+    const obsoleteTrigger = f.host.querySelector('li button')!;
+    await parent.retire();
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    const successor = lifetime();
+    await f.render({
+        entries: [c, a, b],
+        selectionOwner: successor.owner,
+        owner: resource.owner,
+    });
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    await act(async () => (obsoleteTrigger as unknown as HTMLElement).click());
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    await f.open(0);
+    assert.ok(f.host.querySelector('[role="dialog"]'));
+    await f.unmount();
+    assert.equal(successor.listeners.size, 0);
+    assert.equal(resource.listeners.size, 0);
+    assert.equal(f.submits(), 0);
+});
+
 it('keeps a same-owner pending resource through reorder and releases listeners on unmount before settlement', async (t) => {
     const f = await fixture(t);
     const listeners = new Set<() => void>();

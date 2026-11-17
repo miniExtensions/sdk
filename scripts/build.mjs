@@ -381,6 +381,7 @@ for (const format of ['esm', 'cjs']) {
         'attachment-preview',
         'readonly-url-gallery',
         'lookup',
+        'computed',
         'complete-address',
         'address-field',
         'single-line-text',

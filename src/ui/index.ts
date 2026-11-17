@@ -430,3 +430,10 @@ export {
     type LookupValueOccurrence,
     type LookupValueProjection,
 } from './lookupProjection.js';
+export {
+    projectComputedLookup,
+    type ComputedLookupResultField,
+    type ComputedLookupDisplayConfig,
+    type ComputedLookupOccurrence,
+    type ComputedLookupProjection,
+} from './computedProjection.js';

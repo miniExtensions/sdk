@@ -7,6 +7,7 @@ import {
     mkdir,
     readFile,
     readdir,
+    realpath,
     rm,
     symlink,
     writeFile,
@@ -60,6 +61,8 @@ import './browser-rich-text-focus.test.mjs';
 import './portal-chart-inputs.test.mjs';
 import './collaborator-inputs.test.mjs';
 import './source-package-checks.test.mjs';
+import './npm-release-age.test.mjs';
+import './age-qualified-consumer-install.test.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,
@@ -67,7 +70,9 @@ import {
 } from './privacy-proof-inventory.mjs';
 
 async function temporaryRoot(t) {
-    const root = await mkdtemp(join(tmpdir(), 'sdk-package-guard-'));
+    const root = await realpath(
+        await mkdtemp(join(tmpdir(), 'sdk-package-guard-'))
+    );
     t.after(() => rm(root, { recursive: true, force: true }));
     return root;
 }

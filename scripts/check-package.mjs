@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
@@ -490,8 +491,12 @@ import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
 import { assertModuleFormatReceipt } from './module-format-checks.mjs';
+import { enforceNpmReleaseAge } from './npm-release-age.mjs';
 
 const require = createRequire(import.meta.url);
+// Also inherited by the nested npm consumer checks. pnpm matrices retain their
+// own independently verified 2880-minute policy.
+console.log('Fresh npm consumers: release cutoff', enforceNpmReleaseAge());
 const temporaryDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-sdk-'))
 );
@@ -2080,7 +2085,7 @@ new Parser([]).parse({maxDepth:'48'});
         ...singleLineRecipes,
     ];
     assert(reactRecipes.length > 0, 'Missing React mount/dispose recipe');
-    run('npm', [
+    runAgeQualifiedConsumerInstall(run, [
         'install',
         '--ignore-scripts',
         '--no-audit',

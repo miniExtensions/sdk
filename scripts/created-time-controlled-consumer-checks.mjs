@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -534,8 +535,13 @@ export async function checkCreatedTimeReactMatrix({
                     },
                 })
             );
-            execFileSync(
-                'npm',
+            runAgeQualifiedConsumerInstall(
+                (command, args) =>
+                    execFileSync(command, args, {
+                        cwd: directory,
+                        stdio: 'inherit',
+                        timeout: 120000,
+                    }),
                 [
                     'install',
                     '--ignore-scripts',
@@ -547,8 +553,7 @@ export async function checkCreatedTimeReactMatrix({
                     `react-dom@${version.react}`,
                     `@types/react@${version.types}`,
                     `@types/react-dom@${version.domTypes}`,
-                ],
-                { cwd: directory, stdio: 'inherit', timeout: 120000 }
+                ]
             );
             const currentTypedConsumer =
                 field === 'createdTime'

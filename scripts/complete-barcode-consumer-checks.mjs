@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { barcodeReactTypedConsumer } from './barcode-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
@@ -317,14 +318,14 @@ process.stdout.write(JSON.stringify(await installed(process.argv[2],process.argv
             ['18.3.1', '18.3.12', '18.3.1'],
             ['19.2.0', '19.2.2', '19.2.2'],
         ]) {
-            run('npm', [
+            runAgeQualifiedConsumerInstall(run, [
                 'install',
                 '--ignore-scripts',
                 '--strict-peer-deps',
                 '--no-audit',
                 '--no-fund',
                 '--package-lock=false',
-                archivePath,
+                '@miniextensions/sdk@file:' + archivePath,
                 `react@${react}`,
                 `react-dom@${react}`,
                 `@types/react@${types}`,

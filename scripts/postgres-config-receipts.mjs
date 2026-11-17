@@ -68,7 +68,13 @@ const timetzFamily = {
     schemaName: 'postgresTimetzColumnConfigSchema',
     typeName: 'PostgresTimetzColumnConfig',
 };
-const allFamilies = [...temporalFamilies, timeFamily, timetzFamily];
+const timeFamilies = [...temporalFamilies, timeFamily, timetzFamily];
+const intervalFamily = {
+    kind: 'interval',
+    schemaName: 'postgresIntervalColumnConfigSchema',
+    typeName: 'PostgresIntervalColumnConfig',
+};
+const allFamilies = [...timeFamilies, intervalFamily];
 const historicalSources = [
     '.prettierrc',
     'package.json',
@@ -117,6 +123,10 @@ const timeSources = [
     ...temporalSources,
     'types/extensions/postgres/timeColumnFieldDefinitions.ts',
 ].sort();
+const intervalSources = [
+    ...timeSources,
+    'types/extensions/postgres/intervalColumnFieldDefinitions.ts',
+].sort();
 const receiptVersions = new Map([
     [1, { families: [textFamily], sources: historicalSources }],
     [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
@@ -125,7 +135,8 @@ const receiptVersions = new Map([
     [5, { families: enumFamilies, sources: enumSources }],
     [6, { families: uuidFamilies, sources: uuidSources }],
     [7, { families: temporalFamilies, sources: temporalSources }],
-    [8, { families: allFamilies, sources: timeSources }],
+    [8, { families: timeFamilies, sources: timeSources }],
+    [9, { families: allFamilies, sources: intervalSources }],
 ]);
 const sharedReceiptKeys = [
     'formatVersion',
@@ -221,7 +232,7 @@ export function verifyPostgresConfigReceipt({
     );
     const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
-    const hasPresentation = [4, 5, 6, 7, 8].includes(receipt.formatVersion);
+    const hasPresentation = [4, 5, 6, 7, 8, 9].includes(receipt.formatVersion);
     requireReceipt(
         exactKeys(receipt, [
             ...sharedReceiptKeys,
@@ -455,7 +466,7 @@ export function assertPostgresConfigReceiptProvenance(
     declarations
 ) {
     const proof = internal.configurationValidation;
-    const hasPresentation = [4, 5, 6, 7, 8].includes(proof?.receiptVersion);
+    const hasPresentation = [4, 5, 6, 7, 8, 9].includes(proof?.receiptVersion);
     requireReceipt(
         exactKeys(proof, [
             'receiptVersion',

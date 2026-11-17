@@ -49,6 +49,13 @@ Historical versions 1–7 retain their families and source closures. The two
 portable display runtimes are unchanged; these type exports add no public
 PostgreSQL Form/Portal transport operation.
 
+`PostgresIntervalColumnConfig` adds the native `interval` common-settings family
+under receipt v9 and its 26-source closure. Values retain native month/day/time
+components as text or SQL NULL. This adds no duration-number conversion, unit
+selection, precision override, IntervalStyle setting or portable value parser.
+Versions 1–8 retain their exact families and source closures. Public Form/Portal
+transport admission remains separate from these type exports.
+
 The independent native snapshot also exports `PostgresConfiguredColumn`,
 `PostgresReadableRelationConfiguration`, `PostgresFormDraftState`,
 `PostgresFormDraft`, `PostgresPortalTab`, `PostgresPortalDraftState`,

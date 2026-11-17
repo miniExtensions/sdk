@@ -2604,8 +2604,8 @@ async function focusWitnessProposalFixture(
     const f = await completeRichTextFixture(t);
     // Timers enabled after mounting cannot control already-scheduled native
     // Prism metadata updates, which would invalidate a later state baseline.
+    // Own mount-time Prism/focus timers; cleanup is registered before mounting.
     t.mock.timers.enable({ apis: ['setTimeout'] });
-    t.after(() => t.mock.timers.reset());
     const ref = createRef<NativeRichTextEditorHandle>();
     const writes: string[] = [];
     const onValueChange = (value: string) => writes.push(value);
@@ -2628,12 +2628,6 @@ async function focusWitnessProposalFixture(
                 })
             )
         );
-    await render();
-    const editor = await f.editor(ref);
-    const { view } = editor;
-    const neighbor =
-        f.container.querySelector<HTMLButtonElement>('#witness-neighbor');
-    assert(neighbor);
     let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
     let cleaned = false;
     const cleanup = () => {
@@ -2643,6 +2637,12 @@ async function focusWitnessProposalFixture(
         t.mock.timers.reset();
     };
     t.after(cleanup);
+    await render();
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    const neighbor =
+        f.container.querySelector<HTMLButtonElement>('#witness-neighbor');
+    assert(neighbor);
     await f.select(view, 3);
     await act(async () => t.mock.timers.tick(20));
     pending = deferNativeSelectionChanges(t, f.document);

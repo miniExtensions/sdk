@@ -1,12 +1,148 @@
 # Controlled Portal application shell
 
+Hosts with an existing navigation transaction may opt into `onSelectionActivate`.
+It receives the existing scoped navigate envelope for every explicit activation,
+including the already selected view. When supplied, it replaces the ordinary
+`onIntent` navigate notification; the other intents are unchanged. It is a data
+request, not a host-rendered menu. Mount, restoration and reconciliation never
+invoke it. The host retains its canonical storage, SidePanel and record/query
+operations and admits the current owner before executing them.
+
+In menu interaction mode, a desktop parent-table summary sends `viewId:null`
+to request field activation without choosing a view. The existing host retains
+that field's accepted view, including a pending/error identifier. An explicit
+view button sends its view identity, including a same-view activation.
+
+`onItemHover` is a separate pointer-only notification with item/view identity and
+the owner envelope. It does not run on focus, render or import. Keep the existing
+host's bounded initialization/prefetch policy behind it; the SDK performs no reads.
+Desktop topbar table rows notify for the parent; sidebar/mobile view buttons
+notify for their view. Visible flat sidebar/mobile fields do not notify.
+Headerless flat fields retain their pointer notification. Settings gears and
+keyboard opening do not invent a hover notification.
+
+Set `selectionPolicy:'host'` when the existing native owner already accepts the
+selection. The shell validates its nonblank identity, view shape and embedded
+HTTPS URL without requiring current menu membership or choosing a fallback.
+An already accepted table/error body or captured iframe remains owned by the
+host when the menu item disappears or changes type. The host's existing
+restoration and visibility owner decides when to retire that selection.
+Native URL restoration stays mount-only. For a native embedded URL projection,
+preserve the captured raw selection owner separately from the current menu's raw
+URL map. Only explicit admitted activation maps an item back to canonical raw
+storage; do not rewrite restoration just because display URLs normalize equally.
+
+Opt-in `header.menuInteraction:'menu'` extends the existing HTML disclosure
+controls with desktop topbar hover/ArrowUp/ArrowDown opening, current-menu
+Home/End traversal, parent-table activation, outside-click closure and trigger
+focus restoration. Tab/Shift+Tab exits a desktop menu relative to its trigger;
+the account menu closes on Tab while preserving the mobile drawer's focus trap.
+Mobile and hidden-header menu toggles open on ArrowDown at the first destination
+and on ArrowUp at the last. Home/End traverse destinations; Escape restores the
+toggle. Pointer opening also starts at the first destination. Opening and focus
+movement allocate no host navigation or hover work. Editor gears remain reachable by Tab and pointer; Arrow/Home/End traverse actual
+destinations. Same-scope presentation revisions update the open configured menu
+without closing it. Scope, layout/mode loss and unavailable navigation retire its
+open state; stale command and confirmation authority still retires on every
+publication. If its focused destination disappears, the drawer recovers focus
+inside without stealing focus from a native profile dialog or another owner.
+Ordinary disclosure mode retains its revision-closing behavior. Mobile navigation retains dialog Escape/focus
+behavior and resets disclosures on reopening. Per-table/group `sidebarInitiallyExpanded`
+chooses their initial mobile/sidebar state independently. An admitted unresolved
+group may use `keepEmpty:true`; omission retains existing empty-group filtering.
+
+View metadata `badge` and finite `layout` retain configured indicators and native
+layout icons. Omitted layout renders no icon; explicit null uses the grid icon.
+Icons are shown in sidebar/mobile presentation; desktop topbar retains the badge.
+Settings descriptors may set `includeViews:false` for one parent-only gear, and
+`visibleIn:'sidebar'` for controls displayed only in sidebar/mobile presentation.
+These options do not make permission decisions. Existing authoring defaults remain.
+
+Iframe defaults remain `no-referrer`, fullscreen allowance and a URL-keyed element.
+An explicitly configured host may select `embed.referrerPolicy:'browser-default'`,
+`fullscreen:false` and `preserveElement:true` to retain its existing iframe policy
+and element. The same credential-free HTTPS policy still applies; no new URL
+parser or provider adapter is introduced.
+
+```tsx
+import { createElement } from 'react';
+import {
+    CompletePortalShell,
+    type CompletePortalShellProps,
+    type PortalShellSnapshot,
+} from '@miniextensions/sdk/react';
+
+const snapshot: PortalShellSnapshot = {
+    scope: 'synthetic:member',
+    revision: 1,
+    selectionPolicy: 'host',
+    header: {
+        layout: 'topbar',
+        title: 'Portal',
+        actionsPlacement: 'layout',
+        menuInteraction: 'menu',
+    },
+    items: [
+        {
+            type: 'table',
+            id: 'orders',
+            label: 'Orders',
+            sidebarInitiallyExpanded: true,
+            views: [
+                { id: 'open', label: 'Open', layout: 'calendar', badge: true },
+                { id: 'done', label: 'Done', layout: null },
+            ],
+        },
+    ],
+    selection: { type: 'table', itemId: 'orders', viewId: 'open' },
+    settings: {
+        items: [
+            {
+                itemId: 'orders',
+                label: 'Edit Orders',
+                includeViews: false,
+                visibleIn: 'sidebar',
+            },
+        ],
+    },
+    embed: {
+        referrerPolicy: 'browser-default',
+        fullscreen: false,
+        preserveElement: true,
+    },
+};
+const props: CompletePortalShellProps = {
+    snapshot,
+    onIntent(intent) {
+        console.log(intent.type);
+    },
+    onSelectionActivate(request) {
+        if (
+            request.scope !== snapshot.scope ||
+            request.revision !== snapshot.revision
+        )
+            return;
+        console.log(request.selection); // Route the existing admitted native transaction once.
+    },
+    onItemHover(request) {
+        console.log(request.itemId, request.viewId);
+    },
+    onOpenSettings(request) {
+        console.log(request.target);
+    },
+};
+createElement(CompletePortalShell, props);
+```
+
 `CompletePortalShell` owns the stock responsive sidebar, topbar, mobile drawer,
 group disclosures, hidden-header navigation, profile menu, welcome dialog,
 logout confirmation, embedded iframe, styles and accessibility. Import
 `@miniextensions/sdk/react/portal-shell.css` and the existing
 `@miniextensions/sdk/react/html-description.css` for rich HTML titles and descriptions.
 There are no host-rendered menu/header slots. `children` is only the host's
-existing table/collection body.
+existing table/collection body. Button and keyboard-focus chrome styles are
+scoped to the SDK header, navigation and dialogs; controls in that body retain
+their native styles.
 
 Optional `snapshot.settings` contains already admitted authoring labels for the
 title, description, profile and menu-item identities. `onOpenSettings` receives a

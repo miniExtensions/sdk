@@ -14,7 +14,7 @@ import { join } from 'node:path';
 const typed = String.raw`
 import {createElement} from 'react';
 import {resolvePortalShellSelection,type PortalShellMenuItem,type PortalShellIntent} from '@miniextensions/sdk/portals';
-import {CompletePortalShell,type CompletePortalShellProps,type PortalShellSnapshot,type PortalShellSettingsRequest} from '@miniextensions/sdk/react';
+import {CompletePortalShell,type CompletePortalShellProps,type PortalShellSnapshot,type PortalShellSettingsRequest,type PortalShellSelectionActivation,type PortalShellItemHoverRequest} from '@miniextensions/sdk/react';
 const items:readonly PortalShellMenuItem[]=[{type:'table',id:'orders',label:'Orders'}];
 const snapshot:PortalShellSnapshot={scope:'public:user',revision:1,items,selection:resolvePortalShellSelection({items,phase:'initial',initialSelection:{itemId:'orders'}}),header:{layout:'sidebar',title:'Portal'}};
 const props:CompletePortalShellProps={snapshot,onIntent(intent:PortalShellIntent){if(intent.type==='navigate')console.log(intent.selection.itemId);}};
@@ -32,6 +32,15 @@ const editor:CompletePortalShellProps={...props,renderSettings(){return null;}};
 // @ts-expect-error authoring targets are finite, not arbitrary native configuration paths
 const invalidSettings:PortalShellSettingsRequest={scope:'x',revision:1,target:{type:'configuration-path',path:'secret'}};
 void editor;void invalidSettings;
+const hostMenuItem:PortalShellMenuItem={type:'table',id:'orders',label:'Orders',sidebarInitiallyExpanded:true,views:[{id:'open',label:'Open',layout:'calendar',badge:true},{id:'done',label:'Done',layout:null}]};
+const retainedGroup:PortalShellMenuItem={type:'group',id:'external',label:'External',keepEmpty:true,items:[]};
+const hostNavigation:CompletePortalShellProps={...props,snapshot:{...snapshot,items:[hostMenuItem,retainedGroup],selectionPolicy:'host',header:{...snapshot.header,menuInteraction:'menu'},embed:{preserveElement:true,fullscreen:false,referrerPolicy:'browser-default'},settings:{items:[{itemId:'orders',label:'Edit orders',includeViews:false,visibleIn:'sidebar'}]}},onSelectionActivate(request:PortalShellSelectionActivation){console.log(request.scope,request.revision,request.selection.itemId);},onItemHover(request:PortalShellItemHoverRequest){console.log(request.scope,request.revision,request.itemId,request.viewId);}};
+createElement(CompletePortalShell,hostNavigation);
+// @ts-expect-error finite layout metadata, never a host-rendered icon
+const unknownLayout:PortalShellMenuItem={type:'table',id:'x',label:'x',views:[{id:'v',label:'v',layout:'custom-renderer'}]};
+// @ts-expect-error explicit supported iframe policy, never arbitrary referrer behavior
+const unknownPolicy:PortalShellSnapshot={...snapshot,embed:{referrerPolicy:'unsafe'}};
+void unknownLayout;void unknownPolicy;
 // @ts-expect-error description content is controlled; no host-rendered replacement
 const injectedDescription:PortalShellSnapshot={...snapshot,header:{...snapshot.header,descriptionOptions:{render(){return null;}}}};
 // @ts-expect-error only controlled numeric widths, never CSS or a native renderer
@@ -74,12 +83,17 @@ export function checkPortalShellReactMatrix({
             new URL('./portal-shell-runtime.mjs', import.meta.url),
             join(directory, 'scenarios.mjs')
         );
+        cpSync(
+            new URL('./portal-shell-navigation-runtime.mjs', import.meta.url),
+            join(directory, 'navigation-scenarios.mjs')
+        );
         writeFileSync(
             join(directory, 'runtime.mjs'),
             String.raw`
 import assert from 'node:assert/strict';import{createRequire}from'node:module';
 import React from'react';import{createRoot}from'react-dom/client';import{renderToString}from'react-dom/server';
 import{assertPortalShellConsumer,assertPortalShellSidebarConsumer,assertPortalShellPresentationConsumer,assertPortalShellSettingsConsumer}from'./scenarios.mjs';
+import{assertPortalShellNavigationConsumer}from'./navigation-scenarios.mjs';
 const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
@@ -92,7 +106,9 @@ const presentation=await assertPortalShellPresentationConsumer({React,ui,Window,
 assert.deepEqual(presentation,{availabilityCases:8,authorityRetirements:3,logoutIntents:2,submitEvents:0,bodyRemountsWhileSelected:0,implicitNetworkRequests:0,synchronousPublications:1,siblingLogoutIntents:1});
 const settings=await assertPortalShellSettingsConsumer({React,ui,Window,createRoot,renderToString});
 assert.deepEqual(settings,{settingsRequests:11,siblingRequests:1,ordinaryIntents:0,submitEvents:0,implicitNetworkRequests:0,precommitAdmission:'rejected'});
-console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation,settings}));
+const navigation=await assertPortalShellNavigationConsumer({React,ui,Window,createRoot,renderToString});
+assert.deepEqual(navigation,{activations:6,legacyNavigationIntents:1,hoverNotifications:4,settingsRequests:1,precommitAdmission:'rejected',providerRequests:0,submitEvents:0,preservedIframe:true,externalLinkClosure:'passed',tabExitHandoff:'passed',accountKeyboardAndMobileTrap:'passed',hostSelectionAcrossMenuDrift:'passed',closedNavigationKeyboard:'passed',liveNavigationRevision:'passed',editorDirectionalFocus:'passed'});
+console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation,settings,navigation}));
 `
         );
         run('npm', [

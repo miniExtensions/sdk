@@ -49,6 +49,10 @@ await copyFile(
     path.join(root, 'scripts/portal-shell-runtime.mjs'),
     path.join(root, output, 'scripts/portal-shell-runtime.mjs')
 );
+await copyFile(
+    path.join(root, 'scripts/portal-shell-navigation-runtime.mjs'),
+    path.join(root, output, 'scripts/portal-shell-navigation-runtime.mjs')
+);
 run(require.resolve('typescript/bin/tsc'), [
     '--project',
     'tsconfig.test.json',

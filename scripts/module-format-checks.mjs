@@ -206,6 +206,7 @@ export function assertModuleFormats(root) {
                 './react/complete-record-comments.css',
                 './react/form-tracking.css',
                 './react/form-captcha.css',
+                './react/automatic-prefill.css',
                 './react/printable-form.css',
                 './react/form-group.css',
                 './react/csv-export.css',

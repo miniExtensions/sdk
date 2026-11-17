@@ -721,6 +721,52 @@ it('isolates two complete widget instances and retires both message admissions o
     assert.deepEqual(writes, ['A']);
 });
 
+it('settles the second open widget once while preserving the first current widget', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    await act(async () =>
+        f.root.render(
+            h(
+                StrictMode,
+                null,
+                h(CompleteCalendlyWidget, {
+                    ...defaults,
+                    key: 'A',
+                    ownerKey: 'A',
+                    labels: { schedule: 'Schedule A' },
+                    onScheduled: () => writes.push('A'),
+                }),
+                h(CompleteCalendlyWidget, {
+                    ...defaults,
+                    key: 'B',
+                    ownerKey: 'B',
+                    labels: { schedule: 'Schedule B' },
+                    onScheduled: () => writes.push('B'),
+                })
+            )
+        )
+    );
+    await f.click('Schedule A');
+    await f.click('Schedule B');
+    const frames = [...f.container.querySelectorAll('iframe')];
+    assert.equal(frames.length, 2);
+    const first = frames[0]!.contentWindow as unknown as MessageEventSource;
+    const second = frames[1]!.contentWindow as unknown as MessageEventSource;
+    assert.notEqual(first, second);
+    await f.send(second);
+    assert.deepEqual(writes, ['B']);
+    assert.equal(f.container.querySelector('iframe'), frames[0]);
+    await f.send(second);
+    assert.deepEqual(writes, ['B']);
+    await f.send(first);
+    assert.deepEqual(writes, ['B', 'A']);
+    assert.equal(f.container.querySelector('iframe'), null);
+    await f.unmount();
+    await f.send(first);
+    await f.send(second);
+    assert.deepEqual(writes, ['B', 'A']);
+});
+
 it('contains parent-document Escape while leaving native cancellation and ancestor ownership intact', async (t) => {
     let ancestorKeys = 0;
     let windowKeys = 0;

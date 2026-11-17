@@ -32,10 +32,11 @@ window.__calendlyEscapeTrace={keys:[]};
 window.addEventListener('keydown',event=>{if(event.key==='Escape')window.__calendlyEscapeTrace.keys.push({observedAt:'child-window-bubble',trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,activeId:document.activeElement?.id??null});},{passive:true});
 window.__calendlyScheduleTrace=[];
 const recordSchedule=(kind,event)=>{if(window.__calendlyScheduleTrace.length<16)window.__calendlyScheduleTrace.push({kind,at:Date.now(),trusted:event?.isTrusted??null,scheduled:event?.data?.event==='calendly.event_scheduled'});};
-const send=data=>{recordSchedule('send',{data});parent.postMessage(data,'*');};
+const send=data=>{recordSchedule('send',{data});parent.postMessage(data!=null&&typeof data==='object'?{...data,__sdkFixtureScheduleTrace:[...window.__calendlyScheduleTrace]}:data,'*');};
 document.querySelector('#schedule').onclick=event=>{recordSchedule('schedule-click',event);send({event:'calendly.event_scheduled'});};
 document.querySelector('#duplicate').onclick=()=>{send({event:'calendly.event_scheduled'});send({event:'calendly.event_scheduled'});};
 document.querySelector('#invalid').onclick=()=>send(null);
+window.__calendlyFixtureHandlersReady=true;
 </script>`;
 
 export async function checkCompleteCalendlyBrowser({
@@ -101,7 +102,7 @@ window.addEventListener('message',event=>{
  if(messageTrace.length>=32)return;
  const first=document.querySelector('[data-fixture-widget="first"] iframe');
  const second=document.querySelector('[data-fixture-widget="second"] iframe');
- messageTrace.push({at:Date.now(),scheduled:event.data!=null&&typeof event.data==='object'&&event.data.event==='calendly.event_scheduled',expectedOrigin:event.origin==='https://calendly.com',hasSource:event.source!=null,sourceIsFirst:first!=null&&event.source===first.contentWindow,sourceIsSecond:second!=null&&event.source===second.contentWindow,firstConnected:first?.isConnected??false,secondConnected:second?.isConnected??false,firstDialogOpen:first?.closest('dialog')?.open??false,secondDialogOpen:second?.closest('dialog')?.open??false,writes:writes.length});
+ messageTrace.push({at:Date.now(),scheduled:event.data!=null&&typeof event.data==='object'&&event.data.event==='calendly.event_scheduled',fixtureScheduleTrace:Array.isArray(event.data?.__sdkFixtureScheduleTrace)?event.data.__sdkFixtureScheduleTrace.slice(0,16).map(({kind,trusted,scheduled})=>({kind,trusted,scheduled})):[],expectedOrigin:event.origin==='https://calendly.com',hasSource:event.source!=null,sourceIsFirst:first!=null&&event.source===first.contentWindow,sourceIsSecond:second!=null&&event.source===second.contentWindow,firstConnected:first?.isConnected??false,secondConnected:second?.isConnected??false,firstDialogOpen:first?.closest('dialog')?.open??false,secondDialogOpen:second?.closest('dialog')?.open??false,writes:writes.length});
 });
 function App(){
  const [state,setState]=useState(initial),latest=useRef(state);latest.current=state;observed=state;
@@ -255,6 +256,20 @@ window.completeCalendlyProof={
                 page.getByRole('dialog', { name, exact: true });
             const trigger = (name = 'Book synthetic') =>
                 first().getByRole('button', { name, exact: true });
+            const waitForFixtureHandlers = async (current) => {
+                const iframe = current.locator('iframe');
+                const url = new URL(await iframe.getAttribute('src'));
+                assert.equal(url.origin, 'https://calendly.com');
+                assert(fixturePaths.has(url.pathname));
+                const handle = await iframe.elementHandle();
+                const frame = await handle.contentFrame();
+                assert(frame, 'The fixed synthetic iframe must be attached');
+                await frame.waitForFunction(
+                    () => window.__calendlyFixtureHandlersReady === true,
+                    undefined,
+                    { timeout: 5000 }
+                );
+            };
             const open = async (name = 'Book synthetic') => {
                 await trigger(name).click();
                 const current = dialog(name);
@@ -266,6 +281,7 @@ window.completeCalendlyProof={
                         exact: true,
                     })
                     .waitFor({ state: 'visible' });
+                await waitForFixtureHandlers(current);
                 return current;
             };
             const reset = async (mode = 'normal') => {
@@ -828,6 +844,7 @@ window.completeCalendlyProof={
                     exact: true,
                 })
                 .waitFor({ state: 'visible' });
+            await waitForFixtureHandlers(second);
             await focusInside(second, 'second-widget-open');
             await second
                 .frameLocator('iframe')
@@ -836,12 +853,35 @@ window.completeCalendlyProof={
                     exact: true,
                 })
                 .click();
+            await page.waitForFunction(() =>
+                window.completeCalendlyProof
+                    .snapshot()
+                    .messageTrace.some(
+                        (message) =>
+                            message.expectedOrigin &&
+                            message.sourceIsSecond &&
+                            message.scheduled &&
+                            message.fixtureScheduleTrace.some(
+                                (event) =>
+                                    event.kind === 'schedule-click' &&
+                                    event.trusted === true
+                            ) &&
+                            message.fixtureScheduleTrace.some(
+                                (event) =>
+                                    event.kind === 'send' && event.scheduled
+                            )
+                    )
+            );
             await second.waitFor({ state: 'hidden' });
             assert.deepEqual((await snapshot()).writes, [
                 { widget: 'first', writer: 'initial', value: true },
                 { widget: 'second', value: true },
             ]);
             assert.equal(await current.isVisible(), true);
+            evidence.results.push({
+                mobile,
+                case: 'second-widget-trusted-click-and-delivery-before-close',
+            });
             await page.evaluate(() =>
                 document
                     .querySelector(
@@ -856,6 +896,7 @@ window.completeCalendlyProof={
                     exact: true,
                 })
                 .waitFor({ state: 'visible' });
+            await waitForFixtureHandlers(second);
             await change({ mounted: false });
             await current.waitFor({ state: 'hidden' });
             await focusInside(second, 'first-retired-keeps-second-focus');

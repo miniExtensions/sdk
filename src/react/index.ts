@@ -136,6 +136,8 @@ export {
     CompleteVerificationScreen,
     type CompleteVerificationScreenProps,
     type CompleteVerificationScreenLabels,
+    type CompleteVerificationErrorPart,
+    type CompleteVerificationErrorPresentation,
 } from './CompleteVerificationScreen.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';
@@ -3203,6 +3205,8 @@ export type {
     PortalShellSidebarWidthCommit,
     PortalShellSettingsTarget,
     PortalShellSettingsRequest,
+    PortalShellSelectionActivation,
+    PortalShellItemHoverRequest,
 } from './CompletePortalShell.js';
 
 export {
@@ -3214,6 +3218,11 @@ export {
     type FormCaptchaProps,
     type FormCaptchaLabels,
 } from './FormCaptcha.js';
+export {
+    AutomaticPrefillStatus,
+    type AutomaticPrefillStatusProps,
+    type AutomaticPrefillStatusLabels,
+} from './AutomaticPrefillStatus.js';
 export {
     createFormCaptchaProviderRegistry,
     type FormCaptchaToken,

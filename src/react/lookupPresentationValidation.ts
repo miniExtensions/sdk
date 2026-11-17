@@ -278,6 +278,16 @@ export function isLookupResultPresentation(
                 case 'attachmentImages':
                     return (
                         dense(input.images, finderImage) &&
+                        (input.entries === undefined ||
+                            dense(
+                                input.entries,
+                                (entry) =>
+                                    object(entry) &&
+                                    optionalString(entry.id) &&
+                                    (entry.thumbnailUrl === null ||
+                                        string(entry.thumbnailUrl)) &&
+                                    string(entry.filename)
+                            )) &&
                         oneOf(input.empty, ['none', 'no-values']) &&
                         string(input.emptyLabel)
                     );

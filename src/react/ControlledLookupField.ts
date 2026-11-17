@@ -565,6 +565,8 @@ function Result({
                 return h(CompleteReadOnlyTextField, {
                     value: '••••••••',
                     language: result.display.language,
+                    textSize: result.display.textSize,
+                    layout: result.display.layout,
                 });
             return h(ControlledFormulaField, {
                 ...result.display,
@@ -575,9 +577,17 @@ function Result({
                 },
                 gallery: {
                     ...result.display.gallery,
+                    selectionOwner: owner,
                     entries: result.display.gallery?.entries ?? [],
-                    owner: together(owner, result.display.gallery?.owner),
-                    identity: result.display.gallery?.identity ?? identity,
+                    owner: together(
+                        owner,
+                        result.display.gallery?.owner ??
+                            result.display.resource?.owner
+                    ),
+                    identity:
+                        result.display.gallery?.identity ??
+                        result.display.resource?.identity ??
+                        identity,
                 },
             });
         case 'rollup':
@@ -633,7 +643,7 @@ function Result({
 
 /** Complete readonly presentation; it never acquires a field binding or writer. */
 export function ControlledLookupField(
-    props: ControlledLookupFieldProps
+    props: ControlledLookupFieldProps & { readonly frameRole?: 'group' }
 ): ReactNode {
     const id = useId();
     const committedEffect =
@@ -768,6 +778,7 @@ export function ControlledLookupField(
         'div',
         {
             id: props.inputId,
+            role: props.frameRole === 'group' ? 'group' : undefined,
             className: ['mx-sdk-controlled-lookup', props.className]
                 .filter(Boolean)
                 .join(' '),

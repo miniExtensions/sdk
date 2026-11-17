@@ -242,6 +242,7 @@ export function assertModuleFormats(root) {
                 './react/controlled-select.css',
                 './react/readonly-url-gallery.css',
                 './react/lookup.css',
+                './react/computed.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {

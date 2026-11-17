@@ -18,6 +18,7 @@ import {
 } from './csv-export-consumer-checks.mjs';
 import { checkControlledSelectBrowser } from './controlled-select-browser-checks.mjs';
 import { checkControlledLookupBrowser } from './controlled-lookup-browser-checks.mjs';
+import { checkComputedBrowser } from './computed-browser-checks.mjs';
 import {
     checkExternalSyncSourceControlledBrowser,
     checkAiTextControlledBrowser,
@@ -2324,6 +2325,14 @@ try {
             readArchiveMember,
         });
         report.externalSyncSourceControlled = {};
+        report.computed = {};
+        await checkComputedBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.computed,
+            output,
+            readArchiveMember,
+        });
         await checkExternalSyncSourceControlledBrowser({
             browser,
             consumer: temporary,

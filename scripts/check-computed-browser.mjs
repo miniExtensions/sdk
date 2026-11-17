@@ -179,8 +179,25 @@ try {
     report.status = 'failed';
     report.error = error.message;
 } finally {
-    stopBuildService();
-    report.cleanup.bundler = 'completed';
+    let bundlerTimer;
+    try {
+        await Promise.race([
+            stopBuildService(),
+            new Promise((_, reject) => {
+                bundlerTimer = setTimeout(
+                    () => reject(Error('Computed bundler cleanup timed out')),
+                    5000
+                );
+            }),
+        ]);
+        report.cleanup.bundler = 'completed';
+    } catch (error) {
+        failure ??= error;
+        report.status = 'failed';
+        report.cleanup.bundler = { error: error.message };
+    } finally {
+        clearTimeout(bundlerTimer);
+    }
     try {
         if (browser) {
             let timer;

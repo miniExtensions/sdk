@@ -120,6 +120,61 @@ export function acceptedPostgresNativeContracts() {
         privileges: { select: true, insert: false, update: false },
     };
     const relationship: PostgresRelationship = {
+        oid: 16401,
+        referencedIndexOid: 16402,
+        referencedRelationOid: 16403,
+        referencedColumnMetadata: [
+            {
+                name: 'tenant_id',
+                ordinal: 1,
+                typeOid: 25,
+                formattedType: 'text',
+                collationOid: 100,
+            },
+            {
+                name: 'id',
+                ordinal: 2,
+                typeOid: 20,
+                formattedType: 'bigint',
+                collationOid: null,
+            },
+        ],
+        referencedCollations: [
+            { oid: 100, schemaName: 'pg_catalog', name: 'default' },
+            null,
+        ],
+        referencedEqualityOperators: [
+            {
+                oid: 98,
+                schemaName: 'pg_catalog',
+                name: '=',
+                leftTypeOid: 25,
+                rightTypeOid: 25,
+            },
+            {
+                oid: 410,
+                schemaName: 'pg_catalog',
+                name: '=',
+                leftTypeOid: 20,
+                rightTypeOid: 20,
+            },
+        ],
+        foreignEqualityOperators: [
+            {
+                oid: 98,
+                schemaName: 'pg_catalog',
+                name: '=',
+                leftTypeOid: 25,
+                rightTypeOid: 25,
+            },
+            {
+                oid: 410,
+                schemaName: 'pg_catalog',
+                name: '=',
+                leftTypeOid: 20,
+                rightTypeOid: 20,
+            },
+        ],
         name: 'orders_customer_fkey',
         columns: ['tenant_id', 'customer_id'],
         referencedTable: { ...reference, tableName: 'customers' },

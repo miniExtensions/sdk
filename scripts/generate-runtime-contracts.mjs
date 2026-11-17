@@ -234,6 +234,9 @@ const postgresModelAliases = [
     'PostgresField',
     'PostgresType',
     'PostgresRelationship',
+    'PostgresRelationshipOperator',
+    'PostgresRelationshipCollation',
+
     'PostgresRecord',
     'PostgresValue',
     'PostgresRecordIdentity',
@@ -260,6 +263,19 @@ const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
 // Existing private member authoring schemas, not public runtime operations.
 // Keep their source/type/state correlation rather than inventing SDK models.
 const postgresAuthoringContracts = [
+    {
+        source: 'types/postgres/relationships.ts',
+        aliases: [
+            'PostgresRelationshipConfig',
+            'PostgresRelationshipColumn',
+            'PostgresRelationshipBinding',
+            'PostgresRelationshipSelection',
+            'PostgresRelationshipChange',
+            'PostgresRelationshipClear',
+            'PostgresRelationshipCandidate',
+            'PostgresRelationshipCandidatePage',
+        ],
+    },
     {
         source: 'types/extensions/postgres/draftCommon.ts',
         aliases: [
@@ -892,6 +908,9 @@ if (postgresOnly) {
     sourceFiles.add('types/constants/extensionType.ts');
     sourceFiles.add('types/postgres/connections.ts');
     sourceFiles.add('types/postgres/identifierBinding.ts');
+    sourceFiles.add(
+        'types/extensions/postgres/relationshipFieldDefinitions.ts'
+    );
     if (formAccessValidation != null) {
         sourceFiles.add(postgresFormAccessSource);
         sourceFiles.add(postgresFormAccessProvenance);

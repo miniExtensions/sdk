@@ -58,6 +58,16 @@ import type {
     CanonicalPostgresRecordIdentity,
     CanonicalPostgresReadableRelationConfiguration,
     CanonicalPostgresRelationship,
+    CanonicalPostgresRelationshipOperator,
+    CanonicalPostgresRelationshipCollation,
+    CanonicalPostgresRelationshipConfig,
+    CanonicalPostgresRelationshipColumn,
+    CanonicalPostgresRelationshipBinding,
+    CanonicalPostgresRelationshipSelection,
+    CanonicalPostgresRelationshipChange,
+    CanonicalPostgresRelationshipClear,
+    CanonicalPostgresRelationshipCandidate,
+    CanonicalPostgresRelationshipCandidatePage,
     CanonicalPostgresRowObservation,
     CanonicalPostgresSchema,
     CanonicalPostgresSelectQuery,
@@ -127,6 +137,23 @@ export type PostgresTableReference = CanonicalPostgresTableReference;
 export type PostgresField = CanonicalPostgresField;
 export type PostgresType = CanonicalPostgresType;
 export type PostgresRelationship = CanonicalPostgresRelationship;
+/** Saved native relationship intent; current settings, grants and tuple checks remain server-side. */
+export type PostgresRelationshipOperator =
+    CanonicalPostgresRelationshipOperator;
+export type PostgresRelationshipCollation =
+    CanonicalPostgresRelationshipCollation;
+export type PostgresRelationshipConfig = CanonicalPostgresRelationshipConfig;
+export type PostgresRelationshipColumn = CanonicalPostgresRelationshipColumn;
+export type PostgresRelationshipBinding = CanonicalPostgresRelationshipBinding;
+export type PostgresRelationshipSelection =
+    CanonicalPostgresRelationshipSelection;
+export type PostgresRelationshipChange = CanonicalPostgresRelationshipChange;
+export type PostgresRelationshipClear = CanonicalPostgresRelationshipClear;
+export type PostgresRelationshipCandidate =
+    CanonicalPostgresRelationshipCandidate;
+export type PostgresRelationshipCandidatePage =
+    CanonicalPostgresRelationshipCandidatePage;
+
 export type PostgresRecord = CanonicalPostgresRecord;
 export type PostgresValue = CanonicalPostgresValue;
 /** Generated scalar storage only; no schema validator or Form admission. */

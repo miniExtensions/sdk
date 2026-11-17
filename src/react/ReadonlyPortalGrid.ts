@@ -292,6 +292,7 @@ function GridHeader({
                 onFocusCapture: admitHeaderEvent,
                 onClickCapture: admitHeaderEvent,
                 onMouseOverCapture: admitHeaderEvent,
+                onMouseEnter: admitHeaderEvent,
                 onPointerDownCapture: admitHeaderEvent,
                 onKeyDownCapture: (
                     event: ReactKeyboardEvent<HTMLDivElement>

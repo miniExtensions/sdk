@@ -26,7 +26,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
  return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
-window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,hides,widths,opens,submits,errors,pointers,canonicalUnchanged:JSON.stringify(records)===original})};
+window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,canonicalUnchanged:JSON.stringify(records)===original})};
 createRoot(document.querySelector('#root')).render(h(StrictMode,null,h(App)));
 `;
 
@@ -355,9 +355,36 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     );
     await page.keyboard.press('Escape');
     await help.waitFor({ state: 'detached' });
+    const staleHeaderActions = [];
+    evidence.staleHeaderActions = staleHeaderActions;
     await description.focus();
+    staleHeaderActions.push({
+        action: 'focus',
+        tooltipCount: await help.count(),
+        externalRetired: (await snapshot()).externalRetired,
+    });
+    assert.equal(
+        staleHeaderActions.at(-1).tooltipCount,
+        0,
+        'Retired header focus cannot activate help'
+    );
     await description.click();
+    staleHeaderActions.push({
+        action: 'click',
+        tooltipCount: await help.count(),
+        externalRetired: (await snapshot()).externalRetired,
+    });
+    assert.equal(
+        staleHeaderActions.at(-1).tooltipCount,
+        0,
+        'Retired header click/enter cannot activate help'
+    );
     await description.hover();
+    staleHeaderActions.push({
+        action: 'hover',
+        tooltipCount: await help.count(),
+        externalRetired: (await snapshot()).externalRetired,
+    });
     assert.equal(await help.count(), 0);
     assert.equal(await page.locator('[role="tooltip"] img').count(), 0);
     results.push({

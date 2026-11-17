@@ -74,6 +74,8 @@ function Icon({ play }: { play: boolean }) {
               ]
     );
 }
+// Shared inert geometry; this grants no collection or preview capability.
+export { Icon as LinkedFinderAttachmentIcon };
 function Thumbnail({
     row,
     view,

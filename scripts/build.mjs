@@ -239,6 +239,7 @@ for (const format of ['esm', 'cjs']) {
         'form-submit',
         'form-validation-summary',
         'portal-summary-cards',
+        'portal-gallery',
         'form-progress',
         'field-presentation',
         'complete-checkbox',

@@ -1,0 +1,10 @@
+{
+    "extends": "../tsconfig.test.json",
+    "compilerOptions": { "outDir": "../dist/gallery-focused" },
+    "include": [
+        "../src/**/*.ts",
+        "reactPortalGallery.test.ts",
+        "fixtures/htmlPresentationFixture.ts",
+        "../types/**/*.d.ts"
+    ]
+}

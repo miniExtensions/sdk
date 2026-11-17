@@ -131,7 +131,9 @@ logout confirmation, embedded iframe, styles and accessibility. Import
 `@miniextensions/sdk/react/portal-shell.css` and the existing
 `@miniextensions/sdk/react/html-description.css` for rich HTML titles and descriptions.
 There are no host-rendered menu/header slots. `children` is only the host's
-existing table/collection body.
+existing table/collection body. Button and keyboard-focus chrome styles are
+scoped to the SDK header, navigation and dialogs; controls in that body retain
+their native styles.
 
 Optional `snapshot.settings` contains already admitted authoring labels for the
 title, description, profile and menu-item identities. `onOpenSettings` receives a

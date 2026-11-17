@@ -252,7 +252,7 @@ export function createAutomaticPrefillCoordinator(
         }
         publish({ phase: 'submitting' });
         const afterPublication = active() ? current() : null;
-        if (!afterPublication) return;
+        if (!afterPublication || !active()) return;
         const stillEligible = evaluateAutomaticPrefill(afterPublication.facts);
         if (stillEligible.mode !== 'automatic' || !stillEligible.eligible) {
             publish({ phase: 'error', error: 'no-prefills' });

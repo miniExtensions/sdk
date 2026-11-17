@@ -68,6 +68,35 @@ function fixture() {
 }
 
 describe('clientless automatic one-shot and canonical allocation receipts', () => {
+    for (const callback of ['read', 'authority'] as const) {
+        it(`does not request Save after the post-publication ${callback} disconnects the last view`, () => {
+            const f = fixture();
+            f.update({ facts: { ...f.frame().facts, preview: true } }, false);
+            const connection = f.model.connect(() => {});
+            f.update({ facts: { ...f.frame().facts, preview: false } }, false);
+            let calls = 0;
+            if (callback === 'read') {
+                const original = f.host.read;
+                f.host.read = (scope) => {
+                    if (++calls === 2) connection.disconnect();
+                    return original(scope);
+                };
+            } else {
+                const original = f.host.isCurrent;
+                f.host.isCurrent = (frame) => {
+                    if (++calls === 2) connection.disconnect();
+                    return original(frame);
+                };
+            }
+            connection.refresh();
+            assert.equal(f.requests.length, 0);
+            assert.equal(f.model.getSnapshot().allocated, false);
+            assert.equal(f.model.getSnapshot().outcome, null);
+            const reconnected = f.model.connect(() => {});
+            assert.equal(f.requests.length, 0);
+            reconnected.disconnect();
+        });
+    }
     for (const callback of ['read', 'final authority'] as const) {
         it(`issues at most one permit across reentrant ${callback}`, () => {
             const f = fixture();

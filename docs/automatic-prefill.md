@@ -63,3 +63,5 @@ This SDK recipe does not silently enable automatic mode in the incompatible
 full SDK page/controller. Native direct assembly and the genuine supported
 load/Form zero-versus-one allocation oracle are separate required integration
 work; synthetic SDK policy tests alone do not establish them.
+
+Failed and unknown outcomes may carry host-admitted display text. The status UI renders that text literally; the host retains native normalization and current-owner admission. An unknown outcome remains unknown even when its message is specific.

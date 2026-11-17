@@ -175,6 +175,50 @@ test('SDK owns the allocated success and error status leaves', async (t) => {
     await act(async () => root.unmount());
 });
 
+for (const status of ['failed', 'unknown'] as const) {
+    test(`preserves admitted ${status} text as plaintext without stealing focus`, async (t) => {
+        const d = await dom(t),
+            f = fixture();
+        const focus = d.window.document.createElement('button');
+        d.window.document.body.prepend(focus);
+        focus.focus();
+        const root = d.createRoot(d.container as unknown as HTMLElement);
+        try {
+            await act(async () =>
+                root.render(
+                    h(AutomaticPrefillStatus, {
+                        coordinator: f.coordinator,
+                        labels: { unknown: 'Fallback unknown label' },
+                    })
+                )
+            );
+            const request = f.requests[0],
+                admission = request.admitAllocation();
+            assert.equal(admission.status, 'admitted');
+            if (admission.status !== 'admitted')
+                throw new Error('Missing allocation permit');
+            const message = 'Erreur admise <img src=x>';
+            await act(async () => {
+                request.didAllocate(admission.allocation);
+                request.didSettle({
+                    status,
+                    allocation: admission.allocation,
+                    message,
+                });
+            });
+            assert.equal(
+                d.container.querySelector('[role="alert"]')?.textContent,
+                message
+            );
+            assert.equal(d.container.querySelector('img'), null);
+            assert.equal(f.coordinator.getSnapshot().outcome, status);
+            assert.equal(d.window.document.activeElement, focus);
+        } finally {
+            await act(async () => root.unmount());
+        }
+    });
+}
+
 test('an old allocated outcome cannot replace a new coordinator presentation', async (t) => {
     const d = await dom(t),
         old = fixture(),

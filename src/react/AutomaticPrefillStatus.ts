@@ -68,7 +68,9 @@ export function AutomaticPrefillStatus(
         : state.phase === 'saved'
           ? (labels?.saved ?? 'Form submitted.')
           : state.phase === 'unknown'
-            ? (labels?.unknown ?? 'Submission status is unknown.')
+            ? (state.message ??
+              labels?.unknown ??
+              'Submission status is unknown.')
             : state.error === 'no-prefills'
               ? (labels?.noPrefills ?? 'No prefills were detected.')
               : (state.message ?? labels?.failedToSave ?? 'Failed to save.');

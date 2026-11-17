@@ -3405,7 +3405,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(automaticPrefillProof.profiles.length, 2);
     assert.equal(automaticPrefillProof.cleanup, 'completed');
     console.log(
-        'Installed automatic-prefill React18/19 public ESM/CJS, types, CSS, SSR and272 original focused runtime executions passed; native allocation oracle remains separate.'
+        'Installed automatic-prefill React18/19 public ESM/CJS, types, CSS, SSR and280 original focused runtime executions passed; native allocation oracle remains separate.'
     );
     console.log(
         'Installed Printable Form React18/19 public ESM/CJS, types, CSS, SSR and 180 original runtime tests passed. Actual browser print preview/Cancel remains separate.'

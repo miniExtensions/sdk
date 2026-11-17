@@ -2621,12 +2621,7 @@ async function focusWitnessProposalFixture(
                 })
             )
         );
-    await render();
-    const editor = await f.editor(ref);
-    const { view } = editor;
-    const neighbor =
-        f.container.querySelector<HTMLButtonElement>('#witness-neighbor');
-    assert(neighbor);
+    // Own mount-time Prism/focus timers before capturing editor-state identity.
     t.mock.timers.enable({ apis: ['setTimeout'] });
     let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
     let cleaned = false;
@@ -2637,6 +2632,12 @@ async function focusWitnessProposalFixture(
         t.mock.timers.reset();
     };
     t.after(cleanup);
+    await render();
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    const neighbor =
+        f.container.querySelector<HTMLButtonElement>('#witness-neighbor');
+    assert(neighbor);
     await f.select(view, 3);
     await act(async () => t.mock.timers.tick(20));
     pending = deferNativeSelectionChanges(t, f.document);

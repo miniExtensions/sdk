@@ -297,12 +297,12 @@ export async function checkAutomaticPrefillReactMatrix({
                         maxBuffer: 8 * 1024 * 1024,
                     }
                 );
-                assert.match(output, /# tests 68\b/);
-                assert.match(output, /# pass 68\b/);
+                assert.match(output, /# tests 70\b/);
+                assert.match(output, /# pass 70\b/);
                 assert.match(output, /# fail 0\b/);
                 formats.push({
                     format,
-                    tests: 68,
+                    tests: 70,
                     originalAssertions: true,
                     publicEntries: true,
                     outputSha256: sha(output),

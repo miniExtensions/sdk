@@ -275,6 +275,7 @@ export async function checkComputedBrowser({
             record('keyboard reopen then physical-kind resource retirement');
             await page.evaluate(() => window.computedProof.formula('masked'));
             assert.match(await page.locator('main').textContent(), /••••••••/);
+            assert.doesNotMatch(await page.locator('main').innerHTML(), /PRIVATE/);
             assert.equal(
                 await page
                     .locator('main img,main a,main [role="dialog"]')

@@ -81,15 +81,19 @@ are not condition drivers, are retained without cache pruning. The helper owns
 no draft, dirty state, Review transition or Save action.
 
 ```ts
-import { createNonLinkedFormRecordProjection } from '@miniextensions/sdk/forms';
+import {
+    createNonLinkedFormRecordProjection,
+    type CreateNonLinkedFormRecordProjectionInput,
+} from '@miniextensions/sdk/forms';
 
-const projection = createNonLinkedFormRecordProjection({
-    compatibility: 'native-form-v1',
-    formRecord,
-    formRecordForConditionEvaluation,
-    formFields,
-    airtableFields,
-});
+export function projectCommittedFormSnapshot(
+    snapshot: Omit<CreateNonLinkedFormRecordProjectionInput, 'compatibility'>
+) {
+    return createNonLinkedFormRecordProjection({
+        ...snapshot,
+        compatibility: 'native-form-v1',
+    });
+}
 ```
 
 Use `projection.formRecord` only when `projection.type === 'available'`.

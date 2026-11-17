@@ -1,6 +1,7 @@
 import {
     createElement as h,
     useCallback,
+    useEffect,
     type ReactElement,
     type ReactNode,
     type RefObject,
@@ -19,14 +20,26 @@ export default function FieldTooltipPopup(props: {
     onOpenChange: (open: boolean) => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
+    admitDescription?: () => boolean;
     children?: ReactNode;
-}): ReactElement {
+}): ReactElement | null {
     const markReady = useCallback(
         (node: HTMLDivElement | null) => {
             props.onReadyChange(node != null);
         },
         [props.onReadyChange]
     );
+    let admitted = false;
+    try {
+        admitted =
+            props.admitDescription == null || props.admitDescription() === true;
+    } catch {
+        // A retired or unavailable host cannot mount delayed description media.
+    }
+    useEffect(() => {
+        if (!admitted) props.onOpenChange(false);
+    }, [admitted, props.onOpenChange]);
+    if (!admitted) return null;
     return h(
         DatePopover,
         { open: true, onOpenChange: props.onOpenChange, modal: false },

@@ -50,6 +50,8 @@ export type CompleteFormFieldPresentationProps = {
     preview?: boolean;
     /** Explicit host canvas admission marker, projected only in config preview. */
     previewControlProps?: { 'data-config-preview-canvas-control': 'true' };
+    /** Optional host lifetime fence for description activation and lazy media mounting. */
+    admitDescription?: () => boolean;
     readMoreLabel?: string;
     showLessLabel?: string;
     /** Render actual complete leaves with the one shared association. */
@@ -79,7 +81,18 @@ export function CompleteFormFieldPresentation(
         if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
         closeTimer.current = undefined;
     };
+    const descriptionAdmitted = () => {
+        try {
+            return (
+                props.admitDescription == null ||
+                props.admitDescription() === true
+            );
+        } catch {
+            return false;
+        }
+    };
     const openTooltip = () => {
+        if (!descriptionAdmitted()) return;
         cancelClose();
         setTooltipOpen(true);
     };
@@ -200,7 +213,10 @@ export function CompleteFormFieldPresentation(
                                 {
                                     type: 'button',
                                     ...props.previewControlProps,
-                                    onClick: () => setFailedImageUrl(null),
+                                    onClick: () => {
+                                        if (descriptionAdmitted())
+                                            setFailedImageUrl(null);
+                                    },
                                 },
                                 'Try again'
                             )
@@ -317,6 +333,8 @@ export function CompleteFormFieldPresentation(
                                             onOpenChange: setTooltipOpen,
                                             onMouseEnter: openTooltip,
                                             onMouseLeave: leaveTooltip,
+                                            admitDescription:
+                                                props.admitDescription,
                                         },
                                         description()
                                     )

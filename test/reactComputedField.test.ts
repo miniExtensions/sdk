@@ -4,10 +4,14 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     ComputedField,
+    composeComputedPresentation,
+    projectComputedFormulaDisplay,
+    type ComputedPresentationEntry,
     type ComputedFieldProps,
     type ComputedFormulaDisplay,
     type LookupPresentationOwner,
 } from '../src/react/index.js';
+import { projectComputedLookup } from '../src/ui/index.js';
 
 type ValidFormula = Extract<ComputedFormulaDisplay, { isValid: true }>;
 const url = 'https://computed.example.invalid/first.png';
@@ -19,6 +23,23 @@ const formula = (override: Partial<ValidFormula> = {}): ValidFormula => ({
     value: 'Answer',
     formattedValue: 'Answer',
     ...override,
+});
+
+const lookupSource = (result: object) => ({
+    id: 'computed-source',
+    name: 'Computed Lookup',
+    description: null,
+    isPrimaryField: false,
+    isComputed: true,
+    config: {
+        type: 'multipleLookupValues',
+        options: {
+            isValid: true,
+            recordLinkFieldId: 'source-link',
+            fieldIdInLinkedTable: 'source-result',
+            result,
+        },
+    },
 });
 
 async function fixture(t: TestContext) {
@@ -256,6 +277,296 @@ it('renders live Formula, Rollup and ordered Lookup in the same physical field m
     assert.doesNotMatch(f.text(), /€12.30|false/);
 });
 
+it('renders the complete ordered projection pipeline for scalar, whole-array and nested Lookup answers', async (t) => {
+    const f = await fixture(t);
+    const config = Object.freeze({ readOnly: false });
+    const canonical = Object.freeze(['Repeated', null, 'Repeated', false, 0]);
+    const scalar = projectComputedLookup({
+        field: lookupSource({ type: 'singleLineText', options: null }),
+        value: canonical,
+        displayConfig: config,
+        forceReadOnly: true,
+    });
+    if (scalar.status !== 'ready')
+        throw Error('Expected admitted scalar Lookup');
+    const entries = new Map<string, ComputedPresentationEntry>(
+        scalar.occurrences.map((item) => [
+            item.key,
+            {
+                kind: 'result',
+                result: { kind: 'literal', text: String(item.value) },
+            },
+        ])
+    );
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: composeComputedPresentation({
+            projection: scalar,
+            entries,
+            owner: f.first.owner,
+        }),
+    });
+    assert.equal(f.text(), 'RepeatedRepeatedfalse0');
+    assert.deepEqual(
+        scalar.occurrences.map((item) => item.index),
+        [0, 2, 3, 4]
+    );
+    assert.equal(config.readOnly, false);
+    assert.deepEqual(canonical, ['Repeated', null, 'Repeated', false, 0]);
+
+    const choices = [{ id: 'a', name: 'A' }];
+    const wholeValue = Object.freeze(['A', 'A']);
+    const whole = projectComputedLookup({
+        field: lookupSource({ type: 'multipleSelects', options: { choices } }),
+        value: wholeValue,
+        displayConfig: config,
+    });
+    if (whole.status !== 'ready')
+        throw Error('Expected admitted whole-array Lookup');
+    assert.equal(whole.occurrences[0].value, wholeValue);
+    const richEntries = new Map<string, ComputedPresentationEntry>([
+        [
+            whole.occurrences[0].key,
+            {
+                kind: 'result',
+                result: {
+                    kind: 'multipleSelects',
+                    display: {
+                        value: wholeValue,
+                        choices,
+                        availableChoices: choices,
+                        presentation: 'dropdown',
+                    },
+                },
+            },
+        ],
+    ]);
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: composeComputedPresentation({
+            projection: whole,
+            entries: richEntries,
+            owner: f.first.owner,
+        }),
+    });
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-select-badge').length,
+        2
+    );
+
+    const nested = projectComputedLookup({
+        field: lookupSource({
+            type: 'multipleLookupValues',
+            options: {
+                isValid: true,
+                recordLinkFieldId: 'nested-link',
+                fieldIdInLinkedTable: 'nested-result',
+                result: { type: 'singleLineText', options: null },
+            },
+        }),
+        value: canonical,
+        displayConfig: config,
+    });
+    if (nested.status !== 'ready')
+        throw Error('Expected nested result descriptor');
+    const child = projectComputedLookup({
+        field: nested.resultField,
+        value: nested.occurrences[0].value,
+        displayConfig: nested.displayConfig,
+        keyPrefix: nested.occurrences[0].key + '/lookup',
+    });
+    if (child.status !== 'ready')
+        throw Error('Expected child result occurrences');
+    const nestedEntries = new Map<string, ComputedPresentationEntry>(
+        child.occurrences.map((item) => [
+            item.key,
+            {
+                kind: 'result',
+                result: { kind: 'literal', text: String(item.value) },
+            },
+        ])
+    );
+    nestedEntries.set(nested.occurrences[0].key, {
+        kind: 'nested',
+        projection: child,
+    });
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: composeComputedPresentation({
+            projection: nested,
+            entries: nestedEntries,
+            owner: f.first.owner,
+        }),
+    });
+    assert.equal(f.text(), 'RepeatedRepeatedfalse0');
+    nestedEntries.delete(child.occurrences[0].key);
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: composeComputedPresentation({
+            projection: nested,
+            entries: nestedEntries,
+            owner: f.first.owner,
+        }),
+    });
+    assert.match(f.text(), /Unavailable/);
+    assert.doesNotMatch(f.text(), /Repeated/);
+    const emptyChild = { status: 'empty' as const };
+    nestedEntries.set(nested.occurrences[0].key, {
+        kind: 'nested',
+        projection: emptyChild,
+    });
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: composeComputedPresentation({
+            projection: nested,
+            entries: nestedEntries,
+            owner: f.first.owner,
+        }),
+    });
+    assert.match(f.text(), /No Value/);
+    assert.deepEqual(canonical, ['Repeated', null, 'Repeated', false, 0]);
+});
+
+it('renders host-admitted Formula projection and recovery without evaluating concealed conversion or resources', async (t) => {
+    const f = await fixture(t);
+    const render = async (
+        input: Parameters<typeof projectComputedFormulaDisplay>[0]
+    ) => {
+        const projection = projectComputedFormulaDisplay(input);
+        await f.render(
+            projection.status === 'ready'
+                ? {
+                      ...f.common(),
+                      kind: 'formula',
+                      display: projection.display,
+                  }
+                : { ...f.common(), kind: 'formula', state: projection }
+        );
+    };
+    const base = {
+        isValid: true,
+        language: 'en' as const,
+        resultType: 'singleLineText',
+        value: '<strong>Native HTML</strong><script>bad()</script>',
+        formattedValue: 'Native HTML',
+    };
+    let conversions = 0,
+        resources = 0;
+    await render({
+        ...base,
+        config: {
+            renderFormulaAsHTML: true,
+            renderFormulaAsAttachment: true,
+            displayAsButton: true,
+            heightForFormulaFieldHTML: 80,
+            textSizeForFormulaAsTextField: 'large',
+        },
+        get formattedValue() {
+            conversions++;
+            return 'Native HTML';
+        },
+        formattingFailed: true,
+        gallery: { entries: [] },
+    });
+    assert.equal(conversions, 1);
+    assert.equal(
+        f.container.querySelector('strong')?.textContent,
+        'Native HTML'
+    );
+    assert.equal(f.container.querySelector('script'), null);
+    assert.equal(
+        f.container
+            .querySelector('.mx-sdk-html')
+            ?.getAttribute('style')
+            ?.includes('80px'),
+        true
+    );
+    const concealed = Object.defineProperties(
+        {
+            isValid: true,
+            language: 'en',
+            config: {
+                obscurePassword: true,
+                textSizeForFormulaAsTextField: 'very large',
+            },
+        },
+        {
+            value: {
+                get() {
+                    resources++;
+                    throw Error('Private value read');
+                },
+            },
+            formattedValue: {
+                get() {
+                    conversions++;
+                    throw Error('Private conversion');
+                },
+            },
+            gallery: {
+                get() {
+                    resources++;
+                    throw Error('Private gallery');
+                },
+            },
+        }
+    );
+    await render(
+        concealed as Parameters<typeof projectComputedFormulaDisplay>[0]
+    );
+    assert.equal(f.text(), '••••••••');
+    assert.equal(f.container.querySelectorAll('.text-xl').length, 1);
+    assert.equal(conversions, 1);
+    assert.equal(resources, 0);
+    await render({ ...base, isValid: false });
+    assert.match(f.text(), /invalid value/);
+    await render({ ...base, config: { renderFormulaAsHTML: 'malformed' } });
+    assert.match(f.text(), /Unavailable/);
+    const entries = Object.freeze([{ url, filename: 'Host admitted' }]);
+    await render({
+        ...base,
+        config: {
+            renderFormulaAsAttachment: true,
+            displayMode: 'icon',
+            thumbnailSize: 'small',
+            thumbFitType: 'contain',
+            hideAttachmentName: false,
+            disableOpenFiles: true,
+            disableDownloadFiles: true,
+        },
+        gallery: { entries, owner: f.first.owner },
+        resource: { owner: f.first.owner, identity: f.first.owner.token },
+        buttonLabels: { openLink: 'Open supplied URL' },
+    });
+    assert.match(f.text(), /Host admitted/);
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-url-gallery button').length,
+        0
+    );
+    await render({
+        ...base,
+        value: 'Recovered',
+        formattedValue: 'Recovered',
+        config: {},
+    });
+    assert.equal(f.text(), 'Recovered');
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: composeComputedPresentation({
+            projection: { status: 'native-error', message: '#ERROR!' },
+            entries: new Map(),
+            owner: f.first.owner,
+        }),
+    });
+    assert.match(f.text(), /#ERROR!/);
+});
+
 it('accepts explicit nonready Formula and Rollup admission without fabricating display facts', async (t) => {
     const f = await fixture(t);
     await f.render({
@@ -483,6 +794,10 @@ it('owns sibling frame IDs and rejects nested association IDs instead of duplica
             .querySelector('#computed-a')
             ?.getAttribute('aria-labelledby'),
         'label-a'
+    );
+    assert.equal(
+        f.container.querySelector('#computed-a')?.getAttribute('role'),
+        'group'
     );
     assert.equal(
         f.container

@@ -209,6 +209,15 @@ export async function checkComputedBrowser({
                 'RepeatedRepeatedfalse0'
             );
             assert.equal(
+                await page
+                    .getByRole('group', {
+                        name: 'Computed Formula',
+                        exact: true,
+                    })
+                    .count(),
+                1
+            );
+            assert.equal(
                 await page.locator('#rollup').textContent(),
                 '0, false'
             );

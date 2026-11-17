@@ -24,6 +24,8 @@ composeComputedPresentation({projection:{status:'empty'},owner,entries:new Map()
 createElement(ComputedField,{...lookup,onValueChange(){}});
 // @ts-expect-error No host renderer or binding slot
 createElement(ComputedField,{...lookup,render(){return null;}});
+// @ts-expect-error Frame implementation metadata is not a public control option
+createElement(ComputedField,{...lookup,frameRole:'group'});
 // @ts-expect-error Formula inner IDs cannot duplicate the outer association
 createElement(ComputedField,{kind:'formula',owner,identity:owner.token,display:{mode:'controlled',isValid:false,language:'en',inputId:'duplicate'}});
 // @ts-expect-error Formula configuration projection accepts facts, not a formatter callback
@@ -46,7 +48,7 @@ const state=api.composeComputedPresentation({projection,entries,owner,language:'
 const projectedFormula=api.projectComputedFormulaDisplay({isValid:true,language:'en',resultType:'singleLineText',value:'<strong>Computed HTML</strong><script>forbidden()</script>',formattedValue:'Computed HTML',config:{renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}});
 if(projectedFormula.status!=='ready')throw Error('Computed Formula admission');
 const base={owner,identity:owner.token,language:'en'};
-function computedElement(){return h(React.StrictMode,null,h('form',{onSubmit(event){event.preventDefault();throw Error('Unexpected computed submit');}},h('input',{id:'neighbor',defaultValue:'Preserved draft'}),h(api.ComputedField,{...base,kind:'formula',inputId:'formula',display:projectedFormula.display}),h(api.ComputedField,{...base,kind:'rollup',inputId:'rollup',display:{mode:'controlled',language:'en',isValid:true,value:'0, false'}}),h(api.ComputedField,{...base,kind:'lookup',inputId:'lookup',state})));}
+function computedElement(){return h(React.StrictMode,null,h('form',{onSubmit(event){event.preventDefault();throw Error('Unexpected computed submit');}},h('input',{id:'neighbor',defaultValue:'Preserved draft'}),h('span',{id:'computed-formula-title'},'Computed Formula'),h(api.ComputedField,{...base,kind:'formula',inputId:'formula',labelledBy:'computed-formula-title',display:projectedFormula.display}),h(api.ComputedField,{...base,kind:'rollup',inputId:'rollup',display:{mode:'controlled',language:'en',isValid:true,value:'0, false'}}),h(api.ComputedField,{...base,kind:'lookup',inputId:'lookup',state})));}
 `;
 
 export const computedRuntime =

@@ -642,7 +642,7 @@ function Result({
 
 /** Complete readonly presentation; it never acquires a field binding or writer. */
 export function ControlledLookupField(
-    props: ControlledLookupFieldProps
+    props: ControlledLookupFieldProps & { readonly frameRole?: 'group' }
 ): ReactNode {
     const id = useId();
     const committedEffect =
@@ -777,6 +777,7 @@ export function ControlledLookupField(
         'div',
         {
             id: props.inputId,
+            role: props.frameRole === 'group' ? 'group' : undefined,
             className: ['mx-sdk-controlled-lookup', props.className]
                 .filter(Boolean)
                 .join(' '),

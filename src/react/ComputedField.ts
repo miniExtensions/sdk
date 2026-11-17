@@ -182,6 +182,7 @@ export function ComputedField(props: ComputedFieldProps): ReactNode {
         }
         return createElement(ControlledLookupField, {
             ...common,
+            frameRole: 'group',
             key: frameKey,
             state,
         });

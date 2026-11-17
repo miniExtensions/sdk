@@ -236,5 +236,9 @@ export async function checkReadonlyPortalGridReactMatrix({
             JSON.stringify({ ...completedProfile, cleanup: 'completed' })
         );
     }
-    return { profiles, tests: profiles.reduce((total, profile) => total + profile.tests, 0), archiveSha256 };
+    return {
+        profiles,
+        tests: profiles.reduce((total, profile) => total + profile.tests, 0),
+        archiveSha256,
+    };
 }

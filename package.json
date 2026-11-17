@@ -208,7 +208,8 @@
         "./react/readonly-url-gallery.css": "./dist/esm/react/readonly-url-gallery.css",
         "./react/lookup.css": "./dist/esm/react/lookup.css",
         "./react/computed.css": "./dist/esm/react/computed.css",
-        "./react/portal-shell.css": "./dist/esm/react/portal-shell.css"
+        "./react/portal-shell.css": "./dist/esm/react/portal-shell.css",
+        "./react/readonly-portal-list.css": "./dist/esm/react/readonly-portal-list.css"
     },
     "files": [
         "dist/esm",
@@ -243,6 +244,7 @@
         "examples/react-printable-form/build.mjs",
         "examples/react-printable-form/tsconfig.json",
         "docs/portals.md",
+        "docs/readonly-portal-list.md",
         "docs/native-portal-kernel.md",
         "docs/native-portal-differential.md",
         "examples/react-portal-summary-cards/README.md",
@@ -316,6 +318,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "node --test scripts/coverage-policy.test.mjs scripts/coverage-test-profile.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
+        "check:readonly-list": "node scripts/check-readonly-portal-list.mjs",
         "check:lookup:browser": "node scripts/check-controlled-lookup-browser.mjs",
         "check:package": "node scripts/build.mjs && node --test scripts/source-package-checks.test.mjs scripts/portal-sidebar-vendor-checks.test.mjs scripts/calendar-vendor-checks.test.mjs scripts/portal-map-vendor-checks.test.mjs scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/date-popover-vendor.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",

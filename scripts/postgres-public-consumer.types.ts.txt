@@ -43,6 +43,22 @@ import type {
     PostgresUpdateResult,
 } from '@miniextensions/sdk';
 
+export function nativeIdentityProtocolMetadata(type: PostgresType) {
+    const array: boolean | undefined = type.nativeArrayProtocol;
+    const enumProtocol: boolean | undefined = type.nativeEnumProtocol;
+    const attested: PostgresType = {
+        ...type,
+        nativeArrayProtocol: true,
+        nativeEnumProtocol: false,
+    };
+    const invalid: PostgresType = {
+        ...type,
+        // @ts-expect-error Native protocol metadata cannot be inferred from a caller's type-name string.
+        nativeEnumProtocol: 'enum_recv',
+    };
+    return { array, enumProtocol, attested, invalid };
+}
+
 export const defaultTextPresentation: 'text' =
     postgresTextColumnPresentationDefinition.defaultValue;
 export const ordinaryTextPresentation: PostgresTextColumnPresentation =

@@ -79,6 +79,8 @@ export type PostgresPublicAliasContracts = Assert<
 export type PostgresNativeValueContracts = [
     Assert<Equal<PostgresValue, string | null>>,
     Assert<Equal<PostgresField['collationOid'], number | null>>,
+    Assert<Equal<PostgresType['nativeArrayProtocol'], boolean | undefined>>,
+    Assert<Equal<PostgresType['nativeEnumProtocol'], boolean | undefined>>,
     Assert<Equal<PostgresRecord['identity'], PostgresRecordIdentity | null>>,
     Assert<
         Equal<
@@ -313,4 +315,18 @@ export function rejectedPostgresNativeContracts() {
         inventedIdentity,
         crossedReference,
     };
+}
+
+export function nativeIdentityProtocolMetadata(type: PostgresType) {
+    const attested: PostgresType = {
+        ...type,
+        nativeArrayProtocol: true,
+        nativeEnumProtocol: false,
+    };
+    const invalid: PostgresType = {
+        ...type,
+        // @ts-expect-error Protocol metadata is an attested boolean, not a type-name hint.
+        nativeArrayProtocol: 'array_recv',
+    };
+    return { attested, invalid };
 }

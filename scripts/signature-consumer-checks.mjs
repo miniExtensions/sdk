@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -54,8 +55,12 @@ void rendererSlot;void metadataOnly;void queuedWrite;void secondStore;
             { react: '18.3.1', types: '18.3.12', dom: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', dom: '19.2.2' },
         ]) {
-            execFileSync(
-                'npm',
+            runAgeQualifiedConsumerInstall(
+                (command, args) =>
+                    execFileSync(command, args, {
+                        cwd: directory,
+                        stdio: 'inherit',
+                    }),
                 [
                     'install',
                     '--ignore-scripts',
@@ -63,15 +68,12 @@ void rendererSlot;void metadataOnly;void queuedWrite;void secondStore;
                     '--no-audit',
                     '--no-fund',
                     '--package-lock=false',
-                    '--cache',
-                    join(directory, 'npm-cache'),
                     '@types/node@22.20.5',
                     'react@' + version.react,
                     'react-dom@' + version.react,
                     '@types/react@' + version.types,
                     '@types/react-dom@' + version.dom,
-                ],
-                { cwd: directory, stdio: 'inherit' }
+                ]
             );
             for (const extension of ['mts', 'cts']) {
                 const name = 'signature.' + extension;

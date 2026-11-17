@@ -19,6 +19,8 @@ jobs:
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
+            - name: Enforce 48-hour npm release cutoff
+              run: node scripts/npm-release-age.mjs --github-env "$GITHUB_ENV"
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
             - run: pnpm format:check && pnpm typecheck && pnpm test && node --test scripts/wait-for-source-ci.test.mjs
@@ -49,6 +51,8 @@ jobs:
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
+            - name: Enforce 48-hour npm release cutoff
+              run: node scripts/npm-release-age.mjs --github-env "$GITHUB_ENV"
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
             - run: pnpm check:package

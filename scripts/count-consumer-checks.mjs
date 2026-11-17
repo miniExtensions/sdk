@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -913,7 +914,7 @@ console.log(JSON.stringify({ ...result, react: require('react').version }));
                     },
                 })
             );
-            run('npm', [
+            runAgeQualifiedConsumerInstall(run, [
                 'install',
                 '--ignore-scripts',
                 '--strict-peer-deps',

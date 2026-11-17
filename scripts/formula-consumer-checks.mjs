@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -105,7 +106,7 @@ export function checkControlledFormulaReactMatrix({
                     stdio: ['ignore', 'pipe', 'pipe'],
                     timeout: 120000,
                 });
-            run('npm', [
+            runAgeQualifiedConsumerInstall(run, [
                 'install',
                 '--ignore-scripts',
                 '--strict-peer-deps',

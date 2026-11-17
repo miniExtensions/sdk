@@ -1,6 +1,6 @@
 import { createElement as h, useCallback, type ReactElement } from 'react';
 import { GoogleMap, OverlayViewF } from '@react-google-maps/api';
-import { Loader } from '@googlemaps/js-api-loader';
+import * as selectedLoader from '@googlemaps/js-api-loader';
 import type { PortalMapEffectiveProviderConfiguration } from '../../portals/map/providerCoordinator.js';
 import type { PortalMapRuntimeProps } from './types.js';
 
@@ -15,6 +15,18 @@ const offset = (width: number, height: number) => ({
 export async function loadPortalMapProvider(
     configuration: PortalMapEffectiveProviderConfiguration
 ): Promise<void> {
+    // The selected package publishes ESM for bundlers and a UMD CommonJS main.
+    // Node's namespace exposes that UMD export through default; production keeps
+    // the same audited ESM input and one direct Loader constructor.
+    const Loader =
+        (selectedLoader as Partial<Pick<typeof selectedLoader, 'Loader'>>)
+            .Loader ??
+        (
+            Reflect.get(selectedLoader, 'default') as Pick<
+                typeof selectedLoader,
+                'Loader'
+            >
+        ).Loader;
     const loaded = await new Loader({
         ...configuration,
         retries: 0,

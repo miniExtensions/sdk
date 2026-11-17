@@ -3,11 +3,11 @@ import { assertPortalSidebarVendor } from './portal-sidebar-vendor-checks.mjs';
 import { assertAddressCombobox } from './address-combobox-bundle.mjs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { readdir, readFile, rm, mkdir, copyFile, cp } from 'node:fs/promises';
+import { readdir, rm, mkdir, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkCoverage } from './coverage-policy.mjs';
-import { bundlePortalMap } from './portal-map-vendor-checks.mjs';
+import { createTestProfileClassifier } from './coverage-test-profile.mjs';
 import {
     assertRichTextVendor,
     richTextRuntimeFilter,
@@ -60,15 +60,6 @@ run(require.resolve('typescript/bin/tsc'), [
     '--outDir',
     output,
 ]);
-await bundlePortalMap(root, {
-    sourceEntry: `${output}/src/react/map/GoogleMapsRuntime.js`,
-    outputs: [
-        {
-            format: 'esm',
-            child: `${output}/src/react/map/GoogleMapsRuntime.js`,
-        },
-    ],
-});
 await cp(
     path.join(root, 'vendor/headlessui-address'),
     path.join(root, output, 'vendor/headlessui-address'),
@@ -108,14 +99,12 @@ async function tests(directory, prefix = '') {
     }
     return files.sort();
 }
+const classifyTest = createTestProfileClassifier(path.join(root, 'test'));
 for (const name of await tests(path.join(root, 'test'))) {
     if (!name.endsWith('.test.ts')) continue;
-    const source = await readFile(path.join(root, 'test', name), 'utf8');
-    // Component suites explicitly mount native/React controls in happy-dom.
-    // Headless controller and protocol tests remain in the unit group.
-    const group = /from\s+['"]happy-dom['"]/.test(source)
-        ? 'component'
-        : 'unit';
+    // Follow actual local test fixtures without importing or executing them.
+    // Headless controller and protocol graphs remain in the unit group.
+    const group = await classifyTest(name);
     groups[group].push(`${output}/test/${name.replace(/\.ts$/, '.js')}`);
 }
 const c8 = require.resolve('c8/bin/c8.js');

@@ -461,3 +461,142 @@ test('default driver refuses a foreign provider arriving during the lazy runtime
     assert.equal(f.requests(), 0);
     c.release(acquired.lease);
 });
+
+test('actual selected default Loader boots once through a synthetic script response and rejects incomplete ready API shapes', async (t) => {
+    const f = await portalMapGoogleFixture(t);
+    const root = f.create();
+    Reflect.deleteProperty(f.window, 'google');
+    // A browser's free `google` identifier and window.google are the same slot.
+    // Preserve that relation in happy-dom while Loader installs its bootstrap.
+    Object.defineProperty(globalThis, 'google', {
+        configurable: true,
+        get: () => Reflect.get(f.window, 'google'),
+        set: (value: unknown) => {
+            Reflect.set(f.window, 'google', value);
+        },
+    });
+    const head = f.window.document.head;
+    const append = head.append.bind(head);
+    let providerScripts = 0;
+    head.append = (...nodes: Parameters<typeof head.append>) => {
+        const scripts = nodes.filter(
+            (node): node is InstanceType<typeof f.window.HTMLScriptElement> =>
+                node instanceof f.window.HTMLScriptElement &&
+                node.src.startsWith('https://maps.googleapis.com/maps/api/js')
+        );
+        for (const script of scripts) {
+            // This owned unit transport fulfills the response below. Keep the
+            // external-resource engine inert; real script semantics are separately
+            // exercised by the intercepted packed Chromium/default-Loader proof.
+            script.type = 'application/x-sdk-google-fixture';
+        }
+        append(...nodes);
+        for (const script of scripts) {
+            f.expectProviderScript(script);
+            providerScripts++;
+            assert.equal(
+                new URL(script.src).searchParams.get('key'),
+                configuration.apiKey
+            );
+            queueMicrotask(() => {
+                const current = Reflect.get(f.window, 'google') as {
+                    maps: typeof f.google.maps & {
+                        __ib__: () => void;
+                        importLibrary: () => Promise<unknown>;
+                    };
+                };
+                const callback = current.maps.__ib__;
+                Object.assign(current.maps, f.google.maps);
+                current.maps.importLibrary = async () => current.maps;
+                callback();
+            });
+        }
+    };
+    const rawDriver = createGoogleMapsPortalMapDriver({
+        getRealm: () => window,
+    });
+    let fault: { name: string; sites: string[] } | null = null;
+    const c = createPortalMapProviderCoordinator({
+        inspectRealm: rawDriver.inspectRealm,
+        createLoader(effective) {
+            const loader = rawDriver.createLoader(effective);
+            return {
+                load: async () => {
+                    try {
+                        await loader.load();
+                    } catch (error) {
+                        fault = {
+                            name:
+                                error instanceof Error ? error.name : 'Unknown',
+                            sites:
+                                error instanceof Error
+                                    ? (error.stack ?? '')
+                                          .split('\n')
+                                          .slice(1, 4)
+                                    : [],
+                        };
+                        throw error;
+                    }
+                },
+            };
+        },
+    });
+    const binding = bindPortalMapProvider(
+        c,
+        createPortalMapProviderOwnerScope().capture(),
+        configuration
+    );
+    await root.render(
+        h(PortalMap, props(binding, [marker('default-loader row')]))
+    );
+    try {
+        await f.waitFor(
+            () =>
+                root.container.querySelector('.mx-sdk-portal-map-card') !== null
+        );
+    } catch {
+        assert.fail(
+            JSON.stringify({
+                providerScripts,
+                status: root.container
+                    .querySelector('[data-map-status]')
+                    ?.getAttribute('data-map-status'),
+                fault,
+            })
+        );
+    }
+    assert.equal(providerScripts, 1);
+    assert.equal(f.requests(), 0);
+    assert(root.container.textContent?.includes('default-loader row'));
+    const effective = {
+        ...configuration,
+        id: 'script-loader',
+        version: 'weekly',
+        language: 'en',
+        region: 'US',
+        libraries: ['maps'] as const,
+        mapIds: [],
+        nonce: '',
+        authReferrerPolicy: 'origin' as const,
+        retries: 0 as const,
+        url: 'https://maps.googleapis.com/maps/api/js' as const,
+    };
+    const runtime = await import('../src/react/map/GoogleMapsRuntime.js');
+    const current = Reflect.get(f.window, 'google') as typeof f.google;
+    for (const key of ['Map', 'OverlayView', 'LatLngBounds'] as const) {
+        const value = current.maps[key];
+        Reflect.deleteProperty(current.maps, key);
+        try {
+            await assert.rejects(runtime.loadPortalMapProvider(effective), {
+                message: 'provider-failed',
+            });
+        } finally {
+            Reflect.set(current.maps, key, value);
+        }
+    }
+    assert.equal(
+        providerScripts,
+        1,
+        'Readiness validation never resets or retries the pinned loader'
+    );
+});

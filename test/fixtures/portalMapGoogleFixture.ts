@@ -6,7 +6,16 @@ import type { Root } from 'react-dom/client';
 
 /** Fake only the Google API. Vendor React components/portals and their DOM ownership stay real. */
 export async function portalMapGoogleFixture(t: TestContext) {
-    const window = new Window();
+    const window = new Window({
+        settings: {
+            disableJavaScriptFileLoading: true,
+            disableJavaScriptEvaluation: true,
+            disableCSSFileLoading: true,
+        },
+    });
+    const expectedProviderScripts = new Set<
+        InstanceType<typeof window.HTMLScriptElement>
+    >();
     const globals = [
         'window',
         'document',
@@ -16,6 +25,7 @@ export async function portalMapGoogleFixture(t: TestContext) {
         'Node',
         'HTMLButtonElement',
         'HTMLDivElement',
+        'ErrorEvent',
         'IS_REACT_ACT_ENVIRONMENT',
         'google',
     ] as const;
@@ -255,10 +265,12 @@ export async function portalMapGoogleFixture(t: TestContext) {
             0,
             'Every reached owned event handle removed'
         );
-        assert.equal(
-            window.document.querySelectorAll('script[src*="maps.google"]')
-                .length,
-            0
+        assert.deepEqual(
+            Array.from(
+                window.document.querySelectorAll('script[src*="maps.google"]')
+            ),
+            [...expectedProviderScripts],
+            'Root cleanup preserves exactly the admitted provider scripts until this owned realm closes'
         );
         assert.equal(requests, 0);
         globals.forEach((name, index) => {
@@ -271,6 +283,15 @@ export async function portalMapGoogleFixture(t: TestContext) {
     return {
         window,
         google,
+        expectProviderScript(
+            script: InstanceType<typeof window.HTMLScriptElement>
+        ) {
+            assert.equal(script.ownerDocument, window.document);
+            assert(
+                script.src.startsWith('https://maps.googleapis.com/maps/api/js')
+            );
+            expectedProviderScripts.add(script);
+        },
         maps,
         overlays,
         listeners,

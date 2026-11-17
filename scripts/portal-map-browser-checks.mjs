@@ -609,7 +609,11 @@ export async function checkPortalMapBrowser({
             );
             assert.equal(item.providerRequests, 1);
             let state = await snapshot();
-            assert.equal(state.host.realmReads, 1);
+            assert.equal(
+                state.host.realmReads,
+                2,
+                'Initial admission plus post-import custody recheck'
+            );
             assert.deepEqual(state.host.mounted, ['first', 'second']);
             assert.equal(state.boundary, null);
             await item.page.evaluate(() =>
@@ -621,7 +625,11 @@ export async function checkPortalMapBrowser({
             state = await snapshot();
             assert.equal(item.providerRequests, 1);
             assert.equal(item.routeFulfilled, 1);
-            assert.equal(state.host.realmReads, 1);
+            assert.equal(
+                state.host.realmReads,
+                2,
+                'Initial admission plus post-import custody recheck'
+            );
             assert(state.boundary.bootstrapCallbackPreserved);
             const loaded = loadedMaps(state.boundary);
             assert(loaded.length >= 2);

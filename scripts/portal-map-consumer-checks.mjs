@@ -257,7 +257,12 @@ function checkCss(root, consumer, manifest, format, readPacked) {
     const records = new Map();
     function visit(path) {
         path = resolve(path);
-        assert(path.startsWith(resolve(root, 'dist', format) + sep));
+        assert(
+            path.startsWith(resolve(root, 'dist', format) + sep) ||
+                path ===
+                    resolve(root, 'dist/vendor/phone-number-input/style.css'),
+            'Map CSS may reach only its format closure and the shared finder phone stylesheet'
+        );
         if (records.has(path)) return '';
         const bytes = readPacked(path);
         const text = bytes.toString('utf8');

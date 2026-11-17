@@ -9,12 +9,15 @@ React18/19, ESM/CommonJS, strict public types, CSS, cold SSR and hydration.
 `pnpm check:readonly-list` is the focused installed-consumer diagnostic; it does
 not replace the full source/package gates.
 
-`check-readonly-portal-list-browser.mjs` joins the normal package workflow and
-checks trusted pointer/Enter/Space, current focus return, held-action retirement,
+`readonly-portal-list-browser-checks.mjs` runs through the existing
+`check-native-browser.mjs` in the normal package workflow. It checks trusted
+pointer/Enter/Space, current focus return, held-action retirement,
 preview/no-child suppression, accepted ordering/empty labels and List/Grid/List
 over one host-port subscription. Its child controls and data are synthetic.
 Actual native caller, child lifecycle and dependency composition require their
 own native regression and current-revision localhost qualification.
+`check-readonly-portal-list-browser.mjs` is the focused packed wrapper over the
+same browser assertions.
 
 ## Fresh package consumer dependencies
 

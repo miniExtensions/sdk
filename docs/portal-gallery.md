@@ -71,7 +71,10 @@ titles remain unnamed value groups, without deriving labels from schemas.
 
 The shared image controller preserves identity within the first six Gallery
 thumbnails; failed images do not promote a seventh. List image fallback remains
-an independent full-array policy. Attachment leaves accept ordered `entries`
+an independent full-array policy. A temporary loading publication retains only
+carousel selection/failure hints and resolves them against the next current image
+vector; it retains no previous card values or actions. Unavailable, empty images
+and List presentation retire these carousel hints. Attachment leaves accept ordered `entries`
 with resolved `thumbnailUrl` or null and a filename. Missing/failed thumbnails
 render an inert filename/document fallback. Omitted entries retain legacy images;
 explicit empty entries do not recover those images. There is no original-URL
@@ -82,6 +85,8 @@ Their captured functions are requests returning void; no returned Promise or
 value is treated as admission or success. Open can register its real source
 button with `registerTrigger`, whose cleanup retires only that registration.
 The host retains child permissions, URL auto-open, neighbours and return focus.
+Optional `testId` on a row, Open or Unlink control preserves a host's existing
+automation association on the visible SDK leaf; it grants no action capability.
 Unlink confirmation, current canonical membership, allocation, error handling,
 reload and final settlement remain with the native host. `unlinkingRecordId`
 controls all visible Unlink buttons and the matching spinner. Allocated work is

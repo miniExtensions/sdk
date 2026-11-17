@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Window } from 'happy-dom';
 import { createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
@@ -15,6 +16,7 @@ function row(id: string): PortalGalleryRow {
         key: id,
         recordId: id,
         accessibleLabel: `Record ${id}`,
+        testId: 'native-compatible-row',
         projection: {
             status: 'present',
             primary: `Primary ${id}`,
@@ -56,6 +58,7 @@ test('Gallery renders the complete rich-card view in SSR without a browser or na
     assert.match(markup, /Detail/);
     assert.match(markup, /Value a/);
     assert.match(markup, /mx-sdk-portal-gallery-fixed/);
+    assert.match(markup, /data-testid="native-compatible-row"/);
     assert.doesNotMatch(markup, /<button|<input|<iframe/);
 });
 test('Gallery preserves configured one-to-six column caps and source default five', () => {
@@ -80,6 +83,7 @@ test('Gallery preserves configured one-to-six column caps and source default fiv
 });
 test('Gallery StrictMode mount, row replacement and empty states allocate no actions or reads', async (t) => {
     const f = await htmlPresentationFixture(t);
+    assert.ok(f.window instanceof Window);
     const actions: string[] = [];
     const a = {
         ...row('a'),
@@ -585,4 +589,136 @@ test('Gallery legacy attachment images remain ordered and explicit empty entries
     );
     assert.equal(f.container.querySelector('button,a,iframe'), null);
     f.unchangedEffects();
+});
+
+test('Gallery keeps only carousel UI identity through a loading publication and uses only the successor image vector', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const errors: unknown[][] = [];
+    t.mock.method(console, 'error', (...args: unknown[]) => {
+        errors.push(args);
+    });
+    const source = row('image-publication');
+    if (source.projection.status !== 'present')
+        throw new Error('Expected present source');
+    const one = {
+        id: 'one',
+        url: 'https://html-presentation.example.test/one.svg',
+        filename: 'One',
+    };
+    const two = {
+        id: 'two',
+        url: 'https://html-presentation.example.test/two.svg',
+        filename: 'Two',
+    };
+    const three = {
+        id: 'three',
+        url: 'https://html-presentation.example.test/three.svg',
+        filename: 'Three',
+    };
+    const present = {
+        ...source.projection,
+        images: [one, two],
+        shouldRenderThumbnail: true,
+    };
+    await f.render(
+        h(PortalGallery, props([{ ...source, projection: present }]))
+    );
+    const dot = f.container.querySelectorAll(
+        '.mx-sdk-finder-carousel-dots button'
+    )[1];
+    assert(dot instanceof f.window.HTMLButtonElement);
+    await f.click(dot);
+    assert.equal(
+        f.container
+            .querySelector('img[data-visible=true]')
+            ?.getAttribute('alt'),
+        'Two'
+    );
+    await f.render(
+        h(
+            PortalGallery,
+            props([
+                {
+                    ...source,
+                    projection: {
+                        status: 'loading',
+                        label: 'Admitting current native leaves',
+                    },
+                },
+            ])
+        )
+    );
+    assert.equal(f.container.querySelector('img'), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-portal-gallery-open'),
+        null
+    );
+    await f.render(
+        h(
+            PortalGallery,
+            props([
+                {
+                    ...source,
+                    projection: { ...present, images: [three, two, one] },
+                },
+            ])
+        )
+    );
+    assert.equal(
+        f.container
+            .querySelector('img[data-visible=true]')
+            ?.getAttribute('alt'),
+        'Two'
+    );
+    await f.render(
+        h(
+            PortalGallery,
+            props([
+                {
+                    ...source,
+                    projection: {
+                        status: 'loading',
+                        label: 'Current publication',
+                    },
+                },
+            ])
+        )
+    );
+    await f.render(
+        h(
+            PortalGallery,
+            props([{ ...source, projection: { ...present, images: [three] } }])
+        )
+    );
+    assert.equal(
+        f.container
+            .querySelector('img[data-visible=true]')
+            ?.getAttribute('alt'),
+        'Three'
+    );
+    assert.equal(f.container.querySelector('img[alt=Two]'), null);
+    await f.render(
+        h(
+            PortalGallery,
+            props([
+                {
+                    ...source,
+                    projection: {
+                        status: 'unavailable',
+                        label: 'Current unavailable',
+                    },
+                },
+            ])
+        )
+    );
+    await f.render(
+        h(PortalGallery, props([{ ...source, projection: present }]))
+    );
+    assert.equal(
+        f.container
+            .querySelector('img[data-visible=true]')
+            ?.getAttribute('alt'),
+        'One'
+    );
+    assert.deepEqual(errors, [], 'React lifecycle diagnostics remain clear');
 });

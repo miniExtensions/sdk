@@ -43,16 +43,20 @@ export type PortalGalleryRow = Readonly<{
     key: string;
     recordId: string;
     accessibleLabel: string;
+    /** Optional host automation association; no action authority. */
+    testId?: string;
     projection: LinkedFinderCardProjection;
     /** An explicit current host request. Its return value is never admission. */
     open?: Readonly<{
         label: string;
+        testId?: string;
         activate(): void;
         registerTrigger?(element: HTMLButtonElement): () => void;
     }> | null;
     requestUnlink?: Readonly<{
         label: string;
         description: string;
+        testId?: string;
         activate(): void;
     }> | null;
     /** Only an inherited host presentation, never a review command. */
@@ -118,6 +122,7 @@ function GalleryRow({
             className: 'mx-sdk-portal-gallery-row',
             'aria-label': row.accessibleLabel,
             'data-record-id': row.recordId,
+            'data-testid': row.testId,
         },
         h(
             'div',
@@ -130,6 +135,7 @@ function GalleryRow({
                   ref: openRef,
                   className: 'mx-sdk-portal-gallery-open',
                   'aria-label': row.open.label,
+                  'data-testid': row.open.testId,
                   onClick: () => {
                       activateOpen?.();
                   },
@@ -150,6 +156,7 @@ function GalleryRow({
                       className: 'mx-sdk-portal-gallery-unlink',
                       title: row.requestUnlink.description,
                       'aria-label': row.requestUnlink.label,
+                      'data-testid': row.requestUnlink.testId,
                       'aria-busy': pending,
                       disabled: unlinkingRecordId !== null,
                       onClick: () => {

@@ -544,30 +544,67 @@ function useListImage(card: Present) {
     });
 }
 
-function Carousel({ card }: { card: Present }) {
+function useCarouselController(projection: LinkedFinderCardProjection) {
     const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
-    const images = linkedFinderCarouselImages(card.images, failed);
     const [selection, setSelection] = useState<{
         identity: string | null;
         index: number;
     }>({ identity: null, index: 0 });
+    // Loading is a host publication phase, not a new record or image vector.
+    // Keep only UI identity/failure hints; no previous projection is retained.
+    const retire =
+        projection.status === 'unavailable' ||
+        (projection.status === 'present' &&
+            (projection.layout === 'list' ||
+                !projection.shouldRenderThumbnail ||
+                projection.images.length === 0));
+    if (retire) {
+        if (failed.size) setFailed(new Set());
+        if (selection.identity !== null || selection.index !== 0)
+            setSelection({ identity: null, index: 0 });
+    }
+    return { failed, setFailed, selection, setSelection };
+}
+
+function Carousel({
+    card,
+    controller,
+}: {
+    card: Present;
+    controller: ReturnType<typeof useCarouselController>;
+}) {
+    const { failed, setFailed, selection, setSelection } = controller;
+    const images = linkedFinderCarouselImages(card.images, failed);
     const index = linkedFinderCarouselIndex(
         images,
         selection.identity,
         selection.index
     );
     const image = images[index];
-    if (
-        selection.identity !== (image?.identity ?? null) ||
-        selection.index !== index
-    )
-        setSelection({ identity: image?.identity ?? null, index });
+    useCommittedEffect(() => {
+        const identity = image?.identity ?? null;
+        if (selection.identity !== identity || selection.index !== index)
+            setSelection((previous) =>
+                previous.identity === selection.identity &&
+                previous.index === selection.index
+                    ? { identity, index }
+                    : previous
+            );
+    }, [image?.identity, index, selection, setSelection]);
     const committed = useRef(images);
     useCommittedEffect(() => {
         committed.current = images;
+        return () => {
+            if (committed.current === images) committed.current = [];
+        };
     });
     const change = (delta: number) => {
+        if (committed.current !== images) return;
         const next = (index + delta + images.length) % images.length;
+        setSelection({ identity: images[next].identity, index: next });
+    };
+    const select = (next: number) => {
+        if (committed.current !== images || !images[next]) return;
         setSelection({ identity: images[next].identity, index: next });
     };
     return h(
@@ -657,11 +694,7 @@ function Carousel({ card }: { card: Present }) {
                                   ).replace('{index}', String(dotIndex + 1)),
                                   'aria-current':
                                       dotIndex === index ? 'true' : undefined,
-                                  onClick: () =>
-                                      setSelection({
-                                          identity: attempt.identity,
-                                          index: dotIndex,
-                                      }),
+                                  onClick: () => select(dotIndex),
                               },
                               h(
                                   'span',
@@ -699,6 +732,7 @@ export function LinkedFinderCard({
 }: {
     projection: LinkedFinderCardProjection;
 }): ReactElement {
+    const carousel = useCarouselController(projection);
     if (projection.status !== 'present')
         return h(
             'div',
@@ -708,7 +742,7 @@ export function LinkedFinderCard({
             },
             projection.label
         );
-    return h(PresentCard, { projection });
+    return h(PresentCard, { projection, carousel });
 }
 
 function CardDetail({
@@ -746,7 +780,13 @@ function CardDetail({
     );
 }
 
-function PresentCard({ projection }: { projection: Present }): ReactElement {
+function PresentCard({
+    projection,
+    carousel,
+}: {
+    projection: Present;
+    carousel: ReturnType<typeof useCarouselController>;
+}): ReactElement {
     // Native List position belongs to the record presenter, so it survives
     // thumbnail hiding, moving sides and a Gallery/Kanban round trip.
     const listImage = useListImage(projection);
@@ -761,7 +801,7 @@ function PresentCard({ projection }: { projection: Present }): ReactElement {
             ? projection.layout === 'list'
                 ? listImage
                 : projection.images.length
-                  ? h(Carousel, { card: projection })
+                  ? h(Carousel, { card: projection, controller: carousel })
                   : h(
                         'div',
                         {

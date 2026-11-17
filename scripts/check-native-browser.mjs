@@ -4,6 +4,10 @@ import {
 } from './kanban-consumer-checks.mjs';
 import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
 import {
+    preparePortalGalleryBrowserFixtures,
+    checkPortalGalleryBrowser,
+} from './portal-gallery-browser-checks.mjs';
+import {
     preparePrintableFormBrowserFixtures,
     checkPrintableFormBrowser,
 } from './printable-form-browser-checks.mjs';
@@ -1566,6 +1570,7 @@ try {
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/printable-form-browser-checks.mjs',
+            'scripts/portal-gallery-browser-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
             'scripts/controlled-lookup-consumer-checks.mjs',
             'scripts/controlled-lookup-browser-checks.mjs',
@@ -2015,6 +2020,17 @@ try {
         await prepareKanbanBrowserFixtures({
             temporary,
             archive,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await preparePortalGalleryBrowserFixtures({
+            temporary,
             readArchiveMember,
             installed,
             allowed,
@@ -3039,6 +3055,13 @@ try {
         });
         await run('kanban', async (page, origin) => {
             await checkKanbanBrowser({ page, origin, evidence: report.kanban });
+        });
+        await run('portal-gallery-layout', async (page, origin) => {
+            await page.goto(origin + '/portal-gallery-layout.html');
+            await checkPortalGalleryBrowser({
+                page,
+                evidence: report.portalGallery,
+            });
         });
         await run('printable-form-layout', async (page, origin) => {
             await page.goto(origin + '/printable-form-layout.html');

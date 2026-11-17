@@ -4076,8 +4076,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, printable layout, CSV, Kanban and section groups.
-            29 +
+            // Include complete fields, printable layout, CSV, Kanban, Gallery and section groups.
+            30 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

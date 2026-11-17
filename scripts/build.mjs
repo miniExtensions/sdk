@@ -244,6 +244,7 @@ for (const format of ['esm', 'cjs']) {
         'portal-summary-cards',
         'readonly-portal-list',
         'portal-gallery',
+        'readonly-portal-grid',
         'form-progress',
         'field-presentation',
         'complete-checkbox',

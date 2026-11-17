@@ -209,7 +209,8 @@
         "./react/lookup.css": "./dist/esm/react/lookup.css",
         "./react/computed.css": "./dist/esm/react/computed.css",
         "./react/portal-shell.css": "./dist/esm/react/portal-shell.css",
-        "./react/readonly-portal-list.css": "./dist/esm/react/readonly-portal-list.css"
+        "./react/readonly-portal-list.css": "./dist/esm/react/readonly-portal-list.css",
+        "./react/form-pages.css": "./dist/esm/react/form-pages.css"
     },
     "files": [
         "dist/esm",
@@ -303,7 +304,8 @@
         "docs/portal-gallery.md",
         "docs/readonly-portal-grid.md",
         "docs/portal-shell.md",
-        "docs/portal-map.md"
+        "docs/portal-map.md",
+        "docs/native-form-pages.md"
     ],
     "engines": {
         "node": ">=22"

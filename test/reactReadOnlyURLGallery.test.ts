@@ -68,7 +68,9 @@ async function fixture(t: TestContext) {
         await act(async () => (node as unknown as HTMLElement).click());
     };
     const open = (index: number) =>
-        click(`.mx-sdk-url-gallery__entry:nth-child(${index + 1}) button`);
+        click(
+            `.mx-sdk-url-gallery__entry:nth-child(${index + 1}) .mx-sdk-url-gallery__open`
+        );
     const index = () =>
         host.querySelector('.mx-sdk-url-gallery__position')?.textContent;
     const preview = () => host.querySelector('.mx-sdk-url-gallery__preview');
@@ -121,6 +123,229 @@ it('renders localized ordered rows and explicit layout options without write con
         html,
         /type="file"|Delete|Annotate|Upload|type="submit"/
     );
+});
+
+for (const surface of ['list', 'modal picker'] as const) {
+    it(`recovers a broken granted image thumbnail in the ${surface}`, async (t) => {
+        const f = await fixture(t);
+        const thumbnailUrl = 'https://files.example.test/broken-thumb.png';
+        const fullUrl =
+            surface === 'list'
+                ? 'https://files.example.test/granted-preview.png'
+                : thumbnailUrl;
+        const broken: ReadOnlyURLGalleryEntry = {
+            ...entry('attachment'),
+            type: 'image/png',
+            thumbnailUrl,
+            thumbnails: { full: { url: fullUrl } },
+        };
+        const selected = entry('still-selected');
+        const requests = t.mock.method(globalThis, 'fetch', async () => {
+            throw new Error('Thumbnail recovery must use only native images');
+        });
+        await f.render({
+            entries: [broken, selected],
+            labels: { previewNotAvailable: 'Imagen no disponible' },
+        });
+        if (surface === 'modal picker') await f.open(1);
+        const scope =
+            surface === 'list'
+                ? '.mx-sdk-url-gallery__entry:first-child'
+                : '.mx-sdk-url-gallery__strip';
+        const image = () => f.host.querySelector(`${scope} img`);
+        const failImage = async (repeat = false) => {
+            const current = image();
+            assert.ok(current);
+            await act(async () => {
+                current.dispatchEvent(new f.window.Event('error'));
+                if (repeat) current.dispatchEvent(new f.window.Event('error'));
+            });
+        };
+        assert.equal(image()?.getAttribute('src'), thumbnailUrl);
+        await failImage(true);
+        assert.equal(
+            image()?.getAttribute('src'),
+            surface === 'list' ? fullUrl : broken.url,
+            'use the next distinct granted source after one failed attempt'
+        );
+        if (surface === 'list') {
+            await failImage();
+            assert.equal(image()?.getAttribute('src'), broken.url);
+        }
+        await failImage();
+        const status = f.host.querySelector(`${scope} [role="status"]`);
+        assert.ok(status);
+        assert.match(status.textContent ?? '', /Imagen no disponible/);
+        assert.match(
+            status.getAttribute('aria-label') ?? '',
+            /attachment\.png/
+        );
+        const retry = status.querySelector('button');
+        assert.equal(retry?.textContent, 'Try again');
+        assert.equal(retry?.getAttribute('type'), 'button');
+        assert.equal(f.host.querySelector('button button'), null);
+        retry?.focus();
+        await f.click(`${scope} [role="status"] button`);
+        assert.equal(image()?.getAttribute('src'), thumbnailUrl);
+        assert.equal(f.host.querySelector(`${scope} [role="status"]`), null);
+        if (surface === 'list') {
+            assert.equal(f.host.querySelector('[role="dialog"]'), null);
+            assert.equal(
+                f.window.document.activeElement,
+                f.host.querySelector(`${scope} .mx-sdk-url-gallery__open`)
+            );
+            await f.open(0);
+            assert.equal(f.index(), '1 / 2');
+        } else {
+            assert.equal(f.index(), '2 / 2');
+            assert.equal(
+                f.preview()?.querySelector('img')?.getAttribute('src'),
+                selected.url
+            );
+            assert.equal(
+                f.window.document.activeElement,
+                f.host.querySelector('button[aria-label="Select attachment 1"]')
+            );
+            assert.equal(
+                f.host.querySelector('[role="dialog"] a')?.getAttribute('href'),
+                selected.url
+            );
+            await f.click('button[aria-label="Select attachment 1"]');
+            assert.equal(f.index(), '1 / 2');
+        }
+        assert.equal(requests.mock.callCount(), 0);
+        assert.equal(f.submits(), 0);
+    });
+}
+
+it('rejects late thumbnail errors after the owner retires without notifying React', async (t) => {
+    const f = await fixture(t);
+    let current = true;
+    const owner = { isCurrent: () => current };
+    const attachment = {
+        ...entry('retired'),
+        thumbnailUrl: '/retired-thumb.png',
+    };
+    await f.render({ entries: [attachment], owner });
+    await f.open(0);
+    const scope =
+        '.mx-sdk-url-gallery__thumbnail img, .mx-sdk-url-gallery__strip img';
+    const thumbnails = Array.from(f.host.querySelectorAll(scope));
+    assert.equal(thumbnails.length, 2);
+    current = false;
+    await act(async () => {
+        for (const image of thumbnails)
+            image.dispatchEvent(new f.window.Event('error'));
+    });
+    assert.deepEqual(Array.from(f.host.querySelectorAll(scope)), thumbnails);
+    for (const image of thumbnails)
+        assert.equal(image.getAttribute('src'), attachment.thumbnailUrl);
+    assert.equal(f.submits(), 0);
+});
+
+it('restarts a same-URL thumbnail for a replacement resource and rejects both obsolete and retired Retry controls', async (t) => {
+    const f = await fixture(t);
+    const selectionOwner = { isCurrent: () => true };
+    const first = { isCurrent: () => true };
+    let secondCurrent = true;
+    const second = { isCurrent: () => secondCurrent };
+    const attachment = entry('same-image', 'stable');
+    const entries = [attachment];
+    const labels = { retry: 'Reintentar' };
+    const image = () =>
+        f.host.querySelector('.mx-sdk-url-gallery__thumbnail img');
+    const retry = () =>
+        f.host.querySelector(
+            '.mx-sdk-url-gallery__thumbnail [role="status"] button'
+        );
+    const failImage = async () => {
+        const current = image();
+        assert.ok(current);
+        await act(async () =>
+            current.dispatchEvent(new f.window.Event('error'))
+        );
+        return current;
+    };
+    await f.render({ entries, owner: first, selectionOwner, labels });
+    await f.open(0);
+    const oldImage = await failImage();
+    const oldRetry = retry();
+    assert.equal(oldRetry?.textContent, 'Reintentar');
+    await f.render({ entries, owner: second, selectionOwner, labels });
+    const successor = image();
+    assert.ok(successor);
+    assert.notEqual(successor, oldImage);
+    assert.equal(successor.getAttribute('src'), attachment.url);
+    assert.equal(retry(), null);
+    assert.equal(f.index(), '1 / 1');
+    await act(async () => {
+        oldImage.dispatchEvent(new f.window.Event('error'));
+        (oldRetry as unknown as HTMLElement).click();
+    });
+    assert.equal(image(), successor);
+    await failImage();
+    assert.ok(retry());
+    secondCurrent = false;
+    await f.click('.mx-sdk-url-gallery__thumbnail [role="status"] button');
+    assert.equal(image(), null);
+    assert.equal(f.submits(), 0);
+});
+
+it('renders non-images and label-only data without requesting an image', async (t) => {
+    const f = await fixture(t);
+    const document = {
+        ...entry('misleading-image-name'),
+        url: 'https://files.example.test/document.pdf',
+        type: 'application/pdf',
+        thumbnailUrl: 'https://files.example.test/document.pdf',
+        thumbnails: {
+            full: { url: 'https://files.example.test/document.pdf' },
+        },
+    };
+    const invalidLabelOnly = {
+        filename: 'label.png',
+    } as ReadOnlyURLGalleryEntry;
+    await f.render({ entries: [document, invalidLabelOnly] });
+    assert.equal(f.host.querySelector('img'), null);
+    await f.open(0);
+    assert.equal(f.host.querySelector('img'), null);
+    assert.equal(
+        f.preview()?.querySelector('iframe')?.getAttribute('src'),
+        document.url + '#toolbar=0'
+    );
+    assert.equal(
+        f.host.querySelector('[role="dialog"] a')?.getAttribute('href'),
+        document.url
+    );
+    assert.equal(f.submits(), 0);
+});
+
+it('preserves explicitly granted image posters for a document without trying the document as an image', async (t) => {
+    const f = await fixture(t);
+    const thumbnailUrl = '/document-thumbnail.png';
+    const previewUrl = '/document-preview.png';
+    const document = {
+        url: '/document.pdf',
+        type: 'application/pdf',
+        thumbnailUrl,
+        thumbnails: { full: { url: previewUrl } },
+    };
+    await f.render({ entries: [document] });
+    const image = () =>
+        f.host.querySelector('.mx-sdk-url-gallery__thumbnail img');
+    const fail = async () => {
+        const loaded = image();
+        assert.ok(loaded);
+        await act(async () =>
+            loaded.dispatchEvent(new f.window.Event('error'))
+        );
+    };
+    assert.equal(image()?.getAttribute('src'), thumbnailUrl);
+    await fail();
+    assert.equal(image()?.getAttribute('src'), previewUrl);
+    await fail();
+    assert.equal(image(), null);
+    assert.ok(f.host.querySelector('[role="status"] button'));
 });
 
 it('preserves selected repeated URL occurrence across reorder/shrink and synchronously closes on empty', async (t) => {

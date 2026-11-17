@@ -4675,7 +4675,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
-    assert.equal(galleryProof.tests, 44);
+    assert.equal(galleryProof.tests, 48);
     console.log(
         'Installed Portal Gallery React18/19 ESM/CJS/types/SSR/styles and source lifecycle assertions passed.',
         galleryProof

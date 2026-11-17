@@ -2485,6 +2485,10 @@ it('retains reverse navigation ranges and equal-caret stored marks', async (t) =
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();
     const writes: string[] = [];
+    // Capture the real editor's mount timers before its Prism plugin schedules
+    // metadata initialization; drain them before asserting state identity.
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => t.mock.timers.reset());
     await f.render(
         h(CompleteRichTextEditor, {
             ref,
@@ -2493,7 +2497,6 @@ it('retains reverse navigation ranges and equal-caret stored marks', async (t) =
         })
     );
     const { view } = await f.editor(ref);
-    t.mock.timers.enable({ apis: ['setTimeout'] });
     let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
     try {
         await f.select(view, 1);
@@ -2599,6 +2602,10 @@ async function focusWitnessProposalFixture(
     initial = 'Alpha Beta'
 ) {
     const f = await completeRichTextFixture(t);
+    // Timers enabled after mounting cannot control already-scheduled native
+    // Prism metadata updates, which would invalidate a later state baseline.
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => t.mock.timers.reset());
     const ref = createRef<NativeRichTextEditorHandle>();
     const writes: string[] = [];
     const onValueChange = (value: string) => writes.push(value);
@@ -2627,7 +2634,6 @@ async function focusWitnessProposalFixture(
     const neighbor =
         f.container.querySelector<HTMLButtonElement>('#witness-neighbor');
     assert(neighbor);
-    t.mock.timers.enable({ apis: ['setTimeout'] });
     let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
     let cleaned = false;
     const cleanup = () => {

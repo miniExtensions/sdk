@@ -2461,6 +2461,7 @@ try {
             consumer: temporary,
             evidence: report.readonlyPortalList,
             output,
+            expectedReactVersion: nativeReactVersion,
         });
         assert.equal(report.readonlyPortalList.passed, true);
         assert.equal(report.readonlyPortalList.contextClosed, true);

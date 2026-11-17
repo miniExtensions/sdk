@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { createRequire } from 'node:module';
 import {
     mkdtempSync,
     readFileSync,
@@ -40,13 +39,13 @@ export async function checkReadonlyPortalListBrowser({
     consumer,
     evidence,
     output,
+    expectedReactVersion,
 }) {
     const temporary = realpathSync(
         mkdtempSync(join(consumer, 'readonly-list-proof-'))
     );
-    const version = createRequire(join(consumer, 'package.json'))(
-        'react'
-    ).version;
+    assert(['18.3.1', '19.2.0'].includes(expectedReactVersion));
+    const version = expectedReactVersion;
     let server;
     try {
         writeFileSync(

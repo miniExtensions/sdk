@@ -112,6 +112,7 @@ try {
             consumer: temporary,
             evidence,
             output,
+            expectedReactVersion: version,
         });
         assert.equal(evidence.react, version);
     }

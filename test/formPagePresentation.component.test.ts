@@ -17,6 +17,7 @@ import {
 import {
     CompleteFormReview,
     type CompleteFormReviewProps,
+    type FormReviewDialogFrameProps,
 } from '../src/react/CompleteFormReview.js';
 
 const pages: readonly FormPageNavigationDescriptor[] = [
@@ -488,4 +489,89 @@ it('outside dismissal does not invoke Edit or Confirm', async (t) => {
     assert.equal(edits, 0);
     assert.equal(confirms, 0);
     assert.equal(dismissals, 1);
+});
+
+it('delegates only the modal frame while retaining the complete SDK Review panel', async (t) => {
+    const f = await fixture(t);
+    let dialogCalls = 0;
+    let edits = 0;
+    let dismissals = 0;
+    let confirms = 0;
+    const receivedTitles: string[] = [];
+    const prototype = f.window.HTMLDialogElement.prototype;
+    const showModal = prototype.showModal;
+    const close = prototype.close;
+    prototype.showModal = () => {
+        dialogCalls++;
+        throw new Error('A supplied frame must not open a native HTML dialog');
+    };
+    prototype.close = () => {
+        dialogCalls++;
+        throw new Error('A supplied frame must not close a native HTML dialog');
+    };
+    t.after(() => {
+        prototype.showModal = showModal;
+        prototype.close = close;
+    });
+    function Frame({ title, onDismiss, children }: FormReviewDialogFrameProps) {
+        receivedTitles.push(title);
+        return h(
+            'section',
+            {
+                role: 'dialog',
+                'aria-label': title,
+                'data-testid': 'host-frame',
+            },
+            h('button', { type: 'button', onClick: onDismiss }, 'Frame close'),
+            children
+        );
+    }
+    const props = reviewProps({
+        dialogFrame: Frame,
+        onEdit: () => edits++,
+        onDismiss: () => dismissals++,
+        onConfirm: () => confirms++,
+    });
+    await f.render(h(CompleteFormReview, props));
+    assert.ok(receivedTitles.length > 0);
+    assert.ok(receivedTitles.every((title) => title === props.title));
+    assert.equal(f.host.querySelectorAll('dialog').length, 0);
+    assert.equal(dialogCalls, 0);
+    assert.ok(
+        f.window.document.activeElement === f.opener,
+        'The frame, rather than the default dialog, must own focus'
+    );
+    const frame = f.host.querySelector('[data-testid="host-frame"]');
+    assert.ok(frame);
+    assert.equal(frame.getAttribute('aria-label'), props.title);
+    assert.equal(frame.querySelectorAll('.mx-sdk-form-review-panel').length, 1);
+    assert.equal(
+        frame.querySelectorAll('[data-testid="dialog-test-id"]').length,
+        0
+    );
+    assert.equal(frame.querySelector('header h2')?.textContent, props.title);
+    assert.equal(frame.querySelector('dl dt')?.textContent, 'Name');
+    assert.equal(frame.querySelector('dl dd')?.textContent, 'First value');
+    assert.equal(f.button('Edit').type, 'button');
+    assert.equal(f.button('Submit form').type, 'button');
+    await f.click('Edit');
+    await f.click('Submit form');
+    await f.click('Frame close');
+    assert.equal(edits, 1);
+    assert.equal(confirms, 1);
+    assert.equal(dismissals, 1);
+    assert.equal(f.submits(), 0);
+    await act(async () => {
+        f.opener.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(dismissals, 1, 'The supplied frame owns Escape handling');
+    await f.render(h(CompleteFormReview, { ...props, open: false }));
+    assert.equal(f.host.childElementCount, 0);
+    assert.equal(dialogCalls, 0);
 });

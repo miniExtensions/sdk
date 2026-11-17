@@ -1,8 +1,12 @@
+@import './html-description.css';
+
 .mx-sdk-form-pages,
 .mx-sdk-form-pages *,
 .mx-sdk-form-page-button,
 .mx-sdk-form-review-dialog,
-.mx-sdk-form-review-dialog * {
+.mx-sdk-form-review-dialog *,
+.mx-sdk-form-review-panel,
+.mx-sdk-form-review-panel * {
     box-sizing: border-box;
 }
 .mx-sdk-form-pages {
@@ -300,4 +304,3 @@
         animation: none;
     }
 }
-@import './html-description.css';

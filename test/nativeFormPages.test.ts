@@ -370,6 +370,51 @@ it('render reads do not observe currentness; the next action observes and retire
     assert.equal(f.nextPages.length, 0);
 });
 
+for (const action of ['confirm', 'back', 'next'] as const) {
+    it(`a retained ${action} cannot run inside an outer currentness refusal`, () => {
+        const f = fixture();
+        const events: string[] = [];
+        let reenter = false;
+        let retained: () => unknown = () => {};
+        let nestedPresentation: unknown;
+        const publication = f.publication({
+            isCurrent() {
+                if (!reenter) return true;
+                events.push('admission:start');
+                retained();
+                nestedPresentation = pages.getSnapshot();
+                events.push('admission:end');
+                return false;
+            },
+            onNext({ advance }) {
+                events.push('native:next');
+                advance();
+            },
+            onBack() {
+                events.push('native:back');
+            },
+        });
+        const pages = createNativeFormPages(publication);
+        if (action === 'confirm') {
+            pages.openReview(() => {
+                events.push('native:submit');
+            });
+            retained = pages.confirmReview;
+        } else if (action === 'back') {
+            pages.next();
+            retained = pages.back;
+        } else retained = pages.next;
+        events.length = 0;
+        const before = pages.getSnapshot();
+        reenter = true;
+        pages.update(publication);
+        assert.deepEqual(events, ['admission:start', 'admission:end']);
+        assert.equal(nestedPresentation, before);
+        assert.equal(pages.getSnapshot().retired, true);
+        assert.equal(pages.getSnapshot().reviewing, false);
+    });
+}
+
 it('dispose retires held callbacks without touching the host or a successor owner', () => {
     const f = fixture();
     const pages = createNativeFormPages(f.publication());

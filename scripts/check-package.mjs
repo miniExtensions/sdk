@@ -4766,7 +4766,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
-    assert.equal(nativePagesProof.tests, 108);
+    assert.equal(nativePagesProof.tests, 124);
     assert.equal(nativePagesProof.hydrationProfiles, 4);
     assert.equal(nativePagesProof.hydrationChecks, 52);
     assert.equal(nativePagesProof.cleanup, 'completed');

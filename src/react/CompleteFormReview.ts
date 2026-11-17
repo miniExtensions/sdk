@@ -6,6 +6,7 @@ import {
     useLayoutEffect,
     useRef,
     type CSSProperties,
+    type ComponentType,
     type ReactElement,
     type ReactNode,
     type SyntheticEvent,
@@ -19,8 +20,16 @@ export type FormReviewItem = {
     value: ReactNode;
 };
 
+export type FormReviewDialogFrameProps = {
+    title: string;
+    onDismiss(): void;
+    children?: ReactNode;
+};
+
 export type CompleteFormReviewProps = {
     open: boolean;
+    /** Host modal primitive only. SDK retains the complete panel and controls. */
+    dialogFrame?: ComponentType<FormReviewDialogFrameProps>;
     items: readonly FormReviewItem[];
     title: string;
     editLabel: string;
@@ -52,7 +61,7 @@ export function CompleteFormReview(
         dismiss.current = props.onDismiss;
     });
     useCommitEffect(() => {
-        if (!props.open) return;
+        if (!props.open || props.dialogFrame) return;
         const dialog = node.current;
         if (!dialog) return;
         const document = dialog.ownerDocument;
@@ -126,7 +135,7 @@ export function CompleteFormReview(
             )
                 entry.opener.focus({ preventScroll: true });
         };
-    }, [props.open]);
+    }, [props.open, props.dialogFrame]);
     if (!props.open) return null;
     const style: CSSProperties & {
         '--mx-sdk-form-review-reserved-inline-end'?: string;
@@ -135,6 +144,128 @@ export function CompleteFormReview(
         '--mx-sdk-form-review-reserved-inline-end':
             props.reservedInlineEndWidth,
     };
+    const panel = h(
+        'div',
+        {
+            className: 'mx-sdk-form-review-panel',
+            'data-testid': props.dialogFrame ? undefined : 'dialog-test-id',
+        },
+        h(
+            'header',
+            { className: 'mx-sdk-form-review-header' },
+            h(
+                'button',
+                {
+                    type: 'button',
+                    className: 'mx-sdk-form-review-edit',
+                    onClick: props.onEdit,
+                },
+                h(
+                    'svg',
+                    {
+                        className: 'mx-sdk-form-review-icon',
+                        viewBox: '0 0 20 20',
+                        fill: 'currentColor',
+                        'aria-hidden': true,
+                    },
+                    h('path', {
+                        fillRule: 'evenodd',
+                        d: 'M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z',
+                        clipRule: 'evenodd',
+                    })
+                ),
+                props.editLabel
+            ),
+            h(
+                'h2',
+                {
+                    id: `${instanceId}-title`,
+                    className: 'mx-sdk-form-review-title',
+                },
+                props.title
+            )
+        ),
+        h(
+            'div',
+            { className: 'mx-sdk-form-review-body' },
+            props.items.length === 0
+                ? h(
+                      'p',
+                      { className: 'mx-sdk-form-review-empty' },
+                      h(
+                          'svg',
+                          {
+                              className: 'mx-sdk-form-review-icon',
+                              viewBox: '0 0 20 20',
+                              fill: 'currentColor',
+                              'aria-hidden': true,
+                          },
+                          h('path', {
+                              fillRule: 'evenodd',
+                              d: 'M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm4.72-11.66a6.5 6.5 0 0 1-9.06 9.06l9.06-9.06ZM4.6 14.34a6.5 6.5 0 0 1 9.06-9.06L4.6 14.34Z',
+                              clipRule: 'evenodd',
+                          })
+                      ),
+                      props.emptyLabel
+                  )
+                : h(
+                      'dl',
+                      { className: 'mx-sdk-form-review-list' },
+                      props.items.map((item, index) => {
+                          const labelId = `${instanceId}-field-${index}`;
+                          return h(
+                              Fragment,
+                              { key: item.id },
+                              h(
+                                  'dt',
+                                  {
+                                      id: labelId,
+                                      className: `mx-sdk-form-review-label${
+                                          item.title.length === 0
+                                              ? ' mx-sdk-form-review-label--hidden'
+                                              : ''
+                                      }`,
+                                  },
+                                  item.title.length === 0
+                                      ? item.semanticTitle
+                                      : item.title
+                              ),
+                              h(
+                                  'dd',
+                                  {
+                                      className: 'mx-sdk-form-review-value',
+                                      'aria-labelledby': labelId,
+                                  },
+                                  item.value
+                              )
+                          );
+                      })
+                  )
+        ),
+        h(
+            'footer',
+            { className: 'mx-sdk-form-review-footer' },
+            h(
+                'button',
+                {
+                    type: 'button',
+                    className: 'mx-sdk-form-review-confirm',
+                    disabled: props.confirmDisabled,
+                    onClick: () => {
+                        props.onConfirm();
+                    },
+                },
+                props.confirmLabel
+            )
+        )
+    );
+    if (props.dialogFrame) {
+        return h(props.dialogFrame, {
+            title: props.title,
+            onDismiss: props.onDismiss,
+            children: panel,
+        });
+    }
     return h(
         'dialog',
         {
@@ -156,120 +287,6 @@ export function CompleteFormReview(
             'data-testid': 'dialog-overlay-test-id',
             onClick: props.onDismiss,
         }),
-        h(
-            'div',
-            {
-                className: 'mx-sdk-form-review-panel',
-                'data-testid': 'dialog-test-id',
-            },
-            h(
-                'header',
-                { className: 'mx-sdk-form-review-header' },
-                h(
-                    'button',
-                    {
-                        type: 'button',
-                        className: 'mx-sdk-form-review-edit',
-                        onClick: props.onEdit,
-                    },
-                    h(
-                        'svg',
-                        {
-                            className: 'mx-sdk-form-review-icon',
-                            viewBox: '0 0 20 20',
-                            fill: 'currentColor',
-                            'aria-hidden': true,
-                        },
-                        h('path', {
-                            fillRule: 'evenodd',
-                            d: 'M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z',
-                            clipRule: 'evenodd',
-                        })
-                    ),
-                    props.editLabel
-                ),
-                h(
-                    'h2',
-                    {
-                        id: `${instanceId}-title`,
-                        className: 'mx-sdk-form-review-title',
-                    },
-                    props.title
-                )
-            ),
-            h(
-                'div',
-                { className: 'mx-sdk-form-review-body' },
-                props.items.length === 0
-                    ? h(
-                          'p',
-                          { className: 'mx-sdk-form-review-empty' },
-                          h(
-                              'svg',
-                              {
-                                  className: 'mx-sdk-form-review-icon',
-                                  viewBox: '0 0 20 20',
-                                  fill: 'currentColor',
-                                  'aria-hidden': true,
-                              },
-                              h('path', {
-                                  fillRule: 'evenodd',
-                                  d: 'M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm4.72-11.66a6.5 6.5 0 0 1-9.06 9.06l9.06-9.06ZM4.6 14.34a6.5 6.5 0 0 1 9.06-9.06L4.6 14.34Z',
-                                  clipRule: 'evenodd',
-                              })
-                          ),
-                          props.emptyLabel
-                      )
-                    : h(
-                          'dl',
-                          { className: 'mx-sdk-form-review-list' },
-                          props.items.map((item, index) => {
-                              const labelId = `${instanceId}-field-${index}`;
-                              return h(
-                                  Fragment,
-                                  { key: item.id },
-                                  h(
-                                      'dt',
-                                      {
-                                          id: labelId,
-                                          className: `mx-sdk-form-review-label${
-                                              item.title.length === 0
-                                                  ? ' mx-sdk-form-review-label--hidden'
-                                                  : ''
-                                          }`,
-                                      },
-                                      item.title.length === 0
-                                          ? item.semanticTitle
-                                          : item.title
-                                  ),
-                                  h(
-                                      'dd',
-                                      {
-                                          className: 'mx-sdk-form-review-value',
-                                          'aria-labelledby': labelId,
-                                      },
-                                      item.value
-                                  )
-                              );
-                          })
-                      )
-            ),
-            h(
-                'footer',
-                { className: 'mx-sdk-form-review-footer' },
-                h(
-                    'button',
-                    {
-                        type: 'button',
-                        className: 'mx-sdk-form-review-confirm',
-                        disabled: props.confirmDisabled,
-                        onClick: () => {
-                            props.onConfirm();
-                        },
-                    },
-                    props.confirmLabel
-                )
-            )
-        )
+        panel
     );
 }

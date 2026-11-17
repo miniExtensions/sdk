@@ -184,3 +184,14 @@ The DOM consumer uses a synthetic browser boundary; it does not certify real
 browser geometry or native Redux/backend integration. Those remain separate
 native and browser acceptance work. Package verification does not change the
 host's authorization, validation, persistence or cleanup obligations.
+
+## Existing native modal stacks
+
+`CompleteFormReview` supplies the complete header, readonly definition list,
+empty state, Edit control and Confirm footer. A host whose readonly leaves open
+framework-owned portaled dialogs may supply `dialogFrame` to retain that existing
+modal stack. The frame receives only `title`, `onDismiss` and the complete SDK
+panel as `children`; it does not receive a draft, validation callback or Save
+capability. The native Form adapter uses its existing modal primitive so linked
+child and attachment dialogs remain interactive above Review. Standalone
+consumers use the built-in accessible HTML dialog by default.

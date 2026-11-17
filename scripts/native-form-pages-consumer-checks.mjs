@@ -19,7 +19,7 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const nativeFormPagesTypedConsumer = String.raw`
 import {createElement} from 'react';
 import {createNativeFormPages,type NativeFormPageDescriptor,type NativeFormPagesPublication,type NativeFormPagesSnapshot,type NativeFormPages} from '@miniextensions/sdk/ui';
-import {CompleteFormPageNavigation,FormPageNavigationButton,CompleteFormReview,type CompleteFormPageNavigationProps,type FormPageNavigationButtonProps,type CompleteFormReviewProps,type FormReviewItem} from '@miniextensions/sdk/react';
+import {CompleteFormPageNavigation,FormPageNavigationButton,CompleteFormReview,type CompleteFormPageNavigationProps,type FormPageNavigationButtonProps,type CompleteFormReviewProps,type FormReviewItem,type FormReviewDialogFrameProps} from '@miniextensions/sdk/react';
 import type {FormPageOwner} from '@miniextensions/sdk/forms';
 import '@miniextensions/sdk/react/form-pages.css';
 const owner={},configuration={};
@@ -36,6 +36,8 @@ const navigation:CompleteFormPageNavigationProps={pages:snapshot.pages,activePag
 const next:FormPageNavigationButtonProps={direction:'next',label:'Next',form:'existing-form',loading:false,disabled:false,type:'submit'};
 const review:CompleteFormReviewProps={open:snapshot.reviewing,items:snapshot.reviewItems,title:'Review',editLabel:'Edit',confirmLabel:'Submit',emptyLabel:'No values',onEdit:snapshot.actions.dismissReview,onDismiss:snapshot.actions.dismissReview,onConfirm:snapshot.actions.confirmReview,style:{color:'black'}};
 createElement(CompleteFormPageNavigation,navigation);createElement(FormPageNavigationButton,next);createElement(CompleteFormReview,review);
+const frame=({title,onDismiss,children}:FormReviewDialogFrameProps)=>createElement('section',{'aria-label':title},createElement('button',{type:'button',onClick:onDismiss},'Close'),children);
+createElement(CompleteFormReview,{...review,dialogFrame:frame});
 // @ts-expect-error published page descriptors are readonly
 pages.push(pages[0]!);
 // @ts-expect-error field order is a readonly host projection
@@ -111,23 +113,26 @@ const container=domWindow.document.createElement('main');container.innerHTML=htm
 const original=container.firstChild,errors=[];
 const {hydrateRoot}=await import('react-dom/client');let root;
 const button=label=>{const node=Array.from(container.querySelectorAll('button')).find(node=>node.getAttribute('aria-label')===label||node.textContent===label);assert(node,'Missing '+label);return node;};
-const click=async label=>React.act(async()=>button(label).click());
+const click=async label=>React.act(async()=>{const control=button(label);control.focus();control.click();});
 try{
  await React.act(async()=>{root=hydrateRoot(container,tree(),{onRecoverableError:error=>errors.push(error.message)});});
- assert.deepEqual(errors,[]);assert.equal(container.firstChild,original);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(saveCallbacks,0);checks++;
+ assert.deepEqual(errors,[]);assert.ok(container.firstChild===original,'Hydration must preserve the original first node');assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(saveCallbacks,0);checks++;
  await click('Next');assert.equal(nextRequests.length,1);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(button('Next').type,'submit');assert.equal(button('Next').form.id,'live-form');checks++;
  await React.act(async()=>nextRequests[0].advance());assert.equal(controller.getSnapshot().activePageIndex,2);assert.equal(container.querySelector('h2').textContent,'Final page');assert.equal(container.querySelectorAll('[data-testid="form-page-progress-item"]').length,2);checks++;
  await click('Back');assert.deepEqual(backRequests,[0]);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(button('Next').textContent,'Next');checks++;
  await click('Next');await React.act(async()=>nextRequests[1].advance());await click('Review');assert.equal(controller.getSnapshot().reviewing,true);assert.equal(container.querySelectorAll('dialog[open]').length,1);assert.equal(saveCallbacks,0);checks++;
  const oldReview=controller.getSnapshot().actions;
  canonical='Edited while Review is open';await React.act(async()=>controller.update(publication()));assert.equal(container.querySelector('dd').textContent,canonical);assert.equal(controller.getSnapshot().reviewing,true);assert.equal(saveCallbacks,0);checks++;
- await click('Submit');assert.equal(saveCallbacks,1);assert.equal(controller.getSnapshot().reviewing,false);assert.equal(container.querySelector('dialog'),null);assert(result instanceof Promise);assert.equal(oldReview.confirmReview(),undefined);assert.equal(saveCallbacks,1);checks++;
+ await click('Submit');assert.equal(saveCallbacks,1);assert.equal(controller.getSnapshot().reviewing,false);assert.ok(container.querySelector('dialog')===null,'Consumed Review must remove its dialog');assert(result instanceof Promise);assert.equal(oldReview.confirmReview(),undefined);assert.equal(saveCallbacks,1);checks++;
  canonical='Edited after Confirm before allocation';await React.act(async()=>controller.update(publication()));await React.act(async()=>allocation());assert.deepEqual(await result,{payload:canonical});assert.deepEqual(payloads,[canonical]);assert.equal(saveCallbacks,1);checks++;
  await click('Review');await React.act(async()=>oldReview.confirmReview());assert.equal(controller.getSnapshot().reviewing,true);await click('Edit');assert.equal(controller.getSnapshot().reviewing,false);assert.equal(saveCallbacks,1);checks++;
- await click('Review');await React.act(async()=>domWindow.document.activeElement.dispatchEvent(new domWindow.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));assert.equal(controller.getSnapshot().reviewing,false);assert.equal(domWindow.document.activeElement,button('Review'));assert.equal(saveCallbacks,1);checks++;
+ await click('Review');await React.act(async()=>domWindow.document.activeElement.dispatchEvent(new domWindow.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));assert.equal(controller.getSnapshot().reviewing,false);assert.ok(domWindow.document.activeElement===button('Review'),'Dismissal must return focus to the Review trigger');assert.equal(saveCallbacks,1);checks++;
  const retained=controller.getSnapshot().actions;await React.act(async()=>controller.update({...publication(),owner:{}}));await React.act(async()=>controller.update(publication()));retained.openReview(submit);assert.equal(controller.getSnapshot().retired,true);assert.equal(container.querySelector('[data-testid="retired"]').textContent,'Retired');assert.equal(saveCallbacks,1);checks++;
  await React.act(async()=>root.unmount());root=undefined;assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);assert.equal(domWindow.location.href,'https://native-pages-consumer.example.test/');assert.deepEqual(errors,[]);checks++;
  console.log(JSON.stringify({format,react:React.version,checks,hydrationErrors:errors.length,saveCallbacks,payloads,networkRequests:networks}));
+}catch(error){
+ process.stderr.write(JSON.stringify({completedCheckpoints:checks})+'\n');
+ throw error;
 }finally{
  if(root)await React.act(async()=>root.unmount());
  controller.dispose();container.remove();
@@ -136,7 +141,7 @@ try{
 }
 `;
 
-const testsPerProfile = 27;
+const testsPerProfile = 31;
 const hydrationChecksPerProfile = 13;
 
 /** Qualify public installed bytes; do not count local source execution as a package proof. */

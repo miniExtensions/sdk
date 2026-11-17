@@ -153,7 +153,9 @@ export function createNativeFormPages<T>(
 
     const current = (): boolean => {
         if (retired) return false;
-        if (checking) return true;
+        // A native admission callback may reenter a retained action. Its outer
+        // decision is not known yet, so nested actions cannot borrow admission.
+        if (checking) return false;
         checking = true;
         try {
             if (!publication.isCurrent()) retire();

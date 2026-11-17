@@ -3494,5 +3494,6 @@ export {
 export {
     CompleteFormReview,
     type FormReviewItem,
+    type FormReviewDialogFrameProps,
     type CompleteFormReviewProps,
 } from './CompleteFormReview.js';

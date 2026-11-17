@@ -380,6 +380,7 @@ for (const format of ['esm', 'cjs']) {
         'portal-gallery',
         'readonly-portal-grid',
         'form-progress',
+        'form-pages',
         'field-presentation',
         'complete-checkbox',
         'complete-phone',

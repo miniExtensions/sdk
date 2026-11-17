@@ -14,6 +14,7 @@ import {
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
 import { checkNativeFormPagesReactMatrix } from './native-form-pages-consumer-checks.mjs';
+import { checkReadonlyPortalGridReactMatrix } from './readonly-portal-grid-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -704,6 +705,7 @@ try {
                 path === 'docs/kanban.md' ||
                 path === 'docs/portal-gallery.md' ||
                 path === 'docs/native-form-pages.md' ||
+                path === 'docs/readonly-portal-grid.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/image-annotation-markerjs2-license.txt' ||
                 path === 'examples/react-image-annotation/README.md' ||
@@ -910,10 +912,12 @@ try {
         'dist/cjs/react/readonly-portal-list.css',
         'docs/readonly-portal-list.md',
         'dist/esm/react/portal-gallery.css',
+        'dist/esm/react/readonly-portal-grid.css',
         'dist/cjs/react/portal-gallery.css',
         'dist/esm/react/form-pages.css',
         'dist/cjs/react/form-pages.css',
         'docs/native-form-pages.md',
+        'dist/cjs/react/readonly-portal-grid.css',
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
@@ -935,6 +939,7 @@ try {
         'dist/cjs/react/csv-export.css',
         'docs/kanban.md',
         'docs/portal-gallery.md',
+        'docs/readonly-portal-grid.md',
         'dist/esm/react/kanban.css',
         'dist/cjs/react/kanban.css',
         ...headerStarterFiles,
@@ -4773,6 +4778,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         'Installed live Form pages/Review qualification passed.',
         nativePagesProof
+    );
+    const gridProof = await checkReadonlyPortalGridReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(gridProof.profiles.length, 4);
+    assert.equal(gridProof.tests, 72);
+    console.log(
+        'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );
     const galleryProof = await checkPortalGalleryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),

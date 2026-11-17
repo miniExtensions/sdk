@@ -3497,3 +3497,12 @@ export {
     type FormReviewDialogFrameProps,
     type CompleteFormReviewProps,
 } from './CompleteFormReview.js';
+export { ReadonlyPortalGrid } from './ReadonlyPortalGrid.js';
+export type {
+    ReadonlyPortalGridProps,
+    ReadonlyPortalGridColumn,
+    ReadonlyPortalGridRow,
+    ReadonlyPortalGridRowHeight,
+    ReadonlyPortalGridHeaderIcon,
+    ReadonlyPortalGridLabels,
+} from './ReadonlyPortalGrid.js';

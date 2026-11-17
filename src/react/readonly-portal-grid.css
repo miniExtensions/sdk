@@ -1,0 +1,207 @@
+@import './field-presentation.css';
+@import './html-description.css';
+@import './complete-readonly-text.css';
+@import './complete-checkbox.css';
+
+.mx-sdk-readonly-grid {
+    color: inherit;
+    font: inherit;
+}
+
+.mx-sdk-readonly-grid__viewport {
+    max-width: 100%;
+    overflow: auto;
+}
+
+.mx-sdk-readonly-grid[data-copy-restricted='true']
+    .mx-sdk-readonly-grid__viewport {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.mx-sdk-readonly-grid__table {
+    width: max-content;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.mx-sdk-readonly-grid__table caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.mx-sdk-readonly-grid__table th,
+.mx-sdk-readonly-grid__table td {
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-width: 0 0 1px 1px;
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    vertical-align: top;
+}
+
+.mx-sdk-readonly-grid__header {
+    position: relative;
+    pointer-events: none;
+}
+
+.mx-sdk-readonly-grid__table thead th {
+    padding-block: 0.875rem;
+}
+
+.mx-sdk-readonly-grid__table tbody tr:last-child td {
+    border-bottom-width: 0;
+}
+
+.mx-sdk-readonly-grid__cell[data-primary='true'] {
+    border-inline-end-width: 1px;
+}
+
+.mx-sdk-readonly-grid__cell-content {
+    width: 0;
+    min-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mx-sdk-readonly-grid__cell-content.cell-short {
+    height: 24px;
+}
+.mx-sdk-readonly-grid__cell-content.cell-medium {
+    height: 52px;
+}
+.mx-sdk-readonly-grid__cell-content.cell-tall {
+    height: 84px;
+}
+.mx-sdk-readonly-grid__cell-content.cell-extra-tall {
+    height: 140px;
+}
+.mx-sdk-readonly-grid__cell-content.cell-fit-content {
+    height: auto;
+    max-height: none;
+}
+
+.mx-sdk-readonly-grid__heading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    pointer-events: auto;
+    min-width: max-content;
+}
+
+.mx-sdk-readonly-grid__heading > .mx-sdk-field-row-break,
+.mx-sdk-readonly-grid__field-heading .mx-sdk-field-control {
+    display: none;
+}
+.mx-sdk-readonly-grid__field-heading.mx-sdk-form-field {
+    margin: 0;
+}
+.mx-sdk-readonly-grid__field-heading .mx-sdk-field-title {
+    max-width: 24rem;
+    overflow: hidden;
+    color: inherit;
+    font: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mx-sdk-readonly-grid__icon {
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+}
+
+.mx-sdk-readonly-grid__resize {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: -0.5rem;
+    width: 1rem;
+    cursor: col-resize;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+.mx-sdk-readonly-grid__resize:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+}
+
+.mx-sdk-readonly-grid__hide,
+.mx-sdk-readonly-grid__open,
+.mx-sdk-readonly-grid__dialog button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+.mx-sdk-readonly-grid__hide {
+    margin-block-end: 0.5rem;
+}
+
+.mx-sdk-readonly-grid__dialog {
+    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    max-width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+}
+
+.mx-sdk-readonly-grid__dialog::backdrop {
+    background: rgb(0 0 0 / 40%);
+}
+
+.mx-sdk-readonly-grid__dialog-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.mx-sdk-readonly-grid__dialog-heading h2 {
+    margin: 0;
+    font: inherit;
+    font-weight: bold;
+}
+
+.mx-sdk-readonly-grid__dialog ul {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+}
+
+.mx-sdk-readonly-grid__dialog li button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem;
+    border: 0;
+    background: transparent;
+}
+
+.mx-sdk-readonly-grid__switch {
+    display: inline-flex;
+    align-items: center;
+    width: 2.5rem;
+    height: 1.5rem;
+    padding: 0.125rem;
+    border-radius: 1rem;
+    background: GrayText;
+}
+
+.mx-sdk-readonly-grid__switch span {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: Canvas;
+}
+
+.mx-sdk-readonly-grid__switch[data-checked='true'] {
+    justify-content: flex-end;
+    background: Highlight;
+}

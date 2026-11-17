@@ -254,6 +254,13 @@ export type LinkedFinderCardField = {
     };
     readonly leaf: LinkedFinderCardLeaf;
 };
+/** Native Map shows the admitted primary only, never detail/image recovery. */
+export type LinkedFinderMapCardProjection = Readonly<{
+    status: 'present';
+    layout: 'map';
+    primary: string;
+    primaryIsEmpty: boolean;
+}>;
 export type LinkedFinderCardProjection =
     | { readonly status: 'loading'; readonly label: string }
     | { readonly status: 'unavailable'; readonly label: string }
@@ -513,7 +520,13 @@ export function LinkedFinderRichLeaf({
     }
 }
 
-type Present = Extract<LinkedFinderCardProjection, { status: 'present' }>;
+type Present = Extract<
+    LinkedFinderCardProjection,
+    {
+        status: 'present';
+        layout: 'list' | 'gallery' | 'kanban';
+    }
+>;
 function useListImage(card: Present) {
     const vector = linkedFinderListImageVector(card.images);
     const [state, setState] = useState({ vector, index: 0 });
@@ -544,7 +557,9 @@ function useListImage(card: Present) {
     });
 }
 
-function useCarouselController(projection: LinkedFinderCardProjection) {
+function useCarouselController(
+    projection: LinkedFinderCardProjection | LinkedFinderMapCardProjection
+) {
     const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
     const [selection, setSelection] = useState<{
         identity: string | null;
@@ -555,7 +570,8 @@ function useCarouselController(projection: LinkedFinderCardProjection) {
     const retire =
         projection.status === 'unavailable' ||
         (projection.status === 'present' &&
-            (projection.layout === 'list' ||
+            (projection.layout === 'map' ||
+                projection.layout === 'list' ||
                 !projection.shouldRenderThumbnail ||
                 projection.images.length === 0));
     if (retire) {
@@ -730,7 +746,7 @@ function GalleryPlaceholder(): ReactElement {
 export function LinkedFinderCard({
     projection,
 }: {
-    projection: LinkedFinderCardProjection;
+    projection: LinkedFinderCardProjection | LinkedFinderMapCardProjection;
 }): ReactElement {
     const carousel = useCarouselController(projection);
     if (projection.status !== 'present')
@@ -741,6 +757,21 @@ export function LinkedFinderCard({
                 role: projection.status === 'loading' ? 'status' : undefined,
             },
             projection.label
+        );
+    if (projection.layout === 'map')
+        return h(
+            'p',
+            {
+                className: [
+                    'mx-sdk-finder-map-primary',
+                    projection.primaryIsEmpty
+                        ? 'mx-sdk-finder-map-primary-empty'
+                        : '',
+                ].join(' '),
+                title: projection.primary,
+                'aria-label': projection.primary,
+            },
+            projection.primary
         );
     return h(PresentCard, { projection, carousel });
 }

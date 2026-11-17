@@ -4,6 +4,7 @@
     "include": [
         "../src/**/*.ts",
         "reactPortalGallery.test.ts",
+        "reactLinkedFinderCardLayoutComposition.test.ts",
         "fixtures/htmlPresentationFixture.ts",
         "../types/**/*.d.ts"
     ]

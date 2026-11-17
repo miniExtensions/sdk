@@ -242,13 +242,21 @@ the complete `pnpm test` run enforces the cross-profile policy. The SDK does
 not have a separate lint command: Prettier and strict TypeScript are its
 existing static checks.
 
-Tests that directly import happy-dom mount native or React components and
-belong to the component profile. Headless controller, field-model, protocol
-and formula tests belong to the unit profile. Keep a direct happy-dom import
-in component suites so this convention remains explicit. These are synthetic
-tests; happy-dom does not establish real Chromium layout, browser event or
-live backend behavior. The separate packed native Chromium scenarios remain
-required in CI.
+Tests with a runtime happy-dom dependency belong to the component profile,
+including dependencies reached through static relative imports or re-exports
+of helpers inside `test/`. The classifier reads source without executing test
+modules, resolves emitted `.js` references to their `.ts` sources first, and
+handles cycles without caching an incomplete negative result. Type-only imports,
+comments, strings and filenames do not imply a mounted component. Bare package
+and source imports outside `test/` are not traversed; canonical helper escapes,
+unresolved local script dependencies and exceeded per-entry graph limits fail explicitly.
+Headless controller, field-model, protocol and formula graphs remain in the unit
+profile. Create one classifier for each immutable source-coverage invocation.
+
+These are synthetic tests; happy-dom does not establish real Chromium layout,
+browser event or live backend behavior. The separate packed native Chromium
+scenarios remain required in CI. Classification does not change the source
+inventory, raw report retention, structural type-only treatment or thresholds.
 
 ## Portal read failure guidance checks
 

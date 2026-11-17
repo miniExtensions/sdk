@@ -3167,6 +3167,7 @@ export {
     LinkedFinderCard,
     LinkedFinderRichLeaf,
     type LinkedFinderCardProjection,
+    type LinkedFinderMapCardProjection,
     type LinkedFinderCardField,
     type LinkedFinderCardLeaf,
     type LinkedFinderAttachmentThumbnail,
@@ -3181,6 +3182,17 @@ export {
     type PortalGalleryProps,
 } from './PortalGallery.js';
 export { Kanban, type KanbanProps, type KanbanCard } from './Kanban.js';
+export {
+    PortalMap,
+    createGoogleMapsPortalMapDriver,
+    type PortalMapProps,
+    type PortalMapMarker,
+} from './PortalMap.js';
+export {
+    PortalMapCard,
+    type PortalMapCardData,
+    type PortalMapCardProjection,
+} from './PortalMapCard.js';
 export {
     AttachmentPreview,
     type AttachmentPreviewProps,

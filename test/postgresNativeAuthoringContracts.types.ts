@@ -1,5 +1,6 @@
 import type {
     FormLoadedResult,
+    PostgresCopyPlanningConfig,
     PostgresConfiguredColumn,
     PostgresFormDraft,
     PostgresFormDraftState,
@@ -70,6 +71,15 @@ export function inspectPrivateDraft(draft: PostgresNativeDraft) {
         // @ts-expect-error Form state does not acquire Portal tabs.
         draft.state.tabs;
         return { nativeSource, currentVersion, fields, generation };
+    }
+    if (draft.type === 'BULK_COPY_FIELD_VALUE') {
+        const mapping: PostgresCopyPlanningConfig = draft.state.mapping;
+        const generation: number = draft.relationOid;
+        // @ts-expect-error Copy state does not acquire Portal tabs.
+        draft.state.tabs;
+        // @ts-expect-error Copy state does not acquire Form fields.
+        draft.state.formFields;
+        return { nativeSource, currentVersion, mapping, generation };
     }
     const tabs: PostgresPortalTab[] = draft.state.tabs;
     // @ts-expect-error Portal state does not acquire Form fields.

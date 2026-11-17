@@ -65,3 +65,10 @@ and identity preserve the existing explicit-gallery then resource fallback,
 conjoined with the parent capture. Pending downloads retire on child replacement
 or unmount and cannot publish a late result. Host capture renewal remains the
 host's responsibility, including changes that batch back to equal values.
+
+For a Formula gallery, the parent capture may represent the current Form policy
+while the supplied resource capture binds one immutable value. Selection stays
+open across admitted resource successors only while that parent remains current.
+The resource capture still gates every preview, download and link; retiring the
+parent closes selection permanently for that capture. Other Formula modes keep
+their value-bound parent, including the HTML anchor default-action guard.

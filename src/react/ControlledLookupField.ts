@@ -577,6 +577,7 @@ function Result({
                 },
                 gallery: {
                     ...result.display.gallery,
+                    selectionOwner: owner,
                     entries: result.display.gallery?.entries ?? [],
                     owner: together(
                         owner,

@@ -432,6 +432,69 @@ it('renders the complete ordered projection pipeline for scalar, whole-array and
     assert.deepEqual(canonical, ['Repeated', null, 'Repeated', false, 0]);
 });
 
+it('preserves Formula gallery selection across admitted resource successors without renewing a retired resource or Form owner', async (t) => {
+    const f = await fixture(t);
+    let current = true;
+    const listeners = new Set<() => void>();
+    const resource = {
+        token: {},
+        isCurrent: () => current,
+        subscribe(listener: () => void) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+    const a = { url: 'https://computed.example.invalid/A.pdf' },
+        c = { url: 'https://computed.example.invalid/C.pdf' };
+    const display = (entries: readonly (typeof a)[], owner = resource) =>
+        formula({
+            value: entries.map((item) => item.url).join(' '),
+            renderFormulaAsAttachment: true,
+            gallery: { entries, disableDownloadFiles: true },
+            resource: { owner, identity: owner.token },
+        });
+    await f.render({
+        ...f.common(),
+        kind: 'formula',
+        display: display([a, c]),
+    });
+    await f.click(
+        f.container.querySelectorAll('li')[1]!.querySelector('button')!
+    );
+    assert.equal(
+        f.container.querySelector('iframe')?.getAttribute('src'),
+        c.url + '#toolbar=0'
+    );
+    await act(async () => {
+        current = false;
+        for (const listener of [...listeners]) listener();
+    });
+    assert.equal(f.container.querySelector('[role="dialog"]'), null);
+    const next = { ...resource, token: {}, isCurrent: () => true };
+    await f.render({
+        ...f.common(),
+        kind: 'formula',
+        display: display([c, a], next),
+    });
+    assert.equal(
+        f.container.querySelector('iframe')?.getAttribute('src'),
+        c.url + '#toolbar=0'
+    );
+    assert.equal(
+        f.container.querySelector('.mx-sdk-url-gallery__position')?.textContent,
+        '1 / 2'
+    );
+    await f.first.retire();
+    assert.equal(f.container.querySelector('[role="dialog"]'), null);
+    const successor = f.capture();
+    await f.render({
+        ...f.common(successor.owner),
+        kind: 'formula',
+        display: display([c, a], next),
+    });
+    assert.equal(f.container.querySelector('[role="dialog"]'), null);
+});
+
 it('renders host-admitted Formula projection and recovery without evaluating concealed conversion or resources', async (t) => {
     const f = await fixture(t);
     const render = async (

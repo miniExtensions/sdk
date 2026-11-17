@@ -10,7 +10,7 @@ export type CanonicalPostgresConnection = {
     port: number;
     database: string;
     username: string;
-    tls: Contract_ContractType33;
+    tls: Contract_ContractType41;
 };
 
 export type CanonicalPostgresSource = {
@@ -35,16 +35,16 @@ export type CanonicalPostgresSchema = {
 export type CanonicalPostgresTable = {
     reference: CanonicalPostgresTableReference;
     oid: number;
-    kind: Contract_ContractType37;
+    kind: Contract_ContractType45;
     isPartition: boolean;
-    description: Contract_ContractType38;
+    description: Contract_ContractType46;
     fields: Contract_Array4;
-    primaryKey: Contract_ContractType40;
+    primaryKey: Contract_ContractType48;
     uniqueKeys: Contract_Array5;
     relationships: Contract_Array6;
-    privileges: Contract_ContractType43;
-    rowSecurity: Contract_ContractType44;
-    updatable: Contract_ContractType45;
+    privileges: Contract_ContractType51;
+    rowSecurity: Contract_ContractType52;
+    updatable: Contract_ContractType53;
 };
 
 export type CanonicalPostgresTableReference = {
@@ -58,23 +58,23 @@ export type CanonicalPostgresField = {
     ordinal: number;
     typeOid: number;
     formattedType: string;
-    collationOid: Contract_ContractType46;
+    collationOid: Contract_ContractType54;
     notNull: boolean;
     hasDefault: boolean;
-    identity: Contract_ContractType47;
-    generated: Contract_ContractType48;
-    description: Contract_ContractType38;
-    privileges: Contract_ContractType49;
+    identity: Contract_ContractType55;
+    generated: Contract_ContractType56;
+    description: Contract_ContractType46;
+    privileges: Contract_ContractType57;
 };
 
 export type CanonicalPostgresType = {
     oid: number;
     schemaName: string;
     name: string;
-    kind: Contract_ContractType50;
+    kind: Contract_ContractType58;
     category: string;
-    elementTypeOid: Contract_ContractType46;
-    baseTypeOid: Contract_ContractType46;
+    elementTypeOid: Contract_ContractType54;
+    baseTypeOid: Contract_ContractType54;
     domainNotNull: boolean;
     enumLabels: Contract_Array7;
 };
@@ -84,10 +84,10 @@ export type CanonicalPostgresRelationship = {
     columns: Contract_Array7;
     referencedTable: CanonicalPostgresTableReference;
     referencedColumns: Contract_Array7;
-    onUpdate: Contract_ContractType52;
-    onDelete: Contract_ContractType52;
-    onDeleteColumns: Contract_ContractType53;
-    match: Contract_ContractType54;
+    onUpdate: Contract_ContractType60;
+    onDelete: Contract_ContractType60;
+    onDeleteColumns: Contract_ContractType61;
+    match: Contract_ContractType62;
     deferrable: boolean;
     initiallyDeferred: boolean;
     validated: boolean;
@@ -95,36 +95,36 @@ export type CanonicalPostgresRelationship = {
 
 export type CanonicalPostgresRecord = {
     table: CanonicalPostgresTableReference;
-    identity: Contract_ContractType55;
+    identity: Contract_ContractType63;
     fields: Contract_Record;
 };
 
 export type CanonicalPostgresValue = null | string;
 
 export type CanonicalPostgresRecordIdentity = {
-    type: Contract_ContractType57;
+    type: Contract_ContractType65;
     values: Contract_Array8;
 };
 
 export type CanonicalPostgresFilter =
-    | Contract_ContractType59
-    | Contract_ContractType60
-    | Contract_ContractType61
-    | Contract_ContractType62
-    | Contract_ContractType63
-    | Contract_ContractType64;
+    | Contract_ContractType67
+    | Contract_ContractType68
+    | Contract_ContractType69
+    | Contract_ContractType70
+    | Contract_ContractType71
+    | Contract_ContractType72;
 
 export type CanonicalPostgresSort = {
     columnName: string;
-    direction: Contract_ContractType65;
-    nulls: Contract_ContractType66;
+    direction: Contract_ContractType73;
+    nulls: Contract_ContractType74;
 };
 
 export type CanonicalPostgresSelectQuery = {
     source: CanonicalPostgresSource;
     table: CanonicalPostgresTableReference;
     columns: Contract_Array7;
-    where?: Contract_ContractType67;
+    where?: Contract_ContractType75;
     orderBy: Contract_Array9;
     limit: number;
     offset: number;
@@ -135,12 +135,12 @@ export type CanonicalPostgresSelectResult = {
     table: CanonicalPostgresTableReference;
     columns: Contract_Array4;
     rows: Contract_Array10;
-    page: Contract_ContractType70;
+    page: Contract_ContractType78;
 };
 
 export type CanonicalPostgresIdentifierConfiguration =
-    | Contract_ContractType71
-    | Contract_ContractType72;
+    | Contract_ContractType79
+    | Contract_ContractType80;
 
 export type CanonicalPostgresRecordDisplayConfiguration = {
     source: CanonicalPostgresSource;
@@ -161,7 +161,7 @@ export type CanonicalPostgresRecordEditingValidation = {
     identifierColumnNames: Contract_Array7;
     hasVisibleRows: boolean;
     uniquenessScope: 'current-visible-snapshot';
-    stabilityBasis: Contract_ContractType73;
+    stabilityBasis: Contract_ContractType81;
 };
 
 export type CanonicalPostgresCreateQuery = {
@@ -218,68 +218,141 @@ export type CanonicalPostgresAttachmentDisplayFailure =
     | 'URL_CREDENTIALS';
 
 export type CanonicalPostgresTextColumnConfig = {
-    readOnly?: Contract_ContractType78;
-    required?: Contract_ContractType78;
-    showTitle?: Contract_ContractType78;
-    title?: Contract_ContractType79;
-    subtitle?: Contract_ContractType79;
-    descriptionStyle?: Contract_ContractType80;
-    displayAs?: Contract_ContractType81;
-    placeholderText?: Contract_ContractType79;
-    characterLimit?: Contract_ContractType82;
-    preserveTrailingWhitespace?: Contract_ContractType78;
+    readOnly?: Contract_ContractType86;
+    required?: Contract_ContractType86;
+    showTitle?: Contract_ContractType86;
+    title?: Contract_ContractType87;
+    subtitle?: Contract_ContractType87;
+    descriptionStyle?: Contract_ContractType88;
+    displayAs?: Contract_ContractType89;
+    placeholderText?: Contract_ContractType87;
+    characterLimit?: Contract_ContractType90;
+    preserveTrailingWhitespace?: Contract_ContractType86;
 };
 
 export type CanonicalPostgresBooleanColumnConfig = {
-    readOnly?: Contract_ContractType78;
-    required?: Contract_ContractType78;
-    showTitle?: Contract_ContractType78;
-    title?: Contract_ContractType79;
-    subtitle?: Contract_ContractType79;
-    descriptionStyle?: Contract_ContractType80;
+    readOnly?: Contract_ContractType86;
+    required?: Contract_ContractType86;
+    showTitle?: Contract_ContractType86;
+    title?: Contract_ContractType87;
+    subtitle?: Contract_ContractType87;
+    descriptionStyle?: Contract_ContractType88;
 };
 
 export type CanonicalPostgresNumericColumnConfig = {
-    readOnly?: Contract_ContractType78;
-    required?: Contract_ContractType78;
-    showTitle?: Contract_ContractType78;
-    title?: Contract_ContractType79;
-    subtitle?: Contract_ContractType79;
-    descriptionStyle?: Contract_ContractType80;
+    readOnly?: Contract_ContractType86;
+    required?: Contract_ContractType86;
+    showTitle?: Contract_ContractType86;
+    title?: Contract_ContractType87;
+    subtitle?: Contract_ContractType87;
+    descriptionStyle?: Contract_ContractType88;
 };
 
 export type CanonicalPostgresDateColumnConfig = {
-    readOnly?: Contract_ContractType78;
-    required?: Contract_ContractType78;
-    showTitle?: Contract_ContractType78;
-    title?: Contract_ContractType79;
-    subtitle?: Contract_ContractType79;
-    descriptionStyle?: Contract_ContractType80;
+    readOnly?: Contract_ContractType86;
+    required?: Contract_ContractType86;
+    showTitle?: Contract_ContractType86;
+    title?: Contract_ContractType87;
+    subtitle?: Contract_ContractType87;
+    descriptionStyle?: Contract_ContractType88;
 };
 
 export type CanonicalPostgresEnumColumnConfig = {
-    readOnly?: Contract_ContractType78;
-    required?: Contract_ContractType78;
-    showTitle?: Contract_ContractType78;
-    title?: Contract_ContractType79;
-    subtitle?: Contract_ContractType79;
-    descriptionStyle?: Contract_ContractType80;
+    readOnly?: Contract_ContractType86;
+    required?: Contract_ContractType86;
+    showTitle?: Contract_ContractType86;
+    title?: Contract_ContractType87;
+    subtitle?: Contract_ContractType87;
+    descriptionStyle?: Contract_ContractType88;
 };
 
 export type CanonicalPostgresUuidColumnConfig = {
-    readOnly?: Contract_ContractType78;
-    required?: Contract_ContractType78;
-    showTitle?: Contract_ContractType78;
-    title?: Contract_ContractType79;
-    subtitle?: Contract_ContractType79;
-    descriptionStyle?: Contract_ContractType80;
+    readOnly?: Contract_ContractType86;
+    required?: Contract_ContractType86;
+    showTitle?: Contract_ContractType86;
+    title?: Contract_ContractType87;
+    subtitle?: Contract_ContractType87;
+    descriptionStyle?: Contract_ContractType88;
 };
 
 export type CanonicalPostgresFormRecordAccess =
-    | Contract_ContractType83
-    | Contract_ContractType84;
+    | Contract_ContractType91
+    | Contract_ContractType92;
 
-type Contract_ContractType33 = 'disable' | 'verify-full';
+export type CanonicalPostgresConfiguredColumn =
+    | Contract_ContractType93
+    | Contract_ContractType94
+    | Contract_ContractType95
+    | Contract_ContractType96
+    | Contract_ContractType97
+    | Contract_ContractType98;
+
+export type CanonicalPostgresReadableRelationConfiguration = {
+    source: Contract_ContractType99;
+    table: Contract_ContractType100;
+    relationOid: number;
+    displayColumnName: string;
+    columns: Contract_Array13;
+};
+
+export type CanonicalPostgresFormDraftState = {
+    table: Contract_ContractType102;
+    displayColumnName: string;
+    formFields: Contract_Array13;
+    access?: Contract_ContractType103;
+};
+
+export type CanonicalPostgresFormDraft = {
+    type: 'form';
+    version: 106;
+    source: Contract_ContractType99;
+    id: string;
+    name: string;
+    description: Contract_ContractType46;
+    createdTime: Contract_ContractType54;
+    updatedTime: number;
+    lastEditorUID: string;
+    userUID: string;
+    shareId: string;
+    relationOid: number;
+    state: CanonicalPostgresFormDraftState;
+};
+
+export type CanonicalPostgresPortalTab = {
+    id: string;
+    name: string;
+    table: Contract_ContractType104;
+    relationOid: number;
+    displayColumnName: string;
+    columns: Contract_Array13;
+    identifier?: Contract_ContractType105;
+    criteria?: Contract_ContractType106;
+};
+
+export type CanonicalPostgresPortalDraftState = {
+    tabs: Contract_Array14;
+};
+
+export type CanonicalPostgresPortalDraft = {
+    type: 'portal';
+    version: 106;
+    source: Contract_ContractType99;
+    id: string;
+    name: string;
+    description: Contract_ContractType46;
+    createdTime: Contract_ContractType54;
+    updatedTime: number;
+    lastEditorUID: string;
+    userUID: string;
+    shareId: string;
+    state: CanonicalPostgresPortalDraftState;
+};
+
+export type CanonicalPostgresNativeDraft =
+    | CanonicalPostgresFormDraft
+    | CanonicalPostgresPortalDraft;
+
+type Contract_ContractType41 = 'disable' | 'verify-full';
 
 type Contract_Array = Array<CanonicalPostgresSchema>;
 
@@ -287,58 +360,58 @@ type Contract_Array2 = Array<CanonicalPostgresType>;
 
 type Contract_Array3 = Array<CanonicalPostgresTable>;
 
-type Contract_ContractType37 =
+type Contract_ContractType45 =
     | 'table'
     | 'partitioned-table'
     | 'view'
     | 'materialized-view'
     | 'foreign-table';
 
-type Contract_ContractType38 = null | string;
+type Contract_ContractType46 = null | string;
 
 type Contract_Array4 = Array<CanonicalPostgresField>;
 
-type Contract_ContractType40 = null | Contract_ContractType85;
+type Contract_ContractType48 = null | Contract_ContractType108;
 
-type Contract_Array5 = Array<Contract_ContractType86>;
+type Contract_Array5 = Array<Contract_ContractType109>;
 
 type Contract_Array6 = Array<CanonicalPostgresRelationship>;
 
-type Contract_ContractType43 = {
+type Contract_ContractType51 = {
     select: boolean;
     insert: boolean;
     update: boolean;
     delete: boolean;
 };
 
-type Contract_ContractType44 = {
+type Contract_ContractType52 = {
     enabled: boolean;
     forced: boolean;
 };
 
-type Contract_ContractType45 = {
+type Contract_ContractType53 = {
     insert: boolean;
     update: boolean;
     delete: boolean;
 };
 
-type Contract_ContractType46 = null | number;
+type Contract_ContractType54 = null | number;
 
-type Contract_ContractType47 = null | 'always' | 'by-default';
+type Contract_ContractType55 = null | 'always' | 'by-default';
 
-type Contract_ContractType48 = null | 'stored' | 'virtual';
+type Contract_ContractType56 = null | 'stored' | 'virtual';
 
-type Contract_ContractType49 = {
+type Contract_ContractType57 = {
     select: boolean;
     insert: boolean;
     update: boolean;
 };
 
-type Contract_ContractType50 =
+type Contract_ContractType58 =
     | 'array'
+    | 'enum'
     | 'base'
     | 'domain'
-    | 'enum'
     | 'composite'
     | 'range'
     | 'multirange'
@@ -346,181 +419,252 @@ type Contract_ContractType50 =
 
 type Contract_Array7 = Array<string>;
 
-type Contract_ContractType52 =
+type Contract_ContractType60 =
     | 'no-action'
     | 'restrict'
     | 'cascade'
     | 'set-null'
     | 'set-default';
 
-type Contract_ContractType53 = null | Contract_Array7;
+type Contract_ContractType61 = null | Contract_Array7;
 
-type Contract_ContractType54 = 'simple' | 'full' | 'partial';
+type Contract_ContractType62 = 'simple' | 'full' | 'partial';
 
-type Contract_ContractType55 = null | CanonicalPostgresRecordIdentity;
+type Contract_ContractType63 = null | CanonicalPostgresRecordIdentity;
 
 type Contract_Record = {
     [key: string]: CanonicalPostgresValue;
 };
 
-type Contract_ContractType57 = 'primary-key' | 'configured-key';
+type Contract_ContractType65 = 'primary-key' | 'configured-key';
 
-type Contract_Array8 = Array<Contract_ContractType87>;
+type Contract_Array8 = Array<Contract_ContractType110>;
 
-type Contract_ContractType59 = {
-    type: Contract_ContractType88;
-    filters: Contract_Array13;
+type Contract_ContractType67 = {
+    type: Contract_ContractType111;
+    filters: Contract_Array15;
 };
 
-type Contract_ContractType60 = {
+type Contract_ContractType68 = {
     type: 'not';
     filter: CanonicalPostgresFilter;
 };
 
-type Contract_ContractType61 = {
+type Contract_ContractType69 = {
     type: 'comparison';
     columnName: string;
-    operator: Contract_ContractType90;
+    operator: Contract_ContractType113;
     value: string;
 };
 
-type Contract_ContractType62 = {
+type Contract_ContractType70 = {
     type: 'null';
     columnName: string;
-    operator: Contract_ContractType91;
+    operator: Contract_ContractType114;
 };
 
-type Contract_ContractType63 = {
+type Contract_ContractType71 = {
     type: 'membership';
     columnName: string;
-    operator: Contract_ContractType92;
+    operator: Contract_ContractType115;
     values: Contract_Array7;
 };
 
-type Contract_ContractType64 = {
+type Contract_ContractType72 = {
     type: 'text';
     columnName: string;
-    operator: Contract_ContractType93;
+    operator: Contract_ContractType116;
     caseSensitive: boolean;
     value: string;
 };
 
-type Contract_ContractType65 = 'asc' | 'desc';
+type Contract_ContractType73 = 'asc' | 'desc';
 
-type Contract_ContractType66 = 'first' | 'last';
+type Contract_ContractType74 = 'first' | 'last';
 
-type Contract_ContractType67 =
+type Contract_ContractType75 =
     | undefined
-    | Contract_ContractType59
-    | Contract_ContractType60
-    | Contract_ContractType61
-    | Contract_ContractType62
-    | Contract_ContractType63
-    | Contract_ContractType64;
+    | Contract_ContractType67
+    | Contract_ContractType68
+    | Contract_ContractType69
+    | Contract_ContractType70
+    | Contract_ContractType71
+    | Contract_ContractType72;
 
 type Contract_Array9 = Array<CanonicalPostgresSort>;
 
 type Contract_Array10 = Array<Contract_Record>;
 
-type Contract_ContractType70 = {
+type Contract_ContractType78 = {
     limit: number;
     offset: number;
     hasMore: boolean;
-    nextOffset: Contract_ContractType46;
+    nextOffset: Contract_ContractType54;
 };
 
-type Contract_ContractType71 = {
+type Contract_ContractType79 = {
     type: 'primary-key';
 };
 
-type Contract_ContractType72 = {
+type Contract_ContractType80 = {
     type: 'configured-key';
     columnNames: Contract_Array7;
     stabilityConfirmed: true;
 };
 
-type Contract_ContractType73 = 'native-primary-key' | 'customer-confirmed';
+type Contract_ContractType81 = 'native-primary-key' | 'customer-confirmed';
 
-type Contract_Array11 = Array<Contract_ContractType94>;
+type Contract_Array11 = Array<Contract_ContractType117>;
 
 type Contract_PostgresIdentifierBinding = {
     configuration: CanonicalPostgresIdentifierConfiguration;
-    columns: Contract_Array14;
+    columns: Contract_Array16;
 };
 
-type Contract_Array12 = Array<Contract_ContractType96>;
+type Contract_Array12 = Array<Contract_ContractType119>;
 
 type Contract_PostgresQueryCriteria = {
-    where?: Contract_ContractType67;
+    where?: Contract_ContractType75;
     orderBy: Contract_Array9;
 };
 
-type Contract_ContractType78 = undefined | false | true;
+type Contract_ContractType86 = undefined | false | true;
 
-type Contract_ContractType79 = undefined | string;
+type Contract_ContractType87 = undefined | string;
 
-type Contract_ContractType80 = undefined | 'top' | 'bottom' | 'tooltip';
+type Contract_ContractType88 = undefined | 'top' | 'bottom' | 'tooltip';
 
-type Contract_ContractType81 = undefined | 'text' | 'attachments-public-urls';
+type Contract_ContractType89 = undefined | 'text' | 'attachments-public-urls';
 
-type Contract_ContractType82 = undefined | number;
+type Contract_ContractType90 = undefined | number;
 
-type Contract_ContractType83 = {
+type Contract_ContractType91 = {
     disableAccessingExistingRecords: true;
-    disableCreatingRecords?: Contract_ContractType78;
-    identifier?: Contract_ContractType97;
+    disableCreatingRecords?: Contract_ContractType86;
+    identifier?: Contract_ContractType105;
 };
 
-type Contract_ContractType84 = {
+type Contract_ContractType92 = {
     disableAccessingExistingRecords: false;
     identifier: Contract_PostgresIdentifierBinding;
-    disableCreatingRecords?: Contract_ContractType78;
+    disableCreatingRecords?: Contract_ContractType86;
 };
 
-type Contract_ContractType85 = {
+type Contract_ContractType93 = {
+    kind: 'uuid';
+    columnName: string;
+    config: CanonicalPostgresUuidColumnConfig;
+};
+
+type Contract_ContractType94 = {
+    kind: 'enum';
+    columnName: string;
+    config: CanonicalPostgresEnumColumnConfig;
+};
+
+type Contract_ContractType95 = {
+    kind: 'text';
+    columnName: string;
+    config: CanonicalPostgresTextColumnConfig;
+};
+
+type Contract_ContractType96 = {
+    kind: 'boolean';
+    columnName: string;
+    config: CanonicalPostgresBooleanColumnConfig;
+};
+
+type Contract_ContractType97 = {
+    kind: 'numeric';
+    columnName: string;
+    config: CanonicalPostgresNumericColumnConfig;
+};
+
+type Contract_ContractType98 = {
+    kind: 'date';
+    columnName: string;
+    config: CanonicalPostgresDateColumnConfig;
+};
+
+type Contract_ContractType99 = {
+    type: 'postgres';
+    connectionId: string;
+    databaseName: string;
+};
+
+type Contract_ContractType100 = {
+    connectionId: string;
+    schemaName: string;
+    tableName: string;
+};
+
+type Contract_Array13 = Array<CanonicalPostgresConfiguredColumn>;
+
+type Contract_ContractType102 = {
+    connectionId: string;
+    schemaName: string;
+    tableName: string;
+};
+
+type Contract_ContractType103 =
+    | undefined
+    | Contract_ContractType91
+    | Contract_ContractType92;
+
+type Contract_ContractType104 = {
+    connectionId: string;
+    schemaName: string;
+    tableName: string;
+};
+
+type Contract_ContractType105 = undefined | Contract_PostgresIdentifierBinding;
+
+type Contract_ContractType106 = undefined | Contract_PostgresQueryCriteria;
+
+type Contract_Array14 = Array<CanonicalPostgresPortalTab>;
+
+type Contract_ContractType108 = {
     name: string;
     columns: Contract_Array7;
 };
 
-type Contract_ContractType86 = {
+type Contract_ContractType109 = {
     name: string;
     columns: Contract_Array7;
 };
 
-type Contract_ContractType87 = {
+type Contract_ContractType110 = {
     columnName: string;
     value: string;
 };
 
-type Contract_ContractType88 = 'and' | 'or';
+type Contract_ContractType111 = 'and' | 'or';
 
-type Contract_Array13 = Array<CanonicalPostgresFilter>;
+type Contract_Array15 = Array<CanonicalPostgresFilter>;
 
-type Contract_ContractType90 = 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte';
+type Contract_ContractType113 = 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte';
 
-type Contract_ContractType91 = 'is-null' | 'is-not-null';
+type Contract_ContractType114 = 'is-null' | 'is-not-null';
 
-type Contract_ContractType92 = 'in' | 'not-in';
+type Contract_ContractType115 = 'in' | 'not-in';
 
-type Contract_ContractType93 = 'contains' | 'starts-with' | 'ends-with';
+type Contract_ContractType116 = 'contains' | 'starts-with' | 'ends-with';
 
-type Contract_ContractType94 = {
+type Contract_ContractType117 = {
     columnName: string;
     value: CanonicalPostgresValue;
 };
 
-type Contract_Array14 = Array<Contract_PostgresIdentifierColumnBinding>;
+type Contract_Array16 = Array<Contract_PostgresIdentifierColumnBinding>;
 
-type Contract_ContractType96 = {
+type Contract_ContractType119 = {
     columnName: string;
     expected: CanonicalPostgresValue;
     value: CanonicalPostgresValue;
 };
 
-type Contract_ContractType97 = undefined | Contract_PostgresIdentifierBinding;
-
 type Contract_PostgresIdentifierColumnBinding = Contract_Pick &
-    Contract_ContractType100;
+    Contract_ContractType122;
 
 type Contract_Pick = {
     name: string;
@@ -529,8 +673,8 @@ type Contract_Pick = {
     formattedType: string;
 };
 
-type Contract_ContractType100 = {
-    collationOid?: Contract_ContractType101;
+type Contract_ContractType122 = {
+    collationOid?: Contract_ContractType123;
 };
 
-type Contract_ContractType101 = undefined | null | number;
+type Contract_ContractType123 = undefined | null | number;

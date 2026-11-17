@@ -257,6 +257,36 @@ const postgresUpdateAliases = [
     'PostgresUpdateResult',
 ];
 const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
+// Existing private member authoring schemas, not public runtime operations.
+// Keep their source/type/state correlation rather than inventing SDK models.
+const postgresAuthoringContracts = [
+    {
+        source: 'types/extensions/postgres/draftCommon.ts',
+        aliases: [
+            'PostgresConfiguredColumn',
+            'PostgresReadableRelationConfiguration',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/formDraft.ts',
+        aliases: ['PostgresFormDraftState', 'PostgresFormDraft'],
+    },
+    {
+        source: 'types/extensions/postgres/portalDraft.ts',
+        aliases: [
+            'PostgresPortalTab',
+            'PostgresPortalDraftState',
+            'PostgresPortalDraft',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/nativeDraft.ts',
+        aliases: ['PostgresNativeDraft'],
+    },
+];
+const postgresAuthoringAliases = postgresAuthoringContracts.flatMap(
+    ({ aliases }) => aliases
+);
 const readConfigurationValidation = () => ({
     ...readPostgresConfigReceipt({ monorepo, revision }),
     validatorSha256: hash(
@@ -311,6 +341,7 @@ const postgresAliases = [
     ...postgresAttachmentAliases,
     ...postgresFieldConfigAliases,
     ...postgresFormAccessAliases,
+    ...postgresAuthoringAliases,
 ];
 let corsValidation = null;
 let canonicalCorsPolicyPath;
@@ -339,6 +370,10 @@ if (postgresOnly) {
     if (formAccessValidation != null)
         entryLines.push(
             `import type { ${postgresFormAccessAliases.join(', ')} } from './${postgresFormAccessSource.replace(/\.ts$/, '')}';`
+        );
+    for (const { source, aliases } of postgresAuthoringContracts)
+        entryLines.push(
+            `import type { ${aliases.join(', ')} } from './${source.replace(/\.ts$/, '')}';`
         );
     for (const name of postgresAliases)
         entryLines.push(`export type Canonical${name} = ${name};`);
@@ -850,6 +885,13 @@ if (postgresOnly) {
     // retain a declaration in the canonical generated source file.
     sourceFiles.add(postgresFieldConfigSource);
     sourceFiles.add(postgresFieldConfigProvenance);
+    // Inferred Zod types can lose their authored declarations during mapping.
+    // Pin the composed schemas and their shared metadata inputs explicitly.
+    for (const { source } of postgresAuthoringContracts)
+        sourceFiles.add(source);
+    sourceFiles.add('types/constants/extensionType.ts');
+    sourceFiles.add('types/postgres/connections.ts');
+    sourceFiles.add('types/postgres/identifierBinding.ts');
     if (formAccessValidation != null) {
         sourceFiles.add(postgresFormAccessSource);
         sourceFiles.add(postgresFormAccessProvenance);

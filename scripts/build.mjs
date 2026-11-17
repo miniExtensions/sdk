@@ -32,6 +32,7 @@ import {
     publicPostgresRuntimeArtifacts,
 } from './distribution-checks.mjs';
 import {
+    assertPostgresContractDeclarationInventory,
     assertPostgresRuntimeArtifactSet,
     assertPostgresRuntimeEmitter,
     assertPostgresRuntimeContractInventory,
@@ -228,6 +229,7 @@ for (const name of ['generated', 'postgres.generated']) {
                 .digest('hex'),
             declarations
         );
+        assertPostgresContractDeclarationInventory(internal, declarations);
         runtimeArtifacts = publicPostgresRuntimeArtifacts(
             internal.runtimeArtifacts,
             internal.configurationValidation

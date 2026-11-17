@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { assertPostgresFormAccessReceiptProvenance } from './postgres-form-access-receipts.mjs';
 import { assertPostgresConfigDeclarationInventory } from './postgres-config-receipts.mjs';
 import {
+    assertPostgresContractDeclarationInventory,
     assertPostgresRuntimeArtifactSet,
     assertPostgresRuntimeEmitter,
     assertPostgresRuntimeContractInventory,
@@ -289,7 +290,6 @@ export async function assertPublicDistribution(
             ),
             nativeDeclarations
         );
-
         assert(
             nativeDeclarations.equals(
                 contents.get(
@@ -326,6 +326,10 @@ export async function assertPublicDistribution(
                 nativeSource.libReferenceDirectives.length === 0 &&
                 !importsModule,
             'PostgreSQL declarations cannot import schemas or external modules'
+        );
+        assertPostgresContractDeclarationInventory(
+            postgres,
+            nativeDeclarations
         );
         const nativeDigest = sha256(nativeDeclarations);
         for (const format of ['esm', 'cjs']) {

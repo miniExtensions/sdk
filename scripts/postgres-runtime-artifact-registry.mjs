@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 import {
     postgresAttachmentRuntimeModule,
     postgresAttachmentRuntimeSource,
@@ -143,4 +144,57 @@ export function assertPostgresRuntimeContractInventory(
         required.every((path) => paths.includes(path)),
         'Missing packaged PostgreSQL contract file'
     );
+}
+
+/** Compare provenance with the actual exported type inventory, not another manifest. */
+export function assertPostgresContractDeclarationInventory(
+    provenance,
+    declarations
+) {
+    const fail = 'Invalid PostgreSQL contract declaration inventory';
+    assert(Buffer.isBuffer(declarations), `${fail}: declaration bytes`);
+    assert(
+        Array.isArray(provenance?.aliases) &&
+            provenance.aliases.length > 0 &&
+            provenance.aliases.every(
+                (name) =>
+                    typeof name === 'string' &&
+                    /^Postgres[A-Z][A-Za-z0-9]*$/.test(name)
+            ) &&
+            new Set(provenance.aliases).size === provenance.aliases.length,
+        `${fail}: alias metadata`
+    );
+    const parsed = ts.createSourceFile(
+        'postgres.generated.d.ts',
+        declarations.toString('utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS
+    );
+    assert.equal(parsed.parseDiagnostics.length, 0, `${fail}: syntax`);
+    const exported = parsed.statements.filter((statement) => {
+        // TypeScript emits this empty module marker after private helper types.
+        // It declares no name; named re-exports and module references remain invalid.
+        if (
+            ts.isExportDeclaration(statement) &&
+            statement.moduleSpecifier == null &&
+            statement.attributes == null &&
+            statement.exportClause != null &&
+            ts.isNamedExports(statement.exportClause) &&
+            statement.exportClause.elements.length === 0
+        )
+            return false;
+        assert(
+            ts.isTypeAliasDeclaration(statement),
+            `${fail}: only generated type aliases may be declared`
+        );
+        return statement.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
+        );
+    });
+    const actual = exported.map((statement) => statement.name.text).sort();
+    const expected = provenance.aliases
+        .map((name) => `Canonical${name}`)
+        .sort();
+    assert.deepEqual(actual, expected, `${fail}: exported aliases`);
 }

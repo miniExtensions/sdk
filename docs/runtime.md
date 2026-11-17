@@ -32,6 +32,20 @@ UUID remain native string-or-NULL values; this type adds no text normalization,
 version restriction or UUID generation option. Historical receipt versions 1–5
 retain their existing families and source closures.
 
+The independent native snapshot also exports `PostgresConfiguredColumn`,
+`PostgresReadableRelationConfiguration`, `PostgresFormDraftState`,
+`PostgresFormDraft`, `PostgresPortalTab`, `PostgresPortalDraftState`,
+`PostgresPortalDraft` and `PostgresNativeDraft`. These come from the existing
+private workspace-member authoring schemas. The draft union correlates the
+existing `form` or `portal` type with its native state and PostgreSQL source;
+configured columns correlate their native kind with valid field settings.
+Every relation requires a display-column name. Connection equality, duplicate
+columns, bounds, saved revisions and current native metadata still require
+server validation; TypeScript cannot establish those rules for arbitrary
+strings or arrays. These type-only exports add no public load/save operation,
+validator or permission capability and do not widen the released Airtable
+operation contracts.
+
 `PostgresField.collationOid` is required database-local collation metadata.
 Its explicit `null` means a noncollatable column; missing metadata is not NULL.
 Identifier column bindings retain an optional collation only so older saved
@@ -460,8 +474,8 @@ Maintainers verify it with:
 node scripts/generate-runtime-contracts.mjs --postgres-only --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --verify --check
 ```
 
-Omit `--verify --check` to generate it. This mode reads only the canonical native
-models and uses the same compiler, source-hash and bidirectional contract checks;
+Omit `--verify --check` to generate it. This mode reads the canonical native
+models and private authoring schemas using compiler, source-hash and bidirectional contract checks;
 it generates no API operations and does not run transport CORS checks. It also
 relocates the authored attachment-display parser into a portable runtime module
 using an AST import rewrite. The private manifest binds canonical source bytes,

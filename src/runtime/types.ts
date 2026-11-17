@@ -26,6 +26,7 @@ import type {
     CanonicalPostgresAttachmentDisplayFailure,
     CanonicalPostgresBooleanColumnConfig,
     CanonicalPostgresConnection,
+    CanonicalPostgresConfiguredColumn,
     CanonicalPostgresCreateQuery,
     CanonicalPostgresCreateResult,
     CanonicalPostgresDatabase,
@@ -34,14 +35,21 @@ import type {
     CanonicalPostgresUuidColumnConfig,
     CanonicalPostgresField,
     CanonicalPostgresFormRecordAccess,
+    CanonicalPostgresFormDraftState,
+    CanonicalPostgresFormDraft,
     CanonicalPostgresFilter,
     CanonicalPostgresIdentifierConfiguration,
     CanonicalPostgresNumericColumnConfig,
+    CanonicalPostgresNativeDraft,
+    CanonicalPostgresPortalTab,
+    CanonicalPostgresPortalDraftState,
+    CanonicalPostgresPortalDraft,
     CanonicalPostgresRecord,
     CanonicalPostgresRecordDisplayConfiguration,
     CanonicalPostgresRecordEditingConfiguration,
     CanonicalPostgresRecordEditingValidation,
     CanonicalPostgresRecordIdentity,
+    CanonicalPostgresReadableRelationConfiguration,
     CanonicalPostgresRelationship,
     CanonicalPostgresRowObservation,
     CanonicalPostgresSchema,
@@ -94,6 +102,16 @@ export type PostgresUpdateQuery = CanonicalPostgresUpdateQuery;
 export type PostgresUpdateResult = CanonicalPostgresUpdateResult;
 /** Saved private Form access intent; current database/workspace checks still apply. No public transport admission. */
 export type PostgresFormRecordAccess = CanonicalPostgresFormRecordAccess;
+/** Private member authoring contracts; parsing and current authorization remain server-side. */
+export type PostgresConfiguredColumn = CanonicalPostgresConfiguredColumn;
+export type PostgresReadableRelationConfiguration =
+    CanonicalPostgresReadableRelationConfiguration;
+export type PostgresFormDraftState = CanonicalPostgresFormDraftState;
+export type PostgresFormDraft = CanonicalPostgresFormDraft;
+export type PostgresPortalTab = CanonicalPostgresPortalTab;
+export type PostgresPortalDraftState = CanonicalPostgresPortalDraftState;
+export type PostgresPortalDraft = CanonicalPostgresPortalDraft;
+export type PostgresNativeDraft = CanonicalPostgresNativeDraft;
 export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;
 export type PostgresSchema = CanonicalPostgresSchema;

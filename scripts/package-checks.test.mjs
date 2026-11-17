@@ -46,6 +46,7 @@ import {
 } from './postgres-runtime-artifact-registry.mjs';
 import './postgres-config-receipts.test.mjs';
 import './postgres-form-access-receipts.test.mjs';
+import './postgres-contract-declarations.test.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import {
     assertCollaboratorNeighborTarget,
@@ -1238,6 +1239,59 @@ test('public archive rejects UUID declaration inventory tampering even with matc
             }
             await assert.rejects(fixture.check(), /declaration-inventory/);
         });
+});
+
+test('public archive rejects paired omission of composed authoring aliases', async (t) => {
+    const fixture = await postgresDistributionFixture(t);
+    const authoring = [
+        'PostgresConfiguredColumn',
+        'PostgresReadableRelationConfiguration',
+        'PostgresFormDraftState',
+        'PostgresFormDraft',
+        'PostgresPortalTab',
+        'PostgresPortalDraftState',
+        'PostgresPortalDraft',
+        'PostgresNativeDraft',
+    ];
+    const original = await readFile(
+        join(
+            fixture.root,
+            'dist/esm/runtime/contracts/postgres.generated.d.ts'
+        ),
+        'utf8'
+    );
+    const declarations =
+        original +
+        authoring
+            .map((name) => `export type Canonical${name} = unknown;\n`)
+            .join('');
+    fixture.postgres.aliases = [...fixture.postgres.aliases, ...authoring];
+    fixture.postgres.declarationCount += authoring.length;
+    fixture.nativeProvenance.aliases = fixture.postgres.aliases;
+    fixture.nativeProvenance.declarationCount =
+        fixture.postgres.declarationCount;
+    fixture.nativeProvenance.contractDeclarationsSha256 = createHash('sha256')
+        .update(declarations)
+        .digest('hex');
+    const persist = async () => {
+        for (const format of ['esm', 'cjs']) {
+            const prefix = `dist/${format}/runtime/contracts/postgres.generated`;
+            await write(fixture.root, prefix + '.d.ts', declarations);
+            await write(
+                fixture.root,
+                prefix + '.provenance.json',
+                JSON.stringify(fixture.nativeProvenance)
+            );
+        }
+    };
+    await persist();
+    await fixture.check();
+    fixture.postgres.aliases = fixture.postgres.aliases.filter(
+        (name) => !authoring.includes(name)
+    );
+    fixture.nativeProvenance.aliases = fixture.postgres.aliases;
+    await persist();
+    await assert.rejects(fixture.check(), /contract declaration inventory/);
 });
 
 test('public PostgreSQL declarations reject schema dependencies even with matching public hashes', async (t) => {

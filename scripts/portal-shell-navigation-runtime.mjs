@@ -36,9 +36,19 @@ export async function assertPortalShellNavigationConsumer({
                 sidebarInitiallyExpanded: true,
             },
             { type: 'table', id: 'people', label: 'People' },
-            { type: 'group', id: 'links', label: 'Links', items: [
-                { type: 'external', id: 'docs', label: 'Docs', url: 'https://example.invalid/docs' },
-            ] },
+            {
+                type: 'group',
+                id: 'links',
+                label: 'Links',
+                items: [
+                    {
+                        type: 'external',
+                        id: 'docs',
+                        label: 'Docs',
+                        url: 'https://example.invalid/docs',
+                    },
+                ],
+            },
             {
                 type: 'group',
                 id: 'waiting',
@@ -75,9 +85,13 @@ export async function assertPortalShellNavigationConsumer({
             fullscreen: false,
         },
     };
-    const fullItems = snapshot.items, settingsSpec = snapshot.settings;
+    const fullItems = snapshot.items,
+        settingsSpec = snapshot.settings;
     // Synthetic representation of the existing host's per-field view owner.
-    const acceptedViews = new Map([['orders', 'pending-native'], ['people', null]]);
+    const acceptedViews = new Map([
+        ['orders', 'pending-native'],
+        ['people', null],
+    ]);
     const activations = [],
         ordinary = [],
         hovers = [],
@@ -89,11 +103,22 @@ export async function assertPortalShellNavigationConsumer({
         assert.equal(request.scope, snapshot.scope);
         assert.equal(request.revision, snapshot.revision);
         activations.push(request);
-        if (request.selection.type === 'table' && request.selection.viewId !== null)
-            acceptedViews.set(request.selection.itemId, request.selection.viewId);
-        const acceptedSelection = request.selection.type === 'table'
-            ? { ...request.selection, viewId: acceptedViews.get(request.selection.itemId) ?? null }
-            : request.selection;
+        if (
+            request.selection.type === 'table' &&
+            request.selection.viewId !== null
+        )
+            acceptedViews.set(
+                request.selection.itemId,
+                request.selection.viewId
+            );
+        const acceptedSelection =
+            request.selection.type === 'table'
+                ? {
+                      ...request.selection,
+                      viewId:
+                          acceptedViews.get(request.selection.itemId) ?? null,
+                  }
+                : request.selection;
         snapshot = {
             ...snapshot,
             revision: snapshot.revision + 1,
@@ -117,7 +142,9 @@ export async function assertPortalShellNavigationConsumer({
             assert(button?.isConnected);
             precommitProbes++;
             button.click();
-            button.dispatchEvent(
+            const view = named('Open orders');
+            assert(view?.isConnected);
+            view.dispatchEvent(
                 new window.MouseEvent('mouseover', {
                     bubbles: true,
                     relatedTarget: window.document.body,
@@ -233,10 +260,18 @@ export async function assertPortalShellNavigationConsumer({
         const body = container.querySelector('input');
         const trigger = summary();
         await click(trigger);
-        assert.equal(activations[0].selection.viewId, null, 'Inactive parent activation never chooses the default view');
+        assert.equal(
+            activations[0].selection.viewId,
+            null,
+            'Inactive parent activation never chooses the default view'
+        );
         assert.equal(snapshot.selection.viewId, 'pending-native');
         await click(trigger);
-        assert.equal(activations[1].selection.viewId, null, 'Current pending parent activation leaves the view owner untouched');
+        assert.equal(
+            activations[1].selection.viewId,
+            null,
+            'Current pending parent activation leaves the view owner untouched'
+        );
         assert.equal(snapshot.selection.viewId, 'pending-native');
         await React.act(async () => {
             trigger.focus();
@@ -282,6 +317,51 @@ export async function assertPortalShellNavigationConsumer({
             0,
             'Keyboard opening never invents hover reads'
         );
+        await React.act(async () =>
+            named('Open orders').dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'Tab',
+                    bubbles: true,
+                })
+            )
+        );
+        assert.equal(trigger.parentElement.open, false);
+        assert.equal(
+            window.document.activeElement,
+            container.querySelector('[aria-label="Edit orders"]')
+        );
+        await React.act(async () => {
+            trigger.focus();
+            trigger.dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'ArrowUp',
+                    bubbles: true,
+                })
+            );
+        });
+        assert.equal(window.document.activeElement, named('chart'));
+        await React.act(async () =>
+            named('chart').dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'Tab',
+                    shiftKey: true,
+                    bubbles: true,
+                })
+            )
+        );
+        assert.equal(trigger.parentElement.open, false);
+        assert.equal(window.document.activeElement, named('Guide'));
+        assert.equal(activations.length, 2);
+        assert.equal(hovers.length, 0);
+        await React.act(async () => {
+            trigger.focus();
+            trigger.dispatchEvent(
+                new window.KeyboardEvent('keydown', {
+                    key: 'ArrowDown',
+                    bubbles: true,
+                })
+            );
+        });
         await click(named('Open orders'));
         assert.equal(activations.length, 3);
         assert.equal(
@@ -328,14 +408,21 @@ export async function assertPortalShellNavigationConsumer({
         assert.equal(settings.length, 1);
         assert.equal(hovers.length, 1);
         assert.equal(activations.length, 5);
-        const linkTrigger = [...container.querySelectorAll('summary')].find((node) => node.textContent === 'Links');
+        const linkTrigger = [...container.querySelectorAll('summary')].find(
+            (node) => node.textContent === 'Links'
+        );
         await click(linkTrigger);
-        const anchor = container.querySelector('a[href="https://example.invalid/docs"]');
-        anchor.addEventListener('click', (event) => event.preventDefault(), { once: true });
+        const anchor = container.querySelector(
+            'a[href="https://example.invalid/docs"]'
+        );
+        anchor.addEventListener('click', (event) => event.preventDefault(), {
+            once: true,
+        });
         await click(anchor); // Intercept only the browser-owned external destination.
         assert.equal(linkTrigger.parentElement.open, false);
         assert.equal(window.document.activeElement, linkTrigger);
-        assert.equal(activations.length, 5); assert.equal(ordinary.length, 0);
+        assert.equal(activations.length, 5);
+        assert.equal(ordinary.length, 0);
         assert.equal(
             container.querySelectorAll('.mx-sdk-portal-view-icon').length,
             8
@@ -371,19 +458,55 @@ export async function assertPortalShellNavigationConsumer({
         );
         assert.equal(container.querySelector('input'), body);
         await mouse(named('People'), 'mouseover');
-        assert.equal(hovers.length, 2, 'Visible flat sidebar rows do not prefetch');
-        snapshot = { ...snapshot, revision: snapshot.revision + 1, header: { ...snapshot.header, layout: 'topbar' } };
-        await React.act(async () => { window.happyDOM.setWindowSize({ width: 639, height: 800 }); root.render(element()); });
+        assert.equal(
+            hovers.length,
+            2,
+            'Visible flat sidebar rows do not prefetch'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: { ...snapshot.header, layout: 'topbar' },
+        };
+        await React.act(async () => {
+            window.happyDOM.setWindowSize({ width: 639, height: 800 });
+            root.render(element());
+        });
         await click(named('Open navigation'));
         await mouse(named('People'), 'mouseover');
-        assert.equal(hovers.length, 2, 'Visible flat topbar-mobile rows do not prefetch');
-        snapshot = { ...snapshot, revision: snapshot.revision + 1, header: { ...snapshot.header, hidden: true },
-            settings: undefined, items: fullItems.map((item) => item.type === 'table' ? { ...item, views: undefined } : item) };
-        await render(); await click(named('Open navigation'));
+        assert.equal(
+            hovers.length,
+            2,
+            'Visible flat topbar-mobile rows do not prefetch'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: { ...snapshot.header, hidden: true },
+            settings: undefined,
+            items: fullItems.map((item) =>
+                item.type === 'table' ? { ...item, views: undefined } : item
+            ),
+        };
+        await render();
+        await click(named('Open navigation'));
         await mouse(named('People'), 'mouseover');
-        assert.equal(hovers.length, 3, 'Headerless flat fields retain the native pointer notification');
-        snapshot = { ...snapshot, revision: snapshot.revision + 1, header: { ...snapshot.header, hidden: false, layout: 'sidebar' }, settings: settingsSpec, items: fullItems };
-        await React.act(async () => { window.happyDOM.setWindowSize({ width: 1280, height: 900 }); root.render(element()); });
+        assert.equal(
+            hovers.length,
+            3,
+            'Headerless flat fields retain the native pointer notification'
+        );
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            header: { ...snapshot.header, hidden: false, layout: 'sidebar' },
+            settings: settingsSpec,
+            items: fullItems,
+        };
+        await React.act(async () => {
+            window.happyDOM.setWindowSize({ width: 1280, height: 900 });
+            root.render(element());
+        });
         precommitProbe = true;
         snapshot = { ...snapshot, revision: snapshot.revision + 1 };
         await render();
@@ -391,6 +514,12 @@ export async function assertPortalShellNavigationConsumer({
         assert.equal(activations.length, 5);
         assert.equal(hovers.length, 3);
         precommitProbe = false;
+        await mouse(named('Open orders'), 'mouseover');
+        assert.equal(
+            hovers.length,
+            4,
+            'The current committed view still notifies the host'
+        );
         await click(named('People'));
         assert.equal(activations.length, 6);
         activate = undefined;
@@ -450,20 +579,21 @@ export async function assertPortalShellNavigationConsumer({
         await React.act(async () => root.unmount());
         mounted = false;
         assert.equal(activations.length, 6);
-        assert.equal(hovers.length, 3);
+        assert.equal(hovers.length, 4);
         assert.equal(ordinary.length, 1);
         assert.equal(submits, 0);
         assert.equal(networks, 0);
         return {
             activations: 6,
             legacyNavigationIntents: 1,
-            hoverNotifications: 3,
+            hoverNotifications: 4,
             settingsRequests: 1,
             precommitAdmission: 'rejected',
             providerRequests: 0,
             submitEvents: 0,
             preservedIframe: true,
             externalLinkClosure: 'passed',
+            tabExitFocus: 'passed',
         };
     } finally {
         try {

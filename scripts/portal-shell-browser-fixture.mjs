@@ -147,7 +147,30 @@ function App() {
             onSelectionActivate: activationEnabled
                 ? (request) => {
                       window.proof.activations.push(request);
-                      command(request);
+                      const selection = request.selection;
+                      const previous = request.previousSelection;
+                      const item = snapshot.items.find(
+                          (item) => item.id === selection.itemId
+                      );
+                      // This synthetic host retains its accepted view on a
+                      // parent-only activation, as the native owner must do.
+                      const retainedView =
+                          previous?.type === 'table' &&
+                          previous.itemId === selection.itemId
+                              ? previous.viewId
+                              : (item?.defaultViewId ?? null);
+                      command(
+                          selection.type === 'table' &&
+                              selection.viewId === null
+                              ? {
+                                    ...request,
+                                    selection: {
+                                        ...selection,
+                                        viewId: retainedView,
+                                    },
+                                }
+                              : request
+                      );
                   }
                 : undefined,
             onItemHover: (request) => {

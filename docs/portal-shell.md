@@ -8,9 +8,18 @@ request, not a host-rendered menu. Mount, restoration and reconciliation never
 invoke it. The host retains its canonical storage, SidePanel and record/query
 operations and admits the current owner before executing them.
 
+In menu interaction mode, a desktop parent-table summary sends `viewId:null`
+to request field activation without choosing a view. The existing host retains
+that field's accepted view, including a pending/error identifier. An explicit
+view button sends its view identity, including a same-view activation.
+
 `onItemHover` is a separate pointer-only notification with item/view identity and
 the owner envelope. It does not run on focus, render or import. Keep the existing
 host's bounded initialization/prefetch policy behind it; the SDK performs no reads.
+Desktop topbar table rows notify for the parent; sidebar/mobile view buttons
+notify for their view. Visible flat sidebar/mobile fields do not notify.
+Headerless flat fields retain their pointer notification. Settings gears and
+keyboard opening do not invent a hover notification.
 
 Set `selectionPolicy:'host'` when the existing native owner already accepts the
 selection. The shell validates menu identity and embedded HTTPS URLs without
@@ -23,7 +32,9 @@ storage; do not rewrite restoration just because display URLs normalize equally.
 Opt-in `header.menuInteraction:'menu'` extends the existing HTML disclosure
 controls with desktop topbar hover/ArrowUp/ArrowDown opening, current-menu
 Home/End traversal, parent-table activation, outside-click closure and trigger
-focus restoration. Mobile navigation retains dialog Escape/focus behavior and
+focus restoration. Tab/Shift+Tab exits a desktop menu relative to its trigger;
+the account menu closes on Tab while preserving the mobile drawer's focus trap.
+Mobile navigation retains dialog Escape/focus behavior and
 resets disclosures on reopening. Per-table/group `sidebarInitiallyExpanded`
 chooses their initial mobile/sidebar state independently. An admitted unresolved
 group may use `keepEmpty:true`; omission retains existing empty-group filtering.

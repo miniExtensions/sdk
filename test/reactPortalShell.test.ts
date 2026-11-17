@@ -23,14 +23,16 @@ it('optional host activation and pointer notifications preserve native owners, m
         renderToString,
     });
     assert.deepEqual(result, {
-        activations: 4,
+        activations: 6,
         legacyNavigationIntents: 1,
-        hoverNotifications: 2,
+        hoverNotifications: 4,
         settingsRequests: 1,
         precommitAdmission: 'rejected',
         providerRequests: 0,
         submitEvents: 0,
         preservedIframe: true,
+        externalLinkClosure: 'passed',
+        tabExitFocus: 'passed',
     });
 });
 

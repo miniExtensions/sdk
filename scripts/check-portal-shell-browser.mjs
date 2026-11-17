@@ -107,12 +107,54 @@ async function navigationCompatibility(browser, origin, label) {
             true
         );
         assert.equal(await page.evaluate(() => window.proof.hovers.length), 0);
+        await page.keyboard.press('Tab');
+        assert.equal(await openView.isVisible(), false);
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'People', exact: true })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        await summary.focus();
+        await page.keyboard.press('ArrowUp');
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Done orders', exact: true })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        await page.keyboard.press('Shift+Tab');
+        assert.equal(await openView.isVisible(), false);
+        assert.equal(
+            await page
+                .locator('.mx-sdk-portal-user > summary')
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.deepEqual(
+            await page.evaluate(() => [
+                window.proof.activations.length,
+                window.proof.hovers.length,
+                window.proof.intents.length,
+            ]),
+            [0, 0, 0]
+        );
+        await summary.focus();
+        await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Enter');
         await page.waitForFunction(() => window.proof.activations.length === 1);
         await summary.press('Enter');
         await openView.waitFor();
         await openView.click();
         await page.waitForFunction(() => window.proof.activations.length === 3);
+        assert.deepEqual(
+            await page.evaluate(() =>
+                window.proof.activations.map(
+                    (request) => request.selection.viewId
+                )
+            ),
+            ['open', null, 'open']
+        );
         assert.deepEqual(
             await page.evaluate(() => ({
                 intents: window.proof.intents.length,
@@ -183,6 +225,19 @@ async function navigationCompatibility(browser, origin, label) {
                 .evaluate((node) => node === document.activeElement),
             true
         );
+        await page.keyboard.press('Tab');
+        assert.equal(await user.evaluate((node) => node.open), false);
+        assert.equal(await page.getByRole('dialog').count(), 1);
+        assert.equal(
+            await page
+                .getByRole('dialog')
+                .evaluate((node) => node.contains(document.activeElement)),
+            true,
+            'Account-menu Tab stays within the mobile drawer'
+        );
+        assert.equal(await page.evaluate(() => window.proof.intents.length), 3);
+        await user.locator('summary').focus();
+        await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Escape');
         assert.equal(await user.evaluate((node) => node.open), false);
         assert.equal(
@@ -202,6 +257,7 @@ async function navigationCompatibility(browser, origin, label) {
             pointerOnlyNotification: 'passed',
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
+            desktopAndMobileMenuTabFocus: 'passed',
             cleanup: 'completed',
         };
     } catch (error) {

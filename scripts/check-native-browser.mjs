@@ -8,6 +8,10 @@ import {
     checkPortalGalleryBrowser,
 } from './portal-gallery-browser-checks.mjs';
 import {
+    prepareReadonlyPortalGridBrowserFixtures,
+    checkReadonlyPortalGridBrowser,
+} from './readonly-portal-grid-browser-checks.mjs';
+import {
     preparePrintableFormBrowserFixtures,
     checkPrintableFormBrowser,
 } from './printable-form-browser-checks.mjs';
@@ -1574,6 +1578,7 @@ try {
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/printable-form-browser-checks.mjs',
             'scripts/portal-gallery-browser-checks.mjs',
+            'scripts/readonly-portal-grid-browser-checks.mjs',
             'scripts/readonly-portal-list-browser-checks.mjs',
             'scripts/readonly-portal-list-fixture.mjs',
             'scripts/form-group-consumer-checks.mjs',
@@ -2038,6 +2043,17 @@ try {
             hash,
         });
         await preparePortalGalleryBrowserFixtures({
+            temporary,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        await prepareReadonlyPortalGridBrowserFixtures({
             temporary,
             readArchiveMember,
             installed,
@@ -3102,6 +3118,13 @@ try {
         await run('kanban', async (page, origin) => {
             await checkKanbanBrowser({ page, origin, evidence: report.kanban });
         });
+        await run('readonly-portal-grid', async (page, origin) => {
+            await page.goto(origin + '/readonly-portal-grid.html');
+            await checkReadonlyPortalGridBrowser({
+                page,
+                evidence: report.readonlyPortalGrid,
+            });
+        });
         await run('portal-gallery-layout', async (page, origin) => {
             await page.goto(origin + '/portal-gallery-layout.html');
             await checkPortalGalleryBrowser({
@@ -4101,7 +4124,7 @@ try {
         assert.equal(
             results.length,
             // Include complete fields, printable layout, CSV, Kanban, Gallery and section groups.
-            30 +
+            31 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

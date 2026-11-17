@@ -69,6 +69,7 @@ export async function checkPortalGalleryReactMatrix({
         const root = realpathSync(
             mkdtempSync(join(tmpdir(), 'sdk-portal-gallery-'))
         );
+        let completedProfile;
         try {
             writeFileSync(
                 join(root, 'package.json'),
@@ -197,20 +198,20 @@ export async function checkPortalGalleryReactMatrix({
                     .digest('hex'),
                 archiveSha256
             );
-            console.log(
-                JSON.stringify({
-                    react,
-                    profiles: 2,
-                    tests: 22,
-                    strictTypes: ['ESM', 'CJS'],
-                    styles: 'shared card + HTML closure',
-                    ...receipt,
-                    cleanup: 'completed after this profile',
-                })
-            );
+            completedProfile = {
+                react,
+                profiles: 2,
+                tests: 22,
+                strictTypes: ['ESM', 'CJS'],
+                styles: 'shared card + HTML closure',
+                ...receipt,
+            };
         } finally {
             rmSync(root, { recursive: true, force: true });
         }
+        console.log(
+            JSON.stringify({ ...completedProfile, cleanup: 'completed' })
+        );
     }
     return { profiles, tests: 44, archiveSha256 };
 }

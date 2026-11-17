@@ -676,6 +676,81 @@ it('retires width authority withdrawn mid-gesture without reviving it on restora
     f.unchangedEffects();
 });
 
+for (const boxSizing of ['border-box', 'content-box'] as const) {
+    it(`keeps canonical client widths stable across ${boxSizing} keyboard and pointer settlement`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const style = f.window.document.createElement('style');
+        style.textContent = `.mx-sdk-readonly-grid__header { box-sizing: ${boxSizing}; border-left: 1px solid; border-right: 3px solid; padding-left: 10px; padding-right: 14px; }`;
+        f.window.document.head.appendChild(style);
+        const changes: { fieldId: string; width: number }[] = [];
+        const renderWidth = (width: number, revision = 1) =>
+            f.render(
+                h(
+                    ReadonlyPortalGrid,
+                    model({
+                        revision,
+                        columnWidths: { value: width },
+                        onColumnWidthCommit: (change) => changes.push(change),
+                    })
+                )
+            );
+        await renderWidth(240);
+        const cell = header(f);
+        const adjustment = boxSizing === 'border-box' ? 4 : -24;
+        assert.equal(cell.style.width, `${240 + adjustment}px`);
+        // Happy DOM omits layout. Model only the platform box relationship;
+        // the packed Chrome regression exercises the real stylesheet/geometry.
+        const measure = (node: typeof cell) =>
+            Object.defineProperty(node, 'clientWidth', {
+                configurable: true,
+                get: () => Number.parseFloat(node.style.width) - adjustment,
+            });
+        measure(cell);
+        const handle = cell.querySelector('[role="separator"]');
+        assert.ok(handle);
+        for (const [key, expected] of [
+            ['ArrowRight', 241],
+            ['ArrowLeft', 240],
+        ] as const) {
+            await act(async () =>
+                handle.dispatchEvent(
+                    new f.window.KeyboardEvent('keydown', {
+                        key,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.equal(cell.clientWidth, expected);
+            await act(async () =>
+                handle.dispatchEvent(
+                    new f.window.KeyboardEvent('keyup', {
+                        key,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.deepEqual(changes.at(-1), {
+                fieldId: 'value',
+                width: expected,
+            });
+            await renderWidth(expected);
+            assert.equal(cell.clientWidth, expected);
+        }
+        await pointer(f, handle, 'pointerdown', 200);
+        await pointer(f, f.window.document, 'pointerup', 200);
+        assert.deepEqual(changes.at(-1), { fieldId: 'value', width: 240 });
+        assert.equal(cell.clientWidth, 240);
+        await renderWidth(240, 2);
+        const remounted = header(f);
+        assert.notEqual(remounted, cell);
+        measure(remounted);
+        assert.equal(remounted.clientWidth, 240);
+        f.unchangedEffects();
+    });
+}
+
 it('supports keyboard resize with measured settlement and Escape cancellation', async (t) => {
     const f = await htmlPresentationFixture(t);
     const changes: unknown[] = [];

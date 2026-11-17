@@ -12,6 +12,7 @@ import {
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
+import { flushSync } from 'react-dom';
 import { CompleteFormFieldPresentation } from './CompleteFormFieldPresentation.js';
 
 export type ReadonlyPortalGridHeaderIcon =
@@ -242,6 +243,7 @@ function GridHeader({
         event.stopPropagation();
         stopDrag.current?.();
         let lastX = event.clientX;
+        let requestedWidth: number | undefined;
         const pointerId = event.pointerId;
         const document = cell.ownerDocument;
         const cleanup = () => {
@@ -258,14 +260,24 @@ function GridHeader({
             next.preventDefault();
             const delta = next.clientX - lastX;
             lastX = next.clientX;
-            setLocalWidth((previous) => (previous ?? cell.clientWidth) + delta);
+            requestedWidth =
+                (requestedWidth ?? localWidth ?? cell.clientWidth) + delta;
+            setLocalWidth(requestedWidth);
         };
         const end = (next: PointerEvent) => {
             if (next.pointerId !== pointerId) return;
             cleanup();
             stopDrag.current = null;
-            if (current(isCurrent)) settle();
-            else setLocalWidth(admittedWidth(width));
+            if (!current(isCurrent)) {
+                setLocalWidth(admittedWidth(width));
+                return;
+            }
+            // Release can arrive before React paints the final move. Render the
+            // requested width first so the commit still uses browser geometry.
+            const finalWidth = requestedWidth;
+            if (finalWidth !== undefined)
+                flushSync(() => setLocalWidth(finalWidth));
+            settle();
         };
         const cancelled = (next: PointerEvent) => {
             if (next.pointerId === pointerId) cancel();

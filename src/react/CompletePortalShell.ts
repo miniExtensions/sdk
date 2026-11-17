@@ -301,18 +301,23 @@ function Shell(props: CompletePortalShellProps) {
         phase: 'reconcile',
     });
     const suppliedSelection = snapshot.selection;
-    const suppliedItem = suppliedSelection
-        ? flattenPortalShellMenu(items).find(
-              (item) => item.id === suppliedSelection.itemId
-          )
-        : undefined;
     // The host's view/error/loading owner is authoritative. Do not replace a
-    // table's pending view with an independently chosen first view.
+    // table's pending view or captured embed when its current menu changes.
+    // The host retires its accepted owner; this layer only checks the shape
+    // and existing HTTPS policy, independently of current menu membership.
+    const hostIdentity =
+        suppliedSelection != null &&
+        typeof suppliedSelection.itemId === 'string' &&
+        suppliedSelection.itemId.trim() !== '';
     const hostSelection =
-        suppliedSelection?.type === 'table' && suppliedItem?.type === 'table'
+        hostIdentity &&
+        suppliedSelection?.type === 'table' &&
+        (suppliedSelection.viewId === null ||
+            typeof suppliedSelection.viewId === 'string')
             ? suppliedSelection
-            : suppliedSelection?.type === 'embedded' &&
-                suppliedItem?.type === 'embedded' &&
+            : hostIdentity &&
+                suppliedSelection?.type === 'embedded' &&
+                typeof suppliedSelection.url === 'string' &&
                 isPortalShellUrl(suppliedSelection.url)
               ? suppliedSelection
               : null;

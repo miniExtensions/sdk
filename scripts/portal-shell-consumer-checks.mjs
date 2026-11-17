@@ -107,7 +107,7 @@ assert.deepEqual(presentation,{availabilityCases:8,authorityRetirements:3,logout
 const settings=await assertPortalShellSettingsConsumer({React,ui,Window,createRoot,renderToString});
 assert.deepEqual(settings,{settingsRequests:11,siblingRequests:1,ordinaryIntents:0,submitEvents:0,implicitNetworkRequests:0,precommitAdmission:'rejected'});
 const navigation=await assertPortalShellNavigationConsumer({React,ui,Window,createRoot,renderToString});
-assert.deepEqual(navigation,{activations:6,legacyNavigationIntents:1,hoverNotifications:4,settingsRequests:1,precommitAdmission:'rejected',providerRequests:0,submitEvents:0,preservedIframe:true,externalLinkClosure:'passed',tabExitHandoff:'passed',accountKeyboardAndMobileTrap:'passed'});
+assert.deepEqual(navigation,{activations:6,legacyNavigationIntents:1,hoverNotifications:4,settingsRequests:1,precommitAdmission:'rejected',providerRequests:0,submitEvents:0,preservedIframe:true,externalLinkClosure:'passed',tabExitHandoff:'passed',accountKeyboardAndMobileTrap:'passed',hostSelectionAcrossMenuDrift:'passed'});
 console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation,settings,navigation}));
 `
         );

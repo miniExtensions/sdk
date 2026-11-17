@@ -22,8 +22,11 @@ Headerless flat fields retain their pointer notification. Settings gears and
 keyboard opening do not invent a hover notification.
 
 Set `selectionPolicy:'host'` when the existing native owner already accepts the
-selection. The shell validates menu identity and embedded HTTPS URLs without
-choosing an initial/fallback view, or replacing a table's pending/error view.
+selection. The shell validates its nonblank identity, view shape and embedded
+HTTPS URL without requiring current menu membership or choosing a fallback.
+An already accepted table/error body or captured iframe remains owned by the
+host when the menu item disappears or changes type. The host's existing
+restoration and visibility owner decides when to retire that selection.
 Native URL restoration stays mount-only. For a native embedded URL projection,
 preserve the captured raw selection owner separately from the current menu's raw
 URL map. Only explicit admitted activation maps an item back to canonical raw

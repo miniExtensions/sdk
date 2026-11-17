@@ -43,10 +43,20 @@ async function navigationCompatibility(browser, origin, label) {
     });
     const errors = [],
         external = [];
+    const capturedUrl = 'https://example.test/__sdk_portal_captured__';
+    let capturedRequests = 0;
     page.on('pageerror', (error) => errors.push(String(error)));
     await page.route('**/*', (route) => {
         if (new URL(route.request().url()).origin === origin)
             return route.continue();
+        if (route.request().url() === capturedUrl) {
+            capturedRequests++;
+            return route.fulfill({
+                status: 200,
+                contentType: 'text/html',
+                body: '<!doctype html><title>Captured native iframe</title><p>Captured native content</p>',
+            });
+        }
         external.push(route.request().url());
         return route.abort();
     });
@@ -268,6 +278,117 @@ async function navigationCompatibility(browser, origin, label) {
             true
         );
         assert.equal(await page.evaluate(() => window.proof.intents.length), 3);
+        const configureCommitted = async (patch) => {
+            const previousRevision = await page.evaluate((patch) => {
+                const previous = window.fixtureSnapshot.revision;
+                window.configure(patch);
+                return previous;
+            }, patch);
+            await page.waitForFunction(
+                ({ previousRevision, patch }) => {
+                    const current = window.fixtureCommittedSnapshot;
+                    return (
+                        current != null &&
+                        current === window.fixtureSnapshot &&
+                        current.revision > previousRevision &&
+                        Object.entries(patch).every(
+                            ([key, value]) =>
+                                JSON.stringify(current[key]) ===
+                                JSON.stringify(value)
+                        )
+                    );
+                },
+                { previousRevision, patch }
+            );
+        };
+        await configureCommitted({
+            selectionPolicy: 'host',
+            embed: {
+                preserveElement: true,
+                referrerPolicy: 'browser-default',
+                fullscreen: false,
+            },
+            selection: { type: 'embedded', itemId: 'guide', url: capturedUrl },
+        });
+        await page
+            .frameLocator('iframe')
+            .getByText('Captured native content', { exact: true })
+            .waitFor();
+        await page.evaluate(() => {
+            window.capturedNativeFrame = document.querySelector('iframe');
+        });
+        for (const items of [
+            [
+                {
+                    type: 'external',
+                    id: 'guide',
+                    label: 'Current external',
+                    url: 'https://example.test/current-external',
+                },
+            ],
+            [],
+        ]) {
+            await configureCommitted({ items });
+            if (items.length)
+                assert.equal(
+                    await page
+                        .getByRole('link', {
+                            name: 'Current external (opens in a new tab)',
+                            exact: true,
+                        })
+                        .getAttribute('href'),
+                    'https://example.test/current-external'
+                );
+            else
+                assert.equal(
+                    await page
+                        .locator('.mx-sdk-portal-menu :is(button,a,summary)')
+                        .count(),
+                    0
+                );
+            assert.equal(
+                await page.locator('iframe').getAttribute('src'),
+                capturedUrl
+            );
+            assert.equal(
+                await page.evaluate(
+                    () =>
+                        document.querySelector('iframe') ===
+                        window.capturedNativeFrame
+                ),
+                true
+            );
+        }
+        assert.equal(
+            capturedRequests,
+            1,
+            'Menu changes never reload the captured native iframe'
+        );
+        await configureCommitted({
+            selection: {
+                type: 'embedded',
+                itemId: 'guide',
+                url: 'http://example.test/unsafe',
+            },
+        });
+        assert.equal(await page.locator('iframe').count(), 0);
+        await configureCommitted({
+            items: [],
+            selection: {
+                type: 'table',
+                itemId: 'retiring-native-table',
+                viewId: 'pending-native',
+            },
+        });
+        await editor.waitFor();
+        assert.deepEqual(
+            await page.evaluate(() => ({
+                activations: window.proof.activations.length,
+                storage: window.proof.storage.length,
+                reads: window.proof.reads.length,
+            })),
+            { activations: 3, storage: 3, reads: 0 }
+        );
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);
         return {
@@ -279,6 +400,7 @@ async function navigationCompatibility(browser, origin, label) {
             configuredIconsBadgesAndSettings: 'passed',
             desktopAndMobileMenuTabFocus: 'passed',
             nativeHostEditorTabDestination: 'passed',
+            hostSelectionAcrossMenuDrift: 'passed',
             cleanup: 'completed',
         };
     } catch (error) {

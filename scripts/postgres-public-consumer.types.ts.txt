@@ -1189,12 +1189,14 @@ import type {
     PostgresRelationshipClear as RelationshipWitnessPostgresRelationshipClear,
     PostgresRelationshipCandidate as RelationshipWitnessPostgresRelationshipCandidate,
     PostgresRelationshipCandidatePage as RelationshipWitnessPostgresRelationshipCandidatePage,
+    PostgresRelationshipPresentation as RelationshipWitnessPostgresRelationshipPresentation,
+    PostgresRowObservation as RelationshipWitnessPostgresRowObservation,
+    PostgresSelectResult as RelationshipWitnessPostgresSelectResult,
     PostgresFormDraftState as RelationshipWitnessPostgresFormDraftState,
     PostgresPortalTab as RelationshipWitnessPostgresPortalTab,
     PostgresReadableRelationConfiguration as RelationshipWitnessPostgresReadableRelationConfiguration,
     FormLoadedResult as RelationshipWitnessFormLoadedResult,
 } from '@miniextensions/sdk';
-
 
 declare const binding: RelationshipWitnessPostgresRelationshipBinding;
 declare const column: RelationshipWitnessPostgresRelationshipColumn;
@@ -1299,3 +1301,17 @@ export const publicSource: RelationshipWitnessFormLoadedResult['source'] = {
     connectionId: 'native',
     databaseName: 'database',
 };
+
+export const loadedPresentation:RelationshipWitnessPostgresRelationshipPresentation={formatVersion:1,relationshipName:'customer_fk',baseline:[{columnName:'tenant_id',value:' Exact '},{columnName:'contact_id',value:null}],status:'resolved',label:''};
+export const nullPresentation:RelationshipWitnessPostgresRelationshipPresentation={...loadedPresentation,status:'resolved',label:null};
+export const unavailablePresentation:RelationshipWitnessPostgresRelationshipPresentation={formatVersion:1,relationshipName:'customer_fk',baseline:loadedPresentation.baseline,status:'unavailable'};
+export const emptyPresentation:RelationshipWitnessPostgresRelationshipPresentation={...unavailablePresentation,status:'empty'};
+declare const observed:RelationshipWitnessPostgresRowObservation;
+declare const records:RelationshipWitnessPostgresSelectResult;
+export const observedLabels:RelationshipWitnessPostgresRowObservation={...observed,relationshipPresentations:[loadedPresentation]};
+export const rowAlignedLabels:RelationshipWitnessPostgresSelectResult={...records,relationshipPresentations:[[loadedPresentation],[unavailablePresentation]]};
+// @ts-expect-error Loaded presentation has no native target selection tuple.
+export const presentationIsNotSelection:RelationshipWitnessPostgresRelationshipSelection=loadedPresentation;
+export const unavailableHasNoLabel:RelationshipWitnessPostgresRelationshipPresentation={...unavailablePresentation,
+// @ts-expect-error Only a resolved presentation carries a label.
+label:'hidden'};

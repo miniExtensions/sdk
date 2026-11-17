@@ -87,6 +87,13 @@ selection and needs no target display column. `PostgresRelationshipSelection`
 retains lossless native key values, and `PostgresRelationshipChange` pairs a
 selection with loaded component baselines.
 
+`PostgresRelationshipPresentation` is optional read-only display data, bound to
+an ordered loaded local tuple. A resolved label preserves SQL NULL and empty
+text; empty relationships and unavailable labels have distinct states. Row
+observations and select results may carry these presentations separately from
+fields. They cannot be used as selections or write authority. Reopening or
+submitting an unchanged relationship does not assign it again.
+
 `PostgresRelationshipConfig.clearColumnNames` records the builder's explicit
 choice of local columns Clear may empty. `PostgresRelationshipClear` carries
 only relationship intent and optional baselines; it cannot choose write columns.

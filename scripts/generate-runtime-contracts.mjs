@@ -274,6 +274,7 @@ const postgresAuthoringContracts = [
             'PostgresRelationshipClear',
             'PostgresRelationshipCandidate',
             'PostgresRelationshipCandidatePage',
+            'PostgresRelationshipPresentation',
         ],
     },
     {
@@ -908,6 +909,7 @@ if (postgresOnly) {
     sourceFiles.add('types/constants/extensionType.ts');
     sourceFiles.add('types/postgres/connections.ts');
     sourceFiles.add('types/postgres/identifierBinding.ts');
+    sourceFiles.add('types/postgres/relationshipPresentation.ts');
     sourceFiles.add(
         'types/extensions/postgres/relationshipFieldDefinitions.ts'
     );

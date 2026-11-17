@@ -72,6 +72,7 @@ export type {
     PostgresRelationshipClear,
     PostgresRelationshipCandidate,
     PostgresRelationshipCandidatePage,
+    PostgresRelationshipPresentation,
     PostgresRowObservation,
     PostgresSchema,
     PostgresSelectQuery,

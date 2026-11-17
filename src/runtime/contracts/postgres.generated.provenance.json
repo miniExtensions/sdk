@@ -1,8 +1,8 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "1c1b05dc66fcd3d23a9a220be42b2555f0056ea4",
+    "sourceRevision": "ae6c522dbd488ec1eec203786d4e1e44ac5e1e82",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "a8ba99a36a394019175f68005718b74697bcd87168c41594ef8df6e7b700b5df",
+    "generatorSha256": "49be62e78f6dda8060ff7cafbc438cd6edeb33ebfe23133edbe9d98c2b48d361",
     "contractFamily": "postgres",
     "aliases": [
         "PostgresConnection",
@@ -55,6 +55,7 @@
         "PostgresRelationshipClear",
         "PostgresRelationshipCandidate",
         "PostgresRelationshipCandidatePage",
+        "PostgresRelationshipPresentation",
         "PostgresConfiguredColumn",
         "PostgresReadableRelationConfiguration",
         "PostgresFormDraftState",
@@ -273,15 +274,19 @@
         },
         {
             "path": "types/postgres/query.ts",
-            "sha256": "4c45728d0deff145b85ab0c9d3176910111fa51dffed9d9410162b4004e817be"
+            "sha256": "f7e3fe12f0473c61c75184cf03091a6a8481cfaf0e1d3a5eca2791f73cedd083"
         },
         {
             "path": "types/postgres/recordSettings.ts",
             "sha256": "8479e295ce771865a56afb67c6d487cb560ac0a9f63c7cfc453c8c3d5bf93e30"
         },
         {
+            "path": "types/postgres/relationshipPresentation.ts",
+            "sha256": "aaa2d5b7c075df3c5bb30200b7bc26c5fd8eba60c77f4efe2783ca605e51b14a"
+        },
+        {
             "path": "types/postgres/relationships.ts",
-            "sha256": "5131c4903440941984f3dd0255c77060b06023da23bc5325b09ab8ff86ad113c"
+            "sha256": "60277493994cb7f39b379a5c229080bc518d217dcac5adfe1490387b608f306c"
         },
         {
             "path": "types/postgres/types.ts",
@@ -289,7 +294,7 @@
         },
         {
             "path": "types/postgres/update.ts",
-            "sha256": "4a16d498665cdbb49766fa19b11173a9c36c6417356488e7de20b3093fdbd754"
+            "sha256": "815e487b93d55cbd9d96320c3d139ac66329567bfb7963e647b075d11ea547f9"
         }
     ],
     "dependencies": [
@@ -298,6 +303,6 @@
             "sha256": "293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec"
         }
     ],
-    "declarationCount": 171,
-    "generatedSha256": "26844e91195654cf2f156cc9f8d9009906dd00b3fabf7d85ccf0e0837404e227"
+    "declarationCount": 184,
+    "generatedSha256": "254435f5ef35a15696784e676d70236949058c60d2659b36aff3266951fa404c"
 }

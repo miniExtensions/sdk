@@ -1389,6 +1389,7 @@ test('public archive rejects paired omission of composed authoring aliases', asy
         'PostgresRelationshipClear',
         'PostgresRelationshipCandidate',
         'PostgresRelationshipCandidatePage',
+        'PostgresRelationshipPresentation',
     ];
     const original = await readFile(
         join(

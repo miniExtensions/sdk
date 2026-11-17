@@ -68,6 +68,7 @@ import type {
     CanonicalPostgresRelationshipClear,
     CanonicalPostgresRelationshipCandidate,
     CanonicalPostgresRelationshipCandidatePage,
+    CanonicalPostgresRelationshipPresentation,
     CanonicalPostgresRowObservation,
     CanonicalPostgresSchema,
     CanonicalPostgresSelectQuery,
@@ -153,6 +154,10 @@ export type PostgresRelationshipCandidate =
     CanonicalPostgresRelationshipCandidate;
 export type PostgresRelationshipCandidatePage =
     CanonicalPostgresRelationshipCandidatePage;
+
+/** Optional loaded display data; never a relationship selection or write capability. */
+export type PostgresRelationshipPresentation =
+    CanonicalPostgresRelationshipPresentation;
 
 export type PostgresRecord = CanonicalPostgresRecord;
 export type PostgresValue = CanonicalPostgresValue;

@@ -9,6 +9,9 @@ import type {
     PostgresRelationshipClear,
     PostgresRelationshipCandidate,
     PostgresRelationshipCandidatePage,
+    PostgresRelationshipPresentation,
+    PostgresRowObservation,
+    PostgresSelectResult,
     PostgresFormDraftState,
     PostgresPortalTab,
     PostgresReadableRelationConfiguration,
@@ -117,4 +120,51 @@ export const publicSource: FormLoadedResult['source'] = {
     type: 'postgres',
     connectionId: 'native',
     databaseName: 'database',
+};
+
+export const loadedPresentation: PostgresRelationshipPresentation = {
+    formatVersion: 1,
+    relationshipName: 'customer_fk',
+    baseline: [
+        { columnName: 'tenant_id', value: ' Exact ' },
+        { columnName: 'contact_id', value: null },
+    ],
+    status: 'resolved',
+    label: '',
+};
+export const nullPresentation: PostgresRelationshipPresentation = {
+    ...loadedPresentation,
+    status: 'resolved',
+    label: null,
+};
+export const unavailablePresentation: PostgresRelationshipPresentation = {
+    formatVersion: 1,
+    relationshipName: 'customer_fk',
+    baseline: loadedPresentation.baseline,
+    status: 'unavailable',
+};
+export const emptyPresentation: PostgresRelationshipPresentation = {
+    ...unavailablePresentation,
+    status: 'empty',
+};
+declare const observed: PostgresRowObservation;
+declare const records: PostgresSelectResult;
+export const observedLabels: PostgresRowObservation = {
+    ...observed,
+    relationshipPresentations: [loadedPresentation],
+};
+export const rowAlignedLabels: PostgresSelectResult = {
+    ...records,
+    relationshipPresentations: [
+        [loadedPresentation],
+        [unavailablePresentation],
+    ],
+};
+// @ts-expect-error Loaded presentation has no native target selection tuple.
+export const presentationIsNotSelection: PostgresRelationshipSelection =
+    loadedPresentation;
+export const unavailableHasNoLabel: PostgresRelationshipPresentation = {
+    ...unavailablePresentation,
+    // @ts-expect-error Only a resolved presentation carries a label.
+    label: 'hidden',
 };

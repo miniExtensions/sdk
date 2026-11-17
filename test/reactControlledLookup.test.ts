@@ -1269,6 +1269,33 @@ it('rejects nested JSX labels and malformed resource policy before any readonly 
             emptyLabel: 'No image',
         },
     ]);
+    const malformedThumbnail = {
+        thumbnailUrl: null,
+        filename: 'Supplied filename',
+    };
+    Reflect.set(malformedThumbnail, 'filename', sentinel);
+    cases.push([
+        'structured attachment filename renderer',
+        {
+            kind: 'attachmentImages',
+            images: [],
+            entries: [malformedThumbnail],
+            empty: 'none',
+            emptyLabel: 'No image',
+        },
+    ]);
+    const sparseThumbnails = [{ thumbnailUrl: null, filename: 'File' }];
+    Reflect.deleteProperty(sparseThumbnails, '0');
+    cases.push([
+        'sparse structured attachment entries',
+        {
+            kind: 'attachmentImages',
+            images: [],
+            entries: sparseThumbnails,
+            empty: 'none',
+            emptyLabel: 'No image',
+        },
+    ]);
     const wrongButton: LookupResultPresentation = {
         kind: 'button',
         accepted: {

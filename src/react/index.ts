@@ -304,6 +304,21 @@ export type {
     LookupReadonlyLinkedGridRow,
     LookupReadonlyLinkedCollection,
 } from './lookupFieldTypes.js';
+export {
+    composeComputedPresentation,
+    type ComputedPresentationProjection,
+    type ComputedPresentationEntry,
+} from './computedPresentation.js';
+export {
+    ComputedField,
+    type ComputedFieldProps,
+    type ComputedFormulaDisplay,
+} from './ComputedField.js';
+export {
+    projectComputedFormulaDisplay,
+    type ComputedFormulaProjection,
+    type ComputedFormulaProjectionInput,
+} from './computedFormulaProjection.js';
 import {
     RollupControl,
     ControlledRollupField,

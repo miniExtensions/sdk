@@ -206,6 +206,7 @@
         "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
         "./react/readonly-url-gallery.css": "./dist/esm/react/readonly-url-gallery.css",
         "./react/lookup.css": "./dist/esm/react/lookup.css",
+        "./react/computed.css": "./dist/esm/react/computed.css",
         "./react/portal-shell.css": "./dist/esm/react/portal-shell.css",
         "./react/readonly-portal-list.css": "./dist/esm/react/readonly-portal-list.css"
     },
@@ -230,6 +231,7 @@
         "docs/count.md",
         "docs/formula.md",
         "docs/lookup.md",
+        "docs/computed-fields.md",
         "docs/rating.md",
         "docs/form-captcha.md",
         "docs/automatic-prefill.md",

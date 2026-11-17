@@ -243,6 +243,7 @@ for (const format of ['esm', 'cjs']) {
         'form-validation-summary',
         'portal-summary-cards',
         'portal-gallery',
+        'readonly-portal-grid',
         'form-progress',
         'field-presentation',
         'complete-checkbox',

@@ -3305,3 +3305,13 @@ export {
     PrintableFormPreparationControls,
     type PrintableFormJobLabels,
 } from './PrintableFormJobControls.js';
+
+export { ReadonlyPortalGrid } from './ReadonlyPortalGrid.js';
+export type {
+    ReadonlyPortalGridProps,
+    ReadonlyPortalGridColumn,
+    ReadonlyPortalGridRow,
+    ReadonlyPortalGridRowHeight,
+    ReadonlyPortalGridHeaderIcon,
+    ReadonlyPortalGridLabels,
+} from './ReadonlyPortalGrid.js';

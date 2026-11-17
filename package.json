@@ -200,6 +200,7 @@
             }
         },
         "./react/portal-gallery.css": "./dist/esm/react/portal-gallery.css",
+        "./react/readonly-portal-grid.css": "./dist/esm/react/readonly-portal-grid.css",
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
         "./react/portal-map.css": "./dist/esm/react/portal-map.css",
@@ -298,6 +299,7 @@
         "docs/csv-export.md",
         "docs/kanban.md",
         "docs/portal-gallery.md",
+        "docs/readonly-portal-grid.md",
         "docs/portal-shell.md",
         "docs/portal-map.md"
     ],

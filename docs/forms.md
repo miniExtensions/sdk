@@ -28,6 +28,21 @@ For an application-owned immutable state kernel with native host admission,
 validation and allocation, see [canonical Form frames](canonical-form-frame.md).
 It is an additive SDK-first API; native integration remains a separate milestone.
 
+## Record actions for an edit Form
+
+Create one `createFormRecordActionsController` from `@miniextensions/sdk/forms`
+for the host's `FormRecordActionsPort`. Mount `FormRecordActionsFooter` beside
+the host Save control or use `FormRecordActionsMenu`, both from
+`@miniextensions/sdk/react`. Import `@miniextensions/sdk/react/form-record-actions.css`
+and supply the localized labels, including any custom delete label.
+
+The host publishes visibility, disabled state and operation progress. When the
+visitor confirms, the controller closes the dialog and asks the host to admit
+deletion for the currently accepted scope. The host owns eligibility, the
+request and settlement for the original record. The controller never retries
+an uncertain result. The comments action hands off the current scope to the
+host's existing comments surface.
+
 ## Linked and two-source projection candidate
 
 `createLinkedFormRecordProjection` is an additive, synchronous projection

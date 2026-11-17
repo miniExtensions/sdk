@@ -3428,6 +3428,14 @@ export {
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
 export {
+    FormRecordDeleteConfirmation,
+    FormRecordActionsFooter,
+    FormRecordActionsMenu,
+    type FormRecordActionsLabels,
+    type FormRecordDeleteConfirmationProps,
+    type FormRecordActionsProps,
+} from './FormRecordActions.js';
+export {
     FormCaptcha,
     type FormCaptchaProps,
     type FormCaptchaLabels,

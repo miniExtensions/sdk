@@ -39,6 +39,7 @@ import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
+import { checkFormRecordActionsReactMatrix } from './form-record-actions-consumer-checks.mjs';
 import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
 import { checkControlledLookupReactMatrix } from './controlled-lookup-consumer-checks.mjs';
 import { checkComputedReactMatrix } from './computed-consumer-checks.mjs';
@@ -972,6 +973,8 @@ try {
         'dist/cjs/react/complete-multiline.css',
         'dist/esm/react/form-submit.css',
         'dist/cjs/react/form-submit.css',
+        'dist/esm/react/form-record-actions.css',
+        'dist/cjs/react/form-record-actions.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',
@@ -4001,6 +4004,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(headerMatrix.versions.length, 2);
     assert.equal(headerMatrix.cleanup, 'completed');
+    const recordActionsMatrix = checkFormRecordActionsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(recordActionsMatrix.versions.length, 2);
+    assert.equal(recordActionsMatrix.cleanup, 'completed');
     const completionMatrix = checkFormCompletionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

@@ -711,6 +711,7 @@ for (const name of [
     'address-field',
     'complete-collaborators',
     'form-header',
+    'form-record-actions',
     'form-validation-summary',
     'portal-summary-cards',
     'form-progress',

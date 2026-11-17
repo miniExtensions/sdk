@@ -216,6 +216,7 @@ export function assertModuleFormats(root) {
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/form-submit.css',
+                './react/form-record-actions.css',
                 './react/form-validation-summary.css',
                 './react/portal-summary-cards.css',
                 './react/portal-gallery.css',

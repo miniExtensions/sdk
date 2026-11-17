@@ -47,6 +47,9 @@
 .mx-sdk-readonly-grid__header {
     position: relative;
     pointer-events: none;
+}
+
+.mx-sdk-readonly-grid__table thead th {
     padding-block: 0.875rem;
 }
 

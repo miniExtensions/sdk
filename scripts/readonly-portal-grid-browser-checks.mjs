@@ -157,6 +157,18 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     );
     assert.equal(await page.locator('thead b').count(), 0);
     assert.equal(await page.locator('thead svg').count(), 3);
+    assert.deepEqual(
+        await page
+            .locator('thead th')
+            .evaluateAll((headers) =>
+                headers.map((header) => ({
+                    top: getComputedStyle(header).paddingTop,
+                    bottom: getComputedStyle(header).paddingBottom,
+                    left: getComputedStyle(header).paddingLeft,
+                }))
+            ),
+        Array(4).fill({ top: '14px', bottom: '14px', left: '12px' })
+    );
     results.push({
         group: 'ordered admitted cells, literal headers and protected primary',
         passed: true,

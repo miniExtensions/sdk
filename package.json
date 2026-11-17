@@ -205,7 +205,8 @@
         "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
         "./react/readonly-url-gallery.css": "./dist/esm/react/readonly-url-gallery.css",
         "./react/lookup.css": "./dist/esm/react/lookup.css",
-        "./react/portal-shell.css": "./dist/esm/react/portal-shell.css"
+        "./react/portal-shell.css": "./dist/esm/react/portal-shell.css",
+        "./react/readonly-portal-list.css": "./dist/esm/react/readonly-portal-list.css"
     },
     "files": [
         "dist/esm",

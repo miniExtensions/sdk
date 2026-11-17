@@ -57,6 +57,7 @@ export {
 import type {
     PortalPresentationSnapshot,
     PortalPresentationSource,
+    BorrowedPortalRenderSnapshot,
 } from '../ui/borrowedPortalRenderScope.js';
 import {
     CompletePhoneNumberField,
@@ -2998,6 +2999,181 @@ export function AirtableList<
     S extends PortalPresentationSnapshot = PortalRenderSnapshot,
 >(props: AirtableListProps<S>): ReactNode {
     return createElement(AirtablePortal<S>, props);
+}
+
+
+/** Accepted read-only presentation; this source never owns collection transport. */
+export type ReadonlyPortalListSnapshot = BorrowedPortalRenderSnapshot;
+
+/** A registered host command, not authority conferred by its revision number. */
+export type ReadonlyPortalListOpenAction = {
+    readonly revision: number;
+    readonly testId?: string;
+    activate(isCurrent: () => boolean, returnFocus: () => void): void;
+};
+
+export type ReadonlyPortalListProps<
+    S extends ReadonlyPortalListSnapshot = ReadonlyPortalListSnapshot,
+> = Omit<AirtableListProps<S>, 'children'> & {
+    label?: string;
+    openRecordLabel?: string;
+    /** Omit in preview or when no current native child is admitted. */
+    openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
+};
+
+function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
+    scope,
+    state,
+    openActions,
+    label,
+    openRecordLabel,
+}: {
+    scope: PortalPresentationSource<S>;
+    state: AirtablePortalRenderState<S>;
+    openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
+    label?: string;
+    openRecordLabel: string;
+}): ReactNode {
+    const committed = useRef<{
+        scope: PortalPresentationSource<S>;
+        revision: number;
+        actions: ReadonlyMap<string, ReadonlyPortalListOpenAction> | undefined;
+    } | null>(null);
+    const commit =
+        typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    commit(() => {
+        const accepted = {
+            scope,
+            revision: state.revision,
+            actions: openActions,
+        };
+        committed.current = accepted;
+        return () => {
+            if (committed.current === accepted) committed.current = null;
+        };
+    });
+    const current = (
+        recordId: string,
+        action: ReadonlyPortalListOpenAction
+    ) => {
+        const accepted = committed.current;
+        if (
+            accepted?.scope !== scope ||
+            accepted.revision !== state.revision ||
+            accepted.actions?.get(recordId) !== action ||
+            action.revision !== state.revision
+        )
+            return false;
+        try {
+            const snapshot = scope.getSnapshot();
+            return (
+                !snapshot.retired &&
+                snapshot.revision === state.revision &&
+                snapshot.rows.some((row) => row.recordId === recordId)
+            );
+        } catch {
+            return false;
+        }
+    };
+    return createElement(
+        'div',
+        { className: 'mx-sdk-readonly-portal-list' },
+        state.rows.length === 0
+            ? state.columns.map((column) =>
+                  createElement(
+                      'h3',
+                      {
+                          key: column.fieldId,
+                          className: 'mx-sdk-readonly-portal-list__empty-title',
+                      },
+                      column.title
+                  )
+              )
+            : null,
+        createElement(
+            'ul',
+            {
+                className: 'mx-sdk-readonly-portal-list__rows',
+                'aria-label': label,
+            },
+            state.rows.map((row) => {
+                const action = openActions?.get(row.recordId);
+                return createElement(
+                    'li',
+                    {
+                        key: row.recordId,
+                        className: 'mx-sdk-readonly-portal-list__row',
+                        'data-record-id': row.recordId,
+                    },
+                    row.cells.map((cell) =>
+                        createElement(
+                            'div',
+                            { key: cell.fieldId, 'data-field-id': cell.fieldId },
+                            cell.node
+                        )
+                    ),
+                    action?.revision === state.revision
+                        ? createElement(
+                              'button',
+                              {
+                                  type: 'button',
+                                  className: 'mx-sdk-readonly-portal-list__open',
+                                  'data-testid': action.testId,
+                                  onClick: (
+                                      event: import('react').MouseEvent<HTMLButtonElement>
+                                  ) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      if (!current(row.recordId, action)) return;
+                                      const button = event.currentTarget;
+                                      const isCurrent = () =>
+                                          current(row.recordId, action);
+                                      action.activate(isCurrent, () => {
+                                          if (
+                                              isCurrent() &&
+                                              button.isConnected
+                                          )
+                                              button.focus();
+                                      });
+                                  },
+                              },
+                              openRecordLabel
+                          )
+                        : null
+                );
+            })
+        )
+    );
+}
+
+/**
+ * Complete borrowed readonly List UI. Cells use the existing SDK FieldRenderer;
+ * no collection, native child owner, query, write or implicit Save is created.
+ * AirtableList retains its existing app-owned children API unchanged.
+ */
+export function ReadonlyPortalList<
+    S extends ReadonlyPortalListSnapshot = ReadonlyPortalListSnapshot,
+>({
+    scope,
+    renderers,
+    fallback,
+    openActions,
+    label,
+    openRecordLabel = 'Open record',
+}: ReadonlyPortalListProps<S>): ReactNode {
+    return createElement(AirtableList<S>, {
+        scope,
+        renderers,
+        fallback,
+        children: (state) =>
+            createElement(ReadonlyPortalListContent<S>, {
+                scope,
+                state,
+                openActions,
+                label,
+                openRecordLabel,
+            }),
+    });
 }
 
 export {

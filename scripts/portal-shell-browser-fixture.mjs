@@ -73,6 +73,8 @@ function App() {
     }));
     const [mount, setMount] = useState(0);
     const [resizeEnabled, setResizeEnabled] = useState(false);
+    const [hostEditor, setHostEditor] = useState(false);
+    window.enableHostEditor = setHostEditor;
     const [activationEnabled, setActivationEnabled] = useState(false);
     window.enableSelectionActivation = setActivationEnabled;
     // Synthetic controlled-host publication for committed ownership witnesses.
@@ -195,6 +197,18 @@ function App() {
             'article',
             null,
             h('h2', null, 'Host collection'),
+            hostEditor
+                ? h(
+                      'div',
+                      {
+                          role: 'textbox',
+                          contentEditable: true,
+                          'aria-label': 'Native record editor',
+                          suppressContentEditableWarning: true,
+                      },
+                      'Native editable draft'
+                  )
+                : null,
             h(
                 'p',
                 null,

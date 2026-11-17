@@ -171,11 +171,8 @@ export type PortalShellItemHoverRequest = Readonly<{
 }>;
 
 const focusable = 'a[href],button:not([disabled]),summary,[tabindex="0"]';
-function visibleControls(
-    node: HTMLElement,
-    selector = focusable
-): HTMLElement[] {
-    return Array.from(node.querySelectorAll<HTMLElement>(selector)).filter(
+function visibleControls(node: HTMLElement): HTMLElement[] {
+    return Array.from(node.querySelectorAll<HTMLElement>(focusable)).filter(
         (element) => {
             if (element.closest('[hidden]')) return false;
             for (
@@ -196,25 +193,27 @@ function visibleControls(
         }
     );
 }
-function trapFocus(event: KeyboardEvent<HTMLElement>) {
+function trapFocus(
+    event: KeyboardEvent<HTMLElement>,
+    boundary = event.currentTarget
+) {
     if (event.key !== 'Tab') return;
-    const controls = visibleControls(event.currentTarget);
+    const controls = visibleControls(boundary);
     const first = controls[0],
         last = controls.at(-1);
     if (!first) {
         event.preventDefault();
-        event.currentTarget.focus();
+        boundary.focus();
     } else if (
         event.shiftKey &&
-        (event.currentTarget.ownerDocument.activeElement === first ||
-            event.currentTarget.ownerDocument.activeElement ===
-                event.currentTarget)
+        (boundary.ownerDocument.activeElement === first ||
+            boundary.ownerDocument.activeElement === boundary)
     ) {
         event.preventDefault();
         last!.focus();
     } else if (
         !event.shiftKey &&
-        event.currentTarget.ownerDocument.activeElement === last
+        boundary.ownerDocument.activeElement === last
     ) {
         event.preventDefault();
         first.focus();
@@ -628,6 +627,7 @@ function Shell(props: CompletePortalShellProps) {
     function exitMenuOnTab(event: KeyboardEvent<HTMLElement>): boolean {
         if (snapshot.header.menuInteraction !== 'menu' || event.key !== 'Tab')
             return false;
+        if (event.defaultPrevented) return true;
         const details = (
             event.target as HTMLElement
         ).closest<HTMLDetailsElement>('details[open]');
@@ -638,43 +638,14 @@ function Shell(props: CompletePortalShellProps) {
             (!topbarMenu && !details.classList.contains('mx-sdk-portal-user'))
         )
             return false;
-        event.preventDefault();
         event.stopPropagation();
         delete details.dataset.hoverOpen;
         details.open = false;
-        const boundary =
-            overlay && open ? nav.current : details.ownerDocument.body;
-        if (!boundary) return true;
-        const controls = visibleControls(
-            boundary,
-            `${focusable},input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])`
-        ).filter((node) => {
-            const explicitTabIndex = node.getAttribute('tabindex');
-            if (explicitTabIndex !== null && Number(explicitTabIndex) < 0)
-                return false;
-            for (
-                let current: HTMLElement | null = node;
-                current;
-                current = current.parentElement
-            ) {
-                const style =
-                    current.ownerDocument.defaultView?.getComputedStyle(
-                        current
-                    );
-                if (style?.display === 'none' || style?.visibility === 'hidden')
-                    return false;
-            }
-            return true;
-        });
-        const index = controls.indexOf(trigger);
-        if (index < 0) {
-            trigger.focus();
-            return true;
-        }
-        let next = index + (event.shiftKey ? -1 : 1);
-        if (overlay && open && controls.length)
-            next = (next + controls.length) % controls.length;
-        (controls[next] ?? trigger).focus();
+        // Preserve the browser's sequential order for host editors and other
+        // focus targets. Only the outer mobile drawer may cancel an actual wrap.
+        trigger.focus({ preventScroll: true });
+        if (overlay && open && nav.current?.contains(trigger))
+            trapFocus(event, nav.current);
         return true;
     }
     function keyboard(event: KeyboardEvent<HTMLElement>) {

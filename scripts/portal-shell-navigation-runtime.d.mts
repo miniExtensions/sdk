@@ -14,5 +14,5 @@ export function assertPortalShellNavigationConsumer(input: {
     submitEvents: number;
     preservedIframe: boolean;
     externalLinkClosure: 'passed';
-    tabExitFocus: 'passed';
+    tabExitHandoff: 'passed';
 }>;

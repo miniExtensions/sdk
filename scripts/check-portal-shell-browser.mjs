@@ -248,6 +248,26 @@ async function navigationCompatibility(browser, origin, label) {
         await openView.focus();
         await page.keyboard.press('Escape');
         assert.equal(await page.getByRole('dialog').count(), 0);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.evaluate(() => {
+            window.enableHostEditor(true);
+            window.configure({
+                header: { ...window.fixtureSnapshot.header, layout: 'sidebar' },
+            });
+        });
+        const editor = page.getByRole('textbox', {
+            name: 'Native record editor',
+        });
+        await editor.waitFor();
+        await user.locator('summary').focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Tab');
+        assert.equal(await user.evaluate((node) => node.open), false);
+        assert.equal(
+            await editor.evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.equal(await page.evaluate(() => window.proof.intents.length), 3);
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);
         return {
@@ -258,6 +278,7 @@ async function navigationCompatibility(browser, origin, label) {
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
             desktopAndMobileMenuTabFocus: 'passed',
+            nativeHostEditorTabDestination: 'passed',
             cleanup: 'completed',
         };
     } catch (error) {

@@ -317,18 +317,20 @@ export async function assertPortalShellNavigationConsumer({
             0,
             'Keyboard opening never invents hover reads'
         );
+        const forwardTab = new window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            bubbles: true,
+            cancelable: true,
+        });
         await React.act(async () =>
-            named('Open orders').dispatchEvent(
-                new window.KeyboardEvent('keydown', {
-                    key: 'Tab',
-                    bubbles: true,
-                })
-            )
+            named('Open orders').dispatchEvent(forwardTab)
         );
         assert.equal(trigger.parentElement.open, false);
+        assert.equal(window.document.activeElement, trigger);
         assert.equal(
-            window.document.activeElement,
-            container.querySelector('[aria-label="Edit orders"]')
+            forwardTab.defaultPrevented,
+            false,
+            'The real browser retains sequential Tab navigation'
         );
         await React.act(async () => {
             trigger.focus();
@@ -340,17 +342,16 @@ export async function assertPortalShellNavigationConsumer({
             );
         });
         assert.equal(window.document.activeElement, named('chart'));
-        await React.act(async () =>
-            named('chart').dispatchEvent(
-                new window.KeyboardEvent('keydown', {
-                    key: 'Tab',
-                    shiftKey: true,
-                    bubbles: true,
-                })
-            )
-        );
+        const backwardTab = new window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        await React.act(async () => named('chart').dispatchEvent(backwardTab));
         assert.equal(trigger.parentElement.open, false);
-        assert.equal(window.document.activeElement, named('Guide'));
+        assert.equal(window.document.activeElement, trigger);
+        assert.equal(backwardTab.defaultPrevented, false);
         assert.equal(activations.length, 2);
         assert.equal(hovers.length, 0);
         await React.act(async () => {
@@ -593,7 +594,7 @@ export async function assertPortalShellNavigationConsumer({
             submitEvents: 0,
             preservedIframe: true,
             externalLinkClosure: 'passed',
-            tabExitFocus: 'passed',
+            tabExitHandoff: 'passed',
         };
     } finally {
         try {

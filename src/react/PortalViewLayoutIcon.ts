@@ -1,4 +1,4 @@
-import { createElement as h } from 'react';
+import { createElement as h, type ReactElement } from 'react';
 import type { PortalShellViewLayout } from '../portals/shell.js';
 
 // Fixed paths extracted from the native AirtableIcon catalog; no general icon renderer.
@@ -18,7 +18,7 @@ const paths = {
 export function PortalViewLayoutIcon(props: {
     layout: PortalShellViewLayout | null;
     hidden: boolean;
-}) {
+}): ReactElement {
     return h(
         'svg',
         {

@@ -48,6 +48,7 @@ import {
 import { ButtonField, type ButtonFieldProps } from './ButtonField.js';
 import { RatingInput } from './RatingInput.js';
 import { PersonBadge } from './PersonBadge.js';
+import { RecoverableImage } from './RecoverableImage.js';
 import {
     SingleLineTextField,
     type ReadOnlySingleLineTextFieldProps,
@@ -55,6 +56,7 @@ import {
 import type { CollaboratorImageSource } from './CompleteCollaboratorField.js';
 import {
     LinkedFinderAttachmentCollection,
+    LinkedFinderAttachmentIcon,
     type LinkedFinderAttachmentCollectionProps,
 } from './LinkedFinderAttachmentCollection.js';
 import {
@@ -166,6 +168,9 @@ export type LinkedFinderCardLeaf =
     | {
           readonly kind: 'attachmentImages';
           readonly images: readonly LinkedFinderImage[];
+          /** Ordered host projections, including files without a thumbnail.
+           * Null never recovers an original URL or a hidden cached value. */
+          readonly entries?: readonly LinkedFinderAttachmentThumbnail[];
           readonly empty: 'none' | 'no-values';
           readonly emptyLabel: string;
       }
@@ -174,6 +179,70 @@ export type LinkedFinderCardLeaf =
           readonly leaves: readonly LinkedFinderCardLeaf[];
           readonly layout?: 'wrap';
       };
+
+export type LinkedFinderAttachmentThumbnail = Readonly<{
+    id?: string;
+    thumbnailUrl: string | null;
+    filename: string;
+}>;
+
+function AttachmentImages({
+    leaf,
+}: {
+    leaf: Extract<LinkedFinderCardLeaf, { kind: 'attachmentImages' }>;
+}): ReactElement {
+    const entries =
+        leaf.entries ??
+        leaf.images.map((image) => ({
+            id: image.id,
+            thumbnailUrl: image.url,
+            filename: image.filename ?? '',
+        }));
+    const occurrences = new Map<string, number>();
+    return entries.length
+        ? h(
+              'span',
+              { className: 'mx-sdk-finder-attachment-images' },
+              entries.map((entry) => {
+                  const identity = JSON.stringify([
+                      entry.id,
+                      entry.thumbnailUrl,
+                  ]);
+                  const occurrence = occurrences.get(identity) ?? 0;
+                  occurrences.set(identity, occurrence + 1);
+                  return h(
+                      'span',
+                      {
+                          key: identity + ':' + occurrence,
+                          className: 'mx-sdk-finder-attachment-thumbnail',
+                      },
+                      h(RecoverableImage, {
+                          sources: entry.thumbnailUrl
+                              ? [entry.thumbnailUrl]
+                              : [],
+                          alt: entry.filename,
+                          loading: 'lazy',
+                          renderFallback: () =>
+                              h(
+                                  'span',
+                                  {
+                                      className:
+                                          'mx-sdk-finder-attachment-filename',
+                                      title: entry.filename,
+                                  },
+                                  h(LinkedFinderAttachmentIcon, {
+                                      play: false,
+                                  }),
+                                  h('span', null, entry.filename)
+                              ),
+                      })
+                  );
+              })
+          )
+        : leaf.empty === 'no-values'
+          ? h('span', null, leaf.emptyLabel)
+          : h('span');
+}
 
 export type LinkedFinderCardField = {
     readonly key: string;
@@ -198,6 +267,8 @@ export type LinkedFinderCardProjection =
     | {
           readonly status: 'present';
           readonly primary: string;
+          /** Host-observed empty primary before its localized placeholder. */
+          readonly primaryIsEmpty?: boolean;
           readonly fields: readonly LinkedFinderCardField[];
           readonly language: RuntimeLanguage;
           readonly layout: 'list' | 'gallery' | 'kanban';
@@ -422,22 +493,7 @@ export function LinkedFinderRichLeaf({
         case 'attachmentCollection':
             return h(LinkedFinderAttachmentCollection, leaf.display);
         case 'attachmentImages':
-            return leaf.images.length
-                ? h(
-                      'span',
-                      { className: 'mx-sdk-finder-attachment-images' },
-                      leaf.images.map((image, index) =>
-                          h('img', {
-                              key: `${image.id ?? index}:${image.url}`,
-                              src: image.url,
-                              alt: image.filename,
-                              loading: 'lazy',
-                          })
-                      )
-                  )
-                : leaf.empty === 'no-values'
-                  ? h('span', null, leaf.emptyLabel)
-                  : h('span');
+            return h(AttachmentImages, { leaf });
         case 'sequence':
             if (leaf.layout === 'wrap')
                 return h(
@@ -501,30 +557,70 @@ function useListImage(card: Present) {
     });
 }
 
-function Carousel({ card }: { card: Present }) {
+function useCarouselController(
+    projection: LinkedFinderCardProjection | LinkedFinderMapCardProjection
+) {
     const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
-    const images = linkedFinderCarouselImages(card.images, failed);
     const [selection, setSelection] = useState<{
         identity: string | null;
         index: number;
     }>({ identity: null, index: 0 });
+    // Loading is a host publication phase, not a new record or image vector.
+    // Keep only UI identity/failure hints; no previous projection is retained.
+    const retire =
+        projection.status === 'unavailable' ||
+        (projection.status === 'present' &&
+            (projection.layout === 'map' ||
+                projection.layout === 'list' ||
+                !projection.shouldRenderThumbnail ||
+                projection.images.length === 0));
+    if (retire) {
+        if (failed.size) setFailed(new Set());
+        if (selection.identity !== null || selection.index !== 0)
+            setSelection({ identity: null, index: 0 });
+    }
+    return { failed, setFailed, selection, setSelection };
+}
+
+function Carousel({
+    card,
+    controller,
+}: {
+    card: Present;
+    controller: ReturnType<typeof useCarouselController>;
+}) {
+    const { failed, setFailed, selection, setSelection } = controller;
+    const images = linkedFinderCarouselImages(card.images, failed);
     const index = linkedFinderCarouselIndex(
         images,
         selection.identity,
         selection.index
     );
     const image = images[index];
-    if (
-        selection.identity !== (image?.identity ?? null) ||
-        selection.index !== index
-    )
-        setSelection({ identity: image?.identity ?? null, index });
+    useCommittedEffect(() => {
+        const identity = image?.identity ?? null;
+        if (selection.identity !== identity || selection.index !== index)
+            setSelection((previous) =>
+                previous.identity === selection.identity &&
+                previous.index === selection.index
+                    ? { identity, index }
+                    : previous
+            );
+    }, [image?.identity, index, selection, setSelection]);
     const committed = useRef(images);
     useCommittedEffect(() => {
         committed.current = images;
+        return () => {
+            if (committed.current === images) committed.current = [];
+        };
     });
     const change = (delta: number) => {
+        if (committed.current !== images) return;
         const next = (index + delta + images.length) % images.length;
+        setSelection({ identity: images[next].identity, index: next });
+    };
+    const select = (next: number) => {
+        if (committed.current !== images || !images[next]) return;
         setSelection({ identity: images[next].identity, index: next });
     };
     return h(
@@ -576,7 +672,7 @@ function Carousel({ card }: { card: Present }) {
                       role: 'img',
                       'aria-label': card.labels.noImage,
                   },
-                  '▧'
+                  card.layout === 'gallery' ? h(GalleryPlaceholder) : '▧'
               ),
         images.length > 1
             ? h(
@@ -614,13 +710,13 @@ function Carousel({ card }: { card: Present }) {
                                   ).replace('{index}', String(dotIndex + 1)),
                                   'aria-current':
                                       dotIndex === index ? 'true' : undefined,
-                                  onClick: () =>
-                                      setSelection({
-                                          identity: attempt.identity,
-                                          index: dotIndex,
-                                      }),
+                                  onClick: () => select(dotIndex),
                               },
-                              h('span', { 'aria-hidden': true }, '●')
+                              h(
+                                  'span',
+                                  { 'aria-hidden': true },
+                                  card.layout === 'gallery' ? undefined : '●'
+                              )
                           )
                       )
                   )
@@ -629,11 +725,30 @@ function Carousel({ card }: { card: Present }) {
     );
 }
 
+function GalleryPlaceholder(): ReactElement {
+    // Native Heroicons solid Photo geometry; MIT, see THIRD_PARTY_NOTICES.
+    return h(
+        'svg',
+        {
+            viewBox: '0 0 24 24',
+            fill: 'currentColor',
+            'aria-hidden': true,
+            className: 'mx-sdk-finder-gallery-placeholder',
+        },
+        h('path', {
+            fillRule: 'evenodd',
+            clipRule: 'evenodd',
+            d: 'M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z',
+        })
+    );
+}
+
 export function LinkedFinderCard({
     projection,
 }: {
     projection: LinkedFinderCardProjection | LinkedFinderMapCardProjection;
 }): ReactElement {
+    const carousel = useCarouselController(projection);
     if (projection.status !== 'present')
         return h(
             'div',
@@ -658,10 +773,51 @@ export function LinkedFinderCard({
             },
             projection.primary
         );
-    return h(PresentCard, { projection });
+    return h(PresentCard, { projection, carousel });
 }
 
-function PresentCard({ projection }: { projection: Present }): ReactElement {
+function CardDetail({
+    field,
+    layout,
+}: {
+    field: LinkedFinderCardField;
+    layout: Present['layout'];
+}): ReactElement {
+    const titleId = useId();
+    const named = layout === 'gallery' && field.title !== null;
+    return h(
+        'div',
+        { className: 'mx-sdk-finder-card-field' },
+        field.title !== null
+            ? h(
+                  'div',
+                  {
+                      className: 'mx-sdk-finder-card-field-title',
+                      id: named ? titleId : undefined,
+                      role: named ? 'term' : undefined,
+                  },
+                  field.title
+              )
+            : null,
+        h(
+            'div',
+            {
+                className: 'mx-sdk-finder-card-field-value',
+                role: named ? 'definition' : undefined,
+                'aria-labelledby': named ? titleId : undefined,
+            },
+            h(LinkedFinderRichLeaf, { leaf: field.leaf })
+        )
+    );
+}
+
+function PresentCard({
+    projection,
+    carousel,
+}: {
+    projection: Present;
+    carousel: ReturnType<typeof useCarouselController>;
+}): ReactElement {
     // Native List position belongs to the record presenter, so it survives
     // thumbnail hiding, moving sides and a Gallery/Kanban round trip.
     const listImage = useListImage(projection);
@@ -676,7 +832,7 @@ function PresentCard({ projection }: { projection: Present }): ReactElement {
             ? projection.layout === 'list'
                 ? listImage
                 : projection.images.length
-                  ? h(Carousel, { card: projection })
+                  ? h(Carousel, { card: projection, controller: carousel })
                   : h(
                         'div',
                         {
@@ -685,7 +841,9 @@ function PresentCard({ projection }: { projection: Present }): ReactElement {
                             role: 'img',
                             'aria-label': projection.labels.noImage,
                         },
-                        '▧'
+                        projection.layout === 'gallery'
+                            ? h(GalleryPlaceholder)
+                            : '▧'
                     )
             : null,
         h(
@@ -693,45 +851,52 @@ function PresentCard({ projection }: { projection: Present }): ReactElement {
             { className: 'mx-sdk-finder-card-content' },
             h(
                 'p',
-                { className: 'mx-sdk-finder-card-primary' },
+                {
+                    className: [
+                        'mx-sdk-finder-card-primary',
+                        projection.layout === 'gallery' &&
+                        projection.primaryIsEmpty
+                            ? 'mx-sdk-finder-card-primary-empty'
+                            : '',
+                        projection.layout === 'gallery' &&
+                        projection.fields.length
+                            ? 'mx-sdk-finder-card-primary-with-details'
+                            : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' '),
+                    title:
+                        projection.layout === 'gallery'
+                            ? projection.primary
+                            : undefined,
+                    'aria-label':
+                        projection.layout === 'gallery'
+                            ? projection.primary
+                            : undefined,
+                },
                 projection.primary
             ),
-            h(
-                'div',
-                {
-                    className: `mx-sdk-finder-card-fields mx-sdk-finder-card-fields-${projection.layout}`,
-                    style:
-                        projection.layout === 'list'
-                            ? undefined
-                            : {
-                                  gridTemplateColumns: `repeat(${projection.fieldsPerCardRow}, minmax(150px, 1fr))`,
-                              },
-                },
-                projection.fields.map((field) =>
-                    h(
-                        'div',
-                        {
-                            key: field.key,
-                            className: 'mx-sdk-finder-card-field',
-                        },
-                        field.title !== null
-                            ? h(
-                                  'div',
-                                  {
-                                      className:
-                                          'mx-sdk-finder-card-field-title',
-                                  },
-                                  field.title
-                              )
-                            : null,
-                        h(
-                            'div',
-                            { className: 'mx-sdk-finder-card-field-value' },
-                            h(LinkedFinderRichLeaf, { leaf: field.leaf })
-                        )
-                    )
-                )
-            )
+            projection.layout !== 'gallery' || projection.fields.length
+                ? h(
+                      'div',
+                      {
+                          className: `mx-sdk-finder-card-fields mx-sdk-finder-card-fields-${projection.layout}`,
+                          style:
+                              projection.layout === 'list'
+                                  ? undefined
+                                  : {
+                                        gridTemplateColumns: `repeat(${projection.fieldsPerCardRow}, minmax(150px, 1fr))`,
+                                    },
+                      },
+                      projection.fields.map((field) =>
+                          h(CardDetail, {
+                              key: field.key,
+                              field,
+                              layout: projection.layout,
+                          })
+                      )
+                  )
+                : null
         ),
         projection.shouldRenderThumbnail &&
             projection.layout === 'list' &&

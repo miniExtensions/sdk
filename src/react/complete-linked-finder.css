@@ -362,9 +362,140 @@
     object-fit: cover;
     border-radius: 0.25rem;
 }
+.mx-sdk-finder-attachment-thumbnail {
+    display: inline-flex;
+}
+.mx-sdk-finder-attachment-filename {
+    box-sizing: border-box;
+    display: flex;
+    width: 4rem;
+    min-height: 4rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.25rem;
+    color: #6b7280;
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-finder-attachment-filename svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+}
 .mx-sdk-finder-literal {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+}
+
+.mx-sdk-finder-card-gallery {
+    box-sizing: border-box;
+    display: flex;
+    height: 100%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    padding-bottom: 2rem;
+}
+.mx-sdk-finder-card-gallery > .mx-sdk-finder-card-content {
+    flex: 1;
+    min-width: 0;
+    padding: 0.75rem;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-card-primary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 400;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-card-primary-with-details {
+    font-weight: 500;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-card-primary-empty {
+    color: #9ca3af;
+}
+.mx-sdk-finder-card-fields-gallery {
+    margin: 0.25rem 0 0;
+    font-size: 0.8125rem;
+}
+.mx-sdk-finder-card-fields-gallery > .mx-sdk-finder-card-field {
+    margin-top: 0;
+    min-width: 0;
+}
+.mx-sdk-finder-card-fields-gallery .mx-sdk-finder-card-field-title {
+    height: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-transform: uppercase;
+    font-weight: 400;
+    line-height: 1rem;
+}
+.mx-sdk-finder-card-fields-gallery .mx-sdk-finder-card-field-value {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-finder-gallery-placeholder {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 1rem;
+    background: #f9fafb;
+    color: #e5e7eb;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-image-placeholder {
+    width: 100%;
+    height: 100%;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-carousel-dots {
+    z-index: 2;
+    gap: 0.25rem;
+    padding: 0.125rem 0.25rem;
+    background: #0004;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-carousel-dots button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0.125rem;
+}
+.mx-sdk-finder-card-gallery .mx-sdk-finder-carousel-dots button > span {
+    width: 100%;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: #ffffff80;
+}
+.mx-sdk-finder-card-gallery
+    .mx-sdk-finder-carousel-dots
+    button[aria-current='true']
+    > span {
+    background: white;
+}
+.mx-sdk-finder-card-fields-gallery .mx-sdk-finder-attachment-images {
+    flex-wrap: nowrap;
+}
+.mx-sdk-finder-card-fields-gallery .mx-sdk-finder-attachment-thumbnail {
+    flex: 1;
+    min-width: 0;
+    aspect-ratio: 1;
+}
+.mx-sdk-finder-card-fields-gallery .mx-sdk-finder-attachment-thumbnail img,
+.mx-sdk-finder-card-fields-gallery .mx-sdk-finder-attachment-filename {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1;
+    border: 1px solid #e5e7eb;
+    object-fit: cover;
 }
 
 .mx-sdk-finder-attachment-collection {

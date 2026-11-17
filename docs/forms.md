@@ -28,6 +28,84 @@ For an application-owned immutable state kernel with native host admission,
 validation and allocation, see [canonical Form frames](canonical-form-frame.md).
 It is an additive SDK-first API; native integration remains a separate milestone.
 
+## Nonlinked native Form projection
+
+`createNonLinkedFormRecordProjection` is an additive public entry point from
+`@miniextensions/sdk/forms`. It accepts `compatibility: 'native-form-v1'`, the
+complete accepted `formRecord`, complete ordered `formFields`, and current
+`airtableFields`. `formRecordForConditionEvaluation` may supply the separate
+complete decision record. Both sources stay detached from the returned output.
+It does not change the existing scalar projection APIs or their conservative
+driver policy.
+
+This entry admits saved field IDs only and a finite condition cohort: the six
+single-select operators (`is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`,
+`isNotEmpty`); the six multiple-select operators (`hasAllOf`, `hasAnyOf`,
+`hasNoneOf`, `isExactly`, `isEmpty`, `isNotEmpty`); and eight numeric operators
+on each of Number, Percent, Currency and Rating (`equals`, `notEquals`,
+`greaterThan`, `lessThan`, `greaterThanOrEqualsTo`, `lessThanOrEqualsTo`,
+`isEmpty`, `isNotEmpty`). Direct single-line Text `is` retains the legacy
+compatibility path. A valid supplied Formula result additionally permits Text
+`is` or Number, Percent and Currency `equals`. Formula expressions and their
+dependencies are never calculated or loaded by this helper.
+
+Physical drivers require matching noncomputed metadata. Select choices need
+distinct nonempty IDs and names; operands contain saved choice IDs, while
+accepted answer values retain native names. Unknown choice IDs retain native
+compatibility behavior, including false results for an unknown equality choice.
+Number and Percent precision must be finite; Currency also requires a symbol;
+Rating requires a positive integer maximum and string icon/color metadata.
+Formula metadata must be computed, valid, and describe the matching supported
+scalar result. Numeric operands must be finite numbers; text and choice
+operands must have the admitted scalar or list shape. An incomplete or
+unsupported predicate blocks the whole projection instead of dropping a leaf.
+Supplied Formula results must be strings for Text or finite numbers for numeric
+results; null and absent results retain native empty-value behavior. The Form
+schema and current physical configuration must agree, including choice and
+Formula-result metadata. Equivalent object key order does not affect admission.
+Admission still checks every condition when `evaluateConditionalFields: false`;
+that switch disables pruning of an admitted snapshot, not its validation.
+
+The result uses the same native JSON normalization and code-only diagnostics as
+the linked projection below. It preserves the entire output record and its
+metadata, then removes only condition-hidden fields. Every condition reads the
+same unpruned evaluation snapshot. Retained section titles continue to define
+conditional sections even when their display header is disabled.
+
+Linked loading states and linked filter inputs are absent from this API and
+are rejected if supplied at runtime, even as empty objects. Active linked
+filter configuration also blocks. The caller must first establish that its
+native linked-loading boundary is clear; this API does not replace that check
+with an assumed empty cache. Other stored values, including linked values that
+are not condition drivers, are retained without cache pruning. The helper owns
+no draft, dirty state, Review transition or Save action.
+
+```ts
+import { createNonLinkedFormRecordProjection } from '@miniextensions/sdk/forms';
+
+const projection = createNonLinkedFormRecordProjection({
+    compatibility: 'native-form-v1',
+    formRecord,
+    formRecordForConditionEvaluation,
+    formFields,
+    airtableFields,
+});
+```
+
+Use `projection.formRecord` only when `projection.type === 'available'`.
+Otherwise call the complete existing native projection with its original
+arguments, outside the SDK exception boundary. A blocked result carries no
+partially filtered record. Do not use the returned projection as the accepted
+draft or infer permission to submit it.
+
+The existing packed-package qualification checks cover this public entry in
+fresh ESM and CommonJS processes and in the installed `.mts`, `.cts` and
+Bundler declaration consumers. The finite 49-family runtime corpus exercises
+both visibility outcomes for create and edit records, plus whole-result
+refusals, JSON normalization and unchanged legacy APIs. These checks use the
+same installed TGZ as the linked projection checks; they do not import private
+source modules or start a browser or Form operation.
+
 ## Linked and two-source projection candidate
 
 `createLinkedFormRecordProjection` is an additive, synchronous projection

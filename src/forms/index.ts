@@ -99,8 +99,11 @@ export {
 } from './projection.js';
 export {
     createLinkedFormRecordProjection,
+    createNonLinkedFormRecordProjection,
     type CreateLinkedFormRecordProjectionInput,
+    type CreateNonLinkedFormRecordProjectionInput,
     type LinkedFormRecordProjection,
+    type NonLinkedFormRecordProjection,
     type LinkedFormProjectionDiagnostic,
     type FormProjectionDriverPair,
     type FormProjectionLinkedFilters,

@@ -228,6 +228,7 @@
         "docs/count.md",
         "docs/formula.md",
         "docs/lookup.md",
+        "docs/computed-fields.md",
         "docs/rating.md",
         "docs/form-captcha.md",
         "docs/automatic-prefill.md",

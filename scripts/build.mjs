@@ -229,6 +229,7 @@ for (const format of ['esm', 'cjs']) {
         'localized-numeric',
         'form-tracking',
         'form-captcha',
+        'automatic-prefill',
         'printable-form',
         'form-group',
         'csv-export',

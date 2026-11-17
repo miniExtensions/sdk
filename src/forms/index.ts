@@ -1,4 +1,25 @@
 export {
+    evaluateAutomaticPrefill,
+    hasPersistableAutomaticURLPrefill,
+    type AutomaticPrefillFacts,
+    type AutomaticPrefillDecision,
+} from './automaticPrefill.js';
+export {
+    createAutomaticPrefillCoordinator,
+    type AutomaticPrefillScope,
+    type AutomaticPrefillFrame,
+    type AutomaticPrefillIntent,
+    type AutomaticPrefillAllocation,
+    type AutomaticPrefillAllocationAdmission,
+    type AutomaticPrefillOutcome,
+    type AutomaticPrefillRequest,
+    type AutomaticPrefillRequestReceipt,
+    type AutomaticPrefillHost,
+    type AutomaticPrefillState,
+    type AutomaticPrefillConnection,
+    type AutomaticPrefillCoordinator,
+} from './automaticPrefillCoordinator.js';
+export {
     FormDraftStore,
     type ParentFormDraftScope,
     type FormDraftScope,

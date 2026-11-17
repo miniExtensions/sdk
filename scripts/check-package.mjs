@@ -14,6 +14,7 @@ import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-c
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
 import { checkPrintableFormReactMatrix } from './printable-form-consumer-checks.mjs';
+import { checkAutomaticPrefillReactMatrix } from './automatic-prefill-consumer-checks.mjs';
 import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { checkCSVExportReactMatrix } from './csv-export-consumer-checks.mjs';
 import { checkPortalSummaryCardsReactMatrix } from './portal-summary-cards-consumer-checks.mjs';
@@ -673,6 +674,7 @@ try {
                 path === 'docs/formula.md' ||
                 path === 'docs/rating.md' ||
                 path === 'docs/form-captcha.md' ||
+                path === 'docs/automatic-prefill.md' ||
                 path === 'docs/printable-form.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/native-portal-kernel.md' ||
@@ -813,6 +815,16 @@ try {
         'dist/cjs/react/rating.css',
         'docs/rating.md',
         'docs/form-captcha.md',
+        'docs/automatic-prefill.md',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/forms/automaticPrefill.js`,
+            `dist/${format}/forms/automaticPrefill.d.ts`,
+            `dist/${format}/forms/automaticPrefillCoordinator.js`,
+            `dist/${format}/forms/automaticPrefillCoordinator.d.ts`,
+            `dist/${format}/react/AutomaticPrefillStatus.js`,
+            `dist/${format}/react/AutomaticPrefillStatus.d.ts`,
+            `dist/${format}/react/automatic-prefill.css`,
+        ]),
         'docs/printable-form.md',
         ...printableStarterFiles,
         ...['esm', 'cjs'].flatMap((format) => [
@@ -3385,6 +3397,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(printableProof.profiles.length, 2);
     assert.equal(printableProof.cleanup, 'completed');
+    const automaticPrefillProof = await checkAutomaticPrefillReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        packedMetadata: packed,
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(automaticPrefillProof.profiles.length, 2);
+    assert.equal(automaticPrefillProof.cleanup, 'completed');
+    console.log(
+        'Installed automatic-prefill React18/19 public ESM/CJS, types, CSS, SSR and280 original focused runtime executions passed; native allocation oracle remains separate.'
+    );
     console.log(
         'Installed Printable Form React18/19 public ESM/CJS, types, CSS, SSR and 180 original runtime tests passed. Actual browser print preview/Cancel remains separate.'
     );

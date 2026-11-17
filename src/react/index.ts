@@ -3184,6 +3184,8 @@ export type {
     PortalShellSidebarWidthCommit,
     PortalShellSettingsTarget,
     PortalShellSettingsRequest,
+    PortalShellSelectionActivation,
+    PortalShellItemHoverRequest,
 } from './CompletePortalShell.js';
 
 export {

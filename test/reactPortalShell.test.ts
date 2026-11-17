@@ -6,12 +6,33 @@ import { renderToString } from 'react-dom/server';
 import { Window } from 'happy-dom';
 import { CompletePortalShell } from '../src/react/CompletePortalShell.js';
 import { resolvePortalShellSelection } from '../src/portals/shell.js';
+import { assertPortalShellNavigationConsumer } from '../scripts/portal-shell-navigation-runtime.mjs';
 import {
     assertPortalShellConsumer,
     assertPortalShellSidebarConsumer,
     assertPortalShellPresentationConsumer,
     assertPortalShellSettingsConsumer,
 } from '../scripts/portal-shell-runtime.mjs';
+
+it('optional host activation and pointer notifications preserve native owners, menu controls and iframe presentation', async () => {
+    const result = await assertPortalShellNavigationConsumer({
+        React,
+        ui: { CompletePortalShell },
+        Window,
+        createRoot,
+        renderToString,
+    });
+    assert.deepEqual(result, {
+        activations: 4,
+        legacyNavigationIntents: 1,
+        hoverNotifications: 2,
+        settingsRequests: 1,
+        precommitAdmission: 'rejected',
+        providerRequests: 0,
+        submitEvents: 0,
+        preservedIframe: true,
+    });
+});
 
 it('authoring settings keep finite host targets, sibling controls and current callbacks without navigation or submit effects', async () => {
     const result = await assertPortalShellSettingsConsumer({

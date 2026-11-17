@@ -45,6 +45,8 @@ window.proof = {
     mounts: 0,
     sidebarWidths: [],
     settings: [],
+    activations: [],
+    hovers: [],
 };
 function App() {
     const [snapshot, setSnapshot] = useState(() => ({
@@ -71,6 +73,8 @@ function App() {
     }));
     const [mount, setMount] = useState(0);
     const [resizeEnabled, setResizeEnabled] = useState(false);
+    const [activationEnabled, setActivationEnabled] = useState(false);
+    window.enableSelectionActivation = setActivationEnabled;
     // Synthetic controlled-host publication for committed ownership witnesses.
     window.fixtureSnapshot = snapshot;
     window.publishSnapshot = setSnapshot;
@@ -140,6 +144,20 @@ function App() {
             key: mount,
             snapshot,
             onIntent: command,
+            onSelectionActivate: activationEnabled
+                ? (request) => {
+                      window.proof.activations.push(request);
+                      command(request);
+                  }
+                : undefined,
+            onItemHover: (request) => {
+                if (
+                    request.scope !== snapshot.scope ||
+                    request.revision !== snapshot.revision
+                )
+                    throw Error('Stale hover request');
+                window.proof.hovers.push(request);
+            },
             onSidebarWidthCommit: resizeEnabled ? acceptWidth : undefined,
             onOpenSettings: (request) => {
                 if (

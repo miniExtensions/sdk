@@ -1,5 +1,20 @@
 /** Already evaluated presentation data. Visibility/auth/record queries stay with the host. */
-export type PortalShellView = Readonly<{ id: string; label: string }>;
+export type PortalShellViewLayout =
+    | 'map'
+    | 'grid'
+    | 'list'
+    | 'form'
+    | 'gallery'
+    | 'kanban'
+    | 'chart'
+    | 'calendar';
+export type PortalShellView = Readonly<{
+    id: string;
+    label: string;
+    badge?: boolean;
+    /** Omission hides the icon; explicit null preserves the configured grid fallback. */
+    layout?: PortalShellViewLayout | null;
+}>;
 type MenuBase = Readonly<{ id: string; label: string; badge?: string }>;
 export type PortalShellMenuItem = MenuBase &
     (
@@ -7,6 +22,7 @@ export type PortalShellMenuItem = MenuBase &
               type: 'table';
               views?: readonly PortalShellView[];
               defaultViewId?: string;
+              sidebarInitiallyExpanded?: boolean;
           }>
         | Readonly<{ type: 'embedded'; url: string }>
         | Readonly<{
@@ -14,7 +30,13 @@ export type PortalShellMenuItem = MenuBase &
               url: string;
               target?: '_blank' | '_self';
           }>
-        | Readonly<{ type: 'group'; items: readonly PortalShellMenuItem[] }>
+        | Readonly<{
+              type: 'group';
+              items: readonly PortalShellMenuItem[];
+              /** Preserve an already admitted group label while its destinations are unresolved. */
+              keepEmpty?: boolean;
+              sidebarInitiallyExpanded?: boolean;
+          }>
     );
 export type PortalShellSelection =
     | Readonly<{ type: 'table'; itemId: string; viewId: string | null }>
@@ -70,7 +92,7 @@ export function projectPortalShellMenu(
             if (item.id.trim() === '' || counts.get(item.id) !== 1) return [];
             if (item.type === 'group') {
                 const children = project(item.items);
-                return children.length
+                return children.length || item.keepEmpty
                     ? [
                           {
                               ...item,

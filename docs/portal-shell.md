@@ -1,5 +1,116 @@
 # Controlled Portal application shell
 
+Hosts with an existing navigation transaction may opt into `onSelectionActivate`.
+It receives the existing scoped navigate envelope for every explicit activation,
+including the already selected view. When supplied, it replaces the ordinary
+`onIntent` navigate notification; the other intents are unchanged. It is a data
+request, not a host-rendered menu. Mount, restoration and reconciliation never
+invoke it. The host retains its canonical storage, SidePanel and record/query
+operations and admits the current owner before executing them.
+
+`onItemHover` is a separate pointer-only notification with item/view identity and
+the owner envelope. It does not run on focus, render or import. Keep the existing
+host's bounded initialization/prefetch policy behind it; the SDK performs no reads.
+
+Set `selectionPolicy:'host'` when the existing native owner already accepts the
+selection. The shell validates menu identity and embedded HTTPS URLs without
+choosing an initial/fallback view, or replacing a table's pending/error view.
+Native URL restoration stays mount-only. For a native embedded URL projection,
+preserve the captured raw selection owner separately from the current menu's raw
+URL map. Only explicit admitted activation maps an item back to canonical raw
+storage; do not rewrite restoration just because display URLs normalize equally.
+
+Opt-in `header.menuInteraction:'menu'` extends the existing HTML disclosure
+controls with desktop topbar hover/ArrowUp/ArrowDown opening, current-menu
+Home/End traversal, parent-table activation, outside-click closure and trigger
+focus restoration. Mobile navigation retains dialog Escape/focus behavior and
+resets disclosures on reopening. Per-table/group `sidebarInitiallyExpanded`
+chooses their initial mobile/sidebar state independently. An admitted unresolved
+group may use `keepEmpty:true`; omission retains existing empty-group filtering.
+
+View metadata `badge` and finite `layout` retain configured indicators and native
+layout icons. Omitted layout renders no icon; explicit null uses the grid icon.
+Icons are shown in sidebar/mobile presentation; desktop topbar retains the badge.
+Settings descriptors may set `includeViews:false` for one parent-only gear, and
+`visibleIn:'sidebar'` for controls displayed only in sidebar/mobile presentation.
+These options do not make permission decisions. Existing authoring defaults remain.
+
+Iframe defaults remain `no-referrer`, fullscreen allowance and a URL-keyed element.
+An explicitly configured host may select `embed.referrerPolicy:'browser-default'`,
+`fullscreen:false` and `preserveElement:true` to retain its existing iframe policy
+and element. The same credential-free HTTPS policy still applies; no new URL
+parser or provider adapter is introduced.
+
+```tsx
+import { createElement } from 'react';
+import {
+    CompletePortalShell,
+    type CompletePortalShellProps,
+    type PortalShellSnapshot,
+} from '@miniextensions/sdk/react';
+
+const snapshot: PortalShellSnapshot = {
+    scope: 'synthetic:member',
+    revision: 1,
+    selectionPolicy: 'host',
+    header: {
+        layout: 'topbar',
+        title: 'Portal',
+        actionsPlacement: 'layout',
+        menuInteraction: 'menu',
+    },
+    items: [
+        {
+            type: 'table',
+            id: 'orders',
+            label: 'Orders',
+            sidebarInitiallyExpanded: true,
+            views: [
+                { id: 'open', label: 'Open', layout: 'calendar', badge: true },
+                { id: 'done', label: 'Done', layout: null },
+            ],
+        },
+    ],
+    selection: { type: 'table', itemId: 'orders', viewId: 'open' },
+    settings: {
+        items: [
+            {
+                itemId: 'orders',
+                label: 'Edit Orders',
+                includeViews: false,
+                visibleIn: 'sidebar',
+            },
+        ],
+    },
+    embed: {
+        referrerPolicy: 'browser-default',
+        fullscreen: false,
+        preserveElement: true,
+    },
+};
+const props: CompletePortalShellProps = {
+    snapshot,
+    onIntent(intent) {
+        console.log(intent.type);
+    },
+    onSelectionActivate(request) {
+        if (
+            request.scope !== snapshot.scope ||
+            request.revision !== snapshot.revision
+        )
+            return;
+        console.log(request.selection); // Route the existing admitted native transaction once.
+    },
+    onItemHover(request) {
+        console.log(request.itemId, request.viewId);
+    },
+    onOpenSettings(request) {
+        console.log(request.target);
+    },
+};
+createElement(CompletePortalShell, props);
+```
+
 `CompletePortalShell` owns the stock responsive sidebar, topbar, mobile drawer,
 group disclosures, hidden-header navigation, profile menu, welcome dialog,
 logout confirmation, embedded iframe, styles and accessibility. Import

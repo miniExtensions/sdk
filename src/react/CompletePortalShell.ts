@@ -31,6 +31,7 @@ import {
     portalShellSelectionsEqual,
     projectPortalShellMenu,
     resolvePortalShellSelection,
+    isPortalShellUrl,
     type PortalShellIntent,
     type PortalShellMenuItem,
     type PortalShellSelection,
@@ -40,6 +41,7 @@ import {
     CompleteQuillHTMLRenderer,
     CompleteTruncatedDescription,
 } from './html/index.js';
+import { PortalViewLayoutIcon } from './PortalViewLayoutIcon.js';
 
 export type PortalShellSnapshot = Readonly<{
     /** Changes when the accepted portal/user owner changes. Never include credentials. */
@@ -48,6 +50,13 @@ export type PortalShellSnapshot = Readonly<{
     revision: string | number;
     items: readonly PortalShellMenuItem[];
     selection: PortalShellSelection | null;
+    /** Host mode validates the supplied selection without independently choosing a fallback. */
+    selectionPolicy?: 'resolve' | 'host';
+    embed?: Readonly<{
+        referrerPolicy?: 'no-referrer' | 'browser-default';
+        fullscreen?: boolean;
+        preserveElement?: boolean;
+    }>;
     header: Readonly<{
         layout: 'sidebar' | 'topbar';
         hidden?: boolean;
@@ -66,6 +75,8 @@ export type PortalShellSnapshot = Readonly<{
         }>;
         /** Layout placement uses sidebar footers and a 640px topbar breakpoint. */
         actionsPlacement?: 'header' | 'layout';
+        /** Opt-in topbar hover/keyboard menus and parent-summary activation. */
+        menuInteraction?: 'disclosure' | 'menu';
         logoUrl?: string;
     }>;
     hideMenuItems?: boolean;
@@ -74,7 +85,12 @@ export type PortalShellSnapshot = Readonly<{
         title?: string;
         description?: string;
         profile?: string;
-        items?: readonly Readonly<{ itemId: string; label: string }>[];
+        items?: readonly Readonly<{
+            itemId: string;
+            label: string;
+            includeViews?: boolean;
+            visibleIn?: 'all' | 'sidebar';
+        }>[];
     }>;
     user?: Readonly<{
         name: string;
@@ -134,11 +150,25 @@ export type CompletePortalShellProps = {
     onSidebarWidthCommit?: (change: PortalShellSidebarWidthCommit) => void;
     /** Opens the existing host editor; never navigation, account settings or a renderer. */
     onOpenSettings?: (request: PortalShellSettingsRequest) => void;
+    /** Every explicit selection activation, including reselection; replaces the ordinary navigate notification when supplied. */
+    onSelectionActivate?: (request: PortalShellSelectionActivation) => void;
+    /** Pointer-only notification. The existing host owns all prefetch/state operations. */
+    onItemHover?: (request: PortalShellItemHoverRequest) => void;
     /** The host-owned table/collection body. Menus, header, embed and dialogs are SDK-owned. */
     children?: ReactNode;
     labels?: Partial<PortalShellLabels>;
     className?: string;
 };
+export type PortalShellSelectionActivation = Extract<
+    PortalShellIntent,
+    { type: 'navigate' }
+>;
+export type PortalShellItemHoverRequest = Readonly<{
+    scope: string;
+    revision: string | number;
+    itemId: string;
+    viewId: string | null;
+}>;
 
 const focusable = 'a[href],button:not([disabled]),summary,[tabindex="0"]';
 function visibleControls(node: HTMLElement): HTMLElement[] {
@@ -263,11 +293,29 @@ function Shell(props: CompletePortalShellProps) {
         navId = `${id}-navigation`,
         mainId = `${id}-content`;
     const items = projectPortalShellMenu(snapshot.items);
-    const selection = resolvePortalShellSelection({
+    const resolvedSelection = resolvePortalShellSelection({
         items,
         selection: snapshot.selection,
         phase: 'reconcile',
     });
+    const suppliedSelection = snapshot.selection;
+    const suppliedItem = suppliedSelection
+        ? flattenPortalShellMenu(items).find(
+              (item) => item.id === suppliedSelection.itemId
+          )
+        : undefined;
+    // The host's view/error/loading owner is authoritative. Do not replace a
+    // table's pending view with an independently chosen first view.
+    const hostSelection =
+        suppliedSelection?.type === 'table' && suppliedItem?.type === 'table'
+            ? suppliedSelection
+            : suppliedSelection?.type === 'embedded' &&
+                suppliedItem?.type === 'embedded' &&
+                isPortalShellUrl(suppliedSelection.url)
+              ? suppliedSelection
+              : null;
+    const selection =
+        snapshot.selectionPolicy === 'host' ? hostSelection : resolvedSelection;
     const active = flattenPortalShellMenu(items).find(
         (item) => item.id === selection?.itemId
     );
@@ -385,18 +433,47 @@ function Shell(props: CompletePortalShellProps) {
     }, [mobileLimit]);
     useEffect(() => {
         if (!overlay || !open) return;
+        if (snapshot.header.menuInteraction === 'menu')
+            nav.current
+                ?.querySelectorAll<HTMLDetailsElement>('.mx-sdk-portal-group')
+                .forEach((details) => {
+                    delete details.dataset.hoverOpen;
+                    details.open = details.dataset.sidebarExpanded === 'true';
+                });
         (nav.current && visibleControls(nav.current)[0])?.focus();
         return () => {
             if (toggle.current?.isConnected) toggle.current.focus();
         };
-    }, [overlay, open]);
+    }, [overlay, open, snapshot.header.menuInteraction]);
     useEffect(() => {
         setOpen(false);
     }, [snapshot.scope, snapshot.revision]);
     useEffect(() => {
         const document = main.current?.ownerDocument;
-        if (!document || snapshot.header.layout !== 'topbar' || overlay) return;
+        const menuMode = snapshot.header.menuInteraction === 'menu';
+        if (
+            !document ||
+            (!menuMode && (snapshot.header.layout !== 'topbar' || overlay))
+        )
+            return;
         const outside = (event: globalThis.MouseEvent) => {
+            if (
+                menuMode &&
+                event.target instanceof document.defaultView!.Node
+            ) {
+                const candidates =
+                    container.current?.querySelectorAll<HTMLDetailsElement>(
+                        snapshot.header.layout === 'topbar' && !overlay
+                            ? '.mx-sdk-portal-user[open], .mx-sdk-portal-group[open]'
+                            : '.mx-sdk-portal-user[open]'
+                    );
+                candidates?.forEach((details) => {
+                    if (details.contains(event.target as Node)) return;
+                    delete details.dataset.hoverOpen;
+                    details.removeAttribute('open');
+                });
+                return;
+            }
             if (
                 event.target instanceof document.defaultView!.Node &&
                 !nav.current?.contains(event.target)
@@ -407,7 +484,7 @@ function Shell(props: CompletePortalShellProps) {
         };
         document.addEventListener('click', outside);
         return () => document.removeEventListener('click', outside);
-    }, [snapshot.header.layout, overlay]);
+    }, [snapshot.header.layout, snapshot.header.menuInteraction, overlay]);
     function emit(
         intent:
             | Omit<
@@ -471,24 +548,84 @@ function Shell(props: CompletePortalShellProps) {
         emit({ type: 'logout' });
     }
     const close = () => setOpen(false);
-    function navigate(next: PortalShellSelection, source: HTMLElement) {
-        if (!overlay && snapshot.header.layout === 'topbar') {
-            const summary = source.closest('details')?.querySelector('summary');
-            nav.current
-                ?.querySelectorAll('details[open]')
-                .forEach((details) => details.removeAttribute('open'));
-            summary?.focus();
+    function closeTopbarDetails(source: HTMLElement) {
+        if (overlay || snapshot.header.layout !== 'topbar') return;
+        const summary = source.closest('details')?.querySelector('summary');
+        nav.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach((details) => {
+            delete details.dataset.hoverOpen;
+            details.removeAttribute('open');
+        });
+        summary?.focus();
+    }
+    function externalLink(event: MouseEvent<HTMLAnchorElement>) {
+        if (accepted.current !== commandToken) {
+            event.preventDefault();
+            return;
         }
+        if (snapshot.header.menuInteraction === 'menu') closeTopbarDetails(event.currentTarget);
         close();
-        if (!portalShellSelectionsEqual(selection, next))
+    }
+    function navigate(
+        next: PortalShellSelection,
+        source: HTMLElement,
+        closeDisclosure = true
+    ) {
+        if (accepted.current !== commandToken) return;
+        if (closeDisclosure) closeTopbarDetails(source);
+        if (closeDisclosure) close();
+        if (props.onSelectionActivate) {
+            props.onSelectionActivate({
+                type: 'navigate',
+                scope: snapshot.scope,
+                revision: snapshot.revision,
+                selection: next,
+                previousSelection: selection,
+            });
+        } else if (!portalShellSelectionsEqual(selection, next))
             emit({
                 type: 'navigate',
                 selection: next,
                 previousSelection: selection,
             });
     }
-    function keyboard(event: KeyboardEvent<HTMLDivElement>) {
+    const topbarPresentation = snapshot.header.layout === 'topbar' && !overlay;
+    const topbarMenu = snapshot.header.menuInteraction === 'menu' && topbarPresentation;
+    function hoverItem(itemId: string, viewId: string | null) {
+        if (accepted.current !== commandToken) return;
+        props.onItemHover?.({
+            scope: snapshot.scope,
+            revision: snapshot.revision,
+            itemId,
+            viewId,
+        });
+    }
+    function hoverMenu(event: MouseEvent<HTMLElement>, enter: boolean) {
+        if (!topbarMenu || accepted.current !== commandToken) return;
+        const details = event.currentTarget.querySelector('details');
+        if (!details) return;
+        if (enter && !details.open) {
+            details.dataset.hoverOpen = 'true';
+            details.open = true;
+        } else if (!enter && details.dataset.hoverOpen === 'true') {
+            delete details.dataset.hoverOpen;
+            details.open = false;
+        }
+    }
+    function summaryActivation(event: MouseEvent<HTMLElement>) {
+        const details = event.currentTarget.closest('details');
+        if (topbarMenu && details?.dataset.hoverOpen === 'true') {
+            delete details.dataset.hoverOpen;
+            if (details.open) event.preventDefault();
+        }
+    }
+    function keyboard(event: KeyboardEvent<HTMLElement>) {
         if (event.key === 'Escape') {
+            if (overlay && snapshot.header.menuInteraction === 'menu') {
+                event.preventDefault();
+                event.stopPropagation();
+                close();
+                return;
+            }
             const details = (event.target as HTMLElement).closest(
                 'details[open]'
             );
@@ -506,9 +643,36 @@ function Shell(props: CompletePortalShellProps) {
             return;
         }
         if (overlay && open) trapFocus(event);
+        if (topbarMenu && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+            const target = event.target as HTMLElement;
+            const details = target.closest('details');
+            if (target.tagName === 'SUMMARY' && details) {
+                event.preventDefault();
+                delete details.dataset.hoverOpen;
+                details.open = true;
+                const controls = visibleControls(details).filter(
+                    (node) => node !== target
+                );
+                (event.key === 'ArrowDown'
+                    ? controls[0]
+                    : controls.at(-1)
+                )?.focus();
+                return;
+            }
+            if (details) delete details.dataset.hoverOpen;
+        }
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
             return;
-        const controls = visibleControls(event.currentTarget);
+        const popup =
+            snapshot.header.menuInteraction === 'menu'
+                ? (event.target as HTMLElement).closest<HTMLDetailsElement>(
+                      'details[open]'
+                  )
+                : null;
+        const summary = popup?.querySelector(':scope > summary');
+        const controls = visibleControls(popup ?? event.currentTarget).filter(
+            (node) => node !== summary
+        );
         const index = controls.indexOf(
             event.currentTarget.ownerDocument.activeElement as HTMLElement
         );
@@ -572,11 +736,15 @@ function Shell(props: CompletePortalShellProps) {
             )
         );
     }
-    function itemSettings(itemId: string): ReactNode {
+    function itemSettings(itemId: string, forView = false): ReactNode {
         const matches = snapshot.settings?.items?.filter(
             (item) => item.itemId === itemId
         );
-        return matches?.length === 1
+        return matches?.length === 1 &&
+            (!forView || matches[0]!.includeViews !== false) &&
+            (matches[0]!.visibleIn !== 'sidebar' ||
+                snapshot.header.layout === 'sidebar' ||
+                overlay)
             ? settingsButton({ type: 'item', itemId }, matches[0]!.label)
             : null;
     }
@@ -596,11 +764,30 @@ function Shell(props: CompletePortalShellProps) {
             { className: 'mx-sdk-portal-menu' },
             ...list.map((item) => {
                 const control = itemSettings(item.id);
+                const viewControl = itemSettings(item.id, true);
                 const row = {
                     key: item.id,
                     className: control
                         ? 'mx-sdk-portal-configurable'
                         : undefined,
+                    onMouseEnter: (event: MouseEvent<HTMLElement>) => {
+                        if (
+                            (event.target as Element).closest(
+                                '.mx-sdk-portal-settings'
+                            )
+                        )
+                            return;
+                        if (
+                            item.type === 'group' ||
+                            (item.type === 'table' && item.views !== undefined)
+                        )
+                            hoverMenu(event, true);
+                        if (item.type === 'table' &&
+                            (topbarPresentation || (snapshot.header.hidden && item.views === undefined)))
+                            hoverItem(item.id, null);
+                    },
+                    onMouseLeave: (event: MouseEvent<HTMLElement>) =>
+                        hoverMenu(event, false),
                 };
                 const label = h(
                     'span',
@@ -622,8 +809,29 @@ function Shell(props: CompletePortalShellProps) {
                             ? menu(item.items)
                             : h(
                                   'details',
-                                  { className: 'mx-sdk-portal-group' },
-                                  h('summary', null, label),
+                                  {
+                                      className: 'mx-sdk-portal-group',
+                                      'data-sidebar-expanded':
+                                          snapshot.header.menuInteraction ===
+                                          'menu'
+                                              ? String(
+                                                    item.sidebarInitiallyExpanded ===
+                                                        true
+                                                )
+                                              : undefined,
+                                      open:
+                                          item.sidebarInitiallyExpanded &&
+                                          (snapshot.header.layout ===
+                                              'sidebar' ||
+                                              overlay)
+                                              ? true
+                                              : undefined,
+                                  },
+                                  h(
+                                      'summary',
+                                      { onClick: summaryActivation },
+                                      label
+                                  ),
                                   menu(item.items)
                               ),
                         control
@@ -638,7 +846,7 @@ function Shell(props: CompletePortalShellProps) {
                                 href: item.url,
                                 target: item.target ?? '_blank',
                                 rel: 'noopener noreferrer',
-                                onClick: close,
+                                onClick: externalLink,
                             },
                             label,
                             (item.target ?? '_blank') === '_blank'
@@ -657,7 +865,22 @@ function Shell(props: CompletePortalShellProps) {
                         row,
                         h(
                             'details',
-                            { className: 'mx-sdk-portal-group' },
+                            {
+                                className: 'mx-sdk-portal-group',
+                                'data-sidebar-expanded':
+                                    snapshot.header.menuInteraction === 'menu'
+                                        ? String(
+                                              item.sidebarInitiallyExpanded ===
+                                                  true
+                                          )
+                                        : undefined,
+                                open:
+                                    item.sidebarInitiallyExpanded &&
+                                    (snapshot.header.layout === 'sidebar' ||
+                                        overlay)
+                                        ? true
+                                        : undefined,
+                            },
                             h(
                                 'summary',
                                 {
@@ -665,6 +888,39 @@ function Shell(props: CompletePortalShellProps) {
                                         selection?.itemId === item.id
                                             ? 'true'
                                             : undefined,
+                                    onClick: (
+                                        event: MouseEvent<HTMLElement>
+                                    ) => {
+                                        summaryActivation(event);
+                                        if (!topbarMenu) return;
+                                        if (props.onSelectionActivate || snapshot.selectionPolicy === 'host') {
+                                            navigate({ type: 'table', itemId: item.id, viewId: null }, event.currentTarget, false);
+                                            return;
+                                        }
+                                        const next =
+                                            resolvePortalShellSelection({
+                                                items: [item],
+                                                phase: 'reconcile',
+                                                selection: {
+                                                    type: 'table',
+                                                    itemId: item.id,
+                                                    viewId:
+                                                        selection?.type ===
+                                                            'table' &&
+                                                        selection.itemId ===
+                                                            item.id
+                                                            ? selection.viewId
+                                                            : (item.defaultViewId ??
+                                                              null),
+                                                },
+                                            });
+                                        if (next)
+                                            navigate(
+                                                next,
+                                                event.currentTarget,
+                                                false
+                                            );
+                                    },
                                 },
                                 label
                             ),
@@ -676,7 +932,7 @@ function Shell(props: CompletePortalShellProps) {
                                         'li',
                                         {
                                             key: view.id,
-                                            className: control
+                                            className: viewControl
                                                 ? 'mx-sdk-portal-configurable'
                                                 : undefined,
                                         },
@@ -684,6 +940,18 @@ function Shell(props: CompletePortalShellProps) {
                                             'button',
                                             {
                                                 type: 'button',
+                                                className:
+                                                    view.layout !== undefined ||
+                                                    view.badge
+                                                        ? 'mx-sdk-portal-view'
+                                                        : undefined,
+                                                onMouseEnter: () => {
+                                                    if (!topbarPresentation)
+                                                        hoverItem(
+                                                            item.id,
+                                                            view.id
+                                                        );
+                                                },
                                                 'aria-current':
                                                     selection?.type ===
                                                         'table' &&
@@ -704,9 +972,26 @@ function Shell(props: CompletePortalShellProps) {
                                                         event.currentTarget
                                                     ),
                                             },
+                                            view.badge
+                                                ? h('span', {
+                                                      className:
+                                                          'mx-sdk-portal-view-badge',
+                                                      'aria-hidden': true,
+                                                  })
+                                                : null,
+                                            view.layout !== undefined
+                                                ? h(PortalViewLayoutIcon, {
+                                                      layout: view.layout,
+                                                      hidden:
+                                                          snapshot.header
+                                                              .layout ===
+                                                              'topbar' &&
+                                                          !overlay,
+                                                  })
+                                                : null,
                                             view.label
                                         ),
-                                        itemSettings(item.id)
+                                        viewControl
                                     )
                                 )
                             )
@@ -817,7 +1102,44 @@ function Shell(props: CompletePortalShellProps) {
                   {
                       className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
                       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                          if (
+                              snapshot.header.menuInteraction === 'menu' &&
+                              (event.target as HTMLElement).tagName ===
+                                  'SUMMARY' &&
+                              ['ArrowDown', 'ArrowUp'].includes(event.key)
+                          ) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              const details =
+                                  event.currentTarget as HTMLDetailsElement;
+                              details.open = true;
+                              const controls = visibleControls(details).filter(
+                                  (node) => node.tagName !== 'SUMMARY'
+                              );
+                              (event.key === 'ArrowDown'
+                                  ? controls[0]
+                                  : controls.at(-1)
+                              )?.focus();
+                              return;
+                          }
+                          if (
+                              snapshot.header.menuInteraction === 'menu' &&
+                              ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(
+                                  event.key
+                              )
+                          ) {
+                              event.stopPropagation();
+                              keyboard(event);
+                              return;
+                          }
                           if (event.key === 'Escape') {
+                              if (
+                                  snapshot.header.menuInteraction === 'menu' &&
+                                  event.currentTarget.hasAttribute('open')
+                              ) {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                              }
                               event.currentTarget.removeAttribute('open');
                               event.currentTarget
                                   .querySelector('summary')
@@ -1053,12 +1375,20 @@ function Shell(props: CompletePortalShellProps) {
             },
             selection?.type === 'embedded'
                 ? h('iframe', {
-                      key: `${selection.itemId}:${selection.url}`,
+                      key: snapshot.embed?.preserveElement
+                          ? 'portal-embed'
+                          : `${selection.itemId}:${selection.url}`,
                       title: active?.label ?? snapshot.header.title,
                       src: selection.url,
                       className: 'mx-sdk-portal-embed',
-                      referrerPolicy: 'no-referrer',
-                      allow: 'fullscreen',
+                      referrerPolicy:
+                          snapshot.embed?.referrerPolicy === 'browser-default'
+                              ? undefined
+                              : 'no-referrer',
+                      allow:
+                          snapshot.embed?.fullscreen === false
+                              ? undefined
+                              : 'fullscreen',
                   })
                 : selection
                   ? props.children

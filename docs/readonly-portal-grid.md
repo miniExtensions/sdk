@@ -5,6 +5,10 @@ metadata independently of row existence. They reuse
 `CompleteFormFieldPresentation` for the focusable description tooltip, public
 HTML renderer, image-failure latch, Escape handling and popup cleanup. The host
 supplies the optional preview fact; it never grants record or child authority.
+Grid forwards its currentness fence through the optional `admitDescription`
+port at description activation and lazy-popup mount. Existing field-presentation
+callers that omit this port retain their behavior. Retired header links, retry,
+middle-click and context-menu defaults are refused while Tab/Escape remain usable.
 
 Import `ReadonlyPortalGrid` from `@miniextensions/sdk/react` and
 `@miniextensions/sdk/react/readonly-portal-grid.css` for the complete table,

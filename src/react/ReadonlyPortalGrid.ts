@@ -291,6 +291,8 @@ function GridHeader({
                 className: 'mx-sdk-readonly-grid__heading',
                 onFocusCapture: admitHeaderEvent,
                 onClickCapture: admitHeaderEvent,
+                onAuxClickCapture: admitHeaderEvent,
+                onContextMenuCapture: admitHeaderEvent,
                 onMouseOverCapture: admitHeaderEvent,
                 onMouseEnter: admitHeaderEvent,
                 onPointerDownCapture: admitHeaderEvent,
@@ -310,6 +312,7 @@ function GridHeader({
                 description: column.description,
                 descriptionImageUrl: column.descriptionImageUrl,
                 descriptionPlacement: 'tooltip',
+                admitDescription: isCurrent,
                 preview,
                 previewControlProps: preview
                     ? { 'data-config-preview-canvas-control': 'true' }

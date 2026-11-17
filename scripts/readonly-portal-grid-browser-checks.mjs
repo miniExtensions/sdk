@@ -13,8 +13,9 @@ import{createRoot}from'react-dom/client';
 import{ReadonlyPortalGrid,CompleteReadOnlyTextField}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
-const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
+const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
+for(const type of ['click','auxclick','contextmenu'])document.addEventListener(type,event=>{if(!(event.target instanceof Element)||!event.target.closest('[role="tooltip"] a'))return;const item={type,trusted:event.isTrusted,atCapture:event.defaultPrevented,final:null};headerEvents.push(item);queueMicrotask(()=>{item.final=event.defaultPrevented;});},{capture:true});
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
 const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text',description:'<p><strong>Useful header</strong><a href="/stale-help-link">Help link</a><script>window.__headerUnsafe=true</script></p>',descriptionImageUrl:'/grid-header-help.svg'}].map(Object.freeze));
 const leaf=value=>h(CompleteReadOnlyTextField,{value,language:'en'});
@@ -26,7 +27,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
  return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
-window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,canonicalUnchanged:JSON.stringify(records)===original})};
+window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original})};
 createRoot(document.querySelector('#root')).render(h(StrictMode,null,h(App)));
 `;
 
@@ -158,15 +159,13 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(await page.locator('thead b').count(), 0);
     assert.equal(await page.locator('thead svg').count(), 3);
     assert.deepEqual(
-        await page
-            .locator('thead th')
-            .evaluateAll((headers) =>
-                headers.map((header) => ({
-                    top: getComputedStyle(header).paddingTop,
-                    bottom: getComputedStyle(header).paddingBottom,
-                    left: getComputedStyle(header).paddingLeft,
-                }))
-            ),
+        await page.locator('thead th').evaluateAll((headers) =>
+            headers.map((header) => ({
+                top: getComputedStyle(header).paddingTop,
+                bottom: getComputedStyle(header).paddingBottom,
+                left: getComputedStyle(header).paddingLeft,
+            }))
+        ),
         Array(4).fill({ top: '14px', bottom: '14px', left: '12px' })
     );
     results.push({
@@ -359,7 +358,26 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     await help.waitFor({ state: 'visible' });
     const currentUrl = page.url();
     await page.evaluate(() => window.__nativeProbe.retire());
-    await help.getByRole('link', { name: 'Help link', exact: true }).click();
+    const staleLink = help.getByRole('link', {
+        name: 'Help link',
+        exact: true,
+    });
+    await staleLink.click({ button: 'middle' });
+    await staleLink.click({ button: 'right' });
+    const linkEvents = (await snapshot()).headerEvents;
+    assert.deepEqual(
+        linkEvents.map((event) => ({
+            type: event.type,
+            trusted: event.trusted,
+            final: event.final,
+        })),
+        [
+            { type: 'auxclick', trusted: true, final: true },
+            { type: 'contextmenu', trusted: true, final: true },
+        ]
+    );
+    evidence.retiredHeaderDefaults = linkEvents;
+    await staleLink.click();
     assert.equal(
         page.url(),
         currentUrl,

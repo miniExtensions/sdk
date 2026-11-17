@@ -394,6 +394,24 @@ it('refuses stale header focus/hover/click and portaled image retry/link activat
         'Retired popup cannot retry its image'
     );
     await f.click(link);
+    for (const [type, button] of [
+        ['auxclick', 1],
+        ['contextmenu', 2],
+    ] as const) {
+        await act(async () => {
+            const event = new f.window.MouseEvent(type, {
+                button,
+                bubbles: true,
+                cancelable: true,
+            });
+            assert.equal(
+                link.dispatchEvent(event),
+                false,
+                `Retired ${type} default must be cancelled`
+            );
+            assert.equal(event.defaultPrevented, true);
+        });
+    }
     f.unchangedEffects();
     live = true;
     await f.render(h(ReadonlyPortalGrid, { ...props, revision: 2 }));
@@ -401,6 +419,44 @@ it('refuses stale header focus/hover/click and portaled image retry/link activat
         f.window.document.body.querySelector('[role="tooltip"]'),
         null
     );
+});
+
+it('retires admitted header help before its delayed popup/media commit', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    let live = true;
+    await f.render(
+        h(
+            ReadonlyPortalGrid,
+            model({
+                isCurrent: () => live,
+                columns: [
+                    { fieldId: 'primary', title: 'Name' },
+                    {
+                        fieldId: 'value',
+                        title: 'Value',
+                        description: '<p>Deferred help</p>',
+                        descriptionImageUrl:
+                            'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E',
+                    },
+                ],
+            })
+        )
+    );
+    const trigger = f.container.querySelector(
+        'button[aria-label="Field description for Value"]'
+    );
+    assert.ok(trigger instanceof f.window.HTMLButtonElement);
+    await act(async () => {
+        trigger.focus();
+        live = false;
+    });
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]') === null,
+        true
+    );
+    assert.equal(f.window.document.body.querySelector('img') === null, true);
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    f.unchangedEffects();
 });
 
 it('delegates Open with the actual trigger and refuses retained stale/ABA intents', async (t) => {

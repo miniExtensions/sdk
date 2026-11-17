@@ -330,3 +330,22 @@ export function nativeIdentityProtocolMetadata(type: PostgresType) {
     };
     return { attested, invalid };
 }
+
+export function nativeArrayIdentityTransport(
+    binary: NonNullable<PostgresRecordIdentity['values'][number]['binary']>
+) {
+    const format: 'postgres-array-binary-v1' = binary.format;
+    const hex: string = binary.hex;
+    const sourceConnection: string = binary.source.connectionId;
+    const identity: PostgresRecordIdentity = {
+        formatVersion: 1,
+        type: 'primary-key',
+        values: [{ columnName: 'key', value: '{NULL}', binary }],
+    };
+    const invalid = {
+        ...binary,
+        // @ts-expect-error Native input is JSON-safe hex, never driver/browser bytes.
+        hex: new Uint8Array(12),
+    } satisfies typeof binary;
+    return { format, hex, sourceConnection, identity, invalid };
+}

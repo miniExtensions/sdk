@@ -244,6 +244,97 @@ async function configuredPresentation(browser, origin, label) {
             ),
             1
         );
+        await configure({
+            header: {
+                layout: 'sidebar',
+                title: '',
+                actionsPlacement: 'layout',
+                descriptionHtml: '<p>Authoring description</p>',
+                descriptionOptions: { placement: 'navigation' },
+            },
+            settings: {
+                title: 'Edit title',
+                description: 'Edit description',
+                profile: 'Edit profile',
+                items: [
+                    { itemId: 'orders', label: 'Edit orders' },
+                    { itemId: 'docs', label: 'Edit docs' },
+                    { itemId: 'guide', label: 'Edit guide' },
+                    { itemId: 'missing', label: 'Edit missing' },
+                ],
+            },
+        });
+        const titleGear = page.getByRole('button', {
+            name: 'Edit title',
+            exact: true,
+        });
+        await titleGear.focus();
+        await page.keyboard.press('Enter');
+        const box = await titleGear.boundingBox();
+        assert(box && box.width <= 32 && box.height <= 32);
+        for (const name of ['Edit description', 'Edit profile'])
+            await page.getByRole('button', { name, exact: true }).click();
+        const ordersGears = page.getByRole('button', {
+            name: 'Edit orders',
+            exact: true,
+        });
+        await ordersGears.last().click();
+        const orderSummary = page
+            .locator('summary')
+            .filter({ hasText: /^Orders$/ });
+        assert.equal(
+            await orderSummary.evaluate((node) => node.parentElement.open),
+            false
+        );
+        await orderSummary.click();
+        await ordersGears.first().click();
+        assert.equal(
+            await orderSummary.evaluate((node) => node.parentElement.open),
+            true
+        );
+        const resources = page
+            .locator('summary')
+            .filter({ hasText: /^Resources$/ });
+        await resources.click();
+        await page
+            .getByRole('button', { name: 'Edit docs', exact: true })
+            .click();
+        await page
+            .getByRole('button', { name: 'Edit guide', exact: true })
+            .click();
+        assert.equal(
+            await resources.evaluate((node) => node.parentElement.open),
+            true
+        );
+        assert.equal(
+            await page.getByRole('button', { name: 'Edit missing' }).count(),
+            0
+        );
+        assert.deepEqual(
+            await page.evaluate(() =>
+                window.proof.settings.map((request) => request.target)
+            ),
+            [
+                { type: 'title' },
+                { type: 'description' },
+                { type: 'profile' },
+                { type: 'item', itemId: 'orders' },
+                { type: 'item', itemId: 'orders' },
+                { type: 'item', itemId: 'docs' },
+                { type: 'item', itemId: 'guide' },
+            ]
+        );
+        assert.equal(await page.evaluate(() => window.proof.intents.length), 2);
+        await configure({ settings: undefined });
+        await page.waitForFunction(() => {
+            const committed = window.fixtureCommittedSnapshot;
+            return (
+                committed != null &&
+                committed === window.fixtureSnapshot &&
+                committed.settings === undefined
+            );
+        });
+        assert.equal(await page.locator('.mx-sdk-portal-settings').count(), 0);
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);
         return {
@@ -253,6 +344,7 @@ async function configuredPresentation(browser, origin, label) {
             descriptionExpansion: 'passed',
             directActions: 'passed',
             committedLogoutRetirement: 'passed',
+            authoringMouseKeyboardTargetsAndZeroNavigation: 'passed',
             cleanup: 'completed',
         };
     } catch (error) {

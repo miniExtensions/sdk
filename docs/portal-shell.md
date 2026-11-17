@@ -8,6 +8,64 @@ logout confirmation, embedded iframe, styles and accessibility. Import
 There are no host-rendered menu/header slots. `children` is only the host's
 existing table/collection body.
 
+Optional `snapshot.settings` contains already admitted authoring labels for the
+title, description, profile and menu-item identities. `onOpenSettings` receives a
+separate `{scope, revision, target}` request; `PortalShellIntent` is unchanged.
+The shell owns the non-submit gear buttons and never accepts an editor or header
+renderer. The host keeps permission checks, configuration paths and its existing
+editor/modal controller. Public consumers omit the descriptors or callback.
+
+Title settings remain available for an empty visible title. Description settings
+require non-null description content, including an empty string. Profile settings
+require an enabled profile action; logout-only controls have no profile gear.
+Only projected menu identities receive controls, and ambiguous descriptors are
+ignored. Custom-view submenu controls target their parent item. For a native
+headerless field disclosure, omit that field descriptor while retaining admitted
+custom-menu descriptors. Hidden headers never display title/description controls.
+
+Settings controls are siblings of links, buttons and summaries. They do not
+navigate, toggle groups, submit forms or call account settings. Each command checks
+its committed immutable snapshot/callback owner; replacements retire captured old
+handlers without cancelling or replaying editor work already allocated by the host.
+The host must also validate current admission before opening its editor.
+
+```tsx
+import { createElement } from 'react';
+import {
+    CompletePortalShell,
+    type CompletePortalShellProps,
+    type PortalShellSnapshot,
+} from '@miniextensions/sdk/react';
+
+const snapshot: PortalShellSnapshot = {
+    scope: 'synthetic-portal:member',
+    revision: 1,
+    header: { layout: 'sidebar', title: 'Portal' },
+    items: [{ type: 'table', id: 'orders', label: 'Orders' }],
+    selection: { type: 'table', itemId: 'orders', viewId: null },
+    settings: {
+        title: 'Edit portal title',
+        items: [{ itemId: 'orders', label: 'Edit Orders settings' }],
+    },
+};
+const props: CompletePortalShellProps = {
+    snapshot,
+    onIntent(intent) {
+        console.log(intent.type);
+    },
+    onOpenSettings(request) {
+        if (
+            request.scope !== snapshot.scope ||
+            request.revision !== snapshot.revision
+        )
+            return;
+        // Route this finite target through the existing admitted host editor.
+        console.log(request.target);
+    },
+};
+createElement(CompletePortalShell, props);
+```
+
 `header.title` is plain text and is escaped. A host with an existing HTML-title
 configuration may provide `header.titleHtml`; the shell renders it through
 `CompleteHTMLRenderer` and its existing sanitizer and stylesheet. An explicitly

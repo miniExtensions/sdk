@@ -10,7 +10,26 @@ import {
     assertPortalShellConsumer,
     assertPortalShellSidebarConsumer,
     assertPortalShellPresentationConsumer,
+    assertPortalShellSettingsConsumer,
 } from '../scripts/portal-shell-runtime.mjs';
+
+it('authoring settings keep finite host targets, sibling controls and current callbacks without navigation or submit effects', async () => {
+    const result = await assertPortalShellSettingsConsumer({
+        React,
+        ui: { CompletePortalShell },
+        Window,
+        createRoot,
+        renderToString,
+    });
+    assert.deepEqual(result, {
+        settingsRequests: 11,
+        siblingRequests: 1,
+        ordinaryIntents: 0,
+        submitEvents: 0,
+        implicitNetworkRequests: 0,
+        precommitAdmission: 'rejected',
+    });
+});
 
 it('configured shell presentation preserves native availability/layout/disclosure and retires committed logout authority', async () => {
     const result = await assertPortalShellPresentationConsumer({

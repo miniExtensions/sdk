@@ -502,6 +502,34 @@ try {
     await noReadonlyActions();
     await assertMasks(page);
     await inert();
+    const emptyLabels = page.locator('#empty-count-label-examples');
+    for (const kind of ['null', 'missing', 'empty']) {
+        assert.equal(
+            await emptyLabels
+                .locator(`#count-label-${kind}-custom`)
+                .textContent(),
+            'No linked records'
+        );
+        assert.equal(
+            await emptyLabels
+                .locator(`#count-label-${kind}-blank`)
+                .textContent(),
+            ''
+        );
+    }
+    for (const index of [0, 1]) {
+        assert.equal(
+            await emptyLabels
+                .locator(`#count-label-zero-${index}`)
+                .textContent(),
+            '0'
+        );
+    }
+    assert.equal(
+        await emptyLabels.locator('input,button,textarea,select,a').count(),
+        0
+    );
+    await noReadonlyActions();
     const controlled = page.locator('#controlled-count-preview');
     assert.equal(
         await controlled.locator('.read-only-text').textContent(),
@@ -562,6 +590,7 @@ try {
                 readonlyValues: expectedValues,
                 checks: [
                     'controlled Count directly reuses complete readonly text, localized empty presentation and external field chrome without writes',
+                    'custom and deliberately blank empty labels survive null, missing and empty values while populated zero stays visible without controls or writes',
                     'public Count slot and binding use readonly disabled NumberControl and number.css',
                     'real Form owner exposes readonly computed Count with no scalar',
                     'real Portal grid/list owners provide accepted readonly detail projections, without computed cell bindings',

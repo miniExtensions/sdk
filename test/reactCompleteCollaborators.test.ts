@@ -69,6 +69,7 @@ async function fixture(
         value?: Person | readonly Person[] | null;
         choices?: readonly Person[];
         props?: Partial<Common>;
+        expectedParentEvents?: readonly string[];
         /** Let a cold-runtime scenario arrange real synchronous commits first. */
         deferInitialRender?: boolean;
     } = {}
@@ -468,7 +469,11 @@ async function fixture(
                 0,
                 'no collaborator identity/backend lookup'
             );
-            assert.deepEqual(parentEvents, [], 'field gestures remain bounded');
+            assert.deepEqual(
+                parentEvents,
+                args.expectedParentEvents ?? [],
+                'field gestures remain bounded'
+            );
         } finally {
             keys.forEach((key, index) => {
                 const before = originals[index];
@@ -981,6 +986,82 @@ it('an initially empty authoritative offer stays empty while stored multiple val
     assert.equal(f.state.many.length, 0);
     assert.equal(f.options().length, 0);
 });
+
+it('an opted-in readonly Single passes its populated label click to the host without editing', async (t) => {
+    const f = await fixture(t, {
+        value: first,
+        props: { readOnly: true, allowReadonlyClickThrough: true },
+        expectedParentEvents: ['click'],
+    });
+    const label = f.container.querySelector('li');
+    assert.ok(label);
+    assert.equal(label.textContent, first.name);
+    assert.equal(f.container.querySelector('button, input'), null);
+    await act(async () => {
+        for (const event of [
+            new f.window.PointerEvent('pointerdown', { bubbles: true }),
+            new f.window.MouseEvent('auxclick', { bubbles: true, button: 1 }),
+            new f.window.MouseEvent('click', { bubbles: true, button: 1 }),
+            new f.window.MouseEvent('dblclick', { bubbles: true }),
+            new f.window.KeyboardEvent('keydown', {
+                bubbles: true,
+                key: 'Enter',
+            }),
+            new f.window.KeyboardEvent('keyup', {
+                bubbles: true,
+                key: 'Enter',
+            }),
+        ])
+            label.dispatchEvent(event);
+
+        const cancelled = new f.window.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+        });
+        cancelled.preventDefault();
+        label.dispatchEvent(cancelled);
+    });
+    let activationCount = 0;
+    f.form.addEventListener('click', () => activationCount++);
+    await f.pointer(label);
+    assert.equal(activationCount, 1);
+    assert.equal(f.count(), 0);
+    assert.equal(f.state.single, first);
+
+    f.state.props.readOnly = false;
+    await f.render();
+    await f.pointer(f.removal(first));
+    assert.equal(activationCount, 1);
+    assert.deepEqual(
+        f.invocations.map(({ value }) => value),
+        [null]
+    );
+    assert.equal(f.state.single, null);
+});
+
+for (const [name, props] of [
+    ['standalone readonly', { readOnly: true }],
+    [
+        'disabled readonly',
+        {
+            readOnly: true,
+            disabled: true,
+            allowReadonlyClickThrough: true,
+        },
+    ],
+    ['editable', { allowReadonlyClickThrough: true }],
+] as const) {
+    it(`${name} Single keeps the label click inside the field`, async (t) => {
+        const f = await fixture(t, { value: first, props });
+        const label = Array.from(f.container.querySelectorAll('li')).find(
+            (badge) => badge.textContent?.includes(first.name)
+        );
+        assert.ok(label);
+        await f.pointer(label);
+        assert.equal(f.count(), 0);
+        assert.equal(f.state.single, first);
+    });
+}
 
 it('readonly lookup occurrences remain literal, ordered, duplicate-preserving and action-free', async (t) => {
     const literal = { ...first, name: '<img src=x onerror=literal>' };

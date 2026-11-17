@@ -138,6 +138,13 @@ label, form, help and error associations. `title` renders an SDK label unless
 Single has no input. Remove and open controls do not submit a surrounding form;
 picker events remain inside the field boundary.
 
+An editable Grid host can set `allowReadonlyClickThrough` on a controlled
+Single display while the host owns cell selection. With `readOnly` set and the
+display enabled, an uncancelled primary click bubbles to that host. The host can
+select the cell before mounting its separate editable instance. Readonly Single
+defaults to an isolated click, and the opt-in leaves pointer-down, auxiliary
+click, double-click and keyboard handling isolated.
+
 The stylesheet is scoped under `.mx-sdk-complete-collaborators`. Applications
 can override `--mx-sdk-collaborator-accent`, `--mx-sdk-collaborator-tint`,
 `--mx-sdk-collaborator-focus` and `--mx-sdk-collaborator-active` on that root

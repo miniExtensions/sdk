@@ -349,6 +349,7 @@ function Shell(props: CompletePortalShellProps) {
         typeof logoutAuthority | null
     >(null);
     const logout = logoutRequest === logoutAuthority;
+    const openingNavigationEdge = useRef<'first' | 'last' | null>(null);
     const toggle = useRef<HTMLButtonElement>(null),
         nav = useRef<HTMLDivElement>(null),
         main = useRef<HTMLElement>(null),
@@ -447,7 +448,20 @@ function Shell(props: CompletePortalShellProps) {
                     delete details.dataset.hoverOpen;
                     details.open = details.dataset.sidebarExpanded === 'true';
                 });
-        (nav.current && visibleControls(nav.current)[0])?.focus();
+        const edge = openingNavigationEdge.current;
+        openingNavigationEdge.current = null;
+        const focusRoot =
+            edge != null || snapshot.header.menuInteraction === 'menu'
+                ? nav.current?.querySelector('nav')
+                : nav.current;
+        const destinations = focusRoot ? visibleControls(focusRoot) : [];
+        const controls =
+            destinations.length || !nav.current
+                ? destinations
+                : visibleControls(nav.current);
+        (
+            (edge === 'last' ? controls.at(-1) : controls[0]) ?? nav.current
+        )?.focus();
         return () => {
             if (toggle.current?.isConnected) toggle.current.focus();
         };
@@ -706,9 +720,15 @@ function Shell(props: CompletePortalShellProps) {
                   )
                 : null;
         const summary = popup?.querySelector(':scope > summary');
-        const controls = visibleControls(popup ?? event.currentTarget).filter(
-            (node) => node !== summary
-        );
+        const navigationDestinations =
+            overlay && snapshot.header.menuInteraction === 'menu'
+                ? nav.current?.querySelector('nav')
+                : null;
+        let controls = visibleControls(
+            popup ?? navigationDestinations ?? event.currentTarget
+        ).filter((node) => node !== summary);
+        if (!popup && navigationDestinations && controls.length === 0)
+            controls = visibleControls(event.currentTarget);
         const index = controls.indexOf(
             event.currentTarget.ownerDocument.activeElement as HTMLElement
         );
@@ -1352,7 +1372,25 @@ function Shell(props: CompletePortalShellProps) {
                           className: 'mx-sdk-portal-toggle',
                           'aria-expanded': open,
                           'aria-controls': navId,
-                          onClick: () => setOpen(!open),
+                          onClick: () => {
+                              openingNavigationEdge.current = null;
+                              setOpen(!open);
+                          },
+                          onKeyDown: (
+                              event: KeyboardEvent<HTMLButtonElement>
+                          ) => {
+                              if (
+                                  event.defaultPrevented ||
+                                  !overlay ||
+                                  snapshot.header.menuInteraction !== 'menu' ||
+                                  !['ArrowDown', 'ArrowUp'].includes(event.key)
+                              )
+                                  return;
+                              event.preventDefault();
+                              openingNavigationEdge.current =
+                                  event.key === 'ArrowUp' ? 'last' : 'first';
+                              setOpen(true);
+                          },
                       },
                       open ? labels.closeNavigation : labels.openNavigation
                   )

@@ -17,4 +17,5 @@ export function assertPortalShellNavigationConsumer(input: {
     tabExitHandoff: 'passed';
     accountKeyboardAndMobileTrap: 'passed';
     hostSelectionAcrossMenuDrift: 'passed';
+    closedNavigationKeyboard: 'passed';
 }>;

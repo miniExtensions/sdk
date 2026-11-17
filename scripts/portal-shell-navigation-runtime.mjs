@@ -602,6 +602,46 @@ export async function assertPortalShellNavigationConsumer({
             ),
         };
         await render();
+        const closedToggle = named('Open navigation');
+        closedToggle.focus();
+        const beforeKeyboard = [
+            activations.length,
+            hovers.length,
+            ordinary.length,
+        ];
+        await press(closedToggle, 'ArrowDown');
+        assert.equal(
+            window.document.activeElement === named('Guide'),
+            true,
+            'Closed configured navigation opens at its first destination'
+        );
+        await press(named('Guide'), 'ArrowDown');
+        assert.equal(window.document.activeElement === named('Orders'), true);
+        await press(named('Orders'), 'Home');
+        assert.equal(window.document.activeElement === named('Guide'), true);
+        await press(named('Guide'), 'End');
+        const lastDestination = container.querySelector(
+            'nav a[href="https://example.invalid/docs"]'
+        );
+        assert(lastDestination);
+        assert.equal(window.document.activeElement === lastDestination, true);
+        await press(lastDestination, 'Escape');
+        assert.equal(
+            window.document.activeElement === named('Open navigation'),
+            true
+        );
+        await press(named('Open navigation'), 'ArrowUp');
+        assert.equal(
+            window.document.activeElement === lastDestination,
+            true,
+            'ArrowUp opens at the last destination'
+        );
+        await press(lastDestination, 'Escape');
+        assert.deepEqual(
+            [activations.length, hovers.length, ordinary.length],
+            beforeKeyboard,
+            'Opening and moving focus never allocates host work'
+        );
         await click(named('Open navigation'));
         await mouse(named('People'), 'mouseover');
         assert.equal(
@@ -801,6 +841,53 @@ export async function assertPortalShellNavigationConsumer({
             'Keyboard/menu closure never opens account or auth operations'
         );
         assert.equal(hovers.length, 4);
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            items: [],
+            hideMenuItems: true,
+            searchAgainEnabled: true,
+            user: {
+                name: 'Action owner',
+                settingsEnabled: true,
+                logoutEnabled: false,
+                presentation: 'icon',
+            },
+        };
+        await render();
+        await press(named('Open navigation'), 'ArrowDown');
+        const actionDrawer = container.querySelector(
+            '.mx-sdk-portal-navigation[role="dialog"]'
+        );
+        assert(actionDrawer);
+        const closeOnly = actionDrawer.querySelector(':scope > button');
+        const directSettings = actionDrawer.querySelector(
+            'button[aria-label="User settings"]'
+        );
+        assert(directSettings);
+        assert.equal(
+            window.document.activeElement === closeOnly,
+            true,
+            'An action-only drawer still captures opening focus'
+        );
+        await press(closeOnly, 'End');
+        assert.equal(window.document.activeElement === directSettings, true);
+        await press(directSettings, 'Home');
+        assert.equal(window.document.activeElement === closeOnly, true);
+        await press(closeOnly, 'Escape');
+        await press(named('Open navigation'), 'ArrowUp');
+        assert.equal(window.document.activeElement === directSettings, true);
+        await press(directSettings, 'Escape');
+        await click(named('Open navigation'));
+        assert.equal(
+            actionDrawer.contains(window.document.activeElement),
+            true
+        );
+        await press(window.document.activeElement, 'Escape');
+        assert.equal(
+            window.document.activeElement === named('Open navigation'),
+            true
+        );
         await React.act(async () => root.unmount());
         mounted = false;
         assert.equal(activations.length, 6);
@@ -821,6 +908,7 @@ export async function assertPortalShellNavigationConsumer({
             tabExitHandoff: 'passed',
             accountKeyboardAndMobileTrap: 'passed',
             hostSelectionAcrossMenuDrift: 'passed',
+            closedNavigationKeyboard: 'passed',
         };
     } finally {
         try {

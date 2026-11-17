@@ -37,8 +37,12 @@ controls with desktop topbar hover/ArrowUp/ArrowDown opening, current-menu
 Home/End traversal, parent-table activation, outside-click closure and trigger
 focus restoration. Tab/Shift+Tab exits a desktop menu relative to its trigger;
 the account menu closes on Tab while preserving the mobile drawer's focus trap.
-Mobile navigation retains dialog Escape/focus behavior and
-resets disclosures on reopening. Per-table/group `sidebarInitiallyExpanded`
+Mobile and hidden-header menu toggles open on ArrowDown at the first destination
+and on ArrowUp at the last. Home/End traverse destinations; Escape restores the
+toggle. Pointer opening also starts at the first destination. Opening and focus
+movement allocate no host navigation or hover work. Ordinary disclosure mode
+retains its existing behavior. Mobile navigation retains dialog Escape/focus
+behavior and resets disclosures on reopening. Per-table/group `sidebarInitiallyExpanded`
 chooses their initial mobile/sidebar state independently. An admitted unresolved
 group may use `keepEmpty:true`; omission retains existing empty-group filtering.
 

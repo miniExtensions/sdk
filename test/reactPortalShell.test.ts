@@ -35,6 +35,7 @@ it('optional host activation and pointer notifications preserve native owners, m
         tabExitHandoff: 'passed',
         accountKeyboardAndMobileTrap: 'passed',
         hostSelectionAcrossMenuDrift: 'passed',
+        closedNavigationKeyboard: 'passed',
     });
 });
 

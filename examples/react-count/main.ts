@@ -889,6 +889,47 @@ function Card({ index }: { index: number }) {
         )
     );
 }
+function EmptyCountLabelExamples() {
+    const values = [
+        ['null', null],
+        ['missing', undefined],
+        ['empty', ''],
+    ] as const;
+    return h(
+        'section',
+        { className: 'card', id: 'empty-count-label-examples' },
+        h('h2', null, 'Configured empty Count labels'),
+        ...values.flatMap(([kind, value]) =>
+            [
+                ['custom', 'No linked records'],
+                ['blank', ''],
+            ].map(([labelKind, emptyLabel]) =>
+                h(
+                    'div',
+                    { key: `${kind}-${labelKind}` },
+                    h('h3', null, `${kind} value with ${labelKind} label`),
+                    h(
+                        'div',
+                        { id: `count-label-${kind}-${labelKind}` },
+                        h(CountField, { value, language: 'en', emptyLabel })
+                    )
+                )
+            )
+        ),
+        ...['No linked records', ''].map((emptyLabel, index) =>
+            h(
+                'div',
+                { key: `zero-${index}` },
+                h('h3', null, `Populated zero with label ${index + 1}`),
+                h(
+                    'div',
+                    { id: `count-label-zero-${index}` },
+                    h(CountField, { value: '0', language: 'en', emptyLabel })
+                )
+            )
+        )
+    );
+}
 function ControlledCountPreview() {
     const values = [
         '0',
@@ -940,6 +981,7 @@ function App() {
             'Read-only native values from Form and Portal owners. Metadata decides whether a count is available; the renderer never counts links or changes the value.'
         ),
         h(ControlledCountPreview),
+        h(EmptyCountLabelExamples),
         h(
             'div',
             { className: 'toolbar' },

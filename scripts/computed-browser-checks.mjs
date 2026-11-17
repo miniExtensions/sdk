@@ -31,7 +31,7 @@ async function bounded(cleanup) {
     }
 }
 const browserHost = String.raw`
-const main=document.querySelector('main');let root=createRoot(main),last;
+const main=document.querySelector('main');let root=createRoot(main),last,staleAction,staleEvent;
 const effects={requests:0,opens:0,submits:0};
 window.fetch=async()=>{effects.requests++;throw Error('Unexpected computed fetch');};
 XMLHttpRequest.prototype.open=function(){effects.requests++;throw Error('Unexpected computed XHR');};
@@ -46,9 +46,10 @@ window.computedProof={
  formula(mode){const extra=mode==='select'?{resultType:'singleSelect',value:'Ready',select:{choices:[{id:'ready',name:'Ready',displayName:'Ready label'}]},renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:mode==='html'?{value:'<strong>Painted HTML</strong><a href="https://never.example.invalid/">Forbidden navigation</a><script>bad()</script>',renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:(mode==='gallery'||mode==='gallery-closed')?{value:'admitted resources',renderFormulaAsAttachment:true,gallery:{entries:[{id:'one',url:image,type:'image/svg+xml',filename:'First'},{id:'two',url:image,type:'image/svg+xml',filename:'Second'}],disableOpenFiles:mode==='gallery-closed',disableDownloadFiles:true,labels:{attachments:'Computed media'}}}:mode==='masked'?{obscurePassword:true,textSize:'large',value:'PRIVATE'}:mode==='invalid'?{isValid:false}:{};show({...base,kind:'formula',display:valid(extra)});},
  rollup(value){show({...base,kind:'rollup',display:{mode:'controlled',language:'en',isValid:true,value}});},
  retire(notify=true){current=false;if(notify)flushSync(()=>{for(const listener of [...listeners])listener();});},
+ retireOnNextLinkClick(){document.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest('a'):null;if(!target)throw Error('Expected owned HTML link action');current=false;staleEvent=event;staleAction={trusted:event.isTrusted,connected:target.isConnected,beforeDefaultPrevented:event.defaultPrevented};},{capture:true,once:true});},
  echo(){current=true;show(last);},
- snapshot(){return{react:React.version,platform:navigator.platform,text:main.textContent,effects:{...effects},canonical:JSON.stringify(canonical),draft:document.querySelector('#neighbor')?.value,subscriptions:listeners.size};},
- unmount(){flushSync(()=>root.unmount());}
+ snapshot(){if(staleEvent){staleAction.finalDefaultPrevented=staleEvent.defaultPrevented;staleEvent=undefined;}return{react:React.version,platform:navigator.platform,text:main.textContent,effects:{...effects},canonical:JSON.stringify(canonical),draft:document.querySelector('#neighbor')?.value,subscriptions:listeners.size,staleAction};},
+ unmount(){staleEvent=undefined;flushSync(()=>root.unmount());}
 };window.computedProof.initial();
 `;
 
@@ -339,10 +340,26 @@ export async function checkComputedBrowser({
                 'masked rich configuration suppresses private DOM and retains size'
             );
             await page.evaluate(() => window.computedProof.formula('html'));
-            await page.evaluate(() => window.computedProof.retire(false));
+            // Revoke in the same trusted event, before the React capture
+            // handler. An earlier remote turn can legitimately let owner
+            // observation remove the link before Playwright can click it.
+            await page.evaluate(() =>
+                window.computedProof.retireOnNextLinkClick()
+            );
             await page
                 .getByRole('link', { name: 'Forbidden navigation' })
                 .click();
+            assert.deepEqual(
+                await page.evaluate(
+                    () => window.computedProof.snapshot().staleAction
+                ),
+                {
+                    trusted: true,
+                    connected: true,
+                    beforeDefaultPrevented: false,
+                    finalDefaultPrevented: true,
+                }
+            );
             assert.equal(page.url(), origin + '/?format=' + format);
             await page.evaluate(() => window.computedProof.retire());
             await page.evaluate(() => window.computedProof.echo());

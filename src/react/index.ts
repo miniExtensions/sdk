@@ -3001,7 +3001,6 @@ export function AirtableList<
     return createElement(AirtablePortal<S>, props);
 }
 
-
 /** Accepted read-only presentation; this source never owns collection transport. */
 export type ReadonlyPortalListSnapshot = BorrowedPortalRenderSnapshot;
 
@@ -3039,8 +3038,7 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
         revision: number;
         actions: ReadonlyMap<string, ReadonlyPortalListOpenAction> | undefined;
     } | null>(null);
-    const commit =
-        typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    const commit = typeof window === 'undefined' ? useEffect : useLayoutEffect;
     commit(() => {
         const accepted = {
             scope,
@@ -3108,7 +3106,10 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                     row.cells.map((cell) =>
                         createElement(
                             'div',
-                            { key: cell.fieldId, 'data-field-id': cell.fieldId },
+                            {
+                                key: cell.fieldId,
+                                'data-field-id': cell.fieldId,
+                            },
                             cell.node
                         )
                     ),
@@ -3117,23 +3118,24 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                               'button',
                               {
                                   type: 'button',
-                                  className: 'mx-sdk-readonly-portal-list__open',
+                                  className:
+                                      'mx-sdk-readonly-portal-list__open',
                                   'data-testid': action.testId,
                                   onClick: (
                                       event: import('react').MouseEvent<HTMLButtonElement>
                                   ) => {
                                       event.preventDefault();
                                       event.stopPropagation();
-                                      if (!current(row.recordId, action)) return;
+                                      if (!current(row.recordId, action))
+                                          return;
                                       const button = event.currentTarget;
                                       const isCurrent = () =>
                                           current(row.recordId, action);
                                       action.activate(isCurrent, () => {
-                                          if (
-                                              isCurrent() &&
-                                              button.isConnected
-                                          )
-                                              button.focus({ preventScroll: true });
+                                          if (isCurrent() && button.isConnected)
+                                              button.focus({
+                                                  preventScroll: true,
+                                              });
                                       });
                                   },
                               },

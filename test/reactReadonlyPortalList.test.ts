@@ -18,13 +18,23 @@ import { loadedForm } from './formsFixtures.js';
 
 function source() {
     const schema = loadedForm().payload.fieldIdsToSchemas.fld_title;
-    const second = { ...schema.airtableField, id: 'fld_second', name: 'Second' };
+    const second = {
+        ...schema.airtableField,
+        id: 'fld_second',
+        name: 'Second',
+    };
     const projection: PortalRecordPresentation = {
         portalFieldId: 'fld_children',
         linkedTableId: 'table_children',
         records: [
-            { id: 'record_B', fields: { fld_title: 'Beta', fld_second: 'B detail' } },
-            { id: 'record_A', fields: { fld_title: 'Alpha', fld_second: 'A detail' } },
+            {
+                id: 'record_B',
+                fields: { fld_title: 'Beta', fld_second: 'B detail' },
+            },
+            {
+                id: 'record_A',
+                fields: { fld_title: 'Alpha', fld_second: 'A detail' },
+            },
         ],
         table: { airtableFields: [schema.airtableField, second] },
         detailProjection: 'present',
@@ -95,12 +105,16 @@ function environment(t: TestContext) {
         HTMLElement: window.HTMLElement,
         IS_REACT_ACT_ENVIRONMENT: true,
     };
-    const originals = Object.keys(values).map((key) => [
-        key,
-        Object.getOwnPropertyDescriptor(globalThis, key),
-    ] as const);
+    const originals = Object.keys(values).map(
+        (key) =>
+            [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    );
     for (const [key, value] of Object.entries(values))
-        Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            writable: true,
+            value,
+        });
     const container = window.document.createElement('form');
     window.document.body.append(container);
     let submits = 0;
@@ -123,9 +137,16 @@ function environment(t: TestContext) {
         window,
         render: (node: ReactNode) =>
             act(async () => root.render(h(StrictMode, null, node))),
-        click: async (node: NonNullable<ReturnType<typeof container.querySelector>>) =>
+        click: async (
+            node: NonNullable<ReturnType<typeof container.querySelector>>
+        ) =>
             act(async () => {
-                node.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+                node.dispatchEvent(
+                    new window.MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
             }),
     };
 }
@@ -133,14 +154,22 @@ function environment(t: TestContext) {
 it('owns all ordered rows/cells and empty column labels through SSR without reads or child actions', () => {
     const f = source();
     try {
-        const html = renderToString(h(ReadonlyPortalList, { scope: f.scope, renderers, label: 'Records' }));
+        const html = renderToString(
+            h(ReadonlyPortalList, {
+                scope: f.scope,
+                renderers,
+                label: 'Records',
+            })
+        );
         assert.match(html, /<ul[^>]*aria-label="Records"/);
         assert(html.indexOf('record_B') < html.indexOf('record_A'));
         assert(html.indexOf('Beta') < html.indexOf('B detail'));
         assert(html.indexOf('B detail') < html.indexOf('Alpha'));
         assert.doesNotMatch(html, /<button|<input|<form/);
         f.replace({ ...f.projection, records: [] });
-        const empty = renderToString(h(ReadonlyPortalList, { scope: f.scope, renderers }));
+        const empty = renderToString(
+            h(ReadonlyPortalList, { scope: f.scope, renderers })
+        );
         assert.match(empty, /<h3[^>]*>Name label<\/h3>/);
         assert.match(empty, /<h3[^>]*>Detail label<\/h3>/);
         assert.doesNotMatch(empty, /<li\b|<button/);
@@ -151,7 +180,8 @@ it('owns all ordered rows/cells and empty column labels through SSR without read
 });
 
 it('uses current registered Open commands, preserves keys/cosmetic focus and never submits', async (t) => {
-    const dom = environment(t), f = source();
+    const dom = environment(t),
+        f = source();
     t.after(() => f.scope.destroy());
     let guard: (() => boolean) | undefined;
     let returnFocus: (() => void) | undefined;
@@ -164,13 +194,19 @@ it('uses current registered Open commands, preserves keys/cosmetic focus and nev
                 activate(isCurrent, restore) {
                     guard = isCurrent;
                     returnFocus = restore;
-                    if (isCurrent()) void snapshot.actions.openChild(row.recordId);
+                    if (isCurrent())
+                        void snapshot.actions.openChild(row.recordId);
                 },
             },
         ])
     );
     const view = (label = 'Open record') =>
-        h(ReadonlyPortalList, { scope: f.scope, renderers, openActions: actions, openRecordLabel: label });
+        h(ReadonlyPortalList, {
+            scope: f.scope,
+            renderers,
+            openActions: actions,
+            openRecordLabel: label,
+        });
     await dom.render(view());
     const rows = [...dom.container.querySelectorAll('li')];
     const button = rows[0]!.querySelector('button')!;
@@ -178,16 +214,22 @@ it('uses current registered Open commands, preserves keys/cosmetic focus and nev
     assert.equal(f.subscriptions, 1);
     assert.deepEqual(f.calls, []);
     await dom.click(button);
-    assert.deepEqual(f.calls, [{ action: 'open-child', recordId: 'record_B', fieldId: undefined }]);
+    assert.deepEqual(f.calls, [
+        { action: 'open-child', recordId: 'record_B', fieldId: undefined },
+    ]);
     assert.equal(guard?.(), true);
     await dom.render(view('Open this record'));
     assert.equal(dom.container.querySelector('li'), rows[0]);
     dom.window.document.body.focus();
     returnFocus?.();
     assert.equal(dom.window.document.activeElement, button);
-    const oldGuard = guard, oldFocus = returnFocus;
+    const oldGuard = guard,
+        oldFocus = returnFocus;
     await act(async () => {
-        f.replace({ ...f.projection, records: [...f.projection.records].reverse() });
+        f.replace({
+            ...f.projection,
+            records: [...f.projection.records].reverse(),
+        });
     });
     assert.equal(oldGuard?.(), false);
     assert.equal(dom.container.querySelectorAll('button').length, 0);
@@ -198,13 +240,24 @@ it('uses current registered Open commands, preserves keys/cosmetic focus and nev
 });
 
 it('suppresses preview/no-child actions and rejects stale capability revisions', async (t) => {
-    const dom = environment(t), f = source();
+    const dom = environment(t),
+        f = source();
     t.after(() => f.scope.destroy());
     let opens = 0;
     const stale = new Map<string, ReadonlyPortalListOpenAction>([
-        ['record_B', { revision: -1, activate() { opens++; } }],
+        [
+            'record_B',
+            {
+                revision: -1,
+                activate() {
+                    opens++;
+                },
+            },
+        ],
     ]);
-    await dom.render(h(ReadonlyPortalList, { scope: f.scope, renderers, openActions: stale }));
+    await dom.render(
+        h(ReadonlyPortalList, { scope: f.scope, renderers, openActions: stale })
+    );
     assert.equal(dom.container.querySelectorAll('button').length, 0);
     await dom.render(h(ReadonlyPortalList, { scope: f.scope, renderers }));
     assert.equal(dom.container.querySelectorAll('li').length, 2);
@@ -214,25 +267,56 @@ it('suppresses preview/no-child actions and rejects stale capability revisions',
 });
 
 it('keeps one borrowed owner across List/Grid/List and retires held guards/focus on unmount', async (t) => {
-    const dom = environment(t), f = source();
+    const dom = environment(t),
+        f = source();
     t.after(() => f.scope.destroy());
     let guard: (() => boolean) | undefined, restore: (() => void) | undefined;
     const snapshot = f.scope.getSnapshot();
     const actions = new Map<string, ReadonlyPortalListOpenAction>([
-        ['record_B', {
-            revision: snapshot.revision,
-            activate(check, returnFocus) { guard = check; restore = returnFocus; },
-        }],
+        [
+            'record_B',
+            {
+                revision: snapshot.revision,
+                activate(check, returnFocus) {
+                    guard = check;
+                    restore = returnFocus;
+                },
+            },
+        ],
     ]);
-    const list = () => h(ReadonlyPortalList, { scope: f.scope, renderers, openActions: actions });
+    const list = () =>
+        h(ReadonlyPortalList, {
+            scope: f.scope,
+            renderers,
+            openActions: actions,
+        });
     await dom.render(list());
     const old = dom.container.querySelector('button')!;
     await dom.click(old);
-    await dom.render(h(AirtableGrid, { scope: f.scope, renderers, children: (state) =>
-        h('table', null, h('tbody', null, state.rows.map((row) =>
-            h('tr', { key: row.recordId }, row.cells.map((cell) => h('td', { key: cell.fieldId }, cell.node)))
-        )))
-    }));
+    await dom.render(
+        h(AirtableGrid, {
+            scope: f.scope,
+            renderers,
+            children: (state) =>
+                h(
+                    'table',
+                    null,
+                    h(
+                        'tbody',
+                        null,
+                        state.rows.map((row) =>
+                            h(
+                                'tr',
+                                { key: row.recordId },
+                                row.cells.map((cell) =>
+                                    h('td', { key: cell.fieldId }, cell.node)
+                                )
+                            )
+                        )
+                    )
+                ),
+        })
+    );
     assert.equal(guard?.(), false);
     restore?.();
     assert.notEqual(dom.window.document.activeElement, old);
@@ -250,14 +334,27 @@ it('keeps one borrowed owner across List/Grid/List and retires held guards/focus
 });
 
 it('removes presentation and captured commands on scope retirement without destroying a host during render', async (t) => {
-    const dom = environment(t), f = source();
+    const dom = environment(t),
+        f = source();
     let guard: (() => boolean) | undefined;
     const revision = f.scope.getSnapshot().revision;
-    await dom.render(h(ReadonlyPortalList, {
-        scope: f.scope,
-        renderers,
-        openActions: new Map([['record_B', { revision, activate(check: () => boolean) { guard = check; } }]]),
-    }));
+    await dom.render(
+        h(ReadonlyPortalList, {
+            scope: f.scope,
+            renderers,
+            openActions: new Map([
+                [
+                    'record_B',
+                    {
+                        revision,
+                        activate(check: () => boolean) {
+                            guard = check;
+                        },
+                    },
+                ],
+            ]),
+        })
+    );
     await dom.click(dom.container.querySelector('button')!);
     await act(async () => f.scope.destroy());
     assert.equal(dom.container.childElementCount, 0);

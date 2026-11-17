@@ -278,6 +278,29 @@ export async function checkComputedBrowser({
             );
             await page.keyboard.press('Enter');
             await page.locator('[role="dialog"]').waitFor({ state: 'visible' });
+            await page
+                .getByRole('button', { name: 'Next', exact: true })
+                .focus();
+            await page.keyboard.press('ArrowRight');
+            assert.equal(
+                await page
+                    .locator('[role="dialog"]')
+                    .evaluate((node) => node.contains(document.activeElement)),
+                true
+            );
+            await page.keyboard.press('Escape');
+            await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+            assert.equal(
+                await trigger.evaluate(
+                    (node) => node === document.activeElement
+                ),
+                true
+            );
+            record(
+                'trusted boundary ArrowRight retains dialog keyboard ownership and Close'
+            );
+            await page.keyboard.press('Enter');
+            await page.locator('[role="dialog"]').waitFor({ state: 'visible' });
             await page.evaluate(() =>
                 window.computedProof.rollup('Replacement')
             );

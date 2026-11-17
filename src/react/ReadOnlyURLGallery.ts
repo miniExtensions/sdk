@@ -320,6 +320,35 @@ type DialogProps = {
 function GalleryDialog(props: DialogProps): ReactNode {
     const dialog = useRef<HTMLDivElement>(null);
     const close = useRef<HTMLButtonElement>(null);
+    const previousButton = useRef<HTMLButtonElement>(null);
+    const nextButton = useRef<HTMLButtonElement>(null);
+    const navigationTrigger = useRef<HTMLButtonElement | null>(null);
+    const chooseFromNavigation = (index: number) => {
+        const active = dialog.current?.ownerDocument.activeElement;
+        const trigger =
+            active === previousButton.current
+                ? previousButton.current
+                : active === nextButton.current
+                  ? nextButton.current
+                  : null;
+        navigationTrigger.current = trigger;
+        props.choose(index);
+    };
+    useEffect(() => {
+        const trigger = navigationTrigger.current;
+        navigationTrigger.current = null;
+        if (!trigger || trigger.isConnected || !props.current()) return;
+        const document = trigger.ownerDocument;
+        // A boundary navigation can remove its own focused button. Restore
+        // keyboard ownership only when that removal left focus on the body;
+        // preserve a deliberate move to any other connected control.
+        if (
+            document.activeElement == null ||
+            document.activeElement === document.body ||
+            document.activeElement === trigger
+        )
+            close.current?.focus();
+    }, [props.index]);
     useEffect(() => {
         const previous = dialog.current?.ownerDocument.activeElement;
         if (props.current()) close.current?.focus();
@@ -359,10 +388,10 @@ function GalleryDialog(props: DialogProps): ReactNode {
                         props.close();
                     } else if (event.key === 'ArrowLeft') {
                         event.preventDefault();
-                        props.choose(props.index - 1);
+                        chooseFromNavigation(props.index - 1);
                     } else if (event.key === 'ArrowRight') {
                         event.preventDefault();
-                        props.choose(props.index + 1);
+                        chooseFromNavigation(props.index + 1);
                     } else if (event.key === 'Tab' && props.current()) {
                         const nodes = Array.from(
                             dialog.current?.querySelectorAll<HTMLElement>(
@@ -430,8 +459,10 @@ function GalleryDialog(props: DialogProps): ReactNode {
                           ActionButton,
                           {
                               className: 'mx-sdk-url-gallery__previous',
+                              ref: previousButton,
                               'aria-label': props.labels.previous,
-                              onClick: () => props.choose(props.index - 1),
+                              onClick: () =>
+                                  chooseFromNavigation(props.index - 1),
                           },
                           '‹'
                       )
@@ -452,8 +483,10 @@ function GalleryDialog(props: DialogProps): ReactNode {
                           ActionButton,
                           {
                               className: 'mx-sdk-url-gallery__next',
+                              ref: nextButton,
                               'aria-label': props.labels.next,
-                              onClick: () => props.choose(props.index + 1),
+                              onClick: () =>
+                                  chooseFromNavigation(props.index + 1),
                           },
                           '›'
                       )

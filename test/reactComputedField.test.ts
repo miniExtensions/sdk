@@ -586,6 +586,118 @@ it('retires open Formula media and its detached trigger on a physical-kind chang
     assert.equal(f.first.listeners.size, 0);
 });
 
+for (const navigation of [
+    { button: 'Next', key: null },
+    { button: 'Next', key: 'ArrowRight' },
+    { button: 'Previous', key: null },
+    { button: 'Previous', key: 'ArrowLeft' },
+] as const)
+    it(`keeps dialog keyboard ownership when ${navigation.key ?? 'mouse'} removes ${navigation.button}`, async (t) => {
+        const f = await fixture(t);
+        await f.render({
+            ...f.common(),
+            kind: 'formula',
+            display: formula({
+                value: url,
+                renderFormulaAsAttachment: true,
+                gallery: {
+                    entries: [
+                        { url, filename: 'First' },
+                        {
+                            url: 'https://computed.example.invalid/second.png',
+                            filename: 'Second',
+                        },
+                    ],
+                    disableDownloadFiles: true,
+                },
+            }),
+        });
+        const open = f.container.querySelector(`button[aria-label="${url}"]`);
+        assert.ok(open instanceof f.window.HTMLButtonElement);
+        open.focus();
+        await f.click(open);
+        if (navigation.button === 'Previous') {
+            await act(async () =>
+                f.container
+                    .querySelector('[role="dialog"]')
+                    ?.dispatchEvent(
+                        new f.window.KeyboardEvent('keydown', {
+                            key: 'ArrowRight',
+                            bubbles: true,
+                            cancelable: true,
+                        })
+                    )
+            );
+        }
+        const next = f.container.querySelector(
+            `button[aria-label="${navigation.button}"]`
+        );
+        assert.ok(next instanceof f.window.HTMLButtonElement);
+        next.focus();
+        const key = navigation.key;
+        if (key == null) await f.click(next);
+        else
+            await act(async () =>
+                next.dispatchEvent(
+                    new f.window.KeyboardEvent('keydown', {
+                        key,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+        assert.equal(next.isConnected, false);
+        assert.ok(
+            f.window.document.activeElement?.closest('[role="dialog"]'),
+            'removing navigation must retain dialog keyboard ownership'
+        );
+        await act(async () =>
+            f.window.document.activeElement?.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(f.container.querySelector('[role="dialog"]'), null);
+        assert.equal(f.window.document.activeElement, open);
+    });
+
+it('does not steal a deliberate connected-control focus move during boundary navigation', async (t) => {
+    const f = await fixture(t);
+    await f.render({
+        ...f.common(),
+        kind: 'formula',
+        display: formula({
+            value: url,
+            renderFormulaAsAttachment: true,
+            gallery: {
+                entries: [
+                    { url },
+                    { url: 'https://computed.example.invalid/second.png' },
+                ],
+                disableDownloadFiles: true,
+            },
+        }),
+    });
+    const open = f.container.querySelector(`button[aria-label="${url}"]`);
+    assert.ok(open instanceof f.window.HTMLButtonElement);
+    open.focus();
+    await f.click(open);
+    const next = f.container.querySelector('button[aria-label="Next"]');
+    const sibling = f.window.document.querySelector('form > input');
+    assert.ok(next instanceof f.window.HTMLButtonElement);
+    assert.ok(sibling instanceof f.window.HTMLInputElement);
+    await act(async () => {
+        next.focus();
+        next.click();
+        sibling.focus();
+    });
+    assert.equal(next.isConnected, false);
+    assert.equal(f.window.document.activeElement, sibling);
+});
+
 it('keeps Formula resource fallback fenced when only the child capture changes during download', async (t) => {
     const f = await fixture(t);
     let settle: ((value: Response) => void) | undefined;

@@ -6306,6 +6306,23 @@ can preserve app-level timeout/help decoration without copying pending state or
 replacing the SDK's form/spinner. The native shared Refresh/Logout timeout and
 rich error/help presentation are host composition concerns, not SDK auth policy.
 
+For ordered feedback links and an explicit help control, `describeError(message)`
+can return a `CompleteVerificationErrorPresentation`: an ordered `parts` array of
+literal text or `{type: 'link', text, href}`, an optional message `ariaLabel`, and
+an optional `{label, disabled, onActivate}` action. The action is a non-submit
+button; rendering never activates it or confirms a challenge. The host supplies
+its current disabled state and owns the help operation. Link destinations accept
+only absolute HTTP, HTTPS, FTP, FTPS, mailto and tel URLs; invalid or executable
+destinations render their label as inert text. Links open separately with
+`noopener noreferrer`, and all labels remain escaped text.
+
+When supplied, `describeError` takes precedence over the legacy
+`formatErrorMessage` formatter. It receives only the original error message,
+never the confirmed result. Feedback changes do not reset the code, confirmed
+result or exhaustion classification, and an explicit continuation retry still
+receives the identical cached result. Keep codes and private results out of
+feedback descriptors and telemetry.
+
 ### Compatibility and lifecycle
 
 - Initially empty code disables the real `type=submit` button. The input remains

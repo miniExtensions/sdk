@@ -16,7 +16,7 @@ const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'D
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
-const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text'}].map(Object.freeze));
+const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text',description:'<p><strong>Useful header</strong><script>window.__headerUnsafe=true</script></p>',descriptionImageUrl:'/grid-header-help.svg'}].map(Object.freeze));
 const leaf=value=>h(CompleteReadOnlyTextField,{value,language:'en'});
 document.querySelector('#child-close').onclick=()=>{document.querySelector('#child').close();if(returnCheck?.()&&activeTrigger?.isConnected)activeTrigger.focus();};
 function App(){const[state,set]=useState({scope:'original',revision:1,ready:true,live:true,copy:false,height:'short',empty:false,hidden:{original:{name:true}},widths:{original:{name:'180',amount:180,notes:220}}});
@@ -60,6 +60,7 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     for (const suffix of [
         '/react/ReadonlyPortalGrid.js',
         '/react/CompleteReadOnlyTextField.js',
+        '/react/CompleteFormFieldPresentation.js',
         '/react/readonly-portal-grid.css',
         '/react/complete-readonly-text.css',
     ])
@@ -94,6 +95,12 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
             allowed.has('/readonly-portal-grid.css')
     );
     allowed.set('/favicon.ico', Buffer.alloc(0));
+    allowed.set(
+        '/grid-header-help.svg',
+        Buffer.from(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="blue"/></svg>'
+        )
+    );
     allowed.set(
         '/readonly-portal-grid.html',
         Buffer.from(
@@ -130,12 +137,18 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     );
     assert.equal((await snapshot()).react, evidence.react);
     await page.setViewportSize({ width: 1200, height: 900 });
-    assert.deepEqual(await page.locator('thead th').allTextContents(), [
-        '<Name>',
-        'Amount',
-        'Notes',
-        'Record',
-    ]);
+    assert.deepEqual(
+        await page
+            .locator('thead th')
+            .evaluateAll((headers) =>
+                headers.map(
+                    (header) =>
+                        header.querySelector('.mx-sdk-field-title')
+                            ?.textContent ?? header.textContent
+                )
+            ),
+        ['<Name>', 'Amount', 'Notes', 'Record']
+    );
     assert.deepEqual(
         await page
             .locator('tbody tr')
@@ -146,6 +159,43 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(await page.locator('thead svg').count(), 3);
     results.push({
         group: 'ordered admitted cells, literal headers and protected primary',
+        passed: true,
+    });
+
+    const description = page.getByRole('button', {
+        name: 'Field description for Notes',
+        exact: true,
+    });
+    await description.focus();
+    const help = page.getByRole('tooltip');
+    await help.waitFor({ state: 'visible' });
+    assert.equal(await help.locator('strong').textContent(), 'Useful header');
+    await page.waitForFunction(() => {
+        const image = document.querySelector('[role="tooltip"] img');
+        return (
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth === 8
+        );
+    });
+    assert.equal(await page.evaluate(() => window.__headerUnsafe), undefined);
+    await page.keyboard.press('Escape');
+    await help.waitFor({ state: 'detached' });
+    assert.equal(
+        await description.evaluate((node) => node === document.activeElement),
+        true
+    );
+    await patch({ empty: true });
+    await description.focus();
+    // It may already have focus after Escape; trusted Enter still activates it.
+    await page.keyboard.press('Enter');
+    await help.waitFor({ state: 'visible' });
+    await patch({ ready: false });
+    await help.waitFor({ state: 'detached' });
+    await patch({ ready: true, empty: false });
+    assert.equal(await help.count(), 0);
+    results.push({
+        group: 'rich empty-safe header tooltip, actual image, keyboard Escape and retirement',
         passed: true,
     });
 
@@ -670,11 +720,13 @@ export async function checkReadonlyPortalGridProfile({
             }
             response.setHeader(
                 'Content-Type',
-                path.endsWith('.js')
-                    ? 'text/javascript'
-                    : path.endsWith('.css')
-                      ? 'text/css'
-                      : 'text/html'
+                path.endsWith('.svg')
+                    ? 'image/svg+xml'
+                    : path.endsWith('.js')
+                      ? 'text/javascript'
+                      : path.endsWith('.css')
+                        ? 'text/css'
+                        : 'text/html'
             );
             response.end(bytes);
         });

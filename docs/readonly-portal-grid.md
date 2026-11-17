@@ -1,5 +1,11 @@
 # Controlled readonly Portal Grid
 
+Headers accept admitted `description` Quill HTML and `descriptionImageUrl`
+metadata independently of row existence. They reuse
+`CompleteFormFieldPresentation` for the focusable description tooltip, public
+HTML renderer, image-failure latch, Escape handling and popup cleanup. The host
+supplies the optional preview fact; it never grants record or child authority.
+
 Import `ReadonlyPortalGrid` from `@miniextensions/sdk/react` and
 `@miniextensions/sdk/react/readonly-portal-grid.css` for the complete table,
 headers, cells, Open controls, column visibility dialog and resize presentation.

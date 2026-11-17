@@ -216,6 +216,121 @@ it('suppresses unavailable/stale scopes without invoking action or preference po
     f.unchangedEffects();
 });
 
+it('owns rich header descriptions even for empty rows and uses real keyboard tooltip presentation', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    await f.render(
+        h(
+            ReadonlyPortalGrid,
+            model({
+                rows: [],
+                columns: [
+                    { fieldId: 'primary', title: 'Name' },
+                    {
+                        fieldId: 'value',
+                        title: 'Value',
+                        description:
+                            '<p><strong>Rich header</strong><script>unsafe()</script></p>',
+                    },
+                ],
+            })
+        )
+    );
+    const trigger = f.container.querySelector(
+        'button[aria-label="Field description for Value"]'
+    );
+    assert.ok(trigger instanceof f.window.HTMLButtonElement);
+    assert.equal(trigger.type, 'button');
+    assert.equal(f.container.querySelector('script'), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-field-sr-only strong')?.textContent,
+        'Rich header'
+    );
+    await act(async () => trigger.focus());
+    const tooltip = f.window.document.body.querySelector('[role="tooltip"]');
+    assert.ok(tooltip);
+    assert.equal(tooltip.querySelector('strong')?.textContent, 'Rich header');
+    assert.equal(trigger.getAttribute('aria-describedby'), tooltip.id);
+    await act(async () =>
+        trigger.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+            })
+        )
+    );
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+    assert.equal(f.window.document.activeElement, trigger);
+    f.unchangedEffects();
+});
+
+it('reuses the description image failure latch and retires its popup with the admitted header', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const image =
+        'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
+    const props = model({
+        columns: [
+            { fieldId: 'primary', title: 'Name' },
+            { fieldId: 'value', title: 'Value', descriptionImageUrl: image },
+        ],
+    });
+    await f.render(h(ReadonlyPortalGrid, props));
+    const trigger = f.container.querySelector(
+        'button[aria-label="Field description for Value"]'
+    );
+    assert.ok(trigger instanceof f.window.HTMLButtonElement);
+    assert.equal(
+        f.window.document.body.querySelector('img'),
+        null,
+        'No image before description activation'
+    );
+    await act(async () => trigger.focus());
+    const img = f.window.document.body.querySelector('img');
+    assert.ok(img);
+    assert.equal(img.src, image);
+    await f.imageEvent(img, 'error');
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
+    );
+    assert.equal(
+        f.container.querySelector(
+            'button[aria-label="Field description for Value"]'
+        ),
+        null
+    );
+    await f.render(h(ReadonlyPortalGrid, { ...props, rowHeight: 'medium' }));
+    assert.equal(
+        f.container.querySelector(
+            'button[aria-label="Field description for Value"]'
+        ),
+        null,
+        'Same failed image does not restart on ordinary rerender'
+    );
+    await f.render(
+        h(ReadonlyPortalGrid, {
+            ...props,
+            revision: 2,
+            columns: [
+                { fieldId: 'primary', title: 'Name' },
+                {
+                    fieldId: 'value',
+                    title: 'Value',
+                    description: '<p>Replacement help</p>',
+                },
+            ],
+        })
+    );
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null,
+        'Replacement header does not inherit an open popup'
+    );
+    f.unchangedEffects();
+});
+
 it('delegates Open with the actual trigger and refuses retained stale/ABA intents', async (t) => {
     const f = await htmlPresentationFixture(t);
     let epoch = 1;

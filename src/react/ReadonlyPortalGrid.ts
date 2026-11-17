@@ -12,6 +12,7 @@ import {
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
+import { CompleteFormFieldPresentation } from './CompleteFormFieldPresentation.js';
 
 export type ReadonlyPortalGridHeaderIcon =
     | 'text'
@@ -28,7 +29,9 @@ export type ReadonlyPortalGridHeaderIcon =
 export type ReadonlyPortalGridColumn = {
     readonly fieldId: string;
     readonly title: string;
+    /** Already-admitted Quill HTML and image metadata, independent of row values. */
     readonly description?: string | null;
+    readonly descriptionImageUrl?: string | null;
     readonly icon?: ReadonlyPortalGridHeaderIcon | null;
 };
 
@@ -88,6 +91,8 @@ export type ReadonlyPortalGridProps = {
     ) => void;
     readonly doNotAllowUserToCopyTextOnGrid?: boolean | null;
     readonly rowHeight?: ReadonlyPortalGridRowHeight;
+    /** Host-owned preview fact; affects image-failure presentation only. */
+    readonly preview?: boolean;
     readonly labels?: Partial<ReadonlyPortalGridLabels>;
     readonly className?: string;
 };
@@ -157,6 +162,7 @@ type HeaderProps = {
     isCurrent: () => boolean;
     onCommit: ReadonlyPortalGridProps['onColumnWidthCommit'];
     resizeLabel: string;
+    preview: boolean;
 };
 
 function GridHeader({
@@ -165,6 +171,7 @@ function GridHeader({
     isCurrent,
     onCommit,
     resizeLabel,
+    preview,
 }: HeaderProps) {
     const header = useRef<HTMLTableCellElement>(null);
     const stopDrag = useRef<(() => void) | null>(null);
@@ -272,13 +279,25 @@ function GridHeader({
             className: 'mx-sdk-readonly-grid__header',
             style: { width: localWidth ?? 200 },
             'data-field-id': column.fieldId,
-            title: column.description ?? undefined,
         },
         h(
-            'span',
+            'div',
             { className: 'mx-sdk-readonly-grid__heading' },
             headerIcon(column.icon),
-            column.title
+            h(CompleteFormFieldPresentation, {
+                title: column.title,
+                fieldName: column.title,
+                associationKind: 'group',
+                description: column.description,
+                descriptionImageUrl: column.descriptionImageUrl,
+                descriptionPlacement: 'tooltip',
+                preview,
+                previewControlProps: preview
+                    ? { 'data-config-preview-canvas-control': 'true' }
+                    : undefined,
+                className: 'mx-sdk-readonly-grid__field-heading',
+                children: () => null,
+            })
         ),
         onCommit &&
             h('span', {
@@ -517,6 +536,7 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                                 isCurrent,
                                 onCommit: props.onColumnWidthCommit,
                                 resizeLabel: labels.resizeColumn(column.title),
+                                preview: props.preview === true,
                             })
                         ),
                         props.onOpenRecord &&

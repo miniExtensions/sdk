@@ -67,6 +67,7 @@ import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
+import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -1579,6 +1580,9 @@ try {
             'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
             'scripts/calendar-browser-checks.mjs',
+            'scripts/portal-map-browser-checks.mjs',
+            'scripts/portal-map-browser-fixture.mjs',
+            'scripts/portal-map-google-browser-boundary.mjs',
             'scripts/calendar-complete-style-assets.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/external-sync-source-controlled-browser-checks.mjs',
@@ -2439,6 +2443,24 @@ try {
             evidence: report.imageAnnotation,
             output,
         });
+        report.portalMap = {};
+        await checkPortalMapBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalMap,
+            output,
+        });
+        assert.equal(report.portalMap.status, 'passed');
+        assert.deepEqual(
+            report.portalMap.profiles.map(({ format }) => format),
+            ['esm', 'cjs']
+        );
+        for (const profile of report.portalMap.profiles)
+            assert.equal(profile.cases.length, 11);
+        assert.equal(report.portalMap.externalProviderEgress, 0);
+        assert.equal(report.portalMap.cleanup.context, 'completed');
+        assert.equal(report.portalMap.cleanup.server, 'completed');
+        assert.equal(report.portalMap.cleanup.directory, 'completed');
         report.radioInput = {};
         await checkRadioInputBrowser({
             browser,

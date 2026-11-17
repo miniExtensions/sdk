@@ -137,3 +137,25 @@ export type {
     KanbanMutationResult,
     KanbanCategoryInvocation,
 } from './kanban.js';
+
+export {
+    createPortalMapProviderCoordinator,
+    createPortalMapProviderOwnerScope,
+    bindPortalMapProvider,
+} from './map/providerCoordinator.js';
+export { getPortalMapCoordinates } from './map/coordinates.js';
+export type { PortalMapCoordinates } from './map/coordinates.js';
+export type {
+    PortalMapLibrary,
+    PortalMapProviderConfiguration,
+    PortalMapEffectiveProviderConfiguration,
+    PortalMapProviderOwner,
+    PortalMapProviderRealm,
+    PortalMapProviderDriver,
+    PortalMapProviderLease,
+    PortalMapProviderRefusal,
+    PortalMapProviderAcquisition,
+    PortalMapProviderSnapshot,
+    PortalMapProviderCoordinator,
+    PortalMapProviderBinding,
+} from './map/providerCoordinator.js';

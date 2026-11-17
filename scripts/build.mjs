@@ -1,4 +1,5 @@
 import { bundleKanban } from './kanban-bundle.mjs';
+import { bundlePortalMap } from './portal-map-vendor-checks.mjs';
 import { build as bundle } from 'esbuild';
 import { assertDateVendor } from './date-vendor-checks.mjs';
 import { assertPortalSidebarVendor } from './portal-sidebar-vendor-checks.mjs';
@@ -169,6 +170,7 @@ await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
 await bundleKanban();
+await bundlePortalMap();
 if (process.argv.includes('--capture-date-popover'))
     await bundleDatePopover(process.cwd(), true);
 await bundleDatePopover();
@@ -353,6 +355,7 @@ for (const format of ['esm', 'cjs']) {
         'form-group',
         'csv-export',
         'kanban',
+        'portal-map',
         'form-completion',
         'form-header',
         'form-submit',

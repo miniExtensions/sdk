@@ -211,6 +211,7 @@ export function assertModuleFormats(root) {
                 './react/form-group.css',
                 './react/csv-export.css',
                 './react/kanban.css',
+                './react/portal-map.css',
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/form-submit.css',

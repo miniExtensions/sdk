@@ -2456,7 +2456,7 @@ try {
             ['esm', 'cjs']
         );
         for (const profile of report.portalMap.profiles)
-            assert.equal(profile.cases.length, 9);
+            assert.equal(profile.cases.length, 11);
         assert.equal(report.portalMap.externalProviderEgress, 0);
         assert.equal(report.portalMap.cleanup.context, 'completed');
         assert.equal(report.portalMap.cleanup.server, 'completed');

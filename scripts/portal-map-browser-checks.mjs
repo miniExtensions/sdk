@@ -3,21 +3,28 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import {
+    cpSync,
+    existsSync,
     lstatSync,
+    mkdirSync,
     mkdtempSync,
     readFileSync,
+    readdirSync,
     realpathSync,
     rmSync,
     writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import {
     portalMapBrowserFixture,
     portalMapSyntheticKey,
     portalMapPrivateMarker,
+    portalMapPropsFactory,
+    portalMapNodeSSRFixture,
 } from './portal-map-browser-fixture.mjs';
 import { portalMapGoogleBrowserBoundary } from './portal-map-google-browser-boundary.mjs';
 
@@ -57,6 +64,39 @@ const fitTotal = (boundary) =>
     boundary.maps.reduce((sum, map) => sum + map.fits.length, 0);
 const loadedMaps = (boundary) =>
     boundary.maps.filter((map) => map.fits.length > 0);
+function packedInventory(directory) {
+    const files = [];
+    function walk(parent, prefix = '') {
+        for (const name of readdirSync(parent).sort()) {
+            const absolute = join(parent, name),
+                relative = prefix + name;
+            const info = lstatSync(absolute);
+            assert(
+                !info.isSymbolicLink(),
+                'Packed duplicate fixture must contain no symlinks'
+            );
+            if (info.isDirectory()) walk(absolute, relative + '/');
+            else {
+                assert(
+                    info.isFile(),
+                    'Packed duplicate fixture must contain only regular files'
+                );
+                const bytes = regular(absolute);
+                files.push({
+                    path: relative,
+                    bytes: bytes.length,
+                    sha256: hash(bytes),
+                });
+            }
+        }
+    }
+    walk(directory);
+    return {
+        files,
+        sha256: hash(JSON.stringify(files)),
+        bytes: files.reduce((n, file) => n + file.bytes, 0),
+    };
+}
 function assertCleanBoundary(boundary) {
     if (!boundary) return;
     assert.equal(boundary.activeOverlayCount, 0);
@@ -78,7 +118,7 @@ export async function checkPortalMapBrowser({
     evidence,
     output,
 }) {
-    let directory, server, current, failure;
+    let directory, duplicateDirectory, server, current, failure;
     let contextEverAcquired = false,
         contextCleanupFailed = false;
     const contextCleanupFailures = [];
@@ -157,47 +197,218 @@ export async function checkPortalMapBrowser({
             upstreamPerFormat,
             checkerSHA256: hash(regular(new URL(import.meta.url))),
             fixtureSHA256: hash(portalMapBrowserFixture),
+            propsFactorySHA256: hash(portalMapPropsFactory),
+            nodeSSRFixtureSHA256: hash(portalMapNodeSSRFixture),
             syntheticGoogleResponseSHA256: hash(portalMapGoogleBrowserBoundary),
         };
         directory = mkdtempSync(join(root, '.portal-map-proof-'));
+        // This is a physical byte-identical installed package copy, not a mock
+        // or rewritten module. Its package metadata and advertised trees remain
+        // unchanged, and both copies resolve the same consumer React peers.
+        const duplicateName = '@miniextensions/sdk-portal-map-proof-duplicate';
+        const duplicate = join(root, 'node_modules', duplicateName);
+        assert(
+            !existsSync(duplicate),
+            'Refuse an existing duplicate-copy fixture'
+        );
+        const originalInventory = packedInventory(sdk);
+        mkdirSync(duplicate);
+        duplicateDirectory = duplicate; // retain ownership even if copying fails midway
+        cpSync(sdk, duplicate, {
+            recursive: true,
+            dereference: false,
+            force: false,
+            errorOnExist: true,
+        });
+        const duplicateInventory = packedInventory(duplicate);
+        assert.equal(duplicateInventory.sha256, originalInventory.sha256);
+        assert.equal(
+            duplicateInventory.files.length,
+            originalInventory.files.length
+        );
+        assert.equal(duplicateInventory.bytes, originalInventory.bytes);
+        const duplicateRequire = createRequire(join(duplicate, 'package.json'));
+        const sdkRequire = createRequire(join(sdk, 'package.json'));
+        for (const peer of [
+            'react',
+            'react-dom',
+            'react-dom/client',
+            'react-dom/server',
+        ]) {
+            assert.equal(
+                realpathSync(duplicateRequire.resolve(peer)),
+                realpathSync(require.resolve(peer))
+            );
+            assert.equal(
+                realpathSync(sdkRequire.resolve(peer)),
+                realpathSync(require.resolve(peer))
+            );
+        }
+        evidence.provenance.duplicateCopy = {
+            physical: true,
+            name: duplicateName,
+            fileCount: duplicateInventory.files.length,
+            bytes: duplicateInventory.bytes,
+            inventorySHA256: duplicateInventory.sha256,
+            samePhysicalReactPeers: true,
+        };
         const responses = new Map();
+        const ssrByFormat = new Map();
+        const ssrEntry = join(directory, 'actual-packed-portal-map-ssr.mjs');
+        writeFileSync(
+            ssrEntry,
+            portalMapNodeSSRFixture.replace(
+                '__PORTAL_MAP_PROPS_FACTORY__',
+                portalMapPropsFactory
+            )
+        );
         for (const format of ['esm', 'cjs']) {
             const api =
                 format === 'esm'
                     ? "import { PortalMap, createGoogleMapsPortalMapDriver } from '@miniextensions/sdk/react';\nimport { bindPortalMapProvider, createPortalMapProviderCoordinator, createPortalMapProviderOwnerScope } from '@miniextensions/sdk/portals';"
                     : "const { PortalMap, createGoogleMapsPortalMapDriver } = require('@miniextensions/sdk/react');\nconst { bindPortalMapProvider, createPortalMapProviderCoordinator, createPortalMapProviderOwnerScope } = require('@miniextensions/sdk/portals');";
-            const entry = join(directory, format + '.mjs');
-            writeFileSync(
-                entry,
-                portalMapBrowserFixture.replace('__PORTAL_MAP_API__', api)
-            );
-            const bundle = await build({
-                absWorkingDir: root,
-                entryPoints: [entry],
-                bundle: true,
-                platform: 'browser',
-                format: 'esm',
-                write: false,
-                metafile: true,
-            });
-            await assertBrowserInputs(bundle.metafile, root);
-            const inputs = Object.keys(bundle.metafile.inputs);
-            for (const name of [
-                'PortalMap.js',
-                'PortalMapCard.js',
-                'GoogleMapsRuntime.js',
-            ])
-                assert(
-                    inputs.some(
-                        (path) =>
-                            path.includes('/sdk/dist/' + format + '/react/') &&
-                            path.endsWith('/' + name)
-                    ),
-                    'Actual packed Map implementation must be in the bundle'
+            const foreignFormat = format === 'esm' ? 'cjs' : 'esm';
+            const foreign =
+                foreignFormat === 'esm'
+                    ? "import { PortalMap as ForeignPortalMap } from '" +
+                      duplicateName +
+                      "/react';\nimport { bindPortalMapProvider as foreignBindPortalMapProvider, createPortalMapProviderOwnerScope as foreignCreatePortalMapProviderOwnerScope } from '" +
+                      duplicateName +
+                      "/portals';"
+                    : "const { PortalMap: ForeignPortalMap } = require('" +
+                      duplicateName +
+                      "/react');\nconst { bindPortalMapProvider: foreignBindPortalMapProvider, createPortalMapProviderOwnerScope: foreignCreatePortalMapProviderOwnerScope } = require('" +
+                      duplicateName +
+                      "/portals');";
+            for (const mixed of [false, true]) {
+                const entry = join(
+                    directory,
+                    format + (mixed ? '-mixed' : '') + '.mjs'
                 );
-            responses.set('/' + format + '.bundle.js', {
-                type: 'text/javascript',
-                bytes: bundle.outputFiles[0].contents,
+                const foreignAPI = mixed
+                    ? foreign
+                    : 'const ForeignPortalMap = PortalMap, foreignBindPortalMapProvider = bindPortalMapProvider, foreignCreatePortalMapProviderOwnerScope = createPortalMapProviderOwnerScope;';
+                writeFileSync(
+                    entry,
+                    portalMapBrowserFixture
+                        .replace('__PORTAL_MAP_API__', api)
+                        .replace('__PORTAL_MAP_FOREIGN_API__', foreignAPI)
+                        .replace(
+                            '__PORTAL_MAP_PROPS_FACTORY__',
+                            portalMapPropsFactory
+                        )
+                );
+                evidence.provenance.browserEntries ??= [];
+                evidence.provenance.browserEntries.push({
+                    format,
+                    mixed,
+                    sourceSHA256: hash(regular(entry)),
+                });
+                const bundle = await build({
+                    absWorkingDir: root,
+                    entryPoints: [entry],
+                    bundle: true,
+                    platform: 'browser',
+                    format: 'esm',
+                    write: false,
+                    metafile: true,
+                });
+                await assertBrowserInputs(bundle.metafile, root);
+                const inputs = Object.keys(bundle.metafile.inputs);
+                for (const name of [
+                    'PortalMap.js',
+                    'PortalMapCard.js',
+                    'GoogleMapsRuntime.js',
+                ])
+                    assert(
+                        inputs.some(
+                            (path) =>
+                                path.includes(
+                                    '/sdk/dist/' + format + '/react/'
+                                ) && path.endsWith('/' + name)
+                        ),
+                        'Actual packed Map implementation must be in the bundle'
+                    );
+                if (mixed) {
+                    const copies = [
+                        { directory: sdk, format },
+                        { directory: duplicate, format: foreignFormat },
+                    ].map(({ directory, format: copyFormat }) => {
+                        const reached = [
+                            'PortalMap.js',
+                            'PortalMapCard.js',
+                            'map/GoogleMapsRuntime.js',
+                        ].map((name) => {
+                            const target = join(
+                                directory,
+                                'dist',
+                                copyFormat,
+                                'react',
+                                name
+                            );
+                            assert(
+                                inputs.some(
+                                    (input) =>
+                                        realpathSync(resolve(root, input)) ===
+                                        realpathSync(target)
+                                ),
+                                'Both physical packed SDK/runtime copies must be bundled'
+                            );
+                            return {
+                                path: 'dist/' + copyFormat + '/react/' + name,
+                                sha256: hash(regular(target)),
+                            };
+                        });
+                        return {
+                            copy: directory === sdk ? 'primary' : 'foreign',
+                            format: copyFormat,
+                            reached,
+                        };
+                    });
+                    evidence.provenance.mixedCopies ??= [];
+                    evidence.provenance.mixedCopies.push({ format, copies });
+                }
+                responses.set(
+                    '/' + format + (mixed ? '.mixed' : '') + '.bundle.js',
+                    {
+                        type: 'text/javascript',
+                        bytes: bundle.outputFiles[0].contents,
+                    }
+                );
+            }
+            const ssr = JSON.parse(
+                execFileSync(process.execPath, [ssrEntry, format], {
+                    cwd: root,
+                    encoding: 'utf8',
+                    timeout: 10000,
+                    maxBuffer: 65536,
+                    stdio: ['ignore', 'pipe', 'pipe'],
+                })
+            );
+            assert.equal(ssr.format, format);
+            assert.equal(ssr.react, react);
+            assert.equal(ssr.noDOMBeforeAndAfter, true);
+            assert.equal(ssr.samePhysicalReactPeer, true);
+            assert(Object.values(ssr.stats).every((count) => count === 0));
+            assert(ssr.markup.includes('Synthetic Map loading'));
+            assert(
+                !ssr.markup.includes(portalMapSyntheticKey) &&
+                    !ssr.markup.includes(portalMapPrivateMarker)
+            );
+            assert(
+                !/<script\b/i.test(ssr.markup),
+                'SSR must contain only trusted loading markup'
+            );
+            ssrByFormat.set(format, ssr);
+            evidence.provenance.serverRendering ??= [];
+            evidence.provenance.serverRendering.push({
+                format,
+                react,
+                markupSHA256: hash(ssr.markup),
+                stats: ssr.stats,
+                nodeEntrySHA256: hash(regular(ssrEntry)),
+                noDOMBeforeAndAfter: true,
+                samePhysicalReactPeer: true,
             });
         }
         const css = await build({
@@ -225,11 +436,22 @@ export async function checkPortalMapBrowser({
             if (url.pathname === '/') {
                 const format =
                     url.searchParams.get('format') === 'cjs' ? 'cjs' : 'esm';
+                const mode = url.searchParams.get('mode');
+                const main =
+                    mode === 'hydrate'
+                        ? '<div class="portal-map-proof-root" data-proof-root="first">' +
+                          ssrByFormat.get(format).markup +
+                          '</div>'
+                        : '';
+                const bundle =
+                    format + (mode === 'mixed' ? '.mixed' : '') + '.bundle.js';
                 response.setHeader('Content-Type', 'text/html');
                 return response.end(
-                    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Portal Map proof</title><link rel="stylesheet" href="/portal-map.css"><style>body{margin:0;padding:16px;background:#f8fafc}main{display:flex;gap:24px;flex-wrap:wrap}.portal-map-proof-root{width:640px;height:480px;border:1px solid #94a3b8}.mx-sdk-portal-map{height:100%}</style><main></main><script type="module" src="/' +
-                        format +
-                        '.bundle.js"></script>'
+                    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Portal Map proof</title><link rel="stylesheet" href="/portal-map.css"><style>body{margin:0;padding:16px;background:#f8fafc}main{display:flex;gap:24px;flex-wrap:wrap}.portal-map-proof-root{width:640px;height:480px;border:1px solid #94a3b8}.mx-sdk-portal-map{height:100%}</style><main>' +
+                        main +
+                        '</main><script type="module" src="/' +
+                        bundle +
+                        '"></script>'
                 );
             }
             if (url.pathname === '/favicon.ico')
@@ -342,6 +564,7 @@ export async function checkPortalMapBrowser({
                 routeAborted: 0,
                 pageErrors: 0,
                 consoleErrors: 0,
+                consoleWarnings: 0,
                 expectedAbortConsoleErrors: 0,
                 unexpectedConsoleErrors: 0,
                 privateInConsole: false,
@@ -369,6 +592,7 @@ export async function checkPortalMapBrowser({
             });
             page.on('console', (message) => {
                 const text = message.text();
+                if (message.type() === 'warning') item.consoleWarnings++;
                 item.privateInConsole ||=
                     text.includes(portalMapSyntheticKey) ||
                     text.includes(portalMapPrivateMarker);
@@ -509,6 +733,8 @@ export async function checkPortalMapBrowser({
                 'Unexpected console error; raw text retained only in memory'
             );
             assert(item.expectedAbortConsoleErrors <= 1);
+            assert.equal(state.host.recoverableHydrationErrors, 0);
+            assert.equal(state.host.privateInHydrationError, false);
             return state;
         }
         async function record(cases, format, name) {
@@ -521,6 +747,7 @@ export async function checkPortalMapBrowser({
                 locallyAborted: current.routeAborted,
                 bootstrapValidated: current.callbackValidated,
                 consoleErrorCount: current.consoleErrors,
+                consoleWarningCount: current.consoleWarnings,
                 expectedAbortConsoleErrorCount:
                     current.expectedAbortConsoleErrors,
             });
@@ -912,7 +1139,222 @@ export async function checkPortalMapBrowser({
                 'deferred-overlay-retirement-keeps-other-root'
             );
 
-            assert.equal(cases.length, 9);
+            evidence.phase = format + ':duplicate-packed-copies';
+            item = await visit(format, 'mixed');
+            item.mode = 'mixed';
+            await bounded(
+                'Mixed-copy actual Loader bootstrap',
+                () => item.providerSeen.promise
+            );
+            state = await snapshot();
+            assert.equal(state.host.copiesDistinct, true);
+            assert.deepEqual(state.host.rootCopies, [
+                { name: 'first', copy: 'primary' },
+                { name: 'second', copy: 'foreign' },
+            ]);
+            assert(
+                state.host.bindingCopies.every(
+                    (binding) => binding.sharedCoordinator
+                )
+            );
+            assert.equal(state.host.realmReads, 2);
+            assert.equal(item.providerRequests, 1);
+            item.responseGate.resolve('fulfill');
+            await waitCards('first', 1);
+            await waitCards('second', 1);
+            state = await snapshot();
+            assert.equal(state.boundary.activeConnectedOverlayDivCount, 2);
+            assert.equal(state.host.scripts, 1);
+            assert.equal(item.routeFulfilled, 1);
+            await assertAnchors();
+            await item.page.evaluate(() =>
+                window.portalMapProof.mountForeignConflict()
+            );
+            await waitFailure('foreign-conflict', 'configuration-conflict');
+            assert.equal(item.providerRequests, 1);
+            await item.page.evaluate(() => {
+                window.portalMapProof.unmount('foreign-conflict');
+                window.portalMapProof.unmount('first');
+            });
+            await waitCards('second', 1);
+            assert.equal(
+                (await snapshot()).boundary.activeConnectedOverlayDivCount,
+                1
+            );
+            const foreignOpen = item.page.getByRole('button', {
+                name: 'Open second initial',
+                exact: true,
+            });
+            await foreignOpen.focus();
+            await foreignOpen.press('Enter');
+            assert.equal((await snapshot()).host.opens.at(-1).root, 'second');
+            const foreignOpenCount = (await snapshot()).host.opens.length;
+            await item.page.evaluate(() =>
+                window.portalMapProof.retireCardOwner('second')
+            );
+            await foreignOpen.press('Enter');
+            assert.equal(
+                (await snapshot()).host.opens.length,
+                foreignOpenCount
+            );
+            await item.page.evaluate(() => {
+                window.portalMapProof.acceptCardSuccessor('second');
+                window.portalMapProof.identityABA('second');
+            });
+            await foreignOpen.focus();
+            await foreignOpen.press('Enter');
+            assert.equal(
+                (await snapshot()).host.opens.length,
+                foreignOpenCount + 1
+            );
+            await item.page.evaluate(() =>
+                window.portalMapProof.foreignProviderOwnerABA()
+            );
+            await waitFailure('second', 'owner-retired');
+            state = await snapshot();
+            assert.deepEqual(state.host.foreignOwnerABA, {
+                oldOwnerCurrent: false,
+                successorCurrent: true,
+                successorKind: 'lease',
+                successorStatus: 'ready',
+                replayKind: 'refused',
+                replayCode: 'owner-retired',
+            });
+            await item.page.evaluate(() =>
+                window.portalMapProof.unmount('second')
+            );
+            state = await snapshot();
+            assertCleanBoundary(state.boundary);
+            assert(
+                state.host.leaseStatuses.every(
+                    (status) => status === 'released'
+                )
+            );
+            assert.equal(
+                state.host.triggerRegistrations,
+                state.host.triggerReleases
+            );
+            await item.page.evaluate(() =>
+                window.portalMapProof.mountForeignEqual()
+            );
+            await waitCards('foreign-successor', 1);
+            state = await snapshot();
+            assert.deepEqual(state.host.rootCopies, [
+                { name: 'foreign-successor', copy: 'foreign' },
+            ]);
+            assert(
+                state.host.bindingCopies.every(
+                    (binding) => binding.sharedCoordinator
+                )
+            );
+            assert.equal(state.host.realmReads, 2);
+            assert.equal(state.host.scripts, 1);
+            assert.equal(
+                item.providerRequests,
+                1,
+                'Foreign copy must not implicitly create its own loader'
+            );
+            await assertAnchors();
+            await record(
+                cases,
+                format,
+                'duplicate-packed-cross-format-copies-one-coordinator-owner-ABA'
+            );
+
+            evidence.phase = format + ':actual-SSR-hydration';
+            item = await visit(format, 'hydrate');
+            item.mode = 'hydrate';
+            const serverRendered = ssrByFormat.get(format);
+            assert.equal(
+                await item.page
+                    .locator('[data-proof-root="first"]')
+                    .innerHTML(),
+                serverRendered.markup
+            );
+            state = await snapshot();
+            assert.deepEqual(state.host.mounted, []);
+            assert.equal(state.host.acquisitions, 0);
+            assert.equal(state.host.realmReads, 0);
+            assert.equal(state.host.hydrationStarted, false);
+            assert.equal(state.host.scripts, 0);
+            assert.equal(item.providerRequests, 0);
+            assert.equal(state.host.googlePresent, false);
+            assert.equal(state.boundary, null);
+            assert.equal(state.host.serverSectionPreserved, true);
+            assert.equal(state.host.serverLoadingPreserved, true);
+            assert.deepEqual(
+                state.host.hydrationPropsSignature,
+                serverRendered.propsSignature
+            );
+            const beforeHydration = await assertPrivateSafe();
+            await item.page.evaluate(() =>
+                window.portalMapProof.beginHydration()
+            );
+            await bounded(
+                'Hydrated actual Loader bootstrap',
+                () => item.providerSeen.promise
+            );
+            state = await snapshot();
+            assert.equal(state.host.hydrationStarted, true);
+            assert.deepEqual(state.host.mounted, ['first']);
+            assert(state.host.acquisitions > 0);
+            assert.equal(state.host.realmReads, 2);
+            assert.equal(item.providerRequests, 1);
+            assert.equal(item.routeFulfilled, 0);
+            assert.equal(state.host.serverSectionPreserved, true);
+            assert.equal(state.host.serverLoadingPreserved, true);
+            assert.equal(state.host.recoverableHydrationErrors, 0);
+            assert.equal(item.consoleErrors, 0);
+            assert.equal(item.pageErrors, 0);
+            assert.equal(item.consoleWarnings, 0);
+            const hydratedWhileHeld = await assertPrivateSafe();
+            item.responseGate.resolve('fulfill');
+            await waitCards('first', 1);
+            state = await snapshot();
+            assert.equal(state.host.serverSectionPreserved, true);
+            assert.equal(state.host.serverLoadingPreserved, false);
+            assert.equal(state.host.recoverableHydrationErrors, 0);
+            assert.equal(item.consoleErrors, 0);
+            assert.equal(item.pageErrors, 0);
+            assert.equal(item.consoleWarnings, 0);
+            assert.equal(item.providerRequests, 1);
+            assert.equal(item.routeFulfilled, 1);
+            const hydrationMeasurements = await assertAnchors();
+            const hydratedOpen = item.page.getByRole('button', {
+                name: 'Open first initial',
+                exact: true,
+            });
+            await hydratedOpen.focus();
+            await hydratedOpen.press('Enter');
+            assert.equal((await snapshot()).host.opens.length, 1);
+            await record(
+                cases,
+                format,
+                'actual-packed-SSR-hydrateRoot-default-loader'
+            );
+            Object.assign(cases.at(-1), {
+                beforeHydration,
+                hydratedWhileHeld,
+                serverMarkupSHA256: hash(serverRendered.markup),
+                measurements: hydrationMeasurements,
+            });
+            await item.page.evaluate(() =>
+                window.portalMapProof.unmount('first')
+            );
+            state = await assertPrivateSafe();
+            assertCleanBoundary(state.boundary);
+            assert(
+                state.host.leaseStatuses.every(
+                    (status) => status === 'released'
+                )
+            );
+            assert.equal(
+                state.host.triggerRegistrations,
+                state.host.triggerReleases
+            );
+            cases.at(-1).cleanupAfterUnmount = state;
+
+            assert.equal(cases.length, 11);
             evidence.profiles.push({ format, react, cases });
         }
         await closeCurrent();
@@ -920,7 +1362,7 @@ export async function checkPortalMapBrowser({
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.status = 'passed';
         evidence.scope =
-            'Actual packed SDK ESM/CJS PortalMap, class GoogleMap, OverlayViewF, default driver and one direct Loader1.16.8; actual browser layout/keyboard/portals under StrictMode. Only intercepted Google JS/API is synthetic. No real provider egress, Google geography/gestures, key delivery, native host or persistence acceptance.';
+            'Actual packed SDK ESM/CJS PortalMap, class GoogleMap, OverlayViewF, default driver and one direct Loader1.16.8; actual browser layout/keyboard/portals under StrictMode, byte-identical physical installed SDK copies using opposite ESM/CJS trees and sharing one host coordinator, and actual no-DOM packed Node SSR followed by hydrateRoot preserving loading nodes without recoverable errors. Only intercepted Google JS/API is synthetic. No real provider egress, Google geography/gestures, key delivery, native host or persistence acceptance.';
     } catch (error) {
         const sensitiveDiagnostic =
             String(error.message).includes(portalMapSyntheticKey) ||
@@ -989,6 +1431,19 @@ export async function checkPortalMapBrowser({
                 evidence.cleanup.server = 'failed';
             }
         } else evidence.cleanup.server = 'not-acquired';
+        if (duplicateDirectory && !errors.length) {
+            try {
+                rmSync(duplicateDirectory, { recursive: true, force: true });
+                assert(!existsSync(duplicateDirectory));
+                evidence.cleanup.duplicateCopy = 'completed';
+            } catch {
+                errors.push('duplicate-copy');
+                evidence.cleanup.duplicateCopy = 'failed-state-retained';
+            }
+        } else
+            evidence.cleanup.duplicateCopy = duplicateDirectory
+                ? 'retained-for-uncertain-cleanup'
+                : 'not-acquired';
         if (directory && !errors.length) {
             try {
                 rmSync(directory, { recursive: true, force: true });

@@ -5,11 +5,95 @@
 export const portalMapSyntheticKey = 'PORTAL_MAP_SYNTHETIC_KEY_NEVER_SENT';
 export const portalMapPrivateMarker = 'PORTAL_MAP_PRIVATE_UNMODELED_DATA';
 
+/** Identical public-props recipe for the actual Node SSR and browser hydration. */
+export const portalMapPropsFactory = String.raw`
+function makePortalMapProps({ name, provider, rows, owner, identity, privateMarker, onOpen, registerTrigger }) {
+    return { provider,
+        markers: rows.map(row => ({ key: row.key,
+            position: { lat: row.lat, lng: row.lng },
+            card: { recordId: row.key, identity, owner,
+                accessibleLabel: 'Record ' + row.label,
+                projection: { status: 'present', layout: 'map', primary: row.label,
+                    primaryIsEmpty: false, unrecognizedHiddenField: privateMarker },
+                unrecognizedPrivateData: privateMarker,
+                open: { label: 'Open ' + row.label, activate: () => onOpen(row), registerTrigger },
+                needsReviewLabel: 'Review required' }
+        })),
+        label: 'Portal Map ' + name, loadingLabel: 'Synthetic Map loading',
+        failureLabel: code => 'Synthetic Map unavailable: ' + code };
+}
+function portalMapPropsSignature(props) {
+    return { label: props.label, loadingLabel: props.loadingLabel,
+        failureLabel: props.failureLabel('provider-failed'),
+        providerHasAcquire: typeof props.provider.acquire === 'function',
+        markers: props.markers.map(marker => ({ key: marker.key, position: marker.position,
+            recordId: marker.card.recordId, accessibleLabel: marker.card.accessibleLabel,
+            layout: marker.card.projection.layout, primary: marker.card.projection.primary,
+            primaryIsEmpty: marker.card.projection.primaryIsEmpty,
+            openLabel: marker.card.open.label, needsReviewLabel: marker.card.needsReviewLabel,
+            hasOpenCallback: typeof marker.card.open.activate === 'function',
+            hasRegisterTrigger: typeof marker.card.open.registerTrigger === 'function' })) };
+}
+`;
+
+/** Executed only by the owning checker in a bounded Node child inside its consumer. */
+export const portalMapNodeSSRFixture = String.raw`
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+__PORTAL_MAP_PROPS_FACTORY__
+const absent = () => ['window', 'document', 'google', 'HTMLElement'].every(name => !(name in globalThis));
+assert(absent(), 'SSR must begin without DOM/provider globals');
+const stats = { acquisitions: 0, inspections: 0, constructions: 0, realmReads: 0,
+    networkAttempts: 0, triggerRegistrations: 0, opens: 0, consoleErrors: 0, consoleWarnings: 0 };
+console.error = () => { stats.consoleErrors++; };
+console.warn = () => { stats.consoleWarnings++; };
+globalThis.fetch = () => { stats.networkAttempts++; throw Error('SSR network forbidden'); };
+const require = createRequire(join(dirname(dirname(fileURLToPath(import.meta.url))), 'package.json'));
+const React = require('react');
+const { renderToString } = require('react-dom/server');
+const format = process.argv[2];
+assert(['esm', 'cjs'].includes(format));
+const reactAPI = format === 'esm' ? await import('@miniextensions/sdk/react') : require('@miniextensions/sdk/react');
+const portals = format === 'esm' ? await import('@miniextensions/sdk/portals') : require('@miniextensions/sdk/portals');
+const sdkRequire = createRequire(join(dirname(dirname(fileURLToPath(import.meta.url))), 'node_modules/@miniextensions/sdk/package.json'));
+assert.equal(sdkRequire('react'), React, 'SSR SDK shares installed React');
+assert.equal(sdkRequire('react-dom/server'), require('react-dom/server'));
+const realDriver = reactAPI.createGoogleMapsPortalMapDriver({ getRealm() {
+    stats.realmReads++; throw Error('SSR must not inspect realm');
+} });
+const coordinator = portals.createPortalMapProviderCoordinator({
+    inspectRealm(configuration) { stats.inspections++; return realDriver.inspectRealm(configuration); },
+    createLoader(configuration) { stats.constructions++; return realDriver.createLoader(configuration); }
+});
+const providerOwner = portals.createPortalMapProviderOwnerScope();
+const realBinding = portals.bindPortalMapProvider(coordinator, providerOwner.capture(), { apiKey: 'PORTAL_MAP_SYNTHETIC_KEY_NEVER_SENT' });
+const provider = Object.freeze({ ...realBinding, acquire() { stats.acquisitions++; return realBinding.acquire(); } });
+const cardOwner = portals.createPortalMapProviderOwnerScope();
+const props = makePortalMapProps({ name: 'first', provider,
+    rows: [{ key: 'first-initial', label: 'first initial', lat: 1, lng: 2 }],
+    owner: cardOwner.capture(), identity: {}, privateMarker: 'PORTAL_MAP_PRIVATE_UNMODELED_DATA',
+    onOpen() { stats.opens++; }, registerTrigger() { stats.triggerRegistrations++; throw Error('SSR trigger forbidden'); }
+});
+const markup = renderToString(React.createElement(React.StrictMode, null, React.createElement(reactAPI.PortalMap, props)));
+assert(markup.includes('Synthetic Map loading'));
+assert(!markup.includes('first initial') && !markup.includes('PORTAL_MAP_PRIVATE_UNMODELED_DATA') &&
+    !markup.includes('PORTAL_MAP_SYNTHETIC_KEY_NEVER_SENT'), 'SSR output excludes row/private/provider data');
+assert(absent(), 'SSR must finish without DOM/provider globals');
+assert(Object.values(stats).every(count => count === 0), 'SSR performed a forbidden side effect');
+process.stdout.write(JSON.stringify({ format, react: React.version, markup, stats,
+    propsSignature: portalMapPropsSignature(props),
+    noDOMBeforeAndAfter: true, samePhysicalReactPeer: true }));
+`;
+
 export const portalMapBrowserFixture = String.raw`
 import React, { createElement as h, useState } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 __PORTAL_MAP_API__
+__PORTAL_MAP_FOREIGN_API__
+__PORTAL_MAP_PROPS_FACTORY__
 
 const mode = new URLSearchParams(location.search).get('mode') || 'shared';
 const apiKey = 'PORTAL_MAP_SYNTHETIC_KEY_NEVER_SENT';
@@ -18,7 +102,12 @@ const configuration = Object.freeze({ apiKey });
 const stats = { react: React.version, realmReads: 0, acquisitions: 0,
     successfulAcquisitions: 0, refusals: [], opens: [], triggerRegistrations: 0,
     triggerReleases: 0, trustedInputs: [], explicitCardRetirements: 0,
-    explicitCardSuccessors: 0, disposed: false };
+    explicitCardSuccessors: 0, disposed: false,
+    copiesDistinct: PortalMap !== ForeignPortalMap && bindPortalMapProvider !== foreignBindPortalMapProvider &&
+        createPortalMapProviderOwnerScope !== foreignCreatePortalMapProviderOwnerScope,
+    bindingCopies: [], foreignOwnerABA: null,
+    hydrationStarted: false, recoverableHydrationErrors: 0,
+    privateInHydrationError: false };
 const leases = [];
 const roots = new Map();
 const driver = createGoogleMapsPortalMapDriver({
@@ -26,8 +115,10 @@ const driver = createGoogleMapsPortalMapDriver({
 });
 const coordinator = createPortalMapProviderCoordinator(driver);
 
-function observedBinding(owner, selected = configuration) {
-    const real = bindPortalMapProvider(coordinator, owner, selected);
+function observedBinding(owner, selected = configuration, copy = 'primary') {
+    const bind = copy === 'foreign' ? foreignBindPortalMapProvider : bindPortalMapProvider;
+    const real = bind(coordinator, owner, selected);
+    stats.bindingCopies.push({ copy, sharedCoordinator: real.coordinator === coordinator });
     return Object.freeze({ ...real, acquire() {
         stats.acquisitions++;
         const result = real.acquire();
@@ -41,34 +132,35 @@ function initialRows(name) {
     if (mode === 'empty' || mode === 'failure' || mode === 'unmanaged') return [];
     return [{ key: name + '-initial', label: name + ' initial', lat: 1, lng: 2 }];
 }
-function makeRoot(name, selected = configuration) {
+let serverSection = null, serverLoading = null;
+function makeRoot(name, selected = configuration, copy = 'primary', hydration = false) {
     if (roots.get(name)?.mounted) throw Error('Fixture root already mounted');
-    const host = document.createElement('div');
-    host.className = 'portal-map-proof-root'; host.dataset.proofRoot = name;
-    document.querySelector('main').append(host);
-    const providerOwner = createPortalMapProviderOwnerScope();
-    const cardOwner = createPortalMapProviderOwnerScope();
-    const item = { name, host, root: createRoot(host), providerOwner, cardOwner,
-        provider: observedBinding(providerOwner.capture(), selected), mounted: true,
+    const host = hydration ? document.querySelector('[data-proof-root="first"]') : document.createElement('div');
+    if (!(host instanceof HTMLElement)) throw Error('Actual server root required');
+    if (!hydration) {
+        host.className = 'portal-map-proof-root'; host.dataset.proofRoot = name;
+        document.querySelector('main').append(host);
+    }
+    const createOwner = copy === 'foreign' ? foreignCreatePortalMapProviderOwnerScope : createPortalMapProviderOwnerScope;
+    const Component = copy === 'foreign' ? ForeignPortalMap : PortalMap;
+    const providerOwner = createOwner();
+    const cardOwner = createOwner();
+    const item = { name, copy, host, root: null, providerOwner, cardOwner,
+        provider: observedBinding(providerOwner.capture(), selected, copy), mounted: !hydration,
         currentCardOwner: cardOwner.capture(), identity: {}, rows: initialRows(name),
         patch: null, echo: 0 };
     roots.set(name, item);
-    const activate = (row) => () => stats.opens.push({ root: name, record: row.key });
-    function card(row, owner, identity) {
-        return { recordId: row.key, identity, owner,
-            accessibleLabel: 'Record ' + row.label,
-            projection: { status: 'present', layout: 'map', primary: row.label,
-                primaryIsEmpty: false, unrecognizedHiddenField: privateMarker },
-            unrecognizedPrivateData: privateMarker,
-            open: { label: 'Open ' + row.label, activate: activate(row),
-                registerTrigger(element) {
-                    stats.triggerRegistrations++;
-                    if (!(element instanceof HTMLButtonElement))
-                        throw Error('Actual SDK trigger required');
-                    let released = false;
-                    return () => { if (!released) { released = true; stats.triggerReleases++; } };
-                } }, needsReviewLabel: 'Review required' };
-    }
+    const registerTrigger = element => {
+        stats.triggerRegistrations++;
+        if (!(element instanceof HTMLButtonElement)) throw Error('Actual SDK trigger required');
+        let released = false;
+        return () => { if (!released) { released = true; stats.triggerReleases++; } };
+    };
+    const propsFor = state => makePortalMapProps({ name, provider: item.provider,
+        rows: state.rows, owner: state.owner, identity: state.identity, privateMarker,
+        onOpen: row => stats.opens.push({ root: name, record: row.key }), registerTrigger });
+    item.initialPropsSignature = portalMapPropsSignature(propsFor({ rows: item.rows,
+        owner: item.currentCardOwner, identity: item.identity }));
     function App() {
         const [state, setState] = useState({ rows: item.rows,
             owner: item.currentCardOwner, identity: item.identity, echo: 0 });
@@ -77,14 +169,23 @@ function makeRoot(name, selected = configuration) {
             item.currentCardOwner = next.owner; item.identity = next.identity;
             item.echo = next.echo; return next;
         }));
-        return h(PortalMap, { provider: item.provider,
-            markers: state.rows.map(row => ({ key: row.key,
-                position: { lat: row.lat, lng: row.lng },
-                card: card(row, state.owner, state.identity) })),
-            label: 'Portal Map ' + name, loadingLabel: 'Synthetic Map loading',
-            failureLabel: code => 'Synthetic Map unavailable: ' + code });
+        return h(Component, propsFor(state));
     }
-    flushSync(() => item.root.render(h(React.StrictMode, null, h(App))));
+    if (hydration) item.beginHydration = () => {
+        if (stats.hydrationStarted || item.mounted) throw Error('Hydration already started');
+        stats.hydrationStarted = true; item.mounted = true;
+        item.root = hydrateRoot(host, h(React.StrictMode, null, h(App)), {
+            onRecoverableError(error) {
+                stats.recoverableHydrationErrors++;
+                const message = String(error?.message ?? error);
+                stats.privateInHydrationError ||= message.includes(apiKey) || message.includes(privateMarker);
+            }
+        });
+    };
+    else {
+        item.root = createRoot(host);
+        flushSync(() => item.root.render(h(React.StrictMode, null, h(App))));
+    }
     return item;
 }
 function requireRoot(name) {
@@ -104,6 +205,10 @@ function unmount(name) {
 function safeSnapshot() {
     return { ...structuredClone(stats),
         mounted: [...roots.values()].filter(item => item.mounted).map(item => item.name),
+        rootCopies: [...roots.values()].filter(item => item.mounted).map(item => ({ name: item.name, copy: item.copy })),
+        hydrationPropsSignature: mode === 'hydrate' ? roots.get('first')?.initialPropsSignature ?? null : null,
+        serverSectionPreserved: serverSection ? document.querySelector('[data-proof-root="first"] > section') === serverSection : null,
+        serverLoadingPreserved: serverLoading ? serverSection?.querySelector('[role="status"]') === serverLoading : null,
         rows: [...roots.values()].filter(item => item.mounted).map(item => ({
             root: item.name, visible: item.rows.map(row => ({
                 key: row.key, label: row.label, lat: row.lat, lng: row.lng })) })),
@@ -158,7 +263,32 @@ window.portalMapProof = {
         item.providerOwner.retire(); unmount(name);
     },
     mountEqual(name = 'successor') { makeRoot(name); },
+    mountForeignEqual(name = 'foreign-successor') { makeRoot(name, configuration, 'foreign'); },
     mountConflict() { makeRoot('conflict', { apiKey, language: 'fr' }); },
+    mountForeignConflict() { makeRoot('foreign-conflict', { apiKey, language: 'fr' }, 'foreign'); },
+    foreignProviderOwnerABA() {
+        const item = requireRoot('second');
+        if (item.copy !== 'foreign') throw Error('Foreign root required');
+        const oldOwner = item.provider.owner;
+        item.providerOwner.advance();
+        const successor = item.providerOwner.capture();
+        const next = observedBinding(successor, configuration, 'foreign').acquire();
+        const replay = observedBinding(oldOwner, configuration, 'foreign').acquire();
+        stats.foreignOwnerABA = {
+            oldOwnerCurrent: oldOwner.isCurrent(), successorCurrent: successor.isCurrent(),
+            successorKind: next.kind,
+            successorStatus: next.kind === 'lease' ? coordinator.getSnapshot(next.lease).status : next.code,
+            replayKind: replay.kind, replayCode: replay.kind === 'refused' ? replay.code : null
+        };
+        if (next.kind === 'lease') coordinator.release(next.lease);
+        if (replay.kind === 'lease') coordinator.release(replay.lease);
+        item.patch({ echo: item.echo + 1 });
+    },
+    beginHydration() {
+        const item = roots.get('first');
+        if (mode !== 'hydrate' || !item?.beginHydration) throw Error('Prepared SSR root required');
+        item.beginHydration();
+    },
     privacy() {
         const sections = [...document.querySelectorAll('.mx-sdk-portal-map')];
         return { privateInVisibleText: document.body.innerText.includes(privateMarker),
@@ -171,12 +301,21 @@ window.portalMapProof = {
         stats.disposed = true;
         for (const item of roots.values()) {
             item.providerOwner.retire(); item.cardOwner.retire(); unmount(item.name);
+            if (!item.root) item.host.remove();
         }
         window.portalMapGoogleBoundary?.flush();
         window.portalMapGoogleBoundary?.flushLateDraws();
         return safeSnapshot();
     }
 };
-makeRoot('first');
-if (mode === 'shared' || mode === 'deferred') makeRoot('second');
+if (mode === 'hydrate') {
+    serverSection = document.querySelector('[data-proof-root="first"] > section');
+    serverLoading = serverSection?.querySelector('[role="status"]');
+    if (!serverSection || !serverLoading) throw Error('Actual server loading markup required');
+    makeRoot('first', configuration, 'primary', true);
+} else {
+    makeRoot('first');
+    if (mode === 'shared' || mode === 'deferred') makeRoot('second');
+    if (mode === 'mixed') makeRoot('second', configuration, 'foreign');
+}
 `;

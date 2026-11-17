@@ -10,6 +10,7 @@ import {
     type ComputedFieldProps,
     type ComputedFormulaDisplay,
     type LookupPresentationOwner,
+    type LookupResultPresentation,
 } from '../src/react/index.js';
 import { projectComputedLookup } from '../src/ui/index.js';
 
@@ -275,6 +276,130 @@ it('renders live Formula, Rollup and ordered Lookup in the same physical field m
     });
     assert.equal(f.text(), 'DuplicateDuplicate');
     assert.doesNotMatch(f.text(), /€12.30|false/);
+});
+
+it('preserves structured attachment occurrences, missing thumbnails and legacy recovery through computed admission', async (t) => {
+    const f = await fixture(t);
+    const thumbnail = Object.freeze({
+        id: 'repeated',
+        thumbnailUrl: url,
+        filename: 'Preview.png',
+    });
+    const entries = Object.freeze([
+        Object.freeze({ thumbnailUrl: null, filename: 'No preview.pdf' }),
+        thumbnail,
+        thumbnail,
+    ]);
+    const result = Object.freeze({
+        kind: 'attachmentImages' as const,
+        images: Object.freeze([{ url: url + '?legacy', filename: 'Legacy' }]),
+        entries,
+        empty: 'no-values' as const,
+        emptyLabel: 'No Attachments',
+    });
+    const render = async (
+        value: Extract<LookupResultPresentation, { kind: 'attachmentImages' }>
+    ) => {
+        const state = composeComputedPresentation({
+            projection: { status: 'ready', occurrences: [{ key: 'files' }] },
+            entries: new Map<string, ComputedPresentationEntry>([
+                ['files', { kind: 'result', result: value }],
+            ]),
+            owner: f.first.owner,
+        });
+        assert.equal(state.status, 'ready');
+        await f.render({ ...f.common(), kind: 'lookup', state });
+    };
+    await render(result);
+    assert.equal(f.text(), 'No preview.pdf');
+    assert.equal(
+        f.container.querySelectorAll('.mx-sdk-finder-attachment-thumbnail')
+            .length,
+        3
+    );
+    assert.deepEqual(
+        Array.from(f.container.querySelectorAll('img')).map((image) => [
+            image.getAttribute('src'),
+            image.getAttribute('alt'),
+        ]),
+        [
+            [url, 'Preview.png'],
+            [url, 'Preview.png'],
+        ]
+    );
+    await render({ ...result, entries: Object.freeze([]) });
+    assert.equal(f.text(), 'No Attachments');
+    assert.equal(f.container.querySelector('img'), null);
+    const { entries: _entries, ...legacy } = result;
+    await render(legacy);
+    assert.equal(
+        f.container.querySelector('img')?.getAttribute('src'),
+        url + '?legacy'
+    );
+    assert.equal(entries[1], entries[2]);
+    assert.equal(entries[0].thumbnailUrl, null);
+});
+
+it('refuses malformed structured attachment metadata before computed child effects and recovers in place', async (t) => {
+    const f = await fixture(t);
+    let renders = 0;
+    const node = h(() => {
+        renders++;
+        return 'Unadmitted file';
+    });
+    const valid = { thumbnailUrl: null, filename: 'Safe file.pdf' };
+    const malformed: unknown[] = [
+        null,
+        {},
+        [null],
+        new Array(1),
+        [{ ...valid, id: 42 }],
+        [{ ...valid, id: null }],
+        [{ filename: valid.filename }],
+        [{ ...valid, thumbnailUrl: 42 }],
+        [{ thumbnailUrl: null }],
+        [{ ...valid, filename: node }],
+    ];
+    for (const entries of malformed) {
+        const result = {
+            kind: 'attachmentImages' as const,
+            images: [],
+            entries,
+            empty: 'no-values' as const,
+            emptyLabel: 'No Attachments',
+        } as unknown as LookupResultPresentation;
+        const state = composeComputedPresentation({
+            projection: { status: 'ready', occurrences: [{ key: 'files' }] },
+            entries: new Map<string, ComputedPresentationEntry>([
+                ['files', { kind: 'result', result }],
+            ]),
+            owner: f.first.owner,
+        });
+        assert.deepEqual(state, { status: 'unavailable' });
+        await f.render({
+            ...f.common(),
+            kind: 'lookup',
+            state: { status: 'ready', result },
+        });
+        assert.match(f.text(), /Unavailable/);
+        assert.equal(f.container.querySelector('img'), null);
+    }
+    await f.render({
+        ...f.common(),
+        kind: 'lookup',
+        state: {
+            status: 'ready',
+            result: {
+                kind: 'attachmentImages',
+                images: [],
+                entries: [valid],
+                empty: 'none',
+                emptyLabel: 'No Attachments',
+            },
+        },
+    });
+    assert.equal(f.text(), valid.filename);
+    assert.equal(renders, 0);
 });
 
 it('renders the complete ordered projection pipeline for scalar, whole-array and nested Lookup answers', async (t) => {

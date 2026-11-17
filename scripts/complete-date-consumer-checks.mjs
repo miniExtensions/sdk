@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { checkDateRendererConsumer } from './date-renderer-consumer-checks.mjs';
 import { checkDateTimeRendererConsumer } from './datetime-renderer-consumer-checks.mjs';
@@ -459,8 +460,12 @@ export async function checkCompleteDateReactMatrix({
                     },
                 })
             );
-            execFileSync(
-                'npm',
+            runAgeQualifiedConsumerInstall(
+                (command, args) =>
+                    execFileSync(command, args, {
+                        cwd: directory,
+                        stdio: 'inherit',
+                    }),
                 [
                     'install',
                     '--ignore-scripts',
@@ -473,8 +478,7 @@ export async function checkCompleteDateReactMatrix({
                     `@types/react@${version.types}`,
                     `@types/react-dom@${version.domTypes}`,
                     '@radix-ui/react-dialog@1.1.14',
-                ],
-                { cwd: directory, stdio: 'inherit' }
+                ]
             );
             for (const extension of ['mts', 'cts']) {
                 const name = `complete-date.${extension}`;

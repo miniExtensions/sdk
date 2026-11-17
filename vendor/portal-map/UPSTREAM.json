@@ -1,0 +1,1005 @@
+{
+    "schemaVersion": 1,
+    "selectedApiReleaseCommit": "093860a4b25c4ed5a9d94316a2587f2c375eced3",
+    "physicalPackages": [
+        {
+            "name": "@react-google-maps/api",
+            "version": "2.20.7",
+            "packageJsonSha256": "c033fd031efdcada8d1198d61b5630916523cc7ed8f266668f30a0a4b45fa1d8",
+            "declaredLicense": "MIT",
+            "main": "dist/cjs.js",
+            "module": "dist/esm.js",
+            "types": "dist/index.d.ts",
+            "type": null,
+            "exports": null,
+            "sideEffects": false,
+            "dependencies": {
+                "@googlemaps/js-api-loader": "1.16.8",
+                "@googlemaps/markerclusterer": "2.5.3",
+                "@react-google-maps/infobox": "2.20.0",
+                "@react-google-maps/marker-clusterer": "2.20.0",
+                "@types/google.maps": "3.58.1",
+                "invariant": "2.2.4"
+            },
+            "peerDependencies": {
+                "react": "^16.8 || ^17 || ^18 || ^19",
+                "react-dom": "^16.8 || ^17 || ^18 || ^19"
+            },
+            "entries": [
+                {
+                    "role": "selectedEsm",
+                    "path": "dist/esm.js",
+                    "bytes": 332108,
+                    "sha256": "b59f4ae04f1500a8f20929607d5e85926acd34e829c915e4b7d253be6fa3e36d"
+                },
+                {
+                    "role": "nativeCjsNotSelected",
+                    "path": "dist/cjs.js",
+                    "bytes": 336495,
+                    "sha256": "4a1145bca88beff1c6d47216af46ce02fae89fa69973d05c93c5a5476c841ea3"
+                },
+                {
+                    "role": "declaration",
+                    "path": "dist/index.d.ts",
+                    "bytes": 76823,
+                    "sha256": "84a9706fd1fa8d629e5655545ac2a714ca4b1c2ae26f153d9bdf02bd59026523"
+                }
+            ],
+            "licenseFiles": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 1109,
+                    "sha256": "c99fe208664493acde33efc7c45e3af8794657a24a8f63b68bc450b278269f56"
+                }
+            ],
+            "publishedOwnSourceIndex": {
+                "path": "src/index.ts",
+                "bytes": 3648,
+                "sha256": "5477ff06f1a7da8e670c9ad837b3f70340010e4c2e13b4feea008dda3d55d482"
+            }
+        },
+        {
+            "name": "@googlemaps/js-api-loader",
+            "version": "1.16.8",
+            "packageJsonSha256": "e01bd8c716cd5c1608388c685907e6ec27925a8f65bdd829f5feb8e33b48185e",
+            "declaredLicense": "Apache-2.0",
+            "main": "dist/index.umd.js",
+            "module": "dist/index.mjs",
+            "types": "dist/index.d.ts",
+            "type": "commonjs",
+            "exports": null,
+            "sideEffects": null,
+            "dependencies": {},
+            "peerDependencies": {},
+            "entries": [
+                {
+                    "role": "selectedEsm",
+                    "path": "dist/index.mjs",
+                    "bytes": 14787,
+                    "sha256": "54ce0a34af51343b4758d88c42f7b6eb3134b3cd0034863ae61bf515b1e1908c"
+                },
+                {
+                    "role": "nativeCjsNotSelected",
+                    "path": "dist/index.umd.js",
+                    "bytes": 6377,
+                    "sha256": "59c933e4fa3ba7f50d54297710666e2d1aa1005b4d2a348788fff88d5d866647"
+                },
+                {
+                    "role": "declaration",
+                    "path": "dist/index.d.ts",
+                    "bytes": 11216,
+                    "sha256": "9968c61959e7bc4e6edba97b78841fc9c8b478d9df864a9aedcb75db17393814"
+                }
+            ],
+            "licenseFiles": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 11358,
+                    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+                }
+            ],
+            "publishedOwnSourceIndex": {
+                "path": "src/index.ts",
+                "bytes": 18644,
+                "sha256": "2abfd4d97dd014f809ba5c81a424a494d7846ddd4eb835f8caae501424f01650"
+            }
+        }
+    ],
+    "selectedSourceProof": [
+        {
+            "package": "@react-google-maps/api",
+            "path": "src/GoogleMap.tsx",
+            "gitBlob": "b297c47d8ab202f0a0b8f9e3b355225eb2314dad",
+            "sha256": "4b5b675f8d1d7d58c24f2f8eaf375faaed06e94398dadf70e267cb71ec69daa8"
+        },
+        {
+            "package": "@react-google-maps/api",
+            "path": "src/components/dom/OverlayView.tsx",
+            "gitBlob": "dffc282645c6eb4a93b9e65a25cfa7cf80a12610",
+            "sha256": "25ebf401a561bb18bf173d17c607b2b6009ba4b91c5e0f13ec40f06e9c63b389"
+        },
+        {
+            "package": "@react-google-maps/api",
+            "path": "src/components/dom/Overlay.tsx",
+            "gitBlob": "64247f5aa633309e6fc7846fd8ebbe38a6314193",
+            "sha256": "526b8a33047d39b92edcf2f9bc041a8ee83b2c2de5e9b642d46e61b64e7d087d"
+        },
+        {
+            "package": "@react-google-maps/api",
+            "path": "src/useJsApiLoader.tsx",
+            "gitBlob": "10b727bed60ccf6c1cf80f2688b7a83850de848f",
+            "sha256": "2ffab38baef0e5e559a2c6dc85a3579d4d944da88c05cf9f7cfb9c61c9b42529"
+        },
+        {
+            "package": "@react-google-maps/api",
+            "path": "LICENSE",
+            "gitBlob": "8e6f4b050fb58f8e2c8a2b32481e5211c3f39a61",
+            "sha256": "c99fe208664493acde33efc7c45e3af8794657a24a8f63b68bc450b278269f56"
+        },
+        {
+            "package": "@googlemaps/js-api-loader",
+            "path": "src/index.ts",
+            "gitBlob": "a1f91d5a544131be3381ad902cdc2d757faf1cac",
+            "sha256": "2abfd4d97dd014f809ba5c81a424a494d7846ddd4eb835f8caae501424f01650"
+        }
+    ],
+    "prebundledSourceMaps": [
+        {
+            "package": "@react-google-maps/api",
+            "version": "2.20.7",
+            "path": "dist/esm.js.map",
+            "bytes": 742598,
+            "sha256": "46012a3673ed5467e2c6e5be66e4115eeaa107ca9e68032bed4324bcabf93012",
+            "sourceCount": 56,
+            "sources": [
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/typeof.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 366,
+                    "sourceContentSha256": "928bcbbdf74fe24ed7486e7f982c4389c1859886b3ed904ebd2677f22193b57a",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/typeof.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/toPrimitive.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 407,
+                    "sourceContentSha256": "9660291e71923cb5ff9aaaa1de354515c26e3220cba56ac5d21b806f23875545",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/toPrimitive.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/toPropertyKey.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 227,
+                    "sourceContentSha256": "7f0000acc9c9cf7594b412095be66cdc59066b25458a16fe1434fd00cff478e7",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/toPropertyKey.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/defineProperty.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 286,
+                    "sourceContentSha256": "2bad7c96ee851cf2cfe1320a54fd88dd5f769a7faf8bd92d60c9f2e6d1e381dd",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/defineProperty.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/invariant@2.2.4/node_modules/invariant/invariant.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1423,
+                    "sourceContentSha256": "85b13055e10e55cf8f63c2e3103f76b079ee933176cd9e2d90bc2d76d76b8616",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "invariant",
+                    "version": "2.2.4",
+                    "packageRelativePath": "invariant.js"
+                },
+                {
+                    "upstreamSourceLabel": "../src/map-context.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 479,
+                    "sourceContentSha256": "4ab3196da157a9eeca1090e92eda79a2e602f9ceefd5e5eff8b9b247fef083e6",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/reduce.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 236,
+                    "sourceContentSha256": "2db45f620090334cc4d9abe094dfc4a34bf29617f369e796ceab150ab6cfec86",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/foreach.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 187,
+                    "sourceContentSha256": "852f8c2b3a4f9e7d59ab83e9d98e64357bbb696fcad91a443e613425ed8926c9",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/helper.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2763,
+                    "sourceContentSha256": "00fef3ac8e51668a81ec230fb1fd7f91bfc5fe16af92411fb859384af66b8138",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/GoogleMap.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 16507,
+                    "sourceContentSha256": "4b5b675f8d1d7d58c24f2f8eaf375faaed06e94398dadf70e267cb71ec69daa8",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/asyncToGenerator.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 628,
+                    "sourceContentSha256": "d08e6edc7ad01f1116fcbfbd11da76fd9ca700fc17b6e2d1067d16f55564fde3",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/asyncToGenerator.js"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/make-load-script-url.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1839,
+                    "sourceContentSha256": "865d2272000971dca8a465976bf95e14d98d01d56fe15e44ccb53b60e509a01b",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/isbrowser.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 66,
+                    "sourceContentSha256": "659dffeb394805aec089ca2f12d1961ac295c3ec248810faa35e0e5aa92d38d9",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/injectscript.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2276,
+                    "sourceContentSha256": "d2c15272591b4975edfef6b27844b40e85e9e8fa268e9d58f50aa0f7dd5b1372",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/prevent-google-fonts.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 3155,
+                    "sourceContentSha256": "e75e04b246d83bfe50432a48f70c149e84fae4236782a8073950c38a4a2f3f88",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/LoadScript.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 6411,
+                    "sourceContentSha256": "ba2f3fd92e235eb667a893ab5a5cc02173ac5e8e56c49505503dfedeb419810f",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/objectWithoutPropertiesLoose.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 264,
+                    "sourceContentSha256": "625b5d223cee76c6883bac69a573ac5512414c2174b2c4bde50d1543e71d97a1",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/objectWithoutPropertiesLoose.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@babel+runtime@7.25.7/node_modules/@babel/runtime/helpers/esm/objectWithoutProperties.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 471,
+                    "sourceContentSha256": "f0d056e4c8fec80fe2fe09364c7f30ae67e3f2e2818e76f8d967544f6335bb98",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "packageRelativePath": "helpers/esm/objectWithoutProperties.js"
+                },
+                {
+                    "upstreamSourceLabel": "../src/useLoadScript.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 3660,
+                    "sourceContentSha256": "0251217c988d50a2eaca387566d8ec62de9eaf16dad65eabd6ba9b16a6d233be",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/LoadScriptNext.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1324,
+                    "sourceContentSha256": "8b0630b6dded67e6af57175ccfabc974a47e028b87ebaff01d170c2f97c868db",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@googlemaps+js-api-loader@1.16.8/node_modules/@googlemaps/js-api-loader/dist/index.mjs",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 14787,
+                    "sourceContentSha256": "54ce0a34af51343b4758d88c42f7b6eb3134b3cd0034863ae61bf515b1e1908c",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@googlemaps/js-api-loader",
+                    "version": "1.16.8",
+                    "packageRelativePath": "dist/index.mjs"
+                },
+                {
+                    "upstreamSourceLabel": "../src/useJsApiLoader.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2780,
+                    "sourceContentSha256": "2ffab38baef0e5e559a2c6dc85a3579d4d944da88c05cf9f7cfb9c61c9b42529",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/maps/TrafficLayer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 3614,
+                    "sourceContentSha256": "1399246035ff18db28ca79a629e7c6a76e8fc856c6005165ec72379c1706c826",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/maps/BicyclingLayer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2559,
+                    "sourceContentSha256": "5b3933acc6bec9f2bc2af5bead03cc30489ebf9683b52ef543fe82b32bd00c61",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/maps/TransitLayer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2486,
+                    "sourceContentSha256": "afc7fd7a46685afc665806d4342f787e1a35300cb1d48e93d76409b5c5a56300",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/DrawingManager.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 11400,
+                    "sourceContentSha256": "fef168b9f4466410ff382bf0f5906a5f2dd0bbeceab679557f85dc13a8102456",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/Marker.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 29363,
+                    "sourceContentSha256": "08fe82fca215b8181c9fb5ed6b924c4af2b8dc63e75540809a3c7b5a19d4fbad",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@react-google-maps+marker-clusterer@2.20.0/node_modules/@react-google-maps/marker-clusterer/dist/esm.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 41727,
+                    "sourceContentSha256": "21cf7ba2c176c5011638f7bf47108a0c1d2b6a7b9ca6f05da3c3a3ffd8faed0c",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@react-google-maps/marker-clusterer",
+                    "version": "2.20.0",
+                    "packageRelativePath": "dist/esm.js"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/addons/MarkerClusterer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 19466,
+                    "sourceContentSha256": "cf28ab83b5bde0d3b53f3f912f1ebbffa2b32277f4b5c3dfc51c634cae3d0d02",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@react-google-maps+infobox@2.20.0/node_modules/@react-google-maps/infobox/dist/esm.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 24242,
+                    "sourceContentSha256": "2020b423a7a3a17d8752bbc70fdc75b7918f6a3f1a5874045bf0c44184f955f2",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@react-google-maps/infobox",
+                    "version": "2.20.0",
+                    "packageRelativePath": "dist/esm.js"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/addons/InfoBox.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 13006,
+                    "sourceContentSha256": "7d80f1a63359d4163798be027b155db248580b38f05c7c0283e21ac68579197d",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/fast-deep-equal@3.1.3/node_modules/fast-deep-equal/index.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1177,
+                    "sourceContentSha256": "eb469e206280321a3878f2335ec98aa2104a155079d8ed83a23029098dccd215",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "fast-deep-equal",
+                    "version": "3.1.3",
+                    "packageRelativePath": "index.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/kdbush@4.0.2/node_modules/kdbush/index.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 11298,
+                    "sourceContentSha256": "dc4def62fc68e2caf23d03c97fb3726d3c06292148e22b068457625fdcadd2b1",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "kdbush",
+                    "version": "4.0.2",
+                    "packageRelativePath": "index.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/supercluster@8.0.1/node_modules/supercluster/index.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 15107,
+                    "sourceContentSha256": "8d2aa9a8d9c629ab9e86d10077c237ad7e2aa1082028bee5fabfc8f5a9403b92",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "supercluster",
+                    "version": "8.0.1",
+                    "packageRelativePath": "index.js"
+                },
+                {
+                    "upstreamSourceLabel": "../../../node_modules/.pnpm/@googlemaps+markerclusterer@2.5.3/node_modules/@googlemaps/markerclusterer/dist/index.esm.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 35329,
+                    "sourceContentSha256": "58c9a8506817f58e4a32bde7fc4f16d8d4ffe9112ff1d623804d745e474545b5",
+                    "role": "apiPrebundledDependencySnapshot",
+                    "package": "@googlemaps/markerclusterer",
+                    "version": "2.5.3",
+                    "packageRelativePath": "dist/index.esm.js"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/addons/GoogleMarkerClusterer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1821,
+                    "sourceContentSha256": "ec622097388c0341a46e69ff28e17970e67d3676a318cb540b44655d2367d96f",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/InfoWindow.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 11618,
+                    "sourceContentSha256": "fa4744e82547b7b826517184807acbe0176ced56cc4c88ba2da429ee2b68f0b7",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/Polyline.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 14836,
+                    "sourceContentSha256": "b57242828a0d652026b30990cbde8bbcb5355e23a1210a28316cad21585eb506",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/Polygon.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 16422,
+                    "sourceContentSha256": "8ded43f0ee4755c1f57ffeb9d021b05de07fd688e120e3f6c22512436e81d510",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/Rectangle.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 15799,
+                    "sourceContentSha256": "61c6aa0f59b524b626313346ef21de84f1fc404a4219b3b67ac3b56d7e649c05",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/Circle.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 16557,
+                    "sourceContentSha256": "438e67023ddd2d0bef34188b20901c0121fff501c7403885ceffea9d26cb1b2a",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/drawing/Data.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 16613,
+                    "sourceContentSha256": "1d8f66b4054c82dfb1e39b8ed1f746c8d91efc53742388223690257520d90c53",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/kml/KmlLayer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 3457,
+                    "sourceContentSha256": "6d3532d518d76d30ab8aa664e629a32a177e3c95c7022eeb23286845386ceec0",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/dom/dom-helper.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 4057,
+                    "sourceContentSha256": "2ded0ffb513079de020c4dceeebb3ade780d367212acc0d062e76c05e1421ed2",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/dom/Overlay.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2128,
+                    "sourceContentSha256": "526b8a33047d39b92edcf2f9bc041a8ee83b2c2de5e9b642d46e61b64e7d087d",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/dom/OverlayView.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 7644,
+                    "sourceContentSha256": "25ebf401a561bb18bf173d17c607b2b6009ba4b91c5e0f13ec40f06e9c63b389",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/utils/noop.ts",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 40,
+                    "sourceContentSha256": "3acde0d9f0bc3ccf0abaf20f7e61faf6fad1c77929dd62b14385f9f6bd4cea9b",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/overlays/GroundOverlay.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 5559,
+                    "sourceContentSha256": "8bc76071a6e190a0f40e39f12ba7de332ea00ccd08bb568f81294f6772bca072",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/heatmap/HeatmapLayer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 5125,
+                    "sourceContentSha256": "e6c9b20e02e27ed1ac1956fdf1b99544e61d9644fb8f5b8e902c2a3a064e77c1",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/streetview/StreetViewPanorama.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 5699,
+                    "sourceContentSha256": "786ed75a6f2e0b42232b5ca1fc35d224f5e4e7fbb7dc8c88a33d4a111fe62f96",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/streetview/StreetViewService.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1638,
+                    "sourceContentSha256": "601ce89a750837f30825919945e95ab5df4d22c4dcad6c965ed876267bd0ce55",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/directions/DirectionsService.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2764,
+                    "sourceContentSha256": "d194dae1427f8f400eadfa17b45ef56dc3dc6236254e91041374b02cf7c05f7d",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/directions/DirectionsRenderer.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 4186,
+                    "sourceContentSha256": "577ec85dd2db1143c817880d9a1a54f85808aa6e569587a5f3032def9dd291c8",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/distance-matrix/DistanceMatrixService.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 2780,
+                    "sourceContentSha256": "5c1654f3d7df88186a5a90c78535e5cf3bf0ed02dc30e7701695c5490d529c27",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/places/StandaloneSearchBox.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 3820,
+                    "sourceContentSha256": "e76d37b4f5ec0cbcb1be66a87dda73d3e3b50a9f8fd2da4087e0c89f71e2bedb",
+                    "role": "upstreamOwnSource"
+                },
+                {
+                    "upstreamSourceLabel": "../src/components/places/Autocomplete.tsx",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 5269,
+                    "sourceContentSha256": "ca3719dd4162daeeea7a5d3c7785ff9170928b83ae97f0f737c10a4594c0a06f",
+                    "role": "upstreamOwnSource"
+                }
+            ]
+        },
+        {
+            "package": "@googlemaps/js-api-loader",
+            "version": "1.16.8",
+            "path": "dist/index.mjs.map",
+            "bytes": 32329,
+            "sha256": "a54ca2d65e87106eb7d470a8591902068f478569d1ca2fe7f6c8b7e6690030f4",
+            "sourceCount": 3,
+            "sources": [
+                {
+                    "upstreamSourceLabel": "../node_modules/tslib/tslib.es6.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 17588,
+                    "sourceContentSha256": "b74907674e7f2e855c38f90d22bbe5969f27009982129fe71e1b09e3b1cf0725",
+                    "role": "loaderPrebundledDependencySnapshot",
+                    "package": "tslib",
+                    "packageRelativePath": "tslib.es6.js",
+                    "versionEvidence": "To be verified against exact upstream lock and published source bytes"
+                },
+                {
+                    "upstreamSourceLabel": "../node_modules/fast-deep-equal/index.js",
+                    "sourcesContentPresent": true,
+                    "sourceContentBytes": 1177,
+                    "sourceContentSha256": "eb469e206280321a3878f2335ec98aa2104a155079d8ed83a23029098dccd215",
+                    "role": "loaderPrebundledDependencySnapshot",
+                    "package": "fast-deep-equal",
+                    "packageRelativePath": "index.js",
+                    "versionEvidence": "To be verified against exact upstream lock and published source bytes"
+                },
+                {
+                    "upstreamSourceLabel": "../src/index.ts",
+                    "sourcesContentPresent": false,
+                    "role": "upstreamOwnSource"
+                }
+            ]
+        }
+    ],
+    "upstreamPackages": [
+        {
+            "name": "@react-google-maps/api",
+            "version": "2.20.7",
+            "roles": [
+                "selected-physical",
+                "published-prebundle-carrier"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-ys7uri3V6gjhYZUI43srHzSKDC6/jiKTwHNlwXFTvjeaJE3M3OaYBt9FZKvJs8qnOhL6i6nD1BKJoi1KrnkCkg==",
+            "archiveUrl": "https://registry.npmjs.org/@react-google-maps/api/-/api-2.20.7.tgz",
+            "archiveSha256": "41cd61cd0c31498064dac88dcb3c4caa515ec88d08c77d45918d8fc4327137bc",
+            "publishedGitHead": "80167ddcc3d8e356dbf0b0c3a6292c6a3a989f83",
+            "dependencies": {
+                "@googlemaps/js-api-loader": "1.16.8",
+                "@googlemaps/markerclusterer": "2.5.3",
+                "@react-google-maps/infobox": "2.20.0",
+                "@react-google-maps/marker-clusterer": "2.20.0",
+                "@types/google.maps": "3.58.1",
+                "invariant": "2.2.4"
+            },
+            "licenses": [
+                {
+                    "package": "@react-google-maps/api",
+                    "version": "2.20.7",
+                    "path": "licenses/react-google-maps__api@2.20.7/LICENSE",
+                    "sha256": "c99fe208664493acde33efc7c45e3af8794657a24a8f63b68bc450b278269f56"
+                }
+            ]
+        },
+        {
+            "name": "@googlemaps/js-api-loader",
+            "version": "1.16.8",
+            "roles": [
+                "selected-physical",
+                "embedded-in-api-prebundle",
+                "published-prebundle-carrier"
+            ],
+            "license": "Apache-2.0",
+            "integrity": "sha512-CROqqwfKotdO6EBjZO/gQGVTbeDps5V7Mt9+8+5Q+jTg5CRMi3Ii/L9PmV3USROrt2uWxtGzJHORmByxyo9pSQ==",
+            "archiveUrl": "https://registry.npmjs.org/@googlemaps/js-api-loader/-/js-api-loader-1.16.8.tgz",
+            "archiveSha256": "638068e172901bdcccde62a394291cafbfff3258e26fd00a3f7332a4a03abebc",
+            "publishedGitHead": "bef634e6e32ebb278d116e6e2623cfbfc5332165",
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "@googlemaps/js-api-loader",
+                    "version": "1.16.8",
+                    "path": "licenses/googlemaps__js-api-loader@1.16.8/LICENSE",
+                    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+                }
+            ]
+        },
+        {
+            "name": "@babel/runtime",
+            "version": "7.25.7",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-FjoyLe754PMiYsFaN5C94ttGiOmBNYTf6pLr4xXHAT5uctHb092PBszndLDR5XA/jghQvn4n7JMHl7dmTgbm9w==",
+            "archiveUrl": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.25.7.tgz",
+            "archiveSha256": "602b0261928ade9ae4b84e8b4ca2d8f7f0837a2dfb48984a4c2f1634cc6fb9d4",
+            "publishedGitHead": null,
+            "dependencies": {
+                "regenerator-runtime": "^0.14.0"
+            },
+            "licenses": [
+                {
+                    "package": "@babel/runtime",
+                    "version": "7.25.7",
+                    "path": "licenses/babel__runtime@7.25.7/LICENSE",
+                    "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76"
+                }
+            ]
+        },
+        {
+            "name": "invariant",
+            "version": "2.2.4",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==",
+            "archiveUrl": "https://registry.npmjs.org/invariant/-/invariant-2.2.4.tgz",
+            "archiveSha256": "68ca08de61805e195cb73d33803b433469bd5c8006166067a4734c9005effa81",
+            "publishedGitHead": "ce95a9badeee1c97daff1bca0d1f6cec5dda4fe8",
+            "dependencies": {
+                "loose-envify": "^1.0.0"
+            },
+            "licenses": [
+                {
+                    "package": "invariant",
+                    "version": "2.2.4",
+                    "path": "licenses/invariant@2.2.4/LICENSE",
+                    "sha256": "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce"
+                }
+            ]
+        },
+        {
+            "name": "@react-google-maps/marker-clusterer",
+            "version": "2.20.0",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-tieX9Va5w1yP88vMgfH1pHTacDQ9TgDTjox3tLlisKDXRQWdjw+QeVVghhf5XqqIxXHgPdcGwBvKY6UP+SIvLw==",
+            "archiveUrl": "https://registry.npmjs.org/@react-google-maps/marker-clusterer/-/marker-clusterer-2.20.0.tgz",
+            "archiveSha256": "d2851d1ed9db7e88d365fedde86ee7f1dce92873b388cbf7639dad8c4e35791d",
+            "publishedGitHead": "80167ddcc3d8e356dbf0b0c3a6292c6a3a989f83",
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "@react-google-maps/marker-clusterer",
+                    "version": "2.20.0",
+                    "path": "licenses/react-google-maps__marker-clusterer@2.20.0/LICENSE",
+                    "sha256": "4bb7280da3a8f577f1a4169a533948ea351c625f9dd3306d8aba9d0df1642803"
+                }
+            ]
+        },
+        {
+            "name": "@react-google-maps/infobox",
+            "version": "2.20.0",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-03PJHjohhaVLkX6+NHhlr8CIlvUxWaXhryqDjyaZ8iIqqix/nV8GFdz9O3m5OsjtxtNho09F/15j14yV0nuyLQ==",
+            "archiveUrl": "https://registry.npmjs.org/@react-google-maps/infobox/-/infobox-2.20.0.tgz",
+            "archiveSha256": "0f31300ae838736fcec3ab627088d9272881754ffbdedf20e098afdf80b58f97",
+            "publishedGitHead": "80167ddcc3d8e356dbf0b0c3a6292c6a3a989f83",
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "@react-google-maps/infobox",
+                    "version": "2.20.0",
+                    "path": "licenses/react-google-maps__infobox@2.20.0/LICENSE",
+                    "sha256": "4bb7280da3a8f577f1a4169a533948ea351c625f9dd3306d8aba9d0df1642803"
+                }
+            ]
+        },
+        {
+            "name": "fast-deep-equal",
+            "version": "3.1.3",
+            "roles": [
+                "embedded-in-api-prebundle",
+                "embedded-in-loader-prebundle"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==",
+            "archiveUrl": "https://registry.npmjs.org/fast-deep-equal/-/fast-deep-equal-3.1.3.tgz",
+            "archiveSha256": "b019a0980f27638dc3f85836b0e478f188e00d7a6e5852c0819fa86f56e47b8f",
+            "publishedGitHead": "d807ffc5013e710deb1c63d463a03f729bcd144d",
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "fast-deep-equal",
+                    "version": "3.1.3",
+                    "path": "licenses/fast-deep-equal@3.1.3/LICENSE",
+                    "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a"
+                }
+            ]
+        },
+        {
+            "name": "kdbush",
+            "version": "4.0.2",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "ISC",
+            "integrity": "sha512-WbCVYJ27Sz8zi9Q7Q0xHC+05iwkm3Znipc2XTlrnJbsHMYktW4hPhXUE8Ys1engBrvffoSCqbil1JQAa7clRpA==",
+            "archiveUrl": "https://registry.npmjs.org/kdbush/-/kdbush-4.0.2.tgz",
+            "archiveSha256": "2b1cbfbb969a4aaca7eb0c3c783eaa0f0cdfab3c2be77b42c3bb1f26dc8a77b8",
+            "publishedGitHead": "f14ff0b3dafee83ee8b1ca67d2701a25b83b6b47",
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "kdbush",
+                    "version": "4.0.2",
+                    "path": "licenses/kdbush@4.0.2/LICENSE",
+                    "sha256": "597034cb7c11c916ad407344ea99a0b08e3c443a6b4421460f1d23c411c69707"
+                }
+            ]
+        },
+        {
+            "name": "supercluster",
+            "version": "8.0.1",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "ISC",
+            "integrity": "sha512-IiOea5kJ9iqzD2t7QJq/cREyLHTtSmUT6gQsweojg9WH2sYJqZK9SswTu6jrscO6D1G5v5vYZ9ru/eq85lXeZQ==",
+            "archiveUrl": "https://registry.npmjs.org/supercluster/-/supercluster-8.0.1.tgz",
+            "archiveSha256": "9cc3a18707e07453270c5e0b1d2ec2419af03f1794b8c8ca7ac4e33d61f78673",
+            "publishedGitHead": "41bb4ac392df64e6260ada6608f76709b0d54a8f",
+            "dependencies": {
+                "kdbush": "^4.0.2"
+            },
+            "licenses": [
+                {
+                    "package": "supercluster",
+                    "version": "8.0.1",
+                    "path": "licenses/supercluster@8.0.1/LICENSE",
+                    "sha256": "b8878372a0d7d1c303f48659ddbd6881807cd2196e4af2f548d8da0c0f7c4d71"
+                }
+            ]
+        },
+        {
+            "name": "@googlemaps/markerclusterer",
+            "version": "2.5.3",
+            "roles": [
+                "embedded-in-api-prebundle"
+            ],
+            "license": "Apache-2.0",
+            "integrity": "sha512-x7lX0R5yYOoiNectr10wLgCBasNcXFHiADIBdmn7jQllF2B5ENQw5XtZK+hIw4xnV0Df0xhN4LN98XqA5jaiOw==",
+            "archiveUrl": "https://registry.npmjs.org/@googlemaps/markerclusterer/-/markerclusterer-2.5.3.tgz",
+            "archiveSha256": "d872d0310a77b4df6848bdde1de46ab2129a38ba394be02f9ec0326d0c4da3c7",
+            "publishedGitHead": "694ebeb527a25d2ce695d282c339c8334e0dbb3f",
+            "dependencies": {
+                "fast-deep-equal": "^3.1.3",
+                "supercluster": "^8.0.1"
+            },
+            "licenses": [
+                {
+                    "package": "@googlemaps/markerclusterer",
+                    "version": "2.5.3",
+                    "path": "licenses/googlemaps__markerclusterer@2.5.3/LICENSE",
+                    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+                }
+            ]
+        },
+        {
+            "name": "tslib",
+            "version": "2.6.2",
+            "roles": [
+                "embedded-in-loader-prebundle"
+            ],
+            "license": "0BSD",
+            "integrity": "sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==",
+            "archiveUrl": "https://registry.npmjs.org/tslib/-/tslib-2.6.2.tgz",
+            "archiveSha256": "6001e6acf1472b79a2a5044f852f282781270511b45a900850bbceac1ba8d9e2",
+            "publishedGitHead": "49ac8dc364f9d053674f9f67ac78d426e451eaa2",
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "tslib",
+                    "version": "2.6.2",
+                    "path": "licenses/tslib@2.6.2/CopyrightNotice.txt",
+                    "sha256": "da16ddb65f8ca390998fb99223d0112498b56b45784d00afd77ff8ce1ac4de8b"
+                },
+                {
+                    "package": "tslib",
+                    "version": "2.6.2",
+                    "path": "licenses/tslib@2.6.2/LICENSE.txt",
+                    "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751"
+                }
+            ]
+        },
+        {
+            "name": "@types/google.maps",
+            "version": "3.58.1",
+            "roles": [
+                "compile-time-only"
+            ],
+            "license": "MIT",
+            "integrity": "sha512-X9QTSvGJ0nCfMzYOnaVs/k6/4L+7F5uCS+4iUmkLEls6J9S/Phv+m/i3mDeyc49ZBgwab3EFO1HEoBY7k98EGQ==",
+            "archiveUrl": "https://registry.npmjs.org/@types/google.maps/-/google.maps-3.58.1.tgz",
+            "archiveSha256": "9d7d79ea124be2ea1d7b6b36e8991a32696419f1b7a29c03ec12bbd49f4d3d9f",
+            "publishedGitHead": null,
+            "dependencies": {},
+            "licenses": [
+                {
+                    "package": "@types/google.maps",
+                    "version": "3.58.1",
+                    "path": "licenses/types__google.maps@3.58.1/LICENSE",
+                    "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+                }
+            ]
+        }
+    ],
+    "sourceMapContentVerification": {
+        "records": 59,
+        "compared": 58,
+        "differences": 0,
+        "nullContents": 1,
+        "method": "Exact source content compared with integrity-verified published archives. The null loader own sourceContent is unclaimed; its separate published src/index.ts is verified above."
+    },
+    "licenseFiles": [
+        {
+            "package": "@react-google-maps/api",
+            "version": "2.20.7",
+            "path": "licenses/react-google-maps__api@2.20.7/LICENSE",
+            "sha256": "c99fe208664493acde33efc7c45e3af8794657a24a8f63b68bc450b278269f56"
+        },
+        {
+            "package": "@googlemaps/js-api-loader",
+            "version": "1.16.8",
+            "path": "licenses/googlemaps__js-api-loader@1.16.8/LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+            "package": "@babel/runtime",
+            "version": "7.25.7",
+            "path": "licenses/babel__runtime@7.25.7/LICENSE",
+            "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76"
+        },
+        {
+            "package": "invariant",
+            "version": "2.2.4",
+            "path": "licenses/invariant@2.2.4/LICENSE",
+            "sha256": "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce"
+        },
+        {
+            "package": "@react-google-maps/marker-clusterer",
+            "version": "2.20.0",
+            "path": "licenses/react-google-maps__marker-clusterer@2.20.0/LICENSE",
+            "sha256": "4bb7280da3a8f577f1a4169a533948ea351c625f9dd3306d8aba9d0df1642803"
+        },
+        {
+            "package": "@react-google-maps/infobox",
+            "version": "2.20.0",
+            "path": "licenses/react-google-maps__infobox@2.20.0/LICENSE",
+            "sha256": "4bb7280da3a8f577f1a4169a533948ea351c625f9dd3306d8aba9d0df1642803"
+        },
+        {
+            "package": "fast-deep-equal",
+            "version": "3.1.3",
+            "path": "licenses/fast-deep-equal@3.1.3/LICENSE",
+            "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a"
+        },
+        {
+            "package": "kdbush",
+            "version": "4.0.2",
+            "path": "licenses/kdbush@4.0.2/LICENSE",
+            "sha256": "597034cb7c11c916ad407344ea99a0b08e3c443a6b4421460f1d23c411c69707"
+        },
+        {
+            "package": "supercluster",
+            "version": "8.0.1",
+            "path": "licenses/supercluster@8.0.1/LICENSE",
+            "sha256": "b8878372a0d7d1c303f48659ddbd6881807cd2196e4af2f548d8da0c0f7c4d71"
+        },
+        {
+            "package": "@googlemaps/markerclusterer",
+            "version": "2.5.3",
+            "path": "licenses/googlemaps__markerclusterer@2.5.3/LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+            "package": "tslib",
+            "version": "2.6.2",
+            "path": "licenses/tslib@2.6.2/CopyrightNotice.txt",
+            "sha256": "da16ddb65f8ca390998fb99223d0112498b56b45784d00afd77ff8ce1ac4de8b"
+        },
+        {
+            "package": "tslib",
+            "version": "2.6.2",
+            "path": "licenses/tslib@2.6.2/LICENSE.txt",
+            "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751"
+        },
+        {
+            "package": "@types/google.maps",
+            "version": "3.58.1",
+            "path": "licenses/types__google.maps@3.58.1/LICENSE",
+            "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+        }
+    ],
+    "licensesSha256": "579586b09f7fb06da07a5b7b6a30904eb9e39a8c594ccf002d321d23d6b23d34",
+    "scope": [
+        "Physical API and direct Loader inputs are distinct from the API prebundled inventory.",
+        "Emitted closure is recorded separately from build metafiles; source-map inventory is not a claim of tree-shaken reachability.",
+        "One direct Loader only; never use the API embedded LoadScript/useJsApiLoader.",
+        "SDK-owned runtime facade prevents vendor/google.maps declarations escaping the public API.",
+        "No real provider, key, account or hosted acceptance is implied by source auditing."
+    ]
+}

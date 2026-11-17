@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
@@ -85,7 +86,7 @@ console.log(JSON.stringify({format,react:React.version,...result}));
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
         ]) {
-            run('npm', [
+            runAgeQualifiedConsumerInstall(run, [
                 'install',
                 '--ignore-scripts',
                 '--strict-peer-deps',

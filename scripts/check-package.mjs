@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
@@ -10,6 +11,7 @@ import {
     nativePortalKernelTypedConsumer,
 } from './native-portal-kernel-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
+import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -156,6 +158,7 @@ import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-c
 import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
 import { checkImageAnnotationReactMatrix } from './image-annotation-consumer-checks.mjs';
+import { checkPortalMapReactMatrix } from './portal-map-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -491,8 +494,12 @@ import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
 import { assertModuleFormatReceipt } from './module-format-checks.mjs';
+import { enforceNpmReleaseAge } from './npm-release-age.mjs';
 
 const require = createRequire(import.meta.url);
+// Also inherited by the nested npm consumer checks. pnpm matrices retain their
+// own independently verified 2880-minute policy.
+console.log('Fresh npm consumers: release cutoff', enforceNpmReleaseAge());
 const temporaryDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-sdk-'))
 );
@@ -684,6 +691,7 @@ try {
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
                 path === 'docs/calendar.md' ||
+                path === 'docs/portal-map.md' ||
                 path === 'docs/complete-linked-finder.md' ||
                 path === 'docs/complete-rich-text.md' ||
                 path === 'docs/complete-record-comments.md' ||
@@ -691,6 +699,7 @@ try {
                 path === 'docs/single-line-text.md' ||
                 path === 'docs/csv-export.md' ||
                 path === 'docs/kanban.md' ||
+                path === 'docs/portal-gallery.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/image-annotation-markerjs2-license.txt' ||
                 path === 'examples/react-image-annotation/README.md' ||
@@ -743,6 +752,23 @@ try {
     }
     for (const path of [
         ...documentFiles,
+        ...['esm', 'cjs'].flatMap((format) => [
+            ...['PortalMap', 'PortalMapCard'].flatMap((name) => [
+                `dist/${format}/react/${name}.js`,
+                `dist/${format}/react/${name}.d.ts`,
+            ]),
+            `dist/${format}/react/portal-map.css`,
+            `dist/${format}/react/map/GoogleMapsRuntime.js`,
+            `dist/${format}/react/map/GoogleMapsRuntime.d.ts`,
+            `dist/${format}/react/map/types.d.ts`,
+            `dist/${format}/react/map/portal-map-vendor.json`,
+            `dist/${format}/react/map/portal-map-upstream.json`,
+            `dist/${format}/react/map/portal-map.LICENSES.txt`,
+            ...['providerCoordinator', 'coordinates'].flatMap((name) => [
+                `dist/${format}/portals/map/${name}.js`,
+                `dist/${format}/portals/map/${name}.d.ts`,
+            ]),
+        ]),
         ...[
             'index.js',
             'index.d.ts',
@@ -760,6 +786,7 @@ try {
         'docs/browser-lifecycle.md',
         'docs/testing.md',
         'docs/calendar.md',
+        'docs/portal-map.md',
         'docs/complete-linked-finder.md',
         ...linkedFinderStarterFiles,
         'docs/count.md',
@@ -875,6 +902,8 @@ try {
         'dist/cjs/react/complete-portal-chart.css',
         'dist/esm/react/portal-summary-cards.css',
         'dist/cjs/react/portal-summary-cards.css',
+        'dist/esm/react/portal-gallery.css',
+        'dist/cjs/react/portal-gallery.css',
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
@@ -895,6 +924,7 @@ try {
         'dist/esm/react/csv-export.css',
         'dist/cjs/react/csv-export.css',
         'docs/kanban.md',
+        'docs/portal-gallery.md',
         'dist/esm/react/kanban.css',
         'dist/cjs/react/kanban.css',
         ...headerStarterFiles,
@@ -1569,9 +1599,11 @@ store.clear();\n`
     run(process.execPath, ['forms-consumer.cjs']);
 
     const portalsConsumer = `
-import { createPortalCollection, PortalCollectionError } from '@miniextensions/sdk/portals';
-if ([createPortalCollection, PortalCollectionError].some(value => typeof value !== 'function')) throw new Error('Missing Portal collection export');
+import { createPortalCollection, PortalCollectionError, getPortalMapCoordinates, createPortalMapProviderCoordinator, createPortalMapProviderOwnerScope } from '@miniextensions/sdk/portals';
+if ([createPortalCollection, PortalCollectionError, getPortalMapCoordinates, createPortalMapProviderCoordinator, createPortalMapProviderOwnerScope].some(value => typeof value !== 'function')) throw new Error('Missing Portal collection export');
 export const helperType = typeof createPortalCollection;
+export const mapCoordinates = getPortalMapCoordinates('0', '180');
+if (JSON.stringify(mapCoordinates) !== JSON.stringify({lat:0,lng:180})) throw new Error('Packed pure Map coordinates failed');
 `;
     writeFileSync(
         join(temporaryDirectory, 'portals-consumer.mjs'),
@@ -1580,8 +1612,9 @@ export const helperType = typeof createPortalCollection;
     run(process.execPath, ['portals-consumer.mjs']);
     writeFileSync(
         join(temporaryDirectory, 'portals-consumer.cjs'),
-        `const { createPortalCollection, PortalCollectionError } = require('@miniextensions/sdk/portals');
-if ([createPortalCollection, PortalCollectionError].some(value => typeof value !== 'function')) throw new Error('Missing CommonJS Portal collection export');\n`
+        `const { createPortalCollection, PortalCollectionError, getPortalMapCoordinates, createPortalMapProviderCoordinator, createPortalMapProviderOwnerScope } = require('@miniextensions/sdk/portals');
+if (JSON.stringify(getPortalMapCoordinates('0','180')) !== JSON.stringify({lat:0,lng:180})) throw new Error('CommonJS pure Map coordinates failed');
+if ([createPortalCollection, PortalCollectionError, getPortalMapCoordinates, createPortalMapProviderCoordinator, createPortalMapProviderOwnerScope].some(value => typeof value !== 'function')) throw new Error('Missing CommonJS Portal collection export');\n`
     );
     run(process.execPath, ['portals-consumer.cjs']);
 
@@ -2019,6 +2052,15 @@ new Parser([]).parse({maxDepth:'48'});
         metafile: true,
     });
     await assertBrowserInputs(portalBundle.metafile, temporaryDirectory);
+    assert(
+        !Object.keys(portalBundle.metafile.inputs).some(
+            (path) =>
+                /(?:^|[/\\])(?:react|react-dom|@react-google-maps|@googlemaps)(?:[/\\]|$)/.test(
+                    path
+                ) || /dist[/\\](?:esm|cjs)[/\\]react[/\\]/.test(path)
+        ),
+        'Headless Portals must not acquire React/provider modules'
+    );
     const portalBrowserContext = { URL, TextEncoder, fetch };
     runInNewContext(portalBundle.outputFiles[0].text, portalBrowserContext, {
         timeout: 10000,
@@ -2049,7 +2091,7 @@ new Parser([]).parse({maxDepth:'48'});
         ...singleLineRecipes,
     ];
     assert(reactRecipes.length > 0, 'Missing React mount/dispose recipe');
-    run('npm', [
+    runAgeQualifiedConsumerInstall(run, [
         'install',
         '--ignore-scripts',
         '--no-audit',
@@ -3900,6 +3942,34 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(annotationMatrix.versions.length, 2);
     assert.equal(annotationMatrix.cleanup, 'completed');
+    const portalMapMatrix = checkPortalMapReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.deepEqual(
+        portalMapMatrix.versions.map(({ react }) => react),
+        ['18.3.1', '19.2.0']
+    );
+    assert.deepEqual(
+        portalMapMatrix.headless.profiles.map(({ format }) => format),
+        ['esm', 'cjs']
+    );
+    for (const version of portalMapMatrix.versions) {
+        assert.equal(version.frozenLockUnchanged, true);
+        assert.equal(version.policyUnchanged, true);
+        assert.deepEqual(
+            version.profiles.map(({ format }) => format),
+            ['esm', 'cjs']
+        );
+        for (const profile of version.profiles) {
+            assert.equal(profile.groups, 5);
+            assert.equal(profile.noGoogleOrDOM, true);
+            assert.equal(profile.providerAcquisitions, 0);
+            assert.equal(profile.loaderConstructions, 0);
+            assert.equal(profile.networkRequests, 0);
+        }
+    }
+    assert.equal(portalMapMatrix.cleanup, 'completed');
     const headerMatrix = checkFormHeaderReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -4674,6 +4744,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
     }
+    const galleryProof = await checkPortalGalleryReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(galleryProof.tests, 48);
+    console.log(
+        'Installed Portal Gallery React18/19 ESM/CJS/types/SSR/styles and source lifecycle assertions passed.',
+        galleryProof
+    );
     const additionalRuntimeChecks = await checkAdditionalRuntimeOperations({
         consumerDirectory: temporaryDirectory,
     });

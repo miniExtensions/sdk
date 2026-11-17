@@ -4,6 +4,10 @@ import {
 } from './kanban-consumer-checks.mjs';
 import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
 import {
+    preparePortalGalleryBrowserFixtures,
+    checkPortalGalleryBrowser,
+} from './portal-gallery-browser-checks.mjs';
+import {
     preparePrintableFormBrowserFixtures,
     checkPrintableFormBrowser,
 } from './printable-form-browser-checks.mjs';
@@ -68,6 +72,7 @@ import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
+import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -1567,6 +1572,7 @@ try {
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/printable-form-browser-checks.mjs',
+            'scripts/portal-gallery-browser-checks.mjs',
             'scripts/form-group-consumer-checks.mjs',
             'scripts/controlled-lookup-consumer-checks.mjs',
             'scripts/controlled-lookup-browser-checks.mjs',
@@ -1580,6 +1586,9 @@ try {
             'scripts/signature-browser-checks.mjs',
             'scripts/complete-date-browser-checks.mjs',
             'scripts/calendar-browser-checks.mjs',
+            'scripts/portal-map-browser-checks.mjs',
+            'scripts/portal-map-browser-fixture.mjs',
+            'scripts/portal-map-google-browser-boundary.mjs',
             'scripts/calendar-complete-style-assets.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/external-sync-source-controlled-browser-checks.mjs',
@@ -2025,6 +2034,17 @@ try {
             regular,
             hash,
         });
+        await preparePortalGalleryBrowserFixtures({
+            temporary,
+            readArchiveMember,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         await preparePrintableFormBrowserFixtures({
             temporary,
             readArchiveMember,
@@ -2448,6 +2468,24 @@ try {
             evidence: report.imageAnnotation,
             output,
         });
+        report.portalMap = {};
+        await checkPortalMapBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalMap,
+            output,
+        });
+        assert.equal(report.portalMap.status, 'passed');
+        assert.deepEqual(
+            report.portalMap.profiles.map(({ format }) => format),
+            ['esm', 'cjs']
+        );
+        for (const profile of report.portalMap.profiles)
+            assert.equal(profile.cases.length, 11);
+        assert.equal(report.portalMap.externalProviderEgress, 0);
+        assert.equal(report.portalMap.cleanup.context, 'completed');
+        assert.equal(report.portalMap.cleanup.server, 'completed');
+        assert.equal(report.portalMap.cleanup.directory, 'completed');
         report.radioInput = {};
         await checkRadioInputBrowser({
             browser,
@@ -3048,6 +3086,13 @@ try {
         });
         await run('kanban', async (page, origin) => {
             await checkKanbanBrowser({ page, origin, evidence: report.kanban });
+        });
+        await run('portal-gallery-layout', async (page, origin) => {
+            await page.goto(origin + '/portal-gallery-layout.html');
+            await checkPortalGalleryBrowser({
+                page,
+                evidence: report.portalGallery,
+            });
         });
         await run('printable-form-layout', async (page, origin) => {
             await page.goto(origin + '/printable-form-layout.html');
@@ -4040,8 +4085,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, printable layout, CSV, Kanban and section groups.
-            29 +
+            // Include complete fields, printable layout, CSV, Kanban, Gallery and section groups.
+            30 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

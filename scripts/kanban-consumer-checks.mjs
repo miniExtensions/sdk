@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -116,7 +117,7 @@ export function checkKanbanReactMatrix({
             })
         );
         writeFileSync(join(directory, 'runtime.mjs'), kanbanRuntimeConsumer);
-        run('npm', [
+        runAgeQualifiedConsumerInstall(run, [
             'install',
             '--ignore-scripts',
             '--strict-peer-deps',
@@ -140,7 +141,7 @@ export function checkKanbanReactMatrix({
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
         ]) {
-            run('npm', [
+            runAgeQualifiedConsumerInstall(run, [
                 'install',
                 '--ignore-scripts',
                 '--strict-peer-deps',

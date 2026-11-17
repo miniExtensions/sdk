@@ -1,5 +1,29 @@
 # Source test coverage
 
+## Fresh package consumer dependencies
+
+Fresh React matrix consumers use `scripts/age-qualified-consumer-install.mjs`.
+Before installation it verifies pnpm10.28.2, a 2880-minute minimum release age,
+empty exclusions, blocked exotic subdependencies, strict peers, ignored lifecycle
+scripts and a hoisted layout. Each private temporary consumer keeps its actual
+generated lock and archive/manifest hashes in a receipt, compares every installed
+SDK file with the packed archive and refuses SDK symlinks. A second React profile
+may retire only a generated scratch lock matching the preceding successful
+receipt. Unknown retained locks require separate admission; this adapter does
+not relax repository frozen installs or reuse a retained dependency closure.
+
+The genuine npm/headless archive-provenance phase remains separate. The package
+workflow and central checker also verify npm's effective `before` cutoff is at
+least 48 hours old, preserve stricter inherited cutoffs and refuse age exclusions.
+That npm filter covers fresh resolutions with publication timestamps; it does
+not itself age-admit retained locks or undated registry metadata. It is not a
+replacement for the controlled pnpm matrix setup or exact retained-lock admission.
+
+`scripts/age-qualified-consumer-install.test.mjs` exercises policy/version refusal
+before module retirement, profile replacement, archive and same-size installed
+byte drift, symlink substitution and prior npm-provenance preservation. The
+existing runtime, declarations, browser and cleanup assertions remain mandatory.
+
 ## Form CAPTCHA SDK checkpoint
 
 `test/formCaptcha.test.ts` covers canonical publication/refusal, initial/later
@@ -218,13 +242,21 @@ the complete `pnpm test` run enforces the cross-profile policy. The SDK does
 not have a separate lint command: Prettier and strict TypeScript are its
 existing static checks.
 
-Tests that directly import happy-dom mount native or React components and
-belong to the component profile. Headless controller, field-model, protocol
-and formula tests belong to the unit profile. Keep a direct happy-dom import
-in component suites so this convention remains explicit. These are synthetic
-tests; happy-dom does not establish real Chromium layout, browser event or
-live backend behavior. The separate packed native Chromium scenarios remain
-required in CI.
+Tests with a runtime happy-dom dependency belong to the component profile,
+including dependencies reached through static relative imports or re-exports
+of helpers inside `test/`. The classifier reads source without executing test
+modules, resolves emitted `.js` references to their `.ts` sources first, and
+handles cycles without caching an incomplete negative result. Type-only imports,
+comments, strings and filenames do not imply a mounted component. Bare package
+and source imports outside `test/` are not traversed; canonical helper escapes,
+unresolved local script dependencies and exceeded per-entry graph limits fail explicitly.
+Headless controller, field-model, protocol and formula graphs remain in the unit
+profile. Create one classifier for each immutable source-coverage invocation.
+
+These are synthetic tests; happy-dom does not establish real Chromium layout,
+browser event or live backend behavior. The separate packed native Chromium
+scenarios remain required in CI. Classification does not change the source
+inventory, raw report retention, structural type-only treatment or thresholds.
 
 ## Portal read failure guidance checks
 

@@ -10,6 +10,7 @@ import type {
     PostgresAttachmentDisplayFailure,
     PostgresBooleanColumnConfig,
     PostgresEnumColumnConfig,
+    PostgresUuidColumnConfig,
     PostgresConnection,
     PostgresCreateQuery,
     PostgresCreateResult,
@@ -786,3 +787,11 @@ export function inspectFormAccess(access: PostgresFormRecordAccess) {
 // @ts-expect-error Enabled editing cannot use SQL NULL as an identifier.
 export const nullFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: false, identifier: null };
 export const explicitlyAbsentDormantIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: true, identifier: undefined };
+
+export const nativeUuidConfig: PostgresUuidColumnConfig = { readOnly: false, required: true, title: 'Native UUID', descriptionStyle: 'tooltip' };
+// @ts-expect-error UUID settings have no text normalization.
+export const uuidTextNormalization: PostgresUuidColumnConfig = { preserveTrailingWhitespace: true };
+// @ts-expect-error UUID values have no attachment presentation.
+export const uuidAttachmentDisplay: PostgresUuidColumnConfig = { displayAs: 'attachments-public-urls' };
+// @ts-expect-error Database UUID defaults do not add a value generator setting.
+export const uuidValueGeneration: PostgresUuidColumnConfig = { generateUuid: true };

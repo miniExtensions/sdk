@@ -225,7 +225,8 @@ for (const name of ['generated', 'postgres.generated']) {
                         )
                     )
                 )
-                .digest('hex')
+                .digest('hex'),
+            declarations
         );
         runtimeArtifacts = publicPostgresRuntimeArtifacts(
             internal.runtimeArtifacts,

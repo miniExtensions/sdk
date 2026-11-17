@@ -26,6 +26,12 @@ workspace membership, saved revision, native metadata and database grants still
 authorize each operation. This type-only export adds no schema validator,
 resolver, public-session operation or lasting row-mutation capability.
 
+`PostgresUuidColumnConfig` adds UUID common settings as the sixth native family
+under configuration receipt v6 and its 23-source closure. UUIDs and domains over
+UUID remain native string-or-NULL values; this type adds no text normalization,
+version restriction or UUID generation option. Historical receipt versions 1–5
+retain their existing families and source closures.
+
 `PostgresField.collationOid` is required database-local collation metadata.
 Its explicit `null` means a noncollatable column; missing metadata is not NULL.
 Identifier column bindings retain an optional collation only so older saved

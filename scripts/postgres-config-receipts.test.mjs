@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-    assertPostgresConfigReceiptProvenance,
+    assertPostgresConfigReceiptProvenance as assertProof,
+    assertPostgresConfigDeclarationInventory,
     postgresFieldConfigProvenance,
     postgresFieldConfigSource,
     postgresTextPresentationAuthorSource,
@@ -44,7 +45,22 @@ const identities = {
     ],
     date: ['postgresDateColumnConfigSchema', 'PostgresDateColumnConfig'],
     enum: ['postgresEnumColumnConfigSchema', 'PostgresEnumColumnConfig'],
+    uuid: ['postgresUuidColumnConfigSchema', 'PostgresUuidColumnConfig'],
 };
+const configurationDeclarations = (aliases) =>
+    Buffer.from(
+        aliases
+            .filter((name) =>
+                Object.values(identities).some(([, type]) => type === name)
+            )
+            .map((name) => `export type Canonical${name} = unknown;`)
+            .join('\n')
+    );
+const assertPostgresConfigReceiptProvenance = (
+    internal,
+    validator,
+    declarations = configurationDeclarations(internal.aliases)
+) => assertProof(internal, validator, declarations);
 const family = (kind) => {
     assert(Object.hasOwn(identities, kind));
     const [schemaName, typeName] = identities[kind];
@@ -65,7 +81,7 @@ const family = (kind) => {
 };
 
 function fixture(version) {
-    assert([1, 2, 3, 4, 5].includes(version));
+    assert([1, 2, 3, 4, 5, 6].includes(version));
     const paths =
         version === 1
             ? historicalInputs
@@ -83,10 +99,15 @@ function fixture(version) {
                   ...(version >= 4
                       ? [postgresTextPresentationAuthorSource]
                       : []),
-                  ...(version === 5
+                  ...(version >= 5
                       ? [
                             'types/extensions/postgres/enumColumnFieldDefinitions.ts',
                             'types/postgres/enumValue.ts',
+                        ]
+                      : []),
+                  ...(version >= 6
+                      ? [
+                            'types/extensions/postgres/uuidColumnFieldDefinitions.ts',
                         ]
                       : []),
               ].sort();
@@ -128,7 +149,8 @@ function fixture(version) {
                       ...(version >= 3
                           ? [family('numeric'), family('date')]
                           : []),
-                      ...(version === 5 ? [family('enum')] : []),
+                      ...(version >= 5 ? [family('enum')] : []),
+                      ...(version >= 6 ? [family('uuid')] : []),
                   ],
               }),
         runtimeAdmission: 'pending',
@@ -233,7 +255,9 @@ test('v5 binds native enum configuration without rewriting historical family clo
     assert.equal(verified.receiptVersion, 5);
     assert.deepEqual(
         verified.aliases,
-        Object.values(identities).map(([, type]) => type)
+        Object.values(identities)
+            .slice(0, 5)
+            .map(([, type]) => type)
     );
     assert.deepEqual(verified.presentation, value.receipt.presentation);
     assert.deepEqual(value.readPaths, [
@@ -249,8 +273,80 @@ test('v5 binds native enum configuration without rewriting historical family clo
     }
 });
 
+test('v6 binds UUID configuration with its exact closure while historical receipts refuse UUID substitution', () => {
+    const value = fixture(6);
+    value.receipt.families.reverse();
+    const verified = value.verify();
+    assert.equal(value.paths.length, 23);
+    assert.equal(verified.receiptVersion, 6);
+    assert.deepEqual(
+        verified.aliases,
+        Object.values(identities).map(([, type]) => type)
+    );
+    assert.deepEqual(verified.presentation, value.receipt.presentation);
+    assert.deepEqual(value.readPaths, [
+        ...value.paths,
+        postgresTextPresentationSource,
+    ]);
+    for (const version of [2, 3, 4, 5]) {
+        const historical = fixture(version);
+        historical.receipt.families[historical.receipt.families.length - 1] =
+            family('uuid');
+        assert.throws(historical.verify, /family-identity/);
+        assert.deepEqual(historical.readPaths, []);
+    }
+});
+
+test('actual configuration declarations reject paired UUID removal and version downgrade', () => {
+    const aliases = Object.values(identities).map(([, name]) => name);
+    const declarations = configurationDeclarations(aliases);
+    const internal = {
+        aliases,
+        configurationValidation: { receiptVersion: 6 },
+    };
+    assertPostgresConfigDeclarationInventory(internal, declarations);
+    const downgraded = {
+        aliases: aliases.filter((name) => name !== 'PostgresUuidColumnConfig'),
+        configurationValidation: { receiptVersion: 5 },
+    };
+    assertPostgresConfigDeclarationInventory(
+        downgraded,
+        configurationDeclarations(downgraded.aliases)
+    );
+    assert.throws(
+        () =>
+            assertPostgresConfigDeclarationInventory(downgraded, declarations),
+        /declaration-inventory/
+    );
+    assert.throws(
+        () =>
+            assertPostgresConfigDeclarationInventory(
+                internal,
+                configurationDeclarations(downgraded.aliases)
+            ),
+        /declaration-inventory/
+    );
+    assert.throws(
+        () =>
+            assertPostgresConfigDeclarationInventory(
+                internal,
+                Buffer.concat([
+                    declarations,
+                    Buffer.from(
+                        '\nexport type CanonicalPostgresUuidColumnConfig = unknown;\n'
+                    ),
+                ])
+            ),
+        /declaration-inventory/
+    );
+    assert.throws(
+        () => assertPostgresConfigDeclarationInventory(internal),
+        /declaration-bytes/
+    );
+});
+
 test("receipt versions cannot substitute later families or another version's source closure", async (t) => {
-    for (const kind of ['numeric', 'date', 'enum'])
+    for (const kind of ['numeric', 'date', 'enum', 'uuid'])
         await t.test(`v2 refuses the known ${kind} family`, () => {
             const value = fixture(2);
             value.receipt.families[1] = family(kind);
@@ -262,6 +358,8 @@ test("receipt versions cannot substitute later families or another version's sou
         [3, 2],
         [4, 5],
         [5, 4],
+        [5, 6],
+        [6, 5],
     ]) {
         await t.test(`relabel v${from} as v${to}`, () => {
             const value = fixture(from);
@@ -286,7 +384,7 @@ test("receipt versions cannot substitute later families or another version's sou
 
 test('configuration receipts refuse unreviewed versions, family identities and admission', async (t) => {
     for (const [name, mutate, reason] of [
-        ['version', (r) => (r.formatVersion = 6), 'format-version'],
+        ['version', (r) => (r.formatVersion = 7), 'format-version'],
         [
             'contract',
             (r) => (r.contract = 'postgres-text-column-config'),
@@ -339,7 +437,7 @@ test('configuration receipts refuse unreviewed versions, family identities and a
             'editor-pending',
         ],
     ]) {
-        for (const version of [2, 3, 4, 5])
+        for (const version of [2, 3, 4, 5, 6])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -365,7 +463,7 @@ test('configuration receipts refuse missing, reordered or unsafe source membersh
             (r) => (r.sources[0].path = postgresFieldConfigProvenance),
         ],
     ]) {
-        for (const version of [2, 3, 4, 5])
+        for (const version of [2, 3, 4, 5, 6])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -401,7 +499,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
             'generated-integrity',
         ],
     ]) {
-        for (const version of [2, 3, 4, 5])
+        for (const version of [2, 3, 4, 5, 6])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -411,7 +509,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
 });
 
 test('build provenance binds the validator and both canonical configuration inputs without source access', async (t) => {
-    for (const version of [1, 2, 3, 4, 5]) {
+    for (const version of [1, 2, 3, 4, 5, 6]) {
         await t.test(`version ${version}`, () => {
             const verified = fixture(version).verify();
             const validatorSha256 = hash('synthetic validator bytes');
@@ -454,6 +552,29 @@ test('build provenance binds the validator and both canonical configuration inpu
                     }
                 );
             assertPostgresConfigReceiptProvenance(internal, validatorSha256);
+            if (version === 6) {
+                const actualDeclarations = configurationDeclarations(
+                    internal.aliases
+                );
+                const downgraded = structuredClone(internal);
+                downgraded.configurationValidation.receiptVersion = 5;
+                downgraded.configurationValidation.aliases =
+                    downgraded.configurationValidation.aliases.filter(
+                        (name) => name !== 'PostgresUuidColumnConfig'
+                    );
+                downgraded.aliases = downgraded.aliases.filter(
+                    (name) => name !== 'PostgresUuidColumnConfig'
+                );
+                assert.throws(
+                    () =>
+                        assertProof(
+                            downgraded,
+                            validatorSha256,
+                            actualDeclarations
+                        ),
+                    /declaration-inventory/
+                );
+            }
             const commonAlias = structuredClone(internal);
             commonAlias.aliases.unshift('PostgresValue');
             assertPostgresConfigReceiptProvenance(commonAlias, validatorSha256);
@@ -526,7 +647,7 @@ test('build provenance binds the validator and both canonical configuration inpu
 });
 
 test('canonical configuration inputs must match the selected Git revision before verification', async (t) => {
-    for (const version of [2, 3, 4, 5])
+    for (const version of [2, 3, 4, 5, 6])
         await t.test(`version ${version}`, (t) => {
             const root = mkdtempSync(
                 path.join(tmpdir(), 'sdk-config-receipt-git-')
@@ -654,7 +775,7 @@ test('presentation receipts refuse missing, expanded or substituted identities a
             'receipt-scope',
         ],
     ])
-        for (const version of [4, 5])
+        for (const version of [4, 5, 6])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -674,7 +795,7 @@ test('presentation receipts refuse missing, expanded or substituted identities a
     }
 });
 
-for (const version of [4, 5])
+for (const version of [4, 5, 6])
     test(`v${version} build proof binds both policy sources and the generated runtime input`, () => {
         const verified = fixture(version).verify();
         const validatorSha256 = hash('synthetic validator');

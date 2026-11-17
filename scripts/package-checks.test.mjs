@@ -680,7 +680,22 @@ async function postgresDistributionFixture(
     const specifications = postgresRuntimeArtifactSpecifications({
         receiptVersion,
     });
-    const declaration = 'export type CanonicalPostgresValue = string | null;\n';
+    const aliases = [
+        'PostgresValue',
+        'PostgresTextColumnConfig',
+        'PostgresBooleanColumnConfig',
+        ...(receiptVersion >= 3
+            ? ['PostgresNumericColumnConfig', 'PostgresDateColumnConfig']
+            : []),
+        ...(receiptVersion >= 5 ? ['PostgresEnumColumnConfig'] : []),
+        ...(receiptVersion >= 6 ? ['PostgresUuidColumnConfig'] : []),
+    ];
+    const declaration = aliases
+        .map(
+            (name) =>
+                `export type Canonical${name} = ${name === 'PostgresValue' ? 'string | null' : 'unknown'};\n`
+        )
+        .join('');
     const runtimeSource =
         'export const portableDisplayFixture: string = "synthetic";\n';
     const runtimeOutput = compilePostgresRuntime(runtimeSource);
@@ -704,13 +719,16 @@ async function postgresDistributionFixture(
         compilerVersion: '5.9.3',
         generatorSha256: hash('fixture-postgres-generator'),
         contractFamily: 'postgres',
-        aliases: ['PostgresValue'],
+        aliases,
         transport: 'plain JSON',
-        declarationCount: 1,
+        declarationCount: aliases.length,
         generatedSha256: hash('fixture-postgres-generated-source'),
         dependencies: [],
         runtimeArtifacts: [runtimeArtifact],
-        configurationValidation: { receiptVersion },
+        configurationValidation: {
+            receiptVersion,
+            aliases: aliases.filter((name) => name !== 'PostgresValue'),
+        },
         runtimeRegistrySha256: postgresRuntimeRegistrySha256(),
     };
     const runtimeOutputs = [
@@ -731,7 +749,6 @@ async function postgresDistributionFixture(
             emitterSha256: hash(await readFile(specifications[1].emitter)),
             ...postgresPresentationRuntimeOutputHashes(source),
         };
-        postgres.configurationValidation = { receiptVersion };
         postgres.runtimeArtifacts.push(artifact);
         postgres.sources.push({
             path: artifact.sourcePath,
@@ -842,7 +859,7 @@ test('archive checks reject a Form access validator substitution before acceptin
     );
 });
 
-for (const receiptVersion of [4, 5])
+for (const receiptVersion of [4, 5, 6])
     test(`v${receiptVersion} public distribution requires both fixed runtime artifacts`, async (t) => {
         const fixture = await postgresDistributionFixture(t, {
             presentation: true,
@@ -877,7 +894,7 @@ for (const receiptVersion of [4, 5])
             [
                 'legacy receipt',
                 (p) => (p.configurationValidation.receiptVersion = 3),
-                /Unexpected packaged PostgreSQL contract file/,
+                /Unexpected packaged PostgreSQL contract file|declaration-inventory/,
             ],
         ])
             await t.test(name, async (t) => {
@@ -918,7 +935,7 @@ test('archive guard refuses swapped per-module emitter metadata with unchanged r
         });
 });
 
-for (const receiptVersion of [4, 5])
+for (const receiptVersion of [4, 5, 6])
     test(`v${receiptVersion} runtime registry binds each module to its own emitter bytes`, () => {
         const proof = { receiptVersion };
         const specifications = postgresRuntimeArtifactSpecifications(proof);
@@ -1003,7 +1020,7 @@ test('independent distribution validation requires explicit receipt version and 
         [
             'missing version',
             (p) => delete p.configurationValidation,
-            /Unknown PostgreSQL runtime receipt version/,
+            /declaration-inventory/,
         ],
         [
             'registry hash',
@@ -1144,16 +1161,83 @@ test('public distribution rejects private PostgreSQL provenance in package files
 
 test('public distribution rejects changed PostgreSQL declaration bytes', async (t) => {
     const fixture = await postgresDistributionFixture(t);
+    const changed = (
+        await readFile(
+            join(
+                fixture.root,
+                'dist/esm/runtime/contracts/postgres.generated.d.ts'
+            ),
+            'utf8'
+        )
+    ).replace(
+        'CanonicalPostgresValue = string | null',
+        'CanonicalPostgresValue = number'
+    );
     for (const format of ['esm', 'cjs'])
         await write(
             fixture.root,
             `dist/${format}/runtime/contracts/postgres.generated.d.ts`,
-            'export type CanonicalPostgresValue = number;\n'
+            changed
         );
     await assert.rejects(
         fixture.check(),
         /PostgreSQL provenance does not identify/
     );
+});
+
+test('public archive rejects UUID declaration inventory tampering even with matching public hashes', async (t) => {
+    for (const mode of [
+        'paired-downgrade',
+        'missing',
+        'duplicate',
+        'injected-into-v5',
+    ])
+        await t.test(mode, async (t) => {
+            const fixture = await postgresDistributionFixture(t, {
+                presentation: true,
+                receiptVersion: mode === 'injected-into-v5' ? 5 : 6,
+            });
+            let declarations = await readFile(
+                join(
+                    fixture.root,
+                    'dist/esm/runtime/contracts/postgres.generated.d.ts'
+                ),
+                'utf8'
+            );
+            if (mode === 'paired-downgrade') {
+                fixture.postgres.configurationValidation.receiptVersion = 5;
+                fixture.postgres.aliases = fixture.postgres.aliases.filter(
+                    (name) => name !== 'PostgresUuidColumnConfig'
+                );
+                fixture.postgres.configurationValidation.aliases =
+                    fixture.postgres.configurationValidation.aliases.filter(
+                        (name) => name !== 'PostgresUuidColumnConfig'
+                    );
+                fixture.nativeProvenance.aliases = fixture.postgres.aliases;
+            } else if (mode === 'missing')
+                declarations = declarations.replace(
+                    'export type CanonicalPostgresUuidColumnConfig = unknown;\n',
+                    ''
+                );
+            else
+                declarations +=
+                    '\nexport type CanonicalPostgresUuidColumnConfig = unknown;\n';
+            fixture.nativeProvenance.contractDeclarationsSha256 = createHash(
+                'sha256'
+            )
+                .update(declarations)
+                .digest('hex');
+            for (const format of ['esm', 'cjs']) {
+                const prefix = `dist/${format}/runtime/contracts/postgres.generated`;
+                await write(fixture.root, prefix + '.d.ts', declarations);
+                await write(
+                    fixture.root,
+                    prefix + '.provenance.json',
+                    JSON.stringify(fixture.nativeProvenance)
+                );
+            }
+            await assert.rejects(fixture.check(), /declaration-inventory/);
+        });
 });
 
 test('public PostgreSQL declarations reject schema dependencies even with matching public hashes', async (t) => {

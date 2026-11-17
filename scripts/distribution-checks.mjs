@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { assertPostgresFormAccessReceiptProvenance } from './postgres-form-access-receipts.mjs';
+import { assertPostgresConfigDeclarationInventory } from './postgres-config-receipts.mjs';
 import {
     assertPostgresRuntimeArtifactSet,
     assertPostgresRuntimeEmitter,
@@ -275,6 +276,7 @@ export async function assertPublicDistribution(
             'dist/esm/runtime/contracts/postgres.generated.d.ts'
         );
         assert(nativeDeclarations, 'Missing PostgreSQL contract declarations');
+        assertPostgresConfigDeclarationInventory(postgres, nativeDeclarations);
         assertPostgresFormAccessReceiptProvenance(
             postgres,
             sha256(

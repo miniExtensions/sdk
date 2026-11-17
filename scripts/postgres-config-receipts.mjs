@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 export const postgresFieldConfigSource =
     'types/generated/postgres/field-config.ts';
@@ -38,7 +39,14 @@ const enumFamily = {
     schemaName: 'postgresEnumColumnConfigSchema',
     typeName: 'PostgresEnumColumnConfig',
 };
-const allFamilies = [...scalarFamilies, enumFamily];
+// Historical receipt families and their source closures are immutable.
+const enumFamilies = [...scalarFamilies, enumFamily];
+const uuidFamily = {
+    kind: 'uuid',
+    schemaName: 'postgresUuidColumnConfigSchema',
+    typeName: 'PostgresUuidColumnConfig',
+};
+const allFamilies = [...enumFamilies, uuidFamily];
 const historicalSources = [
     '.prettierrc',
     'package.json',
@@ -75,12 +83,17 @@ const enumSources = [
     'types/extensions/postgres/enumColumnFieldDefinitions.ts',
     'types/postgres/enumValue.ts',
 ].sort();
+const uuidSources = [
+    ...enumSources,
+    'types/extensions/postgres/uuidColumnFieldDefinitions.ts',
+].sort();
 const receiptVersions = new Map([
     [1, { families: [textFamily], sources: historicalSources }],
     [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
     [3, { families: scalarFamilies, sources: numericDateSources }],
     [4, { families: scalarFamilies, sources: presentationSources }],
-    [5, { families: allFamilies, sources: enumSources }],
+    [5, { families: enumFamilies, sources: enumSources }],
+    [6, { families: allFamilies, sources: uuidSources }],
 ]);
 const sharedReceiptKeys = [
     'formatVersion',
@@ -176,8 +189,7 @@ export function verifyPostgresConfigReceipt({
     );
     const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
-    const hasPresentation =
-        receipt.formatVersion === 4 || receipt.formatVersion === 5;
+    const hasPresentation = [4, 5, 6].includes(receipt.formatVersion);
     requireReceipt(
         exactKeys(receipt, [
             ...sharedReceiptKeys,
@@ -361,14 +373,57 @@ export function readPostgresConfigReceipt({ monorepo, revision }) {
     });
 }
 
-/** Build checks local validator/input bindings without loading private sources. */
+/** Manifest edits cannot conceal a known family still exported by the real archive. */
+export function assertPostgresConfigDeclarationInventory(
+    internal,
+    declarations
+) {
+    const version = receiptVersions.get(
+        internal.configurationValidation?.receiptVersion
+    );
+    requireReceipt(
+        version != null && Array.isArray(internal.aliases),
+        'declaration-inventory'
+    );
+    requireReceipt(Buffer.isBuffer(declarations), 'declaration-bytes');
+    const expected = version.families.map((family) => family.typeName);
+    const known = new Set(allFamilies.map((family) => family.typeName));
+    const parsed = ts.createSourceFile(
+        'native.d.ts',
+        declarations.toString('utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS
+    );
+    const declared = parsed.statements.flatMap((statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
+        ) &&
+        statement.name.text.startsWith('Canonical') &&
+        known.has(statement.name.text.slice('Canonical'.length))
+            ? [statement.name.text.slice('Canonical'.length)]
+            : []
+    );
+    requireReceipt(
+        parsed.parseDiagnostics.length === 0 &&
+            JSON.stringify(
+                internal.aliases.filter((name) => known.has(name))
+            ) === JSON.stringify(expected) &&
+            JSON.stringify(declared.sort()) ===
+                JSON.stringify([...expected].sort()),
+        'declaration-inventory'
+    );
+}
+
+/** Build checks local validator/input bindings and compiled declarations without private source access. */
 export function assertPostgresConfigReceiptProvenance(
     internal,
-    validatorSha256
+    validatorSha256,
+    declarations
 ) {
     const proof = internal.configurationValidation;
-    const hasPresentation =
-        proof?.receiptVersion === 4 || proof?.receiptVersion === 5;
+    const hasPresentation = [4, 5, 6].includes(proof?.receiptVersion);
     requireReceipt(
         exactKeys(proof, [
             'receiptVersion',
@@ -450,4 +505,5 @@ export function assertPostgresConfigReceiptProvenance(
             'presentation-provenance'
         );
     }
+    assertPostgresConfigDeclarationInventory(internal, declarations);
 }

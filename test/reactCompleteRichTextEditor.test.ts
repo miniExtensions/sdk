@@ -2226,16 +2226,21 @@ for (const key of ['ArrowLeft', 'Home', 'End', 'PageUp']) {
             const selection = f.document.getSelection();
             assert(selection);
             const caret = view.domAtPos(3);
-            await act(async () => selection.collapse(caret.node, caret.offset));
-            assert.equal(view.state.selection.head, 4);
             const up = new f.window.KeyboardEvent('keyup', {
                 key,
                 bubbles: true,
                 cancelable: true,
             });
-            await act(async () => input.dispatchEvent(up as unknown as Event));
-            assert.equal(view.state.selection.head, 3);
-            assert.equal(up.defaultPrevented, false);
+            await act(() => {
+                // Keep the browser-default movement and keyup in one turn.
+                // Holding selectionchange does not hold the DOM observer's
+                // window timers; yielding here can publish the caret early.
+                selection.collapse(caret.node, caret.offset);
+                assert.equal(view.state.selection.head, 4);
+                input.dispatchEvent(up as unknown as Event);
+                assert.equal(view.state.selection.head, 3);
+                assert.equal(up.defaultPrevented, false);
+            });
             await act(async () => input.blur());
             await render('Metadata Rich');
             await act(async () => input.focus());

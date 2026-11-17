@@ -1,0 +1,40 @@
+.mx-sdk-readonly-portal-list {
+    width: 100%;
+    min-width: 0;
+    font: inherit;
+    color: inherit;
+}
+
+.mx-sdk-readonly-portal-list__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.mx-sdk-readonly-portal-list__row {
+    min-width: 0;
+}
+
+.mx-sdk-readonly-portal-list__empty-title {
+    margin: 0;
+    font: inherit;
+}
+
+.mx-sdk-readonly-portal-list__open {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mx-sdk-readonly-portal-list__open:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}

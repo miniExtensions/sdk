@@ -361,6 +361,7 @@ for (const format of ['esm', 'cjs']) {
         'form-submit',
         'form-validation-summary',
         'portal-summary-cards',
+        'readonly-portal-list',
         'portal-gallery',
         'form-progress',
         'field-presentation',

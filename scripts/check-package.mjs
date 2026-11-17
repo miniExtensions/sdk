@@ -1,5 +1,6 @@
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
+import { checkReadonlyPortalListReactMatrix } from './readonly-portal-list-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
     checkCanonicalFormConsumer,
@@ -685,6 +686,7 @@ try {
                 path === 'docs/automatic-prefill.md' ||
                 path === 'docs/printable-form.md' ||
                 path === 'docs/portals.md' ||
+                path === 'docs/readonly-portal-list.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||
                 path === 'docs/auth.md' ||
@@ -902,6 +904,9 @@ try {
         'dist/cjs/react/complete-portal-chart.css',
         'dist/esm/react/portal-summary-cards.css',
         'dist/cjs/react/portal-summary-cards.css',
+        'dist/esm/react/readonly-portal-list.css',
+        'dist/cjs/react/readonly-portal-list.css',
+        'docs/readonly-portal-list.md',
         'dist/esm/react/portal-gallery.css',
         'dist/cjs/react/portal-gallery.css',
         ...summaryCardsStarterFiles,
@@ -3169,6 +3174,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalShellProof.versions.length, 2);
     assert.equal(portalShellProof.cleanup, 'completed');
+    const readonlyPortalListProof = checkReadonlyPortalListReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(readonlyPortalListProof.versions.length, 2);
+    assert.equal(readonlyPortalListProof.cleanup, 'completed');
     const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

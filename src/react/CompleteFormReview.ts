@@ -222,7 +222,7 @@ export function CompleteFormReview(
                                       id: labelId,
                                       className: `mx-sdk-form-review-label${
                                           item.title.length === 0
-                                              ? ' mx-sdk-form-review-label--hidden'
+                                              ? ' mx-sdk-form-review-label--hidden sr-only'
                                               : ''
                                       }`,
                                   },

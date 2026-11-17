@@ -342,6 +342,7 @@ it('updates live readonly leaves without dispatch and retains semantic hidden ti
     assert.ok(
         hiddenTitle?.classList.contains('mx-sdk-form-review-label--hidden')
     );
+    assert.ok(hiddenTitle?.classList.contains('sr-only'));
     assert.equal(
         f.host.querySelector('dd')?.getAttribute('aria-labelledby'),
         hiddenTitle?.id

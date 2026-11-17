@@ -1215,3 +1215,11 @@ and view mode are detached once. Every transport gets a fresh detached request;
 host-only transport context may resolve afresh. Host progress revision/writer
 provenance stays with the existing publication owner and must never be sent,
 reread or written by the loader.
+
+Native BYTEA column configurations share the existing common Form/Portal settings
+and preserve raw PostgreSQL hex and escape strings, including spaces. Optional
+omission uses the database default; SQL NULL and explicit empty input remain
+distinct. Required needs a submitted nonempty answer; `\x` deliberately submits
+zero bytes. Returned bytes use canonical `\x` hex independently of the role's
+`bytea_output` setting. BYTEA does not inherit text normalization, public-URL
+attachment display, upload controls or array-input admission.

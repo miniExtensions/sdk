@@ -85,7 +85,13 @@ const jsonbFamily = {
     schemaName: 'postgresJsonbColumnConfigSchema',
     typeName: 'PostgresJsonbColumnConfig',
 };
-const allFamilies = [...intervalFamilies, jsonFamily, jsonbFamily];
+const jsonFamilies = [...intervalFamilies, jsonFamily, jsonbFamily];
+const byteaFamily = {
+    kind: 'bytea',
+    schemaName: 'postgresByteaColumnConfigSchema',
+    typeName: 'PostgresByteaColumnConfig',
+};
+const allFamilies = [...jsonFamilies, byteaFamily];
 const historicalSources = [
     '.prettierrc',
     'package.json',
@@ -142,6 +148,10 @@ const jsonSources = [
     ...intervalSources,
     'types/extensions/postgres/jsonColumnFieldDefinitions.ts',
 ].sort();
+const byteaSources = [
+    ...jsonSources,
+    'types/extensions/postgres/byteaColumnFieldDefinitions.ts',
+].sort();
 const receiptVersions = new Map([
     [1, { families: [textFamily], sources: historicalSources }],
     [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
@@ -152,7 +162,8 @@ const receiptVersions = new Map([
     [7, { families: temporalFamilies, sources: temporalSources }],
     [8, { families: timeFamilies, sources: timeSources }],
     [9, { families: intervalFamilies, sources: intervalSources }],
-    [10, { families: allFamilies, sources: jsonSources }],
+    [10, { families: jsonFamilies, sources: jsonSources }],
+    [11, { families: allFamilies, sources: byteaSources }],
 ]);
 const sharedReceiptKeys = [
     'formatVersion',
@@ -248,7 +259,7 @@ export function verifyPostgresConfigReceipt({
     );
     const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
-    const hasPresentation = [4, 5, 6, 7, 8, 9, 10].includes(
+    const hasPresentation = [4, 5, 6, 7, 8, 9, 10, 11].includes(
         receipt.formatVersion
     );
     requireReceipt(
@@ -484,7 +495,7 @@ export function assertPostgresConfigReceiptProvenance(
     declarations
 ) {
     const proof = internal.configurationValidation;
-    const hasPresentation = [4, 5, 6, 7, 8, 9, 10].includes(
+    const hasPresentation = [4, 5, 6, 7, 8, 9, 10, 11].includes(
         proof?.receiptVersion
     );
     requireReceipt(

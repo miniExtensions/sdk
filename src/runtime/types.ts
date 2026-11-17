@@ -40,6 +40,7 @@ import type {
     CanonicalPostgresIntervalColumnConfig,
     CanonicalPostgresJsonColumnConfig,
     CanonicalPostgresJsonbColumnConfig,
+    CanonicalPostgresByteaColumnConfig,
     CanonicalPostgresField,
     CanonicalPostgresFormRecordAccess,
     CanonicalPostgresFormDraftState,
@@ -182,6 +183,7 @@ export type PostgresIntervalColumnConfig =
     CanonicalPostgresIntervalColumnConfig;
 export type PostgresJsonColumnConfig = CanonicalPostgresJsonColumnConfig;
 export type PostgresJsonbColumnConfig = CanonicalPostgresJsonbColumnConfig;
+export type PostgresByteaColumnConfig = CanonicalPostgresByteaColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

@@ -62,6 +62,7 @@ const identities = {
     ],
     json: ['postgresJsonColumnConfigSchema', 'PostgresJsonColumnConfig'],
     jsonb: ['postgresJsonbColumnConfigSchema', 'PostgresJsonbColumnConfig'],
+    bytea: ['postgresByteaColumnConfigSchema', 'PostgresByteaColumnConfig'],
 };
 const configurationDeclarations = (aliases) =>
     Buffer.from(
@@ -97,7 +98,7 @@ const family = (kind) => {
 };
 
 function fixture(version) {
-    assert([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(version));
+    assert([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(version));
     const paths =
         version === 1
             ? historicalInputs
@@ -139,6 +140,11 @@ function fixture(version) {
                   ...(version >= 9
                       ? [
                             'types/extensions/postgres/intervalColumnFieldDefinitions.ts',
+                        ]
+                      : []),
+                  ...(version >= 11
+                      ? [
+                            'types/extensions/postgres/byteaColumnFieldDefinitions.ts',
                         ]
                       : []),
                   ...(version >= 10
@@ -194,6 +200,7 @@ function fixture(version) {
                           ? [family('time'), family('timetz')]
                           : []),
                       ...(version >= 9 ? [family('interval')] : []),
+                      ...(version >= 11 ? [family('bytea')] : []),
                       ...(version >= 10
                           ? [family('json'), family('jsonb')]
                           : []),
@@ -479,6 +486,8 @@ test("receipt versions cannot substitute later families or another version's sou
         [8, 9],
         [9, 8],
         [9, 10],
+        [10, 11],
+        [11, 10],
         [10, 9],
     ]) {
         await t.test(`relabel v${from} as v${to}`, () => {
@@ -504,7 +513,7 @@ test("receipt versions cannot substitute later families or another version's sou
 
 test('configuration receipts refuse unreviewed versions, family identities and admission', async (t) => {
     for (const [name, mutate, reason] of [
-        ['version', (r) => (r.formatVersion = 11), 'format-version'],
+        ['version', (r) => (r.formatVersion = 12), 'format-version'],
         [
             'contract',
             (r) => (r.contract = 'postgres-text-column-config'),
@@ -557,7 +566,7 @@ test('configuration receipts refuse unreviewed versions, family identities and a
             'editor-pending',
         ],
     ]) {
-        for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10])
+        for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -583,7 +592,7 @@ test('configuration receipts refuse missing, reordered or unsafe source membersh
             (r) => (r.sources[0].path = postgresFieldConfigProvenance),
         ],
     ]) {
-        for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10])
+        for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -619,7 +628,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
             'generated-integrity',
         ],
     ]) {
-        for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10])
+        for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -629,7 +638,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
 });
 
 test('build provenance binds the validator and both canonical configuration inputs without source access', async (t) => {
-    for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+    for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
         await t.test(`version ${version}`, () => {
             const verified = fixture(version).verify();
             const validatorSha256 = hash('synthetic validator bytes');
@@ -767,7 +776,7 @@ test('build provenance binds the validator and both canonical configuration inpu
 });
 
 test('canonical configuration inputs must match the selected Git revision before verification', async (t) => {
-    for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10])
+    for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
         await t.test(`version ${version}`, (t) => {
             const root = mkdtempSync(
                 path.join(tmpdir(), 'sdk-config-receipt-git-')
@@ -895,7 +904,7 @@ test('presentation receipts refuse missing, expanded or substituted identities a
             'receipt-scope',
         ],
     ])
-        for (const version of [4, 5, 6, 7, 8, 9, 10])
+        for (const version of [4, 5, 6, 7, 8, 9, 10, 11])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -915,7 +924,7 @@ test('presentation receipts refuse missing, expanded or substituted identities a
     }
 });
 
-for (const version of [4, 5, 6, 7, 8, 9, 10])
+for (const version of [4, 5, 6, 7, 8, 9, 10, 11])
     test(`v${version} build proof binds both policy sources and the generated runtime input`, () => {
         const verified = fixture(version).verify();
         const validatorSha256 = hash('synthetic validator');
@@ -1102,7 +1111,9 @@ test('v10 binds JSON/JSONB and exact27-source closure without changing v9', () =
     assert.equal(value.paths.length, 27);
     assert.deepEqual(
         value.verify().aliases,
-        Object.values(identities).map(([, n]) => n)
+        Object.values(identities)
+            .slice(0, 13)
+            .map(([, n]) => n)
     );
     const historical = fixture(9);
     assert.equal(historical.paths.length, 26);
@@ -1111,7 +1122,9 @@ test('v10 binds JSON/JSONB and exact27-source closure without changing v9', () =
     assert.deepEqual(historical.readPaths, []);
 });
 test('actual v10 declarations reject paired JSON removal, missing or duplicate declarations and v9 downgrade', () => {
-    const aliases = Object.values(identities).map(([, n]) => n),
+    const aliases = Object.values(identities)
+            .slice(0, 13)
+            .map(([, n]) => n),
         declarations = configurationDeclarations(aliases),
         internal = { aliases, configurationValidation: { receiptVersion: 10 } };
     assertPostgresConfigDeclarationInventory(internal, declarations);
@@ -1150,4 +1163,58 @@ test('actual v10 declarations reject paired JSON removal, missing or duplicate d
             /declaration-inventory/
         );
     }
+});
+
+test('v11 binds BYTEA and exact 28-source closure while freezing v10', () => {
+    const value = fixture(11);
+    assert.equal(value.paths.length, 28);
+    assert.deepEqual(
+        value.verify().aliases,
+        Object.values(identities).map(([, n]) => n)
+    );
+    const shuffled = fixture(11);
+    shuffled.receipt.families.reverse();
+    assert.deepEqual(shuffled.verify().aliases, value.verify().aliases);
+    const historical = fixture(10);
+    historical.receipt.families.push(family('bytea'));
+    assert.throws(historical.verify, /families/);
+    assert.deepEqual(historical.readPaths, []);
+});
+test('actual v11 BYTEA declaration cannot be dropped, duplicated or hidden by v10 metadata', () => {
+    const aliases = Object.values(identities).map(([, n]) => n),
+        declarations = configurationDeclarations(aliases),
+        internal = { aliases, configurationValidation: { receiptVersion: 11 } };
+    assertPostgresConfigDeclarationInventory(internal, declarations);
+    const historical = aliases.slice(0, 13),
+        older = {
+            aliases: historical,
+            configurationValidation: { receiptVersion: 10 },
+        };
+    assertPostgresConfigDeclarationInventory(
+        older,
+        configurationDeclarations(historical)
+    );
+    assert.throws(
+        () => assertPostgresConfigDeclarationInventory(older, declarations),
+        /declaration-inventory/
+    );
+    assert.throws(
+        () =>
+            assertPostgresConfigDeclarationInventory(
+                internal,
+                configurationDeclarations(historical)
+            ),
+        /declaration-inventory/
+    );
+    assert.throws(
+        () =>
+            assertPostgresConfigDeclarationInventory(
+                internal,
+                Buffer.concat([
+                    declarations,
+                    configurationDeclarations(['PostgresByteaColumnConfig']),
+                ])
+            ),
+        /declaration-inventory/
+    );
 });

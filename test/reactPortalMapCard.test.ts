@@ -374,3 +374,25 @@ test('connection registration immediately disposes its exact lease on synchronou
         'Retired registration must not dispose twice'
     );
 });
+
+test('delayed registration preserves the current Open method receiver', async (t) => {
+    const f = await detachedRegistration(t);
+    let receiver: unknown;
+    const open = {
+        label: 'Current Open receiver',
+        activate() {},
+        registerTrigger(element: HTMLButtonElement) {
+            receiver = this;
+            assert.equal(this.label, 'Current Open receiver');
+            return f.registerTrigger(element);
+        },
+    };
+    await f.render(h(PortalMapCard, { card: card({ open }) }), false);
+    assert.equal(f.registrations.length, 0);
+    f.window.document.body.append(f.container);
+    await f.settle();
+    assert.equal(receiver, open);
+    assert.equal(f.registrations.length, 1);
+    await f.render(null, false);
+    assert.equal(f.releases(), 1);
+});

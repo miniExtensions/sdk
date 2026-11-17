@@ -86,7 +86,7 @@ export function PortalMapCard({
                 if (!element.isConnected) return;
                 attempted = true;
                 stopWaiting();
-                const release = registerTrigger(element);
+                const release = registerTrigger.call(receipt.open, element);
                 if (!sameLiveButton() || !element.isConnected) release();
                 else dispose = release;
             };

@@ -165,6 +165,18 @@
     min-width: 0;
     width: 100%;
 }
+.mx-sdk-finder-map-primary {
+    margin: 0;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mx-sdk-finder-map-primary-empty {
+    color: #9ca3af;
+}
 .mx-sdk-finder-card-list {
     display: flex;
     align-items: center;

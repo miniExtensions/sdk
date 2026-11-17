@@ -618,15 +618,13 @@ for (const navigation of [
         await f.click(open);
         if (navigation.button === 'Previous') {
             await act(async () =>
-                f.container
-                    .querySelector('[role="dialog"]')
-                    ?.dispatchEvent(
-                        new f.window.KeyboardEvent('keydown', {
-                            key: 'ArrowRight',
-                            bubbles: true,
-                            cancelable: true,
-                        })
-                    )
+                f.container.querySelector('[role="dialog"]')?.dispatchEvent(
+                    new f.window.KeyboardEvent('keydown', {
+                        key: 'ArrowRight',
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
             );
         }
         const next = f.container.querySelector(

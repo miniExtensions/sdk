@@ -703,6 +703,7 @@ try {
                 path === 'docs/field-presentation.md' ||
                 path === 'docs/form-groups.md' ||
                 path === 'docs/lookup.md' ||
+                path === 'docs/computed-fields.md' ||
                 headerStarterFiles.includes(path) ||
                 linkedFinderStarterFiles.includes(path) ||
                 summaryCardsStarterFiles.includes(path) ||

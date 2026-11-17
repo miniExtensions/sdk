@@ -179,7 +179,11 @@ function GridHeader({
     const stopDrag = useRef<(() => void) | null>(null);
     const keyboardMove = useRef(false);
     const commitPort = useRef(onCommit);
+    // Host widths and commits use clientWidth (padding included, borders excluded).
+    // Translate only at the CSS boundary so settlement/host echoes cannot shrink
+    // border-box headers or cancel ordinary one-pixel keyboard movement.
     const [localWidth, setLocalWidth] = useState(() => admittedWidth(width));
+    const [cssWidthAdjustment, setCssWidthAdjustment] = useState(0);
 
     useEffect(() => {
         if (stopDrag.current == null && !keyboardMove.current)
@@ -211,6 +215,21 @@ function GridHeader({
     };
     const commitEffect =
         typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    commitEffect(() => {
+        const cell = header.current;
+        const view = cell?.ownerDocument.defaultView;
+        if (!cell || !view) return;
+        const style = view.getComputedStyle(cell);
+        const pixels = (value: string) => {
+            const result = Number.parseFloat(value);
+            return Number.isFinite(result) ? result : 0;
+        };
+        setCssWidthAdjustment(
+            style.boxSizing === 'border-box'
+                ? pixels(style.borderLeftWidth) + pixels(style.borderRightWidth)
+                : -pixels(style.paddingLeft) - pixels(style.paddingRight)
+        );
+    }, []);
     commitEffect(() => {
         commitPort.current = onCommit;
         if (!onCommit) cancel();
@@ -284,7 +303,7 @@ function GridHeader({
             ref: header,
             scope: 'col',
             className: 'mx-sdk-readonly-grid__header',
-            style: { width: localWidth ?? 200 },
+            style: { width: (localWidth ?? 200) + cssWidthAdjustment },
             'data-field-id': column.fieldId,
         },
         h(

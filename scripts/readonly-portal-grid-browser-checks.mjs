@@ -243,11 +243,10 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.widths.at(-1).scope, 'original');
     assert(end.widths.at(-1).width > initialMouseWidth);
     assert.equal(end.widths.at(-1).width, end.widths.at(-1).measuredAtCommit);
-    assert(
-        Math.abs(
-            end.widths.at(-1).width -
-                (await amount.evaluate((node) => node.clientWidth))
-        ) <= 1
+    assert.equal(
+        end.widths.at(-1).width,
+        await amount.evaluate((node) => node.clientWidth),
+        'Host echo preserves the exact measured client width'
     );
     const ordinaryWidth = end.widths.at(-1).width;
     results.push({
@@ -282,11 +281,10 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     end = await snapshot();
     assert(end.widths.at(-1).width > initialKeyboardWidth);
     assert.equal(end.widths.at(-1).width, end.widths.at(-1).measuredAtCommit);
-    assert(
-        Math.abs(
-            end.widths.at(-1).width -
-                (await amount.evaluate((node) => node.clientWidth))
-        ) <= 1
+    assert.equal(
+        end.widths.at(-1).width,
+        await amount.evaluate((node) => node.clientWidth),
+        'Host echo preserves the exact measured client width'
     );
     const beforeCancel = end.widths.length;
     await page.keyboard.down('ArrowLeft');
@@ -297,6 +295,64 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         group: 'trusted keyboard resize and Escape cancellation',
         before: initialKeyboardWidth,
         provisional: provisionalKeyboardWidth,
+        passed: true,
+    });
+
+    const stableWidth = await amount.evaluate((node) => node.clientWidth);
+    let settlements = (await snapshot()).widths.length;
+    const stationaryBox = await handle.boundingBox();
+    assert(stationaryBox);
+    await page.mouse.move(
+        stationaryBox.x + stationaryBox.width / 2,
+        stationaryBox.y + stationaryBox.height / 2
+    );
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForFunction(
+        (n) => window.__nativeProbe.snapshot().widths.length === n + 1,
+        settlements
+    );
+    assert.equal(
+        await amount.evaluate((node) => node.clientWidth),
+        stableWidth
+    );
+    assert.equal((await snapshot()).widths.at(-1).width, stableWidth);
+    await handle.focus();
+    for (const [key, expected] of [
+        ['ArrowRight', stableWidth + 1],
+        ['ArrowLeft', stableWidth],
+    ]) {
+        settlements = (await snapshot()).widths.length;
+        await page.keyboard.down(key);
+        await page.waitForFunction(
+            (width) =>
+                document.querySelector('th[data-field-id="amount"]')
+                    .clientWidth === width,
+            expected
+        );
+        await page.keyboard.up(key);
+        await page.waitForFunction(
+            (n) => window.__nativeProbe.snapshot().widths.length === n + 1,
+            settlements
+        );
+        const settled = (await snapshot()).widths.at(-1);
+        assert.equal(settled.width, expected);
+        assert.equal(settled.measuredAtCommit, expected);
+        assert.equal(
+            await amount.evaluate((node) => node.clientWidth),
+            expected
+        );
+    }
+    await patch({ ready: false });
+    await patch({ ready: true });
+    assert.equal(
+        await amount.evaluate((node) => node.clientWidth),
+        stableWidth
+    );
+    assert.equal((await snapshot()).state.widths.original.amount, stableWidth);
+    results.push({
+        group: 'stationary pointer and ordinary ArrowRight/Left preserve measured width through echo and remount',
+        width: stableWidth,
         passed: true,
     });
 
@@ -350,7 +406,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     await page.getByRole('switch', { name: 'Amount', exact: true }).click();
     await page.keyboard.press('Escape');
     assert.equal(
-        await amount.evaluate((node) => parseFloat(node.style.width)),
+        await amount.evaluate((node) => node.clientWidth),
         (await snapshot()).state.widths.original.amount
     );
     results.push({

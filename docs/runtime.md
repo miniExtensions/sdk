@@ -40,6 +40,15 @@ input. Values remain PostgreSQL text or SQL NULL. Historical receipt versions
 1–6 retain their existing families and source closures. Configuration/read
 preview and value-input admission remain separate in the private application.
 
+`PostgresTimeColumnConfig` and `PostgresTimetzColumnConfig` add common field
+settings for native TIME and TIMETZ columns under receipt v8 and its 25-source
+closure. Configured columns use the distinct `time` and `timetz` kinds. Values
+remain PostgreSQL text or SQL NULL; these types add no timezone conversion,
+precision setting, JavaScript date conversion or portable value parser.
+Historical versions 1–7 retain their families and source closures. The two
+portable display runtimes are unchanged; these type exports add no public
+PostgreSQL Form/Portal transport operation.
+
 The independent native snapshot also exports `PostgresConfiguredColumn`,
 `PostgresReadableRelationConfiguration`, `PostgresFormDraftState`,
 `PostgresFormDraft`, `PostgresPortalTab`, `PostgresPortalDraftState`,

@@ -43,7 +43,7 @@ function show(props){last=props;flushSync(()=>root.render(h(React.StrictMode,nul
 const valid=extra=>({mode:'controlled',language:'en',isValid:true,resultType:'singleLineText',value:'Answer',formattedValue:'Answer',...extra});
 window.computedProof={
  initial(){flushSync(()=>root.render(computedElement()));},
- formula(mode){const extra=mode==='select'?{resultType:'singleSelect',value:'Ready',select:{choices:[{id:'ready',name:'Ready',displayName:'Ready label'}]},renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:mode==='html'?{value:'<strong>Painted HTML</strong><a href="https://never.example.invalid/">Forbidden navigation</a><script>bad()</script>',renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:mode==='gallery'?{value:'admitted resources',renderFormulaAsAttachment:true,gallery:{entries:[{id:'one',url:image,type:'image/svg+xml',filename:'First'},{id:'two',url:image,type:'image/svg+xml',filename:'Second'}],disableOpenFiles:true,disableDownloadFiles:true,labels:{attachments:'Computed media'}}}:mode==='masked'?{obscurePassword:true,textSize:'large',value:'PRIVATE'}:mode==='invalid'?{isValid:false}:{};show({...base,kind:'formula',display:valid(extra)});},
+ formula(mode){const extra=mode==='select'?{resultType:'singleSelect',value:'Ready',select:{choices:[{id:'ready',name:'Ready',displayName:'Ready label'}]},renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:mode==='html'?{value:'<strong>Painted HTML</strong><a href="https://never.example.invalid/">Forbidden navigation</a><script>bad()</script>',renderFormulaAsHTML:true,renderFormulaAsAttachment:true,displayAsButton:true}:(mode==='gallery'||mode==='gallery-closed')?{value:'admitted resources',renderFormulaAsAttachment:true,gallery:{entries:[{id:'one',url:image,type:'image/svg+xml',filename:'First'},{id:'two',url:image,type:'image/svg+xml',filename:'Second'}],disableOpenFiles:mode==='gallery-closed',disableDownloadFiles:true,labels:{attachments:'Computed media'}}}:mode==='masked'?{obscurePassword:true,textSize:'large',value:'PRIVATE'}:mode==='invalid'?{isValid:false}:{};show({...base,kind:'formula',display:valid(extra)});},
  rollup(value){show({...base,kind:'rollup',display:{mode:'controlled',language:'en',isValid:true,value}});},
  retire(notify=true){current=false;if(notify)flushSync(()=>{for(const listener of [...listeners])listener();});},
  echo(){current=true;show(last);},
@@ -232,6 +232,20 @@ export async function checkComputedBrowser({
             await page.evaluate(() => window.computedProof.rollup(null));
             assert.match(await page.locator('main').textContent(), /No Value/);
             record('invalid metadata and empty Rollup transitions');
+            await page.evaluate(() =>
+                window.computedProof.formula('gallery-closed')
+            );
+            assert.equal(
+                await page.locator('.mx-sdk-url-gallery li').count(),
+                2
+            );
+            assert.equal(
+                await page.locator('.mx-sdk-url-gallery button').count(),
+                0
+            );
+            record(
+                'disabled open/download policy retains inert gallery occurrences'
+            );
             await page.evaluate(() => window.computedProof.formula('gallery'));
             const trigger = page
                 .locator('.mx-sdk-url-gallery button[aria-label]')
@@ -275,7 +289,10 @@ export async function checkComputedBrowser({
             record('keyboard reopen then physical-kind resource retirement');
             await page.evaluate(() => window.computedProof.formula('masked'));
             assert.match(await page.locator('main').textContent(), /••••••••/);
-            assert.doesNotMatch(await page.locator('main').innerHTML(), /PRIVATE/);
+            assert.doesNotMatch(
+                await page.locator('main').innerHTML(),
+                /PRIVATE/
+            );
             assert.equal(
                 await page
                     .locator('main img,main a,main [role="dialog"]')

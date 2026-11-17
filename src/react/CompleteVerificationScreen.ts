@@ -19,6 +19,23 @@ export type CompleteVerificationScreenLabels = {
     loading: string;
 };
 
+export type CompleteVerificationErrorPart =
+    | { type: 'text'; text: string }
+    | { type: 'link'; text: string; href: string };
+
+export type CompleteVerificationErrorPresentation = {
+    /** Ordered literal/link content; React escapes every label and text segment. */
+    parts: readonly CompleteVerificationErrorPart[];
+    /** Optional accessible name for the message, supplied by the host. */
+    ariaLabel?: string;
+    /** Explicit host action only. Rendering never invokes it. */
+    action?: {
+        label: string;
+        disabled?: boolean;
+        onActivate: () => void;
+    };
+};
+
 export type CompleteVerificationScreenProps<Result> = {
     verificationId: string;
     /** Already masked by the host. The SDK does not inspect contact details. */
@@ -36,12 +53,78 @@ export type CompleteVerificationScreenProps<Result> = {
     onError?: (error: Error) => void;
     /** Pure display adapter; exhaustion matching still uses the original message. */
     formatErrorMessage?: (message: string) => string;
+    /** Portable feedback only; receives the original error and owns no result/state. */
+    describeError?: (message: string) => CompleteVerificationErrorPresentation;
     /** Optional app-level timeout/help decoration, mounted only while pending. */
     pendingDetails?: ReactNode;
     inputId?: string;
     className?: string;
     accentColor?: string;
 };
+
+function isSafeFeedbackHref(href: string): boolean {
+    try {
+        return ['http:', 'https:', 'ftp:', 'ftps:', 'mailto:', 'tel:'].includes(
+            new URL(href).protocol
+        );
+    } catch {
+        return false;
+    }
+}
+
+function renderVerificationError(
+    message: string,
+    props: Pick<
+        CompleteVerificationScreenProps<unknown>,
+        'describeError' | 'formatErrorMessage'
+    >
+) {
+    const presentation = props.describeError?.(message);
+    if (!presentation)
+        return h(
+            'p',
+            { className: 'mx-sdk-verification-error', role: 'alert' },
+            props.formatErrorMessage?.(message) ?? message
+        );
+    const action = presentation.action;
+    return h(
+        'div',
+        { className: 'mx-sdk-verification-error', role: 'alert' },
+        h(
+            'p',
+            {
+                className: 'mx-sdk-verification-error-message',
+                'aria-label': presentation.ariaLabel,
+            },
+            ...presentation.parts.map((part, index) =>
+                part.type === 'link' && isSafeFeedbackHref(part.href)
+                    ? h(
+                          'a',
+                          {
+                              key: index,
+                              href: part.href,
+                              target: '_blank',
+                              rel: 'noopener noreferrer',
+                          },
+                          part.text
+                      )
+                    : part.text
+            )
+        ),
+        action
+            ? h(
+                  'button',
+                  {
+                      type: 'button',
+                      className: 'mx-sdk-verification-error-action',
+                      disabled: action.disabled,
+                      onClick: action.onActivate,
+                  },
+                  action.label
+              )
+            : null
+    );
+}
 
 /**
  * Complete native-compatible confirmation/continuation UI. This is deliberately
@@ -151,13 +234,7 @@ export function CompleteVerificationScreen<Result>(
             value: code,
             onChange: (event) => setCode(event.target.value),
         }),
-        error
-            ? h(
-                  'p',
-                  { className: 'mx-sdk-verification-error', role: 'alert' },
-                  props.formatErrorMessage?.(error) ?? error
-              )
-            : null,
+        error ? renderVerificationError(error, props) : null,
         // ActionButton forces type=button. Verification requires real native
         // form submission/Enter and the browser's ordinary pattern validation.
         h(

@@ -472,3 +472,181 @@ it('complete screen keeps error formatting separate from exhaustion and renders 
         'Host timeout/help'
     );
 });
+
+it('preserves the legacy string formatter markup when no descriptor is supplied', async (t) => {
+    const legacy = await fixture(t, 'sdk', {
+        async confirm() {
+            throw new Error('Original failure');
+        },
+        formatErrorMessage: (message) => `Legacy: ${message}`,
+    });
+    await legacy.edit('123456');
+    await legacy.submit();
+    const oldAlert = legacy.container.querySelector('[role=alert]');
+    assert.ok(oldAlert);
+    assert.equal(oldAlert.tagName, 'P');
+    assert.equal(oldAlert.textContent, 'Legacy: Original failure');
+});
+
+it('renders ordered semantic feedback through the public screen', async (t) => {
+    const f = await fixture(t, 'sdk', {
+        async confirm() {
+            throw new Error('Read https://example.invalid/details now');
+        },
+        formatErrorMessage: () =>
+            'Legacy fallback should not replace descriptor',
+        describeError: () => ({
+            ariaLabel: 'Verification feedback',
+            parts: [
+                { type: 'text', text: 'Read ' },
+                {
+                    type: 'link',
+                    text: 'Learn more',
+                    href: 'https://example.invalid/details',
+                },
+                { type: 'text', text: ' now' },
+            ],
+        }),
+    });
+    await f.edit('123456');
+    await f.submit();
+    const message = f.container.querySelector(
+        '[aria-label="Verification feedback"]'
+    );
+    assert.equal(message?.textContent, 'Read Learn more now');
+    const link = message?.querySelector('a');
+    assert.equal(link?.getAttribute('href'), 'https://example.invalid/details');
+    assert.equal(link?.getAttribute('target'), '_blank');
+    assert.equal(link?.getAttribute('rel'), 'noopener noreferrer');
+    assert.equal(f.continuations.length, 0);
+});
+
+it('keeps help as a disabled-aware explicit non-submit host action', async (t) => {
+    let confirms = 0;
+    let actions = 0;
+    const describe = (disabled: boolean) => ({
+        parts: [{ type: 'text' as const, text: 'Permission failure' }],
+        action: {
+            label: 'How can I fix permissions-related issues?',
+            disabled,
+            onActivate: () => actions++,
+        },
+    });
+    const f = await fixture(t, 'sdk', {
+        async confirm() {
+            confirms++;
+            throw new Error('Permission failure');
+        },
+        describeError: () => describe(true),
+    });
+    await f.edit('123456');
+    await f.submit();
+    const action = () => {
+        const button = Array.from(f.container.querySelectorAll('button')).find(
+            (candidate) =>
+                candidate.classList.contains('mx-sdk-verification-error-action')
+        );
+        assert.ok(button);
+        return button;
+    };
+    assert.equal(actions, 0);
+    assert.equal(action().type, 'button');
+    assert.equal(action().disabled, true);
+    await act(async () => action().click());
+    assert.equal(actions, 0);
+    await f.update({ describeError: () => describe(false) });
+    await act(async () => action().click());
+    assert.equal(actions, 1);
+    assert.equal(confirms, 1);
+    assert.equal(f.continuations.length, 0);
+    assert.equal(f.reloads(), 0);
+    assert.equal(f.input().value, '123456');
+});
+
+it('retains the opaque cached result through semantic error echoes and a load-only retry', async (t) => {
+    const result = Object.freeze({ privateMarker: 'synthetic-private-result' });
+    let confirms = 0;
+    const continued: Result[] = [];
+    const f = await fixture(t, 'sdk', {
+        async confirm() {
+            confirms++;
+            return result;
+        },
+        async continueWithResult(value) {
+            continued.push(value);
+            if (continued.length === 1) throw new Error('Load needs help');
+        },
+        describeError: (message) => ({
+            parts: [{ type: 'text', text: message }],
+            action: { label: 'Help', onActivate() {} },
+        }),
+    });
+    await f.edit('123456');
+    await f.submit();
+    assert.equal(continued[0], result);
+    assert.ok(!f.container.outerHTML.includes('synthetic-private-result'));
+    assert.ok(!f.container.outerHTML.includes('privateMarker'));
+    await f.update({
+        describeError: (message) => ({
+            parts: [{ type: 'text', text: `Visible: ${message}` }],
+        }),
+    });
+    assert.equal(
+        f.container.querySelector('[role=alert]')?.textContent,
+        'Visible: Load needs help'
+    );
+    await f.submit();
+    assert.equal(confirms, 1);
+    assert.equal(continued.length, 2);
+    assert.equal(continued[1], result);
+    assert.ok(f.container.querySelector('[role=status]'));
+});
+
+it('uses the original localized exhaustion error for Reload despite structured feedback', async (t) => {
+    let confirms = 0;
+    const f = await fixture(t, 'sdk', {
+        async confirm() {
+            confirms++;
+            throw new Error(labels.attemptsExhausted);
+        },
+        describeError: () => ({
+            parts: [{ type: 'text', text: 'Different visible feedback' }],
+            action: { label: 'Help', onActivate() {} },
+        }),
+    });
+    await f.edit('123456');
+    await f.submit();
+    assert.equal(
+        f.container.querySelector('[role=alert]')?.textContent,
+        'Different visible feedbackHelp'
+    );
+    await f.submit();
+    assert.equal(confirms, 1);
+    assert.equal(f.reloads(), 1);
+    assert.equal(f.continuations.length, 0);
+});
+
+it('escapes feedback text and refuses executable link destinations', async (t) => {
+    const f = await fixture(t, 'sdk', {
+        async confirm() {
+            throw new Error('Failure');
+        },
+        describeError: () => ({
+            parts: [
+                { type: 'text', text: '<script>not markup</script> ' },
+                {
+                    type: 'link',
+                    text: '<b>literal label</b>',
+                    href: 'javascript:alert(1)',
+                },
+            ],
+        }),
+    });
+    await f.edit('123456');
+    await f.submit();
+    assert.equal(
+        f.container.querySelector('[role=alert]')?.textContent,
+        '<script>not markup</script> <b>literal label</b>'
+    );
+    assert.equal(f.container.querySelector('script, b, a'), null);
+});

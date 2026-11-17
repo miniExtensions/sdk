@@ -8,11 +8,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const completeVerificationTypedConsumer = String.raw`
 import {createElement} from 'react';
-import {CompleteVerificationScreen,type CompleteVerificationScreenProps,type CompleteVerificationScreenLabels} from '@miniextensions/sdk/react';
+import {CompleteVerificationScreen,type CompleteVerificationScreenProps,type CompleteVerificationScreenLabels,type CompleteVerificationErrorPart,type CompleteVerificationErrorPresentation} from '@miniextensions/sdk/react';
 const result=Object.freeze({synthetic:true});
 const labels:CompleteVerificationScreenLabels={sentCodeTo:'Code sent to',enterCode:'Verification code',continue:'Continue',reload:'Reload',attemptsExhausted:'Attempts exhausted',loading:'Loading'};
 const props:CompleteVerificationScreenProps<typeof result>={verificationId:'synthetic',maskedDestination:'***42',labels,async confirm(input){void input.verificationId;void input.verificationCode;return result;},async continueWithResult(value){const exact:typeof result=value;void exact;},reload(){},onError(error){void error.message;},inputId:'verification',className:'consumer',accentColor:'#0f766e',formatErrorMessage:message=>message,pendingDetails:createElement('aside',null,'Host timeout/help')};
 createElement(CompleteVerificationScreen<typeof result>,props);
+const parts:readonly CompleteVerificationErrorPart[]=[{type:'text',text:'Read '},{type:'link',text:'Learn more',href:'https://example.invalid/help'},{type:'text',text:' now'}];
+const feedback:CompleteVerificationErrorPresentation={parts,ariaLabel:'Synthetic feedback',action:{label:'Synthetic help',disabled:false,onActivate(){}}};
+createElement(CompleteVerificationScreen<typeof result>,{...props,describeError(message):CompleteVerificationErrorPresentation{void message;return feedback;}});
+// @ts-expect-error feedback is semantic data, not a native JSX renderer
+const nativeFeedback:CompleteVerificationScreenProps<typeof result>={...props,describeError:()=>createElement('div',null,'native')};
+void nativeFeedback;
 // @ts-expect-error confirmation transport is an explicit adapter
 const noConfirm:CompleteVerificationScreenProps<typeof result>={verificationId:'synthetic',maskedDestination:'***42',labels,continueWithResult:props.continueWithResult,reload(){}};
 // @ts-expect-error continuation is an explicit adapter, not SDK session installation
@@ -49,6 +55,8 @@ async function checkInstalled(directory, happyDomModulePath) {
         '.mx-sdk-verification-input',
         '.mx-sdk-verification-submit',
         '.mx-sdk-verification-error',
+        '.mx-sdk-verification-error-message',
+        '.mx-sdk-verification-error-action',
         '.mx-sdk-verification-loading',
     ])
         assert(css.includes(selector));
@@ -71,7 +79,8 @@ async function checkInstalled(directory, happyDomModulePath) {
         let confirms = 0,
             continues = 0,
             reloads = 0,
-            networks = 0;
+            networks = 0,
+            helps = 0;
         const identity = [];
         let props = {
             verificationId: 'synthetic-A',
@@ -191,6 +200,53 @@ async function checkInstalled(directory, happyDomModulePath) {
             );
             assert.equal(confirms, 1);
             assert.equal(continues, 1);
+            props = {
+                ...props,
+                describeError: () => ({
+                    ariaLabel: 'Synthetic feedback',
+                    parts: [
+                        { type: 'text', text: 'Read ' },
+                        {
+                            type: 'link',
+                            text: 'Learn more',
+                            href: 'https://example.invalid/help',
+                        },
+                        { type: 'text', text: ' now' },
+                    ],
+                    action: {
+                        label: 'Synthetic help',
+                        onActivate() {
+                            helps++;
+                        },
+                    },
+                }),
+            };
+            await React.act(async () => root.render(element()));
+            const feedback = host.querySelector(
+                '[aria-label="Synthetic feedback"]'
+            );
+            assert.equal(feedback?.textContent, 'Read Learn more now');
+            const feedbackLink = feedback?.querySelector('a');
+            assert.equal(
+                feedbackLink?.getAttribute('href'),
+                'https://example.invalid/help'
+            );
+            assert.equal(feedbackLink?.getAttribute('target'), '_blank');
+            assert.equal(
+                feedbackLink?.getAttribute('rel'),
+                'noopener noreferrer'
+            );
+            const help = host.querySelector(
+                '.mx-sdk-verification-error-action'
+            );
+            assert(help);
+            assert.equal(help.type, 'button');
+            assert.equal(helps, 0);
+            await React.act(async () => help.click());
+            assert.equal(helps, 1);
+            assert.equal(confirms, 1);
+            assert.equal(continues, 1);
+            assert.equal(reloads, 0);
             props = {
                 ...props,
                 async continueWithResult(value) {

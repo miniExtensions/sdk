@@ -55,13 +55,14 @@ import {CompleteVerificationScreen} from '@miniextensions/sdk/react';
 const mode=new URLSearchParams(location.search).get('mode')||'retry';
 const labels={sentCodeTo:'Code sent to',enterCode:'Verification code',continue:'Continue',reload:'Reload',attemptsExhausted:'Attempts exhausted',loading:'Loading'};
 const french={sentCodeTo:'Code envoyé à',enterCode:'Code de vérification',continue:'Continuer',reload:'Recharger',attemptsExhausted:'Essais épuisés',loading:'Chargement'};
-const stats={confirms:0,continues:0,secondConfirms:0,secondContinues:0,reloads:0,identities:[],writers:[],challenges:[],codeLengths:[],observedErrors:[],trustedInputs:[]};
+const stats={confirms:0,continues:0,secondConfirms:0,secondContinues:0,reloads:0,identities:[],writers:[],challenges:[],codeLengths:[],observedErrors:[],trustedInputs:[],helpActions:0};
 const results=new WeakSet();let confirmHeld,loadHeld,change,committed,secondRoot;
-function App(){const [state,setState]=useState({mounted:true,challenge:'A',writer:'initial',french:mode==='french'});committed=state;change=patch=>flushSync(()=>setState(old=>({...old,...patch})));
+function App(){const [state,setState]=useState({mounted:true,challenge:'A',writer:'initial',french:mode==='french',helpDisabled:true});committed=state;change=patch=>flushSync(()=>setState(old=>({...old,...patch})));
  const text=state.french?french:labels;
  const props={verificationId:state.challenge,maskedDestination:'s***@example.invalid',labels:text,accentColor:'#0f766e',
   async confirm(input){stats.confirms++;stats.challenges.push(input.verificationId);stats.codeLengths.push(input.verificationCode.length);const result=Object.freeze({syntheticPrivateResult:'must-not-render'});results.add(result);
    if(mode==='held-confirm')return new Promise(resolve=>{confirmHeld=()=>resolve(result);});
+   if(mode==='feedback')throw new Error('Synthetic feedback source');
    if(mode==='limit'||mode==='french')throw new Error(text.attemptsExhausted);
    if(mode==='invalid'&&stats.confirms===1)throw new Error('Invalid synthetic code');
    return result;},
@@ -69,6 +70,7 @@ function App(){const [state,setState]=useState({mounted:true,challenge:'A',write
    if(mode==='held-load')return new Promise((resolve,reject)=>{loadHeld={resolve,reject};});
    if((mode==='retry'||mode==='two')&&stats.continues===1)throw new Error('Synthetic load failure');},
   reload(){stats.reloads++;},onError(error){stats.observedErrors.push(error.message);}};
+ if(mode==='feedback')props.describeError=()=>({ariaLabel:'Synthetic feedback',parts:[{type:'text',text:'Read '},{type:'link',text:'Learn more',href:'https://example.invalid/help'},{type:'text',text:' now'}],action:{label:'Synthetic help',disabled:state.helpDisabled,onActivate(){stats.helpActions++;}}});
  return h('section',{'data-proof':'first'},state.mounted?h(CompleteVerificationScreen,props):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
@@ -381,7 +383,47 @@ window.verificationProof={snapshot:()=>({react:React.version,...stats,identities
         assert.equal(await second.textContent(), '');
         assert.equal(await first().getByRole('status').count(), 1);
         await finish('independent-roots-and-narrow-style');
-        assert.equal(evidence.results.length, 8);
+        input = await open('feedback');
+        await input.fill('123456');
+        await input.press('Enter');
+        await first().getByRole('alert').waitFor();
+        const feedback = first().getByLabel('Synthetic feedback');
+        assert.equal(await feedback.textContent(), 'Read Learn more now');
+        const feedbackLink = feedback.getByRole('link', { name: 'Learn more' });
+        assert.equal(
+            await feedbackLink.getAttribute('href'),
+            'https://example.invalid/help'
+        );
+        assert.equal(await feedbackLink.getAttribute('target'), '_blank');
+        assert.equal(
+            await feedbackLink.getAttribute('rel'),
+            'noopener noreferrer'
+        );
+        assert(
+            await feedbackLink.evaluate((node) =>
+                getComputedStyle(node).textDecorationLine.includes('underline')
+            )
+        );
+        const help = first().getByRole('button', { name: 'Synthetic help' });
+        assert.equal(await help.isDisabled(), true);
+        assert.equal((await snapshot()).helpActions, 0);
+        await page.evaluate(() =>
+            window.verificationProof.patch({ helpDisabled: false })
+        );
+        assert.equal(await help.isEnabled(), true);
+        await help.focus();
+        await help.press('Enter');
+        await page.waitForFunction(
+            () => window.verificationProof.snapshot().helpActions === 1
+        );
+        state = await snapshot();
+        assert.equal(state.confirms, 1);
+        assert.equal(state.continues, 0);
+        assert.equal(state.reloads, 0);
+        assert.equal(await input.inputValue(), '123456');
+        assert.equal(await feedback.textContent(), 'Read Learn more now');
+        await finish('structured-feedback-link-and-help');
+        assert.equal(evidence.results.length, 9);
         evidence.scope =
             'Installed complete verification with synthetic host callbacks only. No code delivery, provider/auth/session/storage/native-host acceptance.';
         evidence.status = 'passed';

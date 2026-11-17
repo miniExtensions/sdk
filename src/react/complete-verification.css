@@ -96,3 +96,32 @@
         border: 1px solid ButtonText;
     }
 }
+
+.mx-sdk-verification-error-message {
+    margin: 0;
+}
+.mx-sdk-verification-error a,
+.mx-sdk-verification-error-action {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+.mx-sdk-verification-error-action {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+.mx-sdk-verification-error-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.mx-sdk-verification-error a:focus-visible,
+.mx-sdk-verification-error-action:focus-visible {
+    outline: 2px solid
+        var(--mx-sdk-verification-accent, var(--mx-sdk-accent, #4f46e5));
+    outline-offset: 2px;
+}

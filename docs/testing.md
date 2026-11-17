@@ -1065,6 +1065,15 @@ credential, OTP, provider, account, storage/session installation or native Form/
 acceptance is part of these SDK proofs. Native thin-wrapper request/continuation,
 full existing host tests and supported composition/host acceptance remain later work.
 
+Structured-feedback cases retain the legacy string-formatter fallback, ordered
+literal/link content, disabled-aware non-submit help actions, cached-result retry
+and original-message exhaustion matching. Literal HTML is escaped and unsafe
+link destinations remain inert text. Installed consumer checks compile the public
+descriptor types, and the browser proof adds feedback-link styling plus a live
+disabled-to-enabled keyboard help action while retaining all eight protocol
+cases. These checks use synthetic messages and identity booleans, never actual
+codes or private results in receipts.
+
 ## Complete Address qualification
 
 `reactCompleteAddressAutocomplete.test.ts` exercises the real component and

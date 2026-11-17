@@ -512,7 +512,59 @@ async function navigationCompatibility(browser, origin, label) {
             assert.equal(await focused(people), true);
             await page.keyboard.press('ArrowDown');
             assert.equal(await focused(guide), true);
+            const currentDocsURL = 'https://example.test/current-docs-' + width;
+            await configureCommitted({
+                items: [
+                    { type: 'table', id: 'people', label: 'People' },
+                    {
+                        type: 'embedded',
+                        id: 'guide',
+                        label: 'Guide',
+                        url: 'https://example.test/guide',
+                    },
+                    {
+                        type: 'external',
+                        id: 'docs',
+                        label: 'Docs',
+                        url: currentDocsURL,
+                    },
+                ],
+                settings: {
+                    items: [
+                        {
+                            itemId: 'docs',
+                            label: 'Edit Docs settings',
+                            includeViews: false,
+                        },
+                    ],
+                },
+            });
+            assert.equal(
+                await page
+                    .getByRole('dialog', { name: 'Portal navigation' })
+                    .count(),
+                1,
+                'Same-scope refresh keeps current navigation open'
+            );
+            assert.equal(
+                await focused(guide),
+                true,
+                'A surviving destination keeps focus across refresh'
+            );
+            assert.equal(await docs.getAttribute('href'), currentDocsURL);
             await page.keyboard.press('End');
+            assert.equal(await focused(docs), true);
+            const editorGear = page.getByRole('button', {
+                name: 'Edit Docs settings',
+                exact: true,
+            });
+            await page.keyboard.press('Tab');
+            assert.equal(
+                await focused(editorGear),
+                true,
+                'Editor remains in actual Tab order'
+            );
+            await page.keyboard.press('Shift+Tab');
             assert.equal(await focused(docs), true);
             await page.keyboard.press('Home');
             assert.equal(await focused(people), true);
@@ -534,6 +586,49 @@ async function navigationCompatibility(browser, origin, label) {
             await page.keyboard.press('Escape');
             assert.equal(await focused(toggle), true);
         }
+        const recoveryToggle = page.getByRole('button', {
+            name: 'Open navigation',
+            exact: true,
+        });
+        await recoveryToggle.focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('End');
+        const recoveryPeople = page.getByRole('button', {
+            name: 'People',
+            exact: true,
+        });
+        const withoutDocs = await page.evaluate(() =>
+            window.fixtureSnapshot.items.filter((item) => item.id !== 'docs')
+        );
+        await configureCommitted({ items: withoutDocs });
+        assert.equal(
+            await recoveryPeople.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true,
+            'Focused destination removal recovers inside the drawer'
+        );
+        await editor.focus();
+        const onlyGuide = await page.evaluate(() =>
+            window.fixtureSnapshot.items.filter((item) => item.id !== 'people')
+        );
+        await configureCommitted({ items: onlyGuide });
+        assert.equal(
+            await editor.evaluate((node) => node === document.activeElement),
+            true,
+            'Native editor retains outside focus'
+        );
+        await editor.evaluate((node) => node.blur());
+        await configureCommitted({ items: [...onlyGuide] });
+        assert.equal(
+            await page.evaluate(() => document.activeElement === document.body),
+            true,
+            'Relinquished drawer ownership stays retired'
+        );
+        await page
+            .getByRole('dialog', { name: 'Portal navigation' })
+            .getByRole('button', { name: 'Close navigation', exact: true })
+            .click();
         await page.setViewportSize({ width: 639, height: 900 });
         const actionHeader = await page.evaluate(
             () => window.fixtureSnapshot.header
@@ -675,6 +770,9 @@ async function navigationCompatibility(browser, origin, label) {
             nativeHostControlStylesAndFocus: 'passed',
             hostSelectionAcrossMenuDrift: 'passed',
             closedNavigationKeyboard: 'passed',
+            liveNavigationRevision: 'passed',
+            editorDirectionalAndTabFocus: 'passed',
+            focusedRemovalAndOutsideOwnership: 'passed',
             keyboardActivationAndReturnFocus: 'passed',
             cleanup: 'completed',
         };

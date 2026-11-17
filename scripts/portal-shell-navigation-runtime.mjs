@@ -644,6 +644,102 @@ export async function assertPortalShellNavigationConsumer({
         );
         await click(named('Open navigation'));
         await mouse(named('People'), 'mouseover');
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            items: snapshot.items.map((item) =>
+                item.type === 'group' && item.id === 'links'
+                    ? {
+                          ...item,
+                          items: item.items.map((link) =>
+                              link.id === 'docs'
+                                  ? {
+                                        ...link,
+                                        url: 'https://example.invalid/current-docs',
+                                    }
+                                  : link
+                          ),
+                      }
+                    : item
+            ),
+            settings: {
+                items: [
+                    { itemId: 'docs', label: 'Edit Docs', includeViews: false },
+                ],
+            },
+        };
+        await render();
+        const liveDrawer = container.querySelector(
+            '.mx-sdk-portal-navigation[role="dialog"]'
+        );
+        assert(
+            liveDrawer,
+            'Same-scope live data refresh preserves the open navigation'
+        );
+        const currentDocs = liveDrawer.querySelector(
+            'a[href="https://example.invalid/current-docs"]'
+        );
+        assert(currentDocs);
+        const docsEditor = liveDrawer.querySelector(
+            'button[aria-label="Edit Docs"]'
+        );
+        assert(docsEditor);
+        await press(named('Guide'), 'End');
+        assert.equal(
+            window.document.activeElement === currentDocs,
+            true,
+            'Directional navigation ends at the destination, not its settings gear'
+        );
+        docsEditor.focus();
+        assert.equal(
+            window.document.activeElement === docsEditor,
+            true,
+            'The editor remains separately focusable'
+        );
+        assert.equal(docsEditor.type, 'button');
+        currentDocs.focus();
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            items: snapshot.items.map((item) =>
+                item.type === 'group' && item.id === 'links'
+                    ? { ...item, items: [] }
+                    : item
+            ),
+        };
+        await render();
+        assert(container.querySelector('[role="dialog"]'));
+        assert.equal(
+            window.document.activeElement === named('Guide'),
+            true,
+            'Removing the focused destination recovers focus inside the current drawer'
+        );
+        const outsideOwner = container.querySelector('input');
+        outsideOwner.focus();
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            items: snapshot.items.filter((item) => item.id !== 'guide'),
+        };
+        await render();
+        assert.equal(
+            window.document.activeElement === outsideOwner,
+            true,
+            'Live publication never steals legitimate native owner focus'
+        );
+        outsideOwner.blur();
+        snapshot = {
+            ...snapshot,
+            revision: snapshot.revision + 1,
+            items: [...snapshot.items],
+        };
+        await render();
+        assert.equal(
+            window.document.activeElement === window.document.body,
+            true,
+            'A relinquished drawer focus owner cannot revive on a later outside blur'
+        );
+
         assert.equal(
             hovers.length,
             3,
@@ -841,6 +937,8 @@ export async function assertPortalShellNavigationConsumer({
             'Keyboard/menu closure never opens account or auth operations'
         );
         assert.equal(hovers.length, 4);
+        await press(window.document.activeElement, 'Escape');
+        assert.equal(container.querySelector('[role="dialog"]'), null);
         snapshot = {
             ...snapshot,
             revision: snapshot.revision + 1,
@@ -888,6 +986,32 @@ export async function assertPortalShellNavigationConsumer({
             window.document.activeElement === named('Open navigation'),
             true
         );
+        await click(named('Open navigation'));
+        snapshot = {
+            ...snapshot,
+            scope: 'navigation:replacement',
+            revision: snapshot.revision + 1,
+        };
+        await render();
+        assert.equal(
+            container.querySelector('[role="dialog"]'),
+            null,
+            'A new scope retires its open navigation'
+        );
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, menuInteraction: 'disclosure' },
+        };
+        await render();
+        await click(named('Open navigation'));
+        assert(container.querySelector('[role="dialog"]'));
+        snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+        await render();
+        assert.equal(
+            container.querySelector('[role="dialog"]'),
+            null,
+            'Ordinary disclosure mode still closes on revision changes'
+        );
         await React.act(async () => root.unmount());
         mounted = false;
         assert.equal(activations.length, 6);
@@ -909,6 +1033,8 @@ export async function assertPortalShellNavigationConsumer({
             accountKeyboardAndMobileTrap: 'passed',
             hostSelectionAcrossMenuDrift: 'passed',
             closedNavigationKeyboard: 'passed',
+            liveNavigationRevision: 'passed',
+            editorDirectionalFocus: 'passed',
         };
     } finally {
         try {

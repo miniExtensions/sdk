@@ -8,6 +8,7 @@ import {
     useState,
     type ReactNode,
     type KeyboardEvent,
+    type FocusEvent,
     type MouseEvent,
     type CSSProperties,
 } from 'react';
@@ -193,6 +194,13 @@ function visibleControls(node: HTMLElement): HTMLElement[] {
         }
     );
 }
+/** Editor gears keep Tab/pointer access while arrows traverse destinations. */
+function navigationControls(node: HTMLElement): HTMLElement[] {
+    return visibleControls(node).filter(
+        (element) => !element.classList.contains('mx-sdk-portal-settings')
+    );
+}
+
 function trapFocus(
     event: KeyboardEvent<HTMLElement>,
     boundary = event.currentTarget
@@ -350,6 +358,7 @@ function Shell(props: CompletePortalShellProps) {
     >(null);
     const logout = logoutRequest === logoutAuthority;
     const openingNavigationEdge = useRef<'first' | 'last' | null>(null);
+    const lastNavigationFocus = useRef<HTMLElement | null>(null);
     const toggle = useRef<HTMLButtonElement>(null),
         nav = useRef<HTMLDivElement>(null),
         main = useRef<HTMLElement>(null),
@@ -454,11 +463,15 @@ function Shell(props: CompletePortalShellProps) {
             edge != null || snapshot.header.menuInteraction === 'menu'
                 ? nav.current?.querySelector('nav')
                 : nav.current;
-        const destinations = focusRoot ? visibleControls(focusRoot) : [];
+        const controlsIn =
+            snapshot.header.menuInteraction === 'menu'
+                ? navigationControls
+                : visibleControls;
+        const destinations = focusRoot ? controlsIn(focusRoot) : [];
         const controls =
             destinations.length || !nav.current
                 ? destinations
-                : visibleControls(nav.current);
+                : controlsIn(nav.current);
         (
             (edge === 'last' ? controls.at(-1) : controls[0]) ?? nav.current
         )?.focus();
@@ -466,9 +479,45 @@ function Shell(props: CompletePortalShellProps) {
             if (toggle.current?.isConnected) toggle.current.focus();
         };
     }, [overlay, open, snapshot.header.menuInteraction]);
+    const navigationRevision =
+        snapshot.header.menuInteraction === 'menu' ? null : snapshot.revision;
     useEffect(() => {
+        openingNavigationEdge.current = null;
+        lastNavigationFocus.current = null;
         setOpen(false);
-    }, [snapshot.scope, snapshot.revision]);
+    }, [
+        snapshot.scope,
+        navigationRevision,
+        snapshot.header.menuInteraction,
+        snapshot.header.layout,
+        snapshot.header.hidden,
+        showNavigation,
+    ]);
+    useCommitEffect(() => {
+        const root = nav.current,
+            previous = lastNavigationFocus.current;
+        if (
+            !root ||
+            !overlay ||
+            !open ||
+            snapshot.header.menuInteraction !== 'menu' ||
+            !previous ||
+            previous.isConnected
+        )
+            return;
+        const document = root.ownerDocument;
+        // Reclaim focus only when this drawer's focused control disappeared.
+        // A native profile dialog or other legitimate outside focus stays owned.
+        if (
+            document.activeElement !== document.body &&
+            document.activeElement !== document.documentElement
+        )
+            return;
+        const destinations = navigationControls(
+            root.querySelector('nav') ?? root
+        );
+        (destinations[0] ?? navigationControls(root)[0] ?? root).focus();
+    });
     useEffect(() => {
         const document = main.current?.ownerDocument;
         const menuMode = snapshot.header.menuInteraction === 'menu';
@@ -700,7 +749,7 @@ function Shell(props: CompletePortalShellProps) {
                 event.preventDefault();
                 delete details.dataset.hoverOpen;
                 details.open = true;
-                const controls = visibleControls(details).filter(
+                const controls = navigationControls(details).filter(
                     (node) => node !== target
                 );
                 (event.key === 'ArrowDown'
@@ -724,11 +773,15 @@ function Shell(props: CompletePortalShellProps) {
             overlay && snapshot.header.menuInteraction === 'menu'
                 ? nav.current?.querySelector('nav')
                 : null;
-        let controls = visibleControls(
+        const controlsIn =
+            snapshot.header.menuInteraction === 'menu'
+                ? navigationControls
+                : visibleControls;
+        let controls = controlsIn(
             popup ?? navigationDestinations ?? event.currentTarget
         ).filter((node) => node !== summary);
         if (!popup && navigationDestinations && controls.length === 0)
-            controls = visibleControls(event.currentTarget);
+            controls = controlsIn(event.currentTarget);
         const index = controls.indexOf(
             event.currentTarget.ownerDocument.activeElement as HTMLElement
         );
@@ -1185,9 +1238,9 @@ function Shell(props: CompletePortalShellProps) {
                               const details =
                                   event.currentTarget as HTMLDetailsElement;
                               details.open = true;
-                              const controls = visibleControls(details).filter(
-                                  (node) => node.tagName !== 'SUMMARY'
-                              );
+                              const controls = navigationControls(
+                                  details
+                              ).filter((node) => node.tagName !== 'SUMMARY');
                               (event.key === 'ArrowDown'
                                   ? controls[0]
                                   : controls.at(-1)
@@ -1419,6 +1472,19 @@ function Shell(props: CompletePortalShellProps) {
                           'aria-modal': overlay && open ? true : undefined,
                           'aria-label': labels.navigation,
                           tabIndex: -1,
+                          onFocusCapture: (event: FocusEvent<HTMLElement>) => {
+                              lastNavigationFocus.current = event.target;
+                          },
+                          onBlurCapture: (event: FocusEvent<HTMLElement>) => {
+                              if (
+                                  event.relatedTarget != null
+                                      ? !event.currentTarget.contains(
+                                            event.relatedTarget
+                                        )
+                                      : event.target.isConnected
+                              )
+                                  lastNavigationFocus.current = null;
+                          },
                           onKeyDown: keyboard,
                       },
                       overlay

@@ -18,4 +18,6 @@ export function assertPortalShellNavigationConsumer(input: {
     accountKeyboardAndMobileTrap: 'passed';
     hostSelectionAcrossMenuDrift: 'passed';
     closedNavigationKeyboard: 'passed';
+    liveNavigationRevision: 'passed';
+    editorDirectionalFocus: 'passed';
 }>;

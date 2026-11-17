@@ -92,28 +92,28 @@ export const readWithRelationships: PostgresReadableRelationConfiguration = {
     ...readable,
     relationships: [clearOnly],
 };
-// @ts-expect-error Enabled selection requires an explicit display column.
-export const missingDisplay: PostgresRelationshipBinding = {
+export const missingRelationshipDisplay: PostgresRelationshipBinding = {
     ...binding,
+    // @ts-expect-error Enabled selection requires an explicit display column.
     selection: { enabled: true },
 };
-// @ts-expect-error Clear intent cannot supply server-owned columns to empty.
 export const requestOwnedClear: PostgresRelationshipClear = {
     ...clear,
+    // @ts-expect-error Clear intent cannot supply server-owned columns to empty.
     clearColumnNames: ['tenant_id'],
 };
-// @ts-expect-error Selection cannot supply server-owned assignment columns.
 export const requestOwnedWrite: PostgresRelationshipSelection = {
     ...selection,
+    // @ts-expect-error Selection cannot supply server-owned assignment columns.
     writeColumnNames: ['tenant_id'],
 };
-// @ts-expect-error Native key inputs stay lossless strings, never JavaScript numbers.
 export const numericKey: PostgresRelationshipSelection = {
     ...selection,
+    // @ts-expect-error Native key inputs stay lossless strings, never JavaScript numbers.
     values: [{ columnName: 'code', value: 9007199254740993 }],
 };
-// @ts-expect-error Relationship authoring does not admit the existing public Airtable Form protocol.
 export const publicSource: FormLoadedResult['source'] = {
+    // @ts-expect-error Relationship authoring does not admit the existing public Airtable Form protocol.
     type: 'postgres',
     connectionId: 'native',
     databaseName: 'database',

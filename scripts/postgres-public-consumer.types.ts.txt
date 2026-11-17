@@ -1202,29 +1202,100 @@ declare const page: RelationshipWitnessPostgresRelationshipCandidatePage;
 declare const form: RelationshipWitnessPostgresFormDraftState;
 declare const tab: RelationshipWitnessPostgresPortalTab;
 declare const readable: RelationshipWitnessPostgresReadableRelationConfiguration;
-export const operator: RelationshipWitnessPostgresRelationshipOperator = {oid:98,schemaName:'pg_catalog',name:'=',leftTypeOid:25,rightTypeOid:25};
-export const collation: RelationshipWitnessPostgresRelationshipCollation = {oid:100,schemaName:'pg_catalog',name:'default'};
-export const config: RelationshipWitnessPostgresRelationshipConfig = {readOnly:false,required:false,clearColumnNames:['contact_id']};
-export const selection: RelationshipWitnessPostgresRelationshipSelection = {formatVersion:1,relationshipName:'customer_fk',values:[{columnName:'tenant',value:' Exact '},{columnName:'code',value:'9007199254740993'}]};
-export const change: RelationshipWitnessPostgresRelationshipChange = {selection,expected:[{columnName:'tenant_id',value:' Exact '},{columnName:'contact_id',value:null}]};
-export const clear: RelationshipWitnessPostgresRelationshipClear = {relationshipName:'customer_fk',expected:change.expected};
-export const createClear: RelationshipWitnessPostgresRelationshipClear = {relationshipName:'customer_fk'};
-export const choosing: RelationshipWitnessPostgresRelationshipBinding = {...binding,config,selection:{enabled:true,displayColumn:column}};
-export const clearOnly: RelationshipWitnessPostgresRelationshipBinding = {...binding,config,selection:{enabled:false}};
+export const operator: RelationshipWitnessPostgresRelationshipOperator = {
+    oid: 98,
+    schemaName: 'pg_catalog',
+    name: '=',
+    leftTypeOid: 25,
+    rightTypeOid: 25,
+};
+export const collation: RelationshipWitnessPostgresRelationshipCollation = {
+    oid: 100,
+    schemaName: 'pg_catalog',
+    name: 'default',
+};
+export const config: RelationshipWitnessPostgresRelationshipConfig = {
+    readOnly: false,
+    required: false,
+    clearColumnNames: ['contact_id'],
+};
+export const selection: RelationshipWitnessPostgresRelationshipSelection = {
+    formatVersion: 1,
+    relationshipName: 'customer_fk',
+    values: [
+        { columnName: 'tenant', value: ' Exact ' },
+        { columnName: 'code', value: '9007199254740993' },
+    ],
+};
+export const change: RelationshipWitnessPostgresRelationshipChange = {
+    selection,
+    expected: [
+        { columnName: 'tenant_id', value: ' Exact ' },
+        { columnName: 'contact_id', value: null },
+    ],
+};
+export const clear: RelationshipWitnessPostgresRelationshipClear = {
+    relationshipName: 'customer_fk',
+    expected: change.expected,
+};
+export const createClear: RelationshipWitnessPostgresRelationshipClear = {
+    relationshipName: 'customer_fk',
+};
+export const choosing: RelationshipWitnessPostgresRelationshipBinding = {
+    ...binding,
+    config,
+    selection: { enabled: true, displayColumn: column },
+};
+export const clearOnly: RelationshipWitnessPostgresRelationshipBinding = {
+    ...binding,
+    config,
+    selection: { enabled: false },
+};
 export const candidates: RelationshipWitnessPostgresRelationshipCandidate[] = [
-    {selection,label:'Duplicate'},{selection,label:'Duplicate'},{selection,label:null},{selection,label:''},
+    { selection, label: 'Duplicate' },
+    { selection, label: 'Duplicate' },
+    { selection, label: null },
+    { selection, label: '' },
 ];
-export const returned: RelationshipWitnessPostgresRelationshipCandidatePage = {...page,candidates};
-export const formWithRelationships: RelationshipWitnessPostgresFormDraftState = {...form,relationships:[choosing,clearOnly]};
-export const tabWithRelationships: RelationshipWitnessPostgresPortalTab = {...tab,relationships:[choosing]};
-export const readWithRelationships: RelationshipWitnessPostgresReadableRelationConfiguration = {...readable,relationships:[clearOnly]};
-// @ts-expect-error Enabled selection requires an explicit display column.
-export const missingDisplay: RelationshipWitnessPostgresRelationshipBinding = {...binding,selection:{enabled:true}};
-// @ts-expect-error Clear intent cannot supply server-owned columns to empty.
-export const requestOwnedClear: RelationshipWitnessPostgresRelationshipClear = {...clear,clearColumnNames:['tenant_id']};
-// @ts-expect-error Selection cannot supply server-owned assignment columns.
-export const requestOwnedWrite: RelationshipWitnessPostgresRelationshipSelection = {...selection,writeColumnNames:['tenant_id']};
-// @ts-expect-error Native key inputs stay lossless strings, never JavaScript numbers.
-export const numericKey: RelationshipWitnessPostgresRelationshipSelection = {...selection,values:[{columnName:'code',value:9007199254740993}]};
-// @ts-expect-error Relationship authoring does not admit the existing public Airtable Form protocol.
-export const publicSource: RelationshipWitnessFormLoadedResult['source'] = {type:'postgres',connectionId:'native',databaseName:'database'};
+export const returned: RelationshipWitnessPostgresRelationshipCandidatePage = {
+    ...page,
+    candidates,
+};
+export const formWithRelationships: RelationshipWitnessPostgresFormDraftState = {
+    ...form,
+    relationships: [choosing, clearOnly],
+};
+export const tabWithRelationships: RelationshipWitnessPostgresPortalTab = {
+    ...tab,
+    relationships: [choosing],
+};
+export const readWithRelationships: RelationshipWitnessPostgresReadableRelationConfiguration = {
+    ...readable,
+    relationships: [clearOnly],
+};
+export const missingRelationshipDisplay: RelationshipWitnessPostgresRelationshipBinding = {
+    ...binding,
+    // @ts-expect-error Enabled selection requires an explicit display column.
+    selection: { enabled: true },
+};
+export const requestOwnedClear: RelationshipWitnessPostgresRelationshipClear = {
+    ...clear,
+    // @ts-expect-error Clear intent cannot supply server-owned columns to empty.
+    clearColumnNames: ['tenant_id'],
+};
+export const requestOwnedWrite: RelationshipWitnessPostgresRelationshipSelection = {
+    ...selection,
+    // @ts-expect-error Selection cannot supply server-owned assignment columns.
+    writeColumnNames: ['tenant_id'],
+};
+export const numericKey: RelationshipWitnessPostgresRelationshipSelection = {
+    ...selection,
+    // @ts-expect-error Native key inputs stay lossless strings, never JavaScript numbers.
+    values: [{ columnName: 'code', value: 9007199254740993 }],
+};
+export const publicSource: RelationshipWitnessFormLoadedResult['source'] = {
+    // @ts-expect-error Relationship authoring does not admit the existing public Airtable Form protocol.
+    type: 'postgres',
+    connectionId: 'native',
+    databaseName: 'database',
+};

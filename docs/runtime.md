@@ -79,6 +79,24 @@ strings or arrays. These type-only exports add no public load/save operation,
 validator or permission capability and do not widen the released Airtable
 operation contracts.
 
+`PostgresRelationshipBinding` describes a saved outgoing foreign-key group,
+including native constraint/index identities, ordered key columns, equality
+operators and collations. Enabled selection requires an explicit target display
+column; labels may be duplicate, SQL NULL or empty. A clear-only binding disables
+selection and needs no target display column. `PostgresRelationshipSelection`
+retains lossless native key values, and `PostgresRelationshipChange` pairs a
+selection with loaded component baselines.
+
+`PostgresRelationshipConfig.clearColumnNames` records the builder's explicit
+choice of local columns Clear may empty. `PostgresRelationshipClear` carries
+only relationship intent and optional baselines; it cannot choose write columns.
+Server validation still enforces the native MATCH rule, nullable/writable
+columns, saved settings, configured identifier protection, current grants,
+overlapping relationships and stale baselines. For example, a configured Clear
+may empty `contact_id` while preserving `tenant_id`. No Clear action is available
+until the saved column selection is valid. These contracts appear optionally on
+private Form/Portal authoring configurations and add no public mutation route.
+
 `PostgresField.collationOid` is required database-local collation metadata.
 Its explicit `null` means a noncollatable column; missing metadata is not NULL.
 Identifier column bindings retain an optional collation only so older saved

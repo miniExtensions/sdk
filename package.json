@@ -240,6 +240,7 @@
         "examples/react-printable-form/build.mjs",
         "examples/react-printable-form/tsconfig.json",
         "docs/portals.md",
+        "docs/readonly-portal-list.md",
         "docs/native-portal-kernel.md",
         "docs/native-portal-differential.md",
         "examples/react-portal-summary-cards/README.md",

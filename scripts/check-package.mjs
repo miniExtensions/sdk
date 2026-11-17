@@ -683,6 +683,7 @@ try {
                 path === 'docs/automatic-prefill.md' ||
                 path === 'docs/printable-form.md' ||
                 path === 'docs/portals.md' ||
+                path === 'docs/readonly-portal-list.md' ||
                 path === 'docs/native-portal-kernel.md' ||
                 path === 'docs/native-portal-differential.md' ||
                 path === 'docs/auth.md' ||
@@ -895,6 +896,9 @@ try {
         'dist/cjs/react/complete-portal-chart.css',
         'dist/esm/react/portal-summary-cards.css',
         'dist/cjs/react/portal-summary-cards.css',
+        'dist/esm/react/readonly-portal-list.css',
+        'dist/cjs/react/readonly-portal-list.css',
+        'docs/readonly-portal-list.md',
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',

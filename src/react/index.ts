@@ -3133,7 +3133,7 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                                               isCurrent() &&
                                               button.isConnected
                                           )
-                                              button.focus();
+                                              button.focus({ preventScroll: true });
                                       });
                                   },
                               },

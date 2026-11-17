@@ -448,12 +448,320 @@ async function navigationCompatibility(browser, origin, label) {
             })),
             { activations: 3, storage: 3, reads: 0 }
         );
+        const keyboardBefore = await page.evaluate(() => [
+            window.proof.activations.length,
+            window.proof.intents.length,
+            window.proof.hovers.length,
+            window.proof.reads.length,
+        ]);
+        for (const { width, hidden } of [
+            { width: 639, hidden: false },
+            { width: 640, hidden: true },
+            { width: 1280, hidden: true },
+        ]) {
+            await page.setViewportSize({ width, height: 900 });
+            const header = await page.evaluate(
+                () => window.fixtureSnapshot.header
+            );
+            await configureCommitted({
+                header: {
+                    ...header,
+                    layout: 'topbar',
+                    hidden,
+                    menuInteraction: 'menu',
+                },
+                items: [
+                    { type: 'table', id: 'people', label: 'People' },
+                    {
+                        type: 'embedded',
+                        id: 'guide',
+                        label: 'Guide',
+                        url: 'https://example.test/guide',
+                    },
+                    {
+                        type: 'external',
+                        id: 'docs',
+                        label: 'Docs',
+                        url: 'https://example.test/docs',
+                    },
+                ],
+            });
+            const toggle = page.getByRole('button', {
+                name: 'Open navigation',
+                exact: true,
+            });
+            const people = page.getByRole('button', {
+                name: 'People',
+                exact: true,
+            });
+            const guide = page.getByRole('button', {
+                name: 'Guide',
+                exact: true,
+            });
+            const docs = page.getByRole('link', {
+                name: 'Docs (opens in a new tab)',
+                exact: true,
+            });
+            const focused = (locator) =>
+                locator.evaluate((node) => node === document.activeElement);
+            await toggle.focus();
+            await page.keyboard.press('ArrowDown');
+            await page
+                .getByRole('dialog', { name: 'Portal navigation' })
+                .waitFor();
+            assert.equal(await focused(people), true);
+            await page.keyboard.press('ArrowDown');
+            assert.equal(await focused(guide), true);
+            const currentDocsURL = 'https://example.test/current-docs-' + width;
+            await configureCommitted({
+                items: [
+                    { type: 'table', id: 'people', label: 'People' },
+                    {
+                        type: 'embedded',
+                        id: 'guide',
+                        label: 'Guide',
+                        url: 'https://example.test/guide',
+                    },
+                    {
+                        type: 'external',
+                        id: 'docs',
+                        label: 'Docs',
+                        url: currentDocsURL,
+                    },
+                ],
+                settings: {
+                    items: [
+                        {
+                            itemId: 'docs',
+                            label: 'Edit Docs settings',
+                            includeViews: false,
+                        },
+                    ],
+                },
+            });
+            assert.equal(
+                await page
+                    .getByRole('dialog', { name: 'Portal navigation' })
+                    .count(),
+                1,
+                'Same-scope refresh keeps current navigation open'
+            );
+            assert.equal(
+                await focused(guide),
+                true,
+                'A surviving destination keeps focus across refresh'
+            );
+            assert.equal(await docs.getAttribute('href'), currentDocsURL);
+            await page.keyboard.press('End');
+            assert.equal(await focused(docs), true);
+            const editorGear = page.getByRole('button', {
+                name: 'Edit Docs settings',
+                exact: true,
+            });
+            await page.keyboard.press('Tab');
+            assert.equal(
+                await focused(editorGear),
+                true,
+                'Editor remains in actual Tab order'
+            );
+            await page.keyboard.press('Shift+Tab');
+            assert.equal(await focused(docs), true);
+            await page.keyboard.press('Home');
+            assert.equal(await focused(people), true);
+            await page.keyboard.press('Escape');
+            assert.equal(await focused(toggle), true);
+            assert.equal(
+                await page
+                    .getByRole('dialog', { name: 'Portal navigation' })
+                    .count(),
+                0
+            );
+            await page.keyboard.press('ArrowUp');
+            assert.equal(await focused(docs), true);
+            await page.keyboard.press('Escape');
+            await toggle.click();
+            assert.equal(await focused(people), true);
+            await page.keyboard.press('Tab');
+            assert.equal(await focused(guide), true);
+            await page.keyboard.press('Escape');
+            assert.equal(await focused(toggle), true);
+        }
+        const recoveryToggle = page.getByRole('button', {
+            name: 'Open navigation',
+            exact: true,
+        });
+        await recoveryToggle.focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('End');
+        const recoveryPeople = page.getByRole('button', {
+            name: 'People',
+            exact: true,
+        });
+        const withoutDocs = await page.evaluate(() =>
+            window.fixtureSnapshot.items.filter((item) => item.id !== 'docs')
+        );
+        await configureCommitted({ items: withoutDocs });
+        assert.equal(
+            await recoveryPeople.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true,
+            'Focused destination removal recovers inside the drawer'
+        );
+        await editor.focus();
+        const onlyGuide = await page.evaluate(() =>
+            window.fixtureSnapshot.items.filter((item) => item.id !== 'people')
+        );
+        await configureCommitted({ items: onlyGuide });
+        assert.equal(
+            await editor.evaluate((node) => node === document.activeElement),
+            true,
+            'Native editor retains outside focus'
+        );
+        await editor.evaluate((node) => node.blur());
+        await configureCommitted({ items: [...onlyGuide] });
+        assert.equal(
+            await page.evaluate(() => document.activeElement === document.body),
+            true,
+            'Relinquished drawer ownership stays retired'
+        );
+        await page
+            .getByRole('dialog', { name: 'Portal navigation' })
+            .getByRole('button', { name: 'Close navigation', exact: true })
+            .click();
+        await page.setViewportSize({ width: 639, height: 900 });
+        const actionHeader = await page.evaluate(
+            () => window.fixtureSnapshot.header
+        );
+        await configureCommitted({
+            header: { ...actionHeader, hidden: false },
+            items: [],
+            hideMenuItems: true,
+            searchAgainEnabled: true,
+            user: {
+                name: 'Action owner',
+                settingsEnabled: true,
+                logoutEnabled: false,
+                presentation: 'icon',
+            },
+        });
+        const actionToggle = page.getByRole('button', {
+            name: 'Open navigation',
+            exact: true,
+        });
+        await actionToggle.focus();
+        await page.keyboard.press('ArrowDown');
+        const actionDrawer = page.getByRole('dialog', {
+            name: 'Portal navigation',
+        });
+        await actionDrawer.waitFor();
+        assert.equal(
+            await actionDrawer.evaluate((node) =>
+                node.contains(document.activeElement)
+            ),
+            true
+        );
+        const directProfile = page.getByRole('button', {
+            name: 'User settings',
+            exact: true,
+        });
+        await page.keyboard.press('End');
+        assert.equal(
+            await directProfile.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
+        await page.keyboard.press('Home');
+        assert.equal(
+            await actionDrawer
+                .locator(':scope > button')
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        await page.keyboard.press('Escape');
+        await page.keyboard.press('ArrowUp');
+        assert.equal(
+            await directProfile.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
+        await page.keyboard.press('Escape');
+        await actionToggle.click();
+        assert.equal(
+            await actionDrawer.evaluate((node) =>
+                node.contains(document.activeElement)
+            ),
+            true
+        );
+        await page.keyboard.press('Escape');
+        assert.equal(
+            await actionToggle.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
+        assert.deepEqual(
+            await page.evaluate(() => [
+                window.proof.activations.length,
+                window.proof.intents.length,
+                window.proof.hovers.length,
+                window.proof.reads.length,
+            ]),
+            keyboardBefore,
+            'Keyboard opening/traversal/closure creates no host or hover work'
+        );
+        await configureCommitted({
+            items: [{ type: 'table', id: 'people', label: 'People' }],
+            hideMenuItems: false,
+            searchAgainEnabled: false,
+            user: undefined,
+        });
+        const activateToggle = page.getByRole('button', {
+            name: 'Open navigation',
+            exact: true,
+        });
+        await activateToggle.focus();
+        await page.keyboard.press('ArrowDown');
+        const keyboardDestination = page.getByRole('button', {
+            name: 'People',
+            exact: true,
+        });
+        assert.equal(
+            await keyboardDestination.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => window.proof.activations.length === 4);
+        assert.deepEqual(
+            await page.evaluate(() => ({
+                activations: window.proof.activations.length,
+                storage: window.proof.storage.length,
+                reads: window.proof.reads.length,
+            })),
+            { activations: 4, storage: 4, reads: 1 }
+        );
+        assert.equal(
+            await page
+                .getByRole('dialog', { name: 'Portal navigation' })
+                .count(),
+            0
+        );
+        assert.equal(
+            await activateToggle.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);
         return {
-            explicitActivations: 3,
-            recordedHostStorageEffects: 3,
-            recordedHostViewReads: 0,
+            explicitActivations: 4,
+            recordedHostStorageEffects: 4,
+            recordedHostViewReads: 1,
             pointerOnlyNotification: 'passed',
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
@@ -461,6 +769,11 @@ async function navigationCompatibility(browser, origin, label) {
             nativeHostEditorTabDestination: 'passed',
             nativeHostControlStylesAndFocus: 'passed',
             hostSelectionAcrossMenuDrift: 'passed',
+            closedNavigationKeyboard: 'passed',
+            liveNavigationRevision: 'passed',
+            editorDirectionalAndTabFocus: 'passed',
+            focusedRemovalAndOutsideOwnership: 'passed',
+            keyboardActivationAndReturnFocus: 'passed',
             cleanup: 'completed',
         };
     } catch (error) {

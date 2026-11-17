@@ -80,6 +80,24 @@ function header(f: Fixture, fieldId = 'value') {
     assert.ok(node instanceof f.window.HTMLTableCellElement);
     return node;
 }
+function dispatchPointer(
+    f: Fixture,
+    target: HappyEventTarget,
+    type: string,
+    x: number,
+    id = 1
+) {
+    const event = new f.window.MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+    });
+    Object.defineProperty(event, 'pointerId', { value: id });
+    target.dispatchEvent(event);
+}
+
 async function pointer(
     f: Fixture,
     target: HappyEventTarget,
@@ -87,16 +105,7 @@ async function pointer(
     x: number,
     id = 1
 ) {
-    await act(async () => {
-        const event = new f.window.MouseEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            button: 0,
-            clientX: x,
-        });
-        Object.defineProperty(event, 'pointerId', { value: id });
-        target.dispatchEvent(event);
-    });
+    await act(async () => dispatchPointer(f, target, type, x, id));
 }
 
 it('owns complete table markup, accepted ordering, literal labels and empty headers', async (t) => {
@@ -561,6 +570,36 @@ it('settles pointer resize to measured geometry rather than accumulated delta', 
     await pointer(f, f.window.document, 'pointerup', 120);
     assert.deepEqual(changes, [{ fieldId: 'value', width: 241 }]);
     assert.equal(th.style.width, '241px');
+    f.unchangedEffects();
+});
+
+it('commits the final measured width when pointer move and release share a React batch', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const changes: unknown[] = [];
+    const props = model({
+        onColumnWidthCommit: (change) => changes.push(change),
+    });
+    await f.render(h(ReadonlyPortalGrid, props));
+    const th = header(f);
+    Object.defineProperty(th, 'clientWidth', {
+        configurable: true,
+        get: () => Number.parseFloat(th.style.width),
+    });
+    const handle = th.querySelector('[role="separator"]');
+    assert.ok(handle);
+    assert.equal(th.clientWidth, 200);
+    await pointer(f, handle, 'pointerdown', 722);
+    await act(async () => {
+        dispatchPointer(f, f.window.document, 'pointermove', 782);
+        dispatchPointer(f, f.window.document, 'pointerup', 782);
+    });
+    assert.deepEqual(changes, [{ fieldId: 'value', width: 260 }]);
+    assert.equal(th.clientWidth, 260);
+    await f.render(
+        h(ReadonlyPortalGrid, { ...props, columnWidths: { value: 260 } })
+    );
+    assert.equal(th.clientWidth, 260);
+    assert.equal(changes.length, 1);
     f.unchangedEffects();
 });
 

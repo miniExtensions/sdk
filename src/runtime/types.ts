@@ -35,6 +35,8 @@ import type {
     CanonicalPostgresUuidColumnConfig,
     CanonicalPostgresTimestampColumnConfig,
     CanonicalPostgresTimestamptzColumnConfig,
+    CanonicalPostgresTimeColumnConfig,
+    CanonicalPostgresTimetzColumnConfig,
     CanonicalPostgresField,
     CanonicalPostgresFormRecordAccess,
     CanonicalPostgresFormDraftState,
@@ -139,6 +141,8 @@ export type PostgresTimestampColumnConfig =
     CanonicalPostgresTimestampColumnConfig;
 export type PostgresTimestamptzColumnConfig =
     CanonicalPostgresTimestamptzColumnConfig;
+export type PostgresTimeColumnConfig = CanonicalPostgresTimeColumnConfig;
+export type PostgresTimetzColumnConfig = CanonicalPostgresTimetzColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

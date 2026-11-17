@@ -39,6 +39,8 @@ export type {
     PostgresUuidColumnConfig,
     PostgresTimestampColumnConfig,
     PostgresTimestamptzColumnConfig,
+    PostgresTimeColumnConfig,
+    PostgresTimetzColumnConfig,
     PostgresField,
     PostgresFormRecordAccess,
     PostgresFormDraftState,

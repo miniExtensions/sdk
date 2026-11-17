@@ -54,6 +54,8 @@ const identities = {
         'postgresTimestamptzColumnConfigSchema',
         'PostgresTimestamptzColumnConfig',
     ],
+    time: ['postgresTimeColumnConfigSchema', 'PostgresTimeColumnConfig'],
+    timetz: ['postgresTimetzColumnConfigSchema', 'PostgresTimetzColumnConfig'],
 };
 const configurationDeclarations = (aliases) =>
     Buffer.from(
@@ -89,7 +91,7 @@ const family = (kind) => {
 };
 
 function fixture(version) {
-    assert([1, 2, 3, 4, 5, 6, 7].includes(version));
+    assert([1, 2, 3, 4, 5, 6, 7, 8].includes(version));
     const paths =
         version === 1
             ? historicalInputs
@@ -121,6 +123,11 @@ function fixture(version) {
                   ...(version >= 7
                       ? [
                             'types/extensions/postgres/timestampColumnFieldDefinitions.ts',
+                        ]
+                      : []),
+                  ...(version >= 8
+                      ? [
+                            'types/extensions/postgres/timeColumnFieldDefinitions.ts',
                         ]
                       : []),
               ].sort();
@@ -166,6 +173,9 @@ function fixture(version) {
                       ...(version >= 6 ? [family('uuid')] : []),
                       ...(version >= 7
                           ? [family('timestamp'), family('timestamptz')]
+                          : []),
+                      ...(version >= 8
+                          ? [family('time'), family('timetz')]
                           : []),
                   ],
               }),
@@ -322,7 +332,9 @@ test('v7 binds distinct temporal configurations and refuses their substitution i
     assert.equal(value.paths.length, 24);
     assert.deepEqual(
         verified.aliases,
-        Object.values(identities).map(([, name]) => name)
+        Object.values(identities)
+            .slice(0, 8)
+            .map(([, name]) => name)
     );
     for (const version of [2, 3, 4, 5, 6])
         for (const kind of ['timestamp', 'timestamptz']) {
@@ -336,7 +348,9 @@ test('v7 binds distinct temporal configurations and refuses their substitution i
 });
 
 test('actual temporal declarations reject paired removal or a v6 downgrade', () => {
-    const aliases = Object.values(identities).map(([, name]) => name);
+    const aliases = Object.values(identities)
+        .slice(0, 8)
+        .map(([, name]) => name);
     const declarations = configurationDeclarations(aliases);
     const internal = {
         aliases,
@@ -440,6 +454,8 @@ test("receipt versions cannot substitute later families or another version's sou
         [5, 4],
         [5, 6],
         [6, 5],
+        [7, 8],
+        [8, 7],
     ]) {
         await t.test(`relabel v${from} as v${to}`, () => {
             const value = fixture(from);
@@ -464,7 +480,7 @@ test("receipt versions cannot substitute later families or another version's sou
 
 test('configuration receipts refuse unreviewed versions, family identities and admission', async (t) => {
     for (const [name, mutate, reason] of [
-        ['version', (r) => (r.formatVersion = 8), 'format-version'],
+        ['version', (r) => (r.formatVersion = 9), 'format-version'],
         [
             'contract',
             (r) => (r.contract = 'postgres-text-column-config'),
@@ -517,7 +533,7 @@ test('configuration receipts refuse unreviewed versions, family identities and a
             'editor-pending',
         ],
     ]) {
-        for (const version of [2, 3, 4, 5, 6, 7])
+        for (const version of [2, 3, 4, 5, 6, 7, 8])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -543,7 +559,7 @@ test('configuration receipts refuse missing, reordered or unsafe source membersh
             (r) => (r.sources[0].path = postgresFieldConfigProvenance),
         ],
     ]) {
-        for (const version of [2, 3, 4, 5, 6, 7])
+        for (const version of [2, 3, 4, 5, 6, 7, 8])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value.receipt);
@@ -579,7 +595,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
             'generated-integrity',
         ],
     ]) {
-        for (const version of [2, 3, 4, 5, 6, 7])
+        for (const version of [2, 3, 4, 5, 6, 7, 8])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -589,7 +605,7 @@ test('configuration receipts bind source snapshots, individual inputs and genera
 });
 
 test('build provenance binds the validator and both canonical configuration inputs without source access', async (t) => {
-    for (const version of [1, 2, 3, 4, 5, 6, 7]) {
+    for (const version of [1, 2, 3, 4, 5, 6, 7, 8]) {
         await t.test(`version ${version}`, () => {
             const verified = fixture(version).verify();
             const validatorSha256 = hash('synthetic validator bytes');
@@ -727,7 +743,7 @@ test('build provenance binds the validator and both canonical configuration inpu
 });
 
 test('canonical configuration inputs must match the selected Git revision before verification', async (t) => {
-    for (const version of [2, 3, 4, 5, 6, 7])
+    for (const version of [2, 3, 4, 5, 6, 7, 8])
         await t.test(`version ${version}`, (t) => {
             const root = mkdtempSync(
                 path.join(tmpdir(), 'sdk-config-receipt-git-')
@@ -855,7 +871,7 @@ test('presentation receipts refuse missing, expanded or substituted identities a
             'receipt-scope',
         ],
     ])
-        for (const version of [4, 5, 6, 7])
+        for (const version of [4, 5, 6, 7, 8])
             await t.test(`v${version}: ${name}`, () => {
                 const value = fixture(version);
                 mutate(value);
@@ -875,7 +891,7 @@ test('presentation receipts refuse missing, expanded or substituted identities a
     }
 });
 
-for (const version of [4, 5, 6, 7])
+for (const version of [4, 5, 6, 7, 8])
     test(`v${version} build proof binds both policy sources and the generated runtime input`, () => {
         const verified = fixture(version).verify();
         const validatorSha256 = hash('synthetic validator');
@@ -935,3 +951,63 @@ for (const version of [4, 5, 6, 7])
             );
         }
     });
+
+test('v8 binds both native time families and its exact25-source closure', () => {
+    const value = fixture(8);
+    value.receipt.families.reverse();
+    const verified = value.verify();
+    assert.equal(value.paths.length, 25);
+    assert.deepEqual(
+        verified.aliases,
+        Object.values(identities).map(([, name]) => name)
+    );
+    const older = fixture(7);
+    older.receipt.families.push(family('time'), family('timetz'));
+    assert.throws(older.verify, /families/);
+    assert.deepEqual(older.readPaths, []);
+});
+
+test('actual v8 declarations reject paired time-family removal and a v7 downgrade', () => {
+    const aliases = Object.values(identities).map(([, name]) => name);
+    const declarations = configurationDeclarations(aliases);
+    const internal = {
+        aliases,
+        configurationValidation: { receiptVersion: 8 },
+    };
+    assertPostgresConfigDeclarationInventory(internal, declarations);
+    const historicalAliases = aliases.slice(0, 8);
+    const downgraded = {
+        aliases: historicalAliases,
+        configurationValidation: { receiptVersion: 7 },
+    };
+    assertPostgresConfigDeclarationInventory(
+        downgraded,
+        configurationDeclarations(historicalAliases)
+    );
+    assert.throws(
+        () =>
+            assertPostgresConfigDeclarationInventory(downgraded, declarations),
+        /declaration-inventory/
+    );
+    for (const name of aliases.slice(8)) {
+        assert.throws(
+            () =>
+                assertPostgresConfigDeclarationInventory(
+                    internal,
+                    configurationDeclarations(aliases.filter((n) => n !== name))
+                ),
+            /declaration-inventory/
+        );
+        assert.throws(
+            () =>
+                assertPostgresConfigDeclarationInventory(
+                    internal,
+                    Buffer.concat([
+                        declarations,
+                        configurationDeclarations([name]),
+                    ])
+                ),
+            /declaration-inventory/
+        );
+    }
+});

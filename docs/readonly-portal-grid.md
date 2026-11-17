@@ -14,6 +14,8 @@ Import `ReadonlyPortalGrid` from `@miniextensions/sdk/react` and
 `@miniextensions/sdk/react/readonly-portal-grid.css` for the complete table,
 headers, cells, Open controls, column visibility dialog and resize presentation.
 The existing `AirtableGrid` layout shell remains supported unchanged.
+Hosts can preserve existing Open-control selectors through `openRecordTestIds`;
+these strings are DOM metadata and never authorize an Open action.
 
 Pass detached columns and the SDK field nodes from one admitted render snapshot.
 The host retains collection, query, response qualification, child admission,

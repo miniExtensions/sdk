@@ -89,6 +89,8 @@ export type ReadonlyPortalGridProps = {
         recordId: string,
         trigger: HTMLButtonElement
     ) => void;
+    /** Optional host selectors for existing native Open controls; never action authority. */
+    readonly openRecordTestIds?: Readonly<Record<string, string | undefined>>;
     readonly doNotAllowUserToCopyTextOnGrid?: boolean | null;
     readonly rowHeight?: ReadonlyPortalGridRowHeight;
     /** Host-owned preview fact; affects image-failure presentation only. */
@@ -608,6 +610,10 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                                             type: 'button',
                                             className:
                                                 'mx-sdk-readonly-grid__open',
+                                            'data-testid':
+                                                props.openRecordTestIds?.[
+                                                    row.recordId
+                                                ],
                                             'aria-label': [
                                                 labels.openRecord,
                                                 row.label,

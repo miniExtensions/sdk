@@ -465,10 +465,12 @@ it('delegates Open with the actual trigger and refuses retained stale/ABA intent
     const calls: { recordId: string; trigger: HTMLButtonElement }[] = [];
     const props = model({
         isCurrent: () => epoch === 1,
+        openRecordTestIds: { second: 'native-open-second' },
         onOpenRecord: (recordId, trigger) => calls.push({ recordId, trigger }),
     });
     await f.render(h(ReadonlyPortalGrid, props));
     const open = button(f, 'Open record');
+    assert.equal(open.getAttribute('data-testid'), 'native-open-second');
     assert.equal(open.getAttribute('type'), 'button');
     await f.click(open);
     assert.equal(calls.length, 1);

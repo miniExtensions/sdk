@@ -220,6 +220,7 @@ export function assertModuleFormats(root) {
                 './react/portal-summary-cards.css',
                 './react/portal-gallery.css',
                 './react/form-progress.css',
+                './react/form-pages.css',
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',

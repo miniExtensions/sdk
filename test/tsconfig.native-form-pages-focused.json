@@ -1,0 +1,12 @@
+{
+    "extends": "../tsconfig.test.json",
+    "compilerOptions": {
+        "rootDir": "..",
+        "outDir": "../dist/native-form-pages-focused"
+    },
+    "include": [
+        "nativeFormPages.test.ts",
+        "formPagePresentation.component.test.ts",
+        "../types/**/*.d.ts"
+    ]
+}

@@ -13,6 +13,7 @@ import {
 } from './native-portal-kernel-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
+import { checkNativeFormPagesReactMatrix } from './native-form-pages-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -702,6 +703,7 @@ try {
                 path === 'docs/csv-export.md' ||
                 path === 'docs/kanban.md' ||
                 path === 'docs/portal-gallery.md' ||
+                path === 'docs/native-form-pages.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/image-annotation-markerjs2-license.txt' ||
                 path === 'examples/react-image-annotation/README.md' ||
@@ -909,6 +911,9 @@ try {
         'docs/readonly-portal-list.md',
         'dist/esm/react/portal-gallery.css',
         'dist/cjs/react/portal-gallery.css',
+        'dist/esm/react/form-pages.css',
+        'dist/cjs/react/form-pages.css',
+        'docs/native-form-pages.md',
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
@@ -4757,6 +4762,18 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
     }
+    const nativePagesProof = await checkNativeFormPagesReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(nativePagesProof.tests, 108);
+    assert.equal(nativePagesProof.hydrationProfiles, 4);
+    assert.equal(nativePagesProof.hydrationChecks, 52);
+    assert.equal(nativePagesProof.cleanup, 'completed');
+    console.log(
+        'Installed live Form pages/Review qualification passed.',
+        nativePagesProof
+    );
     const galleryProof = await checkPortalGalleryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

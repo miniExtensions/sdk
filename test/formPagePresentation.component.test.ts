@@ -1,0 +1,491 @@
+import assert from 'node:assert/strict';
+import { it, type TestContext } from 'node:test';
+import { Window } from 'happy-dom';
+import {
+    act,
+    createElement as h,
+    Fragment,
+    StrictMode,
+    type ReactNode,
+} from 'react';
+import { renderToString } from 'react-dom/server';
+import {
+    CompleteFormPageNavigation,
+    FormPageNavigationButton,
+    type FormPageNavigationDescriptor,
+} from '../src/react/CompleteFormPageNavigation.js';
+import {
+    CompleteFormReview,
+    type CompleteFormReviewProps,
+} from '../src/react/CompleteFormReview.js';
+
+const pages: readonly FormPageNavigationDescriptor[] = [
+    {
+        title: null,
+        description: null,
+        fieldIds: ['leading'],
+        hidden: false,
+    },
+    {
+        title: 'Contact',
+        description: '<p>Tell us <strong>about you</strong>.</p>',
+        fieldIds: ['name'],
+        hidden: false,
+    },
+    {
+        title: 'Hidden page',
+        description: null,
+        fieldIds: ['hidden'],
+        hidden: true,
+    },
+    {
+        title: 'Details',
+        description: null,
+        fieldIds: ['detail'],
+        hidden: false,
+    },
+];
+
+const reviewProps = (
+    patch: Partial<CompleteFormReviewProps> = {}
+): CompleteFormReviewProps => ({
+    open: true,
+    title: 'Please review your submission',
+    editLabel: 'Edit',
+    confirmLabel: 'Submit form',
+    emptyLabel: 'No set values',
+    items: [
+        {
+            id: 'name',
+            title: 'Name',
+            semanticTitle: 'Name',
+            value: 'First value',
+        },
+    ],
+    onEdit: () => {},
+    onDismiss: () => {},
+    onConfirm: () => {},
+    ...patch,
+});
+
+async function fixture(t: TestContext) {
+    const window = new Window({
+        url: 'https://form-pages.example.test/',
+        settings: {
+            disableCSSFileLoading: true,
+            disableJavaScriptFileLoading: true,
+            disableIframePageLoading: true,
+        },
+    });
+    const values: Record<string, unknown> = {
+        window,
+        document: window.document,
+        navigator: window.navigator,
+        HTMLElement: window.HTMLElement,
+        HTMLDialogElement: window.HTMLDialogElement,
+        Element: window.Element,
+        Node: window.Node,
+        NodeFilter: window.NodeFilter,
+        DocumentFragment: window.DocumentFragment,
+        CustomEvent: window.CustomEvent,
+        MutationObserver: window.MutationObserver,
+        getComputedStyle: window.getComputedStyle.bind(window),
+        IS_REACT_ACT_ENVIRONMENT: true,
+    };
+    const originals = Object.keys(values).map(
+        (key) =>
+            [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    );
+    for (const [key, value] of Object.entries(values))
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            writable: true,
+            value,
+        });
+    const host = window.document.createElement('div');
+    const form = window.document.createElement('form');
+    form.id = 'canonical-form';
+    let submits = 0;
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submits++;
+    });
+    const opener = window.document.createElement('button');
+    opener.textContent = 'Open Review';
+    window.document.body.append(form, opener, host);
+    opener.focus();
+    const { createRoot } = await import('react-dom/client');
+    const root = createRoot(host as unknown as HTMLElement);
+    let mounted = true;
+    const unmount = async () => {
+        if (!mounted) return;
+        mounted = false;
+        await act(async () => root.unmount());
+    };
+    t.after(async () => {
+        try {
+            await unmount();
+        } finally {
+            for (const [key, descriptor] of originals) {
+                if (descriptor)
+                    Object.defineProperty(globalThis, key, descriptor);
+                else Reflect.deleteProperty(globalThis, key);
+            }
+            await window.happyDOM.close();
+        }
+    });
+    const render = async (node: ReactNode) => {
+        await act(async () => root.render(h(StrictMode, null, node)));
+    };
+    const button = (label: string) => {
+        const found = [...host.querySelectorAll('button')].find(
+            (element) =>
+                element.getAttribute('aria-label') === label ||
+                element.textContent === label
+        );
+        assert.ok(found, `Expected button: ${label}`);
+        return found;
+    };
+    return {
+        window,
+        host,
+        opener,
+        render,
+        button,
+        unmount,
+        submits: () => submits,
+        click: async (label: string) => {
+            await act(async () => button(label).click());
+        },
+    };
+}
+
+it('renders complete page and Review presentation in SSR without invoking actions', () => {
+    let actions = 0;
+    const markup = renderToString(
+        h(
+            Fragment,
+            null,
+            h(CompleteFormPageNavigation, {
+                pages,
+                activePageIndex: 1,
+                onSelectTitle: () => actions++,
+            }),
+            h(
+                CompleteFormReview,
+                reviewProps({
+                    title: '<Review>',
+                    onEdit: () => actions++,
+                    onDismiss: () => actions++,
+                    onConfirm: () => actions++,
+                })
+            )
+        )
+    );
+    assert.match(markup, /<strong>about you<\/strong>/);
+    assert.match(markup, /&lt;Review&gt;/);
+    assert.match(markup, /<dl/);
+    assert.match(markup, /First value/);
+    assert.equal(actions, 0);
+    assert.equal(
+        renderToString(h(CompleteFormReview, reviewProps({ open: false }))),
+        ''
+    );
+});
+
+it('uses only visible titled pages for progress and delegates preview title selection', async (t) => {
+    const f = await fixture(t);
+    let selections = 0;
+    await f.render(
+        h(CompleteFormPageNavigation, {
+            pages,
+            activePageIndex: 1,
+            onSelectTitle: () => selections++,
+            progressTestId: 'native-progress',
+            progressItemTestId: 'native-progress-item',
+        })
+    );
+    const progress = f.host.querySelector('[data-testid="native-progress"]');
+    assert.equal(progress?.getAttribute('aria-hidden'), 'true');
+    const items = f.host.querySelectorAll(
+        '[data-testid="native-progress-item"]'
+    );
+    assert.equal(items.length, 2);
+    assert.ok(
+        items[0]?.classList.contains('mx-sdk-form-pages-progress-item--reached')
+    );
+    assert.ok(
+        !items[1]?.classList.contains(
+            'mx-sdk-form-pages-progress-item--reached'
+        )
+    );
+    assert.equal(f.button('Contact').type, 'button');
+    await f.click('Contact');
+    assert.equal(selections, 1);
+    assert.equal(f.submits(), 0);
+    await f.render(
+        h(CompleteFormPageNavigation, { pages, activePageIndex: 3 })
+    );
+    assert.equal(f.host.querySelector('button'), null);
+    assert.equal(f.host.querySelector('h2')?.textContent, 'Details');
+    assert.equal(
+        f.host.querySelectorAll('.mx-sdk-form-pages-progress-item--reached')
+            .length,
+        2
+    );
+});
+
+it('omits an untitled current page, invalid page and single-page progress', async (t) => {
+    const f = await fixture(t);
+    for (const activePageIndex of [0, -1, 10]) {
+        await f.render(
+            h(CompleteFormPageNavigation, { pages, activePageIndex })
+        );
+        assert.equal(f.host.textContent, '');
+    }
+    await f.render(
+        h(CompleteFormPageNavigation, {
+            pages: [pages[1]!],
+            activePageIndex: 0,
+        })
+    );
+    assert.equal(
+        f.host.querySelector('[data-testid="form-page-progress"]'),
+        null
+    );
+    assert.equal(f.host.querySelector('h2')?.textContent, 'Contact');
+});
+
+it('routes Next through the existing associated form while Back stays a command', async (t) => {
+    const f = await fixture(t);
+    let backs = 0;
+    const controls = (loading = false) =>
+        h(
+            Fragment,
+            null,
+            h(FormPageNavigationButton, {
+                direction: 'back',
+                label: 'Back',
+                onClick: () => backs++,
+            }),
+            h(FormPageNavigationButton, {
+                direction: 'next',
+                label: 'Next',
+                form: 'canonical-form',
+                loading,
+            })
+        );
+    await f.render(controls());
+    assert.equal(f.button('Back').type, 'button');
+    assert.equal(f.button('Next').type, 'submit');
+    assert.equal(f.button('Next').getAttribute('form'), 'canonical-form');
+    await f.click('Back');
+    assert.equal(backs, 1);
+    assert.equal(f.submits(), 0);
+    await f.click('Next');
+    assert.equal(f.submits(), 1);
+    await f.render(controls(true));
+    assert.equal(f.button('Next').disabled, true);
+    assert.equal(f.button('Next').getAttribute('aria-busy'), 'true');
+    assert.ok(
+        f.button('Next').querySelector('.mx-sdk-form-page-button-spinner')
+    );
+    await f.click('Next');
+    assert.equal(f.submits(), 1);
+});
+
+it('updates live readonly leaves without dispatch and retains semantic hidden titles', async (t) => {
+    const f = await fixture(t);
+    let edits = 0;
+    let confirms = 0;
+    const props = reviewProps({
+        onEdit: () => edits++,
+        onConfirm: () => confirms++,
+    });
+    await f.render(h(CompleteFormReview, props));
+    const dialog = f.host.querySelector('dialog');
+    assert.ok(dialog?.open);
+    assert.equal(f.window.document.activeElement, f.button('Edit'));
+    const confirm = f.button('Submit form');
+    confirm.focus();
+    await f.render(
+        h(CompleteFormReview, {
+            ...props,
+            items: [
+                {
+                    id: 'name',
+                    title: '',
+                    semanticTitle: 'Name',
+                    value: h('strong', null, 'Latest value'),
+                },
+                {
+                    id: 'url',
+                    title: 'Website',
+                    semanticTitle: 'Website',
+                    value: h('a', { href: '#admitted-destination' }, 'Site'),
+                },
+            ],
+        })
+    );
+    assert.equal(f.window.document.activeElement, confirm);
+    assert.equal(
+        f.host.querySelector('dd strong')?.textContent,
+        'Latest value'
+    );
+    assert.equal(
+        f.host.querySelector('dd a')?.getAttribute('href'),
+        '#admitted-destination'
+    );
+    const hiddenTitle = f.host.querySelector('dt');
+    assert.equal(hiddenTitle?.textContent, 'Name');
+    assert.ok(
+        hiddenTitle?.classList.contains('mx-sdk-form-review-label--hidden')
+    );
+    assert.equal(
+        f.host.querySelector('dd')?.getAttribute('aria-labelledby'),
+        hiddenTitle?.id
+    );
+    assert.equal(edits, 0);
+    assert.equal(confirms, 0);
+    assert.equal(f.button('Edit').type, 'button');
+    assert.equal(confirm.type, 'button');
+    await f.click('Edit');
+    await f.click('Submit form');
+    assert.equal(edits, 1);
+    assert.equal(confirms, 1);
+    assert.equal(f.submits(), 0);
+});
+
+it('shows the supplied empty state and leaves confirmation availability controlled', async (t) => {
+    const f = await fixture(t);
+    let confirms = 0;
+    const props = reviewProps({
+        items: [],
+        confirmDisabled: true,
+        onConfirm: () => confirms++,
+    });
+    await f.render(h(CompleteFormReview, props));
+    assert.equal(f.host.querySelector('dl'), null);
+    assert.equal(
+        f.host.querySelector('.mx-sdk-form-review-empty')?.textContent,
+        'No set values'
+    );
+    await f.click('Submit form');
+    assert.equal(confirms, 0);
+    await f.render(h(CompleteFormReview, { ...props, confirmDisabled: false }));
+    await f.click('Submit form');
+    assert.equal(confirms, 1);
+});
+
+it('traps modal keyboard focus and returns it to the connected invoker on close', async (t) => {
+    const f = await fixture(t);
+    let dismissals = 0;
+    const props = reviewProps({ onDismiss: () => dismissals++ });
+    await f.render(h(CompleteFormReview, props));
+    const edit = f.button('Edit');
+    const confirm = f.button('Submit form');
+    confirm.focus();
+    await act(async () => {
+        confirm.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Tab',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(f.window.document.activeElement, edit);
+    await act(async () => {
+        edit.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Tab',
+                shiftKey: true,
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(f.window.document.activeElement, confirm);
+    await act(async () => {
+        confirm.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(dismissals, 1);
+    await f.render(h(CompleteFormReview, { ...props, open: false }));
+    assert.equal(f.host.querySelector('dialog'), null);
+    assert.equal(f.window.document.activeElement, f.opener);
+});
+
+it('dismisses only the top Review and preserves its invoker when a lower Review unmounts', async (t) => {
+    const f = await fixture(t);
+    let outerDismissals = 0;
+    let innerDismissals = 0;
+    const outer = reviewProps({
+        title: 'Outer Review',
+        onDismiss: () => outerDismissals++,
+    });
+    const inner = reviewProps({
+        title: 'Inner Review',
+        onDismiss: () => innerDismissals++,
+    });
+    await f.render(
+        h(
+            Fragment,
+            null,
+            h(CompleteFormReview, { ...outer, key: 'outer' }),
+            h(CompleteFormReview, { ...inner, key: 'inner' })
+        )
+    );
+    const dialogs = f.host.querySelectorAll('dialog');
+    assert.equal(dialogs.length, 2);
+    const labels = [...f.host.querySelectorAll('dd')].map((dd) =>
+        dd.getAttribute('aria-labelledby')
+    );
+    assert.equal(new Set(labels).size, 2);
+    await act(async () => {
+        f.window.document.activeElement?.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    assert.equal(innerDismissals, 1);
+    assert.equal(outerDismissals, 0);
+    await f.render(
+        h(Fragment, null, h(CompleteFormReview, { ...inner, key: 'inner' }))
+    );
+    await f.render(null);
+    assert.equal(f.window.document.activeElement, f.opener);
+});
+
+it('outside dismissal does not invoke Edit or Confirm', async (t) => {
+    const f = await fixture(t);
+    let edits = 0;
+    let dismissals = 0;
+    let confirms = 0;
+    await f.render(
+        h(
+            CompleteFormReview,
+            reviewProps({
+                onEdit: () => edits++,
+                onDismiss: () => dismissals++,
+                onConfirm: () => confirms++,
+            })
+        )
+    );
+    const overlay = f.host.querySelector(
+        '[data-testid="dialog-overlay-test-id"]'
+    );
+    assert.ok(overlay);
+    await act(async () => (overlay as unknown as HTMLElement).click());
+    assert.equal(edits, 0);
+    assert.equal(confirms, 0);
+    assert.equal(dismissals, 1);
+});

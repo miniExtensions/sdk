@@ -47,10 +47,10 @@ export const postgresRuntimeArtifactModules = [
 export function postgresRuntimeArtifactSpecifications(configurationValidation) {
     const version = configurationValidation?.receiptVersion;
     assert(
-        [1, 2, 3, 4, 5, 6].includes(version),
+        [1, 2, 3, 4, 5, 6, 7].includes(version),
         'Unknown PostgreSQL runtime receipt version'
     );
-    return [4, 5, 6].includes(version)
+    return [4, 5, 6, 7].includes(version)
         ? [attachment, presentation]
         : [attachment];
 }

@@ -33,6 +33,8 @@ import type {
     CanonicalPostgresDateColumnConfig,
     CanonicalPostgresEnumColumnConfig,
     CanonicalPostgresUuidColumnConfig,
+    CanonicalPostgresTimestampColumnConfig,
+    CanonicalPostgresTimestamptzColumnConfig,
     CanonicalPostgresField,
     CanonicalPostgresFormRecordAccess,
     CanonicalPostgresFormDraftState,
@@ -132,6 +134,11 @@ export type PostgresNumericColumnConfig = CanonicalPostgresNumericColumnConfig;
 export type PostgresDateColumnConfig = CanonicalPostgresDateColumnConfig;
 export type PostgresEnumColumnConfig = CanonicalPostgresEnumColumnConfig;
 export type PostgresUuidColumnConfig = CanonicalPostgresUuidColumnConfig;
+/** Native temporal configuration only; values retain PostgreSQL text precision. */
+export type PostgresTimestampColumnConfig =
+    CanonicalPostgresTimestampColumnConfig;
+export type PostgresTimestamptzColumnConfig =
+    CanonicalPostgresTimestamptzColumnConfig;
 export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
 export type PostgresIdentifierConfiguration =
     CanonicalPostgresIdentifierConfiguration;

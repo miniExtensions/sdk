@@ -32,6 +32,14 @@ UUID remain native string-or-NULL values; this type adds no text normalization,
 version restriction or UUID generation option. Historical receipt versions 1–5
 retain their existing families and source closures.
 
+`PostgresTimestampColumnConfig` and `PostgresTimestamptzColumnConfig` add distinct
+native temporal configuration families under receipt v7 and its 24-source
+closure. They describe common field settings for local timestamps and instants;
+they add no timezone conversion, epoch values, precision setting or native value
+input. Values remain PostgreSQL text or SQL NULL. Historical receipt versions
+1–6 retain their existing families and source closures. Configuration/read
+preview and value-input admission remain separate in the private application.
+
 The independent native snapshot also exports `PostgresConfiguredColumn`,
 `PostgresReadableRelationConfiguration`, `PostgresFormDraftState`,
 `PostgresFormDraft`, `PostgresPortalTab`, `PostgresPortalDraftState`,

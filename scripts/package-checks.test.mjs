@@ -690,6 +690,12 @@ async function postgresDistributionFixture(
             : []),
         ...(receiptVersion >= 5 ? ['PostgresEnumColumnConfig'] : []),
         ...(receiptVersion >= 6 ? ['PostgresUuidColumnConfig'] : []),
+        ...(receiptVersion >= 7
+            ? [
+                  'PostgresTimestampColumnConfig',
+                  'PostgresTimestamptzColumnConfig',
+              ]
+            : []),
     ];
     const declaration = aliases
         .map(
@@ -860,7 +866,7 @@ test('archive checks reject a Form access validator substitution before acceptin
     );
 });
 
-for (const receiptVersion of [4, 5, 6])
+for (const receiptVersion of [4, 5, 6, 7])
     test(`v${receiptVersion} public distribution requires both fixed runtime artifacts`, async (t) => {
         const fixture = await postgresDistributionFixture(t, {
             presentation: true,
@@ -936,7 +942,7 @@ test('archive guard refuses swapped per-module emitter metadata with unchanged r
         });
 });
 
-for (const receiptVersion of [4, 5, 6])
+for (const receiptVersion of [4, 5, 6, 7])
     test(`v${receiptVersion} runtime registry binds each module to its own emitter bytes`, () => {
         const proof = { receiptVersion };
         const specifications = postgresRuntimeArtifactSpecifications(proof);
@@ -1239,6 +1245,34 @@ test('public archive rejects UUID declaration inventory tampering even with matc
             }
             await assert.rejects(fixture.check(), /declaration-inventory/);
         });
+});
+
+test('public archive rejects paired temporal alias removal and a v6 downgrade', async (t) => {
+    const fixture = await postgresDistributionFixture(t, {
+        presentation: true,
+        receiptVersion: 7,
+    });
+    await fixture.check();
+    const temporal = new Set([
+        'PostgresTimestampColumnConfig',
+        'PostgresTimestamptzColumnConfig',
+    ]);
+    fixture.postgres.configurationValidation.receiptVersion = 6;
+    fixture.postgres.configurationValidation.aliases =
+        fixture.postgres.configurationValidation.aliases.filter(
+            (name) => !temporal.has(name)
+        );
+    fixture.postgres.aliases = fixture.postgres.aliases.filter(
+        (name) => !temporal.has(name)
+    );
+    fixture.nativeProvenance.aliases = fixture.postgres.aliases;
+    for (const format of ['esm', 'cjs'])
+        await write(
+            fixture.root,
+            `dist/${format}/runtime/contracts/postgres.generated.provenance.json`,
+            JSON.stringify(fixture.nativeProvenance)
+        );
+    await assert.rejects(fixture.check(), /declaration-inventory/);
 });
 
 test('public archive rejects paired omission of composed authoring aliases', async (t) => {

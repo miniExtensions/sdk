@@ -1,4 +1,16 @@
 export {
+    createFormRecordActionsController,
+    type FormRecordActionsScope,
+    type FormRecordDeleteOutcome,
+    type FormRecordDeleteOperation,
+    type FormRecordDeleteAdmission,
+    type FormRecordActionsFrame,
+    type FormRecordActionsPort,
+    type FormRecordActionsSnapshot,
+    type FormRecordActionsController,
+} from './recordActions.js';
+
+export {
     evaluateAutomaticPrefill,
     hasPersistableAutomaticURLPrefill,
     type AutomaticPrefillFacts,

@@ -151,6 +151,7 @@
         "./react/theme.css": "./dist/esm/react/theme.css",
         "./react/form-header.css": "./dist/esm/react/form-header.css",
         "./react/form-submit.css": "./dist/esm/react/form-submit.css",
+        "./react/form-record-actions.css": "./dist/esm/react/form-record-actions.css",
         "./react/form-progress.css": "./dist/esm/react/form-progress.css",
         "./react/form-validation-summary.css": "./dist/esm/react/form-validation-summary.css",
         "./react/portal-summary-cards.css": "./dist/esm/react/portal-summary-cards.css",

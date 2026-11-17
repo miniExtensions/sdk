@@ -1,0 +1,118 @@
+.mx-sdk-form-record-actions {
+    min-width: 0;
+}
+
+.mx-sdk-form-record-actions__footer,
+.mx-sdk-form-record-actions__choices {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mx-sdk-form-record-actions__menu {
+    position: relative;
+    display: inline-block;
+}
+
+.mx-sdk-form-record-actions__panel {
+    position: absolute;
+    inset-inline-start: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 10;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    padding: 0.25rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: #fff;
+    box-shadow: 0 4px 12px #0002;
+}
+
+.mx-sdk-form-record-actions button,
+.mx-sdk-form-record-actions__dialog button {
+    box-sizing: border-box;
+    max-width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0.4375rem 0.6875rem;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.mx-sdk-form-record-actions__panel button {
+    display: block;
+    width: 100%;
+    border-color: transparent;
+    text-align: start;
+}
+
+.mx-sdk-form-record-actions button:enabled:hover,
+.mx-sdk-form-record-actions__dialog button:enabled:hover {
+    background: #f3f4f6;
+}
+
+.mx-sdk-form-record-actions button:disabled,
+.mx-sdk-form-record-actions__dialog button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.mx-sdk-form-record-actions button:focus-visible,
+.mx-sdk-form-record-actions__dialog button:focus-visible {
+    outline: 2px solid rgb(var(--theme-600, 37 99 235));
+    outline-offset: 2px;
+}
+
+.mx-sdk-form-record-actions button.mx-sdk-form-record-actions__danger-text {
+    color: #b91c1c;
+}
+
+.mx-sdk-form-record-actions__dialog {
+    box-sizing: border-box;
+    width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    border: 0;
+    border-radius: 0.75rem;
+    padding: 0;
+    background: #fff;
+    color: #111827;
+    box-shadow: 0 20px 40px #0003;
+}
+
+.mx-sdk-form-record-actions__dialog::backdrop {
+    background: #0006;
+}
+
+.mx-sdk-form-record-actions__warning {
+    padding: 1.5rem;
+    overflow-wrap: anywhere;
+}
+
+.mx-sdk-form-record-actions__warning h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.125rem;
+}
+
+.mx-sdk-form-record-actions__warning p {
+    margin: 0;
+}
+
+.mx-sdk-form-record-actions__choices {
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+.mx-sdk-form-record-actions__dialog button.mx-sdk-form-record-actions__danger {
+    border-color: #b91c1c;
+    background: #b91c1c;
+    color: #fff;
+}
+
+.mx-sdk-form-record-actions__dialog
+    button.mx-sdk-form-record-actions__danger:enabled:hover {
+    background: #991b1b;
+}

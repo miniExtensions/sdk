@@ -45,6 +45,8 @@ window.proof = {
     mounts: 0,
     sidebarWidths: [],
     settings: [],
+    activations: [],
+    hovers: [],
 };
 function App() {
     const [snapshot, setSnapshot] = useState(() => ({
@@ -71,6 +73,10 @@ function App() {
     }));
     const [mount, setMount] = useState(0);
     const [resizeEnabled, setResizeEnabled] = useState(false);
+    const [hostEditor, setHostEditor] = useState(false);
+    window.enableHostEditor = setHostEditor;
+    const [activationEnabled, setActivationEnabled] = useState(false);
+    window.enableSelectionActivation = setActivationEnabled;
     // Synthetic controlled-host publication for committed ownership witnesses.
     window.fixtureSnapshot = snapshot;
     window.publishSnapshot = setSnapshot;
@@ -140,6 +146,43 @@ function App() {
             key: mount,
             snapshot,
             onIntent: command,
+            onSelectionActivate: activationEnabled
+                ? (request) => {
+                      window.proof.activations.push(request);
+                      const selection = request.selection;
+                      const previous = request.previousSelection;
+                      const item = snapshot.items.find(
+                          (item) => item.id === selection.itemId
+                      );
+                      // This synthetic host retains its accepted view on a
+                      // parent-only activation, as the native owner must do.
+                      const retainedView =
+                          previous?.type === 'table' &&
+                          previous.itemId === selection.itemId
+                              ? previous.viewId
+                              : (item?.defaultViewId ?? null);
+                      command(
+                          selection.type === 'table' &&
+                              selection.viewId === null
+                              ? {
+                                    ...request,
+                                    selection: {
+                                        ...selection,
+                                        viewId: retainedView,
+                                    },
+                                }
+                              : request
+                      );
+                  }
+                : undefined,
+            onItemHover: (request) => {
+                if (
+                    request.scope !== snapshot.scope ||
+                    request.revision !== snapshot.revision
+                )
+                    throw Error('Stale hover request');
+                window.proof.hovers.push(request);
+            },
             onSidebarWidthCommit: resizeEnabled ? acceptWidth : undefined,
             onOpenSettings: (request) => {
                 if (
@@ -154,6 +197,18 @@ function App() {
             'article',
             null,
             h('h2', null, 'Host collection'),
+            hostEditor
+                ? h(
+                      'div',
+                      {
+                          role: 'textbox',
+                          contentEditable: true,
+                          'aria-label': 'Native record editor',
+                          suppressContentEditableWarning: true,
+                      },
+                      'Native editable draft'
+                  )
+                : null,
             h(
                 'p',
                 null,

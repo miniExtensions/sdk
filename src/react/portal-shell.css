@@ -447,3 +447,23 @@
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }
+.mx-sdk-portal-shell .mx-sdk-portal-view {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.mx-sdk-portal-view-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+.mx-sdk-portal-view-badge {
+    position: absolute;
+    top: -1px;
+    inset-inline-end: -1px;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #ef4444;
+}

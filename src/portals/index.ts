@@ -28,6 +28,7 @@ export {
 } from './shell.js';
 export type {
     PortalShellView,
+    PortalShellViewLayout,
     PortalShellMenuItem,
     PortalShellSelection,
     PortalShellInitialSelection,

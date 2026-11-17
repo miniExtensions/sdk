@@ -37,6 +37,262 @@ const report = {
     profiles: [],
 };
 let browser, server;
+async function navigationCompatibility(browser, origin, label) {
+    const page = await browser.newPage({
+        viewport: { width: 1280, height: 900 },
+    });
+    const errors = [],
+        external = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    await page.route('**/*', (route) => {
+        if (new URL(route.request().url()).origin === origin)
+            return route.continue();
+        external.push(route.request().url());
+        return route.abort();
+    });
+    try {
+        await page.goto(origin);
+        await page
+            .getByRole('heading', { name: '<Customer Portal>' })
+            .waitFor();
+        await page.evaluate(() => {
+            window.enableSelectionActivation(true);
+            window.configure({
+                selectionPolicy: 'host',
+                header: {
+                    layout: 'topbar',
+                    actionsPlacement: 'layout',
+                    title: 'Native menu proof',
+                    menuInteraction: 'menu',
+                },
+                items: window.fixtureItems.map((item) =>
+                    item.type === 'table' && item.views
+                        ? {
+                              ...item,
+                              sidebarInitiallyExpanded: true,
+                              views: item.views.map((view, index) => ({
+                                  ...view,
+                                  layout: index ? null : 'calendar',
+                                  badge: index === 0,
+                              })),
+                          }
+                        : item
+                ),
+                settings: {
+                    items: [
+                        {
+                            itemId: 'orders',
+                            label: 'Edit Orders settings',
+                            includeViews: false,
+                            visibleIn: 'sidebar',
+                        },
+                    ],
+                },
+            });
+        });
+        await page.waitForFunction(
+            () =>
+                window.fixtureCommittedSnapshot?.header.menuInteraction ===
+                'menu'
+        );
+        const summary = page.locator('summary').filter({ hasText: /^Orders$/ });
+        await summary.focus();
+        await page.keyboard.press('ArrowDown');
+        const openView = page.getByRole('button', {
+            name: 'Open orders',
+            exact: true,
+        });
+        assert.equal(
+            await openView.evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.equal(await page.evaluate(() => window.proof.hovers.length), 0);
+        await page.keyboard.press('Tab');
+        assert.equal(await openView.isVisible(), false);
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'People', exact: true })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        await summary.focus();
+        await page.keyboard.press('ArrowUp');
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Done orders', exact: true })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        await page.keyboard.press('Shift+Tab');
+        assert.equal(await openView.isVisible(), false);
+        assert.equal(
+            await page
+                .locator('.mx-sdk-portal-user > summary')
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.deepEqual(
+            await page.evaluate(() => [
+                window.proof.activations.length,
+                window.proof.hovers.length,
+                window.proof.intents.length,
+            ]),
+            [0, 0, 0]
+        );
+        await summary.focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => window.proof.activations.length === 1);
+        await summary.press('Enter');
+        await openView.waitFor();
+        await openView.click();
+        await page.waitForFunction(() => window.proof.activations.length === 3);
+        assert.deepEqual(
+            await page.evaluate(() =>
+                window.proof.activations.map(
+                    (request) => request.selection.viewId
+                )
+            ),
+            ['open', null, 'open']
+        );
+        assert.deepEqual(
+            await page.evaluate(() => ({
+                intents: window.proof.intents.length,
+                storage: window.proof.storage.length,
+                reads: window.proof.reads.length,
+            })),
+            { intents: 3, storage: 3, reads: 0 }
+        );
+        await page.getByRole('heading', { name: 'Host collection' }).hover();
+        const beforeHover = await page.evaluate(
+            () => window.proof.hovers.length
+        );
+        await summary.hover();
+        await openView.waitFor();
+        await page.waitForFunction(
+            (before) => window.proof.hovers.length > before,
+            beforeHover
+        );
+        assert.deepEqual(
+            await page.evaluate(() => {
+                const r = window.proof.hovers.at(-1);
+                return [r.itemId, r.viewId];
+            }),
+            ['orders', null]
+        );
+        await page.getByRole('heading', { name: 'Host collection' }).hover();
+        assert.equal(await openView.isVisible(), false);
+        assert.equal(
+            await page
+                .getByRole('button', { name: 'Edit Orders settings' })
+                .count(),
+            0
+        );
+        await page.setViewportSize({ width: 639, height: 800 });
+        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await openView.waitFor();
+        assert.equal(
+            await page.locator('.mx-sdk-portal-view-icon:visible').count(),
+            2
+        );
+        assert.equal(
+            await page.locator('.mx-sdk-portal-view-badge').count(),
+            1
+        );
+        const gear = page.getByRole('button', {
+            name: 'Edit Orders settings',
+            exact: true,
+        });
+        assert.equal(await gear.count(), 1);
+        await gear.focus();
+        await page.keyboard.press('Enter');
+        assert.equal(
+            await page.evaluate(() => window.proof.settings.length),
+            1
+        );
+        assert.equal(await page.evaluate(() => window.proof.storage.length), 3);
+        await summary.click();
+        assert.equal(await openView.isVisible(), false);
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await openView.waitFor();
+        const user = page.locator('.mx-sdk-portal-user');
+        await user.locator('summary').focus();
+        await page.keyboard.press('ArrowDown');
+        assert.equal(
+            await user
+                .getByRole('button', { name: 'User settings', exact: true })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        await page.keyboard.press('Tab');
+        assert.equal(await user.evaluate((node) => node.open), false);
+        assert.equal(await page.getByRole('dialog').count(), 1);
+        assert.equal(
+            await page
+                .getByRole('dialog')
+                .evaluate((node) => node.contains(document.activeElement)),
+            true,
+            'Account-menu Tab stays within the mobile drawer'
+        );
+        assert.equal(await page.evaluate(() => window.proof.intents.length), 3);
+        await user.locator('summary').focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Escape');
+        assert.equal(await user.evaluate((node) => node.open), false);
+        assert.equal(
+            await page.getByRole('dialog').count(),
+            1,
+            'Account-menu Escape preserves the mobile navigation dialog'
+        );
+        await openView.focus();
+        await page.keyboard.press('Escape');
+        assert.equal(await page.getByRole('dialog').count(), 0);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.evaluate(() => {
+            window.enableHostEditor(true);
+            window.configure({
+                header: { ...window.fixtureSnapshot.header, layout: 'sidebar' },
+            });
+        });
+        const editor = page.getByRole('textbox', {
+            name: 'Native record editor',
+        });
+        await editor.waitFor();
+        await user.locator('summary').focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Tab');
+        assert.equal(await user.evaluate((node) => node.open), false);
+        assert.equal(
+            await editor.evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.equal(await page.evaluate(() => window.proof.intents.length), 3);
+        assert.deepEqual(errors, []);
+        assert.deepEqual(external, []);
+        return {
+            explicitActivations: 3,
+            recordedHostStorageEffects: 3,
+            recordedHostViewReads: 0,
+            pointerOnlyNotification: 'passed',
+            mobileDisclosureResetAndEscape: 'passed',
+            configuredIconsBadgesAndSettings: 'passed',
+            desktopAndMobileMenuTabFocus: 'passed',
+            nativeHostEditorTabDestination: 'passed',
+            cleanup: 'completed',
+        };
+    } catch (error) {
+        await page
+            .screenshot({
+                path: join(output, `navigation-${label}.png`),
+                fullPage: true,
+            })
+            .catch(() => {});
+        throw error;
+    } finally {
+        await page.close();
+    }
+}
 async function configuredPresentation(browser, origin, label) {
     const page = await browser.newPage({
         viewport: { width: 1280, height: 900 },
@@ -1004,6 +1260,11 @@ try {
                     externalDestinations: external.length,
                     desktopMobileKeyboardAndForcedColors: 'passed',
                     sidebarEndOnlyBoundsRetirementAndBodyIdentity: 'passed',
+                    navigationCompatibility: await navigationCompatibility(
+                        browser,
+                        origin,
+                        `${react}-${format}`
+                    ),
                     configuredPresentation: await configuredPresentation(
                         browser,
                         origin,

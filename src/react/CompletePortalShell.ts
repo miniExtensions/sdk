@@ -17,6 +17,15 @@ import {
     type PortalShellSidebarWidthCommit,
 } from './PortalSidebarResize.js';
 export type { PortalShellSidebarWidthCommit } from './PortalSidebarResize.js';
+
+export type PortalShellSettingsTarget =
+    | Readonly<{ type: 'title' | 'description' | 'profile' }>
+    | Readonly<{ type: 'item'; itemId: string }>;
+export type PortalShellSettingsRequest = Readonly<{
+    scope: string;
+    revision: string | number;
+    target: PortalShellSettingsTarget;
+}>;
 import {
     flattenPortalShellMenu,
     portalShellSelectionsEqual,
@@ -60,6 +69,13 @@ export type PortalShellSnapshot = Readonly<{
         logoUrl?: string;
     }>;
     hideMenuItems?: boolean;
+    /** Already admitted authoring controls. Native configuration paths stay with the host. */
+    settings?: Readonly<{
+        title?: string;
+        description?: string;
+        profile?: string;
+        items?: readonly Readonly<{ itemId: string; label: string }>[];
+    }>;
     user?: Readonly<{
         name: string;
         settingsEnabled?: boolean;
@@ -116,6 +132,8 @@ export type CompletePortalShellProps = {
     onIntent: (intent: PortalShellIntent) => void;
     /** End-only resize notification. The host validates the envelope and persists. */
     onSidebarWidthCommit?: (change: PortalShellSidebarWidthCommit) => void;
+    /** Opens the existing host editor; never navigation, account settings or a renderer. */
+    onOpenSettings?: (request: PortalShellSettingsRequest) => void;
     /** The host-owned table/collection body. Menus, header, embed and dialogs are SDK-owned. */
     children?: ReactNode;
     labels?: Partial<PortalShellLabels>;
@@ -261,6 +279,13 @@ function Shell(props: CompletePortalShellProps) {
         () => ({ snapshot, onIntent: props.onIntent }),
         [snapshot, props.onIntent]
     );
+    const settingsAuthority = useMemo(
+        () => ({ snapshot, onOpenSettings: props.onOpenSettings }),
+        [snapshot, props.onOpenSettings]
+    );
+    const committedSettingsAuthority = useRef<typeof settingsAuthority | null>(
+        null
+    );
     const committedLogoutAuthority = useRef<typeof logoutAuthority | null>(
             null
         ),
@@ -326,6 +351,13 @@ function Shell(props: CompletePortalShellProps) {
                 activeLogoutAuthority.current = null;
         };
     }, [logoutAuthority]);
+    useCommitEffect(() => {
+        committedSettingsAuthority.current = settingsAuthority;
+        return () => {
+            if (committedSettingsAuthority.current === settingsAuthority)
+                committedSettingsAuthority.current = null;
+        };
+    }, [settingsAuthority]);
     useCommitEffect(() => {
         // Preview writes are imperative so dragging never remounts host content.
         // React may otherwise skip an equal style value when resize is withdrawn.
@@ -494,11 +526,82 @@ function Shell(props: CompletePortalShellProps) {
             controls[next]!.focus();
         }
     }
+    // Fixed native lucide-react0.417 Settings outline; installed ISC notice retained.
+    function settingsButton(
+        target: PortalShellSettingsTarget,
+        label: string | undefined
+    ): ReactNode {
+        if (!props.onOpenSettings || !label?.trim()) return null;
+        return h(
+            'button',
+            {
+                type: 'button',
+                className: 'mx-sdk-portal-settings',
+                'aria-label': label,
+                'data-config-preview-canvas-control': 'true',
+                onClick: (event: MouseEvent<HTMLButtonElement>) => {
+                    event.stopPropagation();
+                    if (
+                        committedSettingsAuthority.current !==
+                            settingsAuthority ||
+                        !settingsAuthority.onOpenSettings
+                    )
+                        return;
+                    settingsAuthority.onOpenSettings({
+                        scope: snapshot.scope,
+                        revision: snapshot.revision,
+                        target,
+                    });
+                },
+            },
+            h(
+                'svg',
+                {
+                    viewBox: '0 0 24 24',
+                    fill: 'none',
+                    stroke: 'currentColor',
+                    strokeWidth: 2,
+                    strokeLinecap: 'round',
+                    strokeLinejoin: 'round',
+                    'aria-hidden': true,
+                },
+                h('path', {
+                    d: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z',
+                }),
+                h('circle', { cx: 12, cy: 12, r: 3 })
+            )
+        );
+    }
+    function itemSettings(itemId: string): ReactNode {
+        const matches = snapshot.settings?.items?.filter(
+            (item) => item.itemId === itemId
+        );
+        return matches?.length === 1
+            ? settingsButton({ type: 'item', itemId }, matches[0]!.label)
+            : null;
+    }
+    function configured(content: ReactNode, control: ReactNode): ReactNode {
+        return control
+            ? h(
+                  'div',
+                  { className: 'mx-sdk-portal-configurable' },
+                  content,
+                  control
+              )
+            : content;
+    }
     function menu(list: readonly PortalShellMenuItem[]): ReactNode {
         return h(
             'ul',
             { className: 'mx-sdk-portal-menu' },
             ...list.map((item) => {
+                const control = itemSettings(item.id);
+                const row = {
+                    key: item.id,
+                    className: control
+                        ? 'mx-sdk-portal-configurable'
+                        : undefined,
+                };
                 const label = h(
                     'span',
                     { className: 'mx-sdk-portal-menu-label' },
@@ -514,7 +617,7 @@ function Shell(props: CompletePortalShellProps) {
                 if (item.type === 'group')
                     return h(
                         'li',
-                        { key: item.id },
+                        row,
                         snapshot.header.hidden
                             ? menu(item.items)
                             : h(
@@ -522,12 +625,13 @@ function Shell(props: CompletePortalShellProps) {
                                   { className: 'mx-sdk-portal-group' },
                                   h('summary', null, label),
                                   menu(item.items)
-                              )
+                              ),
+                        control
                     );
                 if (item.type === 'external')
                     return h(
                         'li',
-                        { key: item.id },
+                        row,
                         h(
                             'a',
                             {
@@ -544,12 +648,13 @@ function Shell(props: CompletePortalShellProps) {
                                       ` (${labels.externalLink})`
                                   )
                                 : null
-                        )
+                        ),
+                        control
                     );
                 if (item.type === 'table' && item.views !== undefined)
                     return h(
                         'li',
-                        { key: item.id },
+                        row,
                         h(
                             'details',
                             { className: 'mx-sdk-portal-group' },
@@ -569,7 +674,12 @@ function Shell(props: CompletePortalShellProps) {
                                 ...item.views.map((view) =>
                                     h(
                                         'li',
-                                        { key: view.id },
+                                        {
+                                            key: view.id,
+                                            className: control
+                                                ? 'mx-sdk-portal-configurable'
+                                                : undefined,
+                                        },
                                         h(
                                             'button',
                                             {
@@ -595,15 +705,17 @@ function Shell(props: CompletePortalShellProps) {
                                                     ),
                                             },
                                             view.label
-                                        )
+                                        ),
+                                        itemSettings(item.id)
                                     )
                                 )
                             )
-                        )
+                        ),
+                        control
                     );
                 return h(
                     'li',
-                    { key: item.id },
+                    row,
                     h(
                         'button',
                         {
@@ -629,7 +741,8 @@ function Shell(props: CompletePortalShellProps) {
                                 ),
                         },
                         label
-                    )
+                    ),
+                    control
                 );
             })
         );
@@ -671,7 +784,7 @@ function Shell(props: CompletePortalShellProps) {
     const descriptionOptions = snapshot.header.descriptionOptions;
     const descriptionInNavigation =
         descriptionOptions?.placement === 'navigation';
-    const description = (
+    const descriptionContent = (
         descriptionOptions
             ? snapshot.header.descriptionHtml != null
             : Boolean(snapshot.header.descriptionHtml)
@@ -687,6 +800,80 @@ function Shell(props: CompletePortalShellProps) {
                   html: snapshot.header.descriptionHtml!,
               })
         : null;
+    const description = configured(
+        descriptionContent,
+        snapshot.header.descriptionHtml != null
+            ? settingsButton(
+                  { type: 'description' },
+                  snapshot.settings?.description
+              )
+            : null
+    );
+    const userActions =
+        directUserAction ??
+        (user && (user.settingsEnabled || user.logoutEnabled)
+            ? h(
+                  'details',
+                  {
+                      className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
+                      onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                          if (event.key === 'Escape') {
+                              event.currentTarget.removeAttribute('open');
+                              event.currentTarget
+                                  .querySelector('summary')
+                                  ?.focus();
+                          }
+                      },
+                  },
+                  h('summary', { 'aria-label': labels.userMenu }, userLabel),
+                  h(
+                      'div',
+                      null,
+                      user.settingsEnabled
+                          ? h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    onClick: (
+                                        event: MouseEvent<HTMLElement>
+                                    ) => {
+                                        event.currentTarget
+                                            .closest('details')
+                                            ?.removeAttribute('open');
+                                        event.currentTarget
+                                            .closest('details')
+                                            ?.querySelector('summary')
+                                            ?.focus();
+                                        emit({ type: 'user-settings' });
+                                    },
+                                },
+                                labels.settings
+                            )
+                          : null,
+                      user.logoutEnabled
+                          ? h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    onClick: (
+                                        event: MouseEvent<HTMLElement>
+                                    ) => {
+                                        event.currentTarget
+                                            .closest('details')
+                                            ?.removeAttribute('open');
+                                        event.currentTarget
+                                            .closest('details')
+                                            ?.querySelector('summary')
+                                            ?.focus();
+                                        beginLogout();
+                                    },
+                                },
+                                labels.logout
+                            )
+                          : null
+                  )
+              )
+            : null);
     const actions = h(
         'div',
         { className: 'mx-sdk-portal-actions' },
@@ -700,74 +887,15 @@ function Shell(props: CompletePortalShellProps) {
                   labels.searchAgain
               )
             : null,
-        directUserAction ??
-            (user && (user.settingsEnabled || user.logoutEnabled)
-                ? h(
-                      'details',
-                      {
-                          className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
-                          onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
-                              if (event.key === 'Escape') {
-                                  event.currentTarget.removeAttribute('open');
-                                  event.currentTarget
-                                      .querySelector('summary')
-                                      ?.focus();
-                              }
-                          },
-                      },
-                      h(
-                          'summary',
-                          { 'aria-label': labels.userMenu },
-                          userLabel
-                      ),
-                      h(
-                          'div',
-                          null,
-                          user.settingsEnabled
-                              ? h(
-                                    'button',
-                                    {
-                                        type: 'button',
-                                        onClick: (
-                                            event: MouseEvent<HTMLElement>
-                                        ) => {
-                                            event.currentTarget
-                                                .closest('details')
-                                                ?.removeAttribute('open');
-                                            event.currentTarget
-                                                .closest('details')
-                                                ?.querySelector('summary')
-                                                ?.focus();
-                                            emit({ type: 'user-settings' });
-                                        },
-                                    },
-                                    labels.settings
-                                )
-                              : null,
-                          user.logoutEnabled
-                              ? h(
-                                    'button',
-                                    {
-                                        type: 'button',
-                                        onClick: (
-                                            event: MouseEvent<HTMLElement>
-                                        ) => {
-                                            event.currentTarget
-                                                .closest('details')
-                                                ?.removeAttribute('open');
-                                            event.currentTarget
-                                                .closest('details')
-                                                ?.querySelector('summary')
-                                                ?.focus();
-                                            beginLogout();
-                                        },
-                                    },
-                                    labels.logout
-                                )
-                              : null
-                      )
+        configured(
+            userActions,
+            user?.settingsEnabled
+                ? settingsButton(
+                      { type: 'profile' },
+                      snapshot.settings?.profile
                   )
-                : null)
+                : null
+        )
     );
     const welcome = snapshot.welcome;
     return h(
@@ -805,7 +933,14 @@ function Shell(props: CompletePortalShellProps) {
             !snapshot.header.hidden
                 ? h(
                       'div',
-                      { className: 'mx-sdk-portal-brand' },
+                      {
+                          className: `mx-sdk-portal-brand${
+                              props.onOpenSettings &&
+                              snapshot.settings?.title?.trim()
+                                  ? ' mx-sdk-portal-configurable'
+                                  : ''
+                          }`,
+                      },
                       snapshot.header.logoUrl
                           ? h('img', {
                                 src: snapshot.header.logoUrl,
@@ -827,6 +962,10 @@ function Shell(props: CompletePortalShellProps) {
                                     snapshot.header.title
                                 ),
                           descriptionInNavigation ? null : description
+                      ),
+                      settingsButton(
+                          { type: 'title' },
+                          snapshot.settings?.title
                       )
                   )
                 : null,

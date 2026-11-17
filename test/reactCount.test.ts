@@ -784,6 +784,41 @@ it('controlled Count reuses complete readonly text for supplied zero, empty and 
     assert.equal(rowClicks, 0);
 });
 
+it('controlled Count preserves the complete custom empty label without changing populated zero or binding values', async (t) => {
+    const f = await fixture(t, {}, 42);
+    for (const emptyLabel of ['No linked records', ''] as const) {
+        for (const value of [null, undefined, ''] as const) {
+            await f.render(
+                h(CountField, { value, language: 'en', emptyLabel })
+            );
+            assert.equal(f.container.textContent, emptyLabel);
+            assert.ok(
+                f.container.querySelector('[data-testid="no-value-test-id"]')
+            );
+            assert.equal(
+                f.container.querySelector('input,button,textarea,select'),
+                null
+            );
+            assert.equal(f.binding.getSnapshot().value, 42);
+            assert.equal(f.binding.getSnapshot().dirty, false);
+        }
+    }
+    await f.render(
+        h(CountField, {
+            value: '0',
+            language: 'en',
+            emptyLabel: 'No linked records',
+        })
+    );
+    assert.equal(f.container.textContent, '0');
+    assert.equal(
+        f.container.querySelector('[data-testid="no-value-test-id"]'),
+        null
+    );
+    assert.equal(f.binding.getSnapshot().value, 42);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});
+
 it('switches between controlled and binding Count without retaining subscriptions or changing binding semantics', async (t) => {
     const f = await fixture(t, {}, 7);
     const pure = snapshotBinding(f.binding.getSnapshot());

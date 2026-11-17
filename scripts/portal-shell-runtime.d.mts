@@ -37,3 +37,14 @@ export function assertPortalShellPresentationConsumer(
     synchronousPublications: number;
     siblingLogoutIntents: number;
 }>;
+
+export function assertPortalShellSettingsConsumer(
+    input: Omit<Parameters<typeof assertPortalShellConsumer>[0], 'portals'>
+): Promise<{
+    settingsRequests: number;
+    siblingRequests: number;
+    ordinaryIntents: number;
+    submitEvents: number;
+    implicitNetworkRequests: number;
+    precommitAdmission: 'rejected';
+}>;

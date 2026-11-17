@@ -44,6 +44,7 @@ window.proof = {
     dismissals: [],
     mounts: 0,
     sidebarWidths: [],
+    settings: [],
 };
 function App() {
     const [snapshot, setSnapshot] = useState(() => ({
@@ -140,6 +141,14 @@ function App() {
             snapshot,
             onIntent: command,
             onSidebarWidthCommit: resizeEnabled ? acceptWidth : undefined,
+            onOpenSettings: (request) => {
+                if (
+                    request.scope !== snapshot.scope ||
+                    request.revision !== snapshot.revision
+                )
+                    throw Error('Stale authoring request');
+                window.proof.settings.push(request);
+            },
         },
         h(
             'article',

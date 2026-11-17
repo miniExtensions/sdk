@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { calendarCompleteStyleAssets } from './calendar-complete-style-assets.mjs';
 import { createHash } from 'node:crypto';
@@ -1341,8 +1342,12 @@ export function checkCalendarReactMatrix({
                     },
                 })
             );
-            execFileSync(
-                'npm',
+            runAgeQualifiedConsumerInstall(
+                (command, args) =>
+                    execFileSync(command, args, {
+                        cwd: directory,
+                        stdio: 'inherit',
+                    }),
                 [
                     'install',
                     '--ignore-scripts',
@@ -1354,8 +1359,7 @@ export function checkCalendarReactMatrix({
                     `react-dom@${version.react}`,
                     `@types/react@${version.types}`,
                     `@types/react-dom@${version.domTypes}`,
-                ],
-                { cwd: directory, stdio: 'inherit' }
+                ]
             );
             for (const extension of ['mts', 'cts']) {
                 const name = `calendar.${extension}`;

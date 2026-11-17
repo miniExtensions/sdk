@@ -1,5 +1,29 @@
 # Source test coverage
 
+## Fresh package consumer dependencies
+
+Fresh React matrix consumers use `scripts/age-qualified-consumer-install.mjs`.
+Before installation it verifies pnpm10.28.2, a 2880-minute minimum release age,
+empty exclusions, blocked exotic subdependencies, strict peers, ignored lifecycle
+scripts and a hoisted layout. Each private temporary consumer keeps its actual
+generated lock and archive/manifest hashes in a receipt, compares every installed
+SDK file with the packed archive and refuses SDK symlinks. A second React profile
+may retire only a generated scratch lock matching the preceding successful
+receipt. Unknown retained locks require separate admission; this adapter does
+not relax repository frozen installs or reuse a retained dependency closure.
+
+The genuine npm/headless archive-provenance phase remains separate. The package
+workflow and central checker also verify npm's effective `before` cutoff is at
+least 48 hours old, preserve stricter inherited cutoffs and refuse age exclusions.
+That npm filter covers fresh resolutions with publication timestamps; it does
+not itself age-admit retained locks or undated registry metadata. It is not a
+replacement for the controlled pnpm matrix setup or exact retained-lock admission.
+
+`scripts/age-qualified-consumer-install.test.mjs` exercises policy/version refusal
+before module retirement, profile replacement, archive and same-size installed
+byte drift, symlink substitution and prior npm-provenance preservation. The
+existing runtime, declarations, browser and cleanup assertions remain mandatory.
+
 ## Form CAPTCHA SDK checkpoint
 
 `test/formCaptcha.test.ts` covers canonical publication/refusal, initial/later

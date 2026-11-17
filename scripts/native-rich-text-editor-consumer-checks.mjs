@@ -1,3 +1,4 @@
+import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { fileSelectionTypedConsumer } from './file-selection-consumer-checks.mjs';
 import { recoverableImageTypedConsumer } from './recoverable-image-consumer-checks.mjs';
 import assert from 'node:assert/strict';
@@ -463,7 +464,7 @@ export function checkNativeEditorReactMatrix({
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
         ]) {
-            run('npm', [
+            runAgeQualifiedConsumerInstall(run, [
                 'install',
                 '--ignore-scripts',
                 '--strict-peer-deps',

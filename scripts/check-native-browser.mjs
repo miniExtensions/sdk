@@ -73,6 +73,7 @@ import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.m
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
+import { checkReadonlyPortalListBrowser } from './readonly-portal-list-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -1573,6 +1574,8 @@ try {
             'scripts/field-presentation-consumer-checks.mjs',
             'scripts/printable-form-browser-checks.mjs',
             'scripts/portal-gallery-browser-checks.mjs',
+            'scripts/readonly-portal-list-browser-checks.mjs',
+            'scripts/readonly-portal-list-fixture.mjs',
             'scripts/form-group-consumer-checks.mjs',
             'scripts/controlled-lookup-consumer-checks.mjs',
             'scripts/controlled-lookup-browser-checks.mjs',
@@ -2461,6 +2464,18 @@ try {
             evidence: report.completeVerification,
             output,
         });
+        report.readonlyPortalList = {};
+        await checkReadonlyPortalListBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.readonlyPortalList,
+            output,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.readonlyPortalList.passed, true);
+        assert.equal(report.readonlyPortalList.contextClosed, true);
+        assert.equal(report.readonlyPortalList.serverClosed, true);
+        assert.equal(report.readonlyPortalList.scratchRemoved, true);
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

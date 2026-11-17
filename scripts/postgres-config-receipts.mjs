@@ -74,7 +74,18 @@ const intervalFamily = {
     schemaName: 'postgresIntervalColumnConfigSchema',
     typeName: 'PostgresIntervalColumnConfig',
 };
-const allFamilies = [...timeFamilies, intervalFamily];
+const intervalFamilies = [...timeFamilies, intervalFamily];
+const jsonFamily = {
+    kind: 'json',
+    schemaName: 'postgresJsonColumnConfigSchema',
+    typeName: 'PostgresJsonColumnConfig',
+};
+const jsonbFamily = {
+    kind: 'jsonb',
+    schemaName: 'postgresJsonbColumnConfigSchema',
+    typeName: 'PostgresJsonbColumnConfig',
+};
+const allFamilies = [...intervalFamilies, jsonFamily, jsonbFamily];
 const historicalSources = [
     '.prettierrc',
     'package.json',
@@ -127,6 +138,10 @@ const intervalSources = [
     ...timeSources,
     'types/extensions/postgres/intervalColumnFieldDefinitions.ts',
 ].sort();
+const jsonSources = [
+    ...intervalSources,
+    'types/extensions/postgres/jsonColumnFieldDefinitions.ts',
+].sort();
 const receiptVersions = new Map([
     [1, { families: [textFamily], sources: historicalSources }],
     [2, { families: [textFamily, booleanFamily], sources: booleanSources }],
@@ -136,7 +151,8 @@ const receiptVersions = new Map([
     [6, { families: uuidFamilies, sources: uuidSources }],
     [7, { families: temporalFamilies, sources: temporalSources }],
     [8, { families: timeFamilies, sources: timeSources }],
-    [9, { families: allFamilies, sources: intervalSources }],
+    [9, { families: intervalFamilies, sources: intervalSources }],
+    [10, { families: allFamilies, sources: jsonSources }],
 ]);
 const sharedReceiptKeys = [
     'formatVersion',
@@ -232,7 +248,9 @@ export function verifyPostgresConfigReceipt({
     );
     const version = receiptVersions.get(receipt.formatVersion);
     const historical = receipt.formatVersion === 1;
-    const hasPresentation = [4, 5, 6, 7, 8, 9].includes(receipt.formatVersion);
+    const hasPresentation = [4, 5, 6, 7, 8, 9, 10].includes(
+        receipt.formatVersion
+    );
     requireReceipt(
         exactKeys(receipt, [
             ...sharedReceiptKeys,
@@ -466,7 +484,9 @@ export function assertPostgresConfigReceiptProvenance(
     declarations
 ) {
     const proof = internal.configurationValidation;
-    const hasPresentation = [4, 5, 6, 7, 8, 9].includes(proof?.receiptVersion);
+    const hasPresentation = [4, 5, 6, 7, 8, 9, 10].includes(
+        proof?.receiptVersion
+    );
     requireReceipt(
         exactKeys(proof, [
             'receiptVersion',

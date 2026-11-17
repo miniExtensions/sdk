@@ -56,6 +56,15 @@ selection, precision override, IntervalStyle setting or portable value parser.
 Versions 1–8 retain their exact families and source closures. Public Form/Portal
 transport admission remains separate from these type exports.
 
+`PostgresJsonColumnConfig` and `PostgresJsonbColumnConfig` add separate `json`
+and `jsonb` common-settings families under receipt v10 and its 27-source
+closure. Native document values remain `PostgresValue` strings or SQL NULL;
+JSON text `'null'` is distinct from SQL `null`. No JavaScript object parsing,
+pretty printing, numeric coercion or JSON-schema setting is added. PostgreSQL
+owns the returned representation. The existing `JsonValue` utility is separate
+from native database column values. Versions 1–9 retain their exact families
+and source closures; portable runtime and public transport admission are unchanged.
+
 The independent native snapshot also exports `PostgresConfiguredColumn`,
 `PostgresReadableRelationConfiguration`, `PostgresFormDraftState`,
 `PostgresFormDraft`, `PostgresPortalTab`, `PostgresPortalDraftState`,

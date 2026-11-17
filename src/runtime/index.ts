@@ -42,6 +42,8 @@ export type {
     PostgresTimeColumnConfig,
     PostgresTimetzColumnConfig,
     PostgresIntervalColumnConfig,
+    PostgresJsonColumnConfig,
+    PostgresJsonbColumnConfig,
     PostgresField,
     PostgresFormRecordAccess,
     PostgresFormDraftState,

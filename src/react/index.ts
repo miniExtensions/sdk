@@ -3201,6 +3201,8 @@ export type {
     PortalShellSnapshot,
     PortalShellLabels,
     PortalShellSidebarWidthCommit,
+    PortalShellSettingsTarget,
+    PortalShellSettingsRequest,
 } from './CompletePortalShell.js';
 
 export {

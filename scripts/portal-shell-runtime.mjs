@@ -1,5 +1,362 @@
 import assert from 'node:assert/strict';
 
+/** Public authoring descriptors route to host editors without borrowing navigation authority. */
+export async function assertPortalShellSettingsConsumer({
+    React,
+    ui,
+    Window,
+    createRoot,
+    renderToString,
+}) {
+    const h = React.createElement;
+    const settings = {
+        title: 'Edit title',
+        description: 'Edit description',
+        profile: 'Edit profile',
+        items: [
+            { itemId: 'orders', label: 'Edit orders' },
+            { itemId: 'docs', label: 'Edit docs' },
+            { itemId: 'unsafe', label: 'Edit unsafe' },
+            { itemId: 'absent', label: 'Edit absent' },
+        ],
+    };
+    let snapshot = {
+        scope: 'settings:member',
+        revision: 1,
+        header: { layout: 'sidebar', title: '', descriptionHtml: '' },
+        items: [
+            {
+                type: 'table',
+                id: 'orders',
+                label: 'Orders',
+                views: [
+                    { id: 'open', label: 'Open orders' },
+                    { id: 'done', label: 'Done orders' },
+                ],
+            },
+            {
+                type: 'external',
+                id: 'docs',
+                label: 'Docs',
+                url: 'https://example.invalid/docs',
+            },
+            {
+                type: 'external',
+                id: 'unsafe',
+                label: 'Unsafe',
+                url: 'javascript:void(0)',
+            },
+        ],
+        selection: { type: 'table', itemId: 'orders', viewId: 'open' },
+        user: { name: 'Member', settingsEnabled: true, logoutEnabled: true },
+        settings,
+    };
+    const requests = [],
+        ordinaryIntents = [],
+        siblingRequests = [];
+    const first = (request) => requests.push({ callback: 'first', ...request });
+    const second = (request) =>
+        requests.push({ callback: 'second', ...request });
+    let onOpenSettings = first;
+    const onIntent = (intent) => ordinaryIntents.push(intent);
+    let precommitProbe = false,
+        precommitProbes = 0;
+    function HostBody() {
+        const useCommitEffect =
+            typeof document === 'undefined'
+                ? React.useEffect
+                : React.useLayoutEffect;
+        useCommitEffect(() => {
+            if (!precommitProbe) return;
+            const control = container.querySelector(
+                '[aria-label="Edit title"]'
+            );
+            assert(control?.isConnected);
+            precommitProbes++;
+            // A connected child layout effect precedes the Shell's lease.
+            control.click();
+        }, [snapshot]);
+        return h('input', {
+            'aria-label': 'Host draft',
+            defaultValue: 'Preserved',
+        });
+    }
+    const element = () =>
+        h(
+            React.StrictMode,
+            null,
+            h(
+                ui.CompletePortalShell,
+                { snapshot, onIntent, onOpenSettings },
+                h(HostBody)
+            )
+        );
+    const ssr = renderToString(element());
+    assert.equal((ssr.match(/mx-sdk-portal-settings"/g) ?? []).length, 7);
+    assert.doesNotMatch(ssr, /Edit unsafe|Edit absent/);
+    assert.deepEqual(requests, []);
+    assert.deepEqual(ordinaryIntents, []);
+    assert.doesNotMatch(
+        renderToString(h(ui.CompletePortalShell, { snapshot, onIntent })),
+        /mx-sdk-portal-settings/
+    );
+    let networks = 0,
+        submits = 0;
+    const window = new Window({
+        url: 'https://settings.invalid/',
+        settings: {
+            disableIframePageLoading: true,
+            fetch: {
+                interceptor: {
+                    beforeAsyncRequest() {
+                        networks++;
+                        throw Error('Unexpected network');
+                    },
+                    beforeSyncRequest() {
+                        networks++;
+                        throw Error('Unexpected network');
+                    },
+                },
+            },
+        },
+    });
+    window.happyDOM.setWindowSize({ width: 1280, height: 900 });
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ];
+    const originals = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    for (const key of keys)
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
+        });
+    const container = window.document.createElement('form');
+    container.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submits++;
+    });
+    window.document.body.append(container);
+    const root = createRoot(container);
+    const sibling = window.document.createElement('div');
+    window.document.body.append(sibling);
+    const siblingRoot = createRoot(sibling);
+    const render = () => React.act(async () => root.render(element()));
+    const gear = (label, parent = container) =>
+        [...parent.querySelectorAll('button')].find(
+            (button) => button.getAttribute('aria-label') === label
+        );
+    const click = (button) =>
+        React.act(async () => {
+            assert(button);
+            button.click();
+        });
+    let mounted = true;
+    try {
+        await render();
+        await React.act(async () =>
+            siblingRoot.render(
+                h(
+                    React.StrictMode,
+                    null,
+                    h(ui.CompletePortalShell, {
+                        snapshot: { ...snapshot, scope: 'settings:sibling' },
+                        onIntent,
+                        onOpenSettings: (request) =>
+                            siblingRequests.push(request),
+                    })
+                )
+            )
+        );
+        const body = container.querySelector('input');
+        for (const button of container.querySelectorAll(
+            '.mx-sdk-portal-settings'
+        )) {
+            assert.equal(button.type, 'button');
+            assert.equal(
+                button.parentElement.closest('button,a,summary'),
+                null,
+                'Settings are sibling controls, never nested interactive content'
+            );
+        }
+        for (const label of ['Edit title', 'Edit description', 'Edit profile'])
+            await click(gear(label));
+        const orderGears = [
+            ...container.querySelectorAll('[aria-label="Edit orders"]'),
+        ];
+        assert.equal(
+            orderGears.length,
+            3,
+            'Both custom views target the parent table'
+        );
+        const details = container.querySelector('.mx-sdk-portal-group');
+        await click(
+            details.parentElement.querySelector(
+                ':scope > .mx-sdk-portal-settings'
+            )
+        );
+        assert.equal(
+            details.open,
+            false,
+            'Editing never toggles the navigation disclosure'
+        );
+        await click(details.querySelector('summary'));
+        const viewGears = details.querySelectorAll('.mx-sdk-portal-settings');
+        assert.equal(viewGears.length, 2);
+        await click(viewGears[0]);
+        await click(viewGears[1]);
+        assert.equal(details.open, true);
+        await click(gear('Edit docs'));
+        assert.deepEqual(
+            requests.map((r) => r.target),
+            [
+                { type: 'title' },
+                { type: 'description' },
+                { type: 'profile' },
+                { type: 'item', itemId: 'orders' },
+                { type: 'item', itemId: 'orders' },
+                { type: 'item', itemId: 'orders' },
+                { type: 'item', itemId: 'docs' },
+            ]
+        );
+        assert(
+            requests.every(
+                (r) => r.scope === snapshot.scope && r.revision === 1
+            )
+        );
+        await click(gear('Edit title', sibling));
+        assert.equal(siblingRequests.length, 1);
+        assert.equal(requests.length, 7);
+        precommitProbe = true;
+        snapshot = { ...snapshot, revision: 2 };
+        await render();
+        assert(
+            precommitProbes > 0,
+            'The connected precommit control was actually clicked'
+        );
+        assert.equal(
+            requests.length,
+            7,
+            'A prospective owner cannot allocate editor work'
+        );
+        precommitProbe = false;
+        await click(gear('Edit title'));
+        assert.equal(
+            requests.length,
+            8,
+            'The committed current control remains usable'
+        );
+        const removedControl = gear('Edit title');
+        snapshot = { ...snapshot, settings: undefined };
+        await render();
+        assert.equal(
+            container.querySelectorAll('.mx-sdk-portal-settings').length,
+            0
+        );
+        await click(removedControl);
+        assert.equal(
+            requests.length,
+            8,
+            'Detached removed UI is inert; no captured-handler execution is claimed'
+        );
+        snapshot = { ...snapshot, settings };
+        await render();
+        onOpenSettings = second;
+        await render();
+        await click(gear('Edit title'));
+        onOpenSettings = first;
+        await render();
+        await click(gear('Edit title'));
+        assert.deepEqual(
+            requests.slice(7).map((r) => r.callback),
+            ['first', 'second', 'first'],
+            'Only explicit current controls call the current callback across committed A-B-A'
+        );
+        assert.equal(container.querySelector('input'), body);
+        snapshot = {
+            ...snapshot,
+            settings: {
+                ...settings,
+                items: [
+                    { itemId: 'orders', label: 'One' },
+                    { itemId: 'orders', label: 'Two' },
+                ],
+            },
+        };
+        await render();
+        assert(
+            !gear('One') && !gear('Two'),
+            'Ambiguous descriptor identities fail closed'
+        );
+        snapshot = {
+            ...snapshot,
+            header: { ...snapshot.header, hidden: true },
+            settings: {
+                ...settings,
+                items: settings.items.filter((i) => i.itemId === 'docs'),
+            },
+        };
+        await render();
+        assert(
+            !gear('Edit title') &&
+                !gear('Edit description') &&
+                !gear('Edit orders')
+        );
+        await click(
+            [...container.querySelectorAll('button')].find(
+                (b) => b.textContent === 'Open navigation'
+            )
+        );
+        await click(gear('Edit docs'));
+        assert.equal(requests.length, 11);
+        snapshot = {
+            ...snapshot,
+            user: { ...snapshot.user, settingsEnabled: false },
+        };
+        await render();
+        assert(
+            !gear('Edit profile'),
+            'Logout-only has no profile-authoring gear'
+        );
+        await React.act(async () => root.unmount());
+        mounted = false;
+        await click(removedControl);
+        assert.equal(requests.length, 11);
+        assert.deepEqual(ordinaryIntents, []);
+        assert.equal(submits, 0);
+        assert.equal(networks, 0);
+        return {
+            settingsRequests: requests.length,
+            siblingRequests: siblingRequests.length,
+            ordinaryIntents: 0,
+            submitEvents: 0,
+            implicitNetworkRequests: 0,
+            precommitAdmission: 'rejected',
+        };
+    } finally {
+        try {
+            if (mounted) await React.act(async () => root.unmount());
+            await React.act(async () => siblingRoot.unmount());
+        } finally {
+            try {
+                await window.happyDOM.close();
+            } finally {
+                keys.forEach((key, index) => {
+                    const descriptor = originals[index];
+                    if (descriptor)
+                        Object.defineProperty(globalThis, key, descriptor);
+                    else Reflect.deleteProperty(globalThis, key);
+                });
+            }
+        }
+    }
+}
+
 /** Configured native presentation through the public component and real intent boundary. */
 export async function assertPortalShellPresentationConsumer({
     React,

@@ -211,6 +211,15 @@ for (const [name, change, reason] of [
         /false|directory/i,
     ],
     [
+        'nested installed symlink',
+        ({ installed }) => {
+            const bin = join(installed, 'node_modules/.bin');
+            mkdirSync(bin, { recursive: true });
+            symlinkSync(join(installed, 'index.js'), join(bin, 'sdk-fixture'));
+        },
+        /installed SDK copy @miniextensions\/sdk, lock SHA-256 [a-f0-9]{64}: "node_modules\/\.bin\/sdk-fixture" \(symbolic link\)/,
+    ],
+    [
         'policy rewrite',
         ({ directory }) =>
             writeFileSync(

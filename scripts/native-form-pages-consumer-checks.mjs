@@ -141,7 +141,7 @@ try{
 }
 `;
 
-const testsPerProfile = 31;
+const testsPerProfile = 32;
 const hydrationChecksPerProfile = 13;
 
 /** Qualify public installed bytes; do not count local source execution as a package proof. */
@@ -246,6 +246,10 @@ export async function checkNativeFormPagesReactMatrix({
                         )
                         .replaceAll(
                             '../src/react/CompleteFormReview.js',
+                            '@miniextensions/sdk/react'
+                        )
+                        .replaceAll(
+                            '../src/react/CompleteFormComposition.js',
                             '@miniextensions/sdk/react'
                         );
                     assert(

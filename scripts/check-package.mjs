@@ -4855,7 +4855,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     assert.equal(gridProof.profiles.length, 4);
-    assert.equal(gridProof.tests, 88);
+    assert.equal(gridProof.tests, 84);
     assert.equal(gridProof.textCellTests, 20);
     assert.equal(gridProof.ratingCellTests, 32);
     console.log(

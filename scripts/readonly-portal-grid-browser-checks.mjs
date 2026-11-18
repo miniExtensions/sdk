@@ -1098,6 +1098,34 @@ async function checkPlainTextCellBrowser(page) {
     await guidance.press('Escape');
     await tooltip.waitFor({ state: 'hidden' });
     assert.equal(await guidance.getAttribute('aria-describedby'), null);
+    await guidance.click();
+    assert.equal(
+        await cell.evaluate((node) => document.activeElement === node),
+        true
+    );
+    const copied = await cell.evaluate((node) => {
+        const clipboardData = new DataTransfer();
+        node.dispatchEvent(
+            new ClipboardEvent('copy', {
+                bubbles: true,
+                cancelable: true,
+                clipboardData,
+            })
+        );
+        return clipboardData.getData('text/plain');
+    });
+    assert.equal(copied, 'Current B');
+    await page.keyboard.press('Tab');
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        true
+    );
+    await guidance.press('Enter');
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        true
+    );
+    await tooltip.waitFor({ state: 'visible' });
     assert.equal((await state()).writes.length, 2);
     await page.evaluate(() => window.__textCellProbe.setConditional(false));
     await input.waitFor({ state: 'visible' });

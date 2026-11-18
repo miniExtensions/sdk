@@ -62,7 +62,21 @@ export function PortalGridCellGuidance(props: {
                 className: 'mx-sdk-field-tooltip-trigger',
                 'aria-label': props.label,
                 'aria-describedby': open && ready ? id : undefined,
-                onClick: show,
+                onMouseDown: (event: MouseEvent<HTMLButtonElement>) => {
+                    if (event.button === 0) event.preventDefault();
+                },
+                onClick: (event: MouseEvent<HTMLButtonElement>) => {
+                    const button = event.currentTarget;
+                    // A pointer click keeps the selected cell ready for copy.
+                    // Keyboard activation leaves focus on the help button.
+                    if (
+                        event.detail > 0 &&
+                        !button.ownerDocument.getSelection()?.toString()
+                    ) {
+                        button.closest('td')?.focus({ preventScroll: true });
+                    }
+                    show();
+                },
                 onFocus: show,
                 onBlur: hide,
                 onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {

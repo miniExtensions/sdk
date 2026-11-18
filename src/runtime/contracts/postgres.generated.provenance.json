@@ -1,8 +1,8 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "8647c65a3e1b46a4d4fdb561ffd77fd18e8c5a9c",
+    "sourceRevision": "7661dc432c3a9b2d3eebb35734d64d7b4c36fd36",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "59cd379aeb3b7c00b2c74daf2f49d25d80bb6ec006e4523152b0c64a93b8f7f6",
+    "generatorSha256": "e12f32bc8c0ad4fd0402933b42f8b31c1df4d69c01a9c2a7410e7856193bdac3",
     "contractFamily": "postgres",
     "aliases": [
         "PostgresConnection",
@@ -69,6 +69,10 @@
         "PostgresCopyFieldValueDraft",
         "PostgresCopyFieldValuePlanMapping",
         "PostgresCopyFieldValuePlan",
+        "PostgresRecordCopierDraftState",
+        "PostgresRecordCopierDraft",
+        "PostgresCsvAttachmentState",
+        "PostgresCsvAttachmentDraft",
         "PostgresNativeDraft"
     ],
     "configurationValidation": {
@@ -89,9 +93,9 @@
             "PostgresJsonbColumnConfig",
             "PostgresByteaColumnConfig"
         ],
-        "receiptSourceSha256": "5b4fd300775359e49183928ffaf5793194f70bbce15d872513e77c4b47103176",
+        "receiptSourceSha256": "fc6c6071a5e5cf0f1627d5b0898561c3f4b29e212986b3cdf3855f5adf8b4880",
         "schemaSourceSha256": "77375d9d757f3d90468733d21d534aa0130337d86dc36e637e96fa3e1cf77b6c",
-        "sourceSnapshotSha256": "31eff89f78547110ada46b888ce42ffac659c8786fa9124f1beff480ef938204",
+        "sourceSnapshotSha256": "47fce8b85fcf15b452c70edc4954f4eaa941421c8395c226ed4628bcb15290b7",
         "presentation": {
             "kind": "text-column-presentation",
             "sourcePath": "types/extensions/postgres/textColumnPresentation.ts",
@@ -106,7 +110,7 @@
     "copyPlanningValidation": {
         "receiptVersion": 1,
         "aliases": ["PostgresCopyPlanningConfig"],
-        "receiptSourceSha256": "facc50375c00c11ef037db7559c058885d17a931291835d37197b8c9df7bcc5e",
+        "receiptSourceSha256": "342be26e1dd65abb3d6e631f8eda6323c8d788f93308ba01507943df12e8b660",
         "schemaSourceSha256": "1356f1bdf1a92c76d342ffac34c3ac3f5b472424624aa155b7cb78cb11d98215",
         "sources": [
             {
@@ -115,11 +119,11 @@
             },
             {
                 "path": "package.json",
-                "sha256": "b30b0a14a834b07416ef8181a3879d7adb3b5c88fe5a43aba91b3796230e2ebc"
+                "sha256": "00d7893f1337d8ed1cf3d050242ad4e266304eef4a37043f781c75ad4b8eb2ab"
             },
             {
                 "path": "pnpm-lock.yaml",
-                "sha256": "5e02c406b730eaca191ccdfc266dc4285d524d240300d231f7549a142f16531d"
+                "sha256": "18dd27b0de4c51f14e9f7973b59236831b8b891acf081017a2f3b4f97d8bbe61"
             },
             {
                 "path": "types/constants/extensionType.ts",
@@ -174,14 +178,14 @@
                 "sha256": "9358428dfd9c99461c4df519a9cc26b90fbda8e20c7d57da146209520652142c"
             }
         ],
-        "sourceSnapshotSha256": "51b8fd664d38ce54ebfafae5b8e01a51c9b77a2eab2a1482e126b215769b4997",
+        "sourceSnapshotSha256": "af3de2341a08de4392d600b8b855dcfbc133aca8441e7cb3c2758812d7b3608e",
         "storageProjectionSha256": "4b6e323c132fcda81866f852058ce7bfc9ed2f3f8606a18df3b602e54196444d",
         "validatorSha256": "e439da6be415f0610646ac6e76ffcc0d321d2db862999775a3c9ef3318946624"
     },
     "formAccessValidation": {
         "receiptVersion": 1,
         "aliases": ["PostgresFormRecordAccess"],
-        "receiptSourceSha256": "fcebda3cab8b3f34390a9a62a3e725fae20e9b326451703ee75bddcd9f05faab",
+        "receiptSourceSha256": "18721d4b33ecc0026ea18d3604cd94f03f96c9f02d866bd02c66ea47c7154d7a",
         "schemaSourceSha256": "fa8911a59a270fe11f1d63ec9cd5734e38dab18a1cbb1babd3ee9f01952d0b51",
         "sources": [
             {
@@ -190,11 +194,11 @@
             },
             {
                 "path": "package.json",
-                "sha256": "b30b0a14a834b07416ef8181a3879d7adb3b5c88fe5a43aba91b3796230e2ebc"
+                "sha256": "00d7893f1337d8ed1cf3d050242ad4e266304eef4a37043f781c75ad4b8eb2ab"
             },
             {
                 "path": "pnpm-lock.yaml",
-                "sha256": "5e02c406b730eaca191ccdfc266dc4285d524d240300d231f7549a142f16531d"
+                "sha256": "18dd27b0de4c51f14e9f7973b59236831b8b891acf081017a2f3b4f97d8bbe61"
             },
             {
                 "path": "types/constants/extensionType.ts",
@@ -257,7 +261,7 @@
                 "sha256": "92723e30b1a2121de5afa1eb4b35e2d71d467ee7eadfcc6c7e376b8fd72ca41c"
             }
         ],
-        "sourceSnapshotSha256": "08bcb2e403db8470d54b1f5a3f3a20cecf2cb2c99489f0fb6944bc26846cdd04",
+        "sourceSnapshotSha256": "846b9c95080be865e0fad2f6b5ee6d69d34cc2ef1291bb7fe93d8a90fb3eef27",
         "storageProjectionSha256": "86cfa92101b7b4865147d72869989d2b7748b5a71de8723b75bb5dd210db847b",
         "validatorSha256": "b92b5442694fd2128406f89e47cf4e1d351abe2614f22bf197b088f03c0d23ee"
     },
@@ -299,20 +303,28 @@
             "sha256": "b9a9466b2d16babd19e9a8e5db883b7f577b49cea56c03884ec93370a71fba8b"
         },
         {
+            "path": "types/extensions/postgres/csvAttachmentDraft.ts",
+            "sha256": "e0d2a96b100408b430ef17c469d55e15d71c19e0a135a486e3f89c356f76077b"
+        },
+        {
             "path": "types/extensions/postgres/draftCommon.ts",
             "sha256": "54ca49e2bb32dadd2e9589aa56a5f0876e5c82fec300536b5a60c1f2578d76dc"
         },
         {
             "path": "types/extensions/postgres/formDraft.ts",
-            "sha256": "c1c57d2aa8cb95ece2c81670c5b46071f7c9f180dc3608360c6102e83f29adb5"
+            "sha256": "e24034c7ddcedc1e4429af04e4a2ce569815d57579cccee100cbd78ea406150e"
         },
         {
             "path": "types/extensions/postgres/nativeDraft.ts",
-            "sha256": "960c494daf741d6a76493e23e6035a5a88d040bce3226d4add5e39a9ad996013"
+            "sha256": "404075c165afb8b84af4acc9eb8f95845fa459d9c135120ddab7a15096faa7f2"
         },
         {
             "path": "types/extensions/postgres/portalDraft.ts",
-            "sha256": "f9a6525f97af9af2ba01418ab01eff2d9b253dd8d83c3c248e89637820a35ca6"
+            "sha256": "28a290ea2da1b2f6d7f67626bc722b0e7dbfdfc28bae8de067bf449462408b93"
+        },
+        {
+            "path": "types/extensions/postgres/recordCopierDraft.ts",
+            "sha256": "fe99de27646750a13a3247265be741215c302187e1367136089d6da1b87ef323"
         },
         {
             "path": "types/extensions/postgres/relationshipFieldDefinitions.ts",
@@ -324,7 +336,7 @@
         },
         {
             "path": "types/generated/postgres/copy-planning.provenance.json",
-            "sha256": "facc50375c00c11ef037db7559c058885d17a931291835d37197b8c9df7bcc5e"
+            "sha256": "342be26e1dd65abb3d6e631f8eda6323c8d788f93308ba01507943df12e8b660"
         },
         {
             "path": "types/generated/postgres/copy-planning.ts",
@@ -332,7 +344,7 @@
         },
         {
             "path": "types/generated/postgres/field-config.provenance.json",
-            "sha256": "5b4fd300775359e49183928ffaf5793194f70bbce15d872513e77c4b47103176"
+            "sha256": "fc6c6071a5e5cf0f1627d5b0898561c3f4b29e212986b3cdf3855f5adf8b4880"
         },
         {
             "path": "types/generated/postgres/field-config.ts",
@@ -340,7 +352,7 @@
         },
         {
             "path": "types/generated/postgres/form-access.provenance.json",
-            "sha256": "fcebda3cab8b3f34390a9a62a3e725fae20e9b326451703ee75bddcd9f05faab"
+            "sha256": "18721d4b33ecc0026ea18d3604cd94f03f96c9f02d866bd02c66ea47c7154d7a"
         },
         {
             "path": "types/generated/postgres/form-access.ts",
@@ -397,6 +409,6 @@
             "sha256": "293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec"
         }
     ],
-    "declarationCount": 192,
-    "generatedSha256": "897451f344b41beb432072faef7b5a196f1bb01e2bcd9421f416e21bb8c13509"
+    "declarationCount": 209,
+    "generatedSha256": "6441ee098f9d892b5421c1eb6ea66b74d0f258a7278223a4c088315b55e69e73"
 }

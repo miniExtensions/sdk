@@ -336,6 +336,17 @@ const postgresAuthoringContracts = [
               },
           ]),
     {
+        source: 'types/extensions/postgres/recordCopierDraft.ts',
+        aliases: [
+            'PostgresRecordCopierDraftState',
+            'PostgresRecordCopierDraft',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/csvAttachmentDraft.ts',
+        aliases: ['PostgresCsvAttachmentState', 'PostgresCsvAttachmentDraft'],
+    },
+    {
         source: 'types/extensions/postgres/nativeDraft.ts',
         aliases: ['PostgresNativeDraft'],
     },

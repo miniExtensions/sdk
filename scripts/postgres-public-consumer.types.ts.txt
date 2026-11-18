@@ -8,6 +8,8 @@ import {
 } from '@miniextensions/sdk';
 import type {
     PostgresAttachmentDisplayFailure,
+    PostgresCsvAttachmentDraft,
+    PostgresRecordCopierDraft,
     PostgresBooleanColumnConfig,
     PostgresEnumColumnConfig,
     PostgresUuidColumnConfig,
@@ -917,6 +919,20 @@ export function inspectPrivateDraft(draft: PostgresNativeDraft) {
         // @ts-expect-error Copy state does not acquire Form fields.
         draft.state.formFields;
         return { nativeSource, currentVersion, mapping, generation };
+    }
+    if (draft.type === 'BULK_CREATE_RECORDS_FROM_CSV') {
+        const csv: PostgresCsvAttachmentDraft = draft;
+        const displayColumn: string | undefined = csv.state.targetDisplayColumnName;
+        // @ts-expect-error A CSV destination does not have a Copier count column.
+        csv.state.numberOfCopiesField;
+        return { nativeSource, currentVersion, displayColumn };
+    }
+    if (draft.type === 'BULK_RECORD_COPIER') {
+        const copier: PostgresRecordCopierDraft = draft;
+        const countColumn: string = copier.state.numberOfCopiesField;
+        // @ts-expect-error Copier state does not have a CSV destination.
+        copier.state.targetTable;
+        return { nativeSource, currentVersion, countColumn };
     }
     const tabs: PostgresPortalTab[] = draft.state.tabs;
     // @ts-expect-error Portal state does not acquire Form fields.

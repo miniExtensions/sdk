@@ -1,6 +1,7 @@
 import type {
     FormLoadedResult,
     PostgresCopyPlanningConfig,
+    PostgresCsvAttachmentDraft,
     PostgresConfiguredColumn,
     PostgresFormDraft,
     PostgresFormDraftState,
@@ -9,14 +10,19 @@ import type {
     PostgresPortalDraftState,
     PostgresPortalTab,
     PostgresReadableRelationConfiguration,
+    PostgresRecordCopierDraft,
 } from '../src/runtime/index.js';
 
 declare const privateForm: PostgresFormDraft;
 declare const privatePortal: PostgresPortalDraft;
 declare const privateTab: PostgresPortalTab;
+declare const privateCsv: PostgresCsvAttachmentDraft;
+declare const privateCopier: PostgresRecordCopierDraft;
 
 export const nativeFormArm: PostgresNativeDraft = privateForm;
 export const nativePortalArm: PostgresNativeDraft = privatePortal;
+export const nativeCsvArm: PostgresNativeDraft = privateCsv;
+export const nativeCopierArm: PostgresNativeDraft = privateCopier;
 export const formState: PostgresFormDraftState = {
     table: privateForm.state.table,
     displayColumnName: 'title',
@@ -80,6 +86,19 @@ export function inspectPrivateDraft(draft: PostgresNativeDraft) {
         // @ts-expect-error Copy state does not acquire Form fields.
         draft.state.formFields;
         return { nativeSource, currentVersion, mapping, generation };
+    }
+    if (draft.type === 'BULK_CREATE_RECORDS_FROM_CSV') {
+        const displayColumn: string | undefined =
+            draft.state.targetDisplayColumnName;
+        // @ts-expect-error The CSV destination does not use the Copier count column.
+        draft.state.numberOfCopiesField;
+        return { nativeSource, currentVersion, displayColumn };
+    }
+    if (draft.type === 'BULK_RECORD_COPIER') {
+        const countColumn: string = draft.state.numberOfCopiesField;
+        // @ts-expect-error Copier state does not acquire a CSV destination.
+        draft.state.targetTable;
+        return { nativeSource, currentVersion, countColumn };
     }
     const tabs: PostgresPortalTab[] = draft.state.tabs;
     // @ts-expect-error Portal state does not acquire Form fields.

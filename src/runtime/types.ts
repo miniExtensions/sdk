@@ -57,6 +57,10 @@ import type {
     CanonicalPostgresPortalTab,
     CanonicalPostgresPortalDraftState,
     CanonicalPostgresPortalDraft,
+    CanonicalPostgresRecordCopierDraftState,
+    CanonicalPostgresRecordCopierDraft,
+    CanonicalPostgresCsvAttachmentState,
+    CanonicalPostgresCsvAttachmentDraft,
     CanonicalPostgresRecord,
     CanonicalPostgresRecordDisplayConfiguration,
     CanonicalPostgresRecordEditingConfiguration,
@@ -135,6 +139,11 @@ export type PostgresFormDraft = CanonicalPostgresFormDraft;
 export type PostgresPortalTab = CanonicalPostgresPortalTab;
 export type PostgresPortalDraftState = CanonicalPostgresPortalDraftState;
 export type PostgresPortalDraft = CanonicalPostgresPortalDraft;
+export type PostgresRecordCopierDraftState =
+    CanonicalPostgresRecordCopierDraftState;
+export type PostgresRecordCopierDraft = CanonicalPostgresRecordCopierDraft;
+export type PostgresCsvAttachmentState = CanonicalPostgresCsvAttachmentState;
+export type PostgresCsvAttachmentDraft = CanonicalPostgresCsvAttachmentDraft;
 export type PostgresNativeDraft = CanonicalPostgresNativeDraft;
 export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;

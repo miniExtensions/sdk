@@ -8,7 +8,7 @@ import {
     writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { build } from 'esbuild';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -53,7 +53,7 @@ export function assertPortalMapVendor(root = process.cwd()) {
     assert.equal(upstream.sourceMapContentVerification.nullContents, 1);
     for (const item of upstream.licenseFiles) {
         const path = resolve(vendor, item.path);
-        assert(path.startsWith(vendor + '/'), 'Map notice escaped vendor root');
+        assert(path.startsWith(vendor + sep), 'Map notice escaped vendor root');
         assert(lstatSync(path).isFile());
         assert.equal(hash(readFileSync(path)), item.sha256, item.path);
     }
@@ -63,7 +63,7 @@ export function assertPortalMapVendor(root = process.cwd()) {
     for (const selected of upstream.physicalPackages) {
         const installed = packageFor(require.resolve(selected.name));
         assert(
-            installed.root.startsWith(modulesRoot + '/'),
+            installed.root.startsWith(modulesRoot + sep),
             'Map package escaped installed root'
         );
         assert.equal(sdk.devDependencies[selected.name], selected.version);
@@ -111,7 +111,7 @@ export async function bundlePortalMap(root = process.cwd(), options = {}) {
     const sourceEntry =
         options.sourceEntry ?? 'dist/esm/react/map/GoogleMapsRuntime.js';
     const sourcePath = resolve(root, sourceEntry);
-    assert(sourcePath.startsWith(root + '/'));
+    assert(sourcePath.startsWith(root + sep));
     const source = readFileSync(sourcePath, 'utf8');
     assert(source.includes('@react-google-maps/api'));
     assert(source.includes('@googlemaps/js-api-loader'));
@@ -129,7 +129,7 @@ export async function bundlePortalMap(root = process.cwd(), options = {}) {
     for (const { format, child } of outputs) {
         assert(['esm', 'cjs'].includes(format));
         const path = resolve(root, child);
-        assert(path.startsWith(root + '/'));
+        assert(path.startsWith(root + sep));
         const result = await build({
             absWorkingDir: root,
             stdin: {
@@ -188,7 +188,7 @@ export async function bundlePortalMap(root = process.cwd(), options = {}) {
             const dependency = packageFor(input);
             assert(
                 dependency.root.startsWith(
-                    realpathSync(join(root, 'node_modules')) + '/'
+                    realpathSync(join(root, 'node_modules')) + sep
                 ),
                 'Map input escaped installed root'
             );

@@ -1077,6 +1077,15 @@ original writer. The mounted editor's transient draft stays with the
 The cell delegates mutation, rollback, retry and refresh to the host. Use the
 following existing queue for a host with session-owned edit settlement.
 
+## Empty cells in a host Grid
+
+Use `PortalGridEmptyCell` from `@miniextensions/sdk/react` with
+`@miniextensions/sdk/react/portal-grid-empty-cell.css` for a visible Grid column
+whose row has no detail field. Render it directly inside the table row with
+the configured `rowHeight`. Pass `lastRow` to omit its bottom border and
+`stickyLeft` for the first column, including a zero offset. The placeholder
+keeps that column's position and carries no editor or selection handlers.
+
 ## Session-owned inline edits in an existing host
 
 `createPortalInlineEditQueue<Value, Request, Result>` owns native in-memory

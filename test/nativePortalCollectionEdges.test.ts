@@ -430,6 +430,82 @@ describe('native Portal host transaction boundaries', () => {
         assert.equal(f.snapshot().scope.bindingKey, 'corrected');
     });
 
+    it('G: unchanged cleanup follows once and its deferred notice survives until binding ABA', async () => {
+        const f = fixture();
+        f.host.cleanupScope = (current) => ({ ...current.scope });
+        f.hooks.allocate = async (requestId) =>
+            requestId === 'unchanged'
+                ? { type: 'cleanup', sort: [] }
+                : { type: 'response', response: response() };
+        assert.equal(
+            await runNativePortalCollectionRead(f.kernel, f.host, {
+                requestId: 'unchanged',
+                mode: 'first',
+            }),
+            'committed'
+        );
+        assert.deepEqual(
+            f.requests.map((request) => request.requestId),
+            ['unchanged', 'follow-1']
+        );
+        assert.equal(f.snapshot().generation, 0);
+        const [notice] = f.notices;
+        assert(notice);
+        assert.equal(notice(), true);
+        const original = f.snapshot().scope;
+        f.replace();
+        f.install(f.kernel.observe(f.snapshot(), original));
+        assert.equal(notice(), false);
+    });
+
+    it('G: unchanged cleanup preserves the admitted frame and a same-scope replacement cannot reuse its continuation', async () => {
+        const f = fixture();
+        const seed = f.kernel.begin(f.snapshot(), {
+            requestId: 'seed',
+            mode: 'first',
+        })!;
+        const loaded = f.kernel.succeed(
+            seed.state,
+            seed.receipt,
+            response()
+        )!.state;
+        f.install(loaded);
+        f.host.cleanupScope = (current) => ({ ...current.scope });
+        f.hooks.allocate = async (requestId) =>
+            requestId === 'no-op-correction'
+                ? { type: 'cleanup', sort: [] }
+                : { type: 'response', response: response() };
+        f.hooks.afterCommit = ({ cleanup, state }) => {
+            if (!cleanup) return;
+            const replacement = f.kernel.begin(state, {
+                requestId: 'superseding-read',
+                mode: 'reload',
+            });
+            if (replacement) f.install(replacement.state);
+        };
+        assert.equal(
+            await runNativePortalCollectionRead(f.kernel, f.host, {
+                requestId: 'no-op-correction',
+                mode: 'next',
+            }),
+            'stale'
+        );
+        assert.deepEqual(f.events, [
+            'begin:no-op-correction',
+            'allocate:no-op-correction',
+            'correction:sort',
+        ]);
+        const correction = f.commits.find((commit) => commit.cleanup);
+        assert(correction?.cleanup);
+        assert.equal(correction.state.generation, seed.receipt.generation);
+        assert.equal(correction.state.frame, loaded.frame);
+        assert.equal(f.snapshot().active?.requestId, 'superseding-read');
+        assert.equal(
+            f.snapshot().active?.generation,
+            correction.cleanup.receipt.generation
+        );
+    });
+
     it('G: uses filter cleanup when no sort correction is present', async () => {
         const f = fixture();
         f.hooks.allocate = async (requestId) =>

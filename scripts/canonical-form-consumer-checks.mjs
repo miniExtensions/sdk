@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 export const canonicalFormTypedConsumer = `
 import {createCanonicalFormFrame,transitionCanonicalFormFrame,type CanonicalFormFrame,type CanonicalFormEvent,type CanonicalFormTransitionPorts,type CanonicalFormTransitionResult} from '@miniextensions/sdk/forms';
+import {transitionCanonicalFormCompute,type CanonicalFormComputeFrame,type CanonicalFormComputeOutcome,type CanonicalFormComputePorts,type CanonicalFormComputeRequest} from '@miniextensions/sdk/forms';
 type CanonicalConsumerAuthority={request:'accepted-native-action'};
 type CanonicalConsumerAllocation={requestId:string};
 declare const canonicalConsumerFrame:CanonicalFormFrame;
@@ -26,14 +27,137 @@ transitionCanonicalFormFrame(canonicalConsumerSnapshot,canonicalConsumerEvent,{.
 // @ts-expect-error the frame is not a second controller or transport client
 canonicalConsumerSnapshot.client.forms.save({});
 void canonicalConsumerResult;
+declare const computeFrame:CanonicalFormComputeFrame;
+declare const computeRequest:CanonicalFormComputeRequest<CanonicalConsumerAllocation>;
+declare const computePorts:CanonicalFormComputePorts<CanonicalConsumerAllocation>;
+declare const computeOutcome:CanonicalFormComputeOutcome<{code:'HOST_FAILURE'}>;
+const computeSettlement=transitionCanonicalFormCompute(computeFrame,computeRequest,computeOutcome,computePorts);
+if(computeSettlement.disposition==='computeFailed'){
+    const code:'HOST_FAILURE'=computeSettlement.failure.code;
+    void code;
+}
+// @ts-expect-error the existing non-Compute frame never grants Compute admission
+transitionCanonicalFormCompute(canonicalConsumerFrame,computeRequest,computeOutcome,computePorts);
 `;
+
+function checkComputeSettlement(api) {
+    const frame = {
+        owner: {
+            cohort: 'public-direct-root-compute',
+            installation: 'accepted_native_installation',
+        },
+        record: { type: 'create' },
+        values: { answer: 'A', cleared: null, omitted: [] },
+        dirtyFieldIds: ['cleared', 'answer', 'omitted'],
+        errors: { answer: 'Existing error' },
+        loadedPolicyBaseline: { answer: 'Loaded' },
+        isFormReadOnly: false,
+        provenance: {
+            instanceGeneration: 1,
+            fieldGenerations: { answer: 5, cleared: 6, omitted: 7 },
+            complete: true,
+        },
+        renderLease: { ownerGeneration: 1 },
+    };
+    const allocation = Symbol('actual allocated Compute');
+    const request = {
+        allocation,
+        owner: frame.owner,
+        requestId: 'request-a',
+        record: frame.record,
+        provenance: {
+            ...frame.provenance,
+            fieldGenerations: { answer: 2, cleared: 3, omitted: 4 },
+        },
+        submittedValues: { answer: 'A', cleared: 'Old' },
+        validationValues: { answer: 'A', cleared: 'Old', omitted: [] },
+        addOnlyTextFieldIds: [],
+    };
+    const ports = {
+        isCurrent: (_frame, captured) => captured.allocation === allocation,
+        areValuesEquivalent: (current, captured) =>
+            JSON.stringify(current) === JSON.stringify(captured),
+        allocateInstanceGeneration: () => 8,
+        retainRenderLease: () => true,
+    };
+    const reply = {
+        type: 'returned',
+        record: { type: 'edit', recordId: 'rec_adopted', tableId: 'tbl_form' },
+        values: {
+            answer: 'Server',
+            cleared: 'Old',
+            omitted: ['old'],
+            total: 12,
+        },
+    };
+    const success = api.transitionCanonicalFormCompute(
+        frame,
+        request,
+        reply,
+        ports
+    );
+    assert.equal(success.disposition, 'computeSettled');
+    assert.deepEqual(success.frame.record, reply.record);
+    assert.deepEqual(success.frame.values, {
+        answer: 'A',
+        cleared: null,
+        omitted: [],
+        total: 12,
+    });
+    assert.deepEqual(success.frame.dirtyFieldIds, frame.dirtyFieldIds);
+    assert.equal(
+        success.frame.loadedPolicyBaseline,
+        frame.loadedPolicyBaseline
+    );
+    assert.equal(success.frame.renderLease, frame.renderLease);
+    assert.ok(Object.isFrozen(success.frame.values.omitted));
+
+    const verificationError = new Error('synthetic validation error');
+    const verification = {
+        type: 'validationFailed',
+        errors: { cleared: 'Refused' },
+        failure: verificationError,
+    };
+    const changed = api.transitionCanonicalFormCompute(
+        frame,
+        request,
+        verification,
+        ports
+    );
+    assert.equal(changed.disposition, 'computeValidationSuperseded');
+    assert.equal(changed.frame.errors, frame.errors);
+    const current = api.transitionCanonicalFormCompute(
+        frame,
+        { ...request, validationValues: frame.values },
+        verification,
+        ports
+    );
+    assert.equal(current.disposition, 'computeFailed');
+    assert.equal(current.failure, verificationError);
+    assert.deepEqual(current.frame.errors, verification.errors);
+
+    const successor = {
+        ...frame,
+        provenance: { ...frame.provenance, instanceGeneration: 20 },
+    };
+    for (const outcome of [reply, verification]) {
+        const stale = api.transitionCanonicalFormCompute(
+            successor,
+            request,
+            outcome,
+            ports
+        );
+        assert.deepEqual(stale, { disposition: 'stale', frame: successor });
+        assert.equal(stale.frame, successor);
+    }
+}
 
 /** Actual packed public ESM and CJS entrypoints, without React or host transport. */
 export async function checkCanonicalFormConsumer({ consumerDirectory }) {
     const loader = join(consumerDirectory, 'canonical-form-public.mjs');
     writeFileSync(
         loader,
-        "export {createCanonicalFormFrame,transitionCanonicalFormFrame} from '@miniextensions/sdk/forms';\n"
+        "export {createCanonicalFormFrame,transitionCanonicalFormFrame,transitionCanonicalFormCompute} from '@miniextensions/sdk/forms';\n"
     );
     const esm = await import(pathToFileURL(loader).href);
     const require = createRequire(join(consumerDirectory, 'package.json'));
@@ -174,6 +298,7 @@ export async function checkCanonicalFormConsumer({ consumerDirectory }) {
         assert.deepEqual(acceptedFailure.frame.errors, { amount: 'Rejected' });
         assert.equal(acceptedFailure.frame.values, edited.frame.values);
         assert.equal(Object.isFrozen(acceptedFailure.frame.errors), true);
+        checkComputeSettlement(api);
     }
     return 2;
 }

@@ -1,0 +1,249 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+    createFormBackgroundComputeCoordinator,
+    createFormBackgroundComputeFieldBinding,
+} from '../src/forms/index.js';
+
+function deferred() {
+    let resolve!: () => void;
+    let reject!: (cause: unknown) => void;
+    const promise = new Promise<void>((finish, fail) => {
+        resolve = finish;
+        reject = fail;
+    });
+    return { promise, resolve, reject };
+}
+
+test('a synchronous allocator can queue one follow-up, and waiting foreground work enters after it', async () => {
+    const coordinator = createFormBackgroundComputeCoordinator<symbol>();
+    const key = Symbol();
+    const gate = deferred();
+    const calls: string[] = [];
+    const run = (name: string) => async () => {
+        calls.push(name);
+    };
+    let firstWaiter!: Promise<void>;
+    let lastWaiter!: Promise<void>;
+    const first = coordinator.runBackground(key, async () => {
+        calls.push('first');
+        firstWaiter = coordinator.runBackground(key, run('superseded'));
+        lastWaiter = coordinator.runBackground(key, run('latest'));
+        await gate.promise;
+    });
+    const foreground = coordinator.runForeground(key, run('Save'));
+    const independent = coordinator.runForeground(Symbol(), run('independent'));
+    assert.deepEqual(calls, ['first', 'independent']);
+    gate.resolve();
+    await Promise.all([
+        first,
+        firstWaiter,
+        lastWaiter,
+        foreground,
+        independent,
+    ]);
+    assert.deepEqual(calls, ['first', 'independent', 'latest', 'Save']);
+});
+
+test('an escaped allocation failure clears the session and rejects queued and foreground work', async () => {
+    const coordinator = createFormBackgroundComputeCoordinator<string>();
+    const gate = deferred();
+    const failure = new Error('synthetic allocator failure');
+    const first = coordinator.runBackground('form', () => gate.promise);
+    const never = async () => assert.fail('failed work must not replay');
+    const queued = coordinator.runBackground('form', never);
+    const foreground = coordinator.runForeground('form', never);
+    const rejected = [first, queued, foreground].map((operation) =>
+        assert.rejects(operation, (error) => error === failure)
+    );
+    gate.reject(failure);
+    await Promise.all(rejected);
+
+    let entered = false;
+    const next = coordinator.runForeground('form', async () => {
+        entered = true;
+    });
+    assert.equal(entered, true);
+    await next;
+});
+
+for (const fails of [false, true]) {
+    test(
+        fails
+            ? 'a failed successor background chain rejects waiting foreground work'
+            : 'foreground work waits for a background chain started by a completion callback',
+        async () => {
+            const coordinator =
+                createFormBackgroundComputeCoordinator<string>();
+            const releaseA = deferred();
+            const releaseB = deferred();
+            const enteredB = deferred();
+            const failure = new Error('synthetic successor Compute rejection');
+            let value = 'before A';
+            const first = coordinator.runBackground('form', async () => {
+                await releaseA.promise;
+                value = 'after A';
+            });
+            const second = first.then(() =>
+                coordinator.runBackground('form', async () => {
+                    enteredB.resolve();
+                    await releaseB.promise;
+                    value = 'after B';
+                })
+            );
+            const reads: string[] = [];
+            const waiting = coordinator.runForeground('form', async () => {
+                reads.push(value);
+            });
+            const outcomes = Promise.allSettled([second, waiting]);
+
+            releaseA.resolve();
+            await enteredB.promise;
+            const readsWhileHeld = [...reads];
+            if (fails) releaseB.reject(failure);
+            else releaseB.resolve();
+            const settled = await outcomes;
+
+            assert.deepEqual(readsWhileHeld, []);
+            if (fails) {
+                assert.deepEqual(settled, [
+                    { status: 'rejected', reason: failure },
+                    { status: 'rejected', reason: failure },
+                ]);
+                assert.deepEqual(reads, []);
+            } else {
+                assert.deepEqual(
+                    settled.map(({ status }) => status),
+                    ['fulfilled', 'fulfilled']
+                );
+                assert.deepEqual(reads, ['after B']);
+            }
+        }
+    );
+}
+
+for (const throws of [true, false]) {
+    test(
+        throws
+            ? 'waiting foreground rejects when a successor allocator throws synchronously'
+            : 'waiting foreground sees a successor that returns an already-rejected promise',
+        async () => {
+            const coordinator =
+                createFormBackgroundComputeCoordinator<string>();
+            const release = deferred();
+            const failure = new Error('fast successor failed');
+            const reads: string[] = [];
+            let value = 'before A';
+            const host = release.promise.then(() => {
+                value = 'after A';
+            });
+            const active = coordinator.runBackground('form', () => host);
+            const successor = (throws ? active : host).then(() =>
+                coordinator.runBackground('form', () => {
+                    if (throws) throw failure;
+                    return Promise.reject(failure);
+                })
+            );
+            const allocateSave = async () => {
+                reads.push(value);
+            };
+            const save = coordinator.runForeground('form', allocateSave);
+            const outcomes = Promise.allSettled([successor, save]);
+
+            release.resolve();
+            const results = await outcomes;
+            assert.deepEqual(reads, []);
+            assert.deepEqual(
+                results.map(({ status }) => status),
+                ['rejected', 'rejected']
+            );
+            for (const result of results) {
+                if (result.status === 'rejected') {
+                    assert.equal(result.reason, failure);
+                }
+            }
+
+            value = 'fresh explicit retry';
+            const retry = coordinator.runForeground('form', allocateSave);
+            assert.deepEqual(reads, ['fresh explicit retry']);
+            await retry;
+            assert.deepEqual(reads, ['fresh explicit retry']);
+        }
+    );
+}
+
+test('the default field binding cancels an unstarted timer and replaces a pending debounce', async ({
+    mock,
+}) => {
+    mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+    const field = createFormBackgroundComputeFieldBinding<string>();
+    const edits: string[] = [];
+    const compute = async (owner: string) => {
+        edits.push(owner);
+    };
+    field.edited('cancelled', compute);
+    field.cancelScheduled();
+    mock.timers.tick(300);
+    assert.deepEqual(edits, []);
+    field.edited('first', compute);
+    mock.timers.tick(100);
+    field.edited('latest', compute);
+    mock.timers.tick(299);
+    assert.deepEqual(edits, []);
+    mock.timers.tick(1);
+    assert.deepEqual(edits, ['latest']);
+});
+
+test('a same-tick edit survives cancellation during allocation and a failed allocation discards pending work', async () => {
+    const timestamp = 300;
+    let scheduled: { run: () => Promise<void>; delay: number } | undefined;
+    const clock = {
+        now: () => timestamp,
+        schedule(run: () => Promise<void>, delay: number) {
+            scheduled = { run, delay };
+            return () => {
+                scheduled = undefined;
+            };
+        },
+    };
+    const take = (delay: number) => {
+        assert.equal(scheduled?.delay, delay);
+        const task = scheduled;
+        scheduled = undefined;
+        assert.ok(task);
+        return task.run();
+    };
+    const field = createFormBackgroundComputeFieldBinding<symbol>({ clock });
+    const first = deferred();
+    const failure = deferred();
+    const activeOwner = Symbol('active');
+    const successOwner = Symbol('continue');
+    const failedOwner = Symbol('failed');
+    const calls: symbol[] = [];
+    const compute = async (owner: symbol) => {
+        calls.push(owner);
+        if (owner === activeOwner) await first.promise;
+        if (owner === failedOwner) await failure.promise;
+    };
+
+    field.edited(activeOwner, compute);
+    const active = take(300);
+    field.edited(Symbol('superseded in the same tick'), compute);
+    field.edited(successOwner, compute);
+    assert.equal(clock.now(), timestamp);
+    field.cancelScheduled();
+    first.resolve();
+    await active;
+    await take(0);
+    assert.deepEqual(calls, [activeOwner, successOwner]);
+
+    field.edited(failedOwner, compute);
+    const exhausting = take(300);
+    field.edited(Symbol('discarded on failure'), compute);
+    const cause = new Error('synthetic field failure');
+    const rejected = assert.rejects(exhausting, (error) => error === cause);
+    failure.reject(cause);
+    await rejected;
+    assert.equal(scheduled, undefined);
+    assert.deepEqual(calls, [activeOwner, successOwner, failedOwner]);
+});

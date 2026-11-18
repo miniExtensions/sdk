@@ -995,16 +995,21 @@ whitespace, and allows a later explicit submission of the same term.
 
 The port reads the current committed term, owner stamp and nonnegative integer
 `publicationRevision` and subscribes to those changes. Advance the revision
-for every new Search publication, including a term change back to an earlier
-value. Keep it stable when a repeat submission makes no new publication.
+when publishing a changed term, including a return to an earlier value. A
+same-term reload can keep the revision stable even if its confirmed
+allocation advances the owner generation.
 Validate the captured stamp, `expectedSearchTerm` and
 `expectedPublicationRevision` before writing, then revalidate the installed
 first-page request before transport. Report an allocation only after invoking
-transport. When a command publishes a new frame, return that command's
-verified `committedPublication` with its generation and revision, including
-when the subsequent read is refused or uncertain. The control checks the
+transport. When a command changes the term, return that command's verified
+`committedPublication` with its generation and revision, including when the
+subsequent read is refused or uncertain. A same-term allocation can report
+its verified generation without a publication receipt. The control checks the
 live frame at settlement and delivers feedback only to its owning
-subscription and publication. Retries require a fresh user action.
+subscription and publication. A read exception prevents commands and feedback
+from using an unverified frame. A later successful read can confirm the
+existing draft if its publication still matches. Retries require a fresh
+user action.
 
 An optional scanner renderer captures the result callback when the scanner
 opens. Retire that callback on close. A captured callback accepts one result

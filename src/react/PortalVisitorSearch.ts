@@ -10,7 +10,7 @@ import {
     type ReactNode,
 } from 'react';
 import {
-    createPortalVisitorSearchDraft,
+    capturePortalVisitorSearchDraft,
     readPortalVisitorSearchFrame,
     samePortalVisitorSearchScope,
     type PortalVisitorSearchIntent,
@@ -46,7 +46,7 @@ export type PortalVisitorSearchProps = {
 type Entry = {
     port: PortalVisitorSearchProps['port'];
     subscription: symbol;
-    draft: NonNullable<ReturnType<typeof createPortalVisitorSearchDraft>>;
+    draft: ReturnType<typeof capturePortalVisitorSearchDraft>;
     text: string;
 };
 
@@ -74,10 +74,17 @@ export function PortalVisitorSearch({
         let active = true;
         const subscription = Symbol();
         const refresh = () => {
-            if (!active || current.current?.draft.current()) return;
-            const draft = createPortalVisitorSearchDraft(port);
-            const entry = draft
-                ? { port, subscription, draft, text: draft.frame.searchTerm }
+            if (!active) return;
+            const frame = readPortalVisitorSearchFrame(port);
+            if (frame === undefined || current.current?.draft.observe(frame))
+                return;
+            const entry = frame
+                ? {
+                      port,
+                      subscription,
+                      draft: capturePortalVisitorSearchDraft(port, frame),
+                      text: frame.searchTerm,
+                  }
                 : null;
             current.current = entry;
             setVisible(entry && { entry, text: entry.text });
@@ -102,8 +109,12 @@ export function PortalVisitorSearch({
         candidate.text = text;
         setVisible({ entry: candidate, text });
     };
-    const submit = (candidate: Entry, intent: PortalVisitorSearchIntent) => {
-        void candidate.draft.submit(intent).then((outcome) => {
+    const submit = (
+        candidate: Entry,
+        intent: PortalVisitorSearchIntent,
+        onAdmitted?: () => void
+    ) => {
+        void candidate.draft.submit(intent, onAdmitted).then((outcome) => {
             const live = current.current;
             if (!live || live.subscription !== candidate.subscription) return;
             const publication =
@@ -111,24 +122,30 @@ export function PortalVisitorSearch({
                     ? undefined
                     : outcome.committedPublication;
             const captured = candidate.draft.frame;
-            if (!publication) {
-                if (
-                    live === candidate &&
-                    candidate.draft.current() &&
-                    (outcome.type !== 'allocated' ||
-                        outcome.generation === captured.stamp.generation)
-                )
+            const advancedAllocation =
+                outcome.type === 'allocated' &&
+                outcome.generation > captured.stamp.generation
+                    ? outcome
+                    : undefined;
+            if (!publication && !advancedAllocation) {
+                if (live === candidate && candidate.draft.current())
                     settings.current.onOutcome?.(outcome);
                 return;
             }
-            const frame = readPortalVisitorSearchFrame(candidate.port);
             const requestedTerm =
                 intent.source === 'clear' ? '' : intent.searchTerm;
+            // An allocation alone can identify a same-term reload, but it
+            // cannot establish which command changed the committed term.
+            if (!publication && requestedTerm !== captured.searchTerm) return;
+            const frame = readPortalVisitorSearchFrame(candidate.port);
             if (
                 frame &&
                 samePortalVisitorSearchScope(captured.stamp, frame.stamp) &&
-                frame.stamp.generation === publication.generation &&
-                frame.publicationRevision === publication.revision &&
+                frame.stamp.generation ===
+                    (publication?.generation ??
+                        advancedAllocation?.generation) &&
+                frame.publicationRevision ===
+                    (publication?.revision ?? captured.publicationRevision) &&
                 frame.searchTerm === requestedTerm
             )
                 settings.current.onOutcome?.(outcome);
@@ -168,8 +185,9 @@ export function PortalVisitorSearch({
                       disabled: inactive,
                       onClick() {
                           if (!owns(entry)) return;
-                          edit(entry, '');
-                          submit(entry, { source: 'clear' });
+                          submit(entry, { source: 'clear' }, () =>
+                              edit(entry, '')
+                          );
                       },
                   },
                   names.clear
@@ -182,9 +200,10 @@ export function PortalVisitorSearch({
                 let accepted = false;
                 return (value) => {
                     if (accepted || !owns(entry)) return;
-                    accepted = true;
-                    edit(entry, value);
-                    submit(entry, { source: 'scan', searchTerm: value });
+                    submit(entry, { source: 'scan', searchTerm: value }, () => {
+                        accepted = true;
+                        edit(entry, value);
+                    });
                 };
             },
         }),

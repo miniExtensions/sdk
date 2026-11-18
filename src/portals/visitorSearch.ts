@@ -6,7 +6,7 @@ export type PortalVisitorSearchStamp = PortalVisitorSortStamp;
 export type PortalVisitorSearchFrame = Readonly<{
     stamp: PortalVisitorSearchStamp;
     searchTerm: string;
-    /** Advances for each new committed Search publication, including A → B → A. */
+    /** Advances when the committed term changes, including A → B → A. */
     publicationRevision: number;
 }>;
 
@@ -46,8 +46,9 @@ export type PortalVisitorSearchPort = {
      * Check the captured owner, term and publication before writing anything.
      * Request the first page even when the new term equals the current term.
      * Report allocation only after the authorized transport is invoked.
-     * If this command publishes a new frame, report its own verified
-     * publication with the outcome. Never attribute a later frame to it.
+     * If this command changes the term, report its own verified publication
+     * with the outcome. A same-term allocation can identify its live generation
+     * without a publication receipt. Never attribute a later frame to it.
      */
     apply(
         command: PortalVisitorSearchCommand
@@ -63,9 +64,15 @@ function isRevision(value: unknown): boolean {
 
 export function readPortalVisitorSearchFrame(
     port: PortalVisitorSearchPort
-): PortalVisitorSearchFrame | null {
+): PortalVisitorSearchFrame | null | undefined {
+    let frame: PortalVisitorSearchFrame | null;
     try {
-        const frame = port.read();
+        frame = port.read();
+    } catch {
+        // An unavailable read provides no evidence of a replacement frame.
+        return undefined;
+    }
+    try {
         if (!frame) return null;
         const { searchTerm, publicationRevision } = frame;
         const {
@@ -121,13 +128,13 @@ export function samePortalVisitorSearchScope(
     );
 }
 
-export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
-    const frame = readPortalVisitorSearchFrame(port);
-    if (!frame) return null;
+export function capturePortalVisitorSearchDraft(
+    port: PortalVisitorSearchPort,
+    frame: PortalVisitorSearchFrame
+) {
     let retired = false;
-    const current = () => {
-        if (retired) return false;
-        const live = readPortalVisitorSearchFrame(port);
+    const observe = (live: ReturnType<typeof readPortalVisitorSearchFrame>) => {
+        if (retired || live === undefined) return false;
         retired =
             !live ||
             live.publicationRevision !== frame.publicationRevision ||
@@ -136,11 +143,15 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
             !samePortalVisitorSearchScope(frame.stamp, live.stamp);
         return !retired;
     };
+    const current = () =>
+        !retired && observe(readPortalVisitorSearchFrame(port));
     return {
         frame,
         current,
+        observe,
         async submit(
-            intent: PortalVisitorSearchIntent
+            intent: PortalVisitorSearchIntent,
+            onAdmitted?: () => void
         ): Promise<PortalVisitorSearchOutcome> {
             if (!current()) return { type: 'stale' };
             const source = intent.source;
@@ -154,6 +165,7 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
                 return { type: 'refused' };
 
             try {
+                onAdmitted?.();
                 const outcome = await port.apply({
                     stamp: { ...frame.stamp },
                     source,
@@ -172,7 +184,10 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
                         !Number.isSafeInteger(generation) ||
                         generation < frame.stamp.generation ||
                         !Number.isSafeInteger(revision) ||
-                        revision <= frame.publicationRevision ||
+                        revision < frame.publicationRevision ||
+                        (revision === frame.publicationRevision &&
+                            (generation === frame.stamp.generation ||
+                                searchTerm !== frame.searchTerm)) ||
                         (outcome.type === 'allocated' &&
                             outcome.generation !== generation)
                     )
@@ -205,5 +220,16 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
             }
             return { type: 'uncertain' };
         },
+    };
+}
+
+export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
+    const frame = readPortalVisitorSearchFrame(port);
+    if (!frame) return null;
+    const { current, submit } = capturePortalVisitorSearchDraft(port, frame);
+    return {
+        frame,
+        current,
+        submit: (intent: PortalVisitorSearchIntent) => submit(intent),
     };
 }

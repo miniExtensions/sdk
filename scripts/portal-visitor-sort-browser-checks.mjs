@@ -73,6 +73,7 @@ const searchListeners = new Set();
 const searchCommands = [];
 const searchOutcomes = [];
 let scan;
+let searchReadFails = false;
 let searchFrame = {
     stamp: {...frame.stamp, fieldId: 'search-portal'},
     searchTerm: 'previous',
@@ -83,7 +84,13 @@ function publishSearch(next) {
     for (const listener of searchListeners) listener();
 }
 const searchPort = {
-    read: () => searchFrame,
+    read() {
+        if (searchReadFails) {
+            searchReadFails = false;
+            throw new Error('temporary search read failure');
+        }
+        return searchFrame;
+    },
     subscribe(listener) {
         searchListeners.add(listener);
         return () => searchListeners.delete(listener);
@@ -94,9 +101,13 @@ const searchPort = {
             command.expectedPublicationRevision !== searchFrame.publicationRevision)
             return {type:'stale'};
         searchCommands.push(command);
-        const generation = searchFrame.stamp.generation;
+        const unchanged = command.searchTerm === searchFrame.searchTerm;
+        const generation = searchFrame.stamp.generation + Number(unchanged);
         const receipt = {type:'allocated', requestId:'search-' + searchCommands.length, generation};
-        if (command.searchTerm === searchFrame.searchTerm) return receipt;
+        if (unchanged) {
+            publishSearch({...searchFrame, stamp:{...searchFrame.stamp, generation}});
+            return receipt;
+        }
         const revision = searchFrame.publicationRevision + 1;
         publishSearch({
             ...searchFrame,
@@ -120,6 +131,7 @@ searchRoot.render(h(StrictMode, null, h(PortalVisitorSearch, {
 })));
 globalThis.searchFixture = {
     summary: () => ({commands:searchCommands, outcomes:searchOutcomes, listeners:searchListeners.size}),
+    failNextRead() { searchReadFails = true; },
     hasCurrentInput(value) {
         return searchHost.querySelector('input')?.value === value &&
             Number(searchHost.querySelector('[data-search-generation]')?.dataset.searchGeneration) === searchFrame.stamp.generation &&
@@ -152,7 +164,12 @@ async function checkSearch(page) {
     assert.deepEqual((await search()).commands, []);
     await entry.press('Enter');
     await waitForTerm('  café  ');
-    await page.getByRole('button', { name: 'Submit search' }).press('Enter');
+    const submit = page.getByRole('button', { name: 'Submit search' });
+    await page.evaluate(() => globalThis.searchFixture.failNextRead());
+    await submit.press('Enter');
+    assert.equal((await search()).commands.length, 1);
+    assert.equal(await submit.isEnabled(), true);
+    await submit.press('Enter');
     assert.equal((await search()).commands.length, 2);
     await page.waitForFunction(
         () => globalThis.searchFixture.summary().outcomes.length === 2
@@ -211,11 +228,14 @@ async function checkSearch(page) {
             ['allocated', 5],
         ]
     );
+    assert.equal(outcomes[1].generation, outcomes[0].generation + 1);
     await page.evaluate(() => globalThis.searchFixture.unmount());
     assert.equal((await search()).listeners, 0);
     return {
         commands: commands.length,
         staleScanRejected: true,
+        transientReadRecovered: true,
+        sameTermGenerationReported: true,
         cleanup: 'completed',
     };
 }

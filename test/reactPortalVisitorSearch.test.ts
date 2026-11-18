@@ -71,6 +71,11 @@ function host() {
             );
         },
         notify: notifyListeners,
+        advanceGeneration() {
+            const generation = frame.stamp.generation + 1;
+            publish({ ...frame, stamp: { ...frame.stamp, generation } }, true);
+            return { generation, revision: frame.publicationRevision };
+        },
         commit(searchTerm: string, advanceGeneration = true, notify = true) {
             const generation =
                 frame.stamp.generation + Number(advanceGeneration);
@@ -440,6 +445,129 @@ it('reports its own verified publication before the subscription sees it', async
     ]);
     await act(async () => owner.notify());
     assert.equal(outcomes.length, 1);
+});
+
+it('recovers from a transient read exception without replacing the enabled Search draft', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    let readsBeforeFailure: number | undefined;
+    const port: PortalVisitorSearchProps['port'] = {
+        ...owner.port,
+        read() {
+            if (readsBeforeFailure === 0) {
+                readsBeforeFailure = undefined;
+                throw new Error('temporary owner read failure');
+            }
+            if (readsBeforeFailure !== undefined) readsBeforeFailure -= 1;
+            return owner.port.read();
+        },
+    };
+    await f.render(h(PortalVisitorSearch, { port }));
+    const input = f.container.querySelector('input');
+    assert.ok(input);
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(
+            f.window.HTMLInputElement.prototype,
+            'value'
+        )?.set?.call(input, 'typed before the read failure');
+        input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+    });
+    readsBeforeFailure = 0;
+    await act(async () => owner.notify());
+    assert.equal(input.value, 'typed before the read failure');
+    const submit = [...f.container.querySelectorAll('button')].at(-1);
+    assert.ok(submit);
+    readsBeforeFailure = 0;
+    await f.click(submit);
+    assert.equal(owner.commands.length, 0);
+    assert.equal(submit.disabled, false);
+    const clear = [...f.container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Clear search'
+    );
+    assert.ok(clear);
+    readsBeforeFailure = 1;
+    await f.click(clear);
+    assert.equal(owner.commands.length, 0);
+    assert.equal(input.value, 'typed before the read failure');
+    await f.click(submit);
+    assert.equal(owner.commands.length, 1);
+    assert.equal(owner.commands[0].searchTerm, 'typed before the read failure');
+});
+
+for (const includePublication of [false, true]) {
+    it(`reports an accepted unchanged term when the owner advances generation ${includePublication ? 'with' : 'without'} a publication pair`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const owner = host();
+        const outcomes: PortalVisitorSearchOutcome[] = [];
+        const port: PortalVisitorSearchProps['port'] = {
+            ...owner.port,
+            apply(command) {
+                assert.equal(command.searchTerm, 'previous');
+                const publication = owner.advanceGeneration();
+                return {
+                    type: 'allocated',
+                    requestId: 'same-term-reload',
+                    generation: publication.generation,
+                    ...(includePublication
+                        ? { committedPublication: publication }
+                        : {}),
+                };
+            },
+        };
+        await f.render(
+            h(PortalVisitorSearch, {
+                port,
+                onOutcome: (outcome) => outcomes.push(outcome),
+            })
+        );
+        const submit = [...f.container.querySelectorAll('button')].at(-1);
+        assert.ok(submit);
+        await f.click(submit);
+        assert.deepEqual(outcomes, [
+            {
+                type: 'allocated',
+                requestId: 'same-term-reload',
+                generation: 2,
+                ...(includePublication
+                    ? { committedPublication: { generation: 2, revision: 1 } }
+                    : {}),
+            },
+        ]);
+    });
+}
+
+it('drops an unpaired same-term allocation after a newer term publication returns to the original term', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    let finish!: () => void;
+    const outcomes: PortalVisitorSearchOutcome[] = [];
+    const port: PortalVisitorSearchProps['port'] = {
+        ...owner.port,
+        apply() {
+            const { generation } = owner.advanceGeneration();
+            return new Promise((resolve) => {
+                finish = () =>
+                    resolve({
+                        type: 'allocated',
+                        requestId: 'old-same-term-allocation',
+                        generation,
+                    });
+            });
+        },
+    };
+    await f.render(
+        h(PortalVisitorSearch, {
+            port,
+            onOutcome: (outcome) => outcomes.push(outcome),
+        })
+    );
+    const submit = [...f.container.querySelectorAll('button')].at(-1);
+    assert.ok(submit);
+    await f.click(submit);
+    await act(async () => owner.commit('different publication', false));
+    await act(async () => owner.commit('previous', false));
+    await act(async () => finish());
+    assert.deepEqual(outcomes, []);
 });
 
 it('drops a late receipt when the same port is mounted in a new subscription', async (t) => {

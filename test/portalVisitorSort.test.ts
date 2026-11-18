@@ -77,32 +77,39 @@ function fixture(initial: PortalVisitorSortFrame['criteria'] = []) {
     };
 }
 
-it('adds eligible fields in order, edits and moves by stable key, and applies once', async () => {
+it('appends, edits in place and deletes without changing the remaining rule order', async () => {
     const f = fixture([title, named]);
     const draft = f.draft();
     assert.equal(draft.setField(1, 'title'), false);
     assert.equal(draft.setField(1, 'status'), false);
     assert.equal(draft.add(), 2);
     assert.equal(draft.add(), null);
-    assert.equal(draft.move(2, -1), true);
     assert.deepEqual(
         draft.snapshot().rules.map((rule) => [rule.key, rule.fieldId]),
         [
             [0, 'title'],
-            [2, 'priority'],
             [1, 'status'],
+            [2, 'priority'],
         ]
     );
     assert.equal(draft.setDirection(2, 'desc'), true);
     assert.equal(draft.remove(0), true);
+    assert.equal(draft.setField(2, 'title'), true);
+    assert.deepEqual(
+        draft.snapshot().rules.map((rule) => [rule.key, rule.fieldId]),
+        [
+            [1, 'status'],
+            [2, 'title'],
+        ]
+    );
     assert.deepEqual(f.commands, []);
     assert.deepEqual(await draft.commit(), f.allocated);
     assert.deepEqual(f.commands, [
         {
             stamp,
             criteria: [
-                { type: 'desc', idOrName: { type: 'id', id: 'priority' } },
                 named,
+                { type: 'desc', idOrName: { type: 'id', id: 'title' } },
             ],
         },
     ]);

@@ -272,14 +272,6 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
             rule.value = { ...rule.value, type: direction };
             return true;
         },
-        move(key: number, offset: -1 | 1): boolean {
-            if (!current() || (offset !== -1 && offset !== 1)) return false;
-            const index = rules.findIndex((rule) => rule.key === key);
-            const next = index + offset;
-            if (index < 0 || next < 0 || next >= rules.length) return false;
-            [rules[index], rules[next]] = [rules[next], rules[index]];
-            return true;
-        },
         remove(key: number): boolean {
             if (!current()) return false;
             const index = rules.findIndex((rule) => rule.key === key);

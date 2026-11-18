@@ -175,25 +175,22 @@ export async function checkPortalVisitorSortBrowser({
         );
         await add.press('Enter');
         await add.press('Enter');
-        await dialog
-            .getByRole('combobox', { name: 'Direction 2' })
-            .selectOption('desc');
-        await dialog
-            .getByRole('button', { name: 'Move earlier 2' })
-            .press('Enter');
         assert.equal(
             await page.evaluate(() =>
                 document.activeElement.getAttribute('aria-label')
             ),
-            'Move earlier 1'
+            'Field 2'
         );
+        await dialog
+            .getByRole('combobox', { name: 'Direction 2' })
+            .selectOption('desc');
         assert.deepEqual(
             await dialog
                 .locator('select[aria-label^="Field"]')
                 .evaluateAll((selects) =>
                     selects.map((select) => select.value)
                 ),
-            ['detail', 'title']
+            ['title', 'detail']
         );
         assert.deepEqual((await summary()).commands, []);
         await done.press('Enter');
@@ -205,11 +202,11 @@ export async function checkPortalVisitorSortBrowser({
             (await summary()).commands[0].criteria.map(
                 (rule) => rule.idOrName.id
             ),
-            ['detail', 'title']
+            ['title', 'detail']
         );
         assert.deepEqual(
             (await summary()).commands[0].criteria.map((rule) => rule.type),
-            ['desc', 'asc']
+            ['asc', 'desc']
         );
         assert.deepEqual((await summary()).outcomes, [
             { type: 'allocated', requestId: 'request-1', generation: 2 },
@@ -246,8 +243,9 @@ export async function checkPortalVisitorSortBrowser({
             end.commands.map((command) =>
                 command.criteria.map((rule) => rule.idOrName.id)
             ),
-            [['detail', 'title'], ['title']]
+            [['title', 'detail'], ['detail']]
         );
+        assert.equal(end.commands[1].criteria[0].type, 'desc');
         assert.equal(end.listeners, 0);
         assert.equal(end.submits, 0);
         assert.deepEqual(external, []);

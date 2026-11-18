@@ -29,8 +29,6 @@ const defaultLabels = {
     ascending: 'Ascending',
     descending: 'Descending',
     remove: 'Delete sort condition',
-    up: 'Move earlier',
-    down: 'Move later',
     unavailable: 'This sort field is unavailable.',
     stale: 'The view or sort fields changed. Open Sort again to edit the current rules.',
     refused: 'The current view could not apply these sort rules.',
@@ -167,27 +165,6 @@ function SortDialog({
     };
     const renderRule = (rule: PortalVisitorSortRule, index: number) => {
         const number = index + 1;
-        const move = (offset: -1 | 1) => {
-            const edge =
-                offset === -1 ? index === 0 : index === rules.length - 1;
-            const name = offset === -1 ? labels.up : labels.down;
-            const buttonId = controlId(rule.key, offset === -1 ? 'up' : 'down');
-            return h(
-                'button',
-                {
-                    type: 'button',
-                    id: buttonId,
-                    disabled: inactive,
-                    'aria-disabled': edge || undefined,
-                    'aria-label': `${name} ${number}`,
-                    onClick: () => {
-                        if (!edge)
-                            update(draft.move(rule.key, offset), buttonId);
-                    },
-                },
-                name
-            );
-        };
         return h(
             'li',
             { key: rule.key, style: buttonRow },
@@ -257,8 +234,6 @@ function SortDialog({
                           h('option', { value: 'desc' }, labels.descending)
                       )
                   ),
-            move(-1),
-            move(1),
             h(
                 'button',
                 {

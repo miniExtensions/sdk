@@ -153,7 +153,7 @@ it('hydrates the server trigger, opens from it and retires the subscription on u
     assert.equal(host.listeners.size, 0);
 });
 
-it('mounts the actual dialog, reorders through accessible buttons and sends an ordered command on Done', async (t) => {
+it('mounts the actual dialog and sends the appended criteria in order on Done', async (t) => {
     const f = await htmlPresentationFixture(t);
     const host = owner();
     const outcomes: PortalVisitorSortOutcome[] = [];
@@ -172,10 +172,21 @@ it('mounts the actual dialog, reorders through accessible buttons and sends an o
     await f.click(button(f, 'Add sort condition'));
     await f.click(button(f, 'Add sort condition'));
     assert.equal(button(f, 'Add sort condition').disabled, true);
-    await f.click(button(f, 'Move earlier 2'));
+    assert.deepEqual(
+        [...f.container.querySelectorAll('dialog button')].map(
+            (item) => item.getAttribute('aria-label') ?? item.textContent
+        ),
+        [
+            'Close',
+            'Delete sort condition 1',
+            'Delete sort condition 2',
+            'Add sort condition',
+            'Done',
+        ]
+    );
     assert.equal(
         f.window.document.activeElement?.getAttribute('aria-label'),
-        'Move earlier 1'
+        'Field 2'
     );
     assert.deepEqual(
         [...f.container.querySelectorAll('select[aria-label^=Field]')].map(
@@ -184,7 +195,7 @@ it('mounts the actual dialog, reorders through accessible buttons and sends an o
                 return field.value;
             }
         ),
-        ['detail', 'title']
+        ['title', 'detail']
     );
     assert.equal(host.commands.length, 0);
     await f.click(button(f, 'Done'));
@@ -193,8 +204,8 @@ it('mounts the actual dialog, reorders through accessible buttons and sends an o
     assert.deepEqual(
         host.commands[0].criteria.map((rule) => rule.idOrName),
         [
-            { type: 'id', id: 'detail' },
             { type: 'id', id: 'title' },
+            { type: 'id', id: 'detail' },
         ]
     );
     assert.deepEqual(outcomes, [

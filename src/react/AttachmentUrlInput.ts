@@ -5,6 +5,7 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    type ReactElement,
 } from 'react';
 import {
     getAttachmentFilenameFromUrl,
@@ -44,7 +45,9 @@ export type AttachmentUrlInputProps = Readonly<{
 }>;
 
 /** Stage one URL in a host draft without uploading or submitting its Form. */
-export function AttachmentUrlInput(props: AttachmentUrlInputProps) {
+export function AttachmentUrlInput(
+    props: AttachmentUrlInputProps
+): ReactElement | null {
     const generation = resourceOwnerGeneration(props.owner);
     const [lifetime, setLifetime] = useState({ generation, revision: 0 });
     let revision = lifetime.revision;

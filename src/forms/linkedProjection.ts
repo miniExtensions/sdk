@@ -59,6 +59,18 @@ export type CreateLinkedFormRecordProjectionInput<
     interpreterOptions?: FormulaInterpreterOptions;
 }>;
 
+/**
+ * A finite native Form condition projection with no linked loading or filtering
+ * input. The host must establish that its native loading boundary is clear.
+ */
+export type CreateNonLinkedFormRecordProjectionInput<
+    RecordType extends RuntimeFormRecord = RuntimeFormRecord,
+> = Omit<
+    CreateLinkedFormRecordProjectionInput<RecordType>,
+    | 'linkedTableLoadingStates'
+    | 'conditionalLinkedRecordFieldIdsToFilteringValues'
+>;
+
 export type LinkedFormProjectionDiagnostic = Readonly<{
     code:
         | 'invalid-snapshot'
@@ -79,6 +91,8 @@ export type LinkedFormRecordProjection =
           code: LinkedFormProjectionDiagnostic['code'];
           diagnostics: readonly LinkedFormProjectionDiagnostic[];
       };
+
+export type NonLinkedFormRecordProjection = LinkedFormRecordProjection;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
@@ -171,6 +185,258 @@ const driverTypes = new Set([
     'lastModifiedTime',
 ]);
 
+const nonLinkedPhysicalOperators: Readonly<Record<string, readonly string[]>> =
+    {
+        singleLineText: ['is'],
+        singleSelect: [
+            'is',
+            'isNot',
+            'isAnyOf',
+            'isNoneOf',
+            'isEmpty',
+            'isNotEmpty',
+        ],
+        multipleSelects: [
+            'hasAllOf',
+            'hasAnyOf',
+            'hasNoneOf',
+            'isExactly',
+            'isEmpty',
+            'isNotEmpty',
+        ],
+        number: [
+            'equals',
+            'notEquals',
+            'greaterThan',
+            'lessThan',
+            'greaterThanOrEqualsTo',
+            'lessThanOrEqualsTo',
+            'isEmpty',
+            'isNotEmpty',
+        ],
+    };
+
+function isNonLinkedDriverMetadata(field: RuntimeAirtableField): boolean {
+    const { type, options } = field.config;
+    if (type === 'formula') return formulaConditionResultType(field) != null;
+    if (field.isComputed !== false) return false;
+    if (type === 'singleLineText') return options === null;
+    if (type === 'singleSelect' || type === 'multipleSelects') {
+        if (!isObject(options) || !Array.isArray(options.choices)) return false;
+        const ids = new Set<string>();
+        const names = new Set<string>();
+        for (let index = 0; index < options.choices.length; index++) {
+            const choice = options.choices[index];
+            if (
+                !Object.hasOwn(options.choices, index) ||
+                !isObject(choice) ||
+                typeof choice.id !== 'string' ||
+                choice.id === '' ||
+                typeof choice.name !== 'string' ||
+                choice.name === '' ||
+                ids.has(choice.id) ||
+                names.has(choice.name)
+            )
+                return false;
+            ids.add(choice.id);
+            names.add(choice.name);
+        }
+        return true;
+    }
+    if (type === 'rating')
+        return (
+            isObject(options) &&
+            typeof options.max === 'number' &&
+            Number.isInteger(options.max) &&
+            options.max > 0 &&
+            typeof options.icon === 'string' &&
+            typeof options.color === 'string'
+        );
+    return (
+        (type === 'number' || type === 'percent' || type === 'currency') &&
+        isObject(options) &&
+        typeof options.precision === 'number' &&
+        Number.isFinite(options.precision) &&
+        (type !== 'currency' || typeof options.symbol === 'string')
+    );
+}
+
+/** Inspect every saved leaf, including leaves native short-circuiting may skip. */
+function hasOnlyNonLinkedConditions(
+    definition: unknown,
+    fields: ReadonlyMap<string, RuntimeAirtableField>,
+    values: Readonly<RuntimeFormRecord['data']>
+): boolean {
+    const active = new WeakSet<object>();
+    const visit = (group: unknown): boolean => {
+        if (
+            !isObject(group) ||
+            active.has(group) ||
+            (group.logicalOperator !== 'and' &&
+                group.logicalOperator !== 'or') ||
+            !Array.isArray(group.conditions)
+        )
+            return false;
+        active.add(group);
+        try {
+            for (let index = 0; index < group.conditions.length; index++) {
+                if (!Object.hasOwn(group.conditions, index)) return false;
+                const condition = group.conditions[index];
+                if (!isObject(condition)) return false;
+                if (condition.type === 'groupCondition') {
+                    if (!visit(condition)) return false;
+                    continue;
+                }
+                if (
+                    condition.type !== 'singleCondition' ||
+                    !isObject(condition.setting)
+                )
+                    return false;
+                const setting = condition.setting;
+                const reference = setting.idOrName;
+                if (
+                    !isObject(reference) ||
+                    reference.type !== 'id' ||
+                    typeof reference.id !== 'string' ||
+                    reference.id === '' ||
+                    typeof setting.type !== 'string' ||
+                    typeof setting.fieldType !== 'string'
+                )
+                    return false;
+                const driver = fields.get(reference.id);
+                if (driver == null || !isNonLinkedDriverMetadata(driver))
+                    return false;
+                const resultType =
+                    driver.config.type === 'formula'
+                        ? formulaConditionResultType(driver)
+                        : driver.config.type;
+                if (resultType == null || resultType !== setting.fieldType)
+                    return false;
+                if (driver.config.type === 'formula') {
+                    // Match native name-before-ID lookup, but only consume the
+                    // captured supplied result; never evaluate the Formula.
+                    const supplied =
+                        driver.name in values
+                            ? values[driver.name]
+                            : values[driver.id];
+                    if (
+                        supplied != null &&
+                        (resultType === 'singleLineText'
+                            ? typeof supplied !== 'string'
+                            : typeof supplied !== 'number' ||
+                              !Number.isFinite(supplied))
+                    )
+                        return false;
+                }
+                const operators =
+                    driver.config.type === 'formula'
+                        ? resultType === 'singleLineText'
+                            ? ['is']
+                            : ['equals']
+                        : resultType === 'percent' ||
+                            resultType === 'currency' ||
+                            resultType === 'rating'
+                          ? nonLinkedPhysicalOperators.number
+                          : nonLinkedPhysicalOperators[resultType];
+                if (operators == null || !operators.includes(setting.type))
+                    return false;
+                if (setting.type === 'isEmpty' || setting.type === 'isNotEmpty')
+                    continue;
+                const value = setting.value;
+                if (
+                    resultType === 'singleSelect' ||
+                    resultType === 'multipleSelects'
+                ) {
+                    if (setting.type === 'is' || setting.type === 'isNot') {
+                        if (typeof value !== 'string' || value === '')
+                            return false;
+                    } else {
+                        if (!Array.isArray(value) || value.length === 0)
+                            return false;
+                        for (let index = 0; index < value.length; index++)
+                            if (
+                                !Object.hasOwn(value, index) ||
+                                typeof value[index] !== 'string' ||
+                                value[index] === ''
+                            )
+                                return false;
+                    }
+                } else if (resultType === 'singleLineText') {
+                    if (typeof value !== 'string' || value === '') return false;
+                } else if (typeof value !== 'number' || !Number.isFinite(value))
+                    return false;
+            }
+            return true;
+        } finally {
+            active.delete(group);
+        }
+    };
+    return definition == null || visit(definition);
+}
+
+/** Compare captured configuration data without depending on object key order. */
+function sameNonLinkedMetadata(
+    left: unknown,
+    right: unknown,
+    seen = new WeakMap<object, WeakSet<object>>()
+): boolean {
+    if (Object.is(left, right)) return true;
+    if (
+        left == null ||
+        right == null ||
+        typeof left !== 'object' ||
+        typeof right !== 'object' ||
+        Array.isArray(left) !== Array.isArray(right) ||
+        (Array.isArray(left) &&
+            Array.isArray(right) &&
+            left.length !== right.length)
+    )
+        return false;
+    const matches = seen.get(left);
+    if (matches?.has(right)) return true;
+    if (matches == null) seen.set(left, new WeakSet([right]));
+    else matches.add(right);
+    const leftKeys = Object.keys(left);
+    if (leftKeys.length !== Object.keys(right).length) return false;
+    return leftKeys.every(
+        (key) =>
+            Object.hasOwn(right, key) &&
+            sameNonLinkedMetadata(
+                Reflect.get(left, key),
+                Reflect.get(right, key),
+                seen
+            )
+    );
+}
+
+function hasNonLinkedFieldConfiguration(field: RuntimeFieldSchema): boolean {
+    const config = field.miniExtConfig;
+    if (config == null) return true;
+    if (!isObject(config)) return false;
+    if (
+        ('headerSectionTitle' in config &&
+            config.headerSectionTitle != null &&
+            typeof config.headerSectionTitle !== 'string') ||
+        ('enableSectionHeader' in config &&
+            config.enableSectionHeader != null &&
+            typeof config.enableSectionHeader !== 'boolean') ||
+        ('applyFieldConditionsToSection' in config &&
+            config.applyFieldConditionsToSection != null &&
+            typeof config.applyFieldConditionsToSection !== 'boolean')
+    )
+        return false;
+    return !(
+        ('filterLinkedRecordsConditionFields' in config &&
+            config.filterLinkedRecordsConditionFields != null &&
+            config.filterLinkedRecordsToggle !== false &&
+            config.filterApplicationMode !== 'record-finder-only') ||
+        ('conditionalLinkedRecordFilterFields' in config &&
+            config.conditionalLinkedRecordFilterFields != null &&
+            (!Array.isArray(config.conditionalLinkedRecordFilterFields) ||
+                config.conditionalLinkedRecordFilterFields.length !== 0))
+    );
+}
+
 /**
  * A synchronous, detached projection of one application-owned input snapshot.
  * It reads no store/cache/client/provider and creates no draft or Save owner.
@@ -181,6 +447,28 @@ export function createLinkedFormRecordProjection<
     RecordType extends RuntimeFormRecord,
 >(
     input: CreateLinkedFormRecordProjectionInput<RecordType>
+): LinkedFormRecordProjection {
+    return projectFormRecord(input, 'linked');
+}
+
+/**
+ * Native JSON projection for the finite saved-ID scalar/select cohort. It does
+ * not infer linked loading readiness, filter records or expand Formula values.
+ * A blocked result requires the caller's complete original native fallback.
+ */
+export function createNonLinkedFormRecordProjection<
+    RecordType extends RuntimeFormRecord,
+>(
+    input: CreateNonLinkedFormRecordProjectionInput<RecordType>
+): NonLinkedFormRecordProjection {
+    return projectFormRecord(input, 'nonlinked');
+}
+
+function projectFormRecord<RecordType extends RuntimeFormRecord>(
+    input:
+        | CreateLinkedFormRecordProjectionInput<RecordType>
+        | CreateNonLinkedFormRecordProjectionInput<RecordType>,
+    mode: 'linked' | 'nonlinked'
 ): LinkedFormRecordProjection {
     const blocked = (
         code: LinkedFormProjectionDiagnostic['code']
@@ -207,7 +495,13 @@ export function createLinkedFormRecordProjection<
         if (capturedOptions == null) return blocked('invalid-snapshot');
         if (
             !canCaptureSnapshot(input, new WeakSet<object>(), true) ||
-            input.compatibility !== 'native-form-v1'
+            input.compatibility !== 'native-form-v1' ||
+            (mode === 'nonlinked' &&
+                (Object.hasOwn(input, 'linkedTableLoadingStates') ||
+                    Object.hasOwn(
+                        input,
+                        'conditionalLinkedRecordFieldIdsToFilteringValues'
+                    )))
         )
             return blocked('invalid-snapshot');
         const interpreterOptions = capturedOptions.options;
@@ -221,8 +515,18 @@ export function createLinkedFormRecordProjection<
                 input.formRecordForConditionEvaluation ?? input.formRecord,
             formFields: input.formFields,
             airtableFields: input.airtableFields,
-            linkedStates: input.linkedTableLoadingStates,
-            filters: input.conditionalLinkedRecordFieldIdsToFilteringValues,
+            linkedStates:
+                mode === 'nonlinked'
+                    ? {}
+                    : (
+                          input as CreateLinkedFormRecordProjectionInput<RecordType>
+                      ).linkedTableLoadingStates,
+            filters:
+                mode === 'nonlinked'
+                    ? {}
+                    : (
+                          input as CreateLinkedFormRecordProjectionInput<RecordType>
+                      ).conditionalLinkedRecordFieldIdsToFilteringValues,
         }) as {
             evaluation: RuntimeFormRecord;
             formFields: RuntimeFieldSchema[];
@@ -282,7 +586,31 @@ export function createLinkedFormRecordProjection<
             )
                 return blocked('invalid-snapshot');
             seen.add(physical.id);
+            if (
+                mode === 'nonlinked' &&
+                (field.airtableField.isComputed !== physical.isComputed ||
+                    !sameNonLinkedMetadata(
+                        field.airtableField.config,
+                        physical.config
+                    ) ||
+                    !hasNonLinkedFieldConfiguration(field))
+            )
+                return blocked('invalid-snapshot');
         }
+        if (
+            mode === 'nonlinked' &&
+            !snapshot.formFields.every((field) =>
+                hasOnlyNonLinkedConditions(
+                    field.miniExtConfig != null &&
+                        'conditionalFields' in field.miniExtConfig
+                        ? field.miniExtConfig.conditionalFields
+                        : null,
+                    byId,
+                    snapshot.evaluation.data
+                )
+            )
+        )
+            return blocked('unsupported-driver');
         for (const state of Object.values(snapshot.linkedStates)) {
             if (
                 state == null ||
@@ -404,6 +732,9 @@ export function createLinkedFormRecordProjection<
                 }
             }
         }
+
+        if (mode === 'nonlinked')
+            return { type: 'available', formRecord: output, hiddenFieldIds };
 
         for (const [fieldId, value] of Object.entries(output.data)) {
             const field = byId.get(fieldId);

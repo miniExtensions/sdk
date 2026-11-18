@@ -75,7 +75,7 @@ export function checkCustomerChatMatrix({
                 '--no-fund',
                 '--package-lock=false',
                 '--cache',
-                join(directory, 'npm-cache'),
+                'npm-cache',
                 '@types/node@22.20.5',
                 'react@' + version.react,
                 'react-dom@' + version.react,

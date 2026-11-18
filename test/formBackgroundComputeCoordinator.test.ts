@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import {
     createFormBackgroundComputeCoordinator,
     createFormBackgroundComputeFieldBinding,
-    type FormBackgroundComputeClock,
 } from '../src/forms/index.js';
 
 function deferred() {
@@ -90,12 +89,12 @@ test('the default field binding cancels an unstarted timer and replaces a pendin
     assert.deepEqual(edits, ['latest']);
 });
 
-test('field cancellation during allocation preserves accepted edits and failures do not rearm them', async () => {
-    let time = 0;
+test('a same-tick edit survives cancellation during allocation and a failed allocation discards pending work', async () => {
+    const timestamp = 300;
     let scheduled: { run: () => Promise<void>; delay: number } | undefined;
-    const clock: FormBackgroundComputeClock = {
-        now: () => time,
-        schedule(run, delay) {
+    const clock = {
+        now: () => timestamp,
+        schedule(run: () => Promise<void>, delay: number) {
             scheduled = { run, delay };
             return () => {
                 scheduled = undefined;
@@ -123,10 +122,10 @@ test('field cancellation during allocation preserves accepted edits and failures
     };
 
     field.edited(activeOwner, compute);
-    time = 300;
     const active = take(300);
-    time += 1;
+    field.edited(Symbol('superseded in the same tick'), compute);
     field.edited(successOwner, compute);
+    assert.equal(clock.now(), timestamp);
     field.cancelScheduled();
     first.resolve();
     await active;
@@ -135,7 +134,6 @@ test('field cancellation during allocation preserves accepted edits and failures
 
     field.edited(failedOwner, compute);
     const exhausting = take(300);
-    time += 1;
     field.edited(Symbol('discarded on failure'), compute);
     const cause = new Error('synthetic field failure');
     const rejected = assert.rejects(exhausting, (error) => error === cause);

@@ -76,7 +76,6 @@ export function createFormBackgroundComputeCoordinator<
 
 /** A clock schedules a future callback and yields a cancel function. */
 export type FormBackgroundComputeClock = {
-    now(): number;
     schedule(run: () => Promise<void>, delayMs: number): () => void;
 };
 
@@ -92,7 +91,6 @@ export type FormBackgroundComputeFieldBinding<Owner> = {
 };
 
 const defaultClock: FormBackgroundComputeClock = {
-    now: () => Date.now(),
     schedule(run, delayMs) {
         const timer = setTimeout(run, delayMs);
         return () => clearTimeout(timer);
@@ -115,7 +113,6 @@ export function createFormBackgroundComputeFieldBinding<Owner>({
               compute: (owner: Owner) => Promise<void>;
           }
         | undefined;
-    let lastEditAt = 0;
     let computing = false;
     let cancelTimer: (() => void) | undefined;
 
@@ -126,7 +123,6 @@ export function createFormBackgroundComputeFieldBinding<Owner>({
         if (edit == null) return;
 
         computing = true;
-        const startedAt = clock.now();
         try {
             await edit.compute(edit.owner);
         } catch (error) {
@@ -136,17 +132,16 @@ export function createFormBackgroundComputeFieldBinding<Owner>({
             computing = false;
         }
 
-        if (lastEditAt > startedAt) {
+        // Taking the current edit cleared the slot. Anything now pending
+        // arrived during allocation, including edits in the same clock tick.
+        if (pending != null) {
             cancelTimer = clock.schedule(computePending, 0);
-        } else {
-            pending = undefined;
         }
     };
 
     return {
         edited(owner, compute) {
             pending = { owner, compute };
-            lastEditAt = clock.now();
             if (computing) return;
             cancelTimer?.();
             cancelTimer = clock.schedule(computePending, 300);

@@ -12,7 +12,6 @@ import {
 const backgroundComputes: FormBackgroundComputeCoordinator<symbol> = createFormBackgroundComputeCoordinator();
 const backgroundSession = Symbol();
 const backgroundClock: FormBackgroundComputeClock = {
-    now: () => 0,
     schedule: (_run, _delay) => () => {},
 };
 const backgroundField = createFormBackgroundComputeFieldBinding<symbol>({clock: backgroundClock});
@@ -271,7 +270,7 @@ async function checkCapturedOwner(forms) {
     assert.deepEqual(effects, [nextA]);
 }
 
-async function checkUnmountAndFailure(forms) {
+async function checkUnmountWithPendingEdit(forms, elapsed) {
     const timer = makeClock();
     const releaseField = deferred();
     const owners = [];
@@ -290,7 +289,9 @@ async function checkUnmountAndFailure(forms) {
     field.edited('already allocated');
     const activeField = timer.tick(600);
     assert.deepEqual(owners, ['already allocated']);
-    timer.tick(601);
+    const editAt = 600 + elapsed;
+    timer.tick(editAt);
+    assert.equal(timer.clock.now(), editAt);
     field.edited('first pending');
     field.edited('latest pending');
     field.cancelScheduled();
@@ -299,12 +300,19 @@ async function checkUnmountAndFailure(forms) {
     await Promise.all(activeField);
     assert.deepEqual(
         timer.due(),
-        [601],
-        'allocated pending edit follows at zero delay'
+        [editAt],
+        `allocated pending edit follows at zero delay (clock advanced by ${elapsed} ms)`
     );
-    await Promise.all(timer.tick(601));
+    await Promise.all(timer.tick(editAt));
     assert.deepEqual(owners, ['already allocated', 'latest pending']);
+    assert.deepEqual(timer.due(), []);
+}
 
+async function checkUnmountAndFailure(forms) {
+    for (const elapsed of [1, 0]) {
+        await checkUnmountWithPendingEdit(forms, elapsed);
+    }
+    const timer = makeClock();
     const coordinator = forms.createFormBackgroundComputeCoordinator();
     const release = deferred();
     const failure = new Error('synthetic host failure');
@@ -344,16 +352,16 @@ async function checkUnmountAndFailure(forms) {
         },
     });
     failedField.edited('fails');
-    const [failedTimer] = timer.tick(901);
-    timer.tick(902);
+    const [failedTimer] = timer.tick(300);
+    timer.tick(301);
     failedField.edited('discarded pending edit');
     const rejected = assert.rejects(failedTimer, (error) => error === failure);
     fieldFailure.reject(failure);
     await rejected;
     assert.deepEqual(timer.due(), []);
     failedField.edited('explicit next edit');
-    assert.deepEqual(timer.due(), [1202]);
-    await Promise.all(timer.tick(1202));
+    assert.deepEqual(timer.due(), [601]);
+    await Promise.all(timer.tick(601));
     assert.equal(calls, 2);
 }
 

@@ -902,6 +902,11 @@ try {
         'dist/cjs/react/attachment-preview.css',
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/AttachmentUrlInput.js`,
+            `dist/${format}/react/AttachmentUrlInput.d.ts`,
+            `dist/${format}/react/attachment-url-input.css`,
+        ]),
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
         'docs/portal-shell.md',

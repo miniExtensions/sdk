@@ -264,6 +264,7 @@ for (const format of ['esm', 'cjs']) {
         'barcode',
         'complete-portal-chart',
         'attachment-preview',
+        'attachment-url-input',
         'readonly-url-gallery',
         'lookup',
         'computed',

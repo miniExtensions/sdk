@@ -625,7 +625,9 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         evidence.error = error.message;
         if (page && !evidence.caretNavigation)
             evidence.caretNavigation = await page
-                .evaluate(() => window.canonicalRichText?.finishCaretNavigation())
+                .evaluate(() =>
+                    window.canonicalRichText?.finishCaretNavigation()
+                )
                 .catch(() => undefined);
         if (page)
             evidence.failureState = await page

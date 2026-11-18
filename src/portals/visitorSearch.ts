@@ -21,14 +21,21 @@ export type PortalVisitorSearchCommand = Readonly<{
 
 export type PortalVisitorSearchOutcome =
     | Readonly<{ type: 'allocated'; requestId: string; generation: number }>
-    | Readonly<{ type: 'stale' | 'refused' | 'uncertain' }>;
+    | Readonly<{ type: 'stale' }>
+    | Readonly<{
+          type: 'refused' | 'uncertain';
+          /** Set only when the host observed this command publish its own term. */
+          committedGeneration?: number;
+      }>;
 
 export type PortalVisitorSearchPort = {
     read(): PortalVisitorSearchFrame | null;
     /**
      * Check the captured owner before changing the committed search term.
      * Request the first page even when the new term equals the current term.
-     * Report allocation only after the authorized transport is invoked.
+     * Report allocation only after the authorized transport is invoked. If
+     * the command publishes its term and the read is then refused or uncertain,
+     * report the generation of that verified publication with the outcome.
      */
     apply(
         command: PortalVisitorSearchCommand
@@ -141,8 +148,22 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
                         requestId: outcome.requestId,
                         generation: outcome.generation,
                     };
-                if (outcome.type === 'refused' || outcome.type === 'stale')
-                    return { type: outcome.type };
+                if (outcome.type === 'stale') return { type: 'stale' };
+                if (
+                    outcome.type === 'refused' ||
+                    outcome.type === 'uncertain'
+                ) {
+                    const generation = outcome.committedGeneration;
+                    if (generation === undefined) return { type: outcome.type };
+                    if (
+                        Number.isSafeInteger(generation) &&
+                        generation >= frame.stamp.generation
+                    )
+                        return {
+                            type: outcome.type,
+                            committedGeneration: generation,
+                        };
+                }
             } catch {
                 // An exception does not establish whether transport was invoked.
             }

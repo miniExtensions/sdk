@@ -43,6 +43,7 @@ export type PortalVisitorSearchProps = {
 
 type Entry = {
     port: PortalVisitorSearchProps['port'];
+    subscription: symbol;
     draft: NonNullable<ReturnType<typeof createPortalVisitorSearchDraft>>;
     text: string;
 };
@@ -69,11 +70,12 @@ export function PortalVisitorSearch({
     }, [disabled, onOutcome]);
     useCommitEffect(() => {
         let active = true;
+        const subscription = Symbol();
         const refresh = () => {
             if (!active || current.current?.draft.current()) return;
             const draft = createPortalVisitorSearchDraft(port);
             const entry = draft
-                ? { port, draft, text: draft.frame.searchTerm }
+                ? { port, subscription, draft, text: draft.frame.searchTerm }
                 : null;
             current.current = entry;
             setVisible(entry && { entry, text: entry.text });
@@ -101,9 +103,21 @@ export function PortalVisitorSearch({
     const submit = (candidate: Entry, intent: PortalVisitorSearchIntent) => {
         void candidate.draft.submit(intent).then((outcome) => {
             const live = current.current;
-            if (!live || live.port !== candidate.port) return;
+            if (!live || live.subscription !== candidate.subscription) return;
+            if (live === candidate) {
+                settings.current.onOutcome?.(outcome);
+                return;
+            }
             const oldStamp = candidate.draft.frame.stamp;
             const newStamp = live.draft.frame.stamp;
+            const generation =
+                outcome.type === 'allocated'
+                    ? outcome.generation
+                    : outcome.type === 'stale'
+                      ? undefined
+                      : outcome.committedGeneration;
+            const requestedTerm =
+                intent.source === 'clear' ? '' : intent.searchTerm;
             if (
                 oldStamp.sessionId === newStamp.sessionId &&
                 oldStamp.fieldId === newStamp.fieldId &&
@@ -111,9 +125,8 @@ export function PortalVisitorSearch({
                 oldStamp.configurationRevision ===
                     newStamp.configurationRevision &&
                 oldStamp.metadataRevision === newStamp.metadataRevision &&
-                (oldStamp.generation === newStamp.generation ||
-                    (outcome.type === 'allocated' &&
-                        outcome.generation === newStamp.generation))
+                generation === newStamp.generation &&
+                live.draft.frame.searchTerm === requestedTerm
             )
                 settings.current.onOutcome?.(outcome);
         });

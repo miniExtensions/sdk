@@ -996,8 +996,11 @@ whitespace, and allows a later explicit submission of the same term.
 The port reads the current committed term and owner stamp and subscribes to
 their changes. Validate the captured stamp and `expectedSearchTerm` before
 writing the new term, then revalidate the allocated first-page request before
-transport. Report an allocation only after invoking transport. A refused or
-uncertain submission does not cause an automatic retry.
+transport. Report an allocation only after invoking transport. If the read
+fails after the command publishes its own term, return the verified
+`committedGeneration` with the refused or uncertain result. The control uses
+that generation to deliver the result to its current subscription. Retries
+require a fresh user action.
 
 An optional scanner renderer captures the result callback when the scanner
 opens. Retire that callback on close. A captured callback accepts one result

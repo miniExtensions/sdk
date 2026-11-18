@@ -64,7 +64,7 @@ void createElement(PortalVisitorSearch, { port });
 function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
     const archive = resolve(archivePath);
     const cases = includeSearch ? [...sortCases, ...searchCases] : sortCases;
-    const expectedTests = includeSearch ? 22 : 12;
+    const expectedTests = includeSearch ? 25 : 12;
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(

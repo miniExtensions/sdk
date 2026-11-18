@@ -29,6 +29,10 @@ function host() {
     };
     const listeners = new Set<() => void>();
     const commands: PortalVisitorSearchCommand[] = [];
+    const publish = (next: PortalVisitorSearchFrame) => {
+        frame = next;
+        for (const listener of listeners) listener();
+    };
     const port: PortalVisitorSearchProps['port'] = {
         read: () => frame,
         subscribe(listener) {
@@ -49,15 +53,19 @@ function host() {
         listeners,
         commands,
         select(viewId: string) {
-            frame = {
+            publish({
                 ...frame,
                 stamp: {
                     ...frame.stamp,
                     viewId,
                     generation: frame.stamp.generation + 1,
                 },
-            };
-            for (const listener of listeners) listener();
+            });
+        },
+        commit(searchTerm: string) {
+            const generation = frame.stamp.generation + 1;
+            publish({ stamp: { ...frame.stamp, generation }, searchTerm });
+            return generation;
         },
     };
 }
@@ -252,5 +260,74 @@ it('keeps a superseded asynchronous receipt out of the replacement view', async 
         owner.select('replacement');
         finish({ type: 'allocated', requestId: 'old-receipt', generation: 1 });
     });
+    assert.deepEqual(outcomes, []);
+});
+
+for (const type of ['refused', 'uncertain'] as const) {
+    it(`delivers ${type} after this subscription commits a changed term`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const owner = host();
+        const outcomes: PortalVisitorSearchOutcome[] = [];
+        const port: PortalVisitorSearchProps['port'] = {
+            ...owner.port,
+            apply(command) {
+                return {
+                    type,
+                    committedGeneration: owner.commit(command.searchTerm),
+                };
+            },
+        };
+        await f.render(
+            h(PortalVisitorSearch, {
+                port,
+                onOutcome: (outcome) => outcomes.push(outcome),
+            })
+        );
+        const clear = [...f.container.querySelectorAll('button')].find(
+            (button) => button.textContent === 'Clear search'
+        );
+        assert.ok(clear);
+        await f.click(clear);
+        assert.equal(f.container.querySelector('input')?.value, '');
+        assert.deepEqual(outcomes, [{ type, committedGeneration: 2 }]);
+    });
+}
+
+it('drops a late receipt when the same port is mounted in a new subscription', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const original = host();
+    const replacement = host();
+    let finish!: (outcome: PortalVisitorSearchOutcome) => void;
+    const pending = new Promise<PortalVisitorSearchOutcome>((resolve) => {
+        finish = resolve;
+    });
+    let invocations = 0;
+    const port: PortalVisitorSearchProps['port'] = {
+        ...original.port,
+        apply() {
+            invocations += 1;
+            return pending;
+        },
+    };
+    const outcomes: PortalVisitorSearchOutcome[] = [];
+    const render = (nextPort: PortalVisitorSearchProps['port']) =>
+        f.render(
+            h(PortalVisitorSearch, {
+                port: nextPort,
+                onOutcome: (outcome) => outcomes.push(outcome),
+            })
+        );
+    await render(port);
+    const submit = [...f.container.querySelectorAll('button')].at(-1);
+    assert.ok(submit);
+    await f.click(submit);
+    assert.equal(invocations, 1);
+    await render(replacement.port);
+    assert.equal(original.listeners.size, 0);
+    await render(port);
+    assert.equal(original.listeners.size, 1);
+    await act(async () =>
+        finish({ type: 'allocated', requestId: 'retired-port', generation: 1 })
+    );
     assert.deepEqual(outcomes, []);
 });

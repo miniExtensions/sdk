@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { act, createElement as h } from 'react';
+import { Window } from 'happy-dom';
+import { act, createElement as h, StrictMode } from 'react';
+import type { Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import type {
     PortalVisitorSearchCommand,
@@ -75,6 +77,64 @@ it('server renders portable labelled controls without contacting the host', () =
     assert.match(html, /role="search"/);
     assert.match(html, /disabled=""/);
     assert.doesNotMatch(html, /<form/);
+});
+
+it('hydrates the existing labelled input before enabling the available owner', async () => {
+    const owner = host();
+    const tree = h(
+        StrictMode,
+        null,
+        h(PortalVisitorSearch, { port: owner.port })
+    );
+    const html = renderToString(tree);
+    const window = new Window({ url: 'http://127.0.0.1/visitor-search' });
+    const globals = {
+        window,
+        document: window.document,
+        navigator: window.navigator,
+        HTMLElement: window.HTMLElement,
+        IS_REACT_ACT_ENVIRONMENT: true,
+    };
+    const originals = Object.keys(globals).map(
+        (key) =>
+            [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    );
+    let root: Root | undefined;
+    try {
+        for (const [key, value] of Object.entries(globals))
+            Object.defineProperty(globalThis, key, {
+                configurable: true,
+                value,
+            });
+        const container = window.document.createElement('form');
+        container.innerHTML = html;
+        window.document.body.append(container);
+        const input = container.querySelector('input');
+        assert.ok(input?.disabled);
+        const id = input.id;
+        assert.equal(owner.listeners.size, 0);
+        const recoveries: unknown[] = [];
+        const { hydrateRoot } = await import('react-dom/client');
+        await act(async () => {
+            root = hydrateRoot(container as unknown as HTMLElement, tree, {
+                onRecoverableError: (error) => recoveries.push(error),
+            });
+        });
+        assert.equal(container.querySelector('input'), input);
+        assert.equal(container.querySelector('label')?.htmlFor, id);
+        assert.equal(input.disabled, false);
+        assert.equal(input.value, 'previous');
+        assert.deepEqual(recoveries, []);
+        assert.deepEqual(owner.commands, []);
+    } finally {
+        await act(async () => root?.unmount());
+        for (const [key, descriptor] of originals) {
+            if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+            else Reflect.deleteProperty(globalThis, key);
+        }
+        await window.happyDOM.close();
+    }
+    assert.equal(owner.listeners.size, 0);
 });
 
 it('commits exact draft text on Enter or button click and clears without submitting the outer form', async (t) => {

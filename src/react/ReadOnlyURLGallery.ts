@@ -646,12 +646,14 @@ function GalleryDialog(props: DialogProps): ReactNode {
     );
 }
 
+const idleDownloadState = {
+    pending: false,
+    percent: 0,
+    failed: false,
+};
+
 function DownloadButton(props: DialogProps): ReactNode {
-    const [state, setState] = useState({
-        pending: false,
-        percent: 0,
-        failed: false,
-    });
+    const [state, setState] = useState(idleDownloadState);
     const active = useRef<AbortController | null>(null);
     const releaseActive = useRef<(() => void) | null>(null);
     const live = useRef<DialogProps | null>(null);
@@ -660,8 +662,9 @@ function DownloadButton(props: DialogProps): ReactNode {
     const generation = resourceOwnerGeneration(props.owner);
     commitEffect(() => {
         live.current = props;
-        if (props.disableDownload)
-            setState({ pending: false, percent: 0, failed: false });
+        // The dialog may stay open for a new owner of the same URL.
+        // The retired request cannot settle state for that owner.
+        setState(idleDownloadState);
         return () => {
             live.current = null;
             releaseActive.current?.();

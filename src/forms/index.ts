@@ -59,6 +59,14 @@ export {
     type CanonicalFormTransitionResult,
 } from './canonicalFrame.js';
 export {
+    transitionCanonicalFormCompute,
+    type CanonicalFormComputeFrame,
+    type CanonicalFormComputeRequest,
+    type CanonicalFormComputeOutcome,
+    type CanonicalFormComputePorts,
+    type CanonicalFormComputeSettlement,
+} from './computeSettlement.js';
+export {
     createFormSaveInput,
     describeLoadedFormFields,
     formValidationMessages,

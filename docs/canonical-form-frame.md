@@ -71,6 +71,35 @@ inputs, not SDK network requests or a separate mutable state owner. Public write
 use `CanonicalFormValue`; absence in a snapshot does not create a new undefined
 UI-write operation.
 
+## Settling an allocated Compute
+
+Use `transitionCanonicalFormCompute` from `@miniextensions/sdk/forms` for an
+accepted public direct-root Form with Compute enabled. The host projects its
+current immutable frame and captures the actual allocation, request ID,
+installation, record, edit generations, eligible submitted values and original
+dirty values. The host continues to own request admission, transport and atomic
+publication. Recheck the same native screen and request immediately before
+publishing the returned frame.
+
+- A returned result can adopt a create record ID and reconcile value data through
+  `reconcileFormComputeResult`. Newer and uncertain edit generations remain
+  dirty, even when an edit returns to its original value. Hidden or omitted
+  edits and explicit clears retain their native meaning. The loaded-policy
+  baseline stays the same.
+- A terminal failure only applies to the current allocation. A validation
+  result whose captured dirty values changed returns
+  `computeValidationSuperseded` so the host can finish the request silently.
+  `computeFailed` carries the actual failure for the host's existing
+  presentation policy.
+- A manual readonly receipt requires the matching pending request, exact echoes,
+  an intact render owner and an affirmative host context check. Supply the
+  native exact readonly comparator separately from the acknowledgment
+  comparator. Origin retention also requires the active binding and exact
+  retained values. A stale result leaves successor receipts untouched.
+
+The original non-Compute transition, child Forms, Portal Forms and preview
+Forms keep their existing paths. This API has no scheduling or transport.
+
 ## Evidence boundary
 
 The maintained native corpus records actual reducer/provenance/settlement

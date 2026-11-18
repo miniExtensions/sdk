@@ -247,6 +247,7 @@ for (const format of ['esm', 'cjs']) {
         'portal-gallery',
         'readonly-portal-grid',
         'portal-grid-single-line-text-cell',
+        'portal-grid-empty-cell',
         'form-progress',
         'form-pages',
         'field-presentation',

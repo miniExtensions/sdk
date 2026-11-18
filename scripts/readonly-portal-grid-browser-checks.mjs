@@ -10,10 +10,11 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmptyCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
+import'@miniextensions/sdk/react/portal-grid-empty-cell.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -80,9 +81,32 @@ function TextCellProbe() {
             onClick: () => { openCount.current++; },
         }, 'Open from writable Grid'))))));
 }
+function EmptyCellProbe() {
+    const actions = useRef({ writes: 0, selects: 0, opens: 0, submits: 0 });
+    useEffect(() => {
+        window.__emptyCellProbe = { snapshot: () => ({ ...actions.current }) };
+        return () => { delete window.__emptyCellProbe; };
+    }, []);
+    const heights = ['short', 'medium', 'tall', 'extra-tall', 'fit-content'];
+    return h('form', {
+        onChange() { actions.current.writes++; },
+        onSelect() { actions.current.selects++; },
+        onSubmit(event) { event.preventDefault(); actions.current.submits++; },
+    }, h('table', { 'aria-label': 'Empty Grid cell fixture' }, h('tbody', null,
+        heights.map((rowHeight, index) => h('tr', { key: rowHeight, 'data-row-height': rowHeight },
+            h('td', null, 'Before ' + rowHeight),
+            h(PortalGridEmptyCell, { rowHeight, lastRow: index === heights.length - 1, stickyLeft: 37 }),
+            h('td', null, h('button', {
+                type: 'button',
+                onClick() { actions.current.opens++; },
+            }, 'Sibling action ' + rowHeight))
+        ))
+    )));
+}
 const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
-    startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe)))
+    startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
+    startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe)))
 };
 root.render(h(StrictMode,null,h(App)));
 `;
@@ -123,6 +147,8 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/PortalGridSingleLineTextCell.js',
         '/react/SingleLineTextField.js',
         '/react/portal-grid-single-line-text-cell.css',
+        '/react/PortalGridEmptyCell.js',
+        '/react/portal-grid-empty-cell.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -868,6 +894,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.submits, 0);
     assert.equal(end.canonicalUnchanged, true);
     const textCell = await checkPlainTextCellBrowser(page);
+    const emptyCell = await checkEmptyCellBrowser(page);
     end = await snapshot();
     assert.deepEqual(end.errors, []);
     Object.assign(evidence, {
@@ -883,6 +910,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         },
         canonicalUnchanged: true,
         textCell,
+        emptyCell,
         errors: end.errors,
         limits: [
             'Installed SDK presentation only; actual native borrowed-route, child admission and persistent preference qualification remain separate.',
@@ -961,6 +989,116 @@ async function checkPlainTextCellBrowser(page) {
     assert.equal(result.submits, 0);
     assert.equal(result.opens, 0);
     return { status: 'passed', ...result };
+}
+
+async function checkEmptyCellBrowser(page) {
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.evaluate(() => window.__nativeProbe.startEmptyCell());
+    const table = page.getByRole('table', { name: 'Empty Grid cell fixture' });
+    await table.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => window.__emptyCellProbe != null);
+    const cells = table.locator('.mx-sdk-portal-grid-empty-cell');
+    assert.equal(await cells.count(), 5);
+    const desktop = await cells.evaluateAll((nodes) =>
+        nodes.map((node) => {
+            const content = node.querySelector(
+                '.mx-sdk-portal-grid-empty-cell__content'
+            );
+            const style = getComputedStyle(node);
+            return {
+                rowHeight: node.parentElement.dataset.rowHeight,
+                tag: node.tagName,
+                parentTag: node.parentElement.tagName,
+                index: node.cellIndex,
+                siblingIndexes: [...node.parentElement.children].map(
+                    (sibling) => sibling.cellIndex
+                ),
+                siblingTags: [...node.parentElement.children].map(
+                    (sibling) => sibling.tagName
+                ),
+                text: node.textContent,
+                children: node.children.length,
+                contentTag: content?.tagName ?? null,
+                contentHeight: content?.getBoundingClientRect().height ?? null,
+                interactiveCount: node.querySelectorAll(
+                    'input, button, a, textarea, select, [contenteditable="true"]'
+                ).length,
+                tabIndexAttribute: node.getAttribute('tabindex'),
+                tabIndex: node.tabIndex,
+                position: style.position,
+                left: style.left,
+                bottomBorder: style.borderBottomWidth,
+            };
+        })
+    );
+    assert.deepEqual(
+        desktop.map((cell) => [cell.rowHeight, cell.contentHeight]),
+        [
+            ['short', 24],
+            ['medium', 52],
+            ['tall', 84],
+            ['extra-tall', 140],
+            ['fit-content', 0],
+        ]
+    );
+    for (const cell of desktop) {
+        assert.equal(cell.tag, 'TD');
+        assert.equal(cell.parentTag, 'TR');
+        assert.equal(cell.index, 1);
+        assert.deepEqual(cell.siblingIndexes, [0, 1, 2]);
+        assert.deepEqual(cell.siblingTags, ['TD', 'TD', 'TD']);
+        assert.equal(cell.text, '');
+        assert.equal(cell.children, 1);
+        assert.equal(cell.contentTag, 'DIV');
+        assert.equal(cell.interactiveCount, 0);
+        assert.equal(cell.tabIndexAttribute, null);
+        assert.equal(cell.tabIndex, -1);
+        assert.equal(cell.position, 'sticky');
+        assert.equal(cell.left, '37px');
+        assert.equal(
+            cell.bottomBorder,
+            cell.rowHeight === 'fit-content' ? '0px' : '1px'
+        );
+    }
+    const before = await page.evaluate(() =>
+        window.__emptyCellProbe.snapshot()
+    );
+    assert.deepEqual(before, { writes: 0, selects: 0, opens: 0, submits: 0 });
+    for (let index = 0; index < desktop.length; index++) {
+        await cells.nth(index).click();
+        assert.equal(
+            await cells
+                .nth(index)
+                .evaluate((node) => node === node.ownerDocument.activeElement),
+            false,
+            'Empty cells must not acquire focus when clicked'
+        );
+    }
+    const actions = await page.evaluate(() =>
+        window.__emptyCellProbe.snapshot()
+    );
+    assert.deepEqual(actions, before);
+    await page.setViewportSize({ width: 639, height: 900 });
+    const narrow = await cells.evaluateAll((nodes) =>
+        nodes.map((node) => ({
+            rowHeight: node.parentElement.dataset.rowHeight,
+            position: getComputedStyle(node).position,
+            contentHeight: node
+                .querySelector('.mx-sdk-portal-grid-empty-cell__content')
+                .getBoundingClientRect().height,
+        }))
+    );
+    assert(narrow.every((cell) => cell.position === 'relative'));
+    assert.deepEqual(
+        narrow.map((cell) => cell.contentHeight),
+        desktop.map((cell) => cell.contentHeight)
+    );
+    assert.deepEqual(
+        await page.evaluate(() => window.__emptyCellProbe.snapshot()),
+        actions
+    );
+    await page.setViewportSize({ width: 1200, height: 900 });
+    return { status: 'passed', desktop, narrow, actions };
 }
 
 export async function checkReadonlyPortalGridProfile({

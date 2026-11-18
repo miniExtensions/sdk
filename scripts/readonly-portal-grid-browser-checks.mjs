@@ -146,7 +146,13 @@ function RatingCellProbe() {
     return h('form', {
         'data-rating-probe': true,
         onSubmit(event) { event.preventDefault(); log.current.submits++; },
-    }, h('table', { 'aria-label': 'Rating Grid fixture' }, h('tbody', null, h('tr', null,
+    }, h('table', {
+        'aria-label': 'Rating Grid fixture',
+        style: { width: 'max-content', borderCollapse: 'separate', borderSpacing: 0 },
+    }, h('thead', null, h('tr', null,
+        h('th', { scope: 'col', style: { width: 200 } }, 'Priority rating'),
+        h('th', { scope: 'col', style: { width: 160 } }, 'Record action')
+    )), h('tbody', null, h('tr', null,
         h(PortalGridRatingCell, {
             value: cell.value,
             displayText: cell.value == null ? '' : String(cell.value),
@@ -1213,6 +1219,12 @@ async function checkRatingCellBrowser(page) {
     );
     const geometry = await cell.evaluate((node) => {
         const icon = node.querySelector('.mx-sdk-rating-icon');
+        const thirdIcon = node.querySelectorAll('.mx-sdk-rating-icon')[2];
+        const hitBox = thirdIcon.getBoundingClientRect();
+        const hit = node.ownerDocument.elementFromPoint(
+            hitBox.left + hitBox.width / 2,
+            hitBox.top + hitBox.height / 2
+        );
         const content = node.querySelector(
             '.mx-sdk-portal-grid-text-cell__content'
         );
@@ -1230,6 +1242,7 @@ async function checkRatingCellBrowser(page) {
             iconWidth: iconStyle.width,
             iconHeight: iconStyle.height,
             iconDisplay: getComputedStyle(icon.parentElement).display,
+            thirdIconHit: thirdIcon.contains(hit),
         };
     });
     assert.deepEqual(geometry, {
@@ -1242,6 +1255,7 @@ async function checkRatingCellBrowser(page) {
         iconWidth: '24px',
         iconHeight: '24px',
         iconDisplay: 'flex',
+        thirdIconHit: true,
     });
     await icons.nth(2).click();
     await input.waitFor({ state: 'visible' });

@@ -21,9 +21,12 @@ import {createElement} from 'react';
 import {ReadonlyPortalGrid,type ReadonlyPortalGridProps,type ReadonlyPortalGridRow,type ReadonlyPortalGridColumn} from '@miniextensions/sdk/react';
 import {PortalGridSingleLineTextCell,type PortalGridSingleLineTextCellProps} from '@miniextensions/sdk/react';
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
+import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,ControlledRatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import '@miniextensions/sdk/react/portal-grid-empty-cell.css';
+import '@miniextensions/sdk/react/portal-grid-cell.css';
+import '@miniextensions/sdk/react/rating.css';
 const columns:readonly ReadonlyPortalGridColumn[]=[{fieldId:'name',title:'Name',icon:'text'}];
 const rows:readonly ReadonlyPortalGridRow[]=[{recordId:'row',cells:[{fieldId:'name',node:'Admitted display'}]}];
 const props:ReadonlyPortalGridProps={columns,rows,primaryFieldId:'name',revision:1,preferenceScopeKey:'consumer-view',ready:true,isCurrent:()=>true,hiddenColumns:{},columnWidths:{name:'200'},allowHideColumns:true,onFieldHiddenChange(change){void change.isHidden;},onColumnWidthCommit(change){void change.width;},onOpenRecord(id,trigger){void id;trigger.focus();},doNotAllowUserToCopyTextOnGrid:false,rowHeight:'short'};
@@ -49,6 +52,20 @@ createElement(PortalGridEmptyCell,placeholder);
 // @ts-expect-error a blank column slot has no selection port
 const interactivePlaceholder:PortalGridEmptyCellProps={...placeholder,onSelect(){}};
 void interactivePlaceholder;
+const ratingEditor:PortalGridRatingCellEditor={owner:{token:Symbol(),isCurrent:()=>true},onChange(value){const native:number|null=value;void native;},id:'rating',form:'form',describedBy:'rating-help',labelledBy:'rating-title',invalid:false};
+const ratingCell:PortalGridRatingCellProps={value:2,displayText:'2',title:'Priority',max:5,icon:'star',color:'yellow',labels:{empty:'No priority',repair:'Repair priority'},cellIdentity:'row-rating',selected:true,onSelect(){},rowHeight:'medium',editor:ratingEditor};
+createElement(PortalGridRatingCell,ratingCell);
+// @ts-expect-error a writable Rating port requires the captured native owner
+const unownedRating:PortalGridRatingCellProps={...ratingCell,editor:{onChange(){}}};
+// @ts-expect-error native Rating values are numeric or explicitly null
+const stringRating:PortalGridRatingCellProps={...ratingCell,value:'3'};
+// @ts-expect-error the cell does not gain a transport or record writer
+const transportedRating:PortalGridRatingCellProps={...ratingCell,commit:async()=>{}};
+// @ts-expect-error admitted Rating presentation props remain readonly
+ratingCell.max=10;
+void unownedRating;void stringRating;void transportedRating;
+const legacyRating:ControlledRatingFieldProps={mode:'controlled',value:null,onChange(value){void value;},max:5,icon:'heart',grid:true};
+createElement(ControlledRatingField,legacyRating);
 `;
 
 /** Run unchanged parity assertions against the installed public package. */
@@ -90,11 +107,21 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const ratingCellSource = readFileSync(
+        fileURLToPath(
+            new URL(
+                '../test/reactPortalGridRatingCell.test.ts',
+                import.meta.url
+            )
+        ),
+        'utf8'
+    );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
     const textCellCases = 4;
     const emptyCellCases = 3;
+    const ratingCellCases = 8;
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
         ['19.2.0', '19.2.2', '19.2.2'],
@@ -135,6 +162,13 @@ export async function checkReadonlyPortalGridReactMatrix({
             const emptyCellCssPath = require.resolve(
                 '@miniextensions/sdk/react/portal-grid-empty-cell.css'
             );
+            const cellCssPath = require.resolve(
+                '@miniextensions/sdk/react/portal-grid-cell.css'
+            );
+            const ratingCssPath = require.resolve(
+                '@miniextensions/sdk/react/rating.css'
+            );
+            assert.equal(cellCssPath, textCellCssPath);
             const run = (command, args) =>
                 execFileSync(command, args, {
                     cwd: root,
@@ -184,10 +218,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                     ['readonly-grid', source, componentCases],
                     ['grid-text-cell', textCellSource, textCellCases],
                     ['grid-empty-cell', emptyCellSource, emptyCellCases],
+                    ['grid-rating-cell', ratingCellSource, ratingCellCases],
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmptyCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmptyCell|PortalGridRatingCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -231,6 +266,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     tests: componentCases,
                     textCellTests: textCellCases,
                     emptyCellTests: emptyCellCases,
+                    ratingCellTests: ratingCellCases,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -276,9 +312,22 @@ export async function checkReadonlyPortalGridReactMatrix({
                     'utf8'
                 )
             );
+            const ratingCss = readFileSync(ratingCssPath, 'utf8');
+            assert.equal(
+                ratingCss,
+                readFileSync(
+                    join(
+                        root,
+                        'node_modules/@miniextensions/sdk/dist/cjs/react/rating.css'
+                    ),
+                    'utf8'
+                )
+            );
+            assert.match(ratingCss, /mx-sdk-rating-icons/);
+            assert.match(ratingCss, /mx-sdk-rating-range/);
             writeFileSync(
                 join(root, 'styles.css'),
-                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n"
+                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n"
             );
             const styles = await build({
                 absWorkingDir: root,
@@ -305,6 +354,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                     name.endsWith('/react/portal-grid-empty-cell.css')
                 )
             );
+            assert(
+                Object.keys(styles.metafile.inputs).some((name) =>
+                    name.endsWith('/react/rating.css')
+                )
+            );
             assert.equal(
                 createHash('sha256')
                     .update(readFileSync(archivePath))
@@ -317,6 +371,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 tests: componentCases * 2,
                 textCellTests: textCellCases * 2,
                 emptyCellTests: emptyCellCases * 2,
+                ratingCellTests: ratingCellCases * 2,
                 strictTypes: ['ESM', 'CJS', 'Bundler'],
                 styles: 'owned table, controls and cell geometry',
                 ...receipt,
@@ -337,6 +392,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         emptyCellTests: profiles.reduce(
             (total, profile) => total + profile.emptyCellTests,
+            0
+        ),
+        ratingCellTests: profiles.reduce(
+            (total, profile) => total + profile.ratingCellTests,
             0
         ),
         archiveSha256,

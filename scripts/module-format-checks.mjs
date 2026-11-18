@@ -223,6 +223,7 @@ export function assertModuleFormats(root) {
                 './react/portal-gallery.css',
                 './react/readonly-portal-grid.css',
                 './react/portal-grid-single-line-text-cell.css',
+                './react/portal-grid-cell.css',
                 './react/portal-grid-empty-cell.css',
                 './react/form-progress.css',
                 './react/form-pages.css',
@@ -254,7 +255,11 @@ export function assertModuleFormats(root) {
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
-            assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);
+            const stylesheet =
+                subpath === './react/portal-grid-cell.css'
+                    ? 'react/portal-grid-single-line-text-cell.css'
+                    : subpath.slice(2);
+            assert.equal(mapping, `./dist/esm/${stylesheet}`);
             const file = join(root, mapping);
             assert(
                 lstatSync(file).isFile(),

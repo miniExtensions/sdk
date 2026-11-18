@@ -3542,3 +3542,8 @@ export {
     PortalGridEmptyCell,
     type PortalGridEmptyCellProps,
 } from './PortalGridEmptyCell.js';
+export {
+    PortalGridRatingCell,
+    type PortalGridRatingCellProps,
+    type PortalGridRatingCellEditor,
+} from './PortalGridRatingCell.js';

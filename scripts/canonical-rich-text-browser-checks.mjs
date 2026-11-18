@@ -30,6 +30,56 @@ import {flushSync} from 'react-dom';
 import {RichTextField} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
 const writes=[],saves=[];let update,current,previous;
+let stopCaretNavigation;
+function startCaretNavigationTrace() {
+    const editor = document.querySelector('.ProseMirror');
+    const events = [];
+    const eventTypes = ['focusin', 'focusout', 'selectionchange', 'keydown', 'keyup'];
+    let dropped = 0;
+    const position = () => {
+        const selection = document.getSelection();
+        return {
+            active: document.activeElement === editor,
+            connected: editor.isConnected,
+            anchorInEditor: editor.contains(selection?.anchorNode),
+            focusInEditor: editor.contains(selection?.focusNode),
+            collapsed: selection?.isCollapsed,
+            anchorOffset: selection?.anchorOffset,
+            focusOffset: selection?.focusOffset,
+        };
+    };
+    const initial = position();
+    const capture = event => {
+        if (event.type !== 'selectionchange' && !editor.contains(event.target))
+            return;
+        if (events.length === 64) {
+            dropped++;
+            return;
+        }
+        events.push({
+            event,
+            at: performance.now(),
+            position: position(),
+        });
+    };
+    for (const type of eventTypes) document.addEventListener(type, capture, true);
+    return () => {
+        for (const type of eventTypes) document.removeEventListener(type, capture, true);
+        return {
+            initial,
+            final: position(),
+            dropped,
+            events: events.map(({ event, at, position }) => ({
+                type: event.type,
+                key: event.key,
+                trusted: event.isTrusted,
+                defaultPrevented: event.defaultPrevented,
+                at,
+                position,
+            })),
+        };
+    };
+}
 function App(){const [state,setState]=useState({value:'**Bold** and _italic_\\n\\n[ ] task',readOnly:false,identity:'record:notes',id:'notes',invalid:false,sibling:'untouched'});current=state;update=next=>flushSync(()=>setState(old=>({...old,...next})));
 return h('form',{id:'owned-form',onSubmit:event=>{event.preventDefault();saves.push({...state});}},
 h('label',{id:'notes-label',htmlFor:state.id},'Notes'),h('p',{id:'notes-help'},'Markdown details'),h('p',{id:'notes-error'},state.invalid?'Review notes':''),
@@ -37,7 +87,7 @@ h(RichTextField,{value:state.value,onValueChange:value=>{writes.push({identity:s
 h('label',null,'Neighbor',h('input',{id:'neighbor',value:state.sibling,onChange:event=>setState(old=>({...old,sibling:event.target.value}))})),h('button',{type:'submit',id:'save'},'Save'));
 }
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
-window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},unmount:()=>flushSync(()=>app.unmount())};
+window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},startCaretNavigation:()=>{stopCaretNavigation=startCaretNavigationTrace();},finishCaretNavigation:()=>{const trace=stopCaretNavigation?.();stopCaretNavigation=undefined;return trace;},unmount:()=>{stopCaretNavigation?.();stopCaretNavigation=undefined;flushSync(()=>app.unmount());}};
 `;
     try {
         const entry = join(directory, 'host.mjs');
@@ -218,6 +268,9 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                     'Alpha Beta'
         );
         assert.equal(await page.locator('.ProseMirror').count(), 1);
+        await page.evaluate(() =>
+            window.canonicalRichText.startCaretNavigation()
+        );
         await editor.click();
         await editor.press(documentKeys.end);
         await page.waitForFunction(() => {
@@ -247,6 +300,7 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                 };
             });
         const beforeMetadata = await nativeCaret();
+        evidence.caretNavigationBeforeMetadata = beforeMetadata;
         assert.equal(beforeMetadata.active, true);
         assert.equal(beforeMetadata.contained, true);
         assert.equal(beforeMetadata.collapsed, true);
@@ -282,6 +336,9 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         });
         assert.equal(afterCaretMetadata.saves.length, 1);
         assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
+        evidence.caretNavigation = await page.evaluate(() =>
+            window.canonicalRichText.finishCaretNavigation()
+        );
         evidence.nativeMetadataCaret = {
             beforeMetadata,
             after: await nativeCaret(),
@@ -566,6 +623,10 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
+        if (page && !evidence.caretNavigation)
+            evidence.caretNavigation = await page
+                .evaluate(() => window.canonicalRichText?.finishCaretNavigation())
+                .catch(() => undefined);
         if (page)
             evidence.failureState = await page
                 .evaluate(() => window.canonicalRichText?.snapshot())

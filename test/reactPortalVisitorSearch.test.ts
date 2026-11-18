@@ -26,12 +26,16 @@ function host() {
             generation: 1,
         },
         searchTerm: 'previous',
+        publicationRevision: 1,
     };
     const listeners = new Set<() => void>();
     const commands: PortalVisitorSearchCommand[] = [];
-    const publish = (next: PortalVisitorSearchFrame) => {
-        frame = next;
+    const notifyListeners = () => {
         for (const listener of listeners) listener();
+    };
+    const publish = (next: PortalVisitorSearchFrame, notify: boolean) => {
+        frame = next;
+        if (notify) notifyListeners();
     };
     const port: PortalVisitorSearchProps['port'] = {
         read: () => frame,
@@ -52,20 +56,34 @@ function host() {
         port,
         listeners,
         commands,
-        select(viewId: string) {
-            publish({
-                ...frame,
-                stamp: {
-                    ...frame.stamp,
-                    viewId,
-                    generation: frame.stamp.generation + 1,
+        select(viewId: string, notify = true) {
+            publish(
+                {
+                    ...frame,
+                    publicationRevision: frame.publicationRevision + 1,
+                    stamp: {
+                        ...frame.stamp,
+                        viewId,
+                        generation: frame.stamp.generation + 1,
+                    },
                 },
-            });
+                notify
+            );
         },
-        commit(searchTerm: string) {
-            const generation = frame.stamp.generation + 1;
-            publish({ stamp: { ...frame.stamp, generation }, searchTerm });
-            return generation;
+        notify: notifyListeners,
+        commit(searchTerm: string, advanceGeneration = true, notify = true) {
+            const generation =
+                frame.stamp.generation + Number(advanceGeneration);
+            const revision = frame.publicationRevision + 1;
+            publish(
+                {
+                    stamp: { ...frame.stamp, generation },
+                    searchTerm,
+                    publicationRevision: revision,
+                },
+                notify
+            );
+            return { generation, revision };
         },
     };
 }
@@ -273,7 +291,7 @@ for (const type of ['refused', 'uncertain'] as const) {
             apply(command) {
                 return {
                     type,
-                    committedGeneration: owner.commit(command.searchTerm),
+                    committedPublication: owner.commit(command.searchTerm),
                 };
             },
         };
@@ -289,9 +307,140 @@ for (const type of ['refused', 'uncertain'] as const) {
         assert.ok(clear);
         await f.click(clear);
         assert.equal(f.container.querySelector('input')?.value, '');
-        assert.deepEqual(outcomes, [{ type, committedGeneration: 2 }]);
+        assert.deepEqual(outcomes, [
+            {
+                type,
+                committedPublication: { generation: 2, revision: 2 },
+            },
+        ]);
+    });
+
+    it(`drops a delayed ${type} scan receipt after the same term returns at the same generation`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const owner = host();
+        let finish!: () => void;
+        let capture: (() => ((value: string) => void) | null) | undefined;
+        let invocations = 0;
+        const outcomes: PortalVisitorSearchOutcome[] = [];
+        const port: PortalVisitorSearchProps['port'] = {
+            ...owner.port,
+            apply(command) {
+                invocations += 1;
+                const committedPublication = owner.commit(
+                    command.searchTerm,
+                    false
+                );
+                return new Promise((resolve) => {
+                    finish = () => resolve({ type, committedPublication });
+                });
+            },
+        };
+        await f.render(
+            h(PortalVisitorSearch, {
+                port,
+                onOutcome: (outcome) => outcomes.push(outcome),
+                renderScanner(controls) {
+                    capture = controls.capture;
+                    return null;
+                },
+            })
+        );
+        const scan = capture?.();
+        assert.ok(scan);
+        await act(async () => scan('first publication'));
+        assert.equal(
+            f.container.querySelector('input')?.value,
+            'first publication'
+        );
+        await act(async () => owner.commit('intervening publication', false));
+        assert.equal(
+            f.container.querySelector('input')?.value,
+            'intervening publication'
+        );
+        await act(async () => owner.commit('first publication', false));
+        assert.equal(
+            f.container.querySelector('input')?.value,
+            'first publication'
+        );
+        await act(async () => finish());
+        assert.deepEqual(outcomes, []);
+        assert.equal(invocations, 1);
     });
 }
+
+it('drops a pending receipt when the live owner changes before subscription notification', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    let finish!: (outcome: PortalVisitorSearchOutcome) => void;
+    const pending = new Promise<PortalVisitorSearchOutcome>((resolve) => {
+        finish = resolve;
+    });
+    let invocations = 0;
+    const outcomes: PortalVisitorSearchOutcome[] = [];
+    await f.render(
+        h(PortalVisitorSearch, {
+            port: {
+                ...owner.port,
+                apply() {
+                    invocations += 1;
+                    return pending;
+                },
+            },
+            onOutcome: (outcome) => outcomes.push(outcome),
+        })
+    );
+    const submit = [...f.container.querySelectorAll('button')].at(-1);
+    assert.ok(submit);
+    await f.click(submit);
+    assert.equal(invocations, 1);
+    await act(async () => {
+        owner.select('replacement', false);
+        finish({ type: 'allocated', requestId: 'old-owner', generation: 1 });
+    });
+    assert.deepEqual(outcomes, []);
+});
+
+it('reports its own verified publication before the subscription sees it', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    const outcomes: PortalVisitorSearchOutcome[] = [];
+    const port: PortalVisitorSearchProps['port'] = {
+        ...owner.port,
+        apply(command) {
+            return {
+                type: 'allocated',
+                requestId: 'current-request',
+                generation: 1,
+                committedPublication: owner.commit(
+                    command.searchTerm,
+                    false,
+                    false
+                ),
+            };
+        },
+    };
+    await f.render(
+        h(PortalVisitorSearch, {
+            port,
+            onOutcome: (outcome) => outcomes.push(outcome),
+        })
+    );
+    const clear = [...f.container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Clear search'
+    );
+    assert.ok(clear);
+    await f.click(clear);
+    assert.deepEqual(outcomes, [
+        {
+            type: 'allocated',
+            requestId: 'current-request',
+            generation: 1,
+            committedPublication: { generation: 1, revision: 2 },
+        },
+    ]);
+    await act(async () => owner.notify());
+    assert.equal(outcomes.length, 1);
+});
 
 it('drops a late receipt when the same port is mounted in a new subscription', async (t) => {
     const f = await htmlPresentationFixture(t);

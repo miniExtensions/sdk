@@ -6,6 +6,8 @@ export type PortalVisitorSearchStamp = PortalVisitorSortStamp;
 export type PortalVisitorSearchFrame = Readonly<{
     stamp: PortalVisitorSearchStamp;
     searchTerm: string;
+    /** Advances for each new committed Search publication, including A → B → A. */
+    publicationRevision: number;
 }>;
 
 export type PortalVisitorSearchIntent =
@@ -16,26 +18,36 @@ export type PortalVisitorSearchCommand = Readonly<{
     stamp: PortalVisitorSearchStamp;
     source: PortalVisitorSearchIntent['source'];
     expectedSearchTerm: string;
+    expectedPublicationRevision: number;
     searchTerm: string;
 }>;
 
+export type PortalVisitorSearchPublication = Readonly<{
+    generation: number;
+    revision: number;
+}>;
+
 export type PortalVisitorSearchOutcome =
-    | Readonly<{ type: 'allocated'; requestId: string; generation: number }>
+    | Readonly<{
+          type: 'allocated';
+          requestId: string;
+          generation: number;
+          committedPublication?: PortalVisitorSearchPublication;
+      }>
     | Readonly<{ type: 'stale' }>
     | Readonly<{
           type: 'refused' | 'uncertain';
-          /** Set only when the host observed this command publish its own term. */
-          committedGeneration?: number;
+          committedPublication?: PortalVisitorSearchPublication;
       }>;
 
 export type PortalVisitorSearchPort = {
     read(): PortalVisitorSearchFrame | null;
     /**
-     * Check the captured owner before changing the committed search term.
+     * Check the captured owner, term and publication before writing anything.
      * Request the first page even when the new term equals the current term.
-     * Report allocation only after the authorized transport is invoked. If
-     * the command publishes its term and the read is then refused or uncertain,
-     * report the generation of that verified publication with the outcome.
+     * Report allocation only after the authorized transport is invoked.
+     * If this command publishes a new frame, report its own verified
+     * publication with the outcome. Never attribute a later frame to it.
      */
     apply(
         command: PortalVisitorSearchCommand
@@ -49,12 +61,13 @@ function isRevision(value: unknown): boolean {
     );
 }
 
-function readFrame(
+export function readPortalVisitorSearchFrame(
     port: PortalVisitorSearchPort
 ): PortalVisitorSearchFrame | null {
     try {
         const frame = port.read();
-        if (!frame || typeof frame.searchTerm !== 'string') return null;
+        if (!frame) return null;
+        const { searchTerm, publicationRevision } = frame;
         const {
             sessionId,
             fieldId,
@@ -72,7 +85,10 @@ function readFrame(
             !isRevision(configurationRevision) ||
             !isRevision(metadataRevision) ||
             !Number.isSafeInteger(generation) ||
-            generation < 0
+            generation < 0 ||
+            typeof searchTerm !== 'string' ||
+            !Number.isSafeInteger(publicationRevision) ||
+            publicationRevision < 0
         )
             return null;
         return Object.freeze({
@@ -84,34 +100,42 @@ function readFrame(
                 metadataRevision,
                 generation,
             }),
-            searchTerm: frame.searchTerm,
+            searchTerm,
+            publicationRevision,
         });
     } catch {
         return null;
     }
 }
 
-function sameFrame(
-    captured: PortalVisitorSearchFrame,
-    current: PortalVisitorSearchFrame | null
+export function samePortalVisitorSearchScope(
+    a: PortalVisitorSearchStamp,
+    b: PortalVisitorSearchStamp
 ) {
-    if (!current || captured.searchTerm !== current.searchTerm) return false;
-    const a = captured.stamp;
-    const b = current.stamp;
     return (
         a.sessionId === b.sessionId &&
         a.fieldId === b.fieldId &&
         a.viewId === b.viewId &&
         a.configurationRevision === b.configurationRevision &&
-        a.metadataRevision === b.metadataRevision &&
-        a.generation === b.generation
+        a.metadataRevision === b.metadataRevision
     );
 }
 
 export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
-    const frame = readFrame(port);
+    const frame = readPortalVisitorSearchFrame(port);
     if (!frame) return null;
-    const current = () => sameFrame(frame, readFrame(port));
+    let retired = false;
+    const current = () => {
+        if (retired) return false;
+        const live = readPortalVisitorSearchFrame(port);
+        retired =
+            !live ||
+            live.publicationRevision !== frame.publicationRevision ||
+            live.searchTerm !== frame.searchTerm ||
+            live.stamp.generation !== frame.stamp.generation ||
+            !samePortalVisitorSearchScope(frame.stamp, live.stamp);
+        return !retired;
+    };
     return {
         frame,
         current,
@@ -134,8 +158,33 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
                     stamp: { ...frame.stamp },
                     source,
                     expectedSearchTerm: frame.searchTerm,
+                    expectedPublicationRevision: frame.publicationRevision,
                     searchTerm,
                 });
+                if (outcome.type === 'stale') return { type: 'stale' };
+                const publication = outcome.committedPublication;
+                let committedPublication:
+                    | PortalVisitorSearchPublication
+                    | undefined;
+                if (publication !== undefined) {
+                    const { generation, revision } = publication;
+                    if (
+                        !Number.isSafeInteger(generation) ||
+                        generation < frame.stamp.generation ||
+                        !Number.isSafeInteger(revision) ||
+                        revision <= frame.publicationRevision ||
+                        (outcome.type === 'allocated' &&
+                            outcome.generation !== generation)
+                    )
+                        return { type: 'uncertain' };
+                    committedPublication = Object.freeze({
+                        generation,
+                        revision,
+                    });
+                }
+                const receipt = committedPublication
+                    ? { committedPublication }
+                    : {};
                 if (
                     outcome.type === 'allocated' &&
                     typeof outcome.requestId === 'string' &&
@@ -147,23 +196,10 @@ export function createPortalVisitorSearchDraft(port: PortalVisitorSearchPort) {
                         type: 'allocated',
                         requestId: outcome.requestId,
                         generation: outcome.generation,
+                        ...receipt,
                     };
-                if (outcome.type === 'stale') return { type: 'stale' };
-                if (
-                    outcome.type === 'refused' ||
-                    outcome.type === 'uncertain'
-                ) {
-                    const generation = outcome.committedGeneration;
-                    if (generation === undefined) return { type: outcome.type };
-                    if (
-                        Number.isSafeInteger(generation) &&
-                        generation >= frame.stamp.generation
-                    )
-                        return {
-                            type: outcome.type,
-                            committedGeneration: generation,
-                        };
-                }
+                if (outcome.type === 'refused' || outcome.type === 'uncertain')
+                    return { type: outcome.type, ...receipt };
             } catch {
                 // An exception does not establish whether transport was invoked.
             }

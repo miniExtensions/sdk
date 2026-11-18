@@ -11,6 +11,8 @@ import {
 } from 'react';
 import {
     createPortalVisitorSearchDraft,
+    readPortalVisitorSearchFrame,
+    samePortalVisitorSearchScope,
     type PortalVisitorSearchIntent,
     type PortalVisitorSearchOutcome,
     type PortalVisitorSearchPort,
@@ -104,29 +106,30 @@ export function PortalVisitorSearch({
         void candidate.draft.submit(intent).then((outcome) => {
             const live = current.current;
             if (!live || live.subscription !== candidate.subscription) return;
-            if (live === candidate) {
-                settings.current.onOutcome?.(outcome);
+            const publication =
+                outcome.type === 'stale'
+                    ? undefined
+                    : outcome.committedPublication;
+            const captured = candidate.draft.frame;
+            if (!publication) {
+                if (
+                    live === candidate &&
+                    candidate.draft.current() &&
+                    (outcome.type !== 'allocated' ||
+                        outcome.generation === captured.stamp.generation)
+                )
+                    settings.current.onOutcome?.(outcome);
                 return;
             }
-            const oldStamp = candidate.draft.frame.stamp;
-            const newStamp = live.draft.frame.stamp;
-            const generation =
-                outcome.type === 'allocated'
-                    ? outcome.generation
-                    : outcome.type === 'stale'
-                      ? undefined
-                      : outcome.committedGeneration;
+            const frame = readPortalVisitorSearchFrame(candidate.port);
             const requestedTerm =
                 intent.source === 'clear' ? '' : intent.searchTerm;
             if (
-                oldStamp.sessionId === newStamp.sessionId &&
-                oldStamp.fieldId === newStamp.fieldId &&
-                oldStamp.viewId === newStamp.viewId &&
-                oldStamp.configurationRevision ===
-                    newStamp.configurationRevision &&
-                oldStamp.metadataRevision === newStamp.metadataRevision &&
-                generation === newStamp.generation &&
-                live.draft.frame.searchTerm === requestedTerm
+                frame &&
+                samePortalVisitorSearchScope(captured.stamp, frame.stamp) &&
+                frame.stamp.generation === publication.generation &&
+                frame.publicationRevision === publication.revision &&
+                frame.searchTerm === requestedTerm
             )
                 settings.current.onOutcome?.(outcome);
         });

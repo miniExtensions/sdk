@@ -77,6 +77,7 @@ export type {
     PortalVisitorSearchIntent,
     PortalVisitorSearchOutcome,
     PortalVisitorSearchPort,
+    PortalVisitorSearchPublication,
     PortalVisitorSearchStamp,
 } from './visitorSearch.js';
 export { createPortalVisitorSortDraft } from './visitorSort.js';

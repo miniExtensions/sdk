@@ -71,10 +71,12 @@ document.querySelector('form').append(searchHost);
 const searchRoot = createRoot(searchHost);
 const searchListeners = new Set();
 const searchCommands = [];
+const searchOutcomes = [];
 let scan;
 let searchFrame = {
     stamp: {...frame.stamp, fieldId: 'search-portal'},
     searchTerm: 'previous',
+    publicationRevision: 0,
 };
 function publishSearch(next) {
     searchFrame = next;
@@ -88,39 +90,47 @@ const searchPort = {
     },
     apply(command) {
         if (command.stamp.generation !== searchFrame.stamp.generation ||
-            command.expectedSearchTerm !== searchFrame.searchTerm)
+            command.expectedSearchTerm !== searchFrame.searchTerm ||
+            command.expectedPublicationRevision !== searchFrame.publicationRevision)
             return {type:'stale'};
         searchCommands.push(command);
-        const generation = searchFrame.stamp.generation +
-            Number(command.searchTerm !== searchFrame.searchTerm);
+        const generation = searchFrame.stamp.generation;
+        const receipt = {type:'allocated', requestId:'search-' + searchCommands.length, generation};
+        if (command.searchTerm === searchFrame.searchTerm) return receipt;
+        const revision = searchFrame.publicationRevision + 1;
         publishSearch({
-            stamp: {...searchFrame.stamp, generation},
+            ...searchFrame,
             searchTerm: command.searchTerm,
+            publicationRevision: revision,
         });
-        return {type:'allocated', requestId:'search-' + searchCommands.length, generation};
+        return {...receipt, committedPublication:{generation, revision}};
     },
 };
 searchRoot.render(h(StrictMode, null, h(PortalVisitorSearch, {
     port: searchPort,
+    onOutcome: (outcome) => searchOutcomes.push(outcome),
     labels: {input: 'Find records', submit: 'Submit search'},
     renderScanner: ({capture, disabled}) => h('button', {
         type: 'button',
         disabled,
         'data-search-generation': searchFrame.stamp.generation,
+        'data-search-revision': searchFrame.publicationRevision,
         onClick: () => { scan = capture(); },
     }, 'Open scanner'),
 })));
 globalThis.searchFixture = {
-    summary: () => ({commands:searchCommands, listeners:searchListeners.size}),
+    summary: () => ({commands:searchCommands, outcomes:searchOutcomes, listeners:searchListeners.size}),
     hasCurrentInput(value) {
         return searchHost.querySelector('input')?.value === value &&
-            Number(searchHost.querySelector('[data-search-generation]')?.dataset.searchGeneration) === searchFrame.stamp.generation;
+            Number(searchHost.querySelector('[data-search-generation]')?.dataset.searchGeneration) === searchFrame.stamp.generation &&
+            Number(searchHost.querySelector('[data-search-revision]')?.dataset.searchRevision) === searchFrame.publicationRevision;
     },
     rotate() {
         for (const viewId of ['view-b', 'view-a'])
             publishSearch({
                 ...searchFrame,
                 stamp: {...searchFrame.stamp, viewId, generation:searchFrame.stamp.generation + 1},
+                publicationRevision: searchFrame.publicationRevision + 1,
             });
     },
     scan: (value) => scan?.(value),
@@ -144,6 +154,9 @@ async function checkSearch(page) {
     await waitForTerm('  café  ');
     await page.getByRole('button', { name: 'Submit search' }).press('Enter');
     assert.equal((await search()).commands.length, 2);
+    await page.waitForFunction(
+        () => globalThis.searchFixture.summary().outcomes.length === 2
+    );
     await scanner.press('Enter');
     await page.evaluate(() => {
         globalThis.searchFixture.rotate();
@@ -161,18 +174,41 @@ async function checkSearch(page) {
     await page.getByRole('button', { name: 'Clear search' }).press('Enter');
     await waitForTerm('');
     assert.equal(await entry.inputValue(), '');
-    const { commands } = await search();
+    await page.waitForFunction(
+        () => globalThis.searchFixture.summary().outcomes.length === 4
+    );
+    const { commands, outcomes } = await search();
     assert.deepEqual(
-        commands.map(({ source, expectedSearchTerm, searchTerm }) => [
-            source,
-            expectedSearchTerm,
-            searchTerm,
+        commands.map(
+            ({
+                source,
+                expectedSearchTerm,
+                expectedPublicationRevision,
+                searchTerm,
+            }) => [
+                source,
+                expectedSearchTerm,
+                expectedPublicationRevision,
+                searchTerm,
+            ]
+        ),
+        [
+            ['submit', 'previous', 0, '  café  '],
+            ['submit', '  café  ', 1, '  café  '],
+            ['scan', '  café  ', 3, '  001-α  '],
+            ['clear', '  001-α  ', 4, ''],
+        ]
+    );
+    assert.deepEqual(
+        outcomes.map((outcome) => [
+            outcome.type,
+            outcome.committedPublication?.revision,
         ]),
         [
-            ['submit', 'previous', '  café  '],
-            ['submit', '  café  ', '  café  '],
-            ['scan', '  café  ', '  001-α  '],
-            ['clear', '  001-α  ', ''],
+            ['allocated', 1],
+            ['allocated', undefined],
+            ['allocated', 4],
+            ['allocated', 5],
         ]
     );
     await page.evaluate(() => globalThis.searchFixture.unmount());

@@ -46,15 +46,19 @@ void createElement(PortalVisitorSort, { port });
 const typedSearch = `
 import { createElement } from 'react';
 import { PortalVisitorSearch, type PortalVisitorSearchProps } from '@miniextensions/sdk/react';
-import { createPortalVisitorSearchDraft, type PortalVisitorSearchPort } from '@miniextensions/sdk/portals';
+import { createPortalVisitorSearchDraft, type PortalVisitorSearchPort, type PortalVisitorSearchPublication } from '@miniextensions/sdk/portals';
 const port: PortalVisitorSearchPort & Pick<PortalVisitorSearchProps['port'], 'subscribe'> = {
     read: () => null,
     subscribe: () => () => undefined,
     apply(command) {
         void command.expectedSearchTerm;
+        const committedPublication: PortalVisitorSearchPublication = {
+            generation: command.stamp.generation,
+            revision: command.expectedPublicationRevision + 1,
+        };
         // @ts-expect-error the captured owner is readonly
         command.stamp.generation = 9;
-        return { type: 'refused' };
+        return { type: 'refused', committedPublication };
     },
 };
 void createPortalVisitorSearchDraft(port);
@@ -64,7 +68,7 @@ void createElement(PortalVisitorSearch, { port });
 function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
     const archive = resolve(archivePath);
     const cases = includeSearch ? [...sortCases, ...searchCases] : sortCases;
-    const expectedTests = includeSearch ? 25 : 12;
+    const expectedTests = includeSearch ? 30 : 12;
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(

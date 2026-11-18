@@ -268,6 +268,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-portal-chart',
         'attachment-preview',
         'attachment-url-input',
+        'attachment-upload-progress',
         'readonly-url-gallery',
         'lookup',
         'computed',

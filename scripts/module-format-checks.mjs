@@ -249,6 +249,7 @@ export function assertModuleFormats(root) {
                 './react/single-select.css',
                 './react/controlled-select.css',
                 './react/readonly-url-gallery.css',
+                './react/attachment-upload-progress.css',
                 './react/attachment-url-input.css',
                 './react/lookup.css',
                 './react/computed.css',

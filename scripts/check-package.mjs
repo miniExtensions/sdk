@@ -911,6 +911,11 @@ try {
             `dist/${format}/react/AttachmentUploadProgress.d.ts`,
             `dist/${format}/react/attachment-upload-progress.css`,
         ]),
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/PortalVisitorViewButtons.js`,
+            `dist/${format}/react/PortalVisitorViewButtons.d.ts`,
+            `dist/${format}/react/portal-visitor-view-buttons.css`,
+        ]),
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
         'docs/portal-shell.md',
@@ -4924,9 +4929,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(visitorQueryProof.tests, 140);
+    assert.equal(visitorQueryProof.tests, 152);
     console.log(
-        'Installed Portal visitor Sort and Search qualification passed.',
+        'Installed Portal visitor Sort, Search and view button qualification passed.',
         visitorQueryProof
     );
     const galleryProof = await checkPortalGalleryReactMatrix({

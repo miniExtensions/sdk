@@ -216,6 +216,7 @@
         "./react/lookup.css": "./dist/esm/react/lookup.css",
         "./react/computed.css": "./dist/esm/react/computed.css",
         "./react/portal-shell.css": "./dist/esm/react/portal-shell.css",
+        "./react/portal-visitor-view-buttons.css": "./dist/esm/react/portal-visitor-view-buttons.css",
         "./react/readonly-portal-list.css": "./dist/esm/react/readonly-portal-list.css",
         "./react/form-pages.css": "./dist/esm/react/form-pages.css"
     },

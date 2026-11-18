@@ -201,6 +201,7 @@ export function assertModuleFormats(root) {
                 './react/html-description.css',
                 './react/complete-duration.css',
                 './react/portal-shell.css',
+                './react/portal-visitor-view-buttons.css',
                 './react/readonly-portal-list.css',
                 './react/search-gate.css',
                 './react/complete-calendly.css',

@@ -380,6 +380,7 @@ for (const format of ['esm', 'cjs']) {
         'readonly-portal-list',
         'portal-gallery',
         'readonly-portal-grid',
+        'portal-grid-single-line-text-cell',
         'form-progress',
         'form-pages',
         'field-presentation',

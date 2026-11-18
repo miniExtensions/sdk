@@ -15,6 +15,7 @@ import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
 import { checkNativeFormPagesReactMatrix } from './native-form-pages-consumer-checks.mjs';
 import { checkReadonlyPortalGridReactMatrix } from './readonly-portal-grid-consumer-checks.mjs';
+import { checkPortalVisitorSortReactMatrix } from './portal-visitor-sort-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -4843,6 +4844,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.tests, 84);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
+    );
+    const visitorSortProof = checkPortalVisitorSortReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(visitorSortProof.tests, 44);
+    console.log(
+        'Installed Portal visitor sort qualification passed.',
+        visitorSortProof
     );
     const galleryProof = await checkPortalGalleryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),

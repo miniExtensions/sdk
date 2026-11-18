@@ -70,6 +70,16 @@ export type {
 } from './listOwner.js';
 
 export { createPortalSortEditor, createPortalFilterEditor } from './editors.js';
+export { createPortalVisitorSortDraft } from './visitorSort.js';
+export type {
+    PortalVisitorSortCommand,
+    PortalVisitorSortField,
+    PortalVisitorSortFrame,
+    PortalVisitorSortOutcome,
+    PortalVisitorSortPort,
+    PortalVisitorSortRule,
+    PortalVisitorSortStamp,
+} from './visitorSort.js';
 export type {
     PortalEditorOptions,
     PortalEditorField,

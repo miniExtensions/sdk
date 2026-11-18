@@ -78,6 +78,7 @@ import { checkCompleteVerificationBrowser } from './complete-verification-browse
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
 import { checkReadonlyPortalListBrowser } from './readonly-portal-list-browser-checks.mjs';
+import { checkPortalVisitorSortBrowser } from './portal-visitor-sort-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -2492,6 +2493,14 @@ try {
         assert.equal(report.readonlyPortalList.contextClosed, true);
         assert.equal(report.readonlyPortalList.serverClosed, true);
         assert.equal(report.readonlyPortalList.scratchRemoved, true);
+        report.portalVisitorSort = {};
+        await checkPortalVisitorSortBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalVisitorSort,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.portalVisitorSort.passed, true);
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

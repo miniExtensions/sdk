@@ -1,0 +1,285 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { join } from 'node:path';
+import { build } from 'esbuild';
+import { assertBrowserInputs } from './package-checks.mjs';
+
+const fixture = `
+import { createElement as h, StrictMode, version } from 'react';
+import { createRoot } from 'react-dom/client';
+import { PortalVisitorSort } from '@miniextensions/sdk/react';
+let frame = {
+    stamp: {
+        sessionId: 'session', fieldId: 'portal', viewId: 'view-a',
+        configurationRevision: 1, metadataRevision: 1, generation: 1,
+    },
+    fields: [{id:'title',name:'Title'}, {id:'detail',name:'Detail'}],
+    criteria: [],
+};
+const listeners = new Set();
+const commands = [];
+const outcomes = [];
+let submits = 0;
+function publish(next) {
+    frame = next;
+    for (const listener of listeners) listener();
+}
+function allocate(command) {
+    commands.push(command);
+    return 'request-' + commands.length;
+}
+const port = {
+    read: () => frame,
+    subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+    },
+    apply(command) {
+        if (command.stamp.generation !== frame.stamp.generation)
+            return {type:'stale'};
+        const requestId = allocate(command);
+        const generation = frame.stamp.generation + 1;
+        publish({ ...frame, stamp:{ ...frame.stamp, generation }, criteria:command.criteria });
+        return {type:'allocated', requestId, generation};
+    },
+};
+document.querySelector('form').addEventListener('submit', (event) => {
+    submits++;
+    event.preventDefault();
+});
+const root = createRoot(document.getElementById('root'));
+root.render(h(StrictMode, null, h(PortalVisitorSort, {port, onOutcome: (outcome) => outcomes.push(outcome)})));
+globalThis.sortFixture = {
+    summary: () => ({ version, commands, outcomes, listeners:listeners.size, submits }),
+    cycleViews() {
+        const change = (viewId) => publish({
+            ...frame,
+            stamp: { ...frame.stamp, viewId, generation:frame.stamp.generation + 1 },
+        });
+        change('view-b');
+        change('view-a');
+    },
+    unmount: () => root.unmount(),
+};
+`;
+
+/** Exercise trusted keyboard events on an installed, synthetic host fixture. */
+export async function checkPortalVisitorSortBrowser({
+    browser,
+    consumer,
+    evidence,
+    expectedReactVersion,
+}) {
+    const scratch = mkdtempSync(join(consumer, 'visitor-sort-browser-'));
+    let context;
+    let server;
+    const external = [];
+    const requests = [];
+    const errors = [];
+    const cleanup = {};
+    Object.assign(evidence, {
+        external,
+        requests,
+        errors,
+        cleanup,
+        passed: false,
+    });
+    try {
+        const entry = join(scratch, 'fixture.mjs');
+        writeFileSync(entry, fixture);
+        const bundle = await build({
+            absWorkingDir: consumer,
+            entryPoints: [entry],
+            bundle: true,
+            platform: 'browser',
+            format: 'iife',
+            outfile: join(scratch, 'app.js'),
+            metafile: true,
+            write: false,
+            define: { 'process.env.NODE_ENV': '"production"' },
+        });
+        await assertBrowserInputs(bundle.metafile, consumer);
+        const app = bundle.outputFiles[0].contents;
+        server = createServer((request, response) => {
+            if (request.url === '/') {
+                response.setHeader('content-type', 'text/html; charset=utf-8');
+                response.end(
+                    '<!doctype html><html><head><title>Portal visitor sort fixture</title><link rel="icon" href="data:,"><script defer src="/app.js"></script></head><body><form><main id="root"></main></form></body></html>'
+                );
+            } else if (request.url === '/app.js') {
+                response.setHeader(
+                    'content-type',
+                    'text/javascript; charset=utf-8'
+                );
+                response.end(app);
+            } else {
+                response.writeHead(404).end();
+            }
+        });
+        await new Promise((done, reject) => {
+            server.once('error', reject);
+            server.listen(0, '127.0.0.1', done);
+        });
+        const origin = 'http://127.0.0.1:' + server.address().port;
+        evidence.origin = origin;
+        context = await browser.newContext({ serviceWorkers: 'block' });
+        context.setDefaultTimeout(5000);
+        await context.route('**/*', (route) => {
+            const url = new URL(route.request().url());
+            if (
+                url.origin === origin &&
+                ['/', '/app.js'].includes(url.pathname)
+            )
+                return route.continue();
+            external.push(url.href);
+            return route.abort();
+        });
+        context.on('request', (request) => {
+            if (['xhr', 'fetch'].includes(request.resourceType()))
+                requests.push(request.url());
+        });
+        const page = await context.newPage();
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => {
+            if (['warning', 'error'].includes(message.type()))
+                errors.push(message.text());
+        });
+        await page.goto(origin);
+        const summary = () =>
+            page.evaluate(() => globalThis.sortFixture.summary());
+        const trigger = page.getByRole('button', { name: 'Sort', exact: true });
+        const dialog = page.getByRole('dialog');
+        const add = dialog.getByRole('button', { name: 'Add sort condition' });
+        const done = dialog.getByRole('button', { name: 'Done' });
+        const open = async () => {
+            await trigger.press('Enter');
+            await dialog.waitFor({ state: 'visible' });
+            assert.equal(
+                await page.evaluate(() => document.activeElement.textContent),
+                'Sort records'
+            );
+        };
+        await open();
+        await dialog
+            .getByRole('button', { name: 'Close', exact: true })
+            .press('Shift+Tab');
+        assert.equal(
+            await page.evaluate(() => document.activeElement.textContent),
+            'Done'
+        );
+        await page.keyboard.press('Tab');
+        assert.equal(
+            await page.evaluate(() => document.activeElement.textContent),
+            'Close'
+        );
+        await add.press('Enter');
+        await add.press('Enter');
+        await dialog
+            .getByRole('combobox', { name: 'Direction 2' })
+            .selectOption('desc');
+        await dialog
+            .getByRole('button', { name: 'Move earlier 2' })
+            .press('Enter');
+        assert.equal(
+            await page.evaluate(() =>
+                document.activeElement.getAttribute('aria-label')
+            ),
+            'Move earlier 1'
+        );
+        assert.deepEqual(
+            await dialog
+                .locator('select[aria-label^="Field"]')
+                .evaluateAll((selects) =>
+                    selects.map((select) => select.value)
+                ),
+            ['detail', 'title']
+        );
+        assert.deepEqual((await summary()).commands, []);
+        await done.press('Enter');
+        await dialog.waitFor({ state: 'hidden' });
+        await page.waitForFunction(
+            () => document.activeElement.textContent === 'Sort'
+        );
+        assert.deepEqual(
+            (await summary()).commands[0].criteria.map(
+                (rule) => rule.idOrName.id
+            ),
+            ['detail', 'title']
+        );
+        assert.deepEqual(
+            (await summary()).commands[0].criteria.map((rule) => rule.type),
+            ['desc', 'asc']
+        );
+        assert.deepEqual((await summary()).outcomes, [
+            { type: 'allocated', requestId: 'request-1', generation: 2 },
+        ]);
+
+        await open();
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({ state: 'hidden' });
+        assert.equal((await summary()).commands.length, 1);
+        assert.equal((await summary()).outcomes.at(-1).type, 'unchanged');
+
+        await open();
+        await dialog
+            .getByRole('button', { name: 'Delete sort condition 1' })
+            .press('Enter');
+        await page.evaluate(() => globalThis.sortFixture.cycleViews());
+        await dialog.getByRole('status').waitFor({ state: 'visible' });
+        await done.press('Enter');
+        await dialog.waitFor({ state: 'hidden' });
+        assert.equal((await summary()).commands.length, 1);
+        assert.equal((await summary()).outcomes.at(-1).type, 'stale');
+
+        await open();
+        await dialog
+            .getByRole('button', { name: 'Delete sort condition 1' })
+            .press('Enter');
+        await dialog
+            .getByRole('button', { name: 'Close', exact: true })
+            .press('Enter');
+        await dialog.waitFor({ state: 'hidden' });
+        const end = await summary();
+        assert.equal(end.version, expectedReactVersion);
+        assert.deepEqual(
+            end.commands.map((command) =>
+                command.criteria.map((rule) => rule.idOrName.id)
+            ),
+            [['detail', 'title'], ['title']]
+        );
+        assert.equal(end.listeners, 0);
+        assert.equal(end.submits, 0);
+        assert.deepEqual(external, []);
+        assert.deepEqual(requests, []);
+        assert.deepEqual(errors, []);
+        await page.evaluate(() => globalThis.sortFixture.unmount());
+        Object.assign(evidence, {
+            react: end.version,
+            outcomes: end.outcomes,
+            passed: true,
+        });
+    } finally {
+        try {
+            if (context) {
+                await context.close();
+                cleanup.context = 'completed';
+            }
+        } finally {
+            try {
+                if (server?.listening) {
+                    server.closeAllConnections();
+                    await new Promise((done, reject) =>
+                        server.close((error) =>
+                            error ? reject(error) : done()
+                        )
+                    );
+                    cleanup.server = 'completed';
+                }
+            } finally {
+                rmSync(scratch, { recursive: true });
+                cleanup.scratch = 'completed';
+            }
+        }
+    }
+}

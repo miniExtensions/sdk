@@ -733,6 +733,9 @@ function projectFormRecord<RecordType extends RuntimeFormRecord>(
             }
         }
 
+        if (mode === 'nonlinked')
+            return { type: 'available', formRecord: output, hiddenFieldIds };
+
         for (const [fieldId, value] of Object.entries(output.data)) {
             const field = byId.get(fieldId);
             const filters = snapshot.filters[fieldId];

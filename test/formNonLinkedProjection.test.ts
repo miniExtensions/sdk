@@ -505,6 +505,43 @@ describe('nonlinked native snapshot and section contract', () => {
         assert.equal(Number.isNaN(formRecord.data.notFinite), true);
     });
 
+    it('preserves linked values when a field ID matches an inherited property', () => {
+        const fieldId = '__proto__';
+        const linkedField: RuntimeAirtableField = {
+            ...text('Retained linked records').airtableField,
+            id: fieldId,
+            config: {
+                type: 'multipleRecordLinks',
+                options: {
+                    linkedTableId: 'table-linked',
+                    isReversed: false,
+                    prefersSingleRecordLink: false,
+                },
+            },
+        };
+        const base = inputFor(
+            physical('number'),
+            condition('number', 'equals', 5),
+            0
+        );
+        const linkedRecords = ['record-linked'];
+        const formRecord = {
+            ...base.formRecord,
+            data: { ...base.formRecord.data, [fieldId]: linkedRecords },
+        };
+        const result = available({
+            ...base,
+            formRecord,
+            formFields: [...base.formFields, schema(linkedField)],
+            airtableFields: [...base.airtableFields, linkedField],
+        });
+        assert.deepEqual(result.hiddenFieldIds, ['target']);
+        assert(Object.hasOwn(result.formRecord.data, fieldId));
+        assert.deepEqual(result.formRecord.data[fieldId], linkedRecords);
+        assert.notEqual(result.formRecord.data[fieldId], linkedRecords);
+        assert.deepEqual(formRecord.data[fieldId], ['record-linked']);
+    });
+
     it('disables condition pruning without introducing linked filtering', () => {
         const base = inputFor(
             physical('number'),

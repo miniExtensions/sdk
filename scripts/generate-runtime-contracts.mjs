@@ -347,6 +347,13 @@ const postgresAuthoringContracts = [
         aliases: ['PostgresCsvAttachmentState', 'PostgresCsvAttachmentDraft'],
     },
     {
+        source: 'types/extensions/postgres/randomNumbersDraft.ts',
+        aliases: [
+            'PostgresRandomNumbersDraftState',
+            'PostgresRandomNumbersDraft',
+        ],
+    },
+    {
         source: 'types/extensions/postgres/nativeDraft.ts',
         aliases: ['PostgresNativeDraft'],
     },
@@ -962,6 +969,8 @@ if (postgresOnly) {
     for (const { source } of postgresAuthoringContracts)
         sourceFiles.add(source);
     sourceFiles.add('types/constants/extensionType.ts');
+    sourceFiles.add('types/extensions/constants.ts');
+    sourceFiles.add('types/extensions/randomNumberSettings.ts');
     sourceFiles.add('types/postgres/connections.ts');
     sourceFiles.add('types/postgres/identifierBinding.ts');
     sourceFiles.add('types/postgres/relationshipPresentation.ts');

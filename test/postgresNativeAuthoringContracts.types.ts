@@ -11,6 +11,7 @@ import type {
     PostgresPortalTab,
     PostgresReadableRelationConfiguration,
     PostgresRecordCopierDraft,
+    PostgresRandomNumbersDraft,
 } from '../src/runtime/index.js';
 
 declare const privateForm: PostgresFormDraft;
@@ -18,11 +19,13 @@ declare const privatePortal: PostgresPortalDraft;
 declare const privateTab: PostgresPortalTab;
 declare const privateCsv: PostgresCsvAttachmentDraft;
 declare const privateCopier: PostgresRecordCopierDraft;
+declare const privateRandom: PostgresRandomNumbersDraft;
 
 export const nativeFormArm: PostgresNativeDraft = privateForm;
 export const nativePortalArm: PostgresNativeDraft = privatePortal;
 export const nativeCsvArm: PostgresNativeDraft = privateCsv;
 export const nativeCopierArm: PostgresNativeDraft = privateCopier;
+export const nativeRandomArm: PostgresNativeDraft = privateRandom;
 export const formState: PostgresFormDraftState = {
     table: privateForm.state.table,
     displayColumnName: 'title',
@@ -99,6 +102,14 @@ export function inspectPrivateDraft(draft: PostgresNativeDraft) {
         // @ts-expect-error Copier state does not acquire a CSV destination.
         draft.state.targetTable;
         return { nativeSource, currentVersion, countColumn };
+    }
+    if (draft.type === 'BULK_generate_random_numbers') {
+        const length: number | null | undefined =
+            draft.state.generatedValueLength;
+        const destination: string = draft.state.destinationColumnName;
+        // @ts-expect-error Random Numbers has one output and no Copy field mapping.
+        draft.state.mapping;
+        return { nativeSource, currentVersion, length, destination };
     }
     const tabs: PostgresPortalTab[] = draft.state.tabs;
     // @ts-expect-error Portal state does not acquire Form fields.

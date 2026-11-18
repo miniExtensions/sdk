@@ -61,6 +61,8 @@ import type {
     CanonicalPostgresRecordCopierDraft,
     CanonicalPostgresCsvAttachmentState,
     CanonicalPostgresCsvAttachmentDraft,
+    CanonicalPostgresRandomNumbersDraftState,
+    CanonicalPostgresRandomNumbersDraft,
     CanonicalPostgresRecord,
     CanonicalPostgresRecordDisplayConfiguration,
     CanonicalPostgresRecordEditingConfiguration,
@@ -144,6 +146,9 @@ export type PostgresRecordCopierDraftState =
 export type PostgresRecordCopierDraft = CanonicalPostgresRecordCopierDraft;
 export type PostgresCsvAttachmentState = CanonicalPostgresCsvAttachmentState;
 export type PostgresCsvAttachmentDraft = CanonicalPostgresCsvAttachmentDraft;
+export type PostgresRandomNumbersDraftState =
+    CanonicalPostgresRandomNumbersDraftState;
+export type PostgresRandomNumbersDraft = CanonicalPostgresRandomNumbersDraft;
 export type PostgresNativeDraft = CanonicalPostgresNativeDraft;
 export type PostgresSource = CanonicalPostgresSource;
 export type PostgresDatabase = CanonicalPostgresDatabase;

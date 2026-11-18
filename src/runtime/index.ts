@@ -65,6 +65,8 @@ export type {
     PostgresRecordCopierDraft,
     PostgresCsvAttachmentState,
     PostgresCsvAttachmentDraft,
+    PostgresRandomNumbersDraftState,
+    PostgresRandomNumbersDraft,
     PostgresRecord,
     PostgresRecordDisplayConfiguration,
     PostgresRecordEditingConfiguration,

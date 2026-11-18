@@ -10,6 +10,7 @@ import type {
     PostgresAttachmentDisplayFailure,
     PostgresCsvAttachmentDraft,
     PostgresRecordCopierDraft,
+    PostgresRandomNumbersDraft,
     PostgresBooleanColumnConfig,
     PostgresEnumColumnConfig,
     PostgresUuidColumnConfig,
@@ -933,6 +934,14 @@ export function inspectPrivateDraft(draft: PostgresNativeDraft) {
         // @ts-expect-error Copier state does not have a CSV destination.
         copier.state.targetTable;
         return { nativeSource, currentVersion, countColumn };
+    }
+    if (draft.type === 'BULK_generate_random_numbers') {
+        const random: PostgresRandomNumbersDraft = draft;
+        const length: number | null | undefined = random.state.generatedValueLength;
+        const destination: string = random.state.destinationColumnName;
+        // @ts-expect-error Random Numbers does not use a Copy field mapping.
+        random.state.mapping;
+        return { nativeSource, currentVersion, length, destination };
     }
     const tabs: PostgresPortalTab[] = draft.state.tabs;
     // @ts-expect-error Portal state does not acquire Form fields.

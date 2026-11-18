@@ -3538,3 +3538,7 @@ export {
     type PortalGridSingleLineTextCellProps,
     type PortalGridSingleLineTextEditor,
 } from './PortalGridSingleLineTextCell.js';
+export {
+    PortalGridEmptyCell,
+    type PortalGridEmptyCellProps,
+} from './PortalGridEmptyCell.js';

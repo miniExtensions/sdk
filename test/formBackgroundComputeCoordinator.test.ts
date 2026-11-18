@@ -67,6 +67,61 @@ test('an escaped allocation failure clears the session and rejects queued and fo
     await next;
 });
 
+for (const fails of [false, true]) {
+    test(
+        fails
+            ? 'a failed successor background chain rejects waiting foreground work'
+            : 'foreground work waits for a background chain started by a completion callback',
+        async () => {
+            const coordinator =
+                createFormBackgroundComputeCoordinator<string>();
+            const releaseA = deferred();
+            const releaseB = deferred();
+            const enteredB = deferred();
+            const failure = new Error('synthetic successor Compute rejection');
+            let value = 'before A';
+            const first = coordinator.runBackground('form', async () => {
+                await releaseA.promise;
+                value = 'after A';
+            });
+            const second = first.then(() =>
+                coordinator.runBackground('form', async () => {
+                    enteredB.resolve();
+                    await releaseB.promise;
+                    value = 'after B';
+                })
+            );
+            const reads: string[] = [];
+            const waiting = coordinator.runForeground('form', async () => {
+                reads.push(value);
+            });
+            const outcomes = Promise.allSettled([second, waiting]);
+
+            releaseA.resolve();
+            await enteredB.promise;
+            const readsWhileHeld = [...reads];
+            if (fails) releaseB.reject(failure);
+            else releaseB.resolve();
+            const settled = await outcomes;
+
+            assert.deepEqual(readsWhileHeld, []);
+            if (fails) {
+                assert.deepEqual(settled, [
+                    { status: 'rejected', reason: failure },
+                    { status: 'rejected', reason: failure },
+                ]);
+                assert.deepEqual(reads, []);
+            } else {
+                assert.deepEqual(
+                    settled.map(({ status }) => status),
+                    ['fulfilled', 'fulfilled']
+                );
+                assert.deepEqual(reads, ['after B']);
+            }
+        }
+    );
+}
+
 test('the default field binding cancels an unstarted timer and replaces a pending debounce', async ({
     mock,
 }) => {

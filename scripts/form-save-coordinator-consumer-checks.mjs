@@ -109,9 +109,9 @@ export async function checkFormSaveCoordinatorConsumer({
         await checkBackgroundComputeReentry(forms);
         backgroundComputeScenarios += 1;
     }
-    assert.equal(backgroundComputeScenarios, 10);
+    assert.equal(backgroundComputeScenarios, 14);
     console.log(
-        'Installed Form background Compute: 10 ESM/CommonJS scenarios passed with controlled clock and synthetic host.'
+        'Installed Form background Compute: 14 ESM/CommonJS scenarios passed with controlled clock and synthetic host.'
     );
     for (const extension of ['mts', 'cts']) {
         const filename = `save-coordinator-types.${extension}`;

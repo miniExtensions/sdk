@@ -365,12 +365,71 @@ async function checkUnmountAndFailure(forms) {
     assert.equal(calls, 2);
 }
 
+async function checkForegroundHandoff(forms, fails) {
+    const coordinator = forms.createFormBackgroundComputeCoordinator();
+    const session = Symbol('form');
+    const draft = makeDraft(forms);
+    const releaseCreate = deferred();
+    const enteredSuccessor = deferred();
+    const releaseSuccessor = deferred();
+    const calls = [];
+    const failure = new Error('synthetic successor Compute failed');
+    const first = coordinator.runBackground(session, async () => {
+        const { formRecord } = draft.input(true);
+        assert.equal(formRecord.type, 'create');
+        calls.push('create');
+        draft.adopt(await releaseCreate.promise);
+    });
+    const successor = first.then(() =>
+        coordinator.runBackground(session, async () => {
+            const { formRecord } = draft.input(true);
+            assert.equal(formRecord.recordId, 'rec_adopted');
+            calls.push('successor');
+            enteredSuccessor.resolve();
+            await releaseSuccessor.promise;
+            draft.write('fld_title', 'From successor Compute');
+        })
+    );
+    let saved;
+    const save = coordinator.runForeground(session, async () => {
+        calls.push('Save');
+        saved = draft.input(false);
+    });
+    const outcomes = Promise.allSettled([successor, save]);
+    releaseCreate.resolve('rec_adopted');
+    await enteredSuccessor.promise;
+    const callsWhileHeld = [...calls];
+    if (fails) releaseSuccessor.reject(failure);
+    else releaseSuccessor.resolve();
+    const settled = await outcomes;
+    assert.deepEqual(callsWhileHeld, ['create', 'successor']);
+    if (fails) {
+        assert.deepEqual(settled, [
+            { status: 'rejected', reason: failure },
+            { status: 'rejected', reason: failure },
+        ]);
+        assert.equal(saved, undefined);
+        assert.deepEqual(calls, ['create', 'successor']);
+    } else {
+        assert.deepEqual(
+            settled.map(({ status }) => status),
+            ['fulfilled', 'fulfilled']
+        );
+        assert.deepEqual(calls, ['create', 'successor', 'Save']);
+        assert.equal(saved.isComputeMode, false);
+        assert.equal(saved.formRecord.recordId, 'rec_adopted');
+        assert.equal(saved.formRecord.data.fld_title, 'From successor Compute');
+    }
+}
+
 export async function runFormBackgroundComputeScenarios(forms) {
     await checkCreateAndCoalescing(forms, 'Save');
     await checkCreateAndCoalescing(forms, 'foreground Compute');
     await checkCapturedOwner(forms);
     await checkUnmountAndFailure(forms);
-    return 4;
+    await checkForegroundHandoff(forms, false);
+    await checkForegroundHandoff(forms, true);
+    return 6;
 }
 
 /** A host notification can enqueue another edit during synchronous allocation. */

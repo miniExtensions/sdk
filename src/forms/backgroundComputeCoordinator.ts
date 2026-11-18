@@ -8,8 +8,8 @@ export type FormBackgroundComputeCoordinator<Key> = {
      */
     runBackground(sessionKey: Key, allocate: Allocate): Promise<void>;
     /**
-     * Enter synchronously when idle. Otherwise wait for this session's chain;
-     * its escaped failure rejects the foreground call before allocation.
+     * Enter synchronously when idle. Otherwise wait for this session's active
+     * chains. An escaped failure rejects the foreground call before allocation.
      */
     runForeground(sessionKey: Key, allocate: Allocate): Promise<void>;
 };
@@ -66,8 +66,13 @@ export function createFormBackgroundComputeCoordinator<
     };
 
     const runForeground = async (sessionKey: Key, allocate: Allocate) => {
-        const chain = active.get(sessionKey);
-        if (chain != null) await chain.completion;
+        let chain = active.get(sessionKey);
+        while (chain != null) {
+            await chain.completion;
+            // A completion callback may have started another background chain
+            // before this foreground invocation resumed.
+            chain = active.get(sessionKey);
+        }
         await allocate();
     };
 

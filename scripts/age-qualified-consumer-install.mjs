@@ -25,12 +25,25 @@ export const consumerAgePolicy = Object.freeze({
     ignoreScripts: true,
 });
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
-function files(root, prefix = '') {
+function nonFileType(entry) {
+    const types = {
+        'symbolic link': entry.isSymbolicLink(),
+        'block device': entry.isBlockDevice(),
+        'character device': entry.isCharacterDevice(),
+        FIFO: entry.isFIFO(),
+        socket: entry.isSocket(),
+    };
+    return Object.keys(types).find((type) => types[type]) ?? 'unknown type';
+}
+function files(root, description, prefix = '') {
     return readdirSync(join(root, prefix), { withFileTypes: true })
         .flatMap((entry) => {
             const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-            if (entry.isDirectory()) return files(root, path);
-            assert(entry.isFile(), 'Consumer SDK contains a non-file');
+            if (entry.isDirectory()) return files(root, description, path);
+            if (!entry.isFile())
+                assert.fail(
+                    `Consumer SDK contains a non-file in ${description}: ${JSON.stringify(path)} (${nonFileType(entry)})`
+                );
             return path;
         })
         .sort();
@@ -205,6 +218,7 @@ export function installAgeQualifiedConsumer({
         assert(!existsSync(npmLockPath), 'pnpm must not fabricate an npm lock');
     assert(lstatSync(lockPath).isFile());
     const lock = readFileSync(lockPath);
+    const lockSha256 = sha(lock);
     assert(
         lock.toString().includes(integrity),
         'pnpm lock omitted SDK archive integrity'
@@ -230,12 +244,18 @@ export function installAgeQualifiedConsumer({
                 .name,
             '@miniextensions/sdk'
         );
-        const expectedFiles = files(expectedRoot);
+        const expectedFiles = files(expectedRoot, 'packed archive');
         for (const name of sdkCopies) {
             const installed = join(modules, name);
             assert(lstatSync(installed).isDirectory());
             assert.equal(realpathSync(installed), installed);
-            assert.deepEqual(files(installed), expectedFiles);
+            assert.deepEqual(
+                files(
+                    installed,
+                    `installed SDK copy ${name}, lock SHA-256 ${lockSha256}`
+                ),
+                expectedFiles
+            );
             for (const path of expectedFiles)
                 assert.deepEqual(
                     readFileSync(join(installed, path)),
@@ -247,7 +267,7 @@ export function installAgeQualifiedConsumer({
             manifestSha256: sha(readFileSync(join(root, 'package.json'))),
             minimumReleaseAge: 2880,
             exclusions: [],
-            lockSha256: sha(lock),
+            lockSha256,
             archiveSha256: sha(archive),
             files: expectedFiles.length,
             sdkCopies,

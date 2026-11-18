@@ -21,7 +21,7 @@ import {createElement} from 'react';
 import {ReadonlyPortalGrid,type ReadonlyPortalGridProps,type ReadonlyPortalGridRow,type ReadonlyPortalGridColumn} from '@miniextensions/sdk/react';
 import {PortalGridSingleLineTextCell,type PortalGridSingleLineTextCellProps} from '@miniextensions/sdk/react';
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
-import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,ControlledRatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
+import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,RatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import '@miniextensions/sdk/react/portal-grid-empty-cell.css';
@@ -65,7 +65,7 @@ const transportedRating:PortalGridRatingCellProps={...ratingCell,commit:async()=
 ratingCell.max=10;
 void unownedRating;void stringRating;void transportedRating;
 const legacyRating:ControlledRatingFieldProps={mode:'controlled',value:null,onChange(value){void value;},max:5,icon:'heart',grid:true};
-createElement(ControlledRatingField,legacyRating);
+createElement(RatingField,legacyRating);
 `;
 
 /** Run unchanged parity assertions against the installed public package. */

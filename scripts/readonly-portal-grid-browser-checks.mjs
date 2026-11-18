@@ -202,7 +202,7 @@ function CheckboxCellProbe() {
         record: 'checkbox-A', frame: {}, value: false, selected: false, enabled: true, revision: 0,
     }));
     const currentFrame = useRef(cell.frame);
-    const log = useRef({ writes: [], selections: 0, opens: 0, submits: 0, rejections: [], activations: [] });
+    const log = useRef({ writes: [], selections: 0, opens: 0, submits: 0, rejections: [], activations: [], pointerPhases: [] });
     useEffect(() => {
         window.__checkboxCellProbe = {
             snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, ...log.current }),
@@ -227,6 +227,14 @@ function CheckboxCellProbe() {
         onClickCapture(event) {
             if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
                 log.current.activations.push({ trusted: event.isTrusted, detail: event.detail });
+        },
+        onPointerDownCapture(event) {
+            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+                log.current.pointerPhases.push({ phase: 'down', record: cell.record, pointerType: event.pointerType, button: event.button, primary: event.isPrimary, trusted: event.isTrusted });
+        },
+        onPointerUpCapture(event) {
+            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+                log.current.pointerPhases.push({ phase: 'up', record: cell.record, pointerType: event.pointerType, button: event.button, primary: event.isPrimary, trusted: event.isTrusted });
         },
     }, h('p', { id: 'checkbox-help' }, 'Approval policy.'), h('table', {
         'aria-label': 'Checkbox Grid fixture',
@@ -267,7 +275,7 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
     startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
     startRatingCell: () => root.render(h(StrictMode, null, h(RatingCellProbe))),
-    startCheckboxCell: () => root.render(h(StrictMode, null, h(CheckboxCellProbe)))
+    startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key })))
 };
 root.render(h(StrictMode,null,h(App)));
 `;
@@ -1832,6 +1840,7 @@ async function checkCheckboxCellBrowser(page) {
     assert.equal(result.submits, 0);
     await originalInput.dispose();
     await originalCell.dispose();
+    const splitPointer = await checkCheckboxSplitPointerBrowser(page);
     return {
         status: 'passed',
         geometry,
@@ -1844,7 +1853,142 @@ async function checkCheckboxCellBrowser(page) {
             'blank',
         ],
         ...result,
+        splitPointer,
     };
+}
+
+async function checkCheckboxSplitPointerBrowser(page) {
+    await page.evaluate(() =>
+        window.__nativeProbe.startCheckboxCell('split-pointer')
+    );
+    await page.waitForFunction(() => {
+        const current = window.__checkboxCellProbe?.snapshot();
+        return current?.record === 'checkbox-A' && current.writes.length === 0;
+    });
+    const table = page.getByRole('table', { name: 'Checkbox Grid fixture' });
+    const input = table.getByRole('checkbox', {
+        name: 'Approved',
+        exact: true,
+    });
+    const state = () =>
+        page.evaluate(() => window.__checkboxCellProbe.snapshot());
+    assert.equal((await state()).selected, false);
+    assert.equal(await input.isEnabled(), true);
+    assert.equal(await input.isChecked(), false);
+    const before = await input.boundingBox();
+    assert(before);
+    let pointerHeld = false;
+    let failure;
+    let after;
+    let released;
+    try {
+        await page.mouse.move(
+            before.x + before.width / 2,
+            before.y + before.height / 2
+        );
+        await page.mouse.down({ button: 'left' });
+        pointerHeld = true;
+        assert.deepEqual((await state()).writes, []);
+        await page.evaluate(() => window.__checkboxCellProbe.replace());
+        await page.waitForFunction(
+            () => window.__checkboxCellProbe.snapshot().record === 'checkbox-B'
+        );
+        assert.equal((await state()).selected, false);
+        assert.equal(await input.isEnabled(), true);
+        after = await input.boundingBox();
+        assert(after);
+        assert.deepEqual(
+            after,
+            before,
+            'The successor checkbox occupies the same position'
+        );
+        assert.deepEqual((await state()).writes, []);
+        await page.mouse.up({ button: 'left' });
+        pointerHeld = false;
+        released = await state();
+        assert.deepEqual(
+            released.writes,
+            [],
+            'An A pointer-down followed by B pointer-up must reach neither writer'
+        );
+        assert.equal(released.value, false);
+        assert.equal(released.opens, 0);
+        assert.equal(released.submits, 0);
+        assert.deepEqual(released.pointerPhases, [
+            {
+                phase: 'down',
+                record: 'checkbox-A',
+                pointerType: 'mouse',
+                button: 0,
+                primary: true,
+                trusted: true,
+            },
+            {
+                phase: 'up',
+                record: 'checkbox-B',
+                pointerType: 'mouse',
+                button: 0,
+                primary: true,
+                trusted: true,
+            },
+        ]);
+    } catch (error) {
+        failure = error;
+    } finally {
+        if (pointerHeld) {
+            try {
+                await page.mouse.up({ button: 'left' });
+            } catch (error) {
+                failure ??= error;
+            }
+        }
+    }
+    if (failure) throw failure;
+
+    const currentInput = await input.elementHandle();
+    assert(currentInput);
+    try {
+        await input.click();
+        await page.waitForFunction(
+            () => window.__checkboxCellProbe.snapshot().writes.length === 1
+        );
+        assert.deepEqual((await state()).writes, [
+            { record: 'checkbox-B', value: true },
+        ]);
+        assert.equal(await input.isChecked(), true);
+        assert.equal(
+            await input.evaluate(
+                (node) => node === node.ownerDocument.activeElement
+            ),
+            true,
+            'A fresh B click retains native input focus'
+        );
+        await page.evaluate(() => window.__checkboxCellProbe.rerender());
+        await page.waitForFunction(
+            () => window.__checkboxCellProbe.snapshot().revision === 1
+        );
+        assert.equal(
+            await input.evaluate(
+                (node, original) => node === original,
+                currentInput
+            ),
+            true,
+            'The current placement retains its input through an ordinary rerender'
+        );
+        assert.equal(
+            await input.evaluate(
+                (node) => node === node.ownerDocument.activeElement
+            ),
+            true
+        );
+        const fresh = await state();
+        assert.deepEqual(fresh.writes, [{ record: 'checkbox-B', value: true }]);
+        assert.equal(fresh.opens, 0);
+        assert.equal(fresh.submits, 0);
+        return { status: 'passed', before, after, released, fresh };
+    } finally {
+        await currentInput.dispose();
+    }
 }
 
 export async function checkReadonlyPortalGridProfile({

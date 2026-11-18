@@ -4,6 +4,7 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    useState,
     type ReactElement,
 } from 'react';
 import {
@@ -55,7 +56,10 @@ export function PortalGridCheckboxCell({
     const editing = editor != null;
     const owner = editor?.owner.token;
     const placement = useMemo(() => ({}), [cellIdentity, editing, owner]);
-    const controlContainer = useRef<HTMLDivElement>(null);
+    const [control, setControl] = useState({ placement, key: 0 });
+    // Retire the native press target when the same Grid slot takes a new owner.
+    if (control.placement !== placement)
+        setControl({ placement, key: control.key + 1 });
     const active = useRef<{
         placement: object;
         editor: PortalGridCheckboxCellEditor;
@@ -63,9 +67,6 @@ export function PortalGridCheckboxCell({
     const useCommittedEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
     useCommittedEffect(() => {
-        const control = controlContainer.current?.querySelector('input');
-        if (control && control.ownerDocument.activeElement === control)
-            control.blur();
         return () => {
             if (active.current?.placement === placement) active.current = null;
         };
@@ -91,7 +92,7 @@ export function PortalGridCheckboxCell({
             ? h('span', { className: 'read-only-text' })
             : h(
                   'div',
-                  { ref: controlContainer },
+                  { key: control.key },
                   h(CompleteCheckboxField, {
                       value,
                       title,

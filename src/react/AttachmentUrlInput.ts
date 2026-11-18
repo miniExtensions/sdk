@@ -34,6 +34,8 @@ export type AttachmentUrlInputLabels = Readonly<{
 
 export type AttachmentUrlInputProps = Readonly<{
     id?: string;
+    /** ID of the host field label when the surrounding Form provides one. */
+    labelledBy?: string;
     labels: AttachmentUrlInputLabels;
     /** The host's captured field owner, with a new token for each lifetime. */
     owner: ReadonlyResourceOwner;
@@ -140,6 +142,7 @@ function UrlDraft(props: AttachmentUrlInputProps) {
                 id: props.id,
                 className: 'mx-sdk-attachment-url__input',
                 'aria-label': props.labels.url,
+                'aria-labelledby': props.labelledBy,
                 'aria-invalid': error != null || undefined,
                 'aria-describedby': error != null ? errorId : undefined,
                 placeholder: props.labels.url,

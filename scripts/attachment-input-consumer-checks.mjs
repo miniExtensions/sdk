@@ -20,7 +20,7 @@ import {AttachmentUrlInput,type AttachmentUrlDraft,type AttachmentUrlInputLabels
 const urlEntryLabels:AttachmentUrlInputLabels={url:'Attachment URL',add:'Add',invalidUrl:'Enter an HTTP or HTTPS URL',appendRefused:'Could not add attachment'};
 const urlEntryDrafts:AttachmentUrlDraft[]=[];
 const urlEntryProps:AttachmentUrlInputProps={
-    id:'attachment-url',labels:urlEntryLabels,owner:{token:Symbol(),isCurrent:()=>true},
+    id:'attachment-url',labelledBy:'attachment-field-label',labels:urlEntryLabels,owner:{token:Symbol(),isCurrent:()=>true},
     appendCurrent(draft){const draftId:null=draft.id;urlEntryDrafts.push({...draft,id:draftId});return true;}
 };
 const urlEntryComponent:typeof AttachmentUrlInput=AttachmentUrlInput;

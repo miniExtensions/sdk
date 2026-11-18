@@ -89,12 +89,14 @@ window.lookupProof.startVisitorUrlEntry = () => {
   appendRefused: 'La pièce jointe ne peut pas être ajoutée'
  };
  const entries = [{ id: 'first' }, { id: 'second' }];
- let owner, current, denied = false, flag, submits = 0, attempts = 0;
+ let owner, current, denied = false, flag, submits = 0, attempts = 0, labelled = false;
  function render() {
   flushSync(() => root.render(h(React.StrictMode, null,
    h('form', { id: 'visitor-url-host', onSubmit(event) { event.preventDefault(); submits++; } },
+    labelled ? h('label', { id: 'visitor-url-label', htmlFor: 'visitor-url' }, 'Justificatif') : null,
     h(api.AttachmentUrlInput, {
-     id: 'visitor-url', labels, owner, full: flag === 'full',
+     id: 'visitor-url', labelledBy: labelled ? 'visitor-url-label' : undefined,
+     labels, owner, full: flag === 'full',
      readOnly: flag === 'readOnly', masked: flag === 'masked',
      appendCurrent(value) {
       attempts++;
@@ -118,6 +120,7 @@ window.lookupProof.startVisitorUrlEntry = () => {
   refuse(value) { denied = value; },
   retireSilently() { current = null; },
   show(nextFlag) { flag = nextFlag; render(); },
+  showFieldLabel() { labelled = true; render(); },
   replace
  };
  replace();
@@ -969,6 +972,28 @@ export async function checkControlledLookupBrowser({
             assert.equal(afterSave.attempts, 4);
             assert.equal(afterSave.entries.length, 5);
             assert.equal(await urlInput.inputValue(), 'unfinished');
+
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.showFieldLabel()
+            );
+            const labelledUrlInput = form.getByRole('textbox', {
+                name: 'Justificatif',
+                exact: true,
+            });
+            assert.equal(await labelledUrlInput.count(), 1);
+            assert.equal(await urlInput.count(), 0);
+            assert.equal(
+                await labelledUrlInput.getAttribute('placeholder'),
+                'Lien de pièce jointe'
+            );
+            await form.locator('label').click();
+            assert.equal(
+                await labelledUrlInput.evaluate(
+                    (node) => document.activeElement === node
+                ),
+                true
+            );
+            assert.deepEqual(await urlState(), afterSave);
             assert.deepEqual((await snapshot()).effects, beforeUrl);
             record(
                 'visitor URL input stages ordered Form drafts without network or submit'

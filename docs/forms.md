@@ -33,8 +33,9 @@ It is an additive SDK-first API; native integration remains a separate milestone
 Render `AttachmentUrlInput` from `@miniextensions/sdk/react` inside the host
 Form and import `@miniextensions/sdk/react/attachment-url-input.css`. Supply the
 localized `url`, `add`, `invalidUrl` and `appendRefused` labels and a current
-resource owner. An optional `id` associates the input with an external label.
-The input hides when the owner retires or the field is read-only, masked or full.
+resource owner. Supply `id` for the host label's `htmlFor` and `labelledBy` for
+its label ID. This preserves the Form field title as the accessible name while
+keeping the localized URL prompt as the placeholder. The input hides when the owner retires or the field is read-only, masked or full.
 
 Enter and Add each try to stage one draft attachment without submitting the Form.
 The component validates HTTP(S) syntax and passes `{ id: null, url, filename }`

@@ -156,6 +156,35 @@ it('stages visitor URLs through click and Enter in the public SDK without submit
     f.assertNoEffects();
 });
 
+it('associates the visitor URL textbox with the surrounding Form field label', async (t) => {
+    const f = await formFixture(t);
+    const props = {
+        id: 'attachment-url',
+        labelledBy: 'native-attachment-field',
+        labels,
+        owner: { token: {}, isCurrent: () => true },
+        appendCurrent: () => assert.fail('Focusing the label cannot append'),
+    };
+    await f.render(
+        h(
+            'div',
+            null,
+            h(
+                'label',
+                { id: props.labelledBy, htmlFor: props.id },
+                'Justificatif'
+            ),
+            h(AttachmentUrlInput, props)
+        )
+    );
+
+    const input = f.input();
+    assert.equal(input.getAttribute('aria-labelledby'), props.labelledBy);
+    assert.equal(input.getAttribute('placeholder'), labels.url);
+    assert.equal(f.form.querySelector('label')?.control, input);
+    f.assertNoEffects();
+});
+
 it('keeps refused input and describes errors, and accepts a malformed path escape exactly once', async (t) => {
     const f = await formFixture(t);
     const staged: AttachmentUrlDraft[] = [];

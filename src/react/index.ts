@@ -273,6 +273,12 @@ export {
     type MultipleAttachmentsFieldOptions,
 } from './MultipleAttachmentsField.js';
 export {
+    AttachmentUrlInput,
+    type AttachmentUrlDraft,
+    type AttachmentUrlInputLabels,
+    type AttachmentUrlInputProps,
+} from './AttachmentUrlInput.js';
+export {
     ReadonlyAttachmentsField,
     renderReadonlyAttachmentsField,
     type ReadonlyAttachmentsFieldProps,

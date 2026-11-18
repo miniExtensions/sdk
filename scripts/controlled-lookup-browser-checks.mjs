@@ -81,6 +81,47 @@ window.lookupProof.startGalleryDownload = () => {
  };
  replace();
 };
+window.lookupProof.startVisitorUrlEntry = () => {
+ const labels = {
+  url: 'Lien de pièce jointe',
+  add: 'Ajouter',
+  invalidUrl: 'Saisissez une URL HTTP ou HTTPS',
+  appendRefused: 'La pièce jointe ne peut pas être ajoutée'
+ };
+ const entries = [{ id: 'first' }, { id: 'second' }];
+ let owner, current, denied = false, flag, submits = 0, attempts = 0;
+ function render() {
+  flushSync(() => root.render(h(React.StrictMode, null,
+   h('form', { id: 'visitor-url-host', onSubmit(event) { event.preventDefault(); submits++; } },
+    h(api.AttachmentUrlInput, {
+     id: 'visitor-url', labels, owner, full: flag === 'full',
+     readOnly: flag === 'readOnly', masked: flag === 'masked',
+     appendCurrent(value) {
+      attempts++;
+      if (denied) return false;
+      entries.push(value);
+      return true;
+     }
+    }),
+    h('button', { type: 'submit' }, 'Save draft explicitly')
+   )
+  )));
+ }
+ function replace() {
+  const token = {};
+  current = token;
+  owner = { token, isCurrent: () => current === token };
+  render();
+ }
+ window.lookupProof.visitorUrl = {
+  snapshot: () => ({ entries: [...entries], submits, attempts }),
+  refuse(value) { denied = value; },
+  retireSilently() { current = null; },
+  show(nextFlag) { flag = nextFlag; render(); },
+  replace
+ };
+ replace();
+};
 `;
 const observedInput = String.raw`
 window.lookupProof.currentInput=()=>JSON.stringify(state);
@@ -141,6 +182,8 @@ export async function checkControlledLookupBrowser({
                 'react/RecoverableImage.js',
                 'react/readonly-url-gallery.css',
                 'react/AttachmentPreview.js',
+                'react/AttachmentUrlInput.js',
+                'react/attachment-url-input.css',
                 'react/FormulaField.js',
                 'react/lookupFieldTypes.d.ts',
                 'react/lookup.css',
@@ -161,8 +204,8 @@ export async function checkControlledLookupBrowser({
         for (const format of ['esm', 'cjs']) {
             const imports =
                 format === 'esm'
-                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';import '@miniextensions/sdk/react/readonly-url-gallery.css';"
-                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');require('@miniextensions/sdk/react/readonly-url-gallery.css');";
+                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';import '@miniextensions/sdk/react/readonly-url-gallery.css';import '@miniextensions/sdk/react/attachment-url-input.css';"
+                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');require('@miniextensions/sdk/react/readonly-url-gallery.css');require('@miniextensions/sdk/react/attachment-url-input.css');";
             const source =
                 imports + controlledLookupAssembly + host + observedInput;
             const entry = join(directory, format + '.js');
@@ -820,6 +863,116 @@ export async function checkControlledLookupBrowser({
             } finally {
                 page.off('download', trackDownload);
             }
+
+            const beforeUrl = (await snapshot()).effects;
+            await page.evaluate(() =>
+                window.lookupProof.startVisitorUrlEntry()
+            );
+            const form = page.locator('#visitor-url-host');
+            const urlInput = form.getByRole('textbox', {
+                name: 'Lien de pièce jointe',
+                exact: true,
+            });
+            const addUrl = form.getByRole('button', {
+                name: 'Ajouter',
+                exact: true,
+            });
+            const urlState = () =>
+                page.evaluate(() => window.lookupProof.visitorUrl.snapshot());
+            assert.equal(await form.locator('form').count(), 0);
+            assert.equal(await addUrl.getAttribute('type'), 'button');
+            assert.equal(
+                await urlInput.evaluate(
+                    (node) => getComputedStyle(node.parentElement).display
+                ),
+                'flex'
+            );
+            await urlInput.press('Enter');
+            assert.equal((await urlState()).attempts, 0);
+            const refused = 'ftp://files.example.test/rejected.pdf';
+            await urlInput.fill(refused);
+            await urlInput.press('Enter');
+            assert.equal(await urlInput.inputValue(), refused);
+            assert.equal(
+                await form.getByRole('alert').textContent(),
+                'Saisissez une URL HTTP ou HTTPS'
+            );
+            assert.equal((await urlState()).attempts, 0);
+
+            const pointerUrl =
+                'https://files.example.test/space%20name.pdf?x=1#frag';
+            await urlInput.fill(pointerUrl);
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.refuse(true)
+            );
+            await addUrl.click();
+            assert.equal(await urlInput.inputValue(), pointerUrl);
+            assert.equal(
+                await form.getByRole('alert').textContent(),
+                'La pièce jointe ne peut pas être ajoutée'
+            );
+            assert.equal((await urlState()).entries.length, 2);
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.refuse(false)
+            );
+            await addUrl.dblclick();
+            assert.equal((await urlState()).attempts, 2);
+            assert.equal(await urlInput.inputValue(), '');
+            const malformed = 'http://files.example.test/%E0%A4%A?draft=1';
+            await urlInput.fill(malformed);
+            await urlInput.press('Enter');
+            assert.equal(await urlInput.inputValue(), '');
+
+            const trailingSlash = 'https://files.example.test/folder/';
+            await urlInput.fill(trailingSlash);
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.retireSilently()
+            );
+            await urlInput.press('Enter');
+            await addUrl.click();
+            assert.equal((await urlState()).attempts, 3);
+            await page.evaluate(() => window.lookupProof.visitorUrl.replace());
+            assert.equal(await urlInput.inputValue(), '');
+            for (const flag of ['full', 'readOnly', 'masked']) {
+                await page.evaluate(
+                    (value) => window.lookupProof.visitorUrl.show(value),
+                    flag
+                );
+                assert.equal(await urlInput.count(), 0);
+                await page.evaluate(() => window.lookupProof.visitorUrl.show());
+            }
+            await urlInput.fill(trailingSlash);
+            await urlInput.press('Enter');
+            assert.deepEqual(await urlState(), {
+                entries: [
+                    { id: 'first' },
+                    { id: 'second' },
+                    { id: null, url: pointerUrl, filename: 'space name.pdf' },
+                    { id: null, url: malformed, filename: '%E0%A4%A' },
+                    {
+                        id: null,
+                        url: trailingSlash,
+                        filename: 'files.example.test',
+                    },
+                ],
+                submits: 0,
+                attempts: 4,
+            });
+            assert.deepEqual((await snapshot()).effects, beforeUrl);
+            // An unfinished bad draft does not block an explicit host Save.
+            await urlInput.fill('unfinished');
+            await form
+                .getByRole('button', { name: 'Save draft explicitly' })
+                .click();
+            const afterSave = await urlState();
+            assert.equal(afterSave.submits, 1);
+            assert.equal(afterSave.attempts, 4);
+            assert.equal(afterSave.entries.length, 5);
+            assert.equal(await urlInput.inputValue(), 'unfinished');
+            assert.deepEqual((await snapshot()).effects, beforeUrl);
+            record(
+                'visitor URL input stages ordered Form drafts without network or submit'
+            );
 
             await page.evaluate(() => window.lookupProof.richText());
             await page.locator('.ProseMirror[contenteditable=false]').waitFor();

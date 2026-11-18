@@ -28,6 +28,24 @@ For an application-owned immutable state kernel with native host admission,
 validation and allocation, see [canonical Form frames](canonical-form-frame.md).
 It is an additive SDK-first API; native integration remains a separate milestone.
 
+## Visitor attachment URL input
+
+Render `AttachmentUrlInput` from `@miniextensions/sdk/react` inside the host
+Form and import `@miniextensions/sdk/react/attachment-url-input.css`. Supply the
+localized `url`, `add`, `invalidUrl` and `appendRefused` labels and a current
+resource owner. An optional `id` associates the input with an external label.
+The input hides when the owner retires or the field is read-only, masked or full.
+
+Enter and Add each try to stage one draft attachment without submitting the Form.
+The component validates HTTP(S) syntax and passes `{ id: null, url, filename }`
+to the host's synchronous `appendCurrent` callback. It preserves the entered URL
+after the native input's surrounding whitespace normalization. It decodes the
+last path segment once, falls back to the hostname for an empty path segment and
+retains malformed escapes in the filename. The host rechecks current eligibility,
+appends after the existing attachments and returns `true` only if it accepted
+the draft. When the host returns `false`, the input retains the URL and shows the
+supplied refusal label. The host owns the eventual Save and any backend work.
+
 ## Record actions for an edit Form
 
 Create one `createFormRecordActionsController` from `@miniextensions/sdk/forms`

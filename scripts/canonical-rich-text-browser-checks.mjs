@@ -23,6 +23,7 @@ export async function checkCanonicalRichTextBrowser({
     const root = realpathSync(consumer);
     const directory = mkdtempSync(join(root, '.canonical-rich-text-native-'));
     let server, context, page, failure;
+    let caretEvidence = evidence;
     const source = `
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -30,6 +31,82 @@ import {flushSync} from 'react-dom';
 import {RichTextField} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
 const writes=[],saves=[];let update,current,previous;
+let stopCaretNavigation;
+function startCaretNavigationTrace(withholdFirstSelectionChange) {
+    const editor = document.querySelector('.ProseMirror');
+    const events = [];
+    const eventTypes = ['focusin', 'focusout', 'selectionchange', 'keydown', 'keyup'];
+    let dropped = 0;
+    let firstArrow = 'pending';
+    let withheldSelectionChange = null;
+    const position = () => {
+        const selection = document.getSelection();
+        return {
+            active: document.activeElement === editor,
+            connected: editor.isConnected,
+            anchorInEditor: editor.contains(selection?.anchorNode),
+            focusInEditor: editor.contains(selection?.focusNode),
+            collapsed: selection?.isCollapsed,
+            anchorOffset: selection?.anchorOffset,
+            focusOffset: selection?.focusOffset,
+        };
+    };
+    const initial = position();
+    const capture = event => {
+        if (event.type !== 'selectionchange' && !editor.contains(event.target))
+            return;
+        const sample = { event, at: performance.now(), position: position() };
+        if (events.length === 64) dropped++;
+        else events.push(sample);
+
+        // Test-only stress: withhold just the first trusted movement's
+        // notification while ArrowLeft is down. Leave the browser's actual
+        // selection and all later native events alone.
+        if (!withholdFirstSelectionChange || !event.isTrusted) return;
+        if (firstArrow === 'pending' && event.type === 'keydown' && event.key === 'ArrowLeft') {
+            firstArrow = 'down';
+            return;
+        }
+        if (firstArrow !== 'down') return;
+        if (event.type === 'keyup' && event.key === 'ArrowLeft') {
+            firstArrow = 'released';
+            return;
+        }
+        const native = sample.position;
+        if (
+            !withheldSelectionChange &&
+            event.type === 'selectionchange' &&
+            native.active &&
+            native.connected &&
+            native.collapsed &&
+            native.anchorInEditor &&
+            native.focusInEditor &&
+            native.anchorOffset === 9 &&
+            native.focusOffset === 9
+        ) {
+            withheldSelectionChange = { at: sample.at, position: native };
+            event.stopImmediatePropagation();
+        }
+    };
+    for (const type of eventTypes) document.addEventListener(type, capture, true);
+    return () => {
+        for (const type of eventTypes) document.removeEventListener(type, capture, true);
+        return {
+            initial,
+            final: position(),
+            dropped,
+            withheldSelectionChange,
+            events: events.map(({ event, at, position }) => ({
+                type: event.type,
+                key: event.key,
+                trusted: event.isTrusted,
+                defaultPrevented: event.defaultPrevented,
+                at,
+                position,
+            })),
+        };
+    };
+}
 function App(){const [state,setState]=useState({value:'**Bold** and _italic_\\n\\n[ ] task',readOnly:false,identity:'record:notes',id:'notes',invalid:false,sibling:'untouched'});current=state;update=next=>flushSync(()=>setState(old=>({...old,...next})));
 return h('form',{id:'owned-form',onSubmit:event=>{event.preventDefault();saves.push({...state});}},
 h('label',{id:'notes-label',htmlFor:state.id},'Notes'),h('p',{id:'notes-help'},'Markdown details'),h('p',{id:'notes-error'},state.invalid?'Review notes':''),
@@ -37,7 +114,7 @@ h(RichTextField,{value:state.value,onValueChange:value=>{writes.push({identity:s
 h('label',null,'Neighbor',h('input',{id:'neighbor',value:state.sibling,onChange:event=>setState(old=>({...old,sibling:event.target.value}))})),h('button',{type:'submit',id:'save'},'Save'));
 }
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
-window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},unmount:()=>flushSync(()=>app.unmount())};
+window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},startCaretNavigation:withhold=>{stopCaretNavigation=startCaretNavigationTrace(withhold);},finishCaretNavigation:()=>{const trace=stopCaretNavigation?.();stopCaretNavigation=undefined;return trace;},unmount:()=>{stopCaretNavigation?.();stopCaretNavigation=undefined;flushSync(()=>app.unmount());}};
 `;
     try {
         const entry = join(directory, 'host.mjs');
@@ -208,30 +285,6 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
 
         // Keep the original formatted Save proof above. These additional cases
         // exercise native selection through the ordinary public controlled API.
-        await update({ identity: 'metadata-caret:notes', value: 'Alpha Beta' });
-        await editor.waitFor();
-        await page.waitForFunction(
-            () =>
-                window.canonicalRichText.snapshot().state.value ===
-                    'Alpha Beta' &&
-                document.querySelector('.ProseMirror')?.textContent ===
-                    'Alpha Beta'
-        );
-        assert.equal(await page.locator('.ProseMirror').count(), 1);
-        await editor.click();
-        await editor.press(documentKeys.end);
-        await page.waitForFunction(() => {
-            const node = document.querySelector('.ProseMirror');
-            const native = document.getSelection();
-            return (
-                node?.textContent === 'Alpha Beta' &&
-                native?.isCollapsed &&
-                node.contains(native.anchorNode) &&
-                native.anchorNode?.textContent === 'Alpha Beta' &&
-                native.anchorOffset === 10
-            );
-        });
-        for (let step = 0; step < 8; step++) await editor.press('ArrowLeft');
         const nativeCaret = () =>
             editor.evaluate((node) => {
                 const native = document.getSelection();
@@ -246,49 +299,135 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                     focusOffset: native?.focusOffset,
                 };
             });
-        const beforeMetadata = await nativeCaret();
-        assert.equal(beforeMetadata.active, true);
-        assert.equal(beforeMetadata.contained, true);
-        assert.equal(beforeMetadata.collapsed, true);
-        assert.equal(beforeMetadata.anchorText, 'Alpha Beta');
-        assert.equal(beforeMetadata.anchorOffset, 2);
-        assert.equal(beforeMetadata.focusOffset, 2);
-        await page.evaluate(() => window.canonicalRichText.remember());
-        const beforeCaretMetadata = await snapshot();
-        await update({ id: 'notes-caret', invalid: false });
-        assert.equal((await nativeCaret()).anchorOffset, 2);
-        await page.locator('#neighbor').click();
-        await update({ id: 'notes-caret-renamed', invalid: true });
-        await editor.focus();
-        await page.keyboard.type('Z');
-        await page.waitForFunction(
-            () =>
-                window.canonicalRichText.snapshot().state.value ===
-                'AlZpha Beta'
-        );
-        const afterCaretMetadata = await snapshot();
-        assert.equal(await editor.innerText(), 'AlZpha Beta');
-        assert.equal(
-            await page.evaluate(() => window.canonicalRichText.same()),
-            true
-        );
-        assert.equal(
-            afterCaretMetadata.writes.length,
-            beforeCaretMetadata.writes.length + 1
-        );
-        assert.deepEqual(afterCaretMetadata.writes.at(-1), {
-            identity: 'metadata-caret:notes',
-            value: 'AlZpha Beta',
-        });
-        assert.equal(afterCaretMetadata.saves.length, 1);
-        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
-        evidence.nativeMetadataCaret = {
-            beforeMetadata,
-            after: await nativeCaret(),
+
+        const checkMetadataCaret = async (
+            result,
+            identity,
+            firstArrowDelayMs
+        ) => {
+            caretEvidence = result;
+            await update({ identity, value: 'Alpha Beta' });
+            await editor.waitFor();
+            await page.waitForFunction(
+                () =>
+                    window.canonicalRichText.snapshot().state.value ===
+                        'Alpha Beta' &&
+                    document.querySelector('.ProseMirror')?.textContent ===
+                        'Alpha Beta'
+            );
+            assert.equal(await page.locator('.ProseMirror').count(), 1);
+            await page.evaluate(
+                (withhold) =>
+                    window.canonicalRichText.startCaretNavigation(withhold),
+                result.withholdFirstSelectionChange === true
+            );
+            await editor.click();
+            await editor.press(documentKeys.end);
+            await page.waitForFunction(() => {
+                const node = document.querySelector('.ProseMirror');
+                const native = document.getSelection();
+                return (
+                    node?.textContent === 'Alpha Beta' &&
+                    native?.isCollapsed &&
+                    node.contains(native.anchorNode) &&
+                    native.anchorNode?.textContent === 'Alpha Beta' &&
+                    native.anchorOffset === 10
+                );
+            });
+            for (let step = 0; step < 8; step++) {
+                if (step === 0 && firstArrowDelayMs)
+                    await editor.press('ArrowLeft', {
+                        delay: firstArrowDelayMs,
+                    });
+                else await editor.press('ArrowLeft');
+            }
+            const beforeMetadata = await nativeCaret();
+            result.caretNavigationBeforeMetadata = beforeMetadata;
+            assert.equal(beforeMetadata.active, true);
+            assert.equal(beforeMetadata.contained, true);
+            assert.equal(beforeMetadata.collapsed, true);
+            assert.equal(beforeMetadata.anchorText, 'Alpha Beta');
+            assert.equal(beforeMetadata.anchorOffset, 2);
+            assert.equal(beforeMetadata.focusOffset, 2);
+            await page.evaluate(() => window.canonicalRichText.remember());
+            const beforeCaretMetadata = await snapshot();
+            await update({ id: 'notes-caret', invalid: false });
+            assert.equal((await nativeCaret()).anchorOffset, 2);
+            await page.locator('#neighbor').click();
+            await update({ id: 'notes-caret-renamed', invalid: true });
+            await editor.focus();
+            await page.keyboard.type('Z');
+            await page.waitForFunction(
+                () =>
+                    window.canonicalRichText.snapshot().state.value ===
+                    'AlZpha Beta'
+            );
+            const afterCaretMetadata = await snapshot();
+            assert.equal(await editor.innerText(), 'AlZpha Beta');
+            assert.equal(
+                await page.evaluate(() => window.canonicalRichText.same()),
+                true
+            );
+            assert.equal(
+                afterCaretMetadata.writes.length,
+                beforeCaretMetadata.writes.length + 1
+            );
+            assert.deepEqual(afterCaretMetadata.writes.at(-1), {
+                identity,
+                value: 'AlZpha Beta',
+            });
+            assert.equal(afterCaretMetadata.saves.length, 1);
+            assert.equal(
+                await page.locator('#neighbor').inputValue(),
+                'untouched'
+            );
+            result.caretNavigation = await page.evaluate(() =>
+                window.canonicalRichText.finishCaretNavigation()
+            );
+            if (result.withholdFirstSelectionChange) {
+                assert.ok(
+                    result.caretNavigation.withheldSelectionChange,
+                    'The delayed-observer comparison intercepted the first trusted caret movement'
+                );
+            }
+            result.nativeMetadataCaret = {
+                beforeMetadata,
+                after: await nativeCaret(),
+            };
         };
+        await checkMetadataCaret(evidence, 'metadata-caret:notes');
         evidence.results.push(
             'trusted navigation caret survives accessibility updates, metadata blur and refocus with exact insertion'
         );
+
+        // One additional native gesture probes the pinned ProseMirror focus
+        // reconciliation window. Each case still starts from offset 10
+        // and requires eight trusted movements and the same exact edit.
+        const heldFirstArrow = { delayMs: 35, status: 'running' };
+        evidence.heldFirstArrow = heldFirstArrow;
+        await checkMetadataCaret(
+            heldFirstArrow,
+            'metadata-caret-held:notes',
+            heldFirstArrow.delayMs
+        );
+        heldFirstArrow.status = 'passed';
+
+        // The key hold alone allowed native observation before reconciliation.
+        // Repeat it with only the first selectionchange withheld to test the
+        // stale-model ordering without moving the caret from the fixture.
+        const delayedFirstSelectionChange = {
+            delayMs: heldFirstArrow.delayMs,
+            withholdFirstSelectionChange: true,
+            status: 'running',
+        };
+        evidence.delayedFirstSelectionChange = delayedFirstSelectionChange;
+        await checkMetadataCaret(
+            delayedFirstSelectionChange,
+            'metadata-caret-delayed-observation:notes',
+            delayedFirstSelectionChange.delayMs
+        );
+        delayedFirstSelectionChange.status = 'passed';
+        caretEvidence = evidence;
 
         // A real pointer choice at the start must take precedence over the
         // retained non-start caret. Keep click-to-type adjacent, as above.
@@ -566,6 +705,16 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
+        if (caretEvidence !== evidence) {
+            caretEvidence.status = 'failed';
+            caretEvidence.error = error.message;
+        }
+        if (page && !caretEvidence.caretNavigation)
+            caretEvidence.caretNavigation = await page
+                .evaluate(() =>
+                    window.canonicalRichText?.finishCaretNavigation()
+                )
+                .catch(() => undefined);
         if (page)
             evidence.failureState = await page
                 .evaluate(() => window.canonicalRichText?.snapshot())

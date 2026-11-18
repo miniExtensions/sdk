@@ -986,6 +986,25 @@ Retained handlers fail closed after observed owner/configuration changes,
 including observed A→B→A; unobserved in-place restoration is not detectable.
 The core subpath has no React dependency.
 
+### Visitor Search
+
+`PortalVisitorSearch` from `/react` renders an inline search control for a
+host-owned Portal collection. Typing changes its local draft. Enter, Search,
+and Clear each submit one command. Search preserves the exact input, including
+whitespace, and allows a later explicit submission of the same term.
+
+The port reads the current committed term and owner stamp and subscribes to
+their changes. Validate the captured stamp and `expectedSearchTerm` before
+writing the new term, then revalidate the allocated first-page request before
+transport. Report an allocation only after invoking transport. A refused or
+uncertain submission does not cause an automatic retry.
+
+An optional scanner renderer captures the result callback when the scanner
+opens. Retire that callback on close. A captured callback accepts one result
+and fails closed after a view, owner, or configuration change. Headless
+consumers can use `createPortalVisitorSearchDraft` from `/portals` with the
+same command contract.
+
 ### Parent-record summary cards
 
 `PortalSummaryCards` from `@miniextensions/sdk/react` supplies the complete

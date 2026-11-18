@@ -132,6 +132,11 @@ function assertKernel(api) {
         []
     );
     assert(cleanup);
+    assert.equal(cleanup.state.generation, cleanupBegin.state.generation);
+    assert.equal(
+        cleanup.cleanup.receipt.generation,
+        cleanupBegin.receipt.generation
+    );
     assert.equal(
         kernel.isCleanupCurrent(cleanup.state, cleanup.cleanup.receipt),
         true

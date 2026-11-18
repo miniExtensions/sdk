@@ -10,8 +10,10 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
+import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
+import'@miniextensions/sdk/react/single-line-text.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -27,8 +29,62 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
  return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
-window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original})};
-createRoot(document.querySelector('#root')).render(h(StrictMode,null,h(App)));
+function TextCellProbe() {
+    const [cell, setCell] = useState(() => ({
+        record: 'A', frame: {}, value: 'Committed A', selected: false
+    }));
+    const writeLog = useRef([]);
+    const openCount = useRef(0);
+    const submitCount = useRef(0);
+    const currentFrame = useRef(cell.frame);
+    useEffect(() => {
+        window.__textCellProbe = {
+            snapshot: () => ({
+                record: cell.record,
+                value: cell.value,
+                selected: cell.selected,
+                writes: writeLog.current,
+                opens: openCount.current,
+                submits: submitCount.current,
+            }),
+            reject: () => setCell(current => ({ ...current, value: 'Committed A' })),
+            replace: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'B', frame, value: 'Committed B', selected: true });
+            },
+        };
+        return () => { delete window.__textCellProbe; };
+    }, [cell]);
+    return h('form', {
+        onSubmit(event) { event.preventDefault(); submitCount.current++; }
+    }, h('table', { 'aria-label': 'Writable Grid fixture' }, h('tbody', null,
+        h('tr', null, h(PortalGridSingleLineTextCell, {
+            value: cell.value,
+            displayText: cell.value,
+            title: 'Plain note',
+            language: 'en',
+            cellIdentity: cell.record,
+            selected: cell.selected,
+            rowHeight: 'medium',
+            onSelect: () => setCell(current => ({ ...current, selected: true })),
+            editor: {
+                owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
+                onChange(value) {
+                    writeLog.current.push({ record: cell.record, value });
+                    setCell(current => ({ ...current, value }));
+                },
+            },
+        }), h('td', null, h('button', {
+            type: 'button',
+            onClick: () => { openCount.current++; },
+        }, 'Open from writable Grid'))))));
+}
+const root = createRoot(document.querySelector('#root'));
+window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
+    startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe)))
+};
+root.render(h(StrictMode,null,h(App)));
 `;
 
 export async function prepareReadonlyPortalGridBrowserFixtures(args) {
@@ -64,6 +120,9 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/CompleteFormFieldPresentation.js',
         '/react/readonly-portal-grid.css',
         '/react/complete-readonly-text.css',
+        '/react/PortalGridSingleLineTextCell.js',
+        '/react/SingleLineTextField.js',
+        '/react/portal-grid-single-line-text-cell.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -808,6 +867,8 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.deepEqual(end.errors, []);
     assert.equal(end.submits, 0);
     assert.equal(end.canonicalUnchanged, true);
+    const textCell = await checkPlainTextCellBrowser(page);
+    assert.deepEqual(end.errors, []);
     Object.assign(evidence, {
         status: 'passed',
         results,
@@ -820,11 +881,85 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
             submits: end.submits,
         },
         canonicalUnchanged: true,
+        textCell,
         errors: end.errors,
         limits: [
             'Installed SDK presentation only; actual native borrowed-route, child admission and persistent preference qualification remain separate.',
         ],
     });
+}
+
+async function checkPlainTextCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startTextCell());
+    const table = page.getByRole('table', { name: 'Writable Grid fixture' });
+    const cell = table.getByRole('cell').first();
+    await cell.waitFor({ state: 'visible' });
+    assert.equal(
+        await cell
+            .locator('.mx-sdk-portal-grid-text-cell__content')
+            .evaluate((element) => element.getBoundingClientRect().height),
+        52
+    );
+    assert.equal(
+        await cell
+            .locator('.read-only-text')
+            .evaluate((element) => getComputedStyle(element).webkitLineClamp),
+        '2'
+    );
+    const state = () => page.evaluate(() => window.__textCellProbe.snapshot());
+    const input = table.getByRole('textbox', { name: 'Plain note' });
+    assert.equal(await input.count(), 0);
+    await cell.click();
+    await input.waitFor({ state: 'visible' });
+    assert.equal(
+        await cell.evaluate((element) => element === document.activeElement),
+        true
+    );
+    assert.deepEqual((await state()).writes, []);
+    assert.equal((await state()).opens, 0);
+
+    await input.fill('Rejected A');
+    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+    assert.deepEqual((await state()).writes, []);
+    assert.equal(await input.inputValue(), 'Rejected A');
+    await input.press('Enter');
+    await page.waitForFunction(
+        () => window.__textCellProbe.snapshot().writes.length === 1
+    );
+    assert.deepEqual((await state()).writes, [
+        { record: 'A', value: 'Rejected A' },
+    ]);
+    await page.evaluate(() => window.__textCellProbe.reject());
+    await page.waitForFunction(
+        () =>
+            document.querySelector('[aria-label="Plain note"]')?.value ===
+            'Committed A'
+    );
+    await input.focus();
+    await page.keyboard.press('Tab');
+    assert.equal((await state()).writes.length, 1);
+
+    await input.fill('Retired draft');
+    await page.evaluate(() => window.__textCellProbe.replace());
+    await page.waitForFunction(
+        () =>
+            document.querySelector('[aria-label="Plain note"]')?.value ===
+            'Committed B'
+    );
+    assert.equal((await state()).writes.length, 1);
+    await input.fill('Current B');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(
+        () => window.__textCellProbe.snapshot().writes.length === 2
+    );
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        { record: 'A', value: 'Rejected A' },
+        { record: 'B', value: 'Current B' },
+    ]);
+    assert.equal(result.submits, 0);
+    assert.equal(result.opens, 0);
+    return { status: 'passed', ...result };
 }
 
 export async function checkReadonlyPortalGridProfile({

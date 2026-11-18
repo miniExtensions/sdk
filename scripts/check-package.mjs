@@ -926,6 +926,11 @@ try {
         'dist/cjs/react/form-pages.css',
         'docs/native-form-pages.md',
         'dist/cjs/react/readonly-portal-grid.css',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/PortalGridSingleLineTextCell.js`,
+            `dist/${format}/react/PortalGridSingleLineTextCell.d.ts`,
+            `dist/${format}/react/portal-grid-single-line-text-cell.css`,
+        ]),
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
@@ -4841,6 +4846,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(gridProof.profiles.length, 4);
     assert.equal(gridProof.tests, 84);
+    assert.equal(gridProof.textCellTests, 16);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

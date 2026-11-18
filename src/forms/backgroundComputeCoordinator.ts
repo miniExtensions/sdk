@@ -9,7 +9,8 @@ export type FormBackgroundComputeCoordinator<Key> = {
     runBackground(sessionKey: Key, allocate: Allocate): Promise<void>;
     /**
      * Enter synchronously when idle. Otherwise wait for this session's active
-     * chains. An escaped failure rejects the foreground call before allocation.
+     * chain and any successors started while waiting. An escaped failure
+     * rejects the foreground call before allocation.
      */
     runForeground(sessionKey: Key, allocate: Allocate): Promise<void>;
 };
@@ -17,6 +18,13 @@ export type FormBackgroundComputeCoordinator<Key> = {
 type BackgroundChain = {
     completion: Promise<void>;
     queued?: Allocate;
+    next?: BackgroundChain;
+};
+
+type BackgroundSession = {
+    active?: BackgroundChain;
+    tail: BackgroundChain;
+    foregroundWaiters: number;
 };
 
 /**
@@ -28,9 +36,20 @@ type BackgroundChain = {
 export function createFormBackgroundComputeCoordinator<
     Key,
 >(): FormBackgroundComputeCoordinator<Key> {
-    const active = new Map<Key, BackgroundChain>();
+    const sessions = new Map<Key, BackgroundSession>();
 
-    const drain = async (key: Key, chain: BackgroundChain, first: Allocate) => {
+    const releaseIdle = (key: Key, session: BackgroundSession) => {
+        if (session.active == null && session.foregroundWaiters === 0) {
+            sessions.delete(key);
+        }
+    };
+
+    const drain = async (
+        key: Key,
+        session: BackgroundSession,
+        chain: BackgroundChain,
+        first: Allocate
+    ) => {
         let allocate: Allocate | undefined = first;
         try {
             while (allocate != null) {
@@ -40,12 +59,14 @@ export function createFormBackgroundComputeCoordinator<
             }
         } finally {
             chain.queued = undefined;
-            active.delete(key);
+            session.active = undefined;
+            releaseIdle(key, session);
         }
     };
 
     const runBackground = (sessionKey: Key, allocate: Allocate) => {
-        const chain = active.get(sessionKey);
+        let session = sessions.get(sessionKey);
+        const chain = session?.active;
         if (chain != null) {
             chain.queued = allocate;
             return chain.completion;
@@ -53,25 +74,44 @@ export function createFormBackgroundComputeCoordinator<
 
         // Register before calling the host, even when it schedules another
         // edit synchronously from within allocation.
-        let start!: (chain: BackgroundChain) => void;
+        let start!: (owner: BackgroundSession, chain: BackgroundChain) => void;
         const completion = new Promise<void>((resolve, reject) => {
-            start = (created) => {
-                void drain(sessionKey, created, allocate).then(resolve, reject);
+            start = (owner, created) => {
+                void drain(sessionKey, owner, created, allocate).then(
+                    resolve,
+                    reject
+                );
             };
         });
         const created = { completion };
-        active.set(sessionKey, created);
-        start(created);
+        if (session == null) {
+            session = { tail: created, foregroundWaiters: 0 };
+            sessions.set(sessionKey, session);
+        } else {
+            // Link before allocation so existing foreground waiters can
+            // observe even a successor that fails before they resume.
+            session.tail.next = created;
+            session.tail = created;
+        }
+        session.active = created;
+        start(session, created);
         return completion;
     };
 
     const runForeground = async (sessionKey: Key, allocate: Allocate) => {
-        let chain = active.get(sessionKey);
-        while (chain != null) {
-            await chain.completion;
-            // A completion callback may have started another background chain
-            // before this foreground invocation resumed.
-            chain = active.get(sessionKey);
+        const session = sessions.get(sessionKey);
+        let chain = session?.active;
+        if (session != null && chain != null) {
+            session.foregroundWaiters += 1;
+            try {
+                while (chain != null) {
+                    await chain.completion;
+                    chain = chain.next;
+                }
+            } finally {
+                session.foregroundWaiters -= 1;
+                releaseIdle(sessionKey, session);
+            }
         }
         await allocate();
     };

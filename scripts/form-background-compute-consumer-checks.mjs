@@ -422,6 +422,47 @@ async function checkForegroundHandoff(forms, fails) {
     }
 }
 
+async function checkFastSuccessorFailure(forms, throws) {
+    const coordinator = forms.createFormBackgroundComputeCoordinator();
+    const session = Symbol('form');
+    const draft = makeDraft(forms);
+    const releaseCreate = deferred();
+    const failure = new Error('synthetic fast successor failure');
+    const saves = [];
+    const host = releaseCreate.promise.then((recordId) =>
+        draft.adopt(recordId)
+    );
+    const active = coordinator.runBackground(session, () => host);
+    const successor = (throws ? active : host).then(() =>
+        coordinator.runBackground(session, () => {
+            if (throws) throw failure;
+            return Promise.reject(failure);
+        })
+    );
+    const allocateSave = async () => {
+        saves.push(draft.input(false));
+    };
+    const save = coordinator.runForeground(session, allocateSave);
+    const outcomes = Promise.allSettled([successor, save]);
+
+    releaseCreate.resolve('rec_adopted');
+    const [successorResult, saveResult] = await outcomes;
+    assert.equal(saves.length, 0);
+    assert.equal(successorResult.status, 'rejected');
+    assert.equal(successorResult.reason, failure);
+    assert.equal(saveResult.status, 'rejected');
+    assert.equal(saveResult.reason, failure);
+
+    draft.write('fld_title', 'Explicit retry');
+    const retry = coordinator.runForeground(session, allocateSave);
+    assert.equal(saves.length, 1, 'an idle retry allocates synchronously');
+    await retry;
+    assert.equal(saves.length, 1);
+    assert.equal(saves[0].isComputeMode, false);
+    assert.equal(saves[0].formRecord.recordId, 'rec_adopted');
+    assert.equal(saves[0].formRecord.data.fld_title, 'Explicit retry');
+}
+
 export async function runFormBackgroundComputeScenarios(forms) {
     await checkCreateAndCoalescing(forms, 'Save');
     await checkCreateAndCoalescing(forms, 'foreground Compute');
@@ -429,7 +470,9 @@ export async function runFormBackgroundComputeScenarios(forms) {
     await checkUnmountAndFailure(forms);
     await checkForegroundHandoff(forms, false);
     await checkForegroundHandoff(forms, true);
-    return 6;
+    await checkFastSuccessorFailure(forms, true);
+    await checkFastSuccessorFailure(forms, false);
+    return 8;
 }
 
 /** A host notification can enqueue another edit during synchronous allocation. */

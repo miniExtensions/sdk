@@ -122,6 +122,56 @@ for (const fails of [false, true]) {
     );
 }
 
+for (const throws of [true, false]) {
+    test(
+        throws
+            ? 'waiting foreground rejects when a successor allocator throws synchronously'
+            : 'waiting foreground sees a successor that returns an already-rejected promise',
+        async () => {
+            const coordinator =
+                createFormBackgroundComputeCoordinator<string>();
+            const release = deferred();
+            const failure = new Error('fast successor failed');
+            const reads: string[] = [];
+            let value = 'before A';
+            const host = release.promise.then(() => {
+                value = 'after A';
+            });
+            const active = coordinator.runBackground('form', () => host);
+            const successor = (throws ? active : host).then(() =>
+                coordinator.runBackground('form', () => {
+                    if (throws) throw failure;
+                    return Promise.reject(failure);
+                })
+            );
+            const allocateSave = async () => {
+                reads.push(value);
+            };
+            const save = coordinator.runForeground('form', allocateSave);
+            const outcomes = Promise.allSettled([successor, save]);
+
+            release.resolve();
+            const results = await outcomes;
+            assert.deepEqual(reads, []);
+            assert.deepEqual(
+                results.map(({ status }) => status),
+                ['rejected', 'rejected']
+            );
+            for (const result of results) {
+                if (result.status === 'rejected') {
+                    assert.equal(result.reason, failure);
+                }
+            }
+
+            value = 'fresh explicit retry';
+            const retry = coordinator.runForeground('form', allocateSave);
+            assert.deepEqual(reads, ['fresh explicit retry']);
+            await retry;
+            assert.deepEqual(reads, ['fresh explicit retry']);
+        }
+    );
+}
+
 test('the default field binding cancels an unstarted timer and replaces a pending debounce', async ({
     mock,
 }) => {

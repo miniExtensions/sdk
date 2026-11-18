@@ -712,6 +712,110 @@ it('never upgrades a deferred same-URL download into a replacement owner', async
     assert.equal(f.submits(), 0);
 });
 
+for (const oldSettlement of ['completion', 'abort'] as const) {
+    it(`restarts a same-URL download in the retained dialog after owner replacement and ignores old ${oldSettlement}`, async (t) => {
+        const f = await fixture(t);
+        const entries = [entry('same')];
+        const selectionOwner = { token: {}, isCurrent: () => true };
+        const owner = { token: {}, isCurrent: () => true };
+        const successor = { token: {}, isCurrent: () => true };
+        const props = { entries, selectionOwner, identity: 'same-field' };
+        const pending: {
+            url: string | URL | Request;
+            signal: AbortSignal;
+            resolve(response: Response): void;
+            reject(error: Error): void;
+        }[] = [];
+        const downloaded: string[] = [];
+        const created: string[] = [];
+        const revoked: string[] = [];
+        t.mock.method(URL, 'createObjectURL', () => {
+            const url = `blob:replaced-gallery-download-${created.length}`;
+            created.push(url);
+            return url;
+        });
+        t.mock.method(URL, 'revokeObjectURL', (url: string) =>
+            revoked.push(url)
+        );
+        t.mock.method(
+            f.window.HTMLAnchorElement.prototype,
+            'click',
+            function (this: { download: string }) {
+                downloaded.push(this.download);
+            }
+        );
+        t.mock.method(
+            globalThis,
+            'fetch',
+            async (url: string | URL | Request, options?: RequestInit) => {
+                assert.ok(options?.signal);
+                const { signal } = options;
+                return new Promise<Response>((resolve, reject) =>
+                    pending.push({ url, signal, resolve, reject })
+                );
+            }
+        );
+        const getDownload = () => {
+            const button = Array.from(f.host.querySelectorAll('button')).find(
+                (node) => node.textContent === 'Download'
+            );
+            assert.ok(
+                button,
+                'the retained dialog has an available Download button'
+            );
+            assert.equal(button.disabled, false);
+            return button;
+        };
+
+        await f.render({ ...props, owner });
+        await f.open(0);
+        const dialog = f.host.querySelector('[role="dialog"]');
+        assert.ok(dialog);
+        const download = getDownload();
+        await act(async () => download.click());
+        assert.equal(pending.length, 1);
+        assert.equal(download.textContent, '0%');
+        assert.equal(download.disabled, true);
+
+        await f.render({ ...props, owner: successor });
+        assert.equal(f.host.querySelector('[role="dialog"]'), dialog);
+        assert.equal(f.index(), '1 / 1');
+        assert.equal(pending[0].signal.aborted, true);
+        assert.equal(getDownload(), download);
+        await act(async () => download.click());
+        assert.equal(pending.length, 2);
+        assert.deepEqual(
+            pending.map(({ url }) => url),
+            [entries[0].url, entries[0].url]
+        );
+
+        await act(async () => {
+            if (oldSettlement === 'completion')
+                pending[0].resolve(new Response(new Uint8Array([1])));
+            else
+                pending[0].reject(
+                    new DOMException('Retired download', 'AbortError')
+                );
+        });
+        assert.deepEqual(downloaded, []);
+        assert.deepEqual(created, []);
+        assert.equal(pending[1].signal.aborted, false);
+        assert.equal(download.textContent, '0%');
+        assert.equal(download.disabled, true);
+        assert.equal(dialog.querySelector('[role="alert"]'), null);
+
+        await act(async () =>
+            pending[1].resolve(new Response(new Uint8Array([2])))
+        );
+        assert.deepEqual(downloaded, ['same.png']);
+        assert.equal(created.length, 1);
+        assert.deepEqual(revoked, created);
+        assert.equal(getDownload(), download);
+        assert.equal(f.host.ownerDocument.querySelector('a[download]'), null);
+        assert.equal(f.submits(), 0);
+    });
+}
+
 it('aborts subscribed retirement and ignores obsolete notifications after same-owner reconciliation', async (t) => {
     const f = await fixture(t);
     let current = true;

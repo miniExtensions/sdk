@@ -48,6 +48,39 @@ window.lookupProof.galleryRecovery=(surface)=>{
  const display={entries,labels:{previewNotAvailable:'Imagen no disponible',retry:'Reintentar imagen'},disableDownloadFiles:true};
  flushSync(()=>renew({status:'ready',result:{kind:'urlGallery',display}}));
 };
+window.lookupProof.startGalleryDownload = () => {
+ const entries = [{ id: 'download', url: dataImage, type: 'image/svg+xml', filename: 'Gallery.svg' }];
+ const selectionOwner = { token: {}, isCurrent: () => true };
+ const previousFetch = window.fetch;
+ const requests = [];
+ let submits = 0;
+ let current;
+ window.fetch = (url, options) => {
+  if (url !== entries[0].url) return previousFetch(url, options);
+  return new Promise((resolve, reject) => requests.push({ signal: options.signal, resolve, reject }));
+ };
+ function replace() {
+  const token = {};
+  current = token;
+  const owner = { token, isCurrent: () => current === token };
+  flushSync(() => root.render(h(React.StrictMode, null,
+   h('form', { onSubmit(event) { event.preventDefault(); submits++; } },
+    h(api.ReadOnlyURLGallery, { entries, selectionOwner, owner, identity: 'same-field' })
+   )
+  )));
+ }
+ window.lookupProof.galleryDownload = {
+  replace,
+  snapshot: () => ({ aborted: requests.map(({ signal }) => signal.aborted), submits }),
+  settle(index, kind) {
+   const request = requests[index];
+   if (kind === 'abort') request.reject(new DOMException('Retired request', 'AbortError'));
+   else request.resolve(new Response(kind));
+  },
+  finish() { window.fetch = previousFetch; }
+ };
+ replace();
+};
 `;
 const observedInput = String.raw`
 window.lookupProof.currentInput=()=>JSON.stringify(state);
@@ -703,6 +736,90 @@ export async function checkControlledLookupBrowser({
             record(
                 'gallery picker deduplicates, refuses retired Retry and preserves selection on current Retry'
             );
+
+            const receivedDownloads = [];
+            const trackDownload = (file) => receivedDownloads.push(file);
+            page.on('download', trackDownload);
+            try {
+                for (const retired of ['completion', 'abort']) {
+                    await page.evaluate(() =>
+                        window.lookupProof.startGalleryDownload()
+                    );
+                    await page.locator('.mx-sdk-url-gallery__open').click();
+                    const dialog = page.getByRole('dialog');
+                    const download = dialog.getByRole('button', {
+                        name: 'Download',
+                        exact: true,
+                    });
+                    const busy = dialog.getByRole('button', {
+                        name: '0%',
+                        exact: true,
+                    });
+                    await dialog.evaluate(
+                        (node) => (node.dataset.downloadWitness = 'retained')
+                    );
+                    await download.click();
+                    assert.equal(await busy.isDisabled(), true);
+                    await page.evaluate(() =>
+                        window.lookupProof.galleryDownload.replace()
+                    );
+                    assert.equal(
+                        await dialog.getAttribute('data-download-witness'),
+                        'retained'
+                    );
+                    const downloadState = () =>
+                        page.evaluate(() =>
+                            window.lookupProof.galleryDownload.snapshot()
+                        );
+                    assert.deepEqual(await downloadState(), {
+                        aborted: [true],
+                        submits: 0,
+                    });
+                    assert.equal(await download.isEnabled(), true);
+                    await download.click();
+                    const before = receivedDownloads.length;
+                    await page.evaluate(
+                        async (kind) => {
+                            window.lookupProof.galleryDownload.settle(0, kind);
+                            await new Promise(requestAnimationFrame);
+                        },
+                        retired === 'abort' ? 'abort' : 'retired bytes'
+                    );
+                    assert.equal(receivedDownloads.length, before);
+                    assert.equal(await busy.isDisabled(), true);
+                    assert.equal(await dialog.getByRole('alert').count(), 0);
+                    assert.deepEqual(await downloadState(), {
+                        aborted: [true, false],
+                        submits: 0,
+                    });
+                    const [file] = await Promise.all([
+                        page.waitForEvent('download'),
+                        page.evaluate(() =>
+                            window.lookupProof.galleryDownload.settle(
+                                1,
+                                'current bytes'
+                            )
+                        ),
+                    ]);
+                    assert.equal(file.suggestedFilename(), 'Gallery.svg');
+                    assert.equal(
+                        readFileSync(await file.path(), 'utf8'),
+                        'current bytes'
+                    );
+                    await file.delete();
+                    assert.equal(receivedDownloads.length, before + 1);
+                    assert.equal(await download.isEnabled(), true);
+                    assert.equal((await downloadState()).submits, 0);
+                    await page.evaluate(() =>
+                        window.lookupProof.galleryDownload.finish()
+                    );
+                    record(
+                        `gallery successor downloads after retired ${retired}`
+                    );
+                }
+            } finally {
+                page.off('download', trackDownload);
+            }
 
             await page.evaluate(() => window.lookupProof.richText());
             await page.locator('.ProseMirror[contenteditable=false]').waitFor();

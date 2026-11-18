@@ -42,7 +42,9 @@ The runner checks currentness after begin observers, correction observers,
 notice scheduling and continuation observers. Deferred notice delivery must
 call the supplied `isCurrent` predicate again before showing feedback. Cleanup
 scope is calculated from the host's permitted correction and committed together
-with it. A changed cleanup binding retires the old accepted frame. Native
+with it. A changed cleanup binding advances generation and retires the old
+accepted frame. An unchanged binding preserves generation and the frame.
+Both corrections settle the read and issue an exact cleanup receipt. Native
 response metadata echoes can update the binding in the same success commit;
 they cannot change session, field, token owner, linked table or cache owner.
 

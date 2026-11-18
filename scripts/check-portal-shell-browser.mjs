@@ -802,6 +802,15 @@ async function navigationCompatibility(browser, origin, label) {
             name: 'Open navigation',
             exact: true,
         });
+        const actionNavigationId =
+            await actionToggle.getAttribute('aria-controls');
+        assert.ok(actionNavigationId);
+        // The fixture commit does not wait for the shell's media query listener.
+        await page.waitForFunction(
+            (id) => document.getElementById(id)?.hidden === true,
+            actionNavigationId
+        );
+        assert.equal(await actionToggle.getAttribute('aria-expanded'), 'false');
         await actionToggle.focus();
         await page.keyboard.press('ArrowDown');
         const actionDrawer = page.getByRole('dialog', {

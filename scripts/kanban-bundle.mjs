@@ -34,6 +34,8 @@ export async function bundleKanban(root = process.cwd()) {
     for (const format of ['esm', 'cjs']) {
         for (const entry of ['runtime', 'projectionState']) {
             const path = join(root, `dist/${format}/react/kanban/${entry}.js`);
+            const sourcefile = relative(root, path);
+            const virtualInput = resolve(dirname(path), sourcefile);
             const facade = (name) =>
                 `export * from ${JSON.stringify(name)};\nimport * as peer from ${JSON.stringify(name)};\nexport default peer;\n`;
             const result = await build({
@@ -41,7 +43,7 @@ export async function bundleKanban(root = process.cwd()) {
                 stdin: {
                     contents: readFileSync(path, 'utf8'),
                     resolveDir: dirname(path),
-                    sourcefile: relative(root, path),
+                    sourcefile,
                 },
                 bundle: true,
                 platform: 'neutral',
@@ -100,12 +102,13 @@ export async function bundleKanban(root = process.cwd()) {
                     continue;
                 }
                 // stdin is the already compiled owned entry, also hashed below.
+                const inputPath = resolve(root, input);
                 if (
                     !input.includes('node_modules') &&
-                    input.endsWith(relative(root, path))
+                    inputPath === virtualInput
                 )
                     continue;
-                const actual = realpathSync(resolve(root, input));
+                const actual = realpathSync(inputPath);
                 const owner = packageFor(actual);
                 if (owner.manifest.name === '@miniextensions/sdk') {
                     assert(

@@ -1,3 +1,5 @@
+@import './field-presentation.css';
+
 :is(.mx-sdk-portal-grid-cell, .mx-sdk-portal-grid-text-cell) {
     position: relative;
     border-left: 1px solid #e5e7eb;
@@ -102,6 +104,19 @@
     border: 2px solid var(--mx-sdk-accent, #3b82f6);
     border-radius: 0.25rem;
     pointer-events: none;
+}
+
+.mx-sdk-portal-grid-cell__guidance {
+    position: absolute;
+    z-index: 10;
+    inset-block-start: 0.25rem;
+    inset-inline-end: 0.25rem;
+}
+
+.mx-sdk-portal-grid-text-cell[data-has-guidance='true']
+    > .mx-sdk-portal-grid-text-cell__content {
+    box-sizing: border-box;
+    padding-inline-end: 1.25rem;
 }
 
 :is(

@@ -25,6 +25,7 @@ type PortalGridCellShellProps = Readonly<{
     className?: string;
     /** Additional leaf controls that retain their own focus. */
     interactiveSelector?: string;
+    guidance?: ReactNode;
     children: ReactNode;
 }>;
 
@@ -45,6 +46,7 @@ export function PortalGridCellShell({
     copyDisabled,
     className,
     interactiveSelector,
+    guidance,
     children,
 }: PortalGridCellShellProps): ReactElement {
     const cell = useRef<HTMLTableCellElement>(null);
@@ -64,6 +66,7 @@ export function PortalGridCellShell({
                 ? `mx-sdk-portal-grid-cell ${className}`
                 : 'mx-sdk-portal-grid-text-cell',
             'data-editing': editing,
+            'data-has-guidance': guidance == null ? undefined : true,
             'data-first-row': firstRow,
             'data-last-row': lastRow,
             'data-sticky': stickyLeft != null,
@@ -121,6 +124,7 @@ export function PortalGridCellShell({
                   'aria-hidden': true,
                   className: 'mx-sdk-portal-grid-text-cell__selection',
               })
-            : null
+            : null,
+        guidance
     );
 }

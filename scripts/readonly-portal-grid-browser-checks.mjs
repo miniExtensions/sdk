@@ -34,7 +34,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
 }
 function TextCellProbe() {
     const [cell, setCell] = useState(() => ({
-        record: 'A', frame: {}, value: 'Committed A', selected: false
+        record: 'A', frame: {}, value: 'Committed A', selected: false, conditional: false
     }));
     const writeLog = useRef([]);
     const openCount = useRef(0);
@@ -54,7 +54,17 @@ function TextCellProbe() {
             replace: () => {
                 const frame = {};
                 currentFrame.current = frame;
-                setCell({ record: 'B', frame, value: 'Committed B', selected: true });
+                setCell({ record: 'B', frame, value: 'Committed B', selected: true, conditional: false });
+            },
+            replaceReadonly: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'C', frame, value: 'Readonly C', selected: true, conditional: true });
+            },
+            setConditional: (conditional) => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell(current => ({ ...current, frame, conditional }));
             },
         };
         return () => { delete window.__textCellProbe; };
@@ -71,7 +81,13 @@ function TextCellProbe() {
             selected: cell.selected,
             rowHeight: 'medium',
             onSelect: () => setCell(current => ({ ...current, selected: true })),
-            editor: {
+            readOnlyGuidance: cell.conditional ? {
+                label: 'Edit form required',
+                text: cell.record === 'C'
+                    ? 'Use the edit form for the replacement record.'
+                    : 'Use the edit form for conditional fields.',
+            } : undefined,
+            editor: cell.conditional ? undefined : {
                 owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
                 onChange(value) {
                     writeLog.current.push({ record: cell.record, value });
@@ -1065,6 +1081,96 @@ async function checkPlainTextCellBrowser(page) {
     await page.waitForFunction(
         () => window.__textCellProbe.snapshot().writes.length === 2
     );
+    await input.fill('Retired by conditional policy');
+    await page.evaluate(() => window.__textCellProbe.setConditional(true));
+    const guidance = cell.getByRole('button', { name: 'Edit form required' });
+    await guidance.waitFor({ state: 'visible' });
+    assert.equal(await input.count(), 0);
+    assert.equal(
+        await cell.locator('.read-only-text').textContent(),
+        'Current B'
+    );
+    await guidance.hover();
+    const tooltip = page.getByRole('tooltip');
+    await tooltip.waitFor({ state: 'visible' });
+    assert.equal(
+        await tooltip.textContent(),
+        'Use the edit form for conditional fields.'
+    );
+    await guidance.focus();
+    assert.equal(
+        await guidance.getAttribute('aria-describedby'),
+        await tooltip.getAttribute('id')
+    );
+    await guidance.press('Escape');
+    await tooltip.waitFor({ state: 'hidden' });
+    assert.equal(await guidance.getAttribute('aria-describedby'), null);
+    await guidance.click();
+    assert.equal(
+        await cell.evaluate((node) => document.activeElement === node),
+        true
+    );
+    const copied = await cell.evaluate((node) => {
+        const clipboardData = new DataTransfer();
+        node.dispatchEvent(
+            new ClipboardEvent('copy', {
+                bubbles: true,
+                cancelable: true,
+                clipboardData,
+            })
+        );
+        return clipboardData.getData('text/plain');
+    });
+    assert.equal(copied, 'Current B');
+    await page.keyboard.press('Tab');
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        true
+    );
+    await guidance.press('Enter');
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        true
+    );
+    await tooltip.waitFor({ state: 'visible' });
+    assert.equal((await state()).writes.length, 2);
+    const previousCell = await cell.elementHandle();
+    assert.ok(previousCell);
+    try {
+        await page.evaluate(() => window.__textCellProbe.replaceReadonly());
+        await page.waitForFunction(
+            () => window.__textCellProbe.snapshot().record === 'C'
+        );
+        assert.equal(
+            await cell.evaluate(
+                (node, previous) => node === previous,
+                previousCell
+            ),
+            true
+        );
+    } finally {
+        await previousCell.dispose();
+    }
+    assert.equal(await tooltip.count(), 0);
+    assert.equal(await guidance.getAttribute('aria-describedby'), null);
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        false
+    );
+    assert.equal(
+        await cell.locator('.read-only-text').textContent(),
+        'Readonly C'
+    );
+    await guidance.focus();
+    await tooltip.waitFor({ state: 'visible' });
+    assert.equal(
+        await tooltip.textContent(),
+        'Use the edit form for the replacement record.'
+    );
+    await page.evaluate(() => window.__textCellProbe.setConditional(false));
+    await input.waitFor({ state: 'visible' });
+    assert.equal(await input.inputValue(), 'Readonly C');
+    assert.equal(await guidance.count(), 0);
     const result = await state();
     assert.deepEqual(result.writes, [
         { record: 'A', value: 'Rejected A' },
@@ -1072,7 +1178,12 @@ async function checkPlainTextCellBrowser(page) {
     ]);
     assert.equal(result.submits, 0);
     assert.equal(result.opens, 0);
-    return { status: 'passed', ...result };
+    return {
+        status: 'passed',
+        conditionalGuidance: true,
+        guidanceIdentityRetired: true,
+        ...result,
+    };
 }
 
 async function checkEmptyCellBrowser(page) {

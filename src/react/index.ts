@@ -3512,6 +3512,11 @@ export {
     type CompleteFormReviewProps,
 } from './CompleteFormReview.js';
 export { ReadonlyPortalGrid } from './ReadonlyPortalGrid.js';
+export { PortalVisitorSort } from './PortalVisitorSort.js';
+export type {
+    PortalVisitorSortLabels,
+    PortalVisitorSortProps,
+} from './PortalVisitorSort.js';
 export type {
     ReadonlyPortalGridProps,
     ReadonlyPortalGridColumn,

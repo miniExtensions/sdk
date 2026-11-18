@@ -32,11 +32,13 @@ import {RichTextField} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
 const writes=[],saves=[];let update,current,previous;
 let stopCaretNavigation;
-function startCaretNavigationTrace() {
+function startCaretNavigationTrace(withholdFirstSelectionChange) {
     const editor = document.querySelector('.ProseMirror');
     const events = [];
     const eventTypes = ['focusin', 'focusout', 'selectionchange', 'keydown', 'keyup'];
     let dropped = 0;
+    let firstArrow = 'pending';
+    let withheldSelectionChange = null;
     const position = () => {
         const selection = document.getSelection();
         return {
@@ -53,15 +55,38 @@ function startCaretNavigationTrace() {
     const capture = event => {
         if (event.type !== 'selectionchange' && !editor.contains(event.target))
             return;
-        if (events.length === 64) {
-            dropped++;
+        const sample = { event, at: performance.now(), position: position() };
+        if (events.length === 64) dropped++;
+        else events.push(sample);
+
+        // Test-only stress: withhold just the first trusted movement's
+        // notification while ArrowLeft is down. Leave the browser's actual
+        // selection and all later native events alone.
+        if (!withholdFirstSelectionChange || !event.isTrusted) return;
+        if (firstArrow === 'pending' && event.type === 'keydown' && event.key === 'ArrowLeft') {
+            firstArrow = 'down';
             return;
         }
-        events.push({
-            event,
-            at: performance.now(),
-            position: position(),
-        });
+        if (firstArrow !== 'down') return;
+        if (event.type === 'keyup' && event.key === 'ArrowLeft') {
+            firstArrow = 'released';
+            return;
+        }
+        const native = sample.position;
+        if (
+            !withheldSelectionChange &&
+            event.type === 'selectionchange' &&
+            native.active &&
+            native.connected &&
+            native.collapsed &&
+            native.anchorInEditor &&
+            native.focusInEditor &&
+            native.anchorOffset === 9 &&
+            native.focusOffset === 9
+        ) {
+            withheldSelectionChange = { at: sample.at, position: native };
+            event.stopImmediatePropagation();
+        }
     };
     for (const type of eventTypes) document.addEventListener(type, capture, true);
     return () => {
@@ -70,6 +95,7 @@ function startCaretNavigationTrace() {
             initial,
             final: position(),
             dropped,
+            withheldSelectionChange,
             events: events.map(({ event, at, position }) => ({
                 type: event.type,
                 key: event.key,
@@ -88,7 +114,7 @@ h(RichTextField,{value:state.value,onValueChange:value=>{writes.push({identity:s
 h('label',null,'Neighbor',h('input',{id:'neighbor',value:state.sibling,onChange:event=>setState(old=>({...old,sibling:event.target.value}))})),h('button',{type:'submit',id:'save'},'Save'));
 }
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
-window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},startCaretNavigation:()=>{stopCaretNavigation=startCaretNavigationTrace();},finishCaretNavigation:()=>{const trace=stopCaretNavigation?.();stopCaretNavigation=undefined;return trace;},unmount:()=>{stopCaretNavigation?.();stopCaretNavigation=undefined;flushSync(()=>app.unmount());}};
+window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...writes],saves:[...saves]}),remember:()=>{previous=document.querySelector('.ProseMirror');},same:()=>previous===document.querySelector('.ProseMirror'),staleEvent:()=>{previous?.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'stale'}));},startCaretNavigation:withhold=>{stopCaretNavigation=startCaretNavigationTrace(withhold);},finishCaretNavigation:()=>{const trace=stopCaretNavigation?.();stopCaretNavigation=undefined;return trace;},unmount:()=>{stopCaretNavigation?.();stopCaretNavigation=undefined;flushSync(()=>app.unmount());}};
 `;
     try {
         const entry = join(directory, 'host.mjs');
@@ -290,8 +316,10 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                         'Alpha Beta'
             );
             assert.equal(await page.locator('.ProseMirror').count(), 1);
-            await page.evaluate(() =>
-                window.canonicalRichText.startCaretNavigation()
+            await page.evaluate(
+                (withhold) =>
+                    window.canonicalRichText.startCaretNavigation(withhold),
+                result.withholdFirstSelectionChange === true
             );
             await editor.click();
             await editor.press(documentKeys.end);
@@ -356,6 +384,12 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
             result.caretNavigation = await page.evaluate(() =>
                 window.canonicalRichText.finishCaretNavigation()
             );
+            if (result.withholdFirstSelectionChange) {
+                assert.ok(
+                    result.caretNavigation.withheldSelectionChange,
+                    'The delayed-observer comparison intercepted the first trusted caret movement'
+                );
+            }
             result.nativeMetadataCaret = {
                 beforeMetadata,
                 after: await nativeCaret(),
@@ -377,6 +411,22 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
             heldFirstArrow.delayMs
         );
         heldFirstArrow.status = 'passed';
+
+        // The key hold alone allowed native observation before reconciliation.
+        // Repeat it with only the first selectionchange withheld to test the
+        // stale-model ordering without moving the caret from the fixture.
+        const delayedFirstSelectionChange = {
+            delayMs: heldFirstArrow.delayMs,
+            withholdFirstSelectionChange: true,
+            status: 'running',
+        };
+        evidence.delayedFirstSelectionChange = delayedFirstSelectionChange;
+        await checkMetadataCaret(
+            delayedFirstSelectionChange,
+            'metadata-caret-delayed-observation:notes',
+            delayedFirstSelectionChange.delayMs
+        );
+        delayedFirstSelectionChange.status = 'passed';
         caretEvidence = evidence;
 
         // A real pointer choice at the start must take precedence over the

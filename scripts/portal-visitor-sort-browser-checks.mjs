@@ -64,12 +64,133 @@ globalThis.sortFixture = {
 };
 `;
 
+const searchFixture = `
+import { PortalVisitorSearch } from '@miniextensions/sdk/react';
+const searchHost = document.createElement('section');
+document.querySelector('form').append(searchHost);
+const searchRoot = createRoot(searchHost);
+const searchListeners = new Set();
+const searchCommands = [];
+let scan;
+let searchFrame = {
+    stamp: {...frame.stamp, fieldId: 'search-portal'},
+    searchTerm: 'previous',
+};
+function publishSearch(next) {
+    searchFrame = next;
+    for (const listener of searchListeners) listener();
+}
+const searchPort = {
+    read: () => searchFrame,
+    subscribe(listener) {
+        searchListeners.add(listener);
+        return () => searchListeners.delete(listener);
+    },
+    apply(command) {
+        if (command.stamp.generation !== searchFrame.stamp.generation ||
+            command.expectedSearchTerm !== searchFrame.searchTerm)
+            return {type:'stale'};
+        searchCommands.push(command);
+        const generation = searchFrame.stamp.generation +
+            Number(command.searchTerm !== searchFrame.searchTerm);
+        publishSearch({
+            stamp: {...searchFrame.stamp, generation},
+            searchTerm: command.searchTerm,
+        });
+        return {type:'allocated', requestId:'search-' + searchCommands.length, generation};
+    },
+};
+searchRoot.render(h(StrictMode, null, h(PortalVisitorSearch, {
+    port: searchPort,
+    labels: {input: 'Find records', submit: 'Submit search'},
+    renderScanner: ({capture, disabled}) => h('button', {
+        type: 'button',
+        disabled,
+        'data-search-generation': searchFrame.stamp.generation,
+        onClick: () => { scan = capture(); },
+    }, 'Open scanner'),
+})));
+globalThis.searchFixture = {
+    summary: () => ({commands:searchCommands, listeners:searchListeners.size}),
+    hasCurrentInput(value) {
+        return searchHost.querySelector('input')?.value === value &&
+            Number(searchHost.querySelector('[data-search-generation]')?.dataset.searchGeneration) === searchFrame.stamp.generation;
+    },
+    rotate() {
+        for (const viewId of ['view-b', 'view-a'])
+            publishSearch({
+                ...searchFrame,
+                stamp: {...searchFrame.stamp, viewId, generation:searchFrame.stamp.generation + 1},
+            });
+    },
+    scan: (value) => scan?.(value),
+    unmount: () => searchRoot.unmount(),
+};
+`;
+
+async function checkSearch(page) {
+    const entry = page.getByRole('textbox', { name: 'Find records' });
+    const scanner = page.getByRole('button', { name: 'Open scanner' });
+    const search = () =>
+        page.evaluate(() => globalThis.searchFixture.summary());
+    const waitForTerm = (term) =>
+        page.waitForFunction(
+            (value) => globalThis.searchFixture.hasCurrentInput(value),
+            term
+        );
+    await entry.fill('  café  ');
+    assert.deepEqual((await search()).commands, []);
+    await entry.press('Enter');
+    await waitForTerm('  café  ');
+    await page.getByRole('button', { name: 'Submit search' }).press('Enter');
+    assert.equal((await search()).commands.length, 2);
+    await scanner.press('Enter');
+    await page.evaluate(() => {
+        globalThis.searchFixture.rotate();
+        globalThis.searchFixture.scan('stale camera result');
+    });
+    assert.equal((await search()).commands.length, 2);
+    await waitForTerm('  café  ');
+    await scanner.press('Enter');
+    await page.evaluate(() => {
+        globalThis.searchFixture.scan('  001-α  ');
+        globalThis.searchFixture.scan('duplicate camera result');
+    });
+    await waitForTerm('  001-α  ');
+    assert.equal((await search()).commands.length, 3);
+    await page.getByRole('button', { name: 'Clear search' }).press('Enter');
+    await waitForTerm('');
+    assert.equal(await entry.inputValue(), '');
+    const { commands } = await search();
+    assert.deepEqual(
+        commands.map(({ source, expectedSearchTerm, searchTerm }) => [
+            source,
+            expectedSearchTerm,
+            searchTerm,
+        ]),
+        [
+            ['submit', 'previous', '  café  '],
+            ['submit', '  café  ', '  café  '],
+            ['scan', '  café  ', '  001-α  '],
+            ['clear', '  001-α  ', ''],
+        ]
+    );
+    await page.evaluate(() => globalThis.searchFixture.unmount());
+    assert.equal((await search()).listeners, 0);
+    return {
+        commands: commands.length,
+        staleScanRejected: true,
+        cleanup: 'completed',
+    };
+}
+
 /** Exercise trusted keyboard events on an installed, synthetic host fixture. */
 export async function checkPortalVisitorSortBrowser({
     browser,
     consumer,
     evidence,
     expectedReactVersion,
+    includeSearch = false,
 }) {
     const scratch = mkdtempSync(join(consumer, 'visitor-sort-browser-'));
     let context;
@@ -87,7 +208,7 @@ export async function checkPortalVisitorSortBrowser({
     });
     try {
         const entry = join(scratch, 'fixture.mjs');
-        writeFileSync(entry, fixture);
+        writeFileSync(entry, includeSearch ? fixture + searchFixture : fixture);
         const bundle = await build({
             absWorkingDir: consumer,
             entryPoints: [entry],
@@ -237,6 +358,16 @@ export async function checkPortalVisitorSortBrowser({
             .getByRole('button', { name: 'Close', exact: true })
             .press('Enter');
         await dialog.waitFor({ state: 'hidden' });
+        if (includeSearch) {
+            try {
+                evidence.search = await checkSearch(page);
+            } catch (error) {
+                evidence.search = await page.evaluate(() =>
+                    globalThis.searchFixture.summary()
+                );
+                throw error;
+            }
+        }
         const end = await summary();
         assert.equal(end.version, expectedReactVersion);
         assert.deepEqual(

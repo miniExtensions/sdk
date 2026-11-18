@@ -2499,8 +2499,10 @@ try {
             consumer: temporary,
             evidence: report.portalVisitorSort,
             expectedReactVersion: nativeReactVersion,
+            includeSearch: true,
         });
         assert.equal(report.portalVisitorSort.passed, true);
+        assert.equal(report.portalVisitorSort.search.commands, 4);
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

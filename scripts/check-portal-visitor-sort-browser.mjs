@@ -14,12 +14,11 @@ import { chromium } from 'playwright';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
 import { checkPortalVisitorSortBrowser } from './portal-visitor-sort-browser-checks.mjs';
 
-const [archive, executablePath, expectedSha256] = process.argv.slice(2);
-assert.equal(
-    process.argv.length,
-    5,
-    'Expected archive, Chrome and archive SHA-256'
-);
+const [archive, executablePath, expectedSha256, queryFlag, ...unexpected] =
+    process.argv.slice(2);
+assert.ok(archive && executablePath && expectedSha256);
+assert.ok(queryFlag === undefined || queryFlag === '--include-search');
+assert.deepEqual(unexpected, []);
 assert.equal(realpathSync(archive), archive);
 assert.equal(realpathSync(executablePath), executablePath);
 const archiveDigest = () =>
@@ -62,6 +61,7 @@ try {
                 consumer,
                 evidence,
                 expectedReactVersion: react,
+                includeSearch: queryFlag === '--include-search',
             });
             assert.equal(archiveDigest(), expectedSha256);
         } finally {

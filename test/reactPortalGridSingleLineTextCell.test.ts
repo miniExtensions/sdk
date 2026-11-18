@@ -91,6 +91,65 @@ it('server-renders complete cell markup, literal empty display and named admitte
     assert.doesNotMatch(editable, /<form|<button[^>]+type="submit"/);
 });
 
+it('shows guidance only for the selected readonly cell and preserves its literal value', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const readOnlyGuidance = {
+        label: 'Edit form required',
+        text: 'Use the edit form for conditional fields.',
+    };
+    let selections = 0;
+    const onSelect = () => {
+        selections++;
+    };
+    const marker = '[aria-label="Edit form required"]';
+    const popup = () =>
+        fixture.window.document.body.querySelector('[role="tooltip"]');
+    await fixture.render(table({ readOnlyGuidance, onSelect }));
+    assert.equal(fixture.container.querySelector(marker), null);
+    await fixture.render(table({ readOnlyGuidance, onSelect, selected: true }));
+    const trigger = fixture.container.querySelector(marker);
+    assert.ok(trigger instanceof fixture.window.HTMLElement);
+    assert.equal(trigger.getAttribute('type'), 'button');
+    assert.equal(fixture.container.querySelector('input'), null);
+    assert.equal(
+        fixture.container.querySelector('.read-only-text')?.textContent,
+        'Baseline'
+    );
+    await act(async () => trigger.focus());
+    const help = popup();
+    assert.ok(help);
+    assert.equal(help.textContent, readOnlyGuidance.text);
+    assert.equal(trigger.getAttribute('aria-describedby'), help.id);
+    await act(async () =>
+        trigger.dispatchEvent(
+            new fixture.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        )
+    );
+    assert.equal(popup(), null);
+    assert.equal(trigger.getAttribute('aria-describedby'), null);
+    await fixture.click(trigger);
+    assert.ok(popup());
+    assert.equal(selections, 0);
+    await fixture.render(
+        table({
+            readOnlyGuidance,
+            selected: true,
+            editor: {
+                onChange: () => assert.fail('No explicit edit was made'),
+                owner: { token: 'restored', isCurrent: () => true },
+            },
+        })
+    );
+    assert.equal(fixture.container.querySelector(marker), null);
+    assert.equal(popup(), null);
+    assert.equal(input(fixture).value, 'Baseline');
+    fixture.unchangedEffects();
+});
+
 it('selects and focuses without admission, retains composing Enter and commits once with ordinary Enter', async (t) => {
     const fixture = await htmlPresentationFixture(t);
     const writes: string[] = [];

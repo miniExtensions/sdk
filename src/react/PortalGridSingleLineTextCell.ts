@@ -1,6 +1,7 @@
 import { createElement as h, type ReactElement } from 'react';
 import type { RuntimeLanguage } from '../runtime/types.js';
 import type { ReadonlyPortalGridRowHeight } from './ReadonlyPortalGrid.js';
+import { PortalGridCellGuidance } from './PortalGridCellGuidance.js';
 import { PortalGridCellShell } from './PortalGridCellShell.js';
 import {
     SingleLineTextField,
@@ -40,6 +41,8 @@ export type PortalGridSingleLineTextCellProps = Readonly<{
     onSelect(): void;
     /** Supply the host's admitted editor and canonical writer. */
     editor?: PortalGridSingleLineTextEditor;
+    /** Localized explanation for a selected cell whose host withheld editing. */
+    readOnlyGuidance?: Readonly<{ label: string; text: string }>;
     rowHeight: ReadonlyPortalGridRowHeight;
     firstRow?: boolean;
     lastRow?: boolean;
@@ -57,6 +60,7 @@ export function PortalGridSingleLineTextCell({
     selected,
     onSelect,
     editor,
+    readOnlyGuidance,
     rowHeight,
     firstRow,
     lastRow,
@@ -75,6 +79,10 @@ export function PortalGridSingleLineTextCell({
         lastRow,
         stickyLeft,
         copyDisabled,
+        guidance:
+            selected && editor == null && readOnlyGuidance != null
+                ? h(PortalGridCellGuidance, readOnlyGuidance)
+                : undefined,
         children: editing
             ? h(SingleLineTextField, {
                   // Deselecting a current editor leaves its cleanup writer

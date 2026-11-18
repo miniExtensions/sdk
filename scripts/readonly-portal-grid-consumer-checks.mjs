@@ -44,6 +44,7 @@ const writer:ReadonlyPortalGridProps={...props,setValue:()=>{}};
 void renderer;void reader;void writer;
 const textCell:PortalGridSingleLineTextCellProps={value:null,displayText:'',title:'Notes',language:'en',cellIdentity:'row-and-field',selected:true,onSelect(){},rowHeight:'medium',editor:{owner:{token:Symbol(),isCurrent:()=>true},onChange(text){const literal:string=text;void literal;}}};
 createElement(PortalGridSingleLineTextCell,textCell);
+createElement(PortalGridSingleLineTextCell,{...textCell,editor:undefined,readOnlyGuidance:{label:'Edit form required',text:'Use the edit form.'}});
 // @ts-expect-error a writable port requires a captured native owner
 const unowned:PortalGridSingleLineTextCellProps={...textCell,editor:{onChange(){}}};
 void unowned;
@@ -119,7 +120,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
-    const textCellCases = 4;
+    const textCellCases = 5;
     const emptyCellCases = 3;
     const ratingCellCases = 8;
     for (const [react, types, domTypes] of [
@@ -301,6 +302,8 @@ export async function checkReadonlyPortalGridReactMatrix({
                 textCellCss,
                 /mx-sdk-portal-grid-text-cell__selection/
             );
+            assert.match(textCellCss, /mx-sdk-portal-grid-cell__guidance/);
+            assert.match(textCellCss, /field-presentation\.css/);
             const emptyCellCss = readFileSync(emptyCellCssPath, 'utf8');
             assert.equal(
                 emptyCellCss,

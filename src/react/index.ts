@@ -279,6 +279,11 @@ export {
     type AttachmentUrlInputProps,
 } from './AttachmentUrlInput.js';
 export {
+    AttachmentUploadProgress,
+    type AttachmentUploadProgressLabels,
+    type AttachmentUploadProgressProps,
+} from './AttachmentUploadProgress.js';
+export {
     ReadonlyAttachmentsField,
     renderReadonlyAttachmentsField,
     type ReadonlyAttachmentsFieldProps,

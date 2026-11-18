@@ -60,6 +60,7 @@ import {
     checkAttachmentPresentationBrowser,
     cleanupAttachmentPresentation,
 } from './attachment-presentation-browser-checks.mjs';
+import { checkAttachmentUploadProgressBrowser } from './attachment-upload-progress-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
@@ -1567,6 +1568,7 @@ try {
             'scripts/build-privacy-browser-proof.mjs',
             'scripts/attachment-review-recipe-checks.mjs',
             'scripts/attachment-presentation-browser-checks.mjs',
+            'scripts/attachment-upload-progress-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
@@ -2372,6 +2374,12 @@ try {
             consumer: temporary,
             evidence: report.completeDuration,
             output,
+        });
+        report.attachmentUploadProgress = {};
+        await checkAttachmentUploadProgressBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.attachmentUploadProgress,
         });
         report.theme = {};
         await checkThemeBrowser({

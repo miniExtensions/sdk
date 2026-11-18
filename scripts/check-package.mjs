@@ -39,6 +39,7 @@ import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
+import { checkFormRecordActionsReactMatrix } from './form-record-actions-consumer-checks.mjs';
 import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
 import { checkControlledLookupReactMatrix } from './controlled-lookup-consumer-checks.mjs';
 import { checkComputedReactMatrix } from './computed-consumer-checks.mjs';
@@ -169,6 +170,8 @@ import {
 import {
     checkDurationInputConsumer,
     durationInputTypedConsumer,
+    splitDurationMomentConsumer,
+    splitDurationMomentInstall,
 } from './duration-input-consumer-checks.mjs';
 import {
     checkSelectChoiceProjectionConsumer,
@@ -899,6 +902,11 @@ try {
         'dist/cjs/react/attachment-preview.css',
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/AttachmentUrlInput.js`,
+            `dist/${format}/react/AttachmentUrlInput.d.ts`,
+            `dist/${format}/react/attachment-url-input.css`,
+        ]),
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
         'docs/portal-shell.md',
@@ -972,6 +980,8 @@ try {
         'dist/cjs/react/complete-multiline.css',
         'dist/esm/react/form-submit.css',
         'dist/cjs/react/form-submit.css',
+        'dist/esm/react/form-record-actions.css',
+        'dist/cjs/react/form-record-actions.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',
@@ -999,28 +1009,67 @@ try {
             `Missing shipped browser starter file: ${path}`
         );
     }
+    const packedArchive = join(temporaryDirectory, packed.filename);
+    const installConsumer = (directory) =>
+        run(
+            'npm',
+            [
+                'install',
+                '--save-exact',
+                '--ignore-scripts',
+                '--no-audit',
+                '--no-fund',
+                packedArchive,
+                'host-moment@npm:moment@2.30.1',
+            ],
+            directory
+        );
     writeFileSync(
         join(temporaryDirectory, 'package.json'),
         JSON.stringify({ private: true, type: 'module' })
     );
-    run('npm', [
-        'install',
-        '--save-exact',
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        join(temporaryDirectory, packed.filename),
-        'host-moment@npm:moment@2.30.1',
-    ]);
+    installConsumer(temporaryDirectory);
     const installedPackage = join(
         temporaryDirectory,
         'node_modules/@miniextensions/sdk'
     );
-    await assertInstalledArchive(
-        temporaryDirectory,
-        join(temporaryDirectory, packed.filename),
-        packed
+    await assertInstalledArchive(temporaryDirectory, packedArchive, packed);
+    const splitDurationDirectory = mkdtempSync(
+        join(tmpdir(), 'miniextensions-duration-split-')
     );
+    try {
+        writeFileSync(
+            join(splitDurationDirectory, 'package.json'),
+            JSON.stringify({
+                private: true,
+                type: 'module',
+                ...splitDurationMomentInstall,
+            })
+        );
+        installConsumer(splitDurationDirectory);
+        await assertInstalledArchive(
+            splitDurationDirectory,
+            packedArchive,
+            packed
+        );
+        const splitDurationFilename = 'duration-split-moment-consumer.mjs';
+        writeFileSync(
+            join(splitDurationDirectory, splitDurationFilename),
+            splitDurationMomentConsumer
+        );
+        for (const format of ['esm', 'cjs']) {
+            run(
+                process.execPath,
+                [splitDurationFilename, format],
+                splitDurationDirectory
+            );
+        }
+        console.log(
+            'Installed Duration blur passed with split Moment in ESM and CJS.'
+        );
+    } finally {
+        rmSync(splitDurationDirectory, { recursive: true, force: true });
+    }
     assertModuleFormatReceipt(installedPackage);
     assertDateVendor(installedPackage, 'dist/vendor/date-time');
     assertPortalSidebarVendor(installedPackage, 'dist/vendor/portal-sidebar');
@@ -4037,6 +4086,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(headerMatrix.versions.length, 2);
     assert.equal(headerMatrix.cleanup, 'completed');
+    const recordActionsMatrix = checkFormRecordActionsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(recordActionsMatrix.versions.length, 2);
+    assert.equal(recordActionsMatrix.cleanup, 'completed');
     const completionMatrix = checkFormCompletionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -4820,7 +4876,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     assert.equal(gridProof.profiles.length, 4);
-    assert.equal(gridProof.tests, 80);
+    assert.equal(gridProof.tests, 84);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

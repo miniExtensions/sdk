@@ -14,6 +14,17 @@ import { assertBrowserInputs } from './package-checks.mjs';
 import { controlledLookupAssembly } from './controlled-lookup-consumer-checks.mjs';
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const galleryImagePath = (surface, source) =>
+    '/gallery-recovery-' + surface + '-' + source + '.png';
+const galleryImagePaths = new Set(
+    ['list', 'picker'].flatMap((surface) =>
+        ['thumb', 'preview', 'original'].map((source) =>
+            galleryImagePath(surface, source)
+        )
+    )
+);
+const recoveredImage =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="green"/></svg>';
 const host = String.raw`
 const main=document.querySelector('main');root=createRoot(main);
 window.fetch=async()=>{effects.transport++;throw Error('Unexpected Lookup fetch');};
@@ -29,6 +40,91 @@ window.lookupProof.externalAdmit=()=>externalCapture.admit();
 window.lookupProof.externalRetire=()=>externalCapture.retire();
 window.lookupProof.externalRecover=()=>externalCapture.recover();
 window.lookupProof.externalSnapshot=()=>externalCapture.snapshot();
+window.lookupProof.galleryRecovery=(surface)=>{
+ const url=part=>window.location.origin+'/gallery-recovery-'+surface+'-'+part+'.png';
+ const broken={id:'failed',type:'image/png',filename:'Adjunto.png',thumbnailUrl:url('thumb'),thumbnails:{full:{url:url(surface==='list'?'preview':'thumb')}},url:url('original')};
+ const nonImage={id:'document',type:'application/pdf',filename:'Document.pdf',url:window.location.origin+'/gallery-document.pdf',thumbnailUrl:dataImage};
+ const entries=surface==='picker'?[{id:'selected',type:'image/svg+xml',filename:'Still selected',url:dataImage},broken,nonImage]:[broken,nonImage];
+ const display={entries,labels:{previewNotAvailable:'Imagen no disponible',retry:'Reintentar imagen'},disableDownloadFiles:true};
+ flushSync(()=>renew({status:'ready',result:{kind:'urlGallery',display}}));
+};
+window.lookupProof.startGalleryDownload = () => {
+ const entries = [{ id: 'download', url: dataImage, type: 'image/svg+xml', filename: 'Gallery.svg' }];
+ const selectionOwner = { token: {}, isCurrent: () => true };
+ const previousFetch = window.fetch;
+ const requests = [];
+ let submits = 0;
+ let current;
+ window.fetch = (url, options) => {
+  if (url !== entries[0].url) return previousFetch(url, options);
+  return new Promise((resolve, reject) => requests.push({ signal: options.signal, resolve, reject }));
+ };
+ function replace() {
+  const token = {};
+  current = token;
+  const owner = { token, isCurrent: () => current === token };
+  flushSync(() => root.render(h(React.StrictMode, null,
+   h('form', { onSubmit(event) { event.preventDefault(); submits++; } },
+    h(api.ReadOnlyURLGallery, { entries, selectionOwner, owner, identity: 'same-field' })
+   )
+  )));
+ }
+ window.lookupProof.galleryDownload = {
+  replace,
+  snapshot: () => ({ aborted: requests.map(({ signal }) => signal.aborted), submits }),
+  settle(index, kind) {
+   const request = requests[index];
+   if (kind === 'abort') request.reject(new DOMException('Retired request', 'AbortError'));
+   else request.resolve(new Response(kind));
+  },
+  finish() { window.fetch = previousFetch; }
+ };
+ replace();
+};
+window.lookupProof.startVisitorUrlEntry = () => {
+ const labels = {
+  url: 'Lien de pièce jointe',
+  add: 'Ajouter',
+  invalidUrl: 'Saisissez une URL HTTP ou HTTPS',
+  appendRefused: 'La pièce jointe ne peut pas être ajoutée'
+ };
+ const entries = [{ id: 'first' }, { id: 'second' }];
+ let owner, current, denied = false, flag, submits = 0, attempts = 0, labelled = false;
+ function render() {
+  flushSync(() => root.render(h(React.StrictMode, null,
+   h('form', { id: 'visitor-url-host', onSubmit(event) { event.preventDefault(); submits++; } },
+    labelled ? h('label', { id: 'visitor-url-label', htmlFor: 'visitor-url' }, 'Justificatif') : null,
+    h(api.AttachmentUrlInput, {
+     id: 'visitor-url', labelledBy: labelled ? 'visitor-url-label' : undefined,
+     labels, owner, full: flag === 'full',
+     readOnly: flag === 'readOnly', masked: flag === 'masked',
+     appendCurrent(value) {
+      attempts++;
+      if (denied) return false;
+      entries.push(value);
+      return true;
+     }
+    }),
+    h('button', { type: 'submit' }, 'Save draft explicitly')
+   )
+  )));
+ }
+ function replace() {
+  const token = {};
+  current = token;
+  owner = { token, isCurrent: () => current === token };
+  render();
+ }
+ window.lookupProof.visitorUrl = {
+  snapshot: () => ({ entries: [...entries], submits, attempts }),
+  refuse(value) { denied = value; },
+  retireSilently() { current = null; },
+  show(nextFlag) { flag = nextFlag; render(); },
+  showFieldLabel() { labelled = true; render(); },
+  replace
+ };
+ replace();
+};
 `;
 const observedInput = String.raw`
 window.lookupProof.currentInput=()=>JSON.stringify(state);
@@ -86,7 +182,11 @@ export async function checkControlledLookupBrowser({
                 'react/lookupPresentationValidation.js',
                 'react/readonlyResourceOwner.js',
                 'react/ReadOnlyURLGallery.js',
+                'react/RecoverableImage.js',
+                'react/readonly-url-gallery.css',
                 'react/AttachmentPreview.js',
+                'react/AttachmentUrlInput.js',
+                'react/attachment-url-input.css',
                 'react/FormulaField.js',
                 'react/lookupFieldTypes.d.ts',
                 'react/lookup.css',
@@ -107,8 +207,8 @@ export async function checkControlledLookupBrowser({
         for (const format of ['esm', 'cjs']) {
             const imports =
                 format === 'esm'
-                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';"
-                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');";
+                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';import '@miniextensions/sdk/react/readonly-url-gallery.css';import '@miniextensions/sdk/react/attachment-url-input.css';"
+                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');require('@miniextensions/sdk/react/readonly-url-gallery.css');require('@miniextensions/sdk/react/attachment-url-input.css');";
             const source =
                 imports + controlledLookupAssembly + host + observedInput;
             const entry = join(directory, format + '.js');
@@ -202,8 +302,24 @@ export async function checkControlledLookupBrowser({
                 evidence.pageErrors.push('Unexpected ' + dialog.type());
                 void dialog.dismiss();
             });
+            const galleryRequests = [];
+            let recoverThumbnail;
             await page.route('**/*', (route) => {
                 const url = new URL(route.request().url());
+                if (
+                    url.origin === origin &&
+                    galleryImagePaths.has(url.pathname) &&
+                    route.request().resourceType() === 'image'
+                ) {
+                    galleryRequests.push(url.pathname);
+                    const recovered = recoverThumbnail === url.pathname;
+                    return route.fulfill({
+                        status: recovered ? 200 : 404,
+                        contentType: 'image/svg+xml',
+                        headers: { 'Cache-Control': 'no-store' },
+                        body: recovered ? recoveredImage : '',
+                    });
+                }
                 if (
                     url.origin === origin &&
                     (url.pathname === '/' || assets.has(url.pathname))
@@ -572,6 +688,316 @@ export async function checkControlledLookupBrowser({
                 .click();
             assert.equal(await page.getByRole('dialog').count(), 0);
             record('gallery keyboard/focus and stale Close remains usable');
+
+            const recoveryEffects = (await snapshot()).effects;
+            await page.evaluate(() =>
+                window.lookupProof.galleryRecovery('list')
+            );
+            const tile = page.locator('.mx-sdk-url-gallery__entry').first();
+            const failureLabel = 'Imagen no disponible: Adjunto.png';
+            const listRetry = tile
+                .getByRole('status', { name: failureLabel })
+                .getByRole('button', {
+                    name: 'Reintentar imagen',
+                    exact: true,
+                });
+            await listRetry.waitFor();
+            const listSources = ['thumb', 'preview', 'original'].map((source) =>
+                galleryImagePath('list', source)
+            );
+            assert.deepEqual(galleryRequests, listSources);
+            recoverThumbnail = listSources[0];
+            await listRetry.click();
+            await tile.locator('img').evaluate((image) => image.decode());
+            assert.equal(await page.getByRole('dialog').count(), 0);
+            assert.equal(
+                await tile
+                    .locator('.mx-sdk-url-gallery__open')
+                    .evaluate((node) => node === document.activeElement),
+                true
+            );
+            assert.deepEqual(galleryRequests, [...listSources, listSources[0]]);
+            record(
+                'gallery list follows granted errors and restores Open focus after trusted Retry'
+            );
+
+            recoverThumbnail = undefined;
+            await page.evaluate(() =>
+                window.lookupProof.galleryRecovery('picker')
+            );
+            await page.locator('.mx-sdk-url-gallery__open').first().click();
+            const dialog = page.getByRole('dialog');
+            const strip = dialog.locator('.mx-sdk-url-gallery__strip');
+            const pickerRetry = strip
+                .getByRole('status', { name: failureLabel })
+                .getByRole('button', {
+                    name: 'Reintentar imagen',
+                    exact: true,
+                });
+            await pickerRetry.waitFor();
+            assert.equal(await strip.locator('button button').count(), 0);
+            assert.equal(
+                await strip.locator('img[src*="gallery-document"]').count(),
+                0
+            );
+            const beforeRetiredRetry = galleryRequests.length;
+            await page.evaluate(() => window.lookupProof.retire());
+            await pickerRetry.click();
+            await page.evaluate(
+                () => new Promise((done) => requestAnimationFrame(done))
+            );
+            assert.equal(galleryRequests.length, beforeRetiredRetry);
+            await page.evaluate(() =>
+                window.lookupProof.galleryRecovery('picker')
+            );
+            await page.locator('.mx-sdk-url-gallery__open').first().click();
+            await pickerRetry.waitFor();
+            recoverThumbnail = galleryImagePath('picker', 'thumb');
+            await pickerRetry.click();
+            await strip
+                .locator('img[src*="gallery-recovery-picker-thumb"]')
+                .evaluate((image) => image.decode());
+            assert.equal(
+                await dialog
+                    .locator('.mx-sdk-url-gallery__position')
+                    .textContent(),
+                '1 / 3'
+            );
+            assert.equal(
+                await strip
+                    .getByRole('button', {
+                        name: 'Select attachment 2',
+                        exact: true,
+                    })
+                    .evaluate((node) => node === document.activeElement),
+                true
+            );
+            assert(
+                !galleryRequests.includes(galleryImagePath('picker', 'preview'))
+            );
+            assert(
+                galleryRequests.includes(galleryImagePath('picker', 'original'))
+            );
+            assert.deepEqual((await snapshot()).effects, recoveryEffects);
+            record(
+                'gallery picker deduplicates, refuses retired Retry and preserves selection on current Retry'
+            );
+
+            const receivedDownloads = [];
+            const trackDownload = (file) => receivedDownloads.push(file);
+            page.on('download', trackDownload);
+            try {
+                for (const retired of ['completion', 'abort']) {
+                    await page.evaluate(() =>
+                        window.lookupProof.startGalleryDownload()
+                    );
+                    await page.locator('.mx-sdk-url-gallery__open').click();
+                    const dialog = page.getByRole('dialog');
+                    const download = dialog.getByRole('button', {
+                        name: 'Download',
+                        exact: true,
+                    });
+                    const busy = dialog.getByRole('button', {
+                        name: '0%',
+                        exact: true,
+                    });
+                    await dialog.evaluate(
+                        (node) => (node.dataset.downloadWitness = 'retained')
+                    );
+                    await download.click();
+                    assert.equal(await busy.isDisabled(), true);
+                    await page.evaluate(() =>
+                        window.lookupProof.galleryDownload.replace()
+                    );
+                    assert.equal(
+                        await dialog.getAttribute('data-download-witness'),
+                        'retained'
+                    );
+                    const downloadState = () =>
+                        page.evaluate(() =>
+                            window.lookupProof.galleryDownload.snapshot()
+                        );
+                    assert.deepEqual(await downloadState(), {
+                        aborted: [true],
+                        submits: 0,
+                    });
+                    assert.equal(await download.isEnabled(), true);
+                    await download.click();
+                    const before = receivedDownloads.length;
+                    await page.evaluate(
+                        async (kind) => {
+                            window.lookupProof.galleryDownload.settle(0, kind);
+                            await new Promise(requestAnimationFrame);
+                        },
+                        retired === 'abort' ? 'abort' : 'retired bytes'
+                    );
+                    assert.equal(receivedDownloads.length, before);
+                    assert.equal(await busy.isDisabled(), true);
+                    assert.equal(await dialog.getByRole('alert').count(), 0);
+                    assert.deepEqual(await downloadState(), {
+                        aborted: [true, false],
+                        submits: 0,
+                    });
+                    const [file] = await Promise.all([
+                        page.waitForEvent('download'),
+                        page.evaluate(() =>
+                            window.lookupProof.galleryDownload.settle(
+                                1,
+                                'current bytes'
+                            )
+                        ),
+                    ]);
+                    assert.equal(file.suggestedFilename(), 'Gallery.svg');
+                    assert.equal(
+                        readFileSync(await file.path(), 'utf8'),
+                        'current bytes'
+                    );
+                    await file.delete();
+                    assert.equal(receivedDownloads.length, before + 1);
+                    assert.equal(await download.isEnabled(), true);
+                    assert.equal((await downloadState()).submits, 0);
+                    await page.evaluate(() =>
+                        window.lookupProof.galleryDownload.finish()
+                    );
+                    record(
+                        `gallery successor downloads after retired ${retired}`
+                    );
+                }
+            } finally {
+                page.off('download', trackDownload);
+            }
+
+            const beforeUrl = (await snapshot()).effects;
+            await page.evaluate(() =>
+                window.lookupProof.startVisitorUrlEntry()
+            );
+            const form = page.locator('#visitor-url-host');
+            const urlInput = form.getByRole('textbox', {
+                name: 'Lien de pièce jointe',
+                exact: true,
+            });
+            const addUrl = form.getByRole('button', {
+                name: 'Ajouter',
+                exact: true,
+            });
+            const urlState = () =>
+                page.evaluate(() => window.lookupProof.visitorUrl.snapshot());
+            assert.equal(await form.locator('form').count(), 0);
+            assert.equal(await addUrl.getAttribute('type'), 'button');
+            assert.equal(
+                await urlInput.evaluate(
+                    (node) => getComputedStyle(node.parentElement).display
+                ),
+                'flex'
+            );
+            await urlInput.press('Enter');
+            assert.equal((await urlState()).attempts, 0);
+            const refused = 'ftp://files.example.test/rejected.pdf';
+            await urlInput.fill(refused);
+            await urlInput.press('Enter');
+            assert.equal(await urlInput.inputValue(), refused);
+            assert.equal(
+                await form.getByRole('alert').textContent(),
+                'Saisissez une URL HTTP ou HTTPS'
+            );
+            assert.equal((await urlState()).attempts, 0);
+
+            const pointerUrl =
+                'https://files.example.test/space%20name.pdf?x=1#frag';
+            await urlInput.fill(pointerUrl);
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.refuse(true)
+            );
+            await addUrl.click();
+            assert.equal(await urlInput.inputValue(), pointerUrl);
+            assert.equal(
+                await form.getByRole('alert').textContent(),
+                'La pièce jointe ne peut pas être ajoutée'
+            );
+            assert.equal((await urlState()).entries.length, 2);
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.refuse(false)
+            );
+            await addUrl.dblclick();
+            assert.equal((await urlState()).attempts, 2);
+            assert.equal(await urlInput.inputValue(), '');
+            const malformed = 'http://files.example.test/%E0%A4%A?draft=1';
+            await urlInput.fill(malformed);
+            await urlInput.press('Enter');
+            assert.equal(await urlInput.inputValue(), '');
+
+            const trailingSlash = 'https://files.example.test/folder/';
+            await urlInput.fill(trailingSlash);
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.retireSilently()
+            );
+            await urlInput.press('Enter');
+            await addUrl.click();
+            assert.equal((await urlState()).attempts, 3);
+            await page.evaluate(() => window.lookupProof.visitorUrl.replace());
+            assert.equal(await urlInput.inputValue(), '');
+            for (const flag of ['full', 'readOnly', 'masked']) {
+                await page.evaluate(
+                    (value) => window.lookupProof.visitorUrl.show(value),
+                    flag
+                );
+                assert.equal(await urlInput.count(), 0);
+                await page.evaluate(() => window.lookupProof.visitorUrl.show());
+            }
+            await urlInput.fill(trailingSlash);
+            await urlInput.press('Enter');
+            assert.deepEqual(await urlState(), {
+                entries: [
+                    { id: 'first' },
+                    { id: 'second' },
+                    { id: null, url: pointerUrl, filename: 'space name.pdf' },
+                    { id: null, url: malformed, filename: '%E0%A4%A' },
+                    {
+                        id: null,
+                        url: trailingSlash,
+                        filename: 'files.example.test',
+                    },
+                ],
+                submits: 0,
+                attempts: 4,
+            });
+            assert.deepEqual((await snapshot()).effects, beforeUrl);
+            // An unfinished bad draft does not block an explicit host Save.
+            await urlInput.fill('unfinished');
+            await form
+                .getByRole('button', { name: 'Save draft explicitly' })
+                .click();
+            const afterSave = await urlState();
+            assert.equal(afterSave.submits, 1);
+            assert.equal(afterSave.attempts, 4);
+            assert.equal(afterSave.entries.length, 5);
+            assert.equal(await urlInput.inputValue(), 'unfinished');
+
+            await page.evaluate(() =>
+                window.lookupProof.visitorUrl.showFieldLabel()
+            );
+            const labelledUrlInput = form.getByRole('textbox', {
+                name: 'Justificatif',
+                exact: true,
+            });
+            assert.equal(await labelledUrlInput.count(), 1);
+            assert.equal(await urlInput.count(), 0);
+            assert.equal(
+                await labelledUrlInput.getAttribute('placeholder'),
+                'Lien de pièce jointe'
+            );
+            await form.locator('label').click();
+            assert.equal(
+                await labelledUrlInput.evaluate(
+                    (node) => document.activeElement === node
+                ),
+                true
+            );
+            assert.deepEqual(await urlState(), afterSave);
+            assert.deepEqual((await snapshot()).effects, beforeUrl);
+            record(
+                'visitor URL input stages ordered Form drafts without network or submit'
+            );
 
             await page.evaluate(() => window.lookupProof.richText());
             await page.locator('.ProseMirror[contenteditable=false]').waitFor();

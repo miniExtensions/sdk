@@ -28,6 +28,40 @@ For an application-owned immutable state kernel with native host admission,
 validation and allocation, see [canonical Form frames](canonical-form-frame.md).
 It is an additive SDK-first API; native integration remains a separate milestone.
 
+## Visitor attachment URL input
+
+Render `AttachmentUrlInput` from `@miniextensions/sdk/react` inside the host
+Form and import `@miniextensions/sdk/react/attachment-url-input.css`. Supply the
+localized `url`, `add`, `invalidUrl` and `appendRefused` labels and a current
+resource owner. Supply `id` for the host label's `htmlFor` and `labelledBy` for
+its label ID. This preserves the Form field title as the accessible name while
+keeping the localized URL prompt as the placeholder. The input hides when the owner retires or the field is read-only, masked or full.
+
+Enter and Add each try to stage one draft attachment without submitting the Form.
+The component validates HTTP(S) syntax and passes `{ id: null, url, filename }`
+to the host's synchronous `appendCurrent` callback. It preserves the entered URL
+after the native input's surrounding whitespace normalization. It decodes the
+last path segment once, falls back to the hostname for an empty path segment and
+retains malformed escapes in the filename. The host rechecks current eligibility,
+appends after the existing attachments and returns `true` only if it accepted
+the draft. When the host returns `false`, the input retains the URL and shows the
+supplied refusal label. The host owns the eventual Save and any backend work.
+
+## Record actions for an edit Form
+
+Create one `createFormRecordActionsController` from `@miniextensions/sdk/forms`
+for the host's `FormRecordActionsPort`. Mount `FormRecordActionsFooter` beside
+the host Save control or use `FormRecordActionsMenu`, both from
+`@miniextensions/sdk/react`. Import `@miniextensions/sdk/react/form-record-actions.css`
+and supply the localized labels, including any custom delete label.
+
+The host publishes visibility, disabled state and operation progress. When the
+visitor confirms, the controller closes the dialog and asks the host to admit
+deletion for the currently accepted scope. The host owns eligibility, the
+request and settlement for the original record. The controller never retries
+an uncertain result. The comments action hands off the current scope to the
+host's existing comments surface.
+
 ## Linked and two-source projection candidate
 
 `createLinkedFormRecordProjection` is an additive, synchronous projection

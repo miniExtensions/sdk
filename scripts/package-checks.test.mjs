@@ -126,6 +126,16 @@ test('warm archive reads still reject changed installed bytes and archive replac
     await writeFile(installed, 'other');
     const changed = await readFile(installed);
     assert.throws(() => assert.deepEqual(changed, read('package/a.txt')));
+    const admitted = await readFile(fixture.archive);
+    const changedHeader = Buffer.from(admitted);
+    changedHeader[4] ^= 1; // Gzip header timestamp, with the same member bytes.
+    await writeFile(fixture.archive, changedHeader);
+    assert.throws(
+        () => read('package/a.txt'),
+        /Admitted archive bytes changed/
+    );
+    await writeFile(fixture.archive, admitted);
+    assert.equal(read('package/a.txt').toString(), 'alpha');
     await write(fixture.root, 'package/a.txt', 'omega');
     fixture.pack();
     assert.throws(

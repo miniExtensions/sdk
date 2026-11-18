@@ -33,5 +33,13 @@ import '@miniextensions/sdk/react/readonly-url-gallery.css';
 `ReadOnlyURLGallery` is also public for explicit readonly URL collections. Its
 options control grid/Form layout, thumbnail fit/size, filename visibility and
 open/download controls. These are display settings, not download authorization.
+Image thumbnails in the list and dialog picker try the supplied `thumbnailUrl`,
+full preview URL and original image URL in order, skipping duplicate URLs. If
+all fail, `labels.previewNotAvailable` provides the failure text and
+`labels.retry` customizes the **Try again** button. Retry restarts the same
+granted sources and keeps the current selection. Non-image entries keep any
+explicit image poster and otherwise use a glyph. Their original URL is reserved
+for preview, Open and Download. Formula text alone does not supply a media URL.
+
 The enclosing Form remains the label/help/Save owner; `inputId`, `labelledBy`
 and `describedBy` associate controlled Formula presentation with that shell.

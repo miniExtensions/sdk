@@ -16,6 +16,20 @@ getAggregateUploadProgress({...attachmentProgress,totalUploadWeight:'4'});
 // @ts-expect-error native upload URL input is text
 getAttachmentFilenameFromUrl(null);
 
+import {AttachmentUrlInput,type AttachmentUrlDraft,type AttachmentUrlInputLabels,type AttachmentUrlInputProps} from '@miniextensions/sdk/react';
+const urlEntryLabels:AttachmentUrlInputLabels={url:'Attachment URL',add:'Add',invalidUrl:'Enter an HTTP or HTTPS URL',appendRefused:'Could not add attachment'};
+const urlEntryDrafts:AttachmentUrlDraft[]=[];
+const urlEntryProps:AttachmentUrlInputProps={
+    id:'attachment-url',labelledBy:'attachment-field-label',labels:urlEntryLabels,owner:{token:Symbol(),isCurrent:()=>true},
+    appendCurrent(draft){const draftId:null=draft.id;urlEntryDrafts.push({...draft,id:draftId});return true;}
+};
+const urlEntryComponent:typeof AttachmentUrlInput=AttachmentUrlInput;
+const rejectedUrlEntry:AttachmentUrlInputProps={
+    ...urlEntryProps,
+    // @ts-expect-error staging needs synchronous admission into the current draft
+    async appendCurrent(){return true;}
+};
+void urlEntryComponent;void rejectedUrlEntry;
 void attachmentPercent;void attachmentName;void attachmentUrlCompatible;void emptyFileWeight;
 `;
 

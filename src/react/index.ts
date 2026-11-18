@@ -273,6 +273,12 @@ export {
     type MultipleAttachmentsFieldOptions,
 } from './MultipleAttachmentsField.js';
 export {
+    AttachmentUrlInput,
+    type AttachmentUrlDraft,
+    type AttachmentUrlInputLabels,
+    type AttachmentUrlInputProps,
+} from './AttachmentUrlInput.js';
+export {
     ReadonlyAttachmentsField,
     renderReadonlyAttachmentsField,
     type ReadonlyAttachmentsFieldProps,
@@ -3427,6 +3433,14 @@ export {
     FormSubmitButton,
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
+export {
+    FormRecordDeleteConfirmation,
+    FormRecordActionsFooter,
+    FormRecordActionsMenu,
+    type FormRecordActionsLabels,
+    type FormRecordDeleteConfirmationProps,
+    type FormRecordActionsProps,
+} from './FormRecordActions.js';
 export {
     FormCaptcha,
     type FormCaptchaProps,

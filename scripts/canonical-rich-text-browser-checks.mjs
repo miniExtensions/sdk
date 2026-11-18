@@ -23,6 +23,7 @@ export async function checkCanonicalRichTextBrowser({
     const root = realpathSync(consumer);
     const directory = mkdtempSync(join(root, '.canonical-rich-text-native-'));
     let server, context, page, failure;
+    let caretEvidence = evidence;
     const source = `
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -258,33 +259,6 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
 
         // Keep the original formatted Save proof above. These additional cases
         // exercise native selection through the ordinary public controlled API.
-        await update({ identity: 'metadata-caret:notes', value: 'Alpha Beta' });
-        await editor.waitFor();
-        await page.waitForFunction(
-            () =>
-                window.canonicalRichText.snapshot().state.value ===
-                    'Alpha Beta' &&
-                document.querySelector('.ProseMirror')?.textContent ===
-                    'Alpha Beta'
-        );
-        assert.equal(await page.locator('.ProseMirror').count(), 1);
-        await page.evaluate(() =>
-            window.canonicalRichText.startCaretNavigation()
-        );
-        await editor.click();
-        await editor.press(documentKeys.end);
-        await page.waitForFunction(() => {
-            const node = document.querySelector('.ProseMirror');
-            const native = document.getSelection();
-            return (
-                node?.textContent === 'Alpha Beta' &&
-                native?.isCollapsed &&
-                node.contains(native.anchorNode) &&
-                native.anchorNode?.textContent === 'Alpha Beta' &&
-                native.anchorOffset === 10
-            );
-        });
-        for (let step = 0; step < 8; step++) await editor.press('ArrowLeft');
         const nativeCaret = () =>
             editor.evaluate((node) => {
                 const native = document.getSelection();
@@ -299,53 +273,111 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
                     focusOffset: native?.focusOffset,
                 };
             });
-        const beforeMetadata = await nativeCaret();
-        evidence.caretNavigationBeforeMetadata = beforeMetadata;
-        assert.equal(beforeMetadata.active, true);
-        assert.equal(beforeMetadata.contained, true);
-        assert.equal(beforeMetadata.collapsed, true);
-        assert.equal(beforeMetadata.anchorText, 'Alpha Beta');
-        assert.equal(beforeMetadata.anchorOffset, 2);
-        assert.equal(beforeMetadata.focusOffset, 2);
-        await page.evaluate(() => window.canonicalRichText.remember());
-        const beforeCaretMetadata = await snapshot();
-        await update({ id: 'notes-caret', invalid: false });
-        assert.equal((await nativeCaret()).anchorOffset, 2);
-        await page.locator('#neighbor').click();
-        await update({ id: 'notes-caret-renamed', invalid: true });
-        await editor.focus();
-        await page.keyboard.type('Z');
-        await page.waitForFunction(
-            () =>
-                window.canonicalRichText.snapshot().state.value ===
-                'AlZpha Beta'
-        );
-        const afterCaretMetadata = await snapshot();
-        assert.equal(await editor.innerText(), 'AlZpha Beta');
-        assert.equal(
-            await page.evaluate(() => window.canonicalRichText.same()),
-            true
-        );
-        assert.equal(
-            afterCaretMetadata.writes.length,
-            beforeCaretMetadata.writes.length + 1
-        );
-        assert.deepEqual(afterCaretMetadata.writes.at(-1), {
-            identity: 'metadata-caret:notes',
-            value: 'AlZpha Beta',
-        });
-        assert.equal(afterCaretMetadata.saves.length, 1);
-        assert.equal(await page.locator('#neighbor').inputValue(), 'untouched');
-        evidence.caretNavigation = await page.evaluate(() =>
-            window.canonicalRichText.finishCaretNavigation()
-        );
-        evidence.nativeMetadataCaret = {
-            beforeMetadata,
-            after: await nativeCaret(),
+
+        const checkMetadataCaret = async (
+            result,
+            identity,
+            firstArrowDelayMs
+        ) => {
+            caretEvidence = result;
+            await update({ identity, value: 'Alpha Beta' });
+            await editor.waitFor();
+            await page.waitForFunction(
+                () =>
+                    window.canonicalRichText.snapshot().state.value ===
+                        'Alpha Beta' &&
+                    document.querySelector('.ProseMirror')?.textContent ===
+                        'Alpha Beta'
+            );
+            assert.equal(await page.locator('.ProseMirror').count(), 1);
+            await page.evaluate(() =>
+                window.canonicalRichText.startCaretNavigation()
+            );
+            await editor.click();
+            await editor.press(documentKeys.end);
+            await page.waitForFunction(() => {
+                const node = document.querySelector('.ProseMirror');
+                const native = document.getSelection();
+                return (
+                    node?.textContent === 'Alpha Beta' &&
+                    native?.isCollapsed &&
+                    node.contains(native.anchorNode) &&
+                    native.anchorNode?.textContent === 'Alpha Beta' &&
+                    native.anchorOffset === 10
+                );
+            });
+            for (let step = 0; step < 8; step++) {
+                if (step === 0 && firstArrowDelayMs)
+                    await editor.press('ArrowLeft', {
+                        delay: firstArrowDelayMs,
+                    });
+                else await editor.press('ArrowLeft');
+            }
+            const beforeMetadata = await nativeCaret();
+            result.caretNavigationBeforeMetadata = beforeMetadata;
+            assert.equal(beforeMetadata.active, true);
+            assert.equal(beforeMetadata.contained, true);
+            assert.equal(beforeMetadata.collapsed, true);
+            assert.equal(beforeMetadata.anchorText, 'Alpha Beta');
+            assert.equal(beforeMetadata.anchorOffset, 2);
+            assert.equal(beforeMetadata.focusOffset, 2);
+            await page.evaluate(() => window.canonicalRichText.remember());
+            const beforeCaretMetadata = await snapshot();
+            await update({ id: 'notes-caret', invalid: false });
+            assert.equal((await nativeCaret()).anchorOffset, 2);
+            await page.locator('#neighbor').click();
+            await update({ id: 'notes-caret-renamed', invalid: true });
+            await editor.focus();
+            await page.keyboard.type('Z');
+            await page.waitForFunction(
+                () =>
+                    window.canonicalRichText.snapshot().state.value ===
+                    'AlZpha Beta'
+            );
+            const afterCaretMetadata = await snapshot();
+            assert.equal(await editor.innerText(), 'AlZpha Beta');
+            assert.equal(
+                await page.evaluate(() => window.canonicalRichText.same()),
+                true
+            );
+            assert.equal(
+                afterCaretMetadata.writes.length,
+                beforeCaretMetadata.writes.length + 1
+            );
+            assert.deepEqual(afterCaretMetadata.writes.at(-1), {
+                identity,
+                value: 'AlZpha Beta',
+            });
+            assert.equal(afterCaretMetadata.saves.length, 1);
+            assert.equal(
+                await page.locator('#neighbor').inputValue(),
+                'untouched'
+            );
+            result.caretNavigation = await page.evaluate(() =>
+                window.canonicalRichText.finishCaretNavigation()
+            );
+            result.nativeMetadataCaret = {
+                beforeMetadata,
+                after: await nativeCaret(),
+            };
         };
+        await checkMetadataCaret(evidence, 'metadata-caret:notes');
         evidence.results.push(
             'trusted navigation caret survives accessibility updates, metadata blur and refocus with exact insertion'
         );
+
+        // One additional native gesture probes the pinned ProseMirror focus
+        // reconciliation window. Each case still starts from offset 10
+        // and requires eight trusted movements and the same exact edit.
+        const heldFirstArrow = { delayMs: 35, status: 'running' };
+        evidence.heldFirstArrow = heldFirstArrow;
+        await checkMetadataCaret(
+            heldFirstArrow,
+            'metadata-caret-held:notes',
+            heldFirstArrow.delayMs
+        );
+        heldFirstArrow.status = 'passed';
+        caretEvidence = evidence;
 
         // A real pointer choice at the start must take precedence over the
         // retained non-start caret. Keep click-to-type adjacent, as above.
@@ -623,8 +655,12 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
-        if (page && !evidence.caretNavigation)
-            evidence.caretNavigation = await page
+        if (caretEvidence !== evidence) {
+            caretEvidence.status = 'failed';
+            caretEvidence.error = error.message;
+        }
+        if (page && !caretEvidence.caretNavigation)
+            caretEvidence.caretNavigation = await page
                 .evaluate(() =>
                     window.canonicalRichText?.finishCaretNavigation()
                 )

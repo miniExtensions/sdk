@@ -179,19 +179,37 @@ it('uses the host queue for rollback, keeps newer typing and requires a fresh in
     await render();
     const pending = queue.flush();
     assert.deepEqual(requests, ['Rejected']);
-
-    await edit(fixture, 'Newer typing');
     reject(new Error('Synthetic host rejection'));
     await pending;
     await render();
     assert.equal(value, 'Baseline');
     assert.equal(input(fixture), node);
-    assert.equal(node.value, 'Newer typing');
+    assert.equal(node.value, 'Baseline');
+    await act(async () => {
+        node.focus();
+        node.blur();
+    });
+    await queue.flush();
     assert.equal(queue.hasPending(), false);
     assert.deepEqual(requests, ['Rejected']);
+
+    await edit(fixture, 'Explicit retry');
+    await enter(fixture);
+    await render();
+    const pendingRetry = queue.flush();
+    assert.deepEqual(requests, ['Rejected', 'Explicit retry']);
+    await edit(fixture, 'Newer typing');
+    reject(new Error('Synthetic rejection of new intent'));
+    await pendingRetry;
+    await render();
+    assert.equal(value, 'Baseline');
+    assert.equal(input(fixture), node);
+    assert.equal(node.value, 'Newer typing');
+    assert.equal(queue.hasPending(), false);
+    assert.deepEqual(requests, ['Rejected', 'Explicit retry']);
     await enter(fixture);
     const retry = queue.flush();
-    assert.deepEqual(requests, ['Rejected', 'Newer typing']);
+    assert.deepEqual(requests, ['Rejected', 'Explicit retry', 'Newer typing']);
     resolve('Newer typing');
     await retry;
     await render();
@@ -200,7 +218,7 @@ it('uses the host queue for rollback, keeps newer typing and requires a fresh in
         node.blur();
     });
     await queue.flush();
-    assert.deepEqual(requests, ['Rejected', 'Newer typing']);
+    assert.deepEqual(requests, ['Rejected', 'Explicit retry', 'Newer typing']);
     assert.equal(value, 'Newer typing');
 });
 
@@ -244,8 +262,9 @@ it('keeps the mounted writer on normal deselection and retires it on actual owne
     await fixture.render(table({ editor: original, selected: true }));
     await edit(fixture, 'Retired A');
     frame.current = false;
+    const nextFrame = { canEdit: true };
     const next = {
-        owner: { token: {}, isCurrent: () => true },
+        owner: { token: nextFrame, isCurrent: () => nextFrame.canEdit },
         onChange: (text: string) => writes.push(['B', text]),
     };
     await fixture.render(
@@ -260,6 +279,32 @@ it('keeps the mounted writer on normal deselection and retires it on actual owne
     assert.equal(input(fixture).value, 'B baseline');
     await edit(fixture, 'Current B');
     await enter(fixture);
+    assert.deepEqual(writes, [
+        ['A', 'Admitted A'],
+        ['B', 'Current B'],
+    ]);
+
+    await fixture.render(
+        table({
+            cellIdentity: 'B',
+            editor: next,
+            selected: true,
+            value: 'Current B',
+            displayText: 'Current B',
+        })
+    );
+    await edit(fixture, 'Retired by readonly');
+    nextFrame.canEdit = false;
+    await fixture.render(
+        table({
+            cellIdentity: 'B',
+            selected: true,
+            value: 'Current B',
+            displayText: 'Current B',
+        })
+    );
+    assert.equal(fixture.container.querySelector('input'), null);
+    assert.match(fixture.container.textContent ?? '', /Current B/);
     assert.deepEqual(writes, [
         ['A', 'Admitted A'],
         ['B', 'Current B'],

@@ -3557,3 +3557,8 @@ export {
     type PortalGridRatingCellProps,
     type PortalGridRatingCellEditor,
 } from './PortalGridRatingCell.js';
+export {
+    PortalGridCheckboxCell,
+    type PortalGridCheckboxCellProps,
+    type PortalGridCheckboxCellEditor,
+} from './PortalGridCheckboxCell.js';

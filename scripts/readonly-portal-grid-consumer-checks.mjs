@@ -22,11 +22,13 @@ import {ReadonlyPortalGrid,type ReadonlyPortalGridProps,type ReadonlyPortalGridR
 import {PortalGridSingleLineTextCell,type PortalGridSingleLineTextCellProps} from '@miniextensions/sdk/react';
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
 import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,RatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
+import {PortalGridCheckboxCell,type PortalGridCheckboxCellProps,type PortalGridCheckboxCellEditor} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import '@miniextensions/sdk/react/portal-grid-empty-cell.css';
 import '@miniextensions/sdk/react/portal-grid-cell.css';
 import '@miniextensions/sdk/react/rating.css';
+import '@miniextensions/sdk/react/complete-checkbox.css';
 const columns:readonly ReadonlyPortalGridColumn[]=[{fieldId:'name',title:'Name',icon:'text'}];
 const rows:readonly ReadonlyPortalGridRow[]=[{recordId:'row',cells:[{fieldId:'name',node:'Admitted display'}]}];
 const props:ReadonlyPortalGridProps={columns,rows,primaryFieldId:'name',revision:1,preferenceScopeKey:'consumer-view',ready:true,isCurrent:()=>true,hiddenColumns:{},columnWidths:{name:'200'},allowHideColumns:true,onFieldHiddenChange(change){void change.isHidden;},onColumnWidthCommit(change){void change.width;},onOpenRecord(id,trigger){void id;trigger.focus();},doNotAllowUserToCopyTextOnGrid:false,rowHeight:'short'};
@@ -67,6 +69,16 @@ ratingCell.max=10;
 void unownedRating;void stringRating;void transportedRating;
 const legacyRating:ControlledRatingFieldProps={mode:'controlled',value:null,onChange(value){void value;},max:5,icon:'heart',grid:true};
 createElement(RatingField,legacyRating);
+const checkboxEditor:PortalGridCheckboxCellEditor={owner:{token:Symbol(),isCurrent:()=>true},onChange(checked){const native:boolean=checked;void native;},id:'checked',form:'form',ariaDescribedBy:'checked-help',ariaInvalid:false};
+const checkboxCell:PortalGridCheckboxCellProps={value:false,displayText:'false',title:'Approved',cellIdentity:'row-checked',selected:false,onSelect(){},rowHeight:'medium',editor:checkboxEditor};
+createElement(PortalGridCheckboxCell,checkboxCell);
+// @ts-expect-error an admitted Checkbox port requires a captured owner
+const unownedCheckbox:PortalGridCheckboxCellProps={...checkboxCell,editor:{onChange(){}}};
+// @ts-expect-error native Checkbox values are boolean or explicitly null
+const stringCheckbox:PortalGridCheckboxCellProps={...checkboxCell,value:'false'};
+// @ts-expect-error ordinary Checkbox cells do not grant provider or transport capability
+const providerCheckbox:PortalGridCheckboxCellProps={...checkboxCell,calendly:{url:'https://example.com'}};
+void unownedCheckbox;void stringCheckbox;void providerCheckbox;
 `;
 
 /** Run unchanged parity assertions against the installed public package. */
@@ -117,12 +129,22 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const checkboxCellSource = readFileSync(
+        fileURLToPath(
+            new URL(
+                '../test/reactPortalGridCheckboxCell.test.ts',
+                import.meta.url
+            )
+        ),
+        'utf8'
+    );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
     const textCellCases = 6;
     const emptyCellCases = 3;
     const ratingCellCases = 8;
+    const checkboxCellCases = 14;
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
         ['19.2.0', '19.2.2', '19.2.2'],
@@ -168,6 +190,9 @@ export async function checkReadonlyPortalGridReactMatrix({
             );
             const ratingCssPath = require.resolve(
                 '@miniextensions/sdk/react/rating.css'
+            );
+            const checkboxCssPath = require.resolve(
+                '@miniextensions/sdk/react/complete-checkbox.css'
             );
             assert.equal(cellCssPath, textCellCssPath);
             const run = (command, args) =>
@@ -220,10 +245,15 @@ export async function checkReadonlyPortalGridReactMatrix({
                     ['grid-text-cell', textCellSource, textCellCases],
                     ['grid-empty-cell', emptyCellSource, emptyCellCases],
                     ['grid-rating-cell', ratingCellSource, ratingCellCases],
+                    [
+                        'grid-checkbox-cell',
+                        checkboxCellSource,
+                        checkboxCellCases,
+                    ],
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmptyCell|PortalGridRatingCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -268,6 +298,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     textCellTests: textCellCases,
                     emptyCellTests: emptyCellCases,
                     ratingCellTests: ratingCellCases,
+                    checkboxCellTests: checkboxCellCases,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -328,9 +359,22 @@ export async function checkReadonlyPortalGridReactMatrix({
             );
             assert.match(ratingCss, /mx-sdk-rating-icons/);
             assert.match(ratingCss, /mx-sdk-rating-range/);
+            const checkboxCss = readFileSync(checkboxCssPath, 'utf8');
+            assert.equal(
+                checkboxCss,
+                readFileSync(
+                    join(
+                        root,
+                        'node_modules/@miniextensions/sdk/dist/cjs/react/complete-checkbox.css'
+                    ),
+                    'utf8'
+                )
+            );
+            assert.match(checkboxCss, /mx-sdk-complete-checkbox__input/);
+            assert.match(checkboxCss, /mx-sdk-complete-checkbox__grid/);
             writeFileSync(
                 join(root, 'styles.css'),
-                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n"
+                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n"
             );
             const styles = await build({
                 absWorkingDir: root,
@@ -362,6 +406,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                     name.endsWith('/react/rating.css')
                 )
             );
+            assert(
+                Object.keys(styles.metafile.inputs).some((name) =>
+                    name.endsWith('/react/complete-checkbox.css')
+                )
+            );
             assert.equal(
                 createHash('sha256')
                     .update(readFileSync(archivePath))
@@ -375,6 +424,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 textCellTests: textCellCases * 2,
                 emptyCellTests: emptyCellCases * 2,
                 ratingCellTests: ratingCellCases * 2,
+                checkboxCellTests: checkboxCellCases * 2,
                 strictTypes: ['ESM', 'CJS', 'Bundler'],
                 styles: 'owned table, controls and cell geometry',
                 ...receipt,
@@ -399,6 +449,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         ratingCellTests: profiles.reduce(
             (total, profile) => total + profile.ratingCellTests,
+            0
+        ),
+        checkboxCellTests: profiles.reduce(
+            (total, profile) => total + profile.checkboxCellTests,
             0
         ),
         archiveSha256,

@@ -1004,43 +1004,67 @@ try {
             `Missing shipped browser starter file: ${path}`
         );
     }
+    const packedArchive = join(temporaryDirectory, packed.filename);
+    const installConsumer = (directory) =>
+        run(
+            'npm',
+            [
+                'install',
+                '--save-exact',
+                '--ignore-scripts',
+                '--no-audit',
+                '--no-fund',
+                packedArchive,
+                'host-moment@npm:moment@2.30.1',
+            ],
+            directory
+        );
     writeFileSync(
         join(temporaryDirectory, 'package.json'),
-        JSON.stringify({
-            private: true,
-            type: 'module',
-            ...splitDurationMomentInstall,
-        })
+        JSON.stringify({ private: true, type: 'module' })
     );
-    run('npm', [
-        'install',
-        '--save-exact',
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        join(temporaryDirectory, packed.filename),
-        'host-moment@npm:moment@2.30.1',
-    ]);
+    installConsumer(temporaryDirectory);
     const installedPackage = join(
         temporaryDirectory,
         'node_modules/@miniextensions/sdk'
     );
-    await assertInstalledArchive(
-        temporaryDirectory,
-        join(temporaryDirectory, packed.filename),
-        packed
+    await assertInstalledArchive(temporaryDirectory, packedArchive, packed);
+    const splitDurationDirectory = mkdtempSync(
+        join(tmpdir(), 'miniextensions-duration-split-')
     );
-    const splitDurationFilename = 'duration-split-moment-consumer.mjs';
-    writeFileSync(
-        join(temporaryDirectory, splitDurationFilename),
-        splitDurationMomentConsumer
-    );
-    for (const format of ['esm', 'cjs']) {
-        run(process.execPath, [splitDurationFilename, format]);
+    try {
+        writeFileSync(
+            join(splitDurationDirectory, 'package.json'),
+            JSON.stringify({
+                private: true,
+                type: 'module',
+                ...splitDurationMomentInstall,
+            })
+        );
+        installConsumer(splitDurationDirectory);
+        await assertInstalledArchive(
+            splitDurationDirectory,
+            packedArchive,
+            packed
+        );
+        const splitDurationFilename = 'duration-split-moment-consumer.mjs';
+        writeFileSync(
+            join(splitDurationDirectory, splitDurationFilename),
+            splitDurationMomentConsumer
+        );
+        for (const format of ['esm', 'cjs']) {
+            run(
+                process.execPath,
+                [splitDurationFilename, format],
+                splitDurationDirectory
+            );
+        }
+        console.log(
+            'Installed Duration blur passed with split Moment in ESM and CJS.'
+        );
+    } finally {
+        rmSync(splitDurationDirectory, { recursive: true, force: true });
     }
-    console.log(
-        'Installed Duration blur passed with split Moment in ESM and CJS.'
-    );
     assertModuleFormatReceipt(installedPackage);
     assertDateVendor(installedPackage, 'dist/vendor/date-time');
     assertPortalSidebarVendor(installedPackage, 'dist/vendor/portal-sidebar');

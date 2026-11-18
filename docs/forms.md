@@ -72,14 +72,25 @@ complete decision record. Both sources stay detached from the returned output.
 It does not change the existing scalar projection APIs or their conservative
 driver policy.
 
-This entry admits saved field IDs only and a finite condition cohort: the six
-single-select operators (`is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`,
-`isNotEmpty`); the six multiple-select operators (`hasAllOf`, `hasAnyOf`,
-`hasNoneOf`, `isExactly`, `isEmpty`, `isNotEmpty`); and eight numeric operators
-on each of Number, Percent, Currency and Rating (`equals`, `notEquals`,
-`greaterThan`, `lessThan`, `greaterThanOrEqualsTo`, `lessThanOrEqualsTo`,
-`isEmpty`, `isNotEmpty`). Direct single-line Text `is` retains the legacy
-compatibility path. A valid supplied Formula result additionally permits Text
+This entry accepts saved field IDs and the following finite condition cohort:
+
+- Physical single-line Text supports `is`, `isNot`, `contains`,
+  `doesNotContain`, `isEmpty`, and `isNotEmpty`.
+- Single-select supports `is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`,
+  and `isNotEmpty`.
+- Multiple-select supports `hasAllOf`, `hasAnyOf`, `hasNoneOf`, `isExactly`,
+  `isEmpty`, and `isNotEmpty`.
+- Number, Percent, Currency, and Rating support `equals`, `notEquals`,
+  `greaterThan`, `lessThan`, `greaterThanOrEqualsTo`, `lessThanOrEqualsTo`,
+  `isEmpty`, and `isNotEmpty`.
+
+Text `is` and `isNot` compare case-sensitively and require a nonempty string
+operand. Substring operators ignore case and accept an explicitly configured
+empty string. It matches every Text value, so `doesNotContain` returns false.
+The emptiness operators take no operand. They treat absent, null, and empty
+cells as empty and count whitespace as text.
+
+A valid supplied Formula result additionally permits Text
 `is` or Number, Percent and Currency `equals`. Formula expressions and their
 dependencies are never calculated or loaded by this helper.
 

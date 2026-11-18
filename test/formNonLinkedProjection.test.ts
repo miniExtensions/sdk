@@ -311,8 +311,17 @@ describe('public nonlinked native-form-v1 projection cohort', () => {
         for (const [index, [operator, operand]] of predicates.entries()) {
             const definition = condition('singleLineText', operator, operand);
             for (const [value, visibility] of cells) {
+                const decision = inputFor(driver, definition, value);
+                expectVisibility(decision, visibility[index]);
                 expectVisibility(
-                    inputFor(driver, definition, value),
+                    {
+                        ...inputFor(
+                            driver,
+                            definition,
+                            'Different output cell'
+                        ),
+                        formRecordForConditionEvaluation: decision.formRecord,
+                    },
                     visibility[index]
                 );
             }

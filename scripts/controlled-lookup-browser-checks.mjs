@@ -14,6 +14,17 @@ import { assertBrowserInputs } from './package-checks.mjs';
 import { controlledLookupAssembly } from './controlled-lookup-consumer-checks.mjs';
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const galleryImagePath = (surface, source) =>
+    '/gallery-recovery-' + surface + '-' + source + '.png';
+const galleryImagePaths = new Set(
+    ['list', 'picker'].flatMap((surface) =>
+        ['thumb', 'preview', 'original'].map((source) =>
+            galleryImagePath(surface, source)
+        )
+    )
+);
+const recoveredImage =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="green"/></svg>';
 const host = String.raw`
 const main=document.querySelector('main');root=createRoot(main);
 window.fetch=async()=>{effects.transport++;throw Error('Unexpected Lookup fetch');};
@@ -29,6 +40,14 @@ window.lookupProof.externalAdmit=()=>externalCapture.admit();
 window.lookupProof.externalRetire=()=>externalCapture.retire();
 window.lookupProof.externalRecover=()=>externalCapture.recover();
 window.lookupProof.externalSnapshot=()=>externalCapture.snapshot();
+window.lookupProof.galleryRecovery=(surface)=>{
+ const url=part=>window.location.origin+'/gallery-recovery-'+surface+'-'+part+'.png';
+ const broken={id:'failed',type:'image/png',filename:'Adjunto.png',thumbnailUrl:url('thumb'),thumbnails:{full:{url:url(surface==='list'?'preview':'thumb')}},url:url('original')};
+ const nonImage={id:'document',type:'application/pdf',filename:'Document.pdf',url:window.location.origin+'/gallery-document.pdf',thumbnailUrl:dataImage};
+ const entries=surface==='picker'?[{id:'selected',type:'image/svg+xml',filename:'Still selected',url:dataImage},broken,nonImage]:[broken,nonImage];
+ const display={entries,labels:{previewNotAvailable:'Imagen no disponible',retry:'Reintentar imagen'},disableDownloadFiles:true};
+ flushSync(()=>renew({status:'ready',result:{kind:'urlGallery',display}}));
+};
 `;
 const observedInput = String.raw`
 window.lookupProof.currentInput=()=>JSON.stringify(state);
@@ -86,6 +105,8 @@ export async function checkControlledLookupBrowser({
                 'react/lookupPresentationValidation.js',
                 'react/readonlyResourceOwner.js',
                 'react/ReadOnlyURLGallery.js',
+                'react/RecoverableImage.js',
+                'react/readonly-url-gallery.css',
                 'react/AttachmentPreview.js',
                 'react/FormulaField.js',
                 'react/lookupFieldTypes.d.ts',
@@ -107,8 +128,8 @@ export async function checkControlledLookupBrowser({
         for (const format of ['esm', 'cjs']) {
             const imports =
                 format === 'esm'
-                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';"
-                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');";
+                    ? "import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import * as api from '@miniextensions/sdk/react';import '@miniextensions/sdk/react/lookup.css';import '@miniextensions/sdk/react/readonly-url-gallery.css';"
+                    : "const React=require('react');const {createRoot}=require('react-dom/client');const {flushSync}=require('react-dom');const api=require('@miniextensions/sdk/react');require('@miniextensions/sdk/react/lookup.css');require('@miniextensions/sdk/react/readonly-url-gallery.css');";
             const source =
                 imports + controlledLookupAssembly + host + observedInput;
             const entry = join(directory, format + '.js');
@@ -202,8 +223,24 @@ export async function checkControlledLookupBrowser({
                 evidence.pageErrors.push('Unexpected ' + dialog.type());
                 void dialog.dismiss();
             });
+            const galleryRequests = [];
+            let recoverThumbnail;
             await page.route('**/*', (route) => {
                 const url = new URL(route.request().url());
+                if (
+                    url.origin === origin &&
+                    galleryImagePaths.has(url.pathname) &&
+                    route.request().resourceType() === 'image'
+                ) {
+                    galleryRequests.push(url.pathname);
+                    const recovered = recoverThumbnail === url.pathname;
+                    return route.fulfill({
+                        status: recovered ? 200 : 404,
+                        contentType: 'image/svg+xml',
+                        headers: { 'Cache-Control': 'no-store' },
+                        body: recovered ? recoveredImage : '',
+                    });
+                }
                 if (
                     url.origin === origin &&
                     (url.pathname === '/' || assets.has(url.pathname))
@@ -572,6 +609,100 @@ export async function checkControlledLookupBrowser({
                 .click();
             assert.equal(await page.getByRole('dialog').count(), 0);
             record('gallery keyboard/focus and stale Close remains usable');
+
+            const recoveryEffects = (await snapshot()).effects;
+            await page.evaluate(() =>
+                window.lookupProof.galleryRecovery('list')
+            );
+            const tile = page.locator('.mx-sdk-url-gallery__entry').first();
+            const failureLabel = 'Imagen no disponible: Adjunto.png';
+            const listRetry = tile
+                .getByRole('status', { name: failureLabel })
+                .getByRole('button', {
+                    name: 'Reintentar imagen',
+                    exact: true,
+                });
+            await listRetry.waitFor();
+            const listSources = ['thumb', 'preview', 'original'].map((source) =>
+                galleryImagePath('list', source)
+            );
+            assert.deepEqual(galleryRequests, listSources);
+            recoverThumbnail = listSources[0];
+            await listRetry.click();
+            await tile.locator('img').evaluate((image) => image.decode());
+            assert.equal(await page.getByRole('dialog').count(), 0);
+            assert.equal(
+                await tile
+                    .locator('.mx-sdk-url-gallery__open')
+                    .evaluate((node) => node === document.activeElement),
+                true
+            );
+            assert.deepEqual(galleryRequests, [...listSources, listSources[0]]);
+            record(
+                'gallery list follows granted errors and restores Open focus after trusted Retry'
+            );
+
+            recoverThumbnail = undefined;
+            await page.evaluate(() =>
+                window.lookupProof.galleryRecovery('picker')
+            );
+            await page.locator('.mx-sdk-url-gallery__open').first().click();
+            const dialog = page.getByRole('dialog');
+            const strip = dialog.locator('.mx-sdk-url-gallery__strip');
+            const pickerRetry = strip
+                .getByRole('status', { name: failureLabel })
+                .getByRole('button', {
+                    name: 'Reintentar imagen',
+                    exact: true,
+                });
+            await pickerRetry.waitFor();
+            assert.equal(await strip.locator('button button').count(), 0);
+            assert.equal(
+                await strip.locator('img[src*="gallery-document"]').count(),
+                0
+            );
+            const beforeRetiredRetry = galleryRequests.length;
+            await page.evaluate(() => window.lookupProof.retire());
+            await pickerRetry.click();
+            await page.evaluate(
+                () => new Promise((done) => requestAnimationFrame(done))
+            );
+            assert.equal(galleryRequests.length, beforeRetiredRetry);
+            await page.evaluate(() =>
+                window.lookupProof.galleryRecovery('picker')
+            );
+            await page.locator('.mx-sdk-url-gallery__open').first().click();
+            await pickerRetry.waitFor();
+            recoverThumbnail = galleryImagePath('picker', 'thumb');
+            await pickerRetry.click();
+            await strip
+                .locator('img[src*="gallery-recovery-picker-thumb"]')
+                .evaluate((image) => image.decode());
+            assert.equal(
+                await dialog
+                    .locator('.mx-sdk-url-gallery__position')
+                    .textContent(),
+                '1 / 3'
+            );
+            assert.equal(
+                await strip
+                    .getByRole('button', {
+                        name: 'Select attachment 2',
+                        exact: true,
+                    })
+                    .evaluate((node) => node === document.activeElement),
+                true
+            );
+            assert(
+                !galleryRequests.includes(galleryImagePath('picker', 'preview'))
+            );
+            assert(
+                galleryRequests.includes(galleryImagePath('picker', 'original'))
+            );
+            assert.deepEqual((await snapshot()).effects, recoveryEffects);
+            record(
+                'gallery picker deduplicates, refuses retired Retry and preserves selection on current Retry'
+            );
 
             await page.evaluate(() => window.lookupProof.richText());
             await page.locator('.ProseMirror[contenteditable=false]').waitFor();

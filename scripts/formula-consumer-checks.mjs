@@ -43,7 +43,7 @@ import { FormulaField, type FormulaFieldProps, type ControlledFormulaFieldProps,
 const accepted: ControlledFormulaFieldProps = {mode:'controlled',isValid:true,resultType:'singleLineText',value:'answer',formattedValue:'answer',language:'en',inputId:'formula',formId:'host',labelledBy:'title',describedBy:'help'};
 createElement(FormulaField, accepted);
 createElement(FormulaField, {mode:'controlled',isValid:false,language:'en'});
-const gallery: ReadOnlyURLGalleryProps = {entries:[{url:'/one.png',filename:'One',id:'one'},{url:'/one.png',filename:'Repeated'}],labels:{attachments:'Files'},thumbFitType:'contain',thumbnailSize:'small',hideAttachmentName:false,disableOpenFiles:false,disableDownloadFiles:true};
+const gallery: ReadOnlyURLGalleryProps = {entries:[{url:'/one.png',filename:'One',id:'one',thumbnailUrl:'/thumb.png'},{url:'/one.png',filename:'Repeated'}],labels:{attachments:'Files',retry:'Try image again'},thumbFitType:'contain',thumbnailSize:'small',hideAttachmentName:false,disableOpenFiles:false,disableDownloadFiles:true};
 createElement(FormulaField, {...accepted,renderFormulaAsAttachment:true,gallery});
 createElement(FormulaField, {...accepted,resultType:'singleSelect',select:{choices:[{id:'Ready',name:'Ready',color:'greenLight2'}],isInGrid:true}});
 // @ts-expect-error controlled Formula never borrows a physical field writer
@@ -159,6 +159,9 @@ const select=render({resultType:'singleSelect',value:'Ready',formattedValue:'Rea
 assert.match(select,/Ready/);assert.doesNotMatch(select,/url-gallery|<iframe|<input/);
 const gallery=render({value:'admitted URLs',renderFormulaAsAttachment:true,displayAsButton:true,gallery:{entries:[{url:'/one.png',filename:'One'},{url:'/one.png',filename:'Again'}],hideAttachmentName:false,disableDownloadFiles:true}});
 assert.match(gallery,/mx-sdk-url-gallery/);assert.match(gallery,/Again/);assert.equal(gallery.split('aria-label="/one.png"').length-1,2);
+const protectedGallery=render({value:'explicit readonly gallery',renderFormulaAsAttachment:true,gallery:{entries:[{url:'/full.png',type:'image/png',thumbnailUrl:'/thumb.png'},{url:'/report.pdf',type:'application/pdf',thumbnailUrl:'/report-thumbnail.png'}],labels:{retry:'Try image again'}}});
+assert.ok(protectedGallery.includes('src="/thumb.png"'));assert.ok(protectedGallery.includes('src="/report-thumbnail.png"'));assert.ok(!protectedGallery.includes('src="/report.pdf"'));assert.doesNotMatch(protectedGallery,/Try image again/);
+assert.doesNotMatch(render({value:'/label-only.png',renderFormulaAsAttachment:true}),/<img/);
 assert.ok(render({value:'https://example.invalid/formula',displayAsButton:true,validUrlButtonLabel:'Open result'}).includes('href="https://example.invalid/formula"'));
 assert.match(render({value:42,displayAsButton:true,invalidUrlButtonLabel:'Unavailable result'}),/Unavailable result/);
 const masked=render({value:'PRIVATE_FORMULA',formattedValue:'PRIVATE_FORMULA',obscurePassword:true,renderFormulaAsHTML:true,renderFormulaAsAttachment:true});assert.doesNotMatch(masked,/PRIVATE_FORMULA|url-gallery/);assert.match(masked,/••••••••/);

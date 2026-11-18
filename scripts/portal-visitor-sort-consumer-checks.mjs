@@ -127,12 +127,12 @@ export function checkPortalVisitorSortReactMatrix({
                         .slice(0, 2)
                         .map((file) => file.replace(/\.ts$/, '.' + suffix)),
                 ]);
-                assert.match(report, /^# tests 12$/m);
-                assert.match(report, /^# pass 12$/m);
+                assert.match(report, /^# tests 14$/m);
+                assert.match(report, /^# pass 14$/m);
                 assert.match(report, /^# fail 0$/m);
                 assert.match(report, /^# cancelled 0$/m);
                 assert.match(report, /^# skipped 0$/m);
-                output.push({ react, format, tests: 12, hydration: 'passed' });
+                output.push({ react, format, tests: 14, hydration: 'passed' });
             }
         } finally {
             rmSync(directory, { recursive: true });

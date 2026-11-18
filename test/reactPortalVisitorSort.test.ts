@@ -67,6 +67,46 @@ function owner() {
 
 type Fixture = Awaited<ReturnType<typeof htmlPresentationFixture>>;
 
+for (const type of ['refused', 'uncertain'] as const) {
+    it(`keeps the actual ${type} result after the host publishes the criteria`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const host = owner();
+        const outcome: PortalVisitorSortOutcome = {
+            type,
+            committedGeneration: 2,
+        };
+        const outcomes: PortalVisitorSortOutcome[] = [];
+        const port: PortalVisitorSortPort = {
+            ...host.port,
+            apply(command) {
+                const previous = host.frame();
+                host.update({
+                    ...previous,
+                    stamp: { ...previous.stamp, generation: 2 },
+                    criteria: command.criteria,
+                });
+                return outcome;
+            },
+        };
+        const feedback = 'The host reported ' + type;
+        await f.render(
+            h(PortalVisitorSort, {
+                port,
+                labels: { [type]: feedback },
+                onOutcome: (value) => outcomes.push(value),
+            })
+        );
+        await f.click(button(f, 'Sort'));
+        await f.click(button(f, 'Add sort condition'));
+        await f.click(button(f, 'Done'));
+        assert.equal(
+            f.container.querySelector('[role="status"]')?.textContent,
+            feedback
+        );
+        assert.deepEqual(outcomes, [outcome]);
+    });
+}
+
 function button(f: Fixture, label: string) {
     const element = [...f.container.querySelectorAll('button')].find(
         (item) =>

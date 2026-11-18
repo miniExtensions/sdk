@@ -30,7 +30,12 @@ export type PortalVisitorSortCommand = Readonly<{
 
 export type PortalVisitorSortOutcome =
     | Readonly<{ type: 'allocated'; requestId: string; generation: number }>
-    | Readonly<{ type: 'unchanged' | 'stale' | 'refused' | 'uncertain' }>;
+    | Readonly<{ type: 'unchanged' | 'stale' }>
+    | Readonly<{
+          type: 'refused' | 'uncertain';
+          /** Set only when this command's own criteria publication was verified. */
+          committedGeneration?: number;
+      }>;
 
 export type PortalVisitorSortPort = {
     /** The host may provide this before a row collection has been accepted. */
@@ -40,7 +45,9 @@ export type PortalVisitorSortPort = {
      * Verify the command stamp before any preference write and revalidate the
      * installed request against its active owner before invoking transport.
      * Report allocation only after transport is invoked. Later network
-     * completion and any retained rows belong to the host.
+     * completion and any retained rows belong to the host. If the command
+     * publishes criteria before a refused or uncertain read, include the
+     * verified generation of that publication.
      */
     apply(
         command: PortalVisitorSortCommand
@@ -164,9 +171,19 @@ function outcomeOf(value: PortalVisitorSortOutcome): PortalVisitorSortOutcome {
                 };
             break;
         case 'stale':
-        case 'refused':
         case 'unchanged':
             return { type: value.type };
+        case 'refused':
+        case 'uncertain': {
+            const generation = value.committedGeneration;
+            if (generation === undefined) return { type: value.type };
+            if (Number.isSafeInteger(generation) && generation >= 0)
+                return {
+                    type: value.type,
+                    committedGeneration: generation,
+                };
+            break;
+        }
     }
     return { type: 'uncertain' };
 }
@@ -286,14 +303,23 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
         canReport(outcome: PortalVisitorSortOutcome): boolean {
             if (!submitted) return true;
             const live = readFrame(port);
-            return Boolean(
-                live &&
-                    equalScope(captured, live) &&
-                    (live.stamp.generation === captured.stamp.generation ||
-                        (outcome.type === 'allocated' &&
-                            live.stamp.generation === outcome.generation)) &&
-                    (equalRules(live.criteria, captured.criteria) ||
-                        equalRules(live.criteria, submitted))
+            if (!live || !equalScope(captured, live)) return false;
+            const generation = live.stamp.generation;
+            if (generation === captured.stamp.generation)
+                return (
+                    equalRules(live.criteria, captured.criteria) ||
+                    equalRules(live.criteria, submitted)
+                );
+            const attributedGeneration =
+                outcome.type === 'allocated'
+                    ? outcome.generation
+                    : outcome.type === 'refused' || outcome.type === 'uncertain'
+                      ? outcome.committedGeneration
+                      : undefined;
+            return (
+                generation > captured.stamp.generation &&
+                generation === attributedGeneration &&
+                equalRules(live.criteria, submitted)
             );
         },
         async commit(): Promise<PortalVisitorSortOutcome> {

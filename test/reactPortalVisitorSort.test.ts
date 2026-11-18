@@ -332,3 +332,24 @@ it('moves focus to Done after deleting the last unavailable rule when Add is dis
         [[]]
     );
 });
+
+it('clears visible feedback when the port changes, including a return to the previous port', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const first = owner();
+    const second = owner();
+    first.defer(Promise.resolve({ type: 'refused' }));
+    await f.render(h(PortalVisitorSort, { port: first.port }));
+    await f.click(button(f, 'Sort'));
+    await f.click(button(f, 'Add sort condition'));
+    await f.click(button(f, 'Done'));
+    assert.match(
+        f.container.querySelector('[role=status]')?.textContent ?? '',
+        /could not apply/
+    );
+    await f.render(h(PortalVisitorSort, { port: second.port }));
+    assert.equal(f.container.querySelector('[role=status]'), null);
+    await f.render(h(PortalVisitorSort, { port: first.port }));
+    assert.equal(f.container.querySelector('[role=status]'), null);
+    assert.equal(first.commands.length, 1);
+    assert.equal(second.commands.length, 0);
+});

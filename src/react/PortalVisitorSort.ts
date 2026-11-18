@@ -8,6 +8,7 @@ import {
     type CSSProperties,
     type KeyboardEvent,
     type MouseEvent,
+    type ReactElement,
     type SyntheticEvent,
 } from 'react';
 import {
@@ -349,7 +350,7 @@ function SortDialog({
 }
 
 /** The packaged visitor dialog. The supplied host owns writes, reads and receipts. */
-export function PortalVisitorSort(props: PortalVisitorSortProps) {
+export function PortalVisitorSort(props: PortalVisitorSortProps): ReactElement {
     const labels = { ...defaultLabels, ...props.labels };
     const [active, setActive] = useState<Open | null>(null);
     const [status, setStatus] = useState<
@@ -362,6 +363,7 @@ export function PortalVisitorSort(props: PortalVisitorSortProps) {
     const host = useRef(props.port);
     useCommitEffect(() => {
         host.current = props.port;
+        setStatus(null);
         return () => {
             lifetime.current++;
             const previous = occupied.current;

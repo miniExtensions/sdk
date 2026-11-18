@@ -10,6 +10,10 @@ import {
 } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
+    CompleteFormComposition,
+    type CompleteFormCompositionProps,
+} from '../src/react/CompleteFormComposition.js';
+import {
     CompleteFormPageNavigation,
     FormPageNavigationButton,
     type FormPageNavigationDescriptor,
@@ -192,6 +196,121 @@ it('renders complete page and Review presentation in SSR without invoking action
         renderToString(h(CompleteFormReview, reviewProps({ open: false }))),
         ''
     );
+});
+
+it('keeps composed fields stable and routes only the admitted detached form action', async (t) => {
+    const f = await fixture(t);
+    const formId = 'composed-form';
+    const fieldId = 'fld:literal#id';
+    const intents: string[] = [];
+    const props: CompleteFormCompositionProps = {
+        formId,
+        onSubmit: () => intents.push('next'),
+        items: [
+            {
+                kind: 'field',
+                key: 'ungrouped',
+                node: h('input', { id: fieldId, form: formId }),
+            },
+            {
+                kind: 'group',
+                key: 'contact',
+                group: {
+                    title: 'Contact',
+                    isExpanded: false,
+                    isReadOnlyPage: false,
+                    allFieldsHidden: false,
+                    hasError: false,
+                },
+                fields: [
+                    {
+                        kind: 'field',
+                        key: 'grouped',
+                        node: h('input', { id: 'grouped', form: formId }),
+                    },
+                ],
+            },
+        ],
+        slots: { header: h('h1', null, 'Intake') },
+        validation: {
+            heading: 'Repair below',
+            diagnostics: [
+                {
+                    fieldId,
+                    fieldTitle: 'Literal target',
+                    errorMessage: 'is required',
+                },
+            ],
+        },
+        primary: { kind: 'next', label: 'Next' },
+        back: { label: 'Back', onClick: () => intents.push('back') },
+        decoratePrimary: (control) => h('div', { id: 'inspector' }, control),
+        footerLabel: 'Form actions',
+    };
+    await f.render(h(CompleteFormComposition, props));
+    const form = f.host.querySelector('form');
+    const field = f.window.document.getElementById(fieldId);
+    assert.ok(form);
+    assert.ok(field instanceof f.window.HTMLInputElement);
+    assert.equal(form.id, formId);
+    assert.equal(form.noValidate, true);
+    assert.equal(form.children.length, 0);
+    assert.equal(field.form, form);
+    assert.equal(f.host.querySelector('h1')?.textContent, 'Intake');
+    assert.equal(
+        f.host.querySelector('footer')?.getAttribute('aria-label'),
+        'Form actions'
+    );
+    assert.equal(
+        f.host.querySelector('a')?.getAttribute('href'),
+        '#' + fieldId
+    );
+    assert.equal(f.window.document.getElementById('grouped'), null);
+    await f.click('Contact');
+    const grouped = f.window.document.getElementById('grouped');
+    assert.ok(grouped instanceof f.window.HTMLInputElement);
+    assert.equal(grouped.form, form);
+    assert.equal(f.button('Next').closest('#inspector')?.id, 'inspector');
+    await f.click('Back');
+    await f.click('Next');
+    assert.deepEqual(intents, ['back', 'next']);
+
+    const terminal = (canSubmit: boolean, saving = false) =>
+        h(CompleteFormComposition, {
+            ...props,
+            primary: {
+                kind: 'terminal',
+                mode: 'save',
+                label: 'Save',
+                canSubmit,
+                saving,
+            },
+            onSubmit: () => intents.push('save'),
+        });
+    const submit = async (cancelled = false) => {
+        const event = new f.window.Event('submit', {
+            bubbles: true,
+            cancelable: true,
+        });
+        if (cancelled) event.preventDefault();
+        await act(async () => {
+            form.dispatchEvent(event);
+        });
+        assert.equal(event.defaultPrevented, true);
+    };
+    await f.render(terminal(false));
+    assert.equal(f.button('Save').disabled, true);
+    await submit();
+    await f.render(terminal(true, true));
+    await submit();
+    await f.render(terminal(true));
+    await submit(true);
+    assert.deepEqual(intents, ['back', 'next']);
+    assert.equal(f.window.document.getElementById(fieldId), field);
+    assert.equal(f.window.document.getElementById('grouped'), grouped);
+    await f.click('Save');
+    assert.deepEqual(intents, ['back', 'next', 'save']);
+    assert.equal(f.submits(), 0);
 });
 
 it('uses only visible titled pages for progress and delegates preview title selection', async (t) => {

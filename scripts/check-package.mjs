@@ -3656,7 +3656,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkFormCompositionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
-        26
+        32
     );
     const conditionalValidationChecks =
         await checkConditionalPageValidationConsumer({
@@ -4836,7 +4836,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
-    assert.equal(nativePagesProof.tests, 124);
+    assert.equal(nativePagesProof.tests, 128);
     assert.equal(nativePagesProof.hydrationProfiles, 4);
     assert.equal(nativePagesProof.hydrationChecks, 52);
     assert.equal(nativePagesProof.cleanup, 'completed');

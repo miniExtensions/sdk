@@ -240,6 +240,7 @@ for (const format of ['esm', 'cjs']) {
         'form-completion',
         'form-header',
         'form-submit',
+        'form-composition',
         'form-record-actions',
         'form-validation-summary',
         'portal-summary-cards',

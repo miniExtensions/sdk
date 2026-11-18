@@ -1385,6 +1385,64 @@ does not dispatch requests, authenticate, evaluate formulas, update
 `FormDraftStore` or clear final-save state. It does not enable automatic compute
 in the controller, browser starter, Review, pages or linked-child flows.
 
+## Complete Form presentation
+
+Use `CompleteFormComposition` with field nodes from an existing render scope.
+It renders ordered fields and sections, the associated form, and the supplied
+header, navigation, CAPTCHA, validation, footer, tracking, Review, and completion
+presentations. The host supplies the accepted field and error projections,
+localized text, and current action admission. Import
+`@miniextensions/sdk/react/form-composition.css` for the shipped styles.
+
+This single-page example uses the existing `AirtableForm` callback, a
+`scope`, and `renderers` that associate their input nodes with
+`'contact-form'`.
+
+```tsx
+import {
+    AirtableForm,
+    CompleteFormComposition,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/form-composition.css';
+
+<AirtableForm scope={scope} renderers={renderers}>
+    {(state) => (
+        <CompleteFormComposition
+            formId="contact-form"
+            items={state.fields.map(({ fieldId, node }) => ({
+                kind: 'field',
+                key: fieldId,
+                node,
+            }))}
+            primary={{
+                kind: 'terminal',
+                mode: 'save',
+                label: 'Save',
+                canSubmit: state.canSave,
+                saving,
+            }}
+            validation={{
+                heading: 'Check these fields',
+                diagnostics: state.validationErrors,
+            }}
+            onSubmit={() => {
+                void state.actions.submit().catch(reportSaveError);
+            }}
+        />
+    )}
+</AirtableForm>;
+```
+
+A section item has `kind: 'group'`, an existing stable key, the accepted
+`FormGroup` presentation props, and its ordered field nodes. A `next`
+primary action and a terminal primary action both submit through the same
+associated form. Back and Review confirmation use their supplied host actions.
+Recheck current ownership at deferred Review confirmation before issuing Save.
+
+Use `slots` for existing individual host adapters when they own a preview
+settings wrapper, a scroll ref, or a modal frame. The composition keeps the
+supplied nodes at their respective positions in the layout.
+
 ## Headless controller with explicit Save
 
 `createFormController` binds one loaded Form, complete save options and the

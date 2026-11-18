@@ -184,6 +184,7 @@ export async function checkFormCaptchaReactMatrix({
         const manifest = {
             private: true,
             type: 'module',
+            packageManager: 'pnpm@10.28.2',
             dependencies: {
                 '@miniextensions/sdk': `file:${archivePath}`,
                 react: version,

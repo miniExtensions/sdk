@@ -115,6 +115,12 @@ it('shows guidance only for the selected readonly cell and preserves its literal
         fixture.container.querySelector('.read-only-text')?.textContent,
         'Baseline'
     );
+    await act(async () =>
+        trigger.dispatchEvent(
+            new fixture.window.MouseEvent('mouseover', { bubbles: true })
+        )
+    );
+    assert.ok(popup());
     await act(async () => trigger.focus());
     const help = popup();
     assert.ok(help);

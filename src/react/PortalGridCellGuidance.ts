@@ -88,6 +88,7 @@ export function PortalGridCellGuidance(props: {
                           onOpenChange: setOpen,
                           onMouseEnter: show,
                           onMouseLeave: leave,
+                          keepOpenOnAnchorInteraction: true,
                       },
                       props.text
                   )

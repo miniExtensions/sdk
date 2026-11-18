@@ -1,6 +1,6 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "bcc2ac6a14b77374aa72c60a909b20fbe9bdd115",
+    "sourceRevision": "8e057a9656bdc3a84901451b4f48020ec5b59a24",
     "compilerVersion": "5.9.3",
     "generatorSha256": "a9f2cfa812290886dca614be71d097651db5c346341e8ea69f586e857c38042a",
     "contractFamily": "postgres",
@@ -318,7 +318,7 @@
         },
         {
             "path": "types/extensions/postgres/formDraft.ts",
-            "sha256": "e24034c7ddcedc1e4429af04e4a2ce569815d57579cccee100cbd78ea406150e"
+            "sha256": "817a55464e830f980228c6a511b9f28258dbbe370e68e7a0f1dc34c18f379956"
         },
         {
             "path": "types/extensions/postgres/nativeDraft.ts",
@@ -423,6 +423,6 @@
             "sha256": "293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec"
         }
     ],
-    "declarationCount": 219,
-    "generatedSha256": "43292dc4b443f14eb6343cc704ffb79bfe71307b1e3a09bd77ea05f00be1522a"
+    "declarationCount": 222,
+    "generatedSha256": "18ce93b3cfd9815bd44060ad4a9526696e987737fb5c7d3d1b30fdd047e43fb4"
 }

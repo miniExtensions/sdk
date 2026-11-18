@@ -868,6 +868,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.submits, 0);
     assert.equal(end.canonicalUnchanged, true);
     const textCell = await checkPlainTextCellBrowser(page);
+    end = await snapshot();
     assert.deepEqual(end.errors, []);
     Object.assign(evidence, {
         status: 'passed',

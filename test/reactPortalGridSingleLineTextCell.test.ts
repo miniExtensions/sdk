@@ -220,6 +220,8 @@ it('uses the host queue for rollback, keeps newer typing and requires a fresh in
     await queue.flush();
     assert.deepEqual(requests, ['Rejected', 'Explicit retry', 'Newer typing']);
     assert.equal(value, 'Newer typing');
+    assert.equal(input(fixture), node);
+    assert.equal(node.value, 'Newer typing');
 });
 
 it('keeps the mounted writer on normal deselection and retires it on actual owner replacement', async (t) => {

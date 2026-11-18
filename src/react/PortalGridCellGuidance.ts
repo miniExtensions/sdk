@@ -4,6 +4,7 @@ import {
     Suspense,
     useEffect,
     useId,
+    useLayoutEffect,
     useRef,
     useState,
     type KeyboardEvent,
@@ -14,6 +15,7 @@ import {
 const FieldTooltipPopup = lazy(() => import('./fieldTooltipPopup.js'));
 
 export function PortalGridCellGuidance(props: {
+    cellIdentity: unknown;
     label: string;
     text: string;
 }): ReactElement {
@@ -45,6 +47,17 @@ export function PortalGridCellGuidance(props: {
         closeTimer.current = setTimeout(hide, 150);
     }
     useEffect(() => () => clearTimeout(closeTimer.current), []);
+    const commitEffect =
+        typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    commitEffect(() => {
+        // A recycled cell must not carry help or focus to the next record.
+        const button = trigger.current;
+        if (button && button.ownerDocument.activeElement === button)
+            button.blur();
+        cancelClose();
+        setOpen(false);
+        setReady(false);
+    }, [props.cellIdentity]);
 
     return h(
         'span',

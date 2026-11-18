@@ -4856,7 +4856,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(gridProof.profiles.length, 4);
     assert.equal(gridProof.tests, 84);
-    assert.equal(gridProof.textCellTests, 20);
+    assert.equal(gridProof.textCellTests, 24);
     assert.equal(gridProof.ratingCellTests, 32);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'

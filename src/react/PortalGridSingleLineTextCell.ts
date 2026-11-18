@@ -81,7 +81,10 @@ export function PortalGridSingleLineTextCell({
         copyDisabled,
         guidance:
             selected && editor == null && readOnlyGuidance != null
-                ? h(PortalGridCellGuidance, readOnlyGuidance)
+                ? h(PortalGridCellGuidance, {
+                      ...readOnlyGuidance,
+                      cellIdentity,
+                  })
                 : undefined,
         children: editing
             ? h(SingleLineTextField, {

@@ -120,7 +120,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
-    const textCellCases = 5;
+    const textCellCases = 6;
     const emptyCellCases = 3;
     const ratingCellCases = 8;
     for (const [react, types, domTypes] of [

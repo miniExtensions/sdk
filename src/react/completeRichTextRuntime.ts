@@ -118,6 +118,10 @@ function synchronizeNativeTextSelection(
     return !current();
 }
 
+// Keep the leading timeout in the same realm and duration as the pinned
+// ProseMirror focus fallback (prosemirror-view 1.33.1, src/input.ts).
+const focusSelectionReconciliationMs = 20;
+
 const nativeNavigationKeys = new Set([
     'ArrowLeft',
     'ArrowRight',
@@ -128,6 +132,12 @@ const nativeNavigationKeys = new Set([
     'PageUp',
     'PageDown',
 ]);
+
+type PendingFocusNavigation = {
+    doc: Editor['view']['state']['doc'];
+    before: TextSelection;
+    keydown: KeyboardEvent;
+};
 
 type FocusWitness = {
     doc: Editor['view']['state']['doc'];
@@ -143,6 +153,8 @@ function createFocusWitnessController(editor: Editor, view: Editor['view']) {
     let witness: FocusWitness | undefined;
     let disposed = false;
     let restoring = false;
+    let focusNavigationTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingNavigation: PendingFocusNavigation | undefined;
     const activePointers = new Set<string>();
     const scoped = () =>
         !disposed &&
@@ -154,6 +166,45 @@ function createFocusWitnessController(editor: Editor, view: Editor['view']) {
         !view.composing;
     const focused = () =>
         scoped() && view.hasFocus() && document.activeElement === view.dom;
+    const cancelFocusNavigation = () => {
+        if (focusNavigationTimer !== undefined)
+            clearTimeout(focusNavigationTimer);
+        focusNavigationTimer = undefined;
+        pendingNavigation = undefined;
+    };
+    const scheduleFocusNavigation = () => {
+        cancelFocusNavigation();
+        // ProseMirror calls handleDOMEvents.focus before queuing its equal
+        // timeout. Publish confirmed native movement before its model-to-DOM
+        // fallback can overwrite that movement.
+        focusNavigationTimer = setTimeout(() => {
+            const movement = pendingNavigation;
+            focusNavigationTimer = undefined;
+            pendingNavigation = undefined;
+            if (
+                !movement ||
+                movement.keydown.defaultPrevented ||
+                !focused() ||
+                activePointers.size !== 0
+            )
+                return;
+            const state = view.state;
+            if (
+                state.doc !== movement.doc ||
+                !(state.selection instanceof TextSelection)
+            )
+                return;
+            const native = readNativeTextSelection(view, state);
+            if (
+                native &&
+                !native.eq(movement.before) &&
+                !native.eq(state.selection) &&
+                focused() &&
+                view.state === state
+            )
+                view.dispatch(state.tr.setSelection(native));
+        }, focusSelectionReconciliationMs);
+    };
     const clearStaleWitness = () => {
         if (
             witness &&
@@ -172,6 +223,7 @@ function createFocusWitnessController(editor: Editor, view: Editor['view']) {
     const inEditor = (event: Event) => contains(event.target);
     const pointerStart = (event: Event) => {
         if (disposed || !inEditor(event)) return;
+        cancelFocusNavigation();
         // Capture on the owner document runs before descendant handlers and
         // NodeView stopEvent. Even canceled/default-prevented intent refuses.
         witness = undefined;
@@ -246,6 +298,7 @@ function createFocusWitnessController(editor: Editor, view: Editor['view']) {
     return {
         blur(event: FocusEvent): boolean {
             if (event.target !== view.dom) return false;
+            cancelFocusNavigation();
             witness = undefined;
             if (
                 !scoped() ||
@@ -277,6 +330,7 @@ function createFocusWitnessController(editor: Editor, view: Editor['view']) {
         },
         focus(event: FocusEvent): boolean {
             if (event.target !== view.dom || restoring) return false;
+            if (focused()) scheduleFocusNavigation();
             clearStaleWitness();
             const retained = witness;
             // Consume before restoration, including unsupported or reentrant focus.
@@ -311,11 +365,35 @@ function createFocusWitnessController(editor: Editor, view: Editor['view']) {
             }
             return !focused();
         },
+        recordNativeNavigation(event: KeyboardEvent) {
+            if (focusNavigationTimer === undefined) return;
+            pendingNavigation = undefined;
+            if (
+                !event.isTrusted ||
+                event.defaultPrevented ||
+                event.isComposing ||
+                event.keyCode === 229 ||
+                !nativeNavigationKeys.has(event.key) ||
+                !focused() ||
+                activePointers.size !== 0
+            )
+                return;
+            const state = view.state;
+            if (!(state.selection instanceof TextSelection)) return;
+            const before = readNativeTextSelection(view, state);
+            if (before)
+                pendingNavigation = { doc: state.doc, before, keydown: event };
+        },
+        finishNativeNavigation(event: KeyboardEvent) {
+            if (event.isTrusted && pendingNavigation?.keydown.key === event.key)
+                pendingNavigation = undefined;
+        },
         update() {
             clearStaleWitness();
         },
         destroy() {
             disposed = true;
+            cancelFocusNavigation();
             witness = undefined;
             activePointers.clear();
             for (const type of starts)
@@ -358,7 +436,14 @@ class NativeTextSelectionExtension extends Extension {
                     };
                 },
                 props: {
-                    handleKeyDown: synchronize,
+                    handleKeyDown: (view, event) => {
+                        const handled = synchronize(view, event);
+                        if (!handled)
+                            focusWitnesses
+                                .get(view)
+                                ?.recordNativeNavigation(event);
+                        return handled;
+                    },
                     handleDOMEvents: {
                         focus: (view, event) =>
                             focusWitnesses.get(view)?.focus(event) ?? false,
@@ -370,6 +455,9 @@ class NativeTextSelectionExtension extends Extension {
                         keyup: (view, event) => {
                             if (!nativeNavigationKeys.has(event.key))
                                 return false;
+                            focusWitnesses
+                                .get(view)
+                                ?.finishNativeNavigation(event);
                             const handled = synchronize(view, event);
                             if (handled) event.preventDefault();
                             return handled;

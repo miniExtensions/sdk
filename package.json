@@ -202,6 +202,7 @@
         },
         "./react/portal-gallery.css": "./dist/esm/react/portal-gallery.css",
         "./react/readonly-portal-grid.css": "./dist/esm/react/readonly-portal-grid.css",
+        "./react/portal-grid-single-line-text-cell.css": "./dist/esm/react/portal-grid-single-line-text-cell.css",
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
         "./react/portal-map.css": "./dist/esm/react/portal-map.css",

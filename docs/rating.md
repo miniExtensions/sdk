@@ -43,3 +43,15 @@ may own an outer label/help shell without injecting field UI.
 Existing `RatingField({ binding, render?, iconInput? })` and `renderRatingField`
 retain their numeric binding semantics and opt-in icon slots. Controlled mode
 rejects binding, render and iconInput props rather than mixing authority models.
+
+## Portal Grid
+
+`PortalGridRatingCell` renders the table cell, selected editor and readonly
+Rating summary. Import `@miniextensions/sdk/react/rating.css` and
+`@miniextensions/sdk/react/portal-grid-cell.css`.
+
+Supply the host's selected state, `onSelect`, canonical value and display
+text. For editable cells, pass an `editor` with its captured `owner` and
+`onChange`. The first icon click selects the cell. The selected editor sends
+an icon or keyboard change only while its owner is current. The host's
+existing writer handles publication, rollback and settlement.

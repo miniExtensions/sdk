@@ -3520,3 +3520,8 @@ export type {
     ReadonlyPortalGridHeaderIcon,
     ReadonlyPortalGridLabels,
 } from './ReadonlyPortalGrid.js';
+export {
+    PortalGridSingleLineTextCell,
+    type PortalGridSingleLineTextCellProps,
+    type PortalGridSingleLineTextEditor,
+} from './PortalGridSingleLineTextCell.js';

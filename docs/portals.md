@@ -1056,6 +1056,27 @@ Host adoption must bind the existing owner's mount/session/record/configuration
 lease and keep its transport, dispatch and warning UI in place. This bridge does
 not replace `createPortalListOwner` or create another persistent Portal owner.
 
+## Plain single-line text cells in a host Grid
+
+Render `PortalGridSingleLineTextCell` from `@miniextensions/sdk/react`
+inside a table row. Import `@miniextensions/sdk/react/portal-grid-single-line-text-cell.css`
+and `@miniextensions/sdk/react/single-line-text.css` for the cell and input.
+Provide the canonical text value, the display string, and the localized field
+title. The host controls `selected` and supplies `onSelect`. Selecting the cell
+focuses its surface and only invokes that selection callback.
+
+Supply `editor` when the host has admitted ordinary writable text. Its
+`owner` observes the accepted frame and write policy, and `onChange` delegates
+to the host's existing Grid writer. Keep the same owner through ordinary value,
+selection, and display refreshes. Retire it on an accepted-frame or edit-policy
+replacement. The editor commits literal text, including an empty string, on
+its normal Enter or blur path. On a still-admitted dirty unmount it uses its
+original writer. The mounted editor's transient draft stays with the
+`SingleLineTextField`.
+
+The cell delegates mutation, rollback, retry and refresh to the host. Use the
+following existing queue for a host with session-owned edit settlement.
+
 ## Session-owned inline edits in an existing host
 
 `createPortalInlineEditQueue<Value, Request, Result>` owns native in-memory

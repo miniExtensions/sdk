@@ -221,6 +221,7 @@ export function assertModuleFormats(root) {
                 './react/portal-summary-cards.css',
                 './react/portal-gallery.css',
                 './react/readonly-portal-grid.css',
+                './react/portal-grid-single-line-text-cell.css',
                 './react/form-progress.css',
                 './react/form-pages.css',
                 './react/field-presentation.css',

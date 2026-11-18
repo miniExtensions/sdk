@@ -3653,7 +3653,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkFormCompositionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
-        26
+        32
     );
     const conditionalValidationChecks =
         await checkConditionalPageValidationConsumer({

@@ -3430,6 +3430,13 @@ export type {
 } from './CompletePortalShell.js';
 
 export {
+    CompleteFormComposition,
+    type CompleteFormCompositionProps,
+    type FormCompositionField,
+    type FormCompositionItem,
+    type FormCompositionPrimaryAction,
+} from './CompleteFormComposition.js';
+export {
     FormSubmitButton,
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';

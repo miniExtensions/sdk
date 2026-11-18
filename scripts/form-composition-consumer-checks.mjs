@@ -8,7 +8,7 @@ import { rendererTypedConsumer } from './renderer-consumer-checks.mjs';
 // Reuse the complete 33-kind native metadata/value/config correlation oracle.
 export const formCompositionTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
-import { AirtableForm } from '@miniextensions/sdk/react';
+import { AirtableForm, CompleteFormComposition, type CompleteFormCompositionProps, type FormCompositionItem } from '@miniextensions/sdk/react';
 import { createFormRenderScope, type FormRenderScope, type FormRenderSnapshot } from '@miniextensions/sdk/ui';
 import type { FormFieldBindings, FormPageOwner } from '@miniextensions/sdk/forms';
 ${rendererTypedConsumer.replace('Required<FieldRendererSlots<string>>', 'Required<FieldRendererSlots<ReactNode>>').replace('const rendered: string =', 'const rendered: ReactNode =')}
@@ -25,6 +25,14 @@ createElement(AirtableForm, {scope,renderers:slots,children: state => {
  state.fields[0].host;
  void [revision,nodes]; return createElement('form',null,...nodes.map(f=>f.node));
 }});
+const complete: CompleteFormCompositionProps = {
+    formId: 'consumer-form',
+    items: [{kind: 'field', key: 'literal-field', node: createElement('input', {form: 'consumer-form'})}] satisfies readonly FormCompositionItem[],
+    validation: {heading: 'Check the fields', diagnostics: []},
+    primary: {kind: 'terminal', label: 'Save', mode: 'save', saving: false, canSubmit: true},
+    onSubmit: event => { event.preventDefault(); },
+};
+createElement(CompleteFormComposition, complete);
 // @ts-expect-error consumer must supply its layout
 createElement(AirtableForm, {scope,renderers:slots});
 // @ts-expect-error observed configuration revision is required
@@ -34,7 +42,17 @@ scope.setValue({answer:'replacement'});
 void [snapshot,retained,owns];
 `;
 
-function makeFixture(forms, configure = () => {}) {
+function makeFixture(
+    forms,
+    configure = () => {},
+    validationErrors = [
+        {
+            fieldId: 'a',
+            fieldTitle: 'a',
+            errorMessage: 'Synthetic validation',
+        },
+    ]
+) {
     const loaded = portalRecipeFixtures.makeForm({
         childExtensionInfo: { accessType: { type: 'create' } },
     });
@@ -94,13 +112,7 @@ function makeFixture(forms, configure = () => {}) {
                 calls.push(structuredClone(input));
                 return {
                     type: 'error',
-                    formValidationErrors: [
-                        {
-                            fieldId: 'a',
-                            fieldTitle: 'a',
-                            errorMessage: 'Synthetic validation',
-                        },
-                    ],
+                    formValidationErrors: validationErrors,
                     formErrors: {},
                 };
             },
@@ -142,7 +154,304 @@ function makeFixture(forms, configure = () => {}) {
     };
 }
 
-async function checkMount(f, scope, api, require, retainedControls = false) {
+function characterizeHostPresentation(
+    api,
+    { formId, diagnostics, useCompleteComposition }
+) {
+    let submission;
+    let submitCount = 0;
+    let hostAdmitsSubmit = true;
+    return {
+        render(state, createElement) {
+            const [prefix, ...grouped] = state.fields;
+            const field = ({ fieldId, node }) =>
+                createElement('div', { id: fieldId, key: fieldId }, node);
+            const handleSubmit = (event) => {
+                event.preventDefault();
+                submitCount++;
+                submission = state.actions.submit();
+            };
+            const group = {
+                title: 'Grouped fields',
+                isExpanded: false,
+                allFieldsHidden: false,
+                hasError: state.validationErrors.some(
+                    ({ fieldId }) => fieldId === 'b'
+                ),
+            };
+            const validation = {
+                heading: 'Check these fields',
+                diagnostics: state.validationErrors,
+            };
+            const terminal = {
+                label: 'Save response',
+                mode: 'save',
+                saving: false,
+                canSubmit: hostAdmitsSubmit && state.canSave,
+            };
+            if (useCompleteComposition) {
+                const item = (entry) => ({
+                    kind: 'field',
+                    key: entry.fieldId,
+                    node: field(entry),
+                });
+                return createElement(api.CompleteFormComposition, {
+                    formId,
+                    onSubmit: handleSubmit,
+                    items: [
+                        item(prefix),
+                        {
+                            kind: 'group',
+                            key: grouped[0].fieldId,
+                            group,
+                            fields: grouped.map(item),
+                        },
+                    ],
+                    validation,
+                    primary: { kind: 'terminal', ...terminal },
+                });
+            }
+            return createElement(
+                'section',
+                null,
+                createElement('form', {
+                    id: formId,
+                    noValidate: true,
+                    onSubmit: handleSubmit,
+                }),
+                field(prefix),
+                createElement(api.FormGroup, group, ...grouped.map(field)),
+                createElement(api.FormValidationSummary, validation),
+                createElement(api.FormSubmitButton, { ...terminal, formId })
+            );
+        },
+        async verify({ act, container, fixture, rerender }) {
+            const form = container.querySelector('form');
+            const group = container.querySelector('.mx-sdk-form-group');
+            const disclosure = group.querySelector('button[aria-expanded]');
+            const terminal = container.querySelector('button[type=submit]');
+            const prefixId = diagnostics[0].fieldId;
+            const prefix = container.ownerDocument.getElementById(prefixId);
+            assert.equal(form.id, formId);
+            assert.equal(form.noValidate, true);
+            assert.equal(container.querySelectorAll('form').length, 1);
+            assert.equal(form.childElementCount, 0);
+            assert.equal(terminal.form, form);
+            assert.equal(terminal.getAttribute('aria-label'), 'Save response');
+            assert.equal(terminal.disabled, false);
+            assert.equal(prefix.nextElementSibling, group);
+            assert.equal(prefix.textContent, 'A');
+            assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
+            assert.equal(container.ownerDocument.getElementById('b'), null);
+            assert.equal(container.querySelector('[role=alert]'), null);
+
+            await act(async () => disclosure.click());
+            assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
+            assert.equal(group.querySelector('[id=b]').textContent, 'B');
+            await act(async () => disclosure.click());
+            assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
+            assert.equal(submitCount, 0);
+            assert.equal(fixture.calls.length, 0);
+
+            if (useCompleteComposition) {
+                hostAdmitsSubmit = false;
+                await act(async () => rerender());
+                assert.equal(terminal.disabled, true);
+                await act(async () => terminal.click());
+                const submitEvent =
+                    new container.ownerDocument.defaultView.Event('submit', {
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                await act(async () => form.dispatchEvent(submitEvent));
+                assert.equal(submitEvent.defaultPrevented, true);
+                assert.equal(submitCount, 0);
+                assert.equal(fixture.calls.length, 0);
+                hostAdmitsSubmit = true;
+                await act(async () => rerender());
+                assert.equal(terminal.disabled, false);
+            }
+            await act(async () => {
+                terminal.click();
+                assert(submission);
+                await submission;
+            });
+            assert.equal(submitCount, 1);
+            assert.equal(fixture.calls.length, 1);
+            assert.deepEqual(fixture.calls[0].formRecord.data, {
+                [prefixId]: 'A',
+                b: 'B',
+                c: 'C',
+                unrendered: { text: 'native' },
+            });
+            const links = Array.from(
+                container.querySelectorAll('[role=alert] a')
+            );
+            assert.deepEqual(
+                links.map((a) => [a.getAttribute('href'), a.textContent]),
+                diagnostics.map(({ fieldId, fieldTitle }) => [
+                    `#${fieldId}`,
+                    fieldTitle,
+                ])
+            );
+            assert.equal(
+                container.ownerDocument.getElementById(prefixId),
+                prefix
+            );
+            assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
+            assert.equal(container.ownerDocument.getElementById('b'), null);
+        },
+    };
+}
+
+function characterizeCompositionActions(api) {
+    const formId = 'composition-action-form';
+    const calls = [];
+    let mode = 'next';
+    let reviewOpen = false;
+    let currentRevision = 0;
+    let reviewedRevision;
+    let onReviewConfirmation;
+    return {
+        render(_state, createElement) {
+            const primary =
+                mode === 'next'
+                    ? {
+                          kind: 'next',
+                          label: 'Continue',
+                          onClick: () => calls.push('duplicate click'),
+                      }
+                    : {
+                          kind: 'terminal',
+                          label: mode === 'review' ? 'Review' : 'Compute',
+                          mode,
+                          saving: false,
+                          canSubmit: true,
+                      };
+            return createElement(api.CompleteFormComposition, {
+                formId,
+                items: [
+                    {
+                        kind: 'field',
+                        key: 'answer',
+                        node: createElement('input', {
+                            form: formId,
+                            'aria-label': 'Answer',
+                        }),
+                    },
+                ],
+                primary,
+                back: { label: 'Previous', onClick: () => calls.push('back') },
+                onSubmit(event) {
+                    assert.equal(event.defaultPrevented, true);
+                    calls.push(mode);
+                    if (mode === 'review') {
+                        reviewedRevision = currentRevision;
+                        reviewOpen = true;
+                    }
+                },
+                review: {
+                    open: reviewOpen,
+                    items: [],
+                    title: 'Review answers',
+                    editLabel: 'Edit',
+                    confirmLabel: 'Confirm',
+                    emptyLabel: 'Nothing to review',
+                    dialogFrame: ({ children }) =>
+                        createElement('div', { role: 'dialog' }, children),
+                    onEdit: () => {
+                        reviewOpen = false;
+                        calls.push('edit');
+                    },
+                    onDismiss: () => calls.push('dismiss'),
+                    onConfirm: () => {
+                        if (reviewedRevision !== currentRevision) return;
+                        onReviewConfirmation();
+                    },
+                },
+            });
+        },
+        async verify({ act, container, fixture, rerender }) {
+            onReviewConfirmation = () => calls.push('save');
+            const form = container.querySelector('form');
+            const input = container.querySelector('input');
+            const back = container.querySelector('button[aria-label=Previous]');
+            assert.equal(input.form, form);
+            assert.equal(back.type, 'button');
+            await act(async () => back.click());
+            assert.deepEqual(calls, ['back']);
+            const next = container.querySelector('button[aria-label=Continue]');
+            assert.equal(next.form, form);
+            assert.equal(next.type, 'submit');
+            const cancelledSubmit =
+                new container.ownerDocument.defaultView.Event('submit', {
+                    bubbles: true,
+                    cancelable: true,
+                });
+            cancelledSubmit.preventDefault();
+            await act(async () => form.dispatchEvent(cancelledSubmit));
+            assert.deepEqual(calls, ['back']);
+            await act(async () => next.click());
+            assert.deepEqual(calls, ['back', 'next']);
+
+            mode = 'compute';
+            await act(async () => rerender());
+            const compute = container.querySelector(
+                'button[aria-label=Compute]'
+            );
+            assert.equal(compute.form, form);
+            await act(async () => form.requestSubmit());
+            assert.deepEqual(calls, ['back', 'next', 'compute']);
+
+            mode = 'review';
+            await act(async () => rerender());
+            const review = container.querySelector('button[aria-label=Review]');
+            await act(async () => review.click());
+            await act(async () => rerender());
+            const confirm = container.querySelector(
+                '.mx-sdk-form-review-confirm'
+            );
+            assert.equal(confirm.type, 'button');
+            assert.deepEqual(calls, ['back', 'next', 'compute', 'review']);
+            currentRevision++;
+            await act(async () => confirm.click());
+            assert.deepEqual(calls, ['back', 'next', 'compute', 'review']);
+            const edit = Array.from(
+                container.querySelectorAll('[role=dialog] button')
+            ).find((button) => button.textContent === 'Edit');
+            await act(async () => edit.click());
+            await act(async () => rerender());
+            assert.equal(container.querySelector('[role=dialog]'), null);
+
+            await act(async () => review.click());
+            await act(async () => rerender());
+            await act(async () =>
+                container.querySelector('.mx-sdk-form-review-confirm').click()
+            );
+            assert.deepEqual(calls, [
+                'back',
+                'next',
+                'compute',
+                'review',
+                'edit',
+                'review',
+                'save',
+            ]);
+            assert.equal(container.querySelector('form'), form);
+            assert.equal(container.querySelector('input'), input);
+            assert.equal(fixture.calls.length, 0);
+        },
+    };
+}
+
+async function checkMount(
+    f,
+    scope,
+    api,
+    require,
+    retainedControls = false,
+    hostPresentation
+) {
     const { Window } = createRequire(import.meta.url)('happy-dom');
     const window = new Window();
     const keys = [
@@ -215,6 +524,8 @@ async function checkMount(f, scope, api, require, retainedControls = false) {
                 },
                 children: (s) => {
                     last = s;
+                    if (hostPresentation)
+                        return hostPresentation.render(s, createElement);
                     return createElement(
                         'section',
                         null,
@@ -229,6 +540,16 @@ async function checkMount(f, scope, api, require, retainedControls = false) {
         await act(async () => root.render(tree()));
         mounted = true;
         assert.equal(f.calls.length, 0);
+        if (hostPresentation) {
+            await hostPresentation.verify({
+                act,
+                container,
+                fixture: f,
+                rerender: () => root.render(tree()),
+            });
+            assert.equal(fallbacks, 0);
+            return;
+        }
         if (retainedControls === 'hidden') {
             assert(!last.fields.some((f) => f.fieldId === 'a'));
             assert.equal(fallbacks, 0);
@@ -332,8 +653,8 @@ export async function checkFormCompositionConsumer({ consumerDirectory }) {
         const fixtures = [],
             scopes = [],
             pages = [];
-        const fixture = (fn) => {
-            const f = makeFixture(forms, fn);
+        const fixture = (fn, diagnostics) => {
+            const f = makeFixture(forms, fn, diagnostics);
             fixtures.push(f);
             return f;
         };
@@ -356,6 +677,57 @@ export async function checkFormCompositionConsumer({ consumerDirectory }) {
                 stop();
                 assert.equal(f.calls.length, 0);
                 await checkMount(f, s, react, require);
+                checks++;
+            }
+            for (const useCompleteComposition of [false, true]) {
+                const prefixId = 'field[raw]:prefix';
+                const diagnostics = [
+                    {
+                        fieldId: prefixId,
+                        fieldTitle: 'Prefix field',
+                        errorMessage: 'Provide a different answer',
+                    },
+                    {
+                        fieldId: 'b',
+                        fieldTitle: 'Grouped field',
+                        errorMessage: 'A committed value is required',
+                    },
+                ];
+                const f = fixture((p, schema) => {
+                    p.payload.fieldIdsInForm = [prefixId, 'b', 'c'];
+                    p.payload.fieldIdsToSchemas[prefixId] = schema(prefixId);
+                    delete p.payload.fieldIdsToSchemas.a;
+                    p.payload.formRecord.data[prefixId] =
+                        p.payload.formRecord.data.a;
+                    delete p.payload.formRecord.data.a;
+                    p.payload.publicFields.state.multiPageFormMode = 'one-page';
+                }, diagnostics);
+                const s = scope(f);
+                await checkMount(
+                    f,
+                    s,
+                    react,
+                    require,
+                    false,
+                    characterizeHostPresentation(react, {
+                        formId: 'existing-native-submit',
+                        diagnostics,
+                        useCompleteComposition,
+                    })
+                );
+                checks++;
+            }
+            {
+                const f = fixture();
+                const s = scope(f);
+                await checkMount(
+                    f,
+                    s,
+                    react,
+                    require,
+                    false,
+                    characterizeCompositionActions(react)
+                );
                 checks++;
             }
             {

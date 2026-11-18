@@ -8,14 +8,15 @@ import { fileURLToPath } from 'node:url';
 
 const sdkPath = 'node_modules/@miniextensions/sdk';
 
-// One reader belongs to one admitted archive and one preparation run. Recheck
-// its actual bytes on every request, including cache hits; file metadata alone
-// cannot establish that an archive is unchanged. Installed inputs are still
-// read and compared by each caller, never cached here.
+// One reader belongs to one admitted archive and one preparation run. Admit
+// the first snapshot by digest, then compare freshly read bytes with that
+// private snapshot on every request, including cache hits. Installed inputs
+// are still read and compared by each caller, never cached here.
 export function createArchiveMemberReader({ archivePath, expectedSha256 }) {
     assert.match(expectedSha256, /^[a-f0-9]{64}$/);
     const archive = resolve(archivePath);
     const members = new Map();
+    let admittedSnapshot;
     let requests = 0;
     let captures = 0;
     const read = (member) => {
@@ -41,11 +42,19 @@ export function createArchiveMemberReader({ archivePath, expectedSha256 }) {
             'Archive must not be redirected'
         );
         const snapshot = readFileSync(archive);
-        assert.equal(
-            createHash('sha256').update(snapshot).digest('hex'),
-            expectedSha256,
-            'Admitted archive bytes changed'
-        );
+        if (admittedSnapshot === undefined) {
+            assert.equal(
+                createHash('sha256').update(snapshot).digest('hex'),
+                expectedSha256,
+                'Admitted archive bytes changed'
+            );
+            admittedSnapshot = snapshot;
+        } else {
+            assert(
+                snapshot.equals(admittedSnapshot),
+                'Admitted archive bytes changed'
+            );
+        }
         requests++;
         if (!members.has(member)) {
             captures++;

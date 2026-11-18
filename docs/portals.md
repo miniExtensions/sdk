@@ -986,6 +986,37 @@ Retained handlers fail closed after observed owner/configuration changes,
 including observed A→B→A; unobserved in-place restoration is not detectable.
 The core subpath has no React dependency.
 
+### Visitor Search
+
+`PortalVisitorSearch` from `/react` renders an inline search control for a
+host-owned Portal collection. Typing changes its local draft. Enter, Search,
+and Clear each submit one command. Search preserves the exact input, including
+whitespace, and allows a later explicit submission of the same term.
+
+The port reads the current committed term, owner stamp and nonnegative integer
+`publicationRevision` and subscribes to those changes. Advance the revision
+when publishing a changed term, including a return to an earlier value. A
+same-term reload can keep the revision stable even if its confirmed
+allocation advances the owner generation.
+Validate the captured stamp, `expectedSearchTerm` and
+`expectedPublicationRevision` before writing, then revalidate the installed
+first-page request before transport. Report an allocation only after invoking
+transport. When a command changes the term, return that command's verified
+`committedPublication` with its generation and revision, including when the
+subsequent read is refused or uncertain. A same-term allocation can report
+its verified generation without a publication receipt. The control checks the
+live frame at settlement and delivers feedback only to its owning
+subscription and publication. A read exception prevents commands and feedback
+from using an unverified frame. A later successful read can confirm the
+existing draft or show its replacement. The gesture that discovers a
+replacement does not submit it. Retries require a fresh user action.
+
+An optional scanner renderer captures the result callback when the scanner
+opens. Retire that callback on close. A captured callback accepts one result
+and fails closed when its captured frame is retired. Headless consumers can
+use `createPortalVisitorSearchDraft` from `/portals` with the same command
+contract. A draft remains retired once it observes a different frame.
+
 ### Parent-record summary cards
 
 `PortalSummaryCards` from `@miniextensions/sdk/react` supplies the complete
@@ -1055,6 +1086,36 @@ start a read, and a throwing `onFresh` is not treated as a transport failure.
 Host adoption must bind the existing owner's mount/session/record/configuration
 lease and keep its transport, dispatch and warning UI in place. This bridge does
 not replace `createPortalListOwner` or create another persistent Portal owner.
+
+## Plain single-line text cells in a host Grid
+
+Render `PortalGridSingleLineTextCell` from `@miniextensions/sdk/react`
+inside a table row. Import `@miniextensions/sdk/react/portal-grid-single-line-text-cell.css`
+and `@miniextensions/sdk/react/single-line-text.css` for the cell and input.
+Provide the canonical text value, the display string, and the localized field
+title. The host controls `selected` and supplies `onSelect`. Selecting the cell
+focuses its surface and only invokes that selection callback.
+
+Supply `editor` when the host has admitted ordinary writable text. Its
+`owner` observes the accepted frame and write policy, and `onChange` delegates
+to the host's existing Grid writer. Keep the same owner through ordinary value,
+selection, and display refreshes. Retire it on an accepted-frame or edit-policy
+replacement. The editor commits literal text, including an empty string, on
+its normal Enter or blur path. On a still-admitted dirty unmount it uses its
+original writer. The mounted editor's transient draft stays with the
+`SingleLineTextField`.
+
+The cell delegates mutation, rollback, retry and refresh to the host. Use the
+following existing queue for a host with session-owned edit settlement.
+
+## Empty cells in a host Grid
+
+Use `PortalGridEmptyCell` from `@miniextensions/sdk/react` with
+`@miniextensions/sdk/react/portal-grid-empty-cell.css` for a visible Grid column
+whose row has no detail field. Render it directly inside the table row with
+the configured `rowHeight`. Pass `lastRow` to omit its bottom border and
+`stickyLeft` for the first column, including a zero offset. The placeholder
+keeps that column's position and carries no editor or selection handlers.
 
 ## Session-owned inline edits in an existing host
 

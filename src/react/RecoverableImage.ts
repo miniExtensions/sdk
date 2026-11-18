@@ -15,6 +15,8 @@ export type RecoverableImageProps = Omit<
     /** Caller-authorized sources, tried in order; no URL rewriting or write authority. */
     sources: readonly string[];
     alt: string;
+    /** Optional live resource check before rendering or advancing an image attempt. */
+    isCurrent?(): boolean;
     /** Caller owns localized markup and retry-event containment. */
     renderFallback(retry: () => void): ReactNode;
 };
@@ -25,32 +27,29 @@ type ImageChainProps = RecoverableImageProps & {
 
 function ImageChain({
     sources,
+    isCurrent,
     renderFallback,
     forwardedRef,
     ...native
 }: ImageChainProps) {
     const [current, setCurrent] = useState({ index: 0, attempt: 0 });
+    if (isCurrent?.() === false) return null;
+    const advance = (next: typeof current) => {
+        if (isCurrent?.() === false) return;
+        setCurrent((previous) =>
+            previous === current && isCurrent?.() !== false ? next : previous
+        );
+    };
     if (current.index >= sources.length)
         return renderFallback(() =>
-            setCurrent((previous) =>
-                previous.index === current.index &&
-                previous.attempt === current.attempt
-                    ? { index: 0, attempt: previous.attempt + 1 }
-                    : previous
-            )
+            advance({ index: 0, attempt: current.attempt + 1 })
         );
     return createElement('img', {
         ...native,
         ref: forwardedRef,
         src: sources[current.index],
         key: `${current.index}-${current.attempt}`,
-        onError: () =>
-            setCurrent((previous) =>
-                previous.index === current.index &&
-                previous.attempt === current.attempt
-                    ? { ...previous, index: previous.index + 1 }
-                    : previous
-            ),
+        onError: () => advance({ ...current, index: current.index + 1 }),
     });
 }
 

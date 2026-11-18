@@ -177,9 +177,15 @@ function GridHeader({
 }: HeaderProps) {
     const header = useRef<HTMLTableCellElement>(null);
     const stopDrag = useRef<(() => void) | null>(null);
+    const pointerSettlement = useRef<(() => void) | null>(null);
     const keyboardMove = useRef(false);
     const commitPort = useRef(onCommit);
+    // Host widths and commits use clientWidth (padding included, borders excluded).
+    // Translate only at the CSS boundary so settlement/host echoes cannot shrink
+    // border-box headers or cancel ordinary one-pixel keyboard movement.
     const [localWidth, setLocalWidth] = useState(() => admittedWidth(width));
+    const [cssWidthAdjustment, setCssWidthAdjustment] = useState(0);
+    const [releaseSequence, setReleaseSequence] = useState(0);
 
     useEffect(() => {
         if (stopDrag.current == null && !keyboardMove.current)
@@ -189,6 +195,7 @@ function GridHeader({
         () => () => {
             stopDrag.current?.();
             stopDrag.current = null;
+            pointerSettlement.current = null;
             keyboardMove.current = false;
         },
         []
@@ -206,15 +213,36 @@ function GridHeader({
     const cancel = () => {
         stopDrag.current?.();
         stopDrag.current = null;
+        pointerSettlement.current = null;
         keyboardMove.current = false;
         setLocalWidth(admittedWidth(width));
     };
     const commitEffect =
         typeof window === 'undefined' ? useEffect : useLayoutEffect;
     commitEffect(() => {
+        const cell = header.current;
+        const view = cell?.ownerDocument.defaultView;
+        if (!cell || !view) return;
+        const style = view.getComputedStyle(cell);
+        const pixels = (value: string) => {
+            const result = Number.parseFloat(value);
+            return Number.isFinite(result) ? result : 0;
+        };
+        setCssWidthAdjustment(
+            style.boxSizing === 'border-box'
+                ? pixels(style.borderLeftWidth) + pixels(style.borderRightWidth)
+                : -pixels(style.paddingLeft) - pixels(style.paddingRight)
+        );
+    }, []);
+    commitEffect(() => {
         commitPort.current = onCommit;
         if (!onCommit) cancel();
     }, [onCommit]);
+    commitEffect(() => {
+        const measure = pointerSettlement.current;
+        pointerSettlement.current = null;
+        measure?.();
+    }, [releaseSequence]);
     const start = (event: ReactPointerEvent<HTMLSpanElement>) => {
         const cell = header.current;
         if (!onCommit || !cell || !current(isCurrent) || event.button !== 0)
@@ -222,7 +250,9 @@ function GridHeader({
         event.preventDefault();
         event.stopPropagation();
         stopDrag.current?.();
+        pointerSettlement.current = null;
         let lastX = event.clientX;
+        let requestedWidth: number | undefined;
         const pointerId = event.pointerId;
         const document = cell.ownerDocument;
         const cleanup = () => {
@@ -239,14 +269,27 @@ function GridHeader({
             next.preventDefault();
             const delta = next.clientX - lastX;
             lastX = next.clientX;
-            setLocalWidth((previous) => (previous ?? cell.clientWidth) + delta);
+            requestedWidth =
+                (requestedWidth ?? localWidth ?? cell.clientWidth) + delta;
+            setLocalWidth(requestedWidth);
         };
         const end = (next: PointerEvent) => {
             if (next.pointerId !== pointerId) return;
             cleanup();
             stopDrag.current = null;
-            if (current(isCurrent)) settle();
-            else setLocalWidth(admittedWidth(width));
+            if (!current(isCurrent)) {
+                setLocalWidth(admittedWidth(width));
+                return;
+            }
+            if (requestedWidth === undefined) {
+                settle();
+                return;
+            }
+            // Render the final move and this measurement request together.
+            // Reading clientWidth in the release handler can see the old render.
+            pointerSettlement.current = settle;
+            setLocalWidth(requestedWidth);
+            setReleaseSequence((previous) => previous + 1);
         };
         const cancelled = (next: PointerEvent) => {
             if (next.pointerId === pointerId) cancel();
@@ -284,7 +327,7 @@ function GridHeader({
             ref: header,
             scope: 'col',
             className: 'mx-sdk-readonly-grid__header',
-            style: { width: localWidth ?? 200 },
+            style: { width: (localWidth ?? 200) + cssWidthAdjustment },
             'data-field-id': column.fieldId,
         },
         h(

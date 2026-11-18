@@ -216,11 +216,17 @@ export function assertModuleFormats(root) {
                 './react/form-completion.css',
                 './react/form-header.css',
                 './react/form-submit.css',
+                './react/form-composition.css',
+                './react/form-record-actions.css',
                 './react/form-validation-summary.css',
                 './react/portal-summary-cards.css',
                 './react/portal-gallery.css',
                 './react/readonly-portal-grid.css',
+                './react/portal-grid-single-line-text-cell.css',
+                './react/portal-grid-cell.css',
+                './react/portal-grid-empty-cell.css',
                 './react/form-progress.css',
+                './react/form-pages.css',
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',
@@ -243,12 +249,18 @@ export function assertModuleFormats(root) {
                 './react/single-select.css',
                 './react/controlled-select.css',
                 './react/readonly-url-gallery.css',
+                './react/attachment-upload-progress.css',
+                './react/attachment-url-input.css',
                 './react/lookup.css',
                 './react/computed.css',
                 './react/rich-text.css',
             ].includes(subpath)
         ) {
-            assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);
+            const stylesheet =
+                subpath === './react/portal-grid-cell.css'
+                    ? 'react/portal-grid-single-line-text-cell.css'
+                    : subpath.slice(2);
+            assert.equal(mapping, `./dist/esm/${stylesheet}`);
             const file = join(root, mapping);
             assert(
                 lstatSync(file).isFile(),

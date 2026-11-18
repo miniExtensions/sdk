@@ -273,6 +273,17 @@ export {
     type MultipleAttachmentsFieldOptions,
 } from './MultipleAttachmentsField.js';
 export {
+    AttachmentUrlInput,
+    type AttachmentUrlDraft,
+    type AttachmentUrlInputLabels,
+    type AttachmentUrlInputProps,
+} from './AttachmentUrlInput.js';
+export {
+    AttachmentUploadProgress,
+    type AttachmentUploadProgressLabels,
+    type AttachmentUploadProgressProps,
+} from './AttachmentUploadProgress.js';
+export {
     ReadonlyAttachmentsField,
     renderReadonlyAttachmentsField,
     type ReadonlyAttachmentsFieldProps,
@@ -3424,9 +3435,25 @@ export type {
 } from './CompletePortalShell.js';
 
 export {
+    CompleteFormComposition,
+    type CompleteFormCompositionProps,
+    type FormCompositionField,
+    type FormCompositionHostSlots,
+    type FormCompositionItem,
+    type FormCompositionPrimaryAction,
+} from './CompleteFormComposition.js';
+export {
     FormSubmitButton,
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
+export {
+    FormRecordDeleteConfirmation,
+    FormRecordActionsFooter,
+    FormRecordActionsMenu,
+    type FormRecordActionsLabels,
+    type FormRecordDeleteConfirmationProps,
+    type FormRecordActionsProps,
+} from './FormRecordActions.js';
 export {
     FormCaptcha,
     type FormCaptchaProps,
@@ -3484,7 +3511,30 @@ export {
     type PrintableFormJobLabels,
 } from './PrintableFormJobControls.js';
 
+export {
+    CompleteFormPageNavigation,
+    FormPageNavigationButton,
+    type FormPageNavigationDescriptor,
+    type CompleteFormPageNavigationProps,
+    type FormPageNavigationButtonProps,
+} from './CompleteFormPageNavigation.js';
+export {
+    CompleteFormReview,
+    type FormReviewItem,
+    type FormReviewDialogFrameProps,
+    type CompleteFormReviewProps,
+} from './CompleteFormReview.js';
 export { ReadonlyPortalGrid } from './ReadonlyPortalGrid.js';
+export { PortalVisitorSearch } from './PortalVisitorSearch.js';
+export type {
+    PortalVisitorSearchLabels,
+    PortalVisitorSearchProps,
+} from './PortalVisitorSearch.js';
+export { PortalVisitorSort } from './PortalVisitorSort.js';
+export type {
+    PortalVisitorSortLabels,
+    PortalVisitorSortProps,
+} from './PortalVisitorSort.js';
 export type {
     ReadonlyPortalGridProps,
     ReadonlyPortalGridColumn,
@@ -3493,3 +3543,17 @@ export type {
     ReadonlyPortalGridHeaderIcon,
     ReadonlyPortalGridLabels,
 } from './ReadonlyPortalGrid.js';
+export {
+    PortalGridSingleLineTextCell,
+    type PortalGridSingleLineTextCellProps,
+    type PortalGridSingleLineTextEditor,
+} from './PortalGridSingleLineTextCell.js';
+export {
+    PortalGridEmptyCell,
+    type PortalGridEmptyCellProps,
+} from './PortalGridEmptyCell.js';
+export {
+    PortalGridRatingCell,
+    type PortalGridRatingCellProps,
+    type PortalGridRatingCellEditor,
+} from './PortalGridRatingCell.js';

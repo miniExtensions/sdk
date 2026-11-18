@@ -14,6 +14,7 @@ import {
 } from '../ui/attachmentPreview.js';
 import { AttachmentPreview } from './AttachmentPreview.js';
 import { ActionButton } from './ActionButton.js';
+import { RecoverableImage } from './RecoverableImage.js';
 import { readResourceResponse } from './resourceResponse.js';
 import {
     resourceOwnerCurrent,
@@ -38,6 +39,7 @@ export type ReadOnlyURLGalleryLabels = {
     next: string;
     selectAttachment: string;
     previewNotAvailable: string;
+    retry?: string;
     empty: string;
     downloadFailed: string;
 };
@@ -70,6 +72,7 @@ const defaults: ReadOnlyURLGalleryLabels = {
     next: 'Next',
     selectAttachment: 'Select attachment',
     previewNotAvailable: 'Preview Not Available',
+    retry: 'Try again',
     empty: 'No Value',
     downloadFailed: 'Could not download attachment',
 };
@@ -79,18 +82,83 @@ const contain = (event: SyntheticEvent) => {
     event.stopPropagation();
 };
 
-function thumbnail(entry: ReadOnlyURLGalleryEntry): ReactNode {
-    const src =
-        entry.thumbnailUrl ??
-        entry.thumbnails?.full?.url ??
-        (isAttachmentPreviewImage(entry) ? entry.url : null);
-    return src == null
-        ? h(
-              'span',
-              { 'aria-hidden': true, className: 'mx-sdk-url-gallery__glyph' },
-              '▤'
+type ThumbnailPresentation = {
+    labels: ReadOnlyURLGalleryLabels;
+    thumbnailRevision: number;
+    resourcesCurrent(): boolean;
+    current(): boolean;
+};
+
+function thumbnail(
+    entry: ReadOnlyURLGalleryEntry,
+    view: ThumbnailPresentation
+): ReactNode {
+    const explicitResource = typeof entry.url === 'string' && entry.url !== '';
+    const image = explicitResource && isAttachmentPreviewImage(entry);
+    const sources = explicitResource
+        ? [
+              entry.thumbnailUrl,
+              entry.thumbnails?.full?.url,
+              image ? entry.url : null,
+          ].filter(
+              (source): source is string =>
+                  typeof source === 'string' &&
+                  source !== '' &&
+                  (image || source !== entry.url)
           )
-        : h('img', { src, alt: '', loading: 'lazy' });
+        : [];
+    if (sources.length === 0)
+        return h(
+            'span',
+            { 'aria-hidden': true, className: 'mx-sdk-url-gallery__glyph' },
+            '▤'
+        );
+    const { labels } = view;
+    return h(RecoverableImage, {
+        key: view.thumbnailRevision,
+        sources,
+        alt: '',
+        loading: 'lazy',
+        isCurrent: view.resourcesCurrent,
+        renderFallback: (retry) =>
+            h(
+                'div',
+                {
+                    className: 'mx-sdk-url-gallery__failure',
+                    role: 'status',
+                    'aria-label': entry.filename
+                        ? `${labels.previewNotAvailable}: ${entry.filename}`
+                        : labels.previewNotAvailable,
+                },
+                h('span', null, labels.previewNotAvailable),
+                h(
+                    ActionButton,
+                    {
+                        className: 'mx-sdk-url-gallery__retry',
+                        onClick: (event: SyntheticEvent<HTMLButtonElement>) => {
+                            contain(event);
+                            if (!view.current()) return;
+                            const button = event.currentTarget;
+                            if (button.ownerDocument.activeElement === button) {
+                                const tile = button.closest(
+                                    '.mx-sdk-url-gallery__entry, .mx-sdk-url-gallery__strip-item'
+                                );
+                                const nextFocus =
+                                    tile?.querySelector<HTMLButtonElement>(
+                                        '.mx-sdk-url-gallery__open, .mx-sdk-url-gallery__select'
+                                    ) ??
+                                    button.closest<HTMLElement>(
+                                        '.mx-sdk-url-gallery__thumbnail'
+                                    );
+                                nextFocus?.focus();
+                            }
+                            retry();
+                        },
+                    },
+                    labels.retry ?? defaults.retry
+                )
+            ),
+    });
 }
 
 /** Retain the ordered selected occurrence before any preview/action dereference. */
@@ -128,6 +196,7 @@ function replacementIndex(
 export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
     const selectionOwner = props.selectionOwner ?? props.owner;
     const generation = resourceOwnerGeneration(selectionOwner);
+    const resourceGeneration = resourceOwnerGeneration(props.owner);
     const selectionIdentity =
         props.selectionOwner === undefined ? props.identity : generation;
     const [, updateAvailability] = useState(0);
@@ -135,6 +204,9 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
         entries: props.entries,
         generation,
         identity: selectionIdentity,
+        resourceGeneration,
+        resourceIdentity: props.identity,
+        thumbnailRevision: 0,
         index: 0,
         open: false,
     });
@@ -142,11 +214,19 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
     const replaced =
         !Object.is(selection.generation, generation) ||
         !Object.is(selection.identity, selectionIdentity);
-    if (selection.entries !== props.entries || replaced) {
+    const resourcesReplaced =
+        replaced ||
+        !Object.is(selection.resourceGeneration, resourceGeneration) ||
+        !Object.is(selection.resourceIdentity, props.identity);
+    if (selection.entries !== props.entries || resourcesReplaced) {
         selected = {
             entries: props.entries,
             generation,
             identity: selectionIdentity,
+            resourceGeneration,
+            resourceIdentity: props.identity,
+            thumbnailRevision:
+                selection.thumbnailRevision + Number(resourcesReplaced),
             index: replaced
                 ? 0
                 : replacementIndex(
@@ -168,10 +248,10 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
         };
     });
     const currentPresentation = () => live.current === props;
-    const current = () =>
-        currentPresentation() &&
+    const resourcesCurrent = () =>
         resourceOwnerCurrent(selectionOwner) &&
         resourceOwnerCurrent(props.owner);
+    const current = () => currentPresentation() && resourcesCurrent();
     const lifetimeCurrent = () =>
         live.current !== null &&
         Object.is(
@@ -218,12 +298,16 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
         );
     }, [props.owner, selectionOwner]);
     const labels = { ...defaults, ...props.labels };
+    const thumbnails: ThumbnailPresentation = {
+        labels,
+        thumbnailRevision: selected.thumbnailRevision,
+        resourcesCurrent,
+        current,
+    };
     const choose = (index: number, open = true) => {
         if (!current() || props.entries.length === 0) return;
         setSelection({
-            entries: props.entries,
-            generation,
-            identity: selectionIdentity,
+            ...selected,
             index: Math.max(0, Math.min(index, props.entries.length - 1)),
             open,
         });
@@ -254,8 +338,7 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
             onDoubleClick: stop,
             onPointerDown: stop,
         },
-        !resourceOwnerCurrent(selectionOwner) ||
-            !resourceOwnerCurrent(props.owner)
+        !resourcesCurrent()
             ? h('p', { role: 'status' }, labels.previewNotAvailable)
             : props.entries.length === 0
               ? h(
@@ -281,8 +364,11 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
                             },
                             h(
                                 'div',
-                                { className: 'mx-sdk-url-gallery__thumbnail' },
-                                thumbnail(item)
+                                {
+                                    className: 'mx-sdk-url-gallery__thumbnail',
+                                    tabIndex: -1,
+                                },
+                                thumbnail(item, thumbnails)
                             ),
                             props.hideAttachmentName === false &&
                                 props.isInGrid !== true
@@ -316,21 +402,17 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
                         )
                     )
                 ),
-        selected.open &&
-            entry != null &&
-            resourceOwnerCurrent(selectionOwner) &&
-            resourceOwnerCurrent(props.owner)
+        selected.open && entry != null && resourcesCurrent()
             ? h(GalleryDialog, {
                   entry,
                   index: selected.index,
                   entries: props.entries,
                   mediaKey: JSON.stringify([entry.url, entry.id, occurrence]),
-                  labels,
+                  ...thumbnails,
                   disableOpen: props.disableOpenFiles === true,
                   disableDownload: props.disableDownloadFiles === true,
                   owner: props.owner,
                   identity: props.identity,
-                  current,
                   lifetimeCurrent,
                   choose,
                   close,
@@ -339,17 +421,15 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
     );
 }
 
-type DialogProps = {
+type DialogProps = ThumbnailPresentation & {
     entry: ReadOnlyURLGalleryEntry;
     index: number;
     entries: readonly ReadOnlyURLGalleryEntry[];
     mediaKey: string;
-    labels: ReadOnlyURLGalleryLabels;
     disableOpen: boolean;
     disableDownload: boolean;
     owner?: ReadonlyResourceOwner;
     identity?: unknown;
-    current(): boolean;
     lifetimeCurrent(): boolean;
     choose(index: number): void;
     close(): void;
@@ -547,14 +627,18 @@ function GalleryDialog(props: DialogProps): ReactNode {
                 { className: 'mx-sdk-url-gallery__strip' },
                 props.entries.map((item, index) =>
                     h(
-                        ActionButton,
+                        'div',
                         {
                             key: `${item.id ?? ''}:${index}`,
+                            className: 'mx-sdk-url-gallery__strip-item',
+                        },
+                        thumbnail(item, props),
+                        h(ActionButton, {
+                            className: 'mx-sdk-url-gallery__select',
                             'aria-label': `${props.labels.selectAttachment} ${index + 1}`,
                             'aria-pressed': index === props.index,
                             onClick: () => props.choose(index),
-                        },
-                        thumbnail(item)
+                        })
                     )
                 )
             )
@@ -562,12 +646,14 @@ function GalleryDialog(props: DialogProps): ReactNode {
     );
 }
 
+const idleDownloadState = {
+    pending: false,
+    percent: 0,
+    failed: false,
+};
+
 function DownloadButton(props: DialogProps): ReactNode {
-    const [state, setState] = useState({
-        pending: false,
-        percent: 0,
-        failed: false,
-    });
+    const [state, setState] = useState(idleDownloadState);
     const active = useRef<AbortController | null>(null);
     const releaseActive = useRef<(() => void) | null>(null);
     const live = useRef<DialogProps | null>(null);
@@ -576,8 +662,9 @@ function DownloadButton(props: DialogProps): ReactNode {
     const generation = resourceOwnerGeneration(props.owner);
     commitEffect(() => {
         live.current = props;
-        if (props.disableDownload)
-            setState({ pending: false, percent: 0, failed: false });
+        // The dialog may stay open for a new owner of the same URL.
+        // The retired request cannot settle state for that owner.
+        setState(idleDownloadState);
         return () => {
             live.current = null;
             releaseActive.current?.();

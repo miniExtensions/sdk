@@ -13,7 +13,9 @@ import {
 } from './native-portal-kernel-consumer-checks.mjs';
 import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
+import { checkNativeFormPagesReactMatrix } from './native-form-pages-consumer-checks.mjs';
 import { checkReadonlyPortalGridReactMatrix } from './readonly-portal-grid-consumer-checks.mjs';
+import { checkPortalVisitorQueryReactMatrix } from './portal-visitor-sort-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -38,6 +40,7 @@ import { documentAssetPaths } from './document-preview-assets.mjs';
 import { checkCompleteAddressReactMatrix } from './complete-address-consumer-checks.mjs';
 import { checkFormTrackingReactMatrix } from './form-tracking-consumer-checks.mjs';
 import { checkFormHeaderReactMatrix } from './form-header-consumer-checks.mjs';
+import { checkFormRecordActionsReactMatrix } from './form-record-actions-consumer-checks.mjs';
 import { checkFormGroupReactMatrix } from './form-group-consumer-checks.mjs';
 import { checkControlledLookupReactMatrix } from './controlled-lookup-consumer-checks.mjs';
 import { checkComputedReactMatrix } from './computed-consumer-checks.mjs';
@@ -168,6 +171,8 @@ import {
 import {
     checkDurationInputConsumer,
     durationInputTypedConsumer,
+    splitDurationMomentConsumer,
+    splitDurationMomentInstall,
 } from './duration-input-consumer-checks.mjs';
 import {
     checkSelectChoiceProjectionConsumer,
@@ -703,6 +708,7 @@ try {
                 path === 'docs/csv-export.md' ||
                 path === 'docs/kanban.md' ||
                 path === 'docs/portal-gallery.md' ||
+                path === 'docs/native-form-pages.md' ||
                 path === 'docs/readonly-portal-grid.md' ||
                 path === 'docs/customer-chat.md' ||
                 path === 'docs/image-annotation-markerjs2-license.txt' ||
@@ -897,6 +903,14 @@ try {
         'dist/cjs/react/attachment-preview.css',
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/AttachmentUrlInput.js`,
+            `dist/${format}/react/AttachmentUrlInput.d.ts`,
+            `dist/${format}/react/attachment-url-input.css`,
+            `dist/${format}/react/AttachmentUploadProgress.js`,
+            `dist/${format}/react/AttachmentUploadProgress.d.ts`,
+            `dist/${format}/react/attachment-upload-progress.css`,
+        ]),
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
         'docs/portal-shell.md',
@@ -912,7 +926,21 @@ try {
         'dist/esm/react/portal-gallery.css',
         'dist/esm/react/readonly-portal-grid.css',
         'dist/cjs/react/portal-gallery.css',
+        'dist/esm/react/form-pages.css',
+        'dist/cjs/react/form-pages.css',
+        'docs/native-form-pages.md',
         'dist/cjs/react/readonly-portal-grid.css',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/PortalGridSingleLineTextCell.js`,
+            `dist/${format}/react/PortalGridSingleLineTextCell.d.ts`,
+            `dist/${format}/react/portal-grid-single-line-text-cell.css`,
+            `dist/${format}/react/PortalGridEmptyCell.js`,
+            `dist/${format}/react/PortalGridEmptyCell.d.ts`,
+            `dist/${format}/react/portal-grid-empty-cell.css`,
+            `dist/${format}/react/PortalGridRatingCell.js`,
+            `dist/${format}/react/PortalGridRatingCell.d.ts`,
+            `dist/${format}/react/PortalGridCellShell.js`,
+        ]),
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
         'dist/cjs/react/complete-collaborators.css',
@@ -967,6 +995,8 @@ try {
         'dist/cjs/react/complete-multiline.css',
         'dist/esm/react/form-submit.css',
         'dist/cjs/react/form-submit.css',
+        'dist/esm/react/form-record-actions.css',
+        'dist/cjs/react/form-record-actions.css',
         'dist/esm/react/field-presentation.css',
         'dist/cjs/react/field-presentation.css',
         'dist/esm/react/complete-checkbox.css',
@@ -994,28 +1024,67 @@ try {
             `Missing shipped browser starter file: ${path}`
         );
     }
+    const packedArchive = join(temporaryDirectory, packed.filename);
+    const installConsumer = (directory) =>
+        run(
+            'npm',
+            [
+                'install',
+                '--save-exact',
+                '--ignore-scripts',
+                '--no-audit',
+                '--no-fund',
+                packedArchive,
+                'host-moment@npm:moment@2.30.1',
+            ],
+            directory
+        );
     writeFileSync(
         join(temporaryDirectory, 'package.json'),
         JSON.stringify({ private: true, type: 'module' })
     );
-    run('npm', [
-        'install',
-        '--save-exact',
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        join(temporaryDirectory, packed.filename),
-        'host-moment@npm:moment@2.30.1',
-    ]);
+    installConsumer(temporaryDirectory);
     const installedPackage = join(
         temporaryDirectory,
         'node_modules/@miniextensions/sdk'
     );
-    await assertInstalledArchive(
-        temporaryDirectory,
-        join(temporaryDirectory, packed.filename),
-        packed
+    await assertInstalledArchive(temporaryDirectory, packedArchive, packed);
+    const splitDurationDirectory = mkdtempSync(
+        join(tmpdir(), 'miniextensions-duration-split-')
     );
+    try {
+        writeFileSync(
+            join(splitDurationDirectory, 'package.json'),
+            JSON.stringify({
+                private: true,
+                type: 'module',
+                ...splitDurationMomentInstall,
+            })
+        );
+        installConsumer(splitDurationDirectory);
+        await assertInstalledArchive(
+            splitDurationDirectory,
+            packedArchive,
+            packed
+        );
+        const splitDurationFilename = 'duration-split-moment-consumer.mjs';
+        writeFileSync(
+            join(splitDurationDirectory, splitDurationFilename),
+            splitDurationMomentConsumer
+        );
+        for (const format of ['esm', 'cjs']) {
+            run(
+                process.execPath,
+                [splitDurationFilename, format],
+                splitDurationDirectory
+            );
+        }
+        console.log(
+            'Installed Duration blur passed with split Moment in ESM and CJS.'
+        );
+    } finally {
+        rmSync(splitDurationDirectory, { recursive: true, force: true });
+    }
     assertModuleFormatReceipt(installedPackage);
     assertDateVendor(installedPackage, 'dist/vendor/date-time');
     assertPortalSidebarVendor(installedPackage, 'dist/vendor/portal-sidebar');
@@ -3609,7 +3678,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkFormCompositionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
-        26
+        32
     );
     const conditionalValidationChecks =
         await checkConditionalPageValidationConsumer({
@@ -4050,6 +4119,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     await stop();
     assert.equal(headerMatrix.versions.length, 2);
     assert.equal(headerMatrix.cleanup, 'completed');
+    const recordActionsMatrix = checkFormRecordActionsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(recordActionsMatrix.versions.length, 2);
+    assert.equal(recordActionsMatrix.cleanup, 'completed');
     const completionMatrix = checkFormCompletionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -4817,15 +4893,40 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
     }
+    const nativePagesProof = await checkNativeFormPagesReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    await stop();
+    assert.equal(nativePagesProof.tests, 128);
+    assert.equal(nativePagesProof.hydrationProfiles, 4);
+    assert.equal(nativePagesProof.hydrationChecks, 52);
+    assert.equal(nativePagesProof.cleanup, 'completed');
+    console.log(
+        'Installed live Form pages/Review qualification passed.',
+        nativePagesProof
+    );
     const gridProof = await checkReadonlyPortalGridReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
     assert.equal(gridProof.profiles.length, 4);
-    assert.equal(gridProof.tests, 72);
+    assert.equal(gridProof.tests, 84);
+    assert.equal(gridProof.textCellTests, 16);
+    assert.equal(gridProof.ratingCellTests, 32);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
+    );
+    const visitorQueryProof = checkPortalVisitorQueryReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    await stop();
+    assert.equal(visitorQueryProof.tests, 140);
+    console.log(
+        'Installed Portal visitor Sort and Search qualification passed.',
+        visitorQueryProof
     );
     const galleryProof = await checkPortalGalleryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),

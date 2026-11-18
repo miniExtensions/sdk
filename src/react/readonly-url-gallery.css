@@ -58,6 +58,26 @@
     background: transparent;
     cursor: pointer;
 }
+.mx-sdk-url-gallery__failure {
+    display: grid;
+    place-items: center;
+    gap: 0.125rem;
+    padding: 0.125rem;
+    color: #374151;
+    text-align: center;
+    font-size: 0.625rem;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+}
+.mx-sdk-url-gallery .mx-sdk-url-gallery__retry {
+    position: relative;
+    z-index: 1;
+    padding: 0.125rem 0.25rem;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+}
 .mx-sdk-url-gallery[data-display='icon']:not([data-grid='true'])
     .mx-sdk-url-gallery__entries {
     display: block;
@@ -183,19 +203,31 @@
     overflow-x: auto;
     flex-shrink: 0;
 }
-.mx-sdk-url-gallery__strip button {
-    width: 2.5rem;
-    height: 2.5rem;
-    padding: 0;
-    overflow: hidden;
+.mx-sdk-url-gallery__strip-item {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
     flex-shrink: 0;
+}
+.mx-sdk-url-gallery__strip-item .mx-sdk-url-gallery__failure {
+    max-width: 7.5rem;
+    color: inherit;
+}
+.mx-sdk-url-gallery__strip .mx-sdk-url-gallery__select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
     border: 2px solid transparent;
 }
-.mx-sdk-url-gallery__strip button[aria-pressed='true'] {
+.mx-sdk-url-gallery__strip .mx-sdk-url-gallery__select[aria-pressed='true'] {
     border-color: #f3f4f6;
 }
 .mx-sdk-url-gallery__strip img {
-    width: 100%;
-    height: 100%;
+    width: 2.5rem;
+    height: 2.5rem;
     object-fit: cover;
 }

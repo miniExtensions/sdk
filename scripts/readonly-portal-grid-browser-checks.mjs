@@ -10,8 +10,13 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmptyCell,PortalGridRatingCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
+import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
+import'@miniextensions/sdk/react/single-line-text.css';
+import'@miniextensions/sdk/react/portal-grid-empty-cell.css';
+import'@miniextensions/sdk/react/portal-grid-cell.css';
+import'@miniextensions/sdk/react/rating.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -27,8 +32,161 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
  return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
-window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original})};
-createRoot(document.querySelector('#root')).render(h(StrictMode,null,h(App)));
+function TextCellProbe() {
+    const [cell, setCell] = useState(() => ({
+        record: 'A', frame: {}, value: 'Committed A', selected: false
+    }));
+    const writeLog = useRef([]);
+    const openCount = useRef(0);
+    const submitCount = useRef(0);
+    const currentFrame = useRef(cell.frame);
+    useEffect(() => {
+        window.__textCellProbe = {
+            snapshot: () => ({
+                record: cell.record,
+                value: cell.value,
+                selected: cell.selected,
+                writes: writeLog.current,
+                opens: openCount.current,
+                submits: submitCount.current,
+            }),
+            reject: () => setCell(current => ({ ...current, value: 'Committed A' })),
+            replace: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'B', frame, value: 'Committed B', selected: true });
+            },
+        };
+        return () => { delete window.__textCellProbe; };
+    }, [cell]);
+    return h('form', {
+        onSubmit(event) { event.preventDefault(); submitCount.current++; }
+    }, h('table', { 'aria-label': 'Writable Grid fixture' }, h('tbody', null,
+        h('tr', null, h(PortalGridSingleLineTextCell, {
+            value: cell.value,
+            displayText: cell.value,
+            title: 'Plain note',
+            language: 'en',
+            cellIdentity: cell.record,
+            selected: cell.selected,
+            rowHeight: 'medium',
+            onSelect: () => setCell(current => ({ ...current, selected: true })),
+            editor: {
+                owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
+                onChange(value) {
+                    writeLog.current.push({ record: cell.record, value });
+                    setCell(current => ({ ...current, value }));
+                },
+            },
+        }), h('td', null, h('button', {
+            type: 'button',
+            onClick: () => { openCount.current++; },
+        }, 'Open from writable Grid'))))));
+}
+function EmptyCellProbe() {
+    const actions = useRef({ writes: 0, selects: 0, opens: 0, submits: 0 });
+    useEffect(() => {
+        window.__emptyCellProbe = { snapshot: () => ({ ...actions.current }) };
+        return () => { delete window.__emptyCellProbe; };
+    }, []);
+    const heights = ['short', 'medium', 'tall', 'extra-tall', 'fit-content'];
+    return h('form', {
+        onChange() { actions.current.writes++; },
+        onSelect() { actions.current.selects++; },
+        onSubmit(event) { event.preventDefault(); actions.current.submits++; },
+    }, h('table', { 'aria-label': 'Empty Grid cell fixture' }, h('tbody', null,
+        heights.map((rowHeight, index) => h('tr', { key: rowHeight, 'data-row-height': rowHeight },
+            h('td', null, 'Before ' + rowHeight),
+            h(PortalGridEmptyCell, { rowHeight, lastRow: index === heights.length - 1, stickyLeft: 37 }),
+            h('td', null, h('button', {
+                type: 'button',
+                onClick() { actions.current.opens++; },
+            }, 'Sibling action ' + rowHeight))
+        ))
+    )));
+}
+function RatingCellProbe() {
+    const [cell, setCell] = useState(() => ({
+        record: 'rating-A', frame: {}, value: 2, selected: false, enabled: true, revision: 0,
+    }));
+    const log = useRef({ writes: [], selects: 0, opens: 0, submits: 0, keys: [] });
+    const currentFrame = useRef(cell.frame);
+    const cancelNext = useRef(false);
+    useEffect(() => {
+        const belongs = event => event.target instanceof Element && event.target.closest('[data-rating-probe]');
+        const cancel = event => {
+            if (belongs(event) && cancelNext.current) {
+                cancelNext.current = false;
+                event.preventDefault();
+            }
+        };
+        const record = event => {
+            if (belongs(event)) log.current.keys.push({ key: event.key, repeat: event.repeat, composing: event.isComposing, trusted: event.isTrusted, prevented: event.defaultPrevented });
+        };
+        window.addEventListener('keydown', cancel, true);
+        window.addEventListener('keydown', record);
+        window.__ratingCellProbe = {
+            snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, ...log.current }),
+            patch: patch => setCell(current => ({ ...current, ...patch })),
+            cancelNext: () => { cancelNext.current = true; },
+            retire: () => { currentFrame.current = {}; },
+            rerender: () => setCell(current => ({ ...current, revision: current.revision + 1 })),
+            replace: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'rating-B', frame, value: 4, selected: true, enabled: true, revision: 0 });
+            },
+        };
+        return () => {
+            window.removeEventListener('keydown', cancel, true);
+            window.removeEventListener('keydown', record);
+            delete window.__ratingCellProbe;
+        };
+    }, [cell]);
+    return h('form', {
+        'data-rating-probe': true,
+        onSubmit(event) { event.preventDefault(); log.current.submits++; },
+    }, h('table', {
+        'aria-label': 'Rating Grid fixture',
+        style: { width: 'max-content', borderCollapse: 'separate', borderSpacing: 0 },
+    }, h('thead', null, h('tr', null,
+        h('th', { scope: 'col', style: { width: 200 } }, 'Priority rating'),
+        h('th', { scope: 'col', style: { width: 160 } }, 'Record action')
+    )), h('tbody', null, h('tr', null,
+        h(PortalGridRatingCell, {
+            value: cell.value,
+            displayText: cell.value == null ? '' : String(cell.value),
+            title: 'Priority rating',
+            max: 5,
+            icon: 'star',
+            color: 'yellow',
+            labels: { empty: 'No priority', repair: 'Repair priority' },
+            cellIdentity: cell.record,
+            selected: cell.selected,
+            rowHeight: 'medium',
+            onSelect() {
+                log.current.selects++;
+                setCell(current => ({ ...current, selected: true }));
+            },
+            editor: cell.enabled ? {
+                owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
+                onChange(value) {
+                    log.current.writes.push({ record: cell.record, value });
+                    setCell(current => ({ ...current, value }));
+                },
+            } : undefined,
+        }), h('td', null, h('button', {
+            type: 'button', onClick() { log.current.opens++; },
+        }, 'Open from rating Grid'))
+    ))), h('button', { type: 'submit' }, 'Submit synthetic rating'));
+}
+const root = createRoot(document.querySelector('#root'));
+window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
+    startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
+    startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
+    startRatingCell: () => root.render(h(StrictMode, null, h(RatingCellProbe)))
+};
+root.render(h(StrictMode,null,h(App)));
 `;
 
 export async function prepareReadonlyPortalGridBrowserFixtures(args) {
@@ -64,6 +222,15 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/CompleteFormFieldPresentation.js',
         '/react/readonly-portal-grid.css',
         '/react/complete-readonly-text.css',
+        '/react/PortalGridSingleLineTextCell.js',
+        '/react/SingleLineTextField.js',
+        '/react/portal-grid-single-line-text-cell.css',
+        '/react/PortalGridEmptyCell.js',
+        '/react/portal-grid-empty-cell.css',
+        '/react/PortalGridRatingCell.js',
+        '/react/ControlledRatingField.js',
+        '/react/RatingInput.js',
+        '/react/rating.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -243,11 +410,10 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.widths.at(-1).scope, 'original');
     assert(end.widths.at(-1).width > initialMouseWidth);
     assert.equal(end.widths.at(-1).width, end.widths.at(-1).measuredAtCommit);
-    assert(
-        Math.abs(
-            end.widths.at(-1).width -
-                (await amount.evaluate((node) => node.clientWidth))
-        ) <= 1
+    assert.equal(
+        end.widths.at(-1).width,
+        await amount.evaluate((node) => node.clientWidth),
+        'Host echo preserves the exact measured client width'
     );
     const ordinaryWidth = end.widths.at(-1).width;
     results.push({
@@ -282,11 +448,10 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     end = await snapshot();
     assert(end.widths.at(-1).width > initialKeyboardWidth);
     assert.equal(end.widths.at(-1).width, end.widths.at(-1).measuredAtCommit);
-    assert(
-        Math.abs(
-            end.widths.at(-1).width -
-                (await amount.evaluate((node) => node.clientWidth))
-        ) <= 1
+    assert.equal(
+        end.widths.at(-1).width,
+        await amount.evaluate((node) => node.clientWidth),
+        'Host echo preserves the exact measured client width'
     );
     const beforeCancel = end.widths.length;
     await page.keyboard.down('ArrowLeft');
@@ -297,6 +462,64 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         group: 'trusted keyboard resize and Escape cancellation',
         before: initialKeyboardWidth,
         provisional: provisionalKeyboardWidth,
+        passed: true,
+    });
+
+    const stableWidth = await amount.evaluate((node) => node.clientWidth);
+    let settlements = (await snapshot()).widths.length;
+    const stationaryBox = await handle.boundingBox();
+    assert(stationaryBox);
+    await page.mouse.move(
+        stationaryBox.x + stationaryBox.width / 2,
+        stationaryBox.y + stationaryBox.height / 2
+    );
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForFunction(
+        (n) => window.__nativeProbe.snapshot().widths.length === n + 1,
+        settlements
+    );
+    assert.equal(
+        await amount.evaluate((node) => node.clientWidth),
+        stableWidth
+    );
+    assert.equal((await snapshot()).widths.at(-1).width, stableWidth);
+    await handle.focus();
+    for (const [key, expected] of [
+        ['ArrowRight', stableWidth + 1],
+        ['ArrowLeft', stableWidth],
+    ]) {
+        settlements = (await snapshot()).widths.length;
+        await page.keyboard.down(key);
+        await page.waitForFunction(
+            (width) =>
+                document.querySelector('th[data-field-id="amount"]')
+                    .clientWidth === width,
+            expected
+        );
+        await page.keyboard.up(key);
+        await page.waitForFunction(
+            (n) => window.__nativeProbe.snapshot().widths.length === n + 1,
+            settlements
+        );
+        const settled = (await snapshot()).widths.at(-1);
+        assert.equal(settled.width, expected);
+        assert.equal(settled.measuredAtCommit, expected);
+        assert.equal(
+            await amount.evaluate((node) => node.clientWidth),
+            expected
+        );
+    }
+    await patch({ ready: false });
+    await patch({ ready: true });
+    assert.equal(
+        await amount.evaluate((node) => node.clientWidth),
+        stableWidth
+    );
+    assert.equal((await snapshot()).state.widths.original.amount, stableWidth);
+    results.push({
+        group: 'stationary pointer and ordinary ArrowRight/Left preserve measured width through echo and remount',
+        width: stableWidth,
         passed: true,
     });
 
@@ -350,7 +573,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     await page.getByRole('switch', { name: 'Amount', exact: true }).click();
     await page.keyboard.press('Escape');
     assert.equal(
-        await amount.evaluate((node) => parseFloat(node.style.width)),
+        await amount.evaluate((node) => node.clientWidth),
         (await snapshot()).state.widths.original.amount
     );
     results.push({
@@ -752,6 +975,11 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.deepEqual(end.errors, []);
     assert.equal(end.submits, 0);
     assert.equal(end.canonicalUnchanged, true);
+    const textCell = await checkPlainTextCellBrowser(page);
+    const emptyCell = await checkEmptyCellBrowser(page);
+    const ratingCell = await checkRatingCellBrowser(page);
+    end = await snapshot();
+    assert.deepEqual(end.errors, []);
     Object.assign(evidence, {
         status: 'passed',
         results,
@@ -764,11 +992,416 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
             submits: end.submits,
         },
         canonicalUnchanged: true,
+        textCell,
+        emptyCell,
+        ratingCell,
         errors: end.errors,
         limits: [
             'Installed SDK presentation only; actual native borrowed-route, child admission and persistent preference qualification remain separate.',
         ],
     });
+}
+
+async function checkPlainTextCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startTextCell());
+    const table = page.getByRole('table', { name: 'Writable Grid fixture' });
+    const cell = table.getByRole('cell').first();
+    await cell.waitFor({ state: 'visible' });
+    assert.equal(
+        await cell
+            .locator('.mx-sdk-portal-grid-text-cell__content')
+            .evaluate((element) => element.getBoundingClientRect().height),
+        52
+    );
+    assert.equal(
+        await cell
+            .locator('.read-only-text')
+            .evaluate((element) => getComputedStyle(element).webkitLineClamp),
+        '2'
+    );
+    const state = () => page.evaluate(() => window.__textCellProbe.snapshot());
+    const input = table.getByRole('textbox', { name: 'Plain note' });
+    assert.equal(await input.count(), 0);
+    await cell.click();
+    await input.waitFor({ state: 'visible' });
+    assert.equal(
+        await cell.evaluate((element) => element === document.activeElement),
+        true
+    );
+    assert.deepEqual((await state()).writes, []);
+    assert.equal((await state()).opens, 0);
+
+    await input.fill('Rejected A');
+    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+    assert.deepEqual((await state()).writes, []);
+    assert.equal(await input.inputValue(), 'Rejected A');
+    await input.press('Enter');
+    await page.waitForFunction(
+        () => window.__textCellProbe.snapshot().writes.length === 1
+    );
+    assert.deepEqual((await state()).writes, [
+        { record: 'A', value: 'Rejected A' },
+    ]);
+    await page.evaluate(() => window.__textCellProbe.reject());
+    await page.waitForFunction(
+        () =>
+            document.querySelector('[aria-label="Plain note"]')?.value ===
+            'Committed A'
+    );
+    await input.focus();
+    await page.keyboard.press('Tab');
+    assert.equal((await state()).writes.length, 1);
+
+    await input.fill('Retired draft');
+    await page.evaluate(() => window.__textCellProbe.replace());
+    await page.waitForFunction(
+        () =>
+            document.querySelector('[aria-label="Plain note"]')?.value ===
+            'Committed B'
+    );
+    assert.equal((await state()).writes.length, 1);
+    await input.fill('Current B');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(
+        () => window.__textCellProbe.snapshot().writes.length === 2
+    );
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        { record: 'A', value: 'Rejected A' },
+        { record: 'B', value: 'Current B' },
+    ]);
+    assert.equal(result.submits, 0);
+    assert.equal(result.opens, 0);
+    return { status: 'passed', ...result };
+}
+
+async function checkEmptyCellBrowser(page) {
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.evaluate(() => window.__nativeProbe.startEmptyCell());
+    const table = page.getByRole('table', { name: 'Empty Grid cell fixture' });
+    await table.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => window.__emptyCellProbe != null);
+    const cells = table.locator('.mx-sdk-portal-grid-empty-cell');
+    assert.equal(await cells.count(), 5);
+    const desktop = await cells.evaluateAll((nodes) =>
+        nodes.map((node) => {
+            const content = node.querySelector(
+                '.mx-sdk-portal-grid-empty-cell__content'
+            );
+            const style = getComputedStyle(node);
+            return {
+                rowHeight: node.parentElement.dataset.rowHeight,
+                tag: node.tagName,
+                parentTag: node.parentElement.tagName,
+                index: node.cellIndex,
+                siblingIndexes: [...node.parentElement.children].map(
+                    (sibling) => sibling.cellIndex
+                ),
+                siblingTags: [...node.parentElement.children].map(
+                    (sibling) => sibling.tagName
+                ),
+                text: node.textContent,
+                children: node.children.length,
+                contentTag: content?.tagName ?? null,
+                contentHeight: content?.getBoundingClientRect().height ?? null,
+                interactiveCount: node.querySelectorAll(
+                    'input, button, a, textarea, select, [contenteditable="true"]'
+                ).length,
+                tabIndexAttribute: node.getAttribute('tabindex'),
+                tabIndex: node.tabIndex,
+                position: style.position,
+                left: style.left,
+                bottomBorder: style.borderBottomWidth,
+            };
+        })
+    );
+    assert.deepEqual(
+        desktop.map((cell) => [cell.rowHeight, cell.contentHeight]),
+        [
+            ['short', 24],
+            ['medium', 52],
+            ['tall', 84],
+            ['extra-tall', 140],
+            ['fit-content', 0],
+        ]
+    );
+    for (const cell of desktop) {
+        assert.equal(cell.tag, 'TD');
+        assert.equal(cell.parentTag, 'TR');
+        assert.equal(cell.index, 1);
+        assert.deepEqual(cell.siblingIndexes, [0, 1, 2]);
+        assert.deepEqual(cell.siblingTags, ['TD', 'TD', 'TD']);
+        assert.equal(cell.text, '');
+        assert.equal(cell.children, 1);
+        assert.equal(cell.contentTag, 'DIV');
+        assert.equal(cell.interactiveCount, 0);
+        assert.equal(cell.tabIndexAttribute, null);
+        assert.equal(cell.tabIndex, -1);
+        assert.equal(cell.position, 'sticky');
+        assert.equal(cell.left, '37px');
+        assert.equal(
+            cell.bottomBorder,
+            cell.rowHeight === 'fit-content' ? '0px' : '1px'
+        );
+    }
+    const before = await page.evaluate(() =>
+        window.__emptyCellProbe.snapshot()
+    );
+    assert.deepEqual(before, { writes: 0, selects: 0, opens: 0, submits: 0 });
+    for (let index = 0; index < desktop.length; index++) {
+        await cells.nth(index).click();
+        assert.equal(
+            await cells
+                .nth(index)
+                .evaluate((node) => node === node.ownerDocument.activeElement),
+            false,
+            'Empty cells must not acquire focus when clicked'
+        );
+    }
+    const actions = await page.evaluate(() =>
+        window.__emptyCellProbe.snapshot()
+    );
+    assert.deepEqual(actions, before);
+    await page.setViewportSize({ width: 639, height: 900 });
+    const narrow = await cells.evaluateAll((nodes) =>
+        nodes.map((node) => ({
+            rowHeight: node.parentElement.dataset.rowHeight,
+            position: getComputedStyle(node).position,
+            contentHeight: node
+                .querySelector('.mx-sdk-portal-grid-empty-cell__content')
+                .getBoundingClientRect().height,
+        }))
+    );
+    assert(narrow.every((cell) => cell.position === 'relative'));
+    assert.deepEqual(
+        narrow.map((cell) => cell.contentHeight),
+        desktop.map((cell) => cell.contentHeight)
+    );
+    assert.deepEqual(
+        await page.evaluate(() => window.__emptyCellProbe.snapshot()),
+        actions
+    );
+    await page.setViewportSize({ width: 1200, height: 900 });
+    return { status: 'passed', desktop, narrow, actions };
+}
+
+async function checkRatingCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startRatingCell());
+    const table = page.getByRole('table', { name: 'Rating Grid fixture' });
+    await table.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => window.__ratingCellProbe != null);
+    const state = () =>
+        page.evaluate(() => window.__ratingCellProbe.snapshot());
+    const patch = async (value) => {
+        await page.evaluate(
+            (next) => window.__ratingCellProbe.patch(next),
+            value
+        );
+        await page.waitForFunction((expected) => {
+            const current = window.__ratingCellProbe.snapshot();
+            return Object.entries(expected).every(
+                ([key, value]) => current[key] === value
+            );
+        }, value);
+    };
+    const cell = table.locator('.mx-sdk-portal-grid-rating-cell');
+    const icons = cell.locator('.mx-sdk-rating-icon');
+    const input = cell.getByRole('slider', {
+        name: 'Priority rating',
+        exact: true,
+    });
+    assert.equal(await cell.count(), 1);
+    assert.equal(await icons.count(), 5);
+    assert.equal(await input.count(), 0);
+    assert.equal(
+        await cell.locator('.mx-sdk-rating-sr-only').textContent(),
+        '(2/5)'
+    );
+    const geometry = await cell.evaluate((node) => {
+        const icon = node.querySelector('.mx-sdk-rating-icon');
+        const thirdIcon = node.querySelectorAll('.mx-sdk-rating-icon')[2];
+        const hitBox = thirdIcon.getBoundingClientRect();
+        const hit = node.ownerDocument.elementFromPoint(
+            hitBox.left + hitBox.width / 2,
+            hitBox.top + hitBox.height / 2
+        );
+        const content = node.querySelector(
+            '.mx-sdk-portal-grid-text-cell__content'
+        );
+        const style = getComputedStyle(node);
+        const iconStyle = getComputedStyle(icon);
+        return {
+            tag: node.tagName,
+            parentTag: node.parentElement.tagName,
+            neutralShell: node.classList.contains('mx-sdk-portal-grid-cell'),
+            legacyTextCell: node.classList.contains(
+                'mx-sdk-portal-grid-text-cell'
+            ),
+            padding: [style.paddingTop, style.paddingLeft],
+            contentHeight: content.getBoundingClientRect().height,
+            iconWidth: iconStyle.width,
+            iconHeight: iconStyle.height,
+            iconDisplay: getComputedStyle(icon.parentElement).display,
+            thirdIconHit: thirdIcon.contains(hit),
+        };
+    });
+    assert.deepEqual(geometry, {
+        tag: 'TD',
+        parentTag: 'TR',
+        neutralShell: true,
+        legacyTextCell: false,
+        padding: ['8px', '12px'],
+        contentHeight: 52,
+        iconWidth: '24px',
+        iconHeight: '24px',
+        iconDisplay: 'flex',
+        thirdIconHit: true,
+    });
+    await icons.nth(2).click();
+    await input.waitFor({ state: 'visible' });
+    assert.equal((await state()).selected, true);
+    assert.equal((await state()).selects, 1);
+    assert.deepEqual((await state()).writes, []);
+
+    await icons.nth(2).click();
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().writes.length === 1
+    );
+    assert.deepEqual((await state()).writes, [
+        { record: 'rating-A', value: 3 },
+    ]);
+    assert.equal(await input.inputValue(), '3');
+    assert.equal(
+        await cell.locator('.mx-sdk-rating-print').textContent(),
+        '(3/5)'
+    );
+
+    for (const [key, count] of [
+        ['Delete', 2],
+        ['Backspace', 3],
+    ]) {
+        await patch({ value: 3 });
+        await input.focus();
+        await input.press(key);
+        await page.waitForFunction(
+            (expected) =>
+                window.__ratingCellProbe.snapshot().writes.length === expected,
+            count
+        );
+        const observed = await state();
+        assert.deepEqual(observed.writes.at(-1), {
+            record: 'rating-A',
+            value: null,
+        });
+        assert.equal(observed.value, null);
+        assert.equal(observed.keys.at(-1).key, key);
+        assert.equal(observed.keys.at(-1).prevented, true);
+        assert.equal(observed.keys.at(-1).trusted, true);
+        assert.equal(observed.submits, 0);
+        await input.press(key);
+        assert.equal((await state()).writes.length, count);
+    }
+
+    await patch({ value: 3 });
+    await input.dispatchEvent('keydown', {
+        key: 'Delete',
+        repeat: true,
+        cancelable: true,
+    });
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).keys.at(-1).repeat, true);
+    assert.equal((await state()).keys.at(-1).prevented, true);
+    await input.dispatchEvent('keydown', {
+        key: 'Backspace',
+        isComposing: true,
+        cancelable: true,
+    });
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).keys.at(-1).composing, true);
+    await page.evaluate(() => window.__ratingCellProbe.cancelNext());
+    await input.press('Delete');
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).keys.at(-1).prevented, true);
+    await input.press('Escape');
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).value, 3);
+
+    await patch({ enabled: false });
+    assert.equal(await input.count(), 0);
+    await icons.nth(4).click();
+    await cell.focus();
+    await page.keyboard.press('Delete');
+    assert.equal((await state()).writes.length, 3);
+    const readonlySummary = await cell
+        .locator('.mx-sdk-rating-sr-only')
+        .textContent();
+    assert.equal(readonlySummary, '(3/5)');
+    await patch({ value: null });
+    assert.equal(await cell.textContent(), '');
+    assert.equal(await icons.count(), 0);
+
+    await patch({ enabled: true, value: 3 });
+    await input.waitFor({ state: 'visible' });
+    await page.evaluate(() => window.__ratingCellProbe.retire());
+    await input.focus();
+    await input.press('Delete');
+    await icons.nth(3).click();
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).value, 3);
+
+    await page.evaluate(() => window.__ratingCellProbe.replace());
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().record === 'rating-B'
+    );
+    assert.equal(await input.inputValue(), '4');
+    const mounted = await input.elementHandle();
+    assert(mounted);
+    await input.focus();
+    await page.evaluate(() => window.__ratingCellProbe.rerender());
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().revision === 1
+    );
+    assert.equal(
+        await input.evaluate((node, previous) => node === previous, mounted),
+        true,
+        'An ordinary canonical rerender must retain the Rating input'
+    );
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true
+    );
+    assert.equal((await state()).writes.length, 3);
+    await mounted.dispose();
+    await icons.nth(1).click();
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().writes.length === 4
+    );
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        { record: 'rating-A', value: 3 },
+        { record: 'rating-A', value: null },
+        { record: 'rating-A', value: null },
+        { record: 'rating-B', value: 2 },
+    ]);
+    assert.equal(result.value, 2);
+    assert.equal(result.opens, 0);
+    assert.equal(result.submits, 0);
+    return {
+        status: 'passed',
+        geometry,
+        readonlySummary,
+        nonMutating: [
+            'repeat',
+            'composition',
+            'cancelled key',
+            'Escape',
+            'readonly',
+            'stale owner',
+        ],
+        ...result,
+    };
 }
 
 export async function checkReadonlyPortalGridProfile({

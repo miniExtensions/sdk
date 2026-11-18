@@ -1,4 +1,16 @@
 export {
+    createFormRecordActionsController,
+    type FormRecordActionsScope,
+    type FormRecordDeleteOutcome,
+    type FormRecordDeleteOperation,
+    type FormRecordDeleteAdmission,
+    type FormRecordActionsFrame,
+    type FormRecordActionsPort,
+    type FormRecordActionsSnapshot,
+    type FormRecordActionsController,
+} from './recordActions.js';
+
+export {
     evaluateAutomaticPrefill,
     hasPersistableAutomaticURLPrefill,
     type AutomaticPrefillFacts,
@@ -46,6 +58,14 @@ export {
     type CanonicalFormTransitionDisposition,
     type CanonicalFormTransitionResult,
 } from './canonicalFrame.js';
+export {
+    transitionCanonicalFormCompute,
+    type CanonicalFormComputeFrame,
+    type CanonicalFormComputeRequest,
+    type CanonicalFormComputeOutcome,
+    type CanonicalFormComputePorts,
+    type CanonicalFormComputeSettlement,
+} from './computeSettlement.js';
 export {
     createFormSaveInput,
     describeLoadedFormFields,
@@ -246,6 +266,13 @@ export {
     type NativeFormProgressStorage,
 } from './nativeProgressStorage.js';
 
+export {
+    createFormBackgroundComputeCoordinator,
+    createFormBackgroundComputeFieldBinding,
+    type FormBackgroundComputeCoordinator,
+    type FormBackgroundComputeClock,
+    type FormBackgroundComputeFieldBinding,
+} from './backgroundComputeCoordinator.js';
 export {
     createFormSaveCoordinator,
     type FormSaveCoordinator,

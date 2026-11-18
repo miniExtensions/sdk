@@ -161,6 +161,10 @@ function characterizeHostPresentation(
     let submission;
     let submitCount = 0;
     let hostAdmitsSubmit = true;
+    let navigationContainer;
+    const navigationRef = (element) => {
+        navigationContainer = element;
+    };
     return {
         render(state, createElement) {
             const [prefix, ...grouped] = state.fields;
@@ -209,6 +213,36 @@ function characterizeHostPresentation(
                     ],
                     validation,
                     primary: { kind: 'terminal', ...terminal },
+                    bodyClassName: 'native-form-scroll',
+                    fieldsClassName: 'native-form-fields',
+                    footerClassName: 'native-form-footer',
+                    footerDetailsClassName: 'native-form-footer-details',
+                    afterFields: createElement(
+                        'span',
+                        { 'data-native-feedback': true },
+                        'Host form notification'
+                    ),
+                    actionsClassName: 'native-form-actions',
+                    slots: {
+                        header: createElement(
+                            'div',
+                            { 'data-native-header': true },
+                            'Host settings header'
+                        ),
+                        pageNavigation: createElement(
+                            'div',
+                            {
+                                'data-native-navigation': true,
+                                ref: navigationRef,
+                            },
+                            'Host page navigation'
+                        ),
+                        footerDescription: createElement(
+                            'div',
+                            { 'data-native-footer-description': true },
+                            'Host settings footer'
+                        ),
+                    },
                 });
             }
             return createElement(
@@ -236,6 +270,34 @@ function characterizeHostPresentation(
             assert.equal(form.noValidate, true);
             assert.equal(container.querySelectorAll('form').length, 1);
             assert.equal(form.childElementCount, 0);
+            const initialNavigationContainer = navigationContainer;
+            if (useCompleteComposition) {
+                assert.equal(
+                    initialNavigationContainer,
+                    container.querySelector('[data-native-navigation]')
+                );
+                assert.equal(
+                    initialNavigationContainer.nextElementSibling,
+                    form
+                );
+                assert.equal(
+                    container.querySelector('[data-native-header]')
+                        .nextElementSibling,
+                    initialNavigationContainer
+                );
+                assert(
+                    container.querySelector(
+                        '.native-form-scroll .native-form-fields + [data-native-feedback]'
+                    )
+                );
+                assert(form.closest('.native-form-scroll'));
+                assert(
+                    container.querySelector(
+                        '.native-form-footer .native-form-footer-details [data-native-footer-description]'
+                    )
+                );
+                assert(terminal.closest('.native-form-actions'));
+            }
             assert.equal(terminal.form, form);
             assert.equal(terminal.getAttribute('aria-label'), 'Save response');
             assert.equal(terminal.disabled, false);
@@ -300,6 +362,7 @@ function characterizeHostPresentation(
             );
             assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
             assert.equal(container.ownerDocument.getElementById('b'), null);
+            assert.equal(navigationContainer, initialNavigationContainer);
         },
     };
 }

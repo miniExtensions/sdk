@@ -14,7 +14,8 @@
     margin-block-end: 1rem;
 }
 
-.mx-sdk-form-composition__footer {
+.mx-sdk-form-composition__footer,
+.mx-sdk-form-composition__footer-details {
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -27,6 +28,7 @@
     justify-content: flex-end;
 }
 
-.mx-sdk-form-composition__actions:empty {
+.mx-sdk-form-composition__actions:empty,
+.mx-sdk-form-composition__footer-details:empty {
     display: none;
 }

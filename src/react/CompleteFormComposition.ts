@@ -66,6 +66,16 @@ export type FormCompositionPrimaryAction =
       >
     | Readonly<{ kind: 'terminal' } & Omit<FormSubmitButtonProps, 'formId'>>;
 
+/** Existing host-adapted leaves, including their settings wrappers and refs. */
+export type FormCompositionHostSlots = Readonly<{
+    header?: ReactNode;
+    pageNavigation?: ReactNode;
+    captcha?: ReactNode;
+    footerDescription?: ReactNode;
+    review?: ReactNode;
+    completion?: ReactNode;
+}>;
+
 export type CompleteFormCompositionProps<CaptchaOptions = unknown> = Readonly<{
     formId: string;
     /** The host admits the current Next, Compute, Review or Save intent. */
@@ -84,12 +94,20 @@ export type CompleteFormCompositionProps<CaptchaOptions = unknown> = Readonly<{
     primary?: FormCompositionPrimaryAction;
     /** A native authoring decoration around the existing public primary control. */
     decoratePrimary?: (control: ReactElement) => ReactNode;
+    /** An existing in-body host notification or completion adapter. */
+    afterFields?: ReactNode;
     /** Host-only feedback, such as an administrative or transport error notice. */
     feedback?: ReactNode;
     /** An admitted existing host record-action surface. */
     recordActions?: ReactNode;
     footerLabel?: string;
+    slots?: FormCompositionHostSlots;
     className?: string;
+    bodyClassName?: string;
+    fieldsClassName?: string;
+    footerClassName?: string;
+    footerDetailsClassName?: string;
+    actionsClassName?: string;
 }>;
 
 function renderField(field: FormCompositionField): ReactElement {
@@ -146,7 +164,14 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
     };
     const controls = h(
         'div',
-        { className: 'mx-sdk-form-composition__actions' },
+        {
+            className: [
+                'mx-sdk-form-composition__actions',
+                props.actionsClassName,
+            ]
+                .filter(Boolean)
+                .join(' '),
+        },
         props.back &&
             h(FormPageNavigationButton, {
                 direction: 'back',
@@ -170,37 +195,83 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
                 .filter(Boolean)
                 .join(' '),
         },
-        props.header && h(CompleteFormHeader, props.header),
-        props.pageNavigation &&
-            h(CompleteFormPageNavigation, props.pageNavigation),
-        h('form', {
-            id: props.formId,
-            noValidate: true,
-            onSubmit: handleSubmit,
-        }),
         h(
             'div',
-            { className: 'mx-sdk-form-composition__fields' },
-            props.items.length === 0
-                ? props.emptyMessage
-                : props.items.map(renderItem)
+            {
+                className: [
+                    'mx-sdk-form-composition__body',
+                    props.bodyClassName,
+                ]
+                    .filter(Boolean)
+                    .join(' '),
+            },
+            props.slots?.header ??
+                (props.header && h(CompleteFormHeader, props.header)),
+            props.slots?.pageNavigation ??
+                (props.pageNavigation &&
+                    h(CompleteFormPageNavigation, props.pageNavigation)),
+            h('form', {
+                id: props.formId,
+                noValidate: true,
+                onSubmit: handleSubmit,
+            }),
+            h(
+                'div',
+                {
+                    className: [
+                        'mx-sdk-form-composition__fields',
+                        props.fieldsClassName,
+                    ]
+                        .filter(Boolean)
+                        .join(' '),
+                },
+                props.items.length === 0
+                    ? props.emptyMessage
+                    : props.items.map(renderItem)
+            ),
+            props.slots?.captcha ??
+                (props.captcha &&
+                    h(FormCaptcha<string, CaptchaOptions>, props.captcha)),
+            props.afterFields
         ),
-        props.captcha && h(FormCaptcha<string, CaptchaOptions>, props.captcha),
         props.feedback,
         props.validation && h(FormValidationSummary, props.validation),
         h(
             'footer',
             {
-                className: 'mx-sdk-form-composition__footer',
+                className: [
+                    'mx-sdk-form-composition__footer',
+                    props.footerClassName,
+                ]
+                    .filter(Boolean)
+                    .join(' '),
                 'aria-label': props.footerLabel,
             },
-            props.footerDescription &&
-                h(CompleteFormFooterDescription, props.footerDescription),
-            props.tracking && h(CompleteFormTrackingDisclosure, props.tracking),
+            h(
+                'div',
+                {
+                    className: [
+                        'mx-sdk-form-composition__footer-details',
+                        props.footerDetailsClassName,
+                    ]
+                        .filter(Boolean)
+                        .join(' '),
+                },
+                props.slots?.footerDescription ??
+                    (props.footerDescription &&
+                        h(
+                            CompleteFormFooterDescription,
+                            props.footerDescription
+                        )),
+                props.tracking &&
+                    h(CompleteFormTrackingDisclosure, props.tracking)
+            ),
             controls,
             props.recordActions
         ),
-        props.review && h(CompleteFormReview, props.review),
-        props.completion && h(CompleteFormCompletion, props.completion)
+        props.slots?.review ??
+            (props.review && h(CompleteFormReview, props.review)),
+        props.slots?.completion ??
+            (props.completion && h(CompleteFormCompletion, props.completion))
     );
 }

@@ -3433,6 +3433,7 @@ export {
     CompleteFormComposition,
     type CompleteFormCompositionProps,
     type FormCompositionField,
+    type FormCompositionHostSlots,
     type FormCompositionItem,
     type FormCompositionPrimaryAction,
 } from './CompleteFormComposition.js';

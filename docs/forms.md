@@ -1439,6 +1439,10 @@ primary action and a terminal primary action both submit through the same
 associated form. Back and Review confirmation use their supplied host actions.
 Recheck current ownership at deferred Review confirmation before issuing Save.
 
+Use `slots` for existing individual host adapters when they own a preview
+settings wrapper, a scroll ref, or a modal frame. The composition keeps the
+supplied nodes at their respective positions in the layout.
+
 ## Headless controller with explicit Save
 
 `createFormController` binds one loaded Form, complete save options and the

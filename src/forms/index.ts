@@ -256,6 +256,13 @@ export {
 } from './nativeProgressStorage.js';
 
 export {
+    createFormBackgroundComputeCoordinator,
+    createFormBackgroundComputeFieldBinding,
+    type FormBackgroundComputeCoordinator,
+    type FormBackgroundComputeClock,
+    type FormBackgroundComputeFieldBinding,
+} from './backgroundComputeCoordinator.js';
+export {
     createFormSaveCoordinator,
     type FormSaveCoordinator,
     type FormSaveCoordinatorOptions,

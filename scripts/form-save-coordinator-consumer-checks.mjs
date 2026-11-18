@@ -4,6 +4,12 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import {
+    checkBackgroundComputeReentry,
+    formBackgroundComputeTypedConsumer,
+    runFormBackgroundComputeScenarios,
+} from './form-background-compute-consumer-checks.mjs';
+
 export const formSaveCoordinatorTypedConsumer = `
 import { createFormSaveCoordinator, type FormSaveCoordinator, type FormSaveInvocation, type FormSaveCoordinatorOptions } from '@miniextensions/sdk/forms';
 type SaveSnapshot = { record: { value: string }; dirty: readonly string[] } | null;
@@ -96,11 +102,23 @@ export async function checkFormSaveCoordinatorConsumer({
             'fresh explicit correction, no automatic replay'
         );
     }
+    let backgroundComputeScenarios = 0;
+    for (const forms of [esm, cjs]) {
+        backgroundComputeScenarios +=
+            await runFormBackgroundComputeScenarios(forms);
+        await checkBackgroundComputeReentry(forms);
+        backgroundComputeScenarios += 1;
+    }
+    assert.equal(backgroundComputeScenarios, 10);
+    console.log(
+        'Installed Form background Compute: 10 ESM/CommonJS scenarios passed with controlled clock and synthetic host.'
+    );
     for (const extension of ['mts', 'cts']) {
         const filename = `save-coordinator-types.${extension}`;
         writeFileSync(
             join(consumerDirectory, filename),
-            formSaveCoordinatorTypedConsumer
+            formSaveCoordinatorTypedConsumer +
+                formBackgroundComputeTypedConsumer
         );
         run(process.execPath, [
             createRequire(import.meta.url).resolve('typescript/bin/tsc'),

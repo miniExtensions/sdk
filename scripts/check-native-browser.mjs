@@ -2499,8 +2499,17 @@ try {
             consumer: temporary,
             evidence: report.portalVisitorSort,
             expectedReactVersion: nativeReactVersion,
+            includeSearch: true,
         });
         assert.equal(report.portalVisitorSort.passed, true);
+        assert.deepEqual(report.portalVisitorSort.search, {
+            commands: 5,
+            staleScanRejected: true,
+            transientReadRecovered: true,
+            replacementNotificationRecovered: true,
+            sameTermGenerationReported: true,
+            cleanup: 'completed',
+        });
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

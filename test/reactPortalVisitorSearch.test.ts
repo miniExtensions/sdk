@@ -494,6 +494,57 @@ it('recovers from a transient read exception without replacing the enabled Searc
     assert.equal(owner.commands[0].searchTerm, 'typed before the read failure');
 });
 
+it('binds a replacement after its only notification read fails without replaying a gesture or scanner', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    let failNextRead = false;
+    let capture: (() => ((value: string) => void) | null) | undefined;
+    const port: PortalVisitorSearchProps['port'] = {
+        ...owner.port,
+        read() {
+            if (failNextRead) {
+                failNextRead = false;
+                throw new Error('temporary read failure during replacement');
+            }
+            return owner.port.read();
+        },
+    };
+    await f.render(
+        h(PortalVisitorSearch, {
+            port,
+            renderScanner(controls) {
+                capture = controls.capture;
+                return null;
+            },
+        })
+    );
+    const oldScan = capture?.();
+    const input = f.container.querySelector('input');
+    const submit = [...f.container.querySelectorAll('button')].at(-1);
+    assert.ok(oldScan && input && submit);
+    await act(async () => {
+        owner.select('replacement', false);
+        owner.commit('replacement term', false, false);
+        failNextRead = true;
+        owner.notify();
+    });
+    assert.equal(input.value, 'previous');
+    await f.click(submit);
+    assert.equal(owner.commands.length, 0);
+    assert.equal(input.value, 'replacement term');
+    await act(async () => oldScan('retired camera result'));
+    assert.equal(owner.commands.length, 0);
+    await f.click(submit);
+    assert.deepEqual(
+        owner.commands.map(({ stamp, source, searchTerm }) => [
+            stamp.viewId,
+            source,
+            searchTerm,
+        ]),
+        [['replacement', 'submit', 'replacement term']]
+    );
+});
+
 for (const includePublication of [false, true]) {
     it(`reports an accepted unchanged term when the owner advances generation ${includePublication ? 'with' : 'without'} a publication pair`, async (t) => {
         const f = await htmlPresentationFixture(t);

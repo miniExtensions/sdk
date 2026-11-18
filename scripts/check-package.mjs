@@ -4858,7 +4858,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
-    assert.equal(visitorQueryProof.tests, 136);
+    assert.equal(visitorQueryProof.tests, 140);
     console.log(
         'Installed Portal visitor Sort and Search qualification passed.',
         visitorQueryProof

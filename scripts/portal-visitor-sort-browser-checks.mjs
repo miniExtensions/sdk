@@ -145,6 +145,14 @@ globalThis.searchFixture = {
                 publicationRevision: searchFrame.publicationRevision + 1,
             });
     },
+    replaceAfterReadFailure() {
+        searchReadFails = true;
+        publishSearch({
+            stamp: {...searchFrame.stamp, viewId:'replacement', generation:searchFrame.stamp.generation + 1},
+            searchTerm: 'replacement term',
+            publicationRevision: searchFrame.publicationRevision + 1,
+        });
+    },
     scan: (value) => scan?.(value),
     unmount: () => searchRoot.unmount(),
 };
@@ -194,6 +202,22 @@ async function checkSearch(page) {
     await page.waitForFunction(
         () => globalThis.searchFixture.summary().outcomes.length === 4
     );
+    await scanner.press('Enter');
+    await page.evaluate(() =>
+        globalThis.searchFixture.replaceAfterReadFailure()
+    );
+    assert.equal(await entry.inputValue(), '');
+    await submit.press('Enter');
+    await waitForTerm('replacement term');
+    assert.equal((await search()).commands.length, 4);
+    await page.evaluate(() =>
+        globalThis.searchFixture.scan('retired camera result')
+    );
+    assert.equal((await search()).commands.length, 4);
+    await submit.press('Enter');
+    await page.waitForFunction(
+        () => globalThis.searchFixture.summary().outcomes.length === 5
+    );
     const { commands, outcomes } = await search();
     assert.deepEqual(
         commands.map(
@@ -214,6 +238,7 @@ async function checkSearch(page) {
             ['submit', '  café  ', 1, '  café  '],
             ['scan', '  café  ', 3, '  001-α  '],
             ['clear', '  001-α  ', 4, ''],
+            ['submit', 'replacement term', 6, 'replacement term'],
         ]
     );
     assert.deepEqual(
@@ -226,15 +251,18 @@ async function checkSearch(page) {
             ['allocated', undefined],
             ['allocated', 4],
             ['allocated', 5],
+            ['allocated', undefined],
         ]
     );
     assert.equal(outcomes[1].generation, outcomes[0].generation + 1);
+    assert.equal(commands.at(-1).stamp.viewId, 'replacement');
     await page.evaluate(() => globalThis.searchFixture.unmount());
     assert.equal((await search()).listeners, 0);
     return {
         commands: commands.length,
         staleScanRejected: true,
         transientReadRecovered: true,
+        replacementNotificationRecovered: true,
         sameTermGenerationReported: true,
         cleanup: 'completed',
     };

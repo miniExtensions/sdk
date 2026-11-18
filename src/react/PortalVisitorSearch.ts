@@ -48,6 +48,9 @@ type Entry = {
     subscription: symbol;
     draft: ReturnType<typeof capturePortalVisitorSearchDraft>;
     text: string;
+    reconcile(
+        frame: ReturnType<typeof readPortalVisitorSearchFrame>
+    ): Entry | null;
 };
 
 export function PortalVisitorSearch({
@@ -73,21 +76,25 @@ export function PortalVisitorSearch({
     useCommitEffect(() => {
         let active = true;
         const subscription = Symbol();
-        const refresh = () => {
-            if (!active) return;
-            const frame = readPortalVisitorSearchFrame(port);
-            if (frame === undefined || current.current?.draft.observe(frame))
-                return;
-            const entry = frame
+        const reconcile: Entry['reconcile'] = (frame) => {
+            if (!active || frame === undefined) return null;
+            const previous = current.current;
+            if (previous?.draft.observe(frame)) return previous;
+            const entry: Entry | null = frame
                 ? {
                       port,
                       subscription,
                       draft: capturePortalVisitorSearchDraft(port, frame),
                       text: frame.searchTerm,
+                      reconcile,
                   }
                 : null;
             current.current = entry;
             setVisible(entry && { entry, text: entry.text });
+            return entry;
+        };
+        const refresh = () => {
+            if (active) reconcile(readPortalVisitorSearchFrame(port));
         };
         const unsubscribe = port.subscribe(refresh);
         refresh();
@@ -104,7 +111,8 @@ export function PortalVisitorSearch({
         candidate !== null &&
         candidate === current.current &&
         !settings.current.disabled &&
-        candidate.draft.current();
+        candidate.reconcile(readPortalVisitorSearchFrame(candidate.port)) ===
+            candidate;
     const edit = (candidate: Entry, text: string) => {
         candidate.text = text;
         setVisible({ entry: candidate, text });
@@ -117,6 +125,9 @@ export function PortalVisitorSearch({
         void candidate.draft.submit(intent, onAdmitted).then((outcome) => {
             const live = current.current;
             if (!live || live.subscription !== candidate.subscription) return;
+            const frame = readPortalVisitorSearchFrame(candidate.port);
+            const verified = candidate.reconcile(frame);
+            if (!verified || !frame) return;
             const publication =
                 outcome.type === 'stale'
                     ? undefined
@@ -128,7 +139,7 @@ export function PortalVisitorSearch({
                     ? outcome
                     : undefined;
             if (!publication && !advancedAllocation) {
-                if (live === candidate && candidate.draft.current())
+                if (verified === candidate)
                     settings.current.onOutcome?.(outcome);
                 return;
             }
@@ -137,9 +148,7 @@ export function PortalVisitorSearch({
             // An allocation alone can identify a same-term reload, but it
             // cannot establish which command changed the committed term.
             if (!publication && requestedTerm !== captured.searchTerm) return;
-            const frame = readPortalVisitorSearchFrame(candidate.port);
             if (
-                frame &&
                 samePortalVisitorSearchScope(captured.stamp, frame.stamp) &&
                 frame.stamp.generation ===
                     (publication?.generation ??

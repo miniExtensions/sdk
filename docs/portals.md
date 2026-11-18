@@ -1008,8 +1008,8 @@ its verified generation without a publication receipt. The control checks the
 live frame at settlement and delivers feedback only to its owning
 subscription and publication. A read exception prevents commands and feedback
 from using an unverified frame. A later successful read can confirm the
-existing draft if its publication still matches. Retries require a fresh
-user action.
+existing draft or show its replacement. The gesture that discovers a
+replacement does not submit it. Retries require a fresh user action.
 
 An optional scanner renderer captures the result callback when the scanner
 opens. Retire that callback on close. A captured callback accepts one result

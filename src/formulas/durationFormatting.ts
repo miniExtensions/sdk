@@ -1,6 +1,15 @@
-import moment from 'moment-timezone';
-import 'moment-duration-format';
+import moment from 'moment';
+import setupDurationFormat from 'moment-duration-format';
 import type { DurationFormat } from './types.js';
+
+// The plugin can resolve a different Moment instance in split installations.
+if (typeof moment.duration.fn.format !== 'function') {
+    // The documented initializer accepts the callable export. The published
+    // NodeNext declaration instead adds a module namespace's default member.
+    setupDurationFormat(
+        moment as unknown as Parameters<typeof setupDurationFormat>[0]
+    );
+}
 
 const assertUnreachable = (value: never): never => {
     throw new Error(`Unexpected: ${String(value)}`);

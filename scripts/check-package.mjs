@@ -170,6 +170,8 @@ import {
 import {
     checkDurationInputConsumer,
     durationInputTypedConsumer,
+    splitDurationMomentConsumer,
+    splitDurationMomentInstall,
 } from './duration-input-consumer-checks.mjs';
 import {
     checkSelectChoiceProjectionConsumer,
@@ -1004,7 +1006,11 @@ try {
     }
     writeFileSync(
         join(temporaryDirectory, 'package.json'),
-        JSON.stringify({ private: true, type: 'module' })
+        JSON.stringify({
+            private: true,
+            type: 'module',
+            ...splitDurationMomentInstall,
+        })
     );
     run('npm', [
         'install',
@@ -1023,6 +1029,17 @@ try {
         temporaryDirectory,
         join(temporaryDirectory, packed.filename),
         packed
+    );
+    const splitDurationFilename = 'duration-split-moment-consumer.mjs';
+    writeFileSync(
+        join(temporaryDirectory, splitDurationFilename),
+        splitDurationMomentConsumer
+    );
+    for (const format of ['esm', 'cjs']) {
+        run(process.execPath, [splitDurationFilename, format]);
+    }
+    console.log(
+        'Installed Duration blur passed with split Moment in ESM and CJS.'
     );
     assertModuleFormatReceipt(installedPackage);
     assertDateVendor(installedPackage, 'dist/vendor/date-time');

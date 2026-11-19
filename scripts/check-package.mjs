@@ -4947,9 +4947,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(visitorQueryProof.tests, 276);
+    assert.equal(visitorQueryProof.tests, 328);
     console.log(
-        'Installed Portal visitor Sort, Search, view buttons and advanced Filter qualification passed.',
+        'Installed Portal visitor Sort, Search, view buttons and quick/advanced Filter qualification passed.',
         visitorQueryProof
     );
     const galleryProof = await checkPortalGalleryReactMatrix({

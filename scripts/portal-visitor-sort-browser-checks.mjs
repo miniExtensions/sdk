@@ -205,6 +205,7 @@ globalThis.viewButtonsFixture = {
 
 const filterFixture = `
 import { PortalVisitorFilter } from '@miniextensions/sdk/react';
+import { flushSync } from 'react-dom';
 const filterForm = document.createElement('form');
 const filterHost = document.createElement('section');
 filterForm.append(filterHost);
@@ -213,21 +214,41 @@ const filterRoot = createRoot(filterHost);
 const filterListeners = new Set();
 const filterCommands = [];
 const filterOutcomes = [];
+const heldSelectKeys = [];
+const heldSelectChanges = [];
 let filterFormSubmits = 0;
 filterForm.addEventListener('submit', (event) => {
     filterFormSubmits++;
     event.preventDefault();
 });
+filterForm.addEventListener('keydown', (event) => {
+    if (event.target instanceof HTMLSelectElement && event.target.multiple)
+        heldSelectKeys.push({key: event.key, repeat: event.repeat, trusted: event.isTrusted});
+});
+filterForm.addEventListener('change', (event) => {
+    if (event.target instanceof HTMLSelectElement && event.target.multiple)
+        heldSelectChanges.push({trusted: event.isTrusted, values: Array.from(event.target.selectedOptions, (option) => option.value)});
+}, {capture: true});
 const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
 };
+const quickChoices = [{value: 'red', label: 'Red'}, {value: 'blue', label: 'Blue'}, {value: 'green', label: 'Green'}, {value: 'yellow', label: 'Yellow'}];
 let filterFrame = {
     stamp: {...frame.stamp, fieldId: 'filter-portal'},
     fields: [{
         id: 'title', name: 'Title',
         operators: [{label: 'Contains', setting: currentTitle, operand: {kind: 'text'}}],
+    }, {
+        id: 'status', name: 'Status',
+        operators: [{label: 'Is', operand: {kind: 'choice', choices: quickChoices},
+            setting: {fieldType: 'singleSelect', type: 'is', idOrName: {type: 'id', id: 'status'}, value: 'red'}}],
+    }, {
+        id: 'labels', name: 'Labels',
+        operators: [{label: 'Any of', operand: {kind: 'choices', choices: quickChoices},
+            setting: {fieldType: 'multipleSelects', type: 'hasAnyOf', idOrName: {type: 'id', id: 'labels'}, value: []}}],
     }],
+    dropdownFieldIds: ['status', 'labels'],
     criteria: {
         logicalOperator: 'or',
         conditions: [{
@@ -260,17 +281,184 @@ const filterPort = {
     },
 };
 filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
-    port: filterPort, onOutcome: (outcome) => filterOutcomes.push(outcome),
+    port: filterPort, showDropdowns: true, onOutcome: (outcome) => filterOutcomes.push(outcome),
 })));
 globalThis.filterFixture = {
-    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits}),
+    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits, heldSelectKeys, heldSelectChanges}),
+    seedHeldChoice() {
+        const criteria = filterFrame.criteria ?? {logicalOperator: 'and', conditions: []};
+        publishFilter({ ...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1},
+            criteria: {...criteria, conditions: [{id:'held-seed', type:'singleCondition', setting:{fieldType:'multipleSelects', type:'hasAnyOf', idOrName:{type:'id',id:'labels'}, value:['red']}}, ...criteria.conditions]} });
+    },
     cycleViews() {
-        for (const viewId of ['view-b', 'view-a'])
-            publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
+        flushSync(() => {
+            for (const viewId of ['view-b', 'view-a'])
+                publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
+        });
     },
     unmount: () => filterRoot.unmount(),
 };
 `;
+
+async function checkHeldQuickFilter(page) {
+    const labels = page
+        .getByRole('group', { name: 'Quick filters' })
+        .getByRole('listbox', { name: 'Labels' });
+    const summary = () =>
+        page.evaluate(() => globalThis.filterFixture.summary());
+    const waitForCount = (count) =>
+        page.waitForFunction(
+            (expected) =>
+                globalThis.filterFixture.summary().commands.length === expected,
+            count
+        );
+    const initial = await summary();
+    const offset = initial.commands.length;
+    await page.evaluate(() => globalThis.filterFixture.seedHeldChoice());
+    await page.waitForFunction(
+        () => document.querySelector('select[multiple]')?.value === 'red'
+    );
+    await labels.focus();
+    const retained = await labels.elementHandle();
+    assert.ok(retained);
+    try {
+        await page.keyboard.down('ArrowDown');
+        await waitForCount(offset + 1);
+        await page.keyboard.down('ArrowDown');
+        await waitForCount(offset + 2);
+        assert.equal(
+            await retained.evaluate(
+                (element) => element === document.activeElement
+            ),
+            true
+        );
+        await page.evaluate(() => globalThis.filterFixture.cycleViews());
+        await page.keyboard.down('ArrowDown');
+        assert.match(await page.getByRole('status').textContent(), /changed/);
+        assert.equal((await summary()).commands.length, offset + 2);
+        assert.equal(
+            await retained.evaluate(
+                (element) => element === document.activeElement
+            ),
+            true
+        );
+    } finally {
+        await page.keyboard.up('ArrowDown');
+        await retained.dispose();
+    }
+    // Chromium's native navigation anchor can advance even on the refused change.
+    await page.keyboard.press('Home');
+    await waitForCount(offset + 3);
+    const end = await summary();
+    assert.deepEqual(
+        end.commands
+            .slice(offset)
+            .map((command) => command.criteria.conditions[0].setting.value),
+        [['blue'], ['green'], ['red']]
+    );
+    assert.deepEqual(
+        end.heldSelectKeys.slice(initial.heldSelectKeys.length),
+        [false, true, true, false].map((repeat, index) => ({
+            key: index === 3 ? 'Home' : 'ArrowDown',
+            repeat,
+            trusted: true,
+        }))
+    );
+    assert.deepEqual(
+        end.heldSelectChanges.slice(initial.heldSelectChanges.length),
+        ['blue', 'green', 'yellow', 'red'].map((value) => ({
+            trusted: true,
+            values: [value],
+        }))
+    );
+    assert.equal(end.submits, 0);
+    return {
+        freshAndRepeatedCommands: 3,
+        retiredRepeatRefused: true,
+        trustedKeys: true,
+    };
+}
+
+async function checkQuickFilter(page, startingCriteria) {
+    const root = page.getByRole('group', { name: 'Quick filters' });
+    const status = root.getByRole('combobox', { name: 'Status' });
+    const labels = root.getByRole('listbox', { name: 'Labels' });
+    const summary = () =>
+        page.evaluate(() => globalThis.filterFixture.summary());
+    const waitForCount = (count) =>
+        page.waitForFunction(
+            (expected) =>
+                globalThis.filterFixture.summary().commands.length === expected,
+            count
+        );
+    const choose = async (control, values, count) => {
+        await control.dispatchEvent('pointerdown', {
+            button: 0,
+            isPrimary: true,
+        });
+        await control.selectOption(values);
+        await waitForCount(count);
+    };
+    await status.waitFor();
+    await labels.waitFor();
+    await status.focus();
+    const retained = await status.elementHandle();
+    assert.ok(retained);
+    try {
+        await page.evaluate(() => globalThis.filterFixture.cycleViews());
+        assert.equal(
+            await retained.evaluate(
+                (element) =>
+                    element.isConnected && element === document.activeElement
+            ),
+            true
+        );
+        await retained.selectOption('red');
+        assert.equal((await summary()).commands.length, 2);
+        assert.match(await page.getByRole('status').textContent(), /changed/);
+    } finally {
+        await retained.dispose();
+    }
+    await choose(status, 'red', 3);
+    let current = await summary();
+    assert.deepEqual(current.commands[2].criteria.conditions[0].setting, {
+        fieldType: 'singleSelect',
+        type: 'is',
+        idOrName: { type: 'id', id: 'status' },
+        value: 'red',
+    });
+    assert.deepEqual(
+        current.commands[2].criteria.conditions.slice(1),
+        startingCriteria.conditions
+    );
+    await choose(labels, ['blue', 'red'], 4);
+    current = await summary();
+    assert.deepEqual(current.commands[3].criteria.conditions[0].setting.value, [
+        'red',
+        'blue',
+    ]);
+    await root
+        .getByRole('button', { name: 'Clear filters Labels' })
+        .press('Enter');
+    await waitForCount(5);
+    assert.equal(
+        await labels.evaluate((element) => element === document.activeElement),
+        true
+    );
+    const hadStatus = (await summary()).commands[2].criteria;
+    assert.deepEqual((await summary()).commands[4].criteria, hadStatus);
+    await choose(status, '', 6);
+    const end = await summary();
+    assert.deepEqual(end.commands[5].criteria, startingCriteria);
+    assert.equal(end.submits, 0);
+    return {
+        commands: 4,
+        staleGestureRefused: true,
+        priorTreeRestored: true,
+        clearFocus: true,
+        formSubmits: 0,
+    };
+}
 
 async function checkFilter(page) {
     const trigger = page.getByRole('button', { name: 'Filter', exact: true });
@@ -391,6 +579,8 @@ async function checkFilter(page) {
     );
     assert.equal(dismissed.outcomes.at(-1).requestId, 'filter-2');
     assert.equal(dismissed.submits, 0);
+    const quick = await checkQuickFilter(page, dismissed.commands[1].criteria);
+    const heldQuick = await checkHeldQuickFilter(page);
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -401,6 +591,8 @@ async function checkFilter(page) {
         paddingIsInert: true,
         operandEnterSubmits: 0,
         backdropAllocation: 'filter-2',
+        quick,
+        heldQuick,
         focusRestored: true,
         cleanup: 'completed',
     };

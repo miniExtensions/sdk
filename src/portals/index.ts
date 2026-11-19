@@ -74,6 +74,7 @@ export { createPortalVisitorFilterDraft } from './visitorFilter.js';
 export type {
     PortalVisitorFilterCommand,
     PortalVisitorFilterDraft,
+    PortalVisitorFilterDropdown,
     PortalVisitorFilterField,
     PortalVisitorFilterFrame,
     PortalVisitorFilterOperand,

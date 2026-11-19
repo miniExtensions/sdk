@@ -15,6 +15,7 @@ import {
 import { normalizeFormLeaseLoaded } from '../ui/formLease.js';
 import {
     isCurrentLinkedRecordOpenHistory,
+    verifyLinkedRecordOpenAuthority,
     readLinkedRecordOpenHistory,
     type LinkedRecordOpenHistory,
 } from './linkedRecordOpenHistory.js';
@@ -907,28 +908,23 @@ export function createFormPageOwner(
                             admission();
                         },
                         (requireScope) => {
-                            requireFinalFormSaveAdmission(
-                                saveOptions?.lifecycle,
-                                requireScope
-                            );
-                            if (openHistory === null) return;
-                            if (
-                                readLinkedRecordOpenHistory(fields) !==
-                                openHistory
-                            )
-                                throw new FormPageError('stale-revision');
-                            // Each observation can invalidate the other. Confirm
-                            // the same configuration after the scope read, then
-                            // fence the owner before relying on local state.
-                            requireScope();
+                            const authorityChecked =
+                                requireFinalFormSaveAdmission(
+                                    saveOptions?.lifecycle,
+                                    requireScope
+                                );
+                            if (openHistory === null) return authorityChecked;
                             if (
                                 readLinkedRecordOpenHistory(fields) !==
                                 openHistory
                             )
                                 throw new FormPageError('stale-revision');
                             requireScope();
+                            // Legacy config and scope callbacks can change each
+                            // other. End with one coherent authority read, then
+                            // only inspect captured SDK state before transport.
                             if (
-                                !isCurrentLinkedRecordOpenHistory(
+                                !verifyLinkedRecordOpenAuthority(
                                     fields,
                                     openHistory
                                 ) ||
@@ -941,6 +937,7 @@ export function createFormPageOwner(
                                 navigationRevision !== navigationTicket
                             )
                                 throw new FormPageError('stale-revision');
+                            return true;
                         }
                     ),
                     isCurrent: fresh,

@@ -2,7 +2,7 @@ import type { FormSaveLifecycle } from './controller.js';
 
 // Internal page admission only. The public lifecycle/current contracts stay
 // unchanged, and response acceptance never rechecks a wall-clock rule.
-type FinalAdmission = (requireScope: () => void) => void;
+type FinalAdmission = (requireScope: () => void) => boolean | void;
 
 const admissions = new WeakMap<
     FormSaveLifecycle,
@@ -27,5 +27,8 @@ export const requireFinalFormSaveAdmission = (
     lifecycle: FormSaveLifecycle | undefined,
     requireScope: () => void
 ) => {
-    if (lifecycle) admissions.get(lifecycle)?.finalAdmission?.(requireScope);
+    return (
+        lifecycle !== undefined &&
+        admissions.get(lifecycle)?.finalAdmission?.(requireScope) === true
+    );
 };

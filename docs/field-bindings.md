@@ -933,9 +933,20 @@ The current parent retains credit per linked field and record. Next checks the
 current page. Final Submit rechecks all applicable fields against the unfiltered
 native selection. Closing a child or removing and re-adding the same record keeps
 credit within the same accepted parent. Parent or configuration replacement requires
-fresh presentations. Advance the binding's configuration revision when a new
-linked-record configuration takes effect. Hosts that omit this acknowledgment
-keep the existing refusal for visible nonempty required-open selections.
+fresh presentations and fresh bindings.
+
+To enable required-open credit, supply `linkedRecordOpenAuthorityRevision` when
+creating the field bindings. Return one nonnegative, monotonically increasing
+revision for the accepted parent and page, visitor session, token, connection
+and linked-field presentation policy. Supply the epoch that owns the accepted
+loaded Form when creating its bindings. Include the page owner's currentness
+and configuration revision in the same authority.
+Advance the revision when any of those change, including changes made inside a
+host callback and changes later restored to their old values. Return the epoch
+that is current when the callback completes. The SDK checks this single revision
+after the other preflight callbacks and before sending a Save. Missing, invalid or changed authority refuses credit for that binding.
+Hosts that omit this option or the presentation acknowledgment keep the existing
+refusal for visible nonempty required-open selections.
 
 Optional React `AirtableForm` takes a scope, `FieldRendererSlots<ReactNode>`, an
 optional field `fallback` and a required `children(state)` layout render prop.

@@ -111,6 +111,7 @@ async function exerciseMountedEdits({
         client,
         getScope: () => ({ ownerId: 'synthetic-review-parent', revision: 0 }),
         configurationRevision: () => 0,
+        linkedRecordOpenAuthorityRevision: () => 0,
         saveOptions: {
             captchaVal: null,
             isComputeMode: false,

@@ -4,12 +4,13 @@ import {
     createFormFieldBindings,
     createFormPageOwner,
     FormControllerError,
+    FormDraftStore,
     FormPageError,
     RecoveryJournal,
 } from '../src/forms/index.js';
 import { withFormSaveAdmission } from '../src/forms/saveAdmission.js';
 import { createMiniExtensionsClient } from '../src/runtime/client.js';
-import type { SaveFormInput } from '../src/runtime/types.js';
+import type { AirtableValue, SaveFormInput } from '../src/runtime/types.js';
 import {
     childForm,
     childSaved,
@@ -23,7 +24,14 @@ const second = 'rec_sibling';
 
 function requiredOpenFixture(
     ids = [first, second],
-    observations: { configuration?(): void; scope?(): void } = {}
+    observations: {
+        configuration?(): void;
+        scope?(): void;
+        authority?(): void;
+        omitAuthority?: boolean;
+        store?: FormDraftStore<AirtableValue>;
+        onTransport?(): void;
+    } = {}
 ) {
     const loaded = parentForm('edit');
     loaded.payload.fieldIdsInForm = [links, 'fld_title'];
@@ -43,6 +51,7 @@ function requiredOpenFixture(
     };
     let configuration = 0;
     let scopeRevision = 0;
+    let authorityRevision = 0;
     const writes: SaveFormInput[] = [];
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
@@ -81,6 +90,7 @@ function requiredOpenFixture(
     };
     client.forms.save = async (input) => {
         writes.push(input);
+        observations.onTransport?.();
         const saved = childSaved('edit');
         return {
             ...saved,
@@ -92,6 +102,7 @@ function requiredOpenFixture(
     const fields = createFormFieldBindings({
         loaded,
         client,
+        store: observations.store,
         getScope: () => {
             observations.scope?.();
             return { ownerId: 'synthetic-parent', revision: scopeRevision };
@@ -100,6 +111,14 @@ function requiredOpenFixture(
             observations.configuration?.();
             return configuration;
         },
+        ...(observations.omitAuthority
+            ? {}
+            : {
+                  linkedRecordOpenAuthorityRevision: () => {
+                      observations.authority?.();
+                      return authorityRevision;
+                  },
+              }),
         saveOptions: formSaveOptions(),
     });
     // Keep the separate page epoch fixed, to test the bindings' own final fence.
@@ -131,11 +150,16 @@ function requiredOpenFixture(
         writes,
         open,
         replaceOwner: (kind: 'scope' | 'session') => {
+            authorityRevision++;
             if (kind === 'scope') scopeRevision++;
             else client.setSession({ visitor: 'synthetic-successor' });
         },
         rotateConfiguration: () => {
             configuration++;
+            authorityRevision++;
+        },
+        advanceAuthority: () => {
+            authorityRevision++;
         },
         dispose: () => {
             pages.dispose();
@@ -324,17 +348,29 @@ it('refuses transport when the final owner observation advances the linked confi
     }
 });
 
-for (const kind of ['scope', 'session', 'configuration'] as const) {
+for (const kind of [
+    'scope',
+    'session',
+    'configuration',
+    'authority',
+    'authority-draft',
+] as const) {
     it(
         'refuses a change to ' + kind + ' during final linked admission',
         async () => {
             let finalAdmission = false;
             let checkScope = false;
+            let afterScope = false;
             let changed = false;
             const f = requiredOpenFixture([first], {
                 configuration() {
                     if (!finalAdmission || changed) return;
-                    if (kind === 'configuration') checkScope = true;
+                    if (
+                        kind === 'configuration' ||
+                        kind === 'authority' ||
+                        kind === 'authority-draft'
+                    )
+                        checkScope = true;
                     else {
                         changed = true;
                         f.replaceOwner(kind);
@@ -343,8 +379,24 @@ for (const kind of ['scope', 'session', 'configuration'] as const) {
                 scope() {
                     if (!checkScope) return;
                     checkScope = false;
+                    if (kind === 'authority' || kind === 'authority-draft')
+                        afterScope = true;
+                    else {
+                        changed = true;
+                        f.rotateConfiguration();
+                    }
+                },
+                authority() {
+                    if (!afterScope || changed) return;
                     changed = true;
-                    f.rotateConfiguration();
+                    if (kind === 'authority') f.advanceAuthority();
+                    if (kind === 'authority-draft')
+                        assert(
+                            f.fields.controller.write(
+                                'fld_title',
+                                'Successor draft'
+                            )
+                        );
                 },
             });
             const finishes: string[] = [];
@@ -378,16 +430,26 @@ for (const kind of ['scope', 'session', 'configuration'] as const) {
                         (error: unknown) => error
                     );
                 assert.equal(changed, true);
+                if (kind === 'authority-draft')
+                    assert.equal(
+                        f.fields.controller.getState().draft?.data.fld_title,
+                        'Successor draft'
+                    );
                 assert.deepEqual(
                     { writes: f.writes.length, finishes },
                     { writes: 0, finishes: ['not-dispatched'] }
                 );
-                if (kind === 'configuration') {
-                    assert(outcome instanceof FormPageError);
-                    assert.equal(outcome.reason, 'stale-revision');
-                } else {
+                if (kind === 'scope' || kind === 'session') {
                     assert(outcome instanceof FormControllerError);
                     assert.equal(outcome.code, 'scope-changed');
+                } else if (kind === 'authority-draft') {
+                    assert(
+                        outcome instanceof FormControllerError ||
+                            outcome instanceof FormPageError
+                    );
+                } else {
+                    assert(outcome instanceof FormPageError);
+                    assert.equal(outcome.reason, 'stale-revision');
                 }
             } finally {
                 f.dispose();
@@ -395,3 +457,76 @@ for (const kind of ['scope', 'session', 'configuration'] as const) {
         }
     );
 }
+
+it('fails closed for required-open selections when the host supplies no coherent authority', async () => {
+    const f = requiredOpenFixture([first], { omitAuthority: true });
+    try {
+        assert(await f.fields.linkedRecords(links).readSelected());
+        const present = await f.open(first);
+        assert.equal(present(), false);
+        f.owner.close();
+        assert.equal(f.pages.getSnapshot().canNext, false);
+        await assert.rejects(
+            f.pages.submit(f.pages.getSnapshot().revision),
+            FormPageError
+        );
+        assert.equal(f.writes.length, 0);
+    } finally {
+        f.dispose();
+    }
+});
+
+it('uses the owned draft revision after coherent admission with an injected store', async () => {
+    let finalAdmission = false;
+    let observeScope = false;
+    let coherentRead = false;
+    let lateStoreCallbacks = 0;
+    class InjectedStore extends FormDraftStore<AirtableValue> {
+        override revision(
+            ...args: Parameters<FormDraftStore<AirtableValue>['revision']>
+        ) {
+            if (coherentRead) {
+                lateStoreCallbacks++;
+                f.advanceAuthority();
+            }
+            return super.revision(...args);
+        }
+    }
+    const f = requiredOpenFixture([first], {
+        store: new InjectedStore(),
+        configuration() {
+            if (finalAdmission) observeScope = true;
+        },
+        scope() {
+            if (!observeScope) return;
+            observeScope = false;
+            coherentRead = true;
+        },
+        onTransport() {
+            assert(coherentRead);
+            coherentRead = false;
+            finalAdmission = false;
+        },
+    });
+    try {
+        assert(await f.fields.linkedRecords(links).readSelected());
+        assert((await f.open(first))());
+        f.owner.close();
+        assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+        const lifecycle = withFormSaveAdmission(
+            { dispatch: () => ({ accepted() {}, finish() {} }) },
+            () => {},
+            () => {
+                finalAdmission = true;
+            }
+        );
+        const outcome = await f.pages.submit(f.pages.getSnapshot().revision, {
+            lifecycle,
+        });
+        assert.equal(outcome.type, 'saved');
+        assert.equal(lateStoreCallbacks, 0);
+        assert.equal(f.writes.length, 1);
+    } finally {
+        f.dispose();
+    }
+});

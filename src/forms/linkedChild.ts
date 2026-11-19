@@ -130,7 +130,8 @@ type InternalOptions = FormLinkedChildRecovery & {
     ): (() => void) | null;
     creditEditPresentation(
         recordId: string,
-        configuration: string | number
+        configuration: string | number,
+        presentationCurrent: () => boolean
     ): boolean;
     changed(): void;
 };
@@ -854,7 +855,8 @@ export function createFormLinkedChildOwner(
                     return false;
                 return options.creditEditPresentation(
                     candidate.recordId,
-                    config
+                    config,
+                    () => livePresentation() && draftCurrent()
                 );
             } catch {
                 return false;

@@ -5,6 +5,7 @@ export type LinkedRecordOpenHistory = ReadonlyMap<string, ReadonlySet<string>>;
 type LinkedRecordOpenHistoryAccess = {
     observe(): LinkedRecordOpenHistory | null;
     peek(): LinkedRecordOpenHistory | null;
+    verifyAuthority(captured: LinkedRecordOpenHistory): boolean;
 };
 
 const histories = new WeakMap<
@@ -31,4 +32,12 @@ export function isCurrentLinkedRecordOpenHistory(
     captured: LinkedRecordOpenHistory | null
 ): boolean {
     return (histories.get(fields)?.peek() ?? null) === captured;
+}
+
+/** One coherent host observation after legacy policy/ownership callbacks. */
+export function verifyLinkedRecordOpenAuthority(
+    fields: FormFieldBindings,
+    captured: LinkedRecordOpenHistory
+): boolean {
+    return histories.get(fields)?.verifyAuthority(captured) ?? false;
 }

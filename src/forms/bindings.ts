@@ -105,6 +105,11 @@ export type FormFieldBinding = {
 export type FormFieldBindingsOptions = FormControllerOptions & {
     /** Advance for accepted linked-record configuration replacement, including observed ABA. */
     configurationRevision?(): string | number;
+    /** Coherent epoch for this parent's scope, session and linked configuration.
+     * Required for crediting linked Edit presentations. Advance on any replacement,
+     * including changes inside callbacks and replacement followed by restoration.
+     */
+    linkedRecordOpenAuthorityRevision?(): number;
     /** Explicit client zone for dateTime presentation; never a local-time parser. */
     getClientTimeZone?(): string;
     /** Additional explicit UI/recovery lease. It never clears native data. */
@@ -195,12 +200,30 @@ export function createFormFieldBindings(
     initial: FormFieldBindingsOptions
 ): FormFieldBindings {
     let options = initial;
+    let readingLinkedOpenAuthority = false;
+    const readLinkedOpenAuthority = () => {
+        if (readingLinkedOpenAuthority) return null;
+        readingLinkedOpenAuthority = true;
+        try {
+            const value = options.linkedRecordOpenAuthorityRevision?.();
+            return typeof value === 'number' &&
+                Number.isSafeInteger(value) &&
+                value >= 0
+                ? value
+                : null;
+        } catch {
+            return null;
+        } finally {
+            readingLinkedOpenAuthority = false;
+        }
+    };
     const store = initial.store ?? new FormDraftStore<AirtableValue>();
     let loaded = structuredClone(initial.loaded);
     // Server-accepted selection IDs stay separate from dirty values kept across reload.
     let originalLinkedRecordData = structuredClone(
         initial.loaded.payload.formRecord.data
     );
+    let linkedOpenAuthority = readLinkedOpenAuthority();
     const controller = createFormController({ ...initial, loaded, store });
     let epoch = controller.getState().epoch;
     let contextRevision = controller.getState().contextRevision;
@@ -208,6 +231,14 @@ export function createFormFieldBindings(
         configuration: string | number;
         records: LinkedRecordOpenHistory;
     } | null = null;
+    const currentLinkedOpenAuthority = () => {
+        if (linkedOpenAuthority === null || retired || disposed) return false;
+        if (readLinkedOpenAuthority() !== linkedOpenAuthority) {
+            linkedOpenAuthority = null;
+            openedLinkedRecords = null;
+        }
+        return linkedOpenAuthority !== null && !retired && !disposed;
+    };
     const choiceCreators = new Map<string, FormSelectChoiceController>();
     const choiceBlocked = () =>
         [...choiceCreators.values()].some((model) => model.blocksForm());
@@ -784,7 +815,16 @@ export function createFormFieldBindings(
                             ) ?? null
                         );
                     },
-                    creditEditPresentation: (recordId, configuration) => {
+                    creditEditPresentation: (
+                        recordId,
+                        configuration,
+                        presentationCurrent
+                    ) => {
+                        if (
+                            !currentLinkedOpenAuthority() ||
+                            !presentationCurrent()
+                        )
+                            return false;
                         const schema = loaded.payload.fieldIdsToSchemas[id];
                         const settings = schema?.miniExtConfig;
                         if (
@@ -1334,6 +1374,7 @@ export function createFormFieldBindings(
             } catch {
                 // A host that cannot establish the current epoch supplies no credit.
             }
+            live = live && currentLinkedOpenAuthority();
             if (openedLinkedRecords !== captured) return null;
             // The page already observes controller scope. Here, check only the
             // binding configuration and local lifetime, without calling getState.
@@ -1341,6 +1382,9 @@ export function createFormFieldBindings(
             return openedLinkedRecords?.records ?? null;
         },
         peek: () => openedLinkedRecords?.records ?? null,
+        verifyAuthority: (captured) =>
+            currentLinkedOpenAuthority() &&
+            openedLinkedRecords?.records === captured,
     });
     return owner;
 }

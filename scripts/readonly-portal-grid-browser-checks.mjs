@@ -143,7 +143,11 @@ function EmailCellProbe() {
     return h('form',{id:'grid-email-form',onSubmit(event){
         event.preventDefault();
         log.current.submits++;
-    }},h('table',{'aria-label':'Email Grid fixture'},h('tbody',null,h('tr',null,
+    }},h('table',{
+        'aria-label':'Email Grid fixture',
+        style:{width:'max-content',borderCollapse:'separate',borderSpacing:0},
+    },h('thead',null,h('tr',null,h('th',{scope:'col',style:{width:240}},'Email'))),
+    h('tbody',null,h('tr',null,
         h(PortalGridEmailCell,{
             value:cell.value,displayText:cell.value,title:'Contact email',language:'en',
             cellIdentity:cell.record,selected:cell.selected,rowHeight:'medium',

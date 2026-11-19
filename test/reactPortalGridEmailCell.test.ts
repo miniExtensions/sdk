@@ -120,9 +120,15 @@ it('settles a current draft on deselection through its original writer', async (
         onChange: (value: string) => writes.push(value),
     };
     await fixture.render(grid({ editor, selected: true }));
-    await change(fixture, edited);
+    const input = await change(fixture, edited);
     assert.deepEqual(writes, []);
-    await fixture.render(grid({ editor }));
+    const updated = {
+        ...editor,
+        onChange: () => assert.fail('Cleanup must retain the original writer'),
+    };
+    await fixture.render(grid({ editor: updated, selected: true }));
+    assert.equal(fixture.container.querySelector('input'), input);
+    await fixture.render(grid({ editor: updated }));
     assert.deepEqual(writes, [edited]);
     assert.equal(fixture.container.querySelector('input'), null);
 });

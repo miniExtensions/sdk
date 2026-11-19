@@ -88,6 +88,8 @@ import {
 import {
     checkChildNavigationConsumer,
     childNavigationTypedConsumer,
+    checkPortalSidePanelNavigationConsumer,
+    portalSidePanelNavigationTypedConsumer,
 } from './child-navigation-consumer-checks.mjs';
 import {
     checkFormulaCompatibilityConsumer,
@@ -2206,6 +2208,12 @@ new Parser([]).parse({maxDepth:'48'});
         '@types/react@19.2.2',
         '@types/react-dom@19.2.2',
     ]);
+    assert.equal(
+        await checkPortalSidePanelNavigationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     for (const extension of ['mts', 'cts']) {
         const filename = `text-input-consumer.${extension}`;
         writeFileSync(
@@ -2226,7 +2234,8 @@ new Parser([]).parse({maxDepth:'48'});
                 dateInputCompatibilityTypedConsumer +
                 recoverableImageTypedConsumer +
                 fileSelectionTypedConsumer +
-                borrowedFormRenderReactTypedConsumer
+                borrowedFormRenderReactTypedConsumer +
+                portalSidePanelNavigationTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -2274,7 +2283,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             calendlyBookingJsxConsumer +
             personBadgeJsxConsumer +
             recoverableImageJsxConsumer +
-            borrowedFormRenderReactTypedConsumer
+            borrowedFormRenderReactTypedConsumer +
+            portalSidePanelNavigationTypedConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(

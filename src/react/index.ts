@@ -3816,3 +3816,10 @@ export {
     type PortalGridCheckboxCellProps,
     type PortalGridCheckboxCellEditor,
 } from './PortalGridCheckboxCell.js';
+
+export { PortalSidePanelNavigation } from './PortalSidePanelNavigation.js';
+export type {
+    PortalSidePanelNavigationFrame,
+    PortalSidePanelNavigationProps,
+    PortalSidePanelNavigationRequest,
+} from './PortalSidePanelNavigation.js';

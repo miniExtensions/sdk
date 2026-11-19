@@ -13,7 +13,7 @@ import {
     writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import {
     consumerAgePolicy,
@@ -29,6 +29,7 @@ function fixture(
         afterInstall,
         npmLock = false,
         alias = false,
+        packedFiles = {},
     } = {}
 ) {
     const root = realpathSync(
@@ -43,9 +44,13 @@ function fixture(
             version: '0.1.0',
         }),
         'index.js': 'export const value = 1;\n',
+        ...packedFiles,
     };
-    for (const [path, bytes] of Object.entries(contents))
-        writeFileSync(join(source, path), bytes);
+    for (const [path, bytes] of Object.entries(contents)) {
+        const destination = join(source, path);
+        mkdirSync(dirname(destination), { recursive: true });
+        writeFileSync(destination, bytes);
+    }
     const archive = join(root, 'sdk.tgz');
     execFileSync('tar', ['-czf', archive, '-C', root, 'package']);
     const integrity = `sha512-${createHash('sha512').update(readFileSync(archive)).digest('base64')}`;
@@ -187,6 +192,50 @@ test('consumer refuses an unverified installer version before install', (t) => {
     assert.equal(f.installs, 0);
     assert(existsSync(f.installed));
 });
+test('consumer verifies the SDK payload alongside pnpm hoisted dependencies', (t) => {
+    const f = fixture(t, {
+        afterInstall: ({ installed }) => {
+            const dependencies = join(installed, 'node_modules');
+            const markdownBin = join(dependencies, 'markdown-it/bin');
+            mkdirSync(markdownBin, { recursive: true });
+            writeFileSync(
+                join(dependencies, 'markdown-it/package.json'),
+                JSON.stringify({
+                    name: 'markdown-it',
+                    bin: { 'markdown-it': 'bin/markdown-it.js' },
+                })
+            );
+            writeFileSync(
+                join(markdownBin, 'markdown-it.js'),
+                '#!/usr/bin/env node\n'
+            );
+            const bin = join(dependencies, '.bin');
+            mkdirSync(bin);
+            symlinkSync(
+                '../markdown-it/bin/markdown-it.js',
+                join(bin, 'markdown-it')
+            );
+        },
+    });
+    const receipt = installAgeQualifiedConsumer(f);
+    assert.equal(receipt.files, 2);
+    assert.equal(f.installs, 1);
+});
+test('consumer verifies bytes inside node_modules shipped by the archive', (t) => {
+    const packedFile = 'node_modules/bundled/index.js';
+    const f = fixture(t, {
+        packedFiles: { [packedFile]: 'export const value = 1;\n' },
+        afterInstall: ({ installed }) =>
+            writeFileSync(
+                join(installed, packedFile),
+                'export const value = 2;\n'
+            ),
+    });
+    assert.throws(
+        () => installAgeQualifiedConsumer(f),
+        /Installed SDK archive bytes differ: @miniextensions\/sdk\/node_modules\/bundled\/index\.js/
+    );
+});
 for (const [name, change, reason] of [
     [
         'archive replacement',
@@ -209,6 +258,21 @@ for (const [name, change, reason] of [
             symlinkSync(join(root, 'package'), installed);
         },
         /false|directory/i,
+    ],
+    [
+        'installed dependency directory symlink',
+        ({ installed, root }) =>
+            symlinkSync(join(root, 'package'), join(installed, 'node_modules')),
+        /"node_modules" \(symbolic link\)/,
+    ],
+    [
+        'unexpected dependency-shaped SDK payload entry',
+        ({ installed }) => {
+            const nested = join(installed, 'dist/node_modules');
+            mkdirSync(nested, { recursive: true });
+            writeFileSync(join(nested, 'extra.js'), 'export {};\n');
+        },
+        /dist\/node_modules\/extra\.js/,
     ],
     [
         'nested installed symlink',

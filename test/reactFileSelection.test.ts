@@ -219,3 +219,115 @@ it('denies disabled picker/drop intake, clears drag lifetime and uses the curren
     assert.equal(second.length, 2);
     assert.equal(first.length, 0);
 });
+
+it('renders the device picker in a host Form and hands off only the original selected or dropped files', async (t) => {
+    const { AttachmentDeviceInput } = await import('../src/react/index.js');
+    assert.equal(typeof AttachmentDeviceInput, 'function');
+    const f = await fixture(t);
+    const request = t.mock.method(globalThis, 'fetch', () =>
+        assert.fail('File selection has no transport authority')
+    );
+    const first = new f.window.File(['first'], 'first.txt');
+    const second = new f.window.File(['second'], 'second.txt');
+    const selected: File[][] = [];
+    const replacement: File[][] = [];
+    let submits = 0;
+    let bubbledDrops = 0;
+    const mount = async (disabled: boolean, onFiles: (files: File[]) => void) =>
+        f.render(
+            h(
+                'form',
+                {
+                    id: 'native-form',
+                    onSubmit: () => submits++,
+                    onDrop: () => bubbledDrops++,
+                },
+                h(AttachmentDeviceInput, {
+                    id: 'documents',
+                    form: 'native-form',
+                    accept: 'text/plain,.md',
+                    describedBy: 'documents-help documents-error',
+                    invalid: true,
+                    disabled,
+                    labels: {
+                        chooseFiles: 'Choisir les fichiers',
+                        dragAndDrop: 'ou glisser-déposer.',
+                    },
+                    onFiles,
+                })
+            )
+        );
+    const input = () => {
+        const element = f.container.querySelector('input[type=file]');
+        assert.ok(element instanceof f.window.HTMLInputElement);
+        return element;
+    };
+    const dropZone = () => {
+        const element = input().parentElement;
+        assert.ok(element);
+        return element;
+    };
+    const choose = async () => {
+        const element = input();
+        Object.defineProperty(element, 'files', {
+            configurable: true,
+            value: [first, second],
+        });
+        await act(async () =>
+            element.dispatchEvent(
+                new f.window.Event('change', { bubbles: true })
+            )
+        );
+        assert.equal(element.value, '');
+    };
+    const drag = async (type: string) => {
+        const event = new f.window.Event(type, {
+            bubbles: true,
+            cancelable: true,
+        });
+        Object.defineProperty(event, 'dataTransfer', {
+            value: { files: [second, first] },
+        });
+        await act(async () => dropZone().dispatchEvent(event));
+        assert.equal(event.defaultPrevented, true);
+    };
+
+    await mount(false, (files) => selected.push(files));
+    assert.equal(input().id, 'documents');
+    assert.equal(input().multiple, true);
+    assert.equal(input().accept, 'text/plain,.md');
+    assert.equal(input().form?.id, 'native-form');
+    assert.equal(input().getAttribute('aria-label'), 'Choisir les fichiers');
+    assert.equal(
+        input().getAttribute('aria-describedby'),
+        'documents-help documents-error'
+    );
+    assert.equal(input().getAttribute('aria-invalid'), 'true');
+    assert.match(dropZone().textContent ?? '', /ou glisser-déposer\./);
+    await choose();
+    await choose();
+    await drag('dragenter');
+    assert.equal(dropZone().getAttribute('data-drag-active'), 'true');
+    await drag('drop');
+    assert.equal(dropZone().hasAttribute('data-drag-active'), false);
+    assert.equal(selected.length, 3);
+    assert.equal(selected[0]?.[0], first);
+    assert.equal(selected[0]?.[1], second);
+    assert.equal(selected[1]?.[0], first);
+    assert.equal(selected[2]?.[0], second);
+    assert.equal(selected[2]?.[1], first);
+
+    await mount(true, (files) => replacement.push(files));
+    await choose();
+    await drag('drop');
+    assert.equal(input().disabled, true);
+    assert.equal(replacement.length, 0);
+    await mount(false, (files) => replacement.push(files));
+    await choose();
+    assert.equal(replacement.length, 1);
+    assert.equal(replacement[0]?.[0], first);
+    assert.equal(selected.length, 3);
+    assert.equal(submits, 0);
+    assert.equal(bubbledDrops, 0);
+    assert.equal(request.mock.callCount(), 0);
+});

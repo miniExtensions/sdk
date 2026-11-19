@@ -2508,8 +2508,15 @@ try {
             evidence: report.portalVisitorSort,
             expectedReactVersion: nativeReactVersion,
             includeSearch: true,
+            includeViewButtons: true,
         });
         assert.equal(report.portalVisitorSort.passed, true);
+        assert.deepEqual(report.portalVisitorSort.viewButtons, {
+            intents: 3,
+            tabFocus: true,
+            formSubmits: 0,
+            cleanup: 'completed',
+        });
         assert.deepEqual(report.portalVisitorSort.search, {
             commands: 5,
             staleScanRejected: true,

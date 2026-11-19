@@ -20,6 +20,7 @@ const searchCases = [
     'portalVisitorSearch.test.ts',
     'reactPortalVisitorSearch.test.ts',
 ];
+const viewButtonsCase = 'reactPortalVisitorViewButtons.test.ts';
 const fixture = 'fixtures/htmlPresentationFixture.ts';
 const profiles = [
     ['18.3.1', '18.3.12', '18.3.1'],
@@ -65,10 +66,32 @@ void createPortalVisitorSearchDraft(port);
 void createElement(PortalVisitorSearch, { port });
 `;
 
+const typedViewButtons = `
+import { createElement } from 'react';
+import {
+    PortalVisitorViewButtons,
+    type PortalVisitorViewButton,
+    type PortalVisitorViewButtonsProps,
+} from '@miniextensions/sdk/react';
+const option: PortalVisitorViewButton = { id: 'grid', label: null };
+const props: PortalVisitorViewButtonsProps = {
+    views: [option],
+    selectedViewId: null,
+    ownerToken: 'admitted view owner',
+    unnamedViewLabel: 'Localized unnamed view',
+    onSelect(id) { void id.toUpperCase(); },
+};
+// @ts-expect-error metadata published to the chooser is read-only.
+option.label = 'Do not mutate the host view';
+void createElement(PortalVisitorViewButtons, props);
+`;
+
 function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
     const archive = resolve(archivePath);
-    const cases = includeSearch ? [...sortCases, ...searchCases] : sortCases;
-    const expectedTests = includeSearch ? 38 : 15;
+    const cases = includeSearch
+        ? [...sortCases, ...searchCases, viewButtonsCase]
+        : sortCases;
+    const expectedTests = includeSearch ? 42 : 15;
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(
@@ -95,6 +118,27 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                 args: ['install', '--ignore-scripts'],
             });
             mkdirSync(join(directory, 'fixtures'));
+            if (includeSearch) {
+                const css = readFileSync(
+                    join(
+                        directory,
+                        'node_modules/@miniextensions/sdk/dist/esm/react/portal-visitor-view-buttons.css'
+                    ),
+                    'utf8'
+                );
+                assert.match(css, /flex-wrap: wrap/);
+                assert.match(css, /:focus-visible/);
+                assert.equal(
+                    readFileSync(
+                        join(
+                            directory,
+                            'node_modules/@miniextensions/sdk/dist/cjs/react/portal-visitor-view-buttons.css'
+                        ),
+                        'utf8'
+                    ),
+                    css
+                );
+            }
             const run = (argv) =>
                 execFileSync(process.execPath, argv, {
                     cwd: directory,
@@ -111,6 +155,11 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                         join(directory, 'search-consumer.' + typeSuffix),
                         typedSearch
                     );
+                if (includeSearch)
+                    writeFileSync(
+                        join(directory, 'view-buttons-consumer.' + typeSuffix),
+                        typedViewButtons
+                    );
                 run([
                     typescriptBin,
                     '--noEmit',
@@ -122,7 +171,12 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                     '--module',
                     'NodeNext',
                     'consumer.' + typeSuffix,
-                    ...(includeSearch ? ['search-consumer.' + typeSuffix] : []),
+                    ...(includeSearch
+                        ? [
+                              'search-consumer.' + typeSuffix,
+                              'view-buttons-consumer.' + typeSuffix,
+                          ]
+                        : []),
                 ]);
                 for (const file of [...cases, fixture]) {
                     const source = readFileSync(
@@ -139,6 +193,10 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                         )
                         .replaceAll(
                             "'../src/react/PortalVisitorSearch.js'",
+                            "'@miniextensions/sdk/react'"
+                        )
+                        .replaceAll(
+                            "'../src/react/PortalVisitorViewButtons.js'",
                             "'@miniextensions/sdk/react'"
                         )
                         .replaceAll(

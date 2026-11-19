@@ -277,6 +277,11 @@ export {
     type MultipleAttachmentsFieldOptions,
 } from './MultipleAttachmentsField.js';
 export {
+    AttachmentDeviceInput,
+    type AttachmentDeviceInputLabels,
+    type AttachmentDeviceInputProps,
+} from './AttachmentDeviceInput.js';
+export {
     AttachmentUrlInput,
     type AttachmentUrlDraft,
     type AttachmentUrlInputLabels,
@@ -3744,6 +3749,11 @@ export type {
     PortalVisitorSortLabels,
     PortalVisitorSortProps,
 } from './PortalVisitorSort.js';
+export { PortalVisitorViewButtons } from './PortalVisitorViewButtons.js';
+export type {
+    PortalVisitorViewButton,
+    PortalVisitorViewButtonsProps,
+} from './PortalVisitorViewButtons.js';
 export type {
     ReadonlyPortalGridProps,
     ReadonlyPortalGridColumn,

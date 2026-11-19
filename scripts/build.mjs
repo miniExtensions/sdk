@@ -221,6 +221,7 @@ for (const format of ['esm', 'cjs']) {
 for (const format of ['esm', 'cjs']) {
     for (const name of [
         'portal-shell',
+        'portal-visitor-view-buttons',
         'signature',
         'theme',
         'button',
@@ -267,6 +268,7 @@ for (const format of ['esm', 'cjs']) {
         'barcode',
         'complete-portal-chart',
         'attachment-preview',
+        'attachment-device-input',
         'attachment-url-input',
         'attachment-upload-progress',
         'readonly-url-gallery',

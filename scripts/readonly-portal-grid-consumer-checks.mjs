@@ -21,6 +21,7 @@ import {createElement} from 'react';
 import {ReadonlyPortalGrid,type ReadonlyPortalGridProps,type ReadonlyPortalGridRow,type ReadonlyPortalGridColumn} from '@miniextensions/sdk/react';
 import {PortalGridSingleLineTextCell,type PortalGridSingleLineTextCellProps} from '@miniextensions/sdk/react';
 import {PortalGridEmailCell,type PortalGridEmailCellProps,type PortalGridEmailCellEditor} from '@miniextensions/sdk/react';
+import {PortalGridPhoneNumberCell,type PortalGridPhoneNumberCellProps,type PortalGridPhoneNumberCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
 import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,RatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import {PortalGridCheckboxCell,type PortalGridCheckboxCellProps,type PortalGridCheckboxCellEditor} from '@miniextensions/sdk/react';
@@ -31,6 +32,7 @@ import '@miniextensions/sdk/react/portal-grid-cell.css';
 import '@miniextensions/sdk/react/rating.css';
 import '@miniextensions/sdk/react/complete-checkbox.css';
 import '@miniextensions/sdk/react/text.css';
+import '@miniextensions/sdk/react/complete-phone.css';
 const columns:readonly ReadonlyPortalGridColumn[]=[{fieldId:'name',title:'Name',icon:'text'}];
 const rows:readonly ReadonlyPortalGridRow[]=[{recordId:'row',cells:[{fieldId:'name',node:'Admitted display'}]}];
 const props:ReadonlyPortalGridProps={columns,rows,primaryFieldId:'name',revision:1,preferenceScopeKey:'consumer-view',ready:true,isCurrent:()=>true,hiddenColumns:{},columnWidths:{name:'200'},allowHideColumns:true,onFieldHiddenChange(change){void change.isHidden;},onColumnWidthCommit(change){void change.width;},onOpenRecord(id,trigger){void id;trigger.focus();},doNotAllowUserToCopyTextOnGrid:false,rowHeight:'short'};
@@ -60,6 +62,12 @@ const unownedEmail:PortalGridEmailCellProps={...emailCell,editor:{onChange(){}}}
 // @ts-expect-error the cell has no transport port
 const transportedEmail:PortalGridEmailCellProps={...emailCell,commit:async()=>{}};
 void unownedEmail;void transportedEmail;
+const phoneEditor:PortalGridPhoneNumberCellEditor={owner:{token:Symbol(),isCurrent:()=>true},onValueChange(value,commit){const native:string|undefined=value;void native;void commit.reason;},showCountryCodes:true,input:{form:'form'}};
+const phoneCell:PortalGridPhoneNumberCellProps={value:'+14155552671',displayText:'+14155552671',title:'Phone',cellIdentity:'row-phone',selected:true,onSelect(){},rowHeight:'medium',editor:phoneEditor};
+createElement(PortalGridPhoneNumberCell,phoneCell);
+// @ts-expect-error a country or plain editor requires the current host owner
+const unownedPhone:PortalGridPhoneNumberCellProps={...phoneCell,editor:{onValueChange(){}}};
+void unownedPhone;
 const placeholder:PortalGridEmptyCellProps={rowHeight:'extra-tall',stickyLeft:0,lastRow:true};
 createElement(PortalGridEmptyCell,placeholder);
 // @ts-expect-error a blank column slot has no selection port
@@ -132,6 +140,15 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const phoneCellSource = readFileSync(
+        fileURLToPath(
+            new URL(
+                '../test/reactPortalGridPhoneNumberCell.test.ts',
+                import.meta.url
+            )
+        ),
+        'utf8'
+    );
     const emptyCellSource = readFileSync(
         fileURLToPath(
             new URL('../test/reactPortalGridEmptyCell.test.ts', import.meta.url)
@@ -161,6 +178,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const componentCases = 21;
     const textCellCases = 6;
     const emailCellCases = 6;
+    const phoneCellCases = 2;
     const emptyCellCases = 3;
     const ratingCellCases = 8;
     const checkboxCellCases = 16;
@@ -263,6 +281,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     ['readonly-grid', source, componentCases],
                     ['grid-text-cell', textCellSource, textCellCases],
                     ['grid-email-cell', emailCellSource, emailCellCases],
+                    ['grid-phone-cell', phoneCellSource, phoneCellCases],
                     ['grid-empty-cell', emptyCellSource, emptyCellCases],
                     ['grid-rating-cell', ratingCellSource, ratingCellCases],
                     [
@@ -273,7 +292,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -317,6 +336,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     tests: componentCases,
                     textCellTests: textCellCases,
                     emailCellTests: emailCellCases,
+                    phoneCellTests: phoneCellCases,
                     emptyCellTests: emptyCellCases,
                     ratingCellTests: ratingCellCases,
                     checkboxCellTests: checkboxCellCases,
@@ -393,9 +413,19 @@ export async function checkReadonlyPortalGridReactMatrix({
             );
             assert.match(checkboxCss, /mx-sdk-complete-checkbox__input/);
             assert.match(checkboxCss, /mx-sdk-complete-checkbox__grid/);
+            const phoneCss = (format) =>
+                readFileSync(
+                    join(
+                        root,
+                        `node_modules/@miniextensions/sdk/dist/${format}/react/complete-phone.css`
+                    ),
+                    'utf8'
+                );
+            assert.equal(phoneCss('esm'), phoneCss('cjs'));
+            assert.match(phoneCss('esm'), /mx-sdk-complete-phone-link/);
             writeFileSync(
                 join(root, 'styles.css'),
-                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n@import '@miniextensions/sdk/react/text.css';\n"
+                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n@import '@miniextensions/sdk/react/text.css';\n@import '@miniextensions/sdk/react/complete-phone.css';\n"
             );
             const styles = await build({
                 absWorkingDir: root,
@@ -449,6 +479,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 tests: componentCases * 2,
                 textCellTests: textCellCases * 2,
                 emailCellTests: emailCellCases * 2,
+                phoneCellTests: phoneCellCases * 2,
                 emptyCellTests: emptyCellCases * 2,
                 ratingCellTests: ratingCellCases * 2,
                 checkboxCellTests: checkboxCellCases * 2,
@@ -480,6 +511,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         checkboxCellTests: profiles.reduce(
             (total, profile) => total + profile.checkboxCellTests,
+            0
+        ),
+        phoneCellTests: profiles.reduce(
+            (total, profile) => total + profile.phoneCellTests,
             0
         ),
         archiveSha256,

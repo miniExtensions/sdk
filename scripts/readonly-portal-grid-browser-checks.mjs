@@ -10,7 +10,7 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -19,6 +19,7 @@ import'@miniextensions/sdk/react/portal-grid-cell.css';
 import'@miniextensions/sdk/react/rating.css';
 import'@miniextensions/sdk/react/complete-checkbox.css';
 import'@miniextensions/sdk/react/text.css';
+import'@miniextensions/sdk/react/complete-phone.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -165,6 +166,58 @@ function EmailCellProbe() {
             },
         })
     ))),h('button',{type:'submit'},'Submit Email fixture'));
+}
+function PhoneCellProbe() {
+    const saved = { 'phone-A': '+14155552671', 'phone-B': '+14155550100' };
+    const [cell,setCell] = useState(() => ({
+        record:'phone-A',value:saved['phone-A'],selected:false,frame:{},
+    }));
+    const authority = useRef(cell.frame);
+    const log = useRef({ selections:0,writes:[],submits:0 });
+    useEffect(() => {
+        window.__phoneCellProbe = {
+            snapshot: () => ({ record:cell.record,value:cell.value,selected:cell.selected,...log.current }),
+            dismiss() {
+                setCell(current => ({ ...current,selected:false }));
+            },
+            replace(record,selected) {
+                const frame = {};
+                authority.current = frame;
+                setCell({ record,value:saved[record],selected,frame });
+            },
+        };
+        return () => { delete window.__phoneCellProbe; };
+    },[cell]);
+    return h('form',{id:'grid-phone-form',onSubmit(event){
+        event.preventDefault();
+        log.current.submits++;
+    }},h('table',{
+        'aria-label':'Phone Grid fixture',
+        style:{width:'max-content',borderCollapse:'separate',borderSpacing:0},
+    },h('thead',null,h('tr',null,h('th',{scope:'col',style:{width:280}},'Phone'))),
+    h('tbody',null,h('tr',null,
+        h(PortalGridPhoneNumberCell,{
+            value:cell.value,displayText:cell.value ?? '',title:'Contact phone',
+            cellIdentity:cell.record,selected:cell.selected,rowHeight:'medium',
+            onSelect() {
+                log.current.selections++;
+                setCell(current => ({ ...current,selected:true }));
+            },
+            editor:{
+                input:{form:'grid-phone-form'},
+                showCountryCodes:true,
+                defaultCountry:'US',
+                owner:{token:cell.frame,isCurrent:()=>authority.current===cell.frame},
+                onValueChange(value,commit) {
+                    log.current.writes.push({
+                        record:cell.record,field:'phone',value:value ?? null,
+                        valueType:typeof value,reason:commit.reason,
+                    });
+                    setCell(current => ({ ...current,value:value ?? null }));
+                },
+            },
+        })
+    ))),h('button',{type:'submit'},'Submit Phone fixture'));
 }
 function RatingCellProbe() {
     const [cell, setCell] = useState(() => ({
@@ -329,6 +382,7 @@ const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
     startEmailCell: () => root.render(h(StrictMode, null, h(EmailCellProbe))),
+    startPhoneCell: () => root.render(h(StrictMode, null, h(PhoneCellProbe))),
     startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
     startRatingCell: () => root.render(h(StrictMode, null, h(RatingCellProbe))),
     startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key })))
@@ -373,6 +427,7 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/SingleLineTextField.js',
         '/react/portal-grid-single-line-text-cell.css',
         '/react/PortalGridEmailCell.js',
+        '/react/PortalGridPhoneNumberCell.js',
         '/react/ControlledEmailField.js',
         '/react/text.css',
         '/react/PortalGridEmptyCell.js',
@@ -1131,6 +1186,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.canonicalUnchanged, true);
     const textCell = await checkPlainTextCellBrowser(page);
     const emailCell = await checkEmailCellBrowser(page);
+    const phoneCell = await checkPhoneCellBrowser(page);
     const emptyCell = await checkEmptyCellBrowser(page);
     const ratingCell = await checkRatingCellBrowser(page);
     const checkboxCell = await checkCheckboxCellBrowser(page);
@@ -1150,6 +1206,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         canonicalUnchanged: true,
         textCell,
         emailCell,
+        phoneCell,
         emptyCell,
         ratingCell,
         checkboxCell,
@@ -1385,6 +1442,97 @@ async function checkEmailCellBrowser(page) {
     assert.deepEqual(result.writes, [
         ...first,
         { record: 'email-B', value: 'fresh@example.com' },
+    ]);
+    assert.equal(result.submits, 0);
+    return { status: 'passed', ...result };
+}
+
+async function checkPhoneCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startPhoneCell());
+    const table = page.getByRole('table', { name: 'Phone Grid fixture' });
+    const cell = table.locator('.mx-sdk-portal-grid-phone-number-cell');
+    const input = cell.getByRole('textbox', { name: 'Contact phone' });
+    const state = () => page.evaluate(() => window.__phoneCellProbe.snapshot());
+    const replace = async (record, selected) => {
+        await page.evaluate(
+            ({ record, selected }) =>
+                window.__phoneCellProbe.replace(record, selected),
+            { record, selected }
+        );
+        await page.waitForFunction(
+            (record) => window.__phoneCellProbe.snapshot().record === record,
+            record
+        );
+    };
+    const select = async () => {
+        await cell.click({ position: { x: 2, y: 2 } });
+        await input.waitFor();
+    };
+    const link = cell.getByRole('link', { name: '+14155552671' });
+    assert.equal(await link.getAttribute('href'), 'tel:+14155552671');
+    await link.evaluate((node) =>
+        node.addEventListener('click', (event) => event.preventDefault())
+    );
+    await link.click();
+    assert.equal((await state()).selections, 0);
+    await select();
+    assert.equal((await state()).selections, 1);
+    assert.equal(await cell.getByRole('combobox').inputValue(), 'US');
+    assert.equal(await input.inputValue(), '+1 415 555 2671');
+    assert.equal(
+        await input.evaluate((node) => node.form?.id),
+        'grid-phone-form'
+    );
+    assert.deepEqual((await state()).writes, []);
+    await input.fill('');
+    assert.deepEqual((await state()).writes, []);
+    await input.press('Tab');
+    await page.waitForFunction(
+        () => window.__phoneCellProbe.snapshot().writes.length === 1
+    );
+    const clear = {
+        record: 'phone-A',
+        field: 'phone',
+        value: null,
+        valueType: 'undefined',
+        reason: 'blur',
+    };
+    assert.deepEqual((await state()).writes, [clear]);
+
+    await replace('phone-A', false);
+    await select();
+    await page.evaluate(() => window.__phoneCellProbe.dismiss());
+    await input.waitFor({ state: 'detached' });
+    assert.deepEqual((await state()).writes, [clear]);
+
+    await select();
+    await input.fill('+1 212 555 0134');
+    const retired = await input.elementHandle();
+    assert(retired);
+    try {
+        await replace('phone-B', true);
+        assert.equal(await retired.evaluate((node) => node.isConnected), false);
+        await replace('phone-A', true);
+        assert.equal(await input.inputValue(), '+1 415 555 2671');
+        assert.deepEqual((await state()).writes, [clear]);
+    } finally {
+        await retired.dispose();
+    }
+    await input.fill('+1 650 253 0000');
+    await input.press('Tab');
+    await page.waitForFunction(
+        () => window.__phoneCellProbe.snapshot().writes.length === 2
+    );
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        clear,
+        {
+            record: 'phone-A',
+            field: 'phone',
+            value: '+16502530000',
+            valueType: 'string',
+            reason: 'blur',
+        },
     ]);
     assert.equal(result.submits, 0);
     return { status: 'passed', ...result };

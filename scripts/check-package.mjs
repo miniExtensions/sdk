@@ -954,6 +954,8 @@ try {
             `dist/${format}/react/PortalGridSingleLineTextCell.d.ts`,
             `dist/${format}/react/PortalGridEmailCell.js`,
             `dist/${format}/react/PortalGridEmailCell.d.ts`,
+            `dist/${format}/react/PortalGridPhoneNumberCell.js`,
+            `dist/${format}/react/PortalGridPhoneNumberCell.d.ts`,
             `dist/${format}/react/portal-grid-single-line-text-cell.css`,
             `dist/${format}/react/PortalGridEmptyCell.js`,
             `dist/${format}/react/PortalGridEmptyCell.d.ts`,
@@ -4966,6 +4968,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.textCellTests, 24);
     assert.equal(gridProof.ratingCellTests, 32);
     assert.equal(gridProof.checkboxCellTests, 64);
+    assert.equal(gridProof.phoneCellTests, 8);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

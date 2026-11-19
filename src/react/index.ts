@@ -3803,6 +3803,11 @@ export {
     type PortalGridEmailCellEditor,
 } from './PortalGridEmailCell.js';
 export {
+    PortalGridPhoneNumberCell,
+    type PortalGridPhoneNumberCellProps,
+    type PortalGridPhoneNumberCellEditor,
+} from './PortalGridPhoneNumberCell.js';
+export {
     PortalGridEmptyCell,
     type PortalGridEmptyCellProps,
 } from './PortalGridEmptyCell.js';

@@ -273,6 +273,11 @@ export {
     type MultipleAttachmentsFieldOptions,
 } from './MultipleAttachmentsField.js';
 export {
+    AttachmentDeviceInput,
+    type AttachmentDeviceInputLabels,
+    type AttachmentDeviceInputProps,
+} from './AttachmentDeviceInput.js';
+export {
     AttachmentUrlInput,
     type AttachmentUrlDraft,
     type AttachmentUrlInputLabels,

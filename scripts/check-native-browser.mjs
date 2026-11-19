@@ -62,6 +62,7 @@ import {
     cleanupAttachmentPresentation,
 } from './attachment-presentation-browser-checks.mjs';
 import { checkAttachmentUploadProgressBrowser } from './attachment-upload-progress-browser-checks.mjs';
+import { checkMultipleAttachmentsHeldRemoveBrowser } from './multiple-attachments-held-remove-browser-checks.mjs';
 import { checkAttachmentSliderNavigationBrowser } from './attachment-slider-navigation-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
@@ -1574,6 +1575,9 @@ try {
             'scripts/attachment-presentation-browser-checks.mjs',
             'scripts/attachment-upload-progress-browser-checks.mjs',
             'scripts/attachment-slider-navigation-browser-checks.mjs',
+            'scripts/multiple-attachments-consumer-checks.mjs',
+            'scripts/multiple-attachments-held-remove-browser-checks.mjs',
+            'scripts/multiple-attachments-held-remove-fixture.mjs',
             'scripts/portal-recipe-checks.mjs',
             'scripts/child-navigation-browser-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
@@ -2260,6 +2264,12 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.multipleAttachmentsHeldRemove = {};
+        await checkMultipleAttachmentsHeldRemoveBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.multipleAttachmentsHeldRemove,
+        });
         report.canonicalRichText = {};
         await checkCanonicalRichTextBrowser({
             browser,

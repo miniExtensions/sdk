@@ -6,6 +6,9 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
@@ -36,6 +39,11 @@ type View =
           invalid: boolean;
           actions: Omit<AttachmentRendererActions, 'state'>;
       };
+
+type RemovePress = {
+    button: HTMLButtonElement;
+    token: object;
+};
 
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 const unavailable: View = { type: 'unavailable' };
@@ -196,6 +204,8 @@ export function MultipleAttachmentsField({
     const upload = useRef<HTMLButtonElement>(null);
     const cancel = useRef<HTMLButtonElement>(null);
     const focus = useRef<HTMLButtonElement | null>(null);
+    const removePointer = useRef<RemovePress | null>(null);
+    const removeSpace = useRef<RemovePress | null>(null);
     useEffect(() => {
         mounted.current = true;
         return () => {
@@ -286,6 +296,15 @@ export function MultipleAttachmentsField({
         );
     const uncertain = view.phase === 'uncertain';
     const busy = view.busy || localBusy;
+    const removeDisabled = view.pending || busy || uncertain;
+    const removePress = (button: HTMLButtonElement): RemovePress => ({
+        button,
+        token,
+    });
+    const matchesRemovePress = (
+        press: RemovePress | null,
+        button: HTMLButtonElement
+    ) => press?.button === button && press.token === token;
     const chooseDisabled =
         !view.available || view.pending || (uncertain && !view.busy);
     const uploadDisabled =
@@ -419,17 +438,64 @@ export function MultipleAttachmentsField({
                                   'data-attachment-row': index,
                                   'aria-label': `Remove attachment ${index + 1}`,
                                   disabled:
-                                      view.pending ||
-                                      busy ||
-                                      uncertain ||
-                                      !row.removeAllowed,
-                                  onClick: () => {
+                                      removeDisabled || !row.removeAllowed,
+                                  onPointerDown(
+                                      event: PointerEvent<HTMLButtonElement>
+                                  ) {
+                                      removePointer.current =
+                                          event.isPrimary && event.button === 0
+                                              ? removePress(event.currentTarget)
+                                              : null;
+                                  },
+                                  onPointerCancel() {
+                                      removePointer.current = null;
+                                  },
+                                  onKeyDown(
+                                      event: KeyboardEvent<HTMLButtonElement>
+                                  ) {
+                                      if (event.key === ' ' && !event.repeat)
+                                          removeSpace.current = removePress(
+                                              event.currentTarget
+                                          );
+                                  },
+                                  onKeyUp(
+                                      event: KeyboardEvent<HTMLButtonElement>
+                                  ) {
+                                      if (event.key !== ' ') return;
+                                      // Let the button's native Space activation complete only for the pressed row revision.
+                                      const press = removeSpace.current;
+                                      removeSpace.current = null;
                                       if (
-                                          !view.pending &&
-                                          !busy &&
-                                          !uncertain &&
-                                          row.removeAllowed
+                                          !matchesRemovePress(
+                                              press,
+                                              event.currentTarget
+                                          )
                                       )
+                                          event.preventDefault();
+                                  },
+                                  onBlur() {
+                                      removeSpace.current = null;
+                                  },
+                                  onClick(
+                                      event: MouseEvent<HTMLButtonElement>
+                                  ) {
+                                      const press = removePointer.current;
+                                      removePointer.current = null;
+                                      // Click-only activation covers Enter and assistive technology.
+                                      const pointerClick =
+                                          event.detail > 0 ||
+                                          ('pointerType' in event.nativeEvent &&
+                                              event.nativeEvent.pointerType !==
+                                                  '');
+                                      if (
+                                          pointerClick &&
+                                          !matchesRemovePress(
+                                              press,
+                                              event.currentTarget
+                                          )
+                                      )
+                                          return;
+                                      if (!removeDisabled && row.removeAllowed)
                                           invoke(() =>
                                               view.actions.remove(
                                                   row.nativeIndex

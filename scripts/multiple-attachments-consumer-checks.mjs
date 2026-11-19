@@ -3,11 +3,15 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+    checkSyntheticHeldRemove,
+    heldRemoveCases,
+} from './multiple-attachments-held-remove-fixture.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 const unavailable = 'Attachment presentation unavailable';
 const mask = '••••••••';
-export const multipleAttachmentsConsumerCheckCount = 134;
+export const multipleAttachmentsConsumerCheckCount = 142;
 
 export const multipleAttachmentsSaveOptions = {
     captchaVal: null,
@@ -266,6 +270,35 @@ export const importPackage = name => import(name);
                         });
                 }
             });
+            for (const options of heldRemoveCases) {
+                const { gesture, newHost, sameLabel } = options;
+                await check(
+                    `held ${gesture} across ${newHost ? 'a host change' : 'a draft change'}${sameLabel ? ' with the same label' : ''}`,
+                    () =>
+                        checkSyntheticHeldRemove({
+                            window,
+                            act,
+                            createRoot,
+                            options,
+                            fixture: {
+                                h,
+                                loaded: multipleAttachmentsLoadedFixture()
+                                    .loaded,
+                                saveOptions: multipleAttachmentsSaveOptions,
+                                createMiniExtensionsClient:
+                                    core.createMiniExtensionsClient,
+                                createFormFieldBindings:
+                                    forms.createFormFieldBindings,
+                                RecoveryJournal: forms.RecoveryJournal,
+                                createFormFieldRendererHost:
+                                    ui.createFormFieldRendererHost,
+                                FieldRenderer: react.FieldRenderer,
+                                renderMultipleAttachmentsField:
+                                    renderer.renderMultipleAttachmentsField,
+                            },
+                        })
+                );
+            }
             const container = window.document.createElement('div');
             window.document.body.append(container);
             let root = createRoot(container);

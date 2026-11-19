@@ -18,6 +18,8 @@ const safeSignupCopy: LoginSignupConfirmationCopy = {
 };
 const signupProps: LoginSignupConfirmationDialogProps = {
     open: true,
+    attemptId: 'synthetic-signup',
+    disabled: false,
     copy: safeSignupCopy,
     onCancel() {},
     onCreate() {},
@@ -35,6 +37,7 @@ function SignupHost() {
         signupElement('button', { type: 'button', onClick() { setOpen(true); } }, 'Open signup'),
         signupElement(LoginSignupConfirmationDialog, {
             open,
+            attemptId: 'synthetic-signup',
             copy: {
                 title: '•••••••• n’existe pas',
                 body: 'Vérifiez la valeur ou créez un nouvel enregistrement.',

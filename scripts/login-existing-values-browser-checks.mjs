@@ -21,7 +21,7 @@ const settingsActivations = [];
 const signupDraft = 'masked-signup@example.invalid';
 const unmaskedDraft = 'visible-signup@example.invalid';
 let signupCancels = 0;
-let signupCreates = 0;
+const signupCreates = [];
 let submits = 0;
 let update;
 let release;
@@ -34,6 +34,8 @@ function App() {
         disabled: false,
         masked: false,
         signup: null,
+        signupAttempt: 'A',
+        signupDisabled: false,
     });
     update = (patch) => flushSync(() => setState(current => ({ ...current, ...patch })));
     return h('form', {
@@ -44,6 +46,8 @@ function App() {
     h('button', { type: 'button', onClick: () => update({ signup: 'visible' }) }, 'Confirm visible signup'),
     h(LoginSignupConfirmationDialog, {
         open: state.signup !== null,
+        attemptId: state.signupAttempt,
+        disabled: state.signupDisabled,
         copy: {
             title: (state.signup === 'masked' ? '••••••••' : unmaskedDraft) + ' n’existe pas',
             body: 'Vérifiez la valeur ou créez un nouvel enregistrement.',
@@ -51,7 +55,7 @@ function App() {
             create: 'Créer',
         },
         onCancel() { signupCancels++; update({ signup: null }); },
-        onCreate() { signupCreates++; },
+        onCreate() { signupCreates.push(state.signupAttempt); },
     }),
     h(LoginExistingValuesPicker, {
         owner: {
@@ -137,6 +141,11 @@ export async function checkLoginExistingValuesBrowser({
         assert(
             inputs.some((path) =>
                 path.endsWith('/react/login-existing-values-picker.css')
+            )
+        );
+        assert(
+            inputs.some((path) =>
+                path.endsWith('/react/LoginSignupConfirmationDialog.js')
             )
         );
 
@@ -309,7 +318,7 @@ export async function checkLoginExistingValuesBrowser({
         await signupDialog.waitFor({ state: 'hidden' });
         await focus(maskedSignup);
         assert.equal((await read()).signupCancels, 1);
-        assert.equal((await read()).signupCreates, 0);
+        assert.deepEqual((await read()).signupCreates, []);
         assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
 
         await maskedSignup.click();
@@ -318,7 +327,7 @@ export async function checkLoginExistingValuesBrowser({
         await signupDialog.waitFor({ state: 'hidden' });
         await focus(maskedSignup);
         assert.equal((await read()).signupCancels, 2);
-        assert.equal((await read()).signupCreates, 0);
+        assert.deepEqual((await read()).signupCreates, []);
         assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
 
         await maskedSignup.click();
@@ -327,7 +336,7 @@ export async function checkLoginExistingValuesBrowser({
         await focus(create);
         await page.keyboard.press('Space');
         await page.keyboard.press('Space');
-        assert.equal((await read()).signupCreates, 1);
+        assert.deepEqual((await read()).signupCreates, ['A']);
         assert.equal((await read()).signupCancels, 2);
         assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
         await patch({ signup: null });
@@ -344,11 +353,100 @@ export async function checkLoginExistingValuesBrowser({
         await focus(visible.getByRole('button', { name: 'Retour' }));
         await patch({ signup: null });
         await visible.waitFor({ state: 'hidden' });
-        const afterSignup = await read();
-        assert.deepEqual(afterSignup.calls, beforeSignup.calls);
-        assert.equal(afterSignup.signupCreates, 1);
-        assert.equal(afterSignup.signupCancels, 2);
-        assert.equal(afterSignup.submits, 0);
+        const assertSignupIntents = async (creates, cancels = 2) => {
+            const proof = await read();
+            assert.deepEqual(proof.signupCreates, creates);
+            assert.equal(proof.signupCancels, cancels);
+            assert.equal(proof.submits, 0);
+            assert.deepEqual(proof.calls, beforeSignup.calls);
+            assert.equal(
+                await draft.inputValue(),
+                'masked-signup@example.invalid'
+            );
+        };
+
+        // Finish a real mouse gesture after the host replaces the open attempt.
+        await maskedSignup.click();
+        await create.hover();
+        await page.mouse.down();
+        await patch({ signupAttempt: 'B' });
+        await focus(back);
+        await create.hover();
+        await page.mouse.up();
+        await assertSignupIntents(['A']);
+        await create.click();
+        await assertSignupIntents(['A', 'B']);
+
+        // Suspending a decision does not clear its already-settled state.
+        await patch({ signupDisabled: true });
+        await patch({ signupDisabled: false });
+        assert(await create.isDisabled());
+        assert(await back.isDisabled());
+
+        // The replacement starts ready, but completion of the held Space is stale.
+        await patch({ signupAttempt: 'C' });
+        await focus(back);
+        await page.keyboard.press('Tab');
+        await focus(create);
+        await page.keyboard.down('Space');
+        await patch({ signupAttempt: 'D' });
+        await focus(back);
+        await page.keyboard.up('Space');
+        await assertSignupIntents(['A', 'B']);
+        await page.keyboard.press('Tab');
+        await focus(create);
+        await page.keyboard.press('Space');
+        await assertSignupIntents(['A', 'B', 'D']);
+
+        // Disabling an unsettled attempt retires its held input immediately.
+        await patch({ signupAttempt: 'E' });
+        await create.hover();
+        await page.mouse.down();
+        await patch({ signupDisabled: true });
+        assert(await create.isDisabled());
+        assert(await back.isDisabled());
+        await page.keyboard.press('Escape');
+        await signupDialog.waitFor();
+        await patch({ signupDisabled: false });
+        await create.hover();
+        await page.mouse.up();
+        await assertSignupIntents(['A', 'B', 'D']);
+        await create.click();
+        await assertSignupIntents(['A', 'B', 'D', 'E']);
+
+        // Closing and reopening the controlled dialog retires the old Space,
+        // even when the host uses the same attempt key on reopening.
+        await patch({ signupAttempt: 'F' });
+        await create.focus();
+        await page.keyboard.down('Space');
+        await patch({ signup: null });
+        await signupDialog.waitFor({ state: 'hidden' });
+        await focus(maskedSignup);
+        await patch({ signup: 'masked' });
+        await focus(back);
+        await page.keyboard.up('Space');
+        await assertSignupIntents(['A', 'B', 'D', 'E']);
+        await page.keyboard.press('Escape');
+        await signupDialog.waitFor({ state: 'hidden' });
+        await focus(maskedSignup);
+        await assertSignupIntents(['A', 'B', 'D', 'E'], 3);
+
+        // The replacement must ignore repeats from a held Enter.
+        await patch({ signup: 'masked', signupAttempt: 'G' });
+        await focus(back);
+        await page.keyboard.press('Tab');
+        await focus(create);
+        await page.keyboard.down('Enter');
+        await assertSignupIntents(['A', 'B', 'D', 'E', 'G'], 3);
+        await patch({ signupAttempt: 'H' });
+        await focus(back);
+        await page.keyboard.down('Enter');
+        await page.keyboard.up('Enter');
+        await assertSignupIntents(['A', 'B', 'D', 'E', 'G'], 3);
+        await page.keyboard.press('Enter');
+        await signupDialog.waitFor({ state: 'hidden' });
+        await focus(maskedSignup);
+        await assertSignupIntents(['A', 'B', 'D', 'E', 'G'], 4);
 
         const beforeDenied = (await read()).calls.length;
         await patch({ disabled: true });

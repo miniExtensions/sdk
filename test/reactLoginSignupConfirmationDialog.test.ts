@@ -18,6 +18,7 @@ const copy: LoginSignupConfirmationCopy = {
 
 it('renders only the supplied confirmation copy on the server', () => {
     const props = {
+        attemptId: 'server-attempt',
         copy,
         onCancel: () => assert.fail('SSR cannot cancel'),
         onCreate: () => assert.fail('SSR cannot create'),
@@ -53,6 +54,7 @@ it('preserves the masked host draft and admits only one intent per opening', asy
             ),
             h(LoginSignupConfirmationDialog, {
                 open,
+                attemptId: 'masked-attempt',
                 copy,
                 onCancel() {
                     cancels++;
@@ -115,5 +117,142 @@ it('preserves the masked host draft and admits only one intent per opening', asy
     assert(pending.create.disabled);
     assert(pending.back.disabled);
     assert.equal(field.value, draft);
+    ui.unchangedEffects();
+});
+
+it('retires held decisions when an attempt is replaced, suspended, or closed', async (t) => {
+    const ui = await htmlPresentationFixture(t);
+    const intents: string[] = [];
+    const render = (
+        attemptId: string,
+        { open = true, disabled = false } = {}
+    ) =>
+        ui.render(
+            h(
+                Fragment,
+                null,
+                h('input', { type: 'password', defaultValue: draft }),
+                h('button', { type: 'button' }, 'Open signup'),
+                h(LoginSignupConfirmationDialog, {
+                    open,
+                    disabled,
+                    attemptId,
+                    copy: { ...copy },
+                    onCancel: () => intents.push('cancel ' + attemptId),
+                    onCreate: () => intents.push('create ' + attemptId),
+                })
+            )
+        );
+    const controls = () => {
+        const dialog = ui.container.querySelector('dialog[open]');
+        assert(dialog);
+        const [back, create] = dialog.querySelectorAll('button');
+        assert(back && create);
+        return { dialog, back, create };
+    };
+    type Button = ReturnType<typeof controls>['create'];
+    const pointer = async (button: Button) => {
+        await act(async () => {
+            button.dispatchEvent(
+                new ui.window.PointerEvent('pointerdown', {
+                    bubbles: true,
+                    isPrimary: true,
+                    button: 0,
+                })
+            );
+        });
+    };
+    const click = async (button: Button) => {
+        await act(async () => {
+            button.dispatchEvent(
+                new ui.window.MouseEvent('click', {
+                    bubbles: true,
+                    detail: 1,
+                })
+            );
+        });
+    };
+    const key = async (
+        button: Button,
+        type: string,
+        key: string,
+        repeat = false
+    ) => {
+        const event = new ui.window.KeyboardEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            key,
+            repeat,
+        });
+        await act(async () => {
+            button.dispatchEvent(event);
+        });
+        return event.defaultPrevented;
+    };
+
+    await render('A', { open: false });
+    const opener = ui.container.querySelector('button');
+    assert(opener);
+    opener.focus();
+    await render('A');
+    const a = controls();
+    await pointer(a.create);
+    await key(a.create, 'keydown', ' ');
+    await render('B');
+    const b = controls();
+    assert.notEqual(b.create, a.create);
+    assert.equal(ui.window.document.activeElement, b.back);
+    await click(b.create);
+    await key(b.back, 'keyup', ' ');
+    assert(await key(b.back, 'keydown', 'Enter', true));
+    assert(await key(b.back, 'keydown', 'Escape', true));
+    await pointer(b.create);
+    await act(async () => {
+        b.create.dispatchEvent(
+            new ui.window.PointerEvent('pointercancel', { bubbles: true })
+        );
+    });
+    await click(b.create);
+    assert.deepEqual(intents, []);
+    await pointer(b.create);
+    await click(b.create);
+    assert.deepEqual(intents, ['create B']);
+
+    // Changing callback/copy references or suspending B cannot rearm B.
+    await render('B', { disabled: true });
+    await render('B');
+    assert.equal(controls().create, b.create);
+    assert(controls().create.disabled);
+    await ui.click(controls().create);
+    assert.deepEqual(intents, ['create B']);
+
+    await render('C');
+    const c = controls();
+    assert.equal(ui.window.document.activeElement, c.back);
+    await pointer(c.create);
+    await key(c.create, 'keydown', ' ');
+    await render('C', { disabled: true });
+    assert(c.back.disabled && c.create.disabled);
+    await act(async () => {
+        c.dialog.dispatchEvent(
+            new ui.window.Event('cancel', { cancelable: true })
+        );
+    });
+    await render('C');
+    await click(c.create);
+    await key(c.create, 'keyup', ' ');
+    assert.deepEqual(intents, ['create B']);
+
+    await key(c.create, 'keydown', ' ');
+    await render('C', { open: false });
+    assert.equal(ui.window.document.activeElement, opener);
+    await render('C');
+    const reopened = controls();
+    await key(reopened.back, 'keyup', ' ');
+    assert.deepEqual(intents, ['create B']);
+    await key(reopened.create, 'keydown', ' ');
+    await key(reopened.create, 'keyup', ' ');
+    assert.deepEqual(intents, ['create B', 'create C']);
+    assert.equal(ui.container.querySelector('input')?.value, draft);
     ui.unchangedEffects();
 });

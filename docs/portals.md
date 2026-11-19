@@ -1108,6 +1108,27 @@ original writer. The mounted editor's transient draft stays with the
 The cell delegates mutation, rollback, retry and refresh to the host. Use the
 following existing queue for a host with session-owned edit settlement.
 
+## Single-select cells in a host Grid
+
+Render `PortalGridSingleSelectCell` from `@miniextensions/sdk/react` directly
+inside a table row. Import `@miniextensions/sdk/react/portal-grid-cell.css` and
+`@miniextensions/sdk/react/controlled-select.css`. Pass the canonical selected
+name, the host's display text, and choice projections that keep Airtable names
+in `name` and customer-facing labels in `displayName`.
+
+The first cell click reports selection and focuses the cell. The picker is
+available when the host marks the cell selected and supplies an admitted
+`editor`. Its `availableChoices` and `owner` come from the current host frame.
+The picker forwards the selected canonical name or `null` for Clear to
+`onValueChange`. Keep the writer bound to the captured row and field. Pass
+`formId` to associate controls with the host Form. The picker has no option
+creation or Form submission action.
+
+The host retains permission checks, option availability and write settlement.
+Retire the editor owner when the accepted session, view, record, field or edit
+policy changes. Use `readOnlyGuidance` to explain why a selected cell stayed
+read-only when the host withheld its editor.
+
 ## Empty cells in a host Grid
 
 Use `PortalGridEmptyCell` from `@miniextensions/sdk/react` with

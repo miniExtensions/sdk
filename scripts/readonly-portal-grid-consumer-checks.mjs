@@ -26,6 +26,7 @@ import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions
 import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,RatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import {PortalGridCheckboxCell,type PortalGridCheckboxCellProps,type PortalGridCheckboxCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridButtonCell,type PortalGridButtonCellProps} from '@miniextensions/sdk/react';
+import {PortalGridSingleSelectCell,type PortalGridSingleSelectCellProps,type PortalGridSingleSelectCellEditor} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import '@miniextensions/sdk/react/portal-grid-empty-cell.css';
@@ -35,6 +36,7 @@ import '@miniextensions/sdk/react/complete-checkbox.css';
 import '@miniextensions/sdk/react/text.css';
 import '@miniextensions/sdk/react/complete-phone.css';
 import '@miniextensions/sdk/react/button.css';
+import '@miniextensions/sdk/react/controlled-select.css';
 const columns:readonly ReadonlyPortalGridColumn[]=[{fieldId:'name',title:'Name',icon:'text'}];
 const rows:readonly ReadonlyPortalGridRow[]=[{recordId:'row',cells:[{fieldId:'name',node:'Admitted display'}]}];
 const props:ReadonlyPortalGridProps={columns,rows,primaryFieldId:'name',revision:1,preferenceScopeKey:'consumer-view',ready:true,isCurrent:()=>true,hiddenColumns:{},columnWidths:{name:'200'},allowHideColumns:true,onFieldHiddenChange(change){void change.isHidden;},onColumnWidthCommit(change){void change.width;},onOpenRecord(id,trigger){void id;trigger.focus();},doNotAllowUserToCopyTextOnGrid:false,rowHeight:'short'};
@@ -75,6 +77,17 @@ createElement(PortalGridButtonCell,buttonCell);
 // @ts-expect-error a Grid Button has no inline value editor
 const editableButton:PortalGridButtonCellProps={...buttonCell,editor:{onChange(){}}};
 void editableButton;
+const singleSelectEditor:PortalGridSingleSelectCellEditor={owner:{token:Symbol(),isCurrent:()=>true},availableChoices:[{id:'choice',name:'airtable-value',displayName:'Visible label'}],formId:'form',onValueChange(value){const native:string|null=value;void native;}};
+const singleSelectCell:PortalGridSingleSelectCellProps={value:'airtable-value',choices:singleSelectEditor.availableChoices,displayText:'Visible label',title:'Status',cellIdentity:'row-status',selected:true,onSelect(){},rowHeight:'medium',editor:singleSelectEditor};
+createElement(PortalGridSingleSelectCell,singleSelectCell);
+createElement(PortalGridSingleSelectCell,{...singleSelectCell,editor:undefined,readOnlyGuidance:{label:'Use the edit form',text:'Editing is unavailable here.'}});
+// @ts-expect-error a writable Select cell requires the host's current owner
+const unownedSelect:PortalGridSingleSelectCellEditor={availableChoices:[],onValueChange(){}};
+// @ts-expect-error a Single Select value is a canonical string or null
+const multipleValues:PortalGridSingleSelectCellProps={...singleSelectCell,value:['airtable-value']};
+// @ts-expect-error Grid Select cannot publish or create metadata
+const metadataSelect:PortalGridSingleSelectCellEditor={...singleSelectEditor,publishMetadata(){}};
+void unownedSelect;void multipleValues;void metadataSelect;
 const placeholder:PortalGridEmptyCellProps={rowHeight:'extra-tall',stickyLeft:0,lastRow:true};
 createElement(PortalGridEmptyCell,placeholder);
 // @ts-expect-error a blank column slot has no selection port
@@ -189,6 +202,13 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const singleSelectCellSource = readFileSync(
+        new URL(
+            '../test/reactPortalGridSingleSelectCell.test.ts',
+            import.meta.url
+        ),
+        'utf8'
+    );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
@@ -199,6 +219,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const ratingCellCases = 8;
     const checkboxCellCases = 16;
     const buttonCellCases = 2;
+    const singleSelectCellCases = 4;
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
         ['19.2.0', '19.2.2', '19.2.2'],
@@ -307,10 +328,15 @@ export async function checkReadonlyPortalGridReactMatrix({
                         checkboxCellCases,
                     ],
                     ['grid-button-cell', buttonCellSource, buttonCellCases],
+                    [
+                        'grid-single-select-cell',
+                        singleSelectCellSource,
+                        singleSelectCellCases,
+                    ],
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -359,6 +385,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     ratingCellTests: ratingCellCases,
                     checkboxCellTests: checkboxCellCases,
                     buttonCellTests: buttonCellCases,
+                    singleSelectCellTests: singleSelectCellCases,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -444,7 +471,7 @@ export async function checkReadonlyPortalGridReactMatrix({
             assert.match(phoneCss('esm'), /mx-sdk-complete-phone-link/);
             writeFileSync(
                 join(root, 'styles.css'),
-                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n@import '@miniextensions/sdk/react/text.css';\n@import '@miniextensions/sdk/react/complete-phone.css';\n@import '@miniextensions/sdk/react/button.css';\n"
+                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n@import '@miniextensions/sdk/react/text.css';\n@import '@miniextensions/sdk/react/complete-phone.css';\n@import '@miniextensions/sdk/react/button.css';\n@import '@miniextensions/sdk/react/controlled-select.css';\n"
             );
             const styles = await build({
                 absWorkingDir: root,
@@ -492,6 +519,12 @@ export async function checkReadonlyPortalGridReactMatrix({
                 ),
                 'The installed Grid Button stylesheet must enter the CSS bundle'
             );
+            assert(
+                Object.keys(styles.metafile.inputs).some((name) =>
+                    name.endsWith('/react/controlled-select.css')
+                ),
+                'The installed Grid Select stylesheet must enter the CSS bundle'
+            );
             assert.equal(
                 createHash('sha256')
                     .update(readFileSync(archivePath))
@@ -509,6 +542,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 ratingCellTests: ratingCellCases * 2,
                 checkboxCellTests: checkboxCellCases * 2,
                 buttonCellTests: buttonCellCases * 2,
+                singleSelectCellTests: singleSelectCellCases * 2,
                 strictTypes: ['ESM', 'CJS', 'Bundler'],
                 styles: 'owned table, controls and cell geometry',
                 ...receipt,
@@ -541,6 +575,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         buttonCellTests: profiles.reduce(
             (total, profile) => total + profile.buttonCellTests,
+            0
+        ),
+        singleSelectCellTests: profiles.reduce(
+            (total, profile) => total + profile.singleSelectCellTests,
             0
         ),
         phoneCellTests: profiles.reduce(

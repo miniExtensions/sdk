@@ -965,6 +965,8 @@ try {
             `dist/${format}/react/PortalGridRatingCell.d.ts`,
             `dist/${format}/react/PortalGridButtonCell.js`,
             `dist/${format}/react/PortalGridButtonCell.d.ts`,
+            `dist/${format}/react/PortalGridSingleSelectCell.js`,
+            `dist/${format}/react/PortalGridSingleSelectCell.d.ts`,
             `dist/${format}/react/PortalGridCellShell.js`,
         ]),
         ...summaryCardsStarterFiles,
@@ -4979,6 +4981,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.checkboxCellTests, 64);
     assert.equal(gridProof.phoneCellTests, 8);
     assert.equal(gridProof.buttonCellTests, 8);
+    assert.equal(gridProof.singleSelectCellTests, 16);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

@@ -693,9 +693,6 @@ export function createFormFieldBindings(
                             ...child,
                             client: options.client,
                             getScope: () => options.getScope(),
-                            // One native store per genuine accepted child intent.
-                            // No synthetic Portal parent scope and no saved-create reuse.
-                            store: new FormDraftStore<AirtableValue>(),
                         }),
                     commit: (
                         value,

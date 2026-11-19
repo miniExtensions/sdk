@@ -2731,8 +2731,21 @@ or static Create query, while retaining applicable token-bound parent
 relationship context. The server remains authoritative for child access; this
 local displayed-row subset is not a server allowlist. Applications cannot
 supply a Save receipt or validation exemption. Save invokes
-`save(snapshot.revision)` using the rendered revision; Close invokes `close()`.
-Give every button an explicit `type="button"`.
+`save(snapshot.revision)` using the rendered revision. The low-level `close()`
+cancels the intent and discards its draft. Give every button an explicit
+`type="button"`.
+
+For an interactive Close on an existing record, check the child snapshot's
+dirty field IDs and ask for confirmation when they are nonempty. The browser
+starter uses a labelled dialog with **Keep editing** initially focused.
+Keep editing leaves the current owner and draft active. **Confirm close** calls
+`closeEdit(snapshot.revision)` with the revision captured before the prompt.
+It releases the old controls without a Save. A clean Edit can use
+`closeEdit(snapshot.revision)` directly. Explicitly opening the same still
+selected record through `openEdit(recordId, revision)` restores the retained
+dirty values and IDs under fresh controls. It uses the existing accepted load
+and its Save authority. Selection loss, another accepted child intent, or
+parent retirement ends draft retention.
 
 A React presentation borrows this owner. Subscribe in an effect and return only
 the unsubscribe function. Render `snapshot.child` using `AirtableForm` with a

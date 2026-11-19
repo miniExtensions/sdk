@@ -46,12 +46,14 @@ export function createLinkedChildPanel(options: Options) {
     node.dataset.linkedChildFieldId = options.fieldId;
     node.setAttribute('aria-label', 'Linked record actions');
     const actions = element('div', undefined, 'actions');
+    const closeActions = element('div');
+    closeActions.hidden = true;
     const notice = element('p');
     notice.setAttribute('role', 'status');
     const pane = element('section');
     pane.dataset.linkedChildPane = '';
     pane.setAttribute('aria-label', 'Linked child Form');
-    node.append(actions, notice, pane);
+    node.append(actions, closeActions, notice, pane);
     // There is deliberately no nested form. Enter in a child input must not
     // submit the enclosing parent; textarea newlines keep their native meaning.
     pane.addEventListener('keydown', (event) => {
@@ -65,6 +67,11 @@ export function createLinkedChildPanel(options: Options) {
     let stopPages = () => {};
     let currentState: FormLinkedChildSnapshot = owner.getSnapshot();
     let refreshing = false;
+    let closePrompt: { revision: number; abort: AbortController } | null = null;
+    let closeAction: {
+        state: FormLinkedChildSnapshot;
+        node: HTMLButtonElement;
+    } | null = null;
     const controls = new Map<string, FieldControl>();
     const wrappers = new Map<string, HTMLDivElement>();
     let childActions = element('div');
@@ -86,6 +93,7 @@ export function createLinkedChildPanel(options: Options) {
         current() &&
         node.isConnected &&
         options.canStart() &&
+        closePrompt === null &&
         owner.getSnapshot().revision === revision;
     const request = (
         description: string,
@@ -343,11 +351,81 @@ export function createLinkedChildPanel(options: Options) {
         stopChild = child.controller.subscribe(() => updateChild());
         stopPages = state.pages.subscribe(() => updateChild());
     };
+    const closeEdit = async (state: FormLinkedChildSnapshot) => {
+        const recordId = state.intent?.type === 'edit' && state.intent.recordId;
+        const stillCurrent = () =>
+            current() &&
+            node.isConnected &&
+            owner.getSnapshot().revision === state.revision;
+        if (!recordId || !state.child || closePrompt || !stillCurrent()) return;
+        const dirty =
+            state.child.controller.getState().draft?.dirtyFieldIds.length;
+        if (dirty) {
+            const prompt = {
+                revision: state.revision,
+                abort: new AbortController(),
+            };
+            closePrompt = prompt;
+            try {
+                if (
+                    !(await requestConfirmation({
+                        title: 'Close linked record?',
+                        message:
+                            'You can keep editing or close now and resume your unsaved draft by reopening this linked record.',
+                        confirmLabel: 'Confirm close',
+                        cancelLabel: 'Keep editing',
+                        signal: prompt.abort.signal,
+                    }))
+                )
+                    return;
+            } catch {
+                if (stillCurrent())
+                    options.status(
+                        'Could not display the Close confirmation.',
+                        true
+                    );
+                return;
+            } finally {
+                if (closePrompt === prompt) closePrompt = null;
+            }
+        }
+        if (!stillCurrent() || !owner.closeEdit(state.revision)) return;
+        refresh();
+        options.changed();
+        if (!current() || owner.getSnapshot().phase !== 'closed') return;
+        const edit = [...actions.querySelectorAll('button')].find(
+            (action) => action.dataset.childEditRecord === recordId
+        );
+        edit?.focus();
+    };
+    const updateCloseAction = (state: FormLinkedChildSnapshot | null) => {
+        if (state?.child) {
+            // An input may commit on blur before the Close click arrives.
+            // Keep the mounted button, but bind it to the latest revision.
+            if (closeAction?.state.child === state.child) {
+                closeAction.state = state;
+                return;
+            }
+            const control = button('Close child', () => {
+                if (closeAction?.node === control)
+                    void closeEdit(closeAction.state);
+            });
+            closeAction = { state, node: control };
+            closeActions.replaceChildren(control);
+            closeActions.hidden = false;
+        } else if (closeAction) {
+            closeAction = null;
+            closeActions.replaceChildren();
+            closeActions.hidden = true;
+        }
+    };
     const refresh = () => {
         if (destroyed || refreshing) return;
         refreshing = true;
         try {
             if (!current()) {
+                closePrompt?.abort.abort();
+                updateCloseAction(null);
                 node.hidden = false;
                 node.inert = true;
                 actions.replaceChildren();
@@ -357,6 +435,10 @@ export function createLinkedChildPanel(options: Options) {
                 return;
             }
             const state = owner.getSnapshot();
+            if (closePrompt) {
+                if (closePrompt.revision === state.revision) return;
+                closePrompt.abort.abort();
+            }
             currentState = state;
             const field = options.fields.field(options.fieldId).getSnapshot();
             const visible =
@@ -400,20 +482,26 @@ export function createLinkedChildPanel(options: Options) {
                         )
                     )
                 );
-            for (const id of visible ? state.editableRecordIds : [])
-                actions.append(
-                    button(`Edit linked record ${id}`, () =>
-                        request(
-                            'Opening the configured linked record…',
-                            revision,
-                            (signal) => owner.openEdit(id, revision, { signal })
-                        )
+            for (const id of visible ? state.editableRecordIds : []) {
+                const edit = button(`Edit linked record ${id}`, () =>
+                    request(
+                        'Opening the configured linked record.',
+                        revision,
+                        (signal) => owner.openEdit(id, revision, { signal })
                     )
                 );
+                edit.dataset.childEditRecord = id;
+                actions.append(edit);
+            }
+            const editReady =
+                state.intent?.type === 'edit' &&
+                (state.phase === 'ready' || state.phase === 'error');
+            updateCloseAction(editReady ? state : null);
             if (
-                state.child != null ||
-                state.phase === 'loading' ||
-                state.phase === 'unknown'
+                !editReady &&
+                (state.child != null ||
+                    state.phase === 'loading' ||
+                    state.phase === 'unknown')
             )
                 actions.append(
                     button('Cancel child', () => {
@@ -469,6 +557,7 @@ export function createLinkedChildPanel(options: Options) {
         destroy: () => {
             if (destroyed) return;
             destroyed = true;
+            closePrompt?.abort.abort();
             stop();
             unmount();
         },

@@ -119,7 +119,7 @@ const schema = (field: RuntimeAirtableField): RuntimeFieldSchema =>
 const inputFor = (
     driver: RuntimeAirtableField,
     definition: RuntimeConditionsDefinition,
-    value: AirtableValue
+    value: AirtableValue | undefined
 ): Input => {
     const target = text('target', { conditionalFields: definition });
     return {
@@ -128,7 +128,10 @@ const inputFor = (
             type: 'edit',
             tableId: 'table-output',
             recordId: 'record-output',
-            data: { driver: value, target: 'Retained answer' },
+            data: {
+                ...(typeof value === 'undefined' ? {} : { driver: value }),
+                target: 'Retained answer',
+            },
         },
         formFields: [schema(driver), target],
         airtableFields: [driver, target.airtableField],
@@ -284,6 +287,97 @@ describe('public nonlinked native-form-v1 projection cohort', () => {
         });
         expectVisibility(inputFor(driver, definition, 'ready'), true);
         expectVisibility(inputFor(driver, definition, 'waiting'), false);
+    });
+
+    it('projects saved physical Text predicates with native blank and case behavior', () => {
+        const driver = text('driver').airtableField;
+        const predicates = [
+            ['isNot', 'Alpha'],
+            ['contains', 'Alpha'],
+            ['doesNotContain', 'Alpha'],
+            ['isEmpty', undefined],
+            ['isNotEmpty', undefined],
+        ] as const;
+        const cells = [
+            ['Alpha', [false, true, false, false, true]],
+            ['alpha', [true, true, false, false, true]],
+            ['before ALPHA after', [true, true, false, false, true]],
+            ['Beta', [true, false, true, false, true]],
+            [' ', [true, false, true, false, true]],
+            ['', [true, false, true, true, false]],
+            [null, [true, false, true, true, false]],
+            [undefined, [true, false, true, true, false]],
+        ] as const;
+        for (const [index, [operator, operand]] of predicates.entries()) {
+            const definition = condition('singleLineText', operator, operand);
+            for (const [value, visibility] of cells) {
+                const decision = inputFor(driver, definition, value);
+                expectVisibility(decision, visibility[index]);
+                expectVisibility(
+                    {
+                        ...inputFor(
+                            driver,
+                            definition,
+                            'Different output cell'
+                        ),
+                        formRecordForConditionEvaluation: decision.formRecord,
+                    },
+                    visibility[index]
+                );
+            }
+            blocked(
+                inputFor(formula('singleLineText'), definition, 'Alpha'),
+                'unsupported-driver'
+            );
+        }
+    });
+
+    it('retains authored empty substrings and refuses missing or incomplete Text operands', () => {
+        const driver = text('driver').airtableField;
+        for (const operator of ['contains', 'doesNotContain']) {
+            const definition = condition('singleLineText', operator, '');
+            expectVisibility(
+                inputFor(driver, definition, undefined),
+                operator === 'contains'
+            );
+            expectVisibility(
+                inputFor(driver, definition, ''),
+                operator === 'contains'
+            );
+            expectVisibility(
+                inputFor(driver, definition, 'Alpha'),
+                operator === 'contains'
+            );
+        }
+        for (const operator of ['isNot', 'contains', 'doesNotContain']) {
+            blocked(
+                inputFor(
+                    driver,
+                    condition('singleLineText', operator, null),
+                    'Alpha'
+                ),
+                'unsupported-driver'
+            );
+        }
+        blocked(
+            inputFor(driver, condition('singleLineText', 'isNot', ''), 'Alpha'),
+            'unsupported-driver'
+        );
+
+        const supported = condition('singleLineText', 'contains', "O'Reilly");
+        expectVisibility(
+            inputFor(driver, supported, "Read O'REILLY books"),
+            true
+        );
+        const unsupported = condition('singleLineText', 'isOfLength', 5);
+        const mixed: RuntimeConditionsDefinition = {
+            logicalOperator: 'or',
+            conditions: [...supported.conditions, ...unsupported.conditions],
+        };
+        blocked(
+            inputFor(driver, mixed, "Read O'REILLY books"),
+            'unsupported-driver'
+        );
     });
 
     it('preserves percent scaling and numeric versus Rating zero emptiness', () => {
@@ -628,7 +722,7 @@ describe('whole-result native fallback boundary', () => {
             ],
             [
                 text('driver').airtableField,
-                condition('singleLineText', 'contains', 'ready'),
+                condition('singleLineText', 'isOfLength', 5),
                 'ready',
             ],
             [physical('number'), condition('number', 'unknown-operator', 5), 5],

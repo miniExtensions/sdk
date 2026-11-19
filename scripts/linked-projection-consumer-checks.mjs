@@ -136,6 +136,13 @@ for(const fieldType of ['singleLineText','number','percent','currency'])
     families.push({driver:computed(fieldType),fieldType,operator:fieldType==='singleLineText'?'is':'equals',operand:fieldType==='singleLineText'?'ready':fieldType==='percent'?50:5,yes:fieldType==='singleLineText'?'ready':fieldType==='percent'?0.5:5,no:fieldType==='singleLineText'?'waiting':4});
 families.push({driver:physical(),fieldType:'singleLineText',operator:'is',operand:'ready',yes:'ready',no:'waiting'});
 assert.equal(families.length,49);
+const physicalTextPredicates=[
+    {operator:'isNot',operand:'Alpha',yes:'alpha',no:'Alpha'},
+    {operator:'contains',operand:"O'Reilly",yes:"Read O'REILLY books",no:''},
+    {operator:'doesNotContain',operand:'Alpha',yes:null,no:'before ALPHA after'},
+    {operator:'isEmpty',yes:'',no:' '},
+    {operator:'isNotEmpty',yes:' ',no:null},
+];
 let nonLinkedComparisons=0,nonLinkedRefusals=0;
 const refuse=input=>{
     const before=structuredClone(input);
@@ -147,7 +154,8 @@ const refuse=input=>{
     assert.deepEqual(input,before);
     nonLinkedRefusals++;
 };
-for(const family of families) for(const type of ['create','edit']) for(const visible of [true,false]){
+const textFamilies=physicalTextPredicates.map(predicate=>({...predicate,driver:physical(),fieldType:'singleLineText'}));
+for(const family of [...families,...textFamilies]) for(const type of ['create','edit']) for(const visible of [true,false]){
     const input=freeze(makeInput(structuredClone(family.driver),rule(family.fieldType,family.operator,family.operand),structuredClone(visible?family.yes:family.no),type));
     const before=structuredClone(input);
     const expected=JSON.parse(JSON.stringify(input.formRecord));
@@ -161,7 +169,7 @@ for(const family of families) for(const type of ['create','edit']) for(const vis
     assert.notEqual(result.formRecord.data,input.formRecord.data);
     nonLinkedComparisons++;
 }
-assert.equal(nonLinkedComparisons,196);
+assert.equal(nonLinkedComparisons,216);
 const ordinary=()=>makeInput(physical('number'),rule('number','equals',5),5);
 refuse({...ordinary(),linkedTableLoadingStates:{}});
 refuse({...ordinary(),conditionalLinkedRecordFieldIdsToFilteringValues:{}});
@@ -180,7 +188,7 @@ for(const driver of [physical('singleSelect'),computed('number')]){
     assert.equal(legacyScalar(oldInput).type,'blocked');assert.equal(legacyFlat(oldInput).type,'blocked');
     if(!select)assert.equal(publicCompile({conditions:definition,airtableFields:[driver],invalidConditionMode:'strict'}).type,'unsupported');
 }
-console.log(JSON.stringify({nonLinkedPairFamilies:families.length,nonLinkedComparisons,nonLinkedRefusals,clone:true,legacy:true,source:'installed public nonlinked forms export; no private imports, DOM or Form/Save operations'}));
+console.log(JSON.stringify({nonLinkedPairFamilies:families.length+textFamilies.length,nonLinkedComparisons,nonLinkedRefusals,clone:true,legacy:true,source:'installed public nonlinked forms export; no private imports, DOM or Form/Save operations'}));
 `;
     for (const extension of ['mjs', 'cjs']) {
         const imports =

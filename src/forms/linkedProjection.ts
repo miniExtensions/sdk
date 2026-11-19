@@ -187,7 +187,14 @@ const driverTypes = new Set([
 
 const nonLinkedPhysicalOperators: Readonly<Record<string, readonly string[]>> =
     {
-        singleLineText: ['is'],
+        singleLineText: [
+            'is',
+            'isNot',
+            'contains',
+            'doesNotContain',
+            'isEmpty',
+            'isNotEmpty',
+        ],
         singleSelect: [
             'is',
             'isNot',
@@ -362,7 +369,12 @@ function hasOnlyNonLinkedConditions(
                                 return false;
                     }
                 } else if (resultType === 'singleLineText') {
-                    if (typeof value !== 'string' || value === '') return false;
+                    if (
+                        typeof value !== 'string' ||
+                        (value === '' &&
+                            (setting.type === 'is' || setting.type === 'isNot'))
+                    )
+                        return false;
                 } else if (typeof value !== 'number' || !Number.isFinite(value))
                     return false;
             }

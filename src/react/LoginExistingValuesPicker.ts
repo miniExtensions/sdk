@@ -101,6 +101,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
     const id = useId();
     const trigger = useRef<HTMLButtonElement>(null);
     const search = useRef<HTMLInputElement>(null);
+    const optionsList = useRef<HTMLUListElement>(null);
     const active = useRef<Lookup | null>(null);
     const callbacks = useRef(props);
     const [view, setView] = useState<LookupView | null>(null);
@@ -195,6 +196,40 @@ function Picker(props: LoginExistingValuesPickerProps) {
         callbacks.current.onSelect(option.label);
     }
 
+    function moveOptionFocus(
+        event: KeyboardEvent<HTMLInputElement | HTMLButtonElement>
+    ) {
+        const forward = event.key === 'ArrowDown';
+        if (
+            (!forward && event.key !== 'ArrowUp') ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.nativeEvent.isComposing
+        )
+            return;
+        const buttons = Array.from(
+            optionsList.current?.querySelectorAll<HTMLButtonElement>(
+                'li > button'
+            ) ?? []
+        );
+        if (buttons.length === 0) return;
+        event.preventDefault();
+
+        // Navigate the mounted occurrences in order, including repeated labels.
+        const index = buttons.findIndex(
+            (button) => button === event.currentTarget
+        );
+        if (index === -1) {
+            (forward ? buttons[0] : buttons.at(-1))?.focus();
+            return;
+        }
+        const next = buttons[index + (forward ? 1 : -1)];
+        if (next) next.focus();
+        else if (!forward) search.current?.focus();
+    }
+
     function handleDialogKey(event: KeyboardEvent<HTMLDivElement>) {
         if (event.key === 'Escape' && view) {
             event.preventDefault();
@@ -234,12 +269,14 @@ function Picker(props: LoginExistingValuesPickerProps) {
                       changeQuery(view.lookup, event.currentTarget.value),
                   onKeyDown: (event) => {
                       if (event.key === 'Enter') event.preventDefault();
+                      else moveOptionFocus(event);
                   },
               }),
               h(
                   'ul',
                   {
                       className: 'mx-sdk-login-values-options',
+                      ref: optionsList,
                       'aria-busy': loading,
                   },
                   view.state.options.map((option) =>
@@ -255,6 +292,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
                                       : {}),
                                   onClick: () =>
                                       choose(view.lookup, option.value),
+                                  onKeyDown: moveOptionFocus,
                               },
                               option.label
                           )
@@ -319,6 +357,11 @@ function Picker(props: LoginExistingValuesPickerProps) {
                 'aria-haspopup': 'dialog',
                 'aria-expanded': panel !== null,
                 'aria-controls': panel ? `${id}-panel` : undefined,
+                onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+                    // A held Enter can repeat after selection returns focus.
+                    if (event.key === 'Enter' && event.repeat)
+                        event.preventDefault();
+                },
                 onClick: () => {
                     if (active.current) close(active.current);
                     else open();

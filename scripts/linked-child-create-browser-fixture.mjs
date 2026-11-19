@@ -8,16 +8,24 @@ import { LinkedChildCreateAction } from './installed-create-example.ts';
 
 const fixture = __LINKED_CHILD_CREATE_FIXTURES__;
 const calls = { loads: [], saves: [], parentSubmits: 0 };
-const loaded = fixture.parent;
-const scope = { ownerId: 'synthetic-parent', revision: 0 };
 let holdSave = false;
+let holdLoad = false;
 window.holdNextCreateSave = () => {
     holdSave = true;
+};
+window.holdNextCreateLoad = () => {
+    holdLoad = true;
 };
 const client = {
     getSession: () => ({}),
     loadExtension: async (input) => {
         calls.loads.push(structuredClone(input));
+        if (holdLoad) {
+            holdLoad = false;
+            await new Promise((resolve) => {
+                window.releaseCreateLoad = resolve;
+            });
+        }
         return structuredClone(fixture.child);
     },
     forms: {
@@ -39,21 +47,28 @@ const client = {
         },
     },
 };
-const fields = createFormFieldBindings({
-    loaded,
-    client,
-    getScope: () => scope,
-    saveOptions: {
-        captchaVal: null,
-        isComputeMode: false,
-        searchQuery: {},
-        context: { type: 'direct-url' },
-        conditionalLinkedRecordFieldIdsToFilteringValues: {},
-    },
-});
-const owner = fields.linkedChild('fld_children_a', {
-    journal: new RecoveryJournal(),
-    loadVersion: 1,
+function createParent(loaded, scope) {
+    const fields = createFormFieldBindings({
+        loaded,
+        client,
+        getScope: () => scope,
+        saveOptions: {
+            captchaVal: null,
+            isComputeMode: false,
+            searchQuery: {},
+            context: { type: 'direct-url' },
+            conditionalLinkedRecordFieldIdsToFilteringValues: {},
+        },
+    });
+    const owner = fields.linkedChild('fld_children_a', {
+        journal: new RecoveryJournal(),
+        loadVersion: 1,
+    });
+    return { fields, owner };
+}
+let current = createParent(fixture.parent, {
+    ownerId: 'synthetic-parent',
+    revision: 0,
 });
 let parentEpoch = 0;
 
@@ -73,15 +88,34 @@ function ChildTitle({ child }) {
 
 function Parent() {
     const [epoch, setEpoch] = useState(parentEpoch);
+    const [parentCurrent, setParentCurrent] = useState(true);
+    window.setParentPresentationCurrent = setParentCurrent;
     window.retireCreateView = (staleButton) => {
         parentEpoch++;
         // The old event runs before React commits the replacement markup.
         staleButton?.click();
         setEpoch(parentEpoch);
     };
+    window.replaceNativeParent = (nextLinks) => {
+        const previous = current;
+        const replacement = structuredClone(fixture.parent);
+        replacement.payload.formRecord.recordId = 'rec_parent_replacement';
+        replacement.payload.formRecord.data.fld_title = 'Replacement parent';
+        replacement.payload.formRecord.data.fld_children_a = nextLinks;
+        current = createParent(replacement, {
+            ownerId: 'synthetic-parent-replacement',
+            revision: 1,
+        });
+        previous.fields.destroy();
+        window.previousCreateCompletion = () =>
+            previous.owner.getSnapshot().completion;
+        parentEpoch++;
+        setEpoch(parentEpoch);
+    };
     return h(
         'form',
         {
+            'data-parent-current': parentCurrent,
             onSubmit: (event) => {
                 event.preventDefault();
                 calls.parentSubmits++;
@@ -91,21 +125,25 @@ function Parent() {
         h('button', { id: 'outside-focus', type: 'button' }, 'Outside focus'),
         h(LinkedChildCreateAction, {
             key: epoch,
-            owner,
-            parentIsCurrent: () => epoch === parentEpoch,
+            owner: current.owner,
+            parentIsCurrent: () => parentCurrent && epoch === parentEpoch,
             renderFields: (child) => h(ChildTitle, { child }),
         })
     );
 }
 
-window.readCreateProof = () => ({
-    calls: structuredClone(calls),
-    phase: owner.getSnapshot().phase,
-    childTitle: owner.getSnapshot().child?.field('fld_title').getSnapshot()
-        .value,
-    parentTitle: fields.field('fld_title').getSnapshot().value,
-    links: fields.field('fld_children_a').getSnapshot().value,
-    sibling: fields.field('fld_children_b').getSnapshot().value,
-});
+window.readCreateProof = () => {
+    const { fields, owner } = current;
+    const snapshot = owner.getSnapshot();
+    return {
+        calls: structuredClone(calls),
+        phase: snapshot.phase,
+        canCreate: snapshot.canCreate,
+        childTitle: snapshot.child?.field('fld_title').getSnapshot().value,
+        parentTitle: fields.field('fld_title').getSnapshot().value,
+        links: fields.field('fld_children_a').getSnapshot().value,
+        sibling: fields.field('fld_children_b').getSnapshot().value,
+    };
+};
 const root = createRoot(document.querySelector('#app'));
 root.render(h(StrictMode, null, h(Parent)));

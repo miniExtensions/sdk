@@ -608,6 +608,10 @@ const summaryCardsStarterFiles = linkedFinderStarterFiles.map((path) =>
     path.replace('react-complete-linked-finder/', 'react-portal-summary-cards/')
 );
 
+const linkedChildCreateExampleFiles = ['README.md', 'main.ts'].map(
+    (path) => `examples/react-linked-child-create/${path}`
+);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -725,6 +729,7 @@ try {
                 path === 'docs/computed-fields.md' ||
                 headerStarterFiles.includes(path) ||
                 linkedFinderStarterFiles.includes(path) ||
+                linkedChildCreateExampleFiles.includes(path) ||
                 summaryCardsStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 printableStarterFiles.includes(path) ||
@@ -799,6 +804,7 @@ try {
         'docs/portal-map.md',
         'docs/complete-linked-finder.md',
         ...linkedFinderStarterFiles,
+        ...linkedChildCreateExampleFiles,
         'docs/count.md',
         'docs/formula.md',
         'docs/complete-record-comments.md',
@@ -4546,6 +4552,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
                         linkedFinderStarterFiles.includes(path) ||
+                        linkedChildCreateExampleFiles.includes(path) ||
                         summaryCardsStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [

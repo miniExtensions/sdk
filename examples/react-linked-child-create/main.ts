@@ -23,6 +23,8 @@ type Props = {
     renderFields: FormLinkedChildCreateDialogProps['renderFields'];
 };
 
+type Activation = { abort: AbortController };
+
 /** Mount beside the parent field. The owner comes from the parent's existing bindings. */
 export function LinkedChildCreateAction({
     owner,
@@ -31,26 +33,39 @@ export function LinkedChildCreateAction({
 }: Props) {
     const button = useRef<HTMLButtonElement>(null);
     const host = useRef({ owner, parentIsCurrent });
-    const activation = useRef<object | null>(null);
+    const activation = useRef<Activation | null>(null);
     const [pending, setPending] = useState<{
         owner: FormLinkedChildOwner;
-        ticket: object;
+        ticket: Activation;
     } | null>(null);
     const [failure, setFailure] = useState<FormLinkedChildOwner | null>(null);
     const [accepted, setAccepted] = useState<{
         owner: FormLinkedChildOwner;
         opening: FormLinkedChildCreateOpening;
     } | null>(null);
+    const parentCurrent = parentIsCurrent();
     useCommitEffect(() => {
-        if (host.current.owner !== owner) activation.current = null;
+        if (host.current.owner !== owner || !parentCurrent) {
+            const prior = activation.current;
+            activation.current = null;
+            prior?.abort.abort();
+        }
         host.current = { owner, parentIsCurrent };
-    }, [owner, parentIsCurrent]);
+    }, [owner, parentCurrent, parentIsCurrent]);
+    useCommitEffect(
+        () => () => {
+            const prior = activation.current;
+            activation.current = null;
+            prior?.abort.abort();
+        },
+        []
+    );
     const loading =
         pending?.owner === owner && pending.ticket === activation.current;
 
     const open = async (opener: HTMLButtonElement) => {
         if (loading || !parentIsCurrent()) return;
-        const ticket = {};
+        const ticket = { abort: new AbortController() };
         activation.current = ticket;
         const isCurrent = () =>
             activation.current === ticket &&
@@ -60,7 +75,11 @@ export function LinkedChildCreateAction({
         setFailure(null);
         setPending({ owner, ticket });
         try {
-            if (!(await owner.openCreate()) || !isCurrent()) return;
+            if (
+                !(await owner.openCreate({ signal: ticket.abort.signal })) ||
+                !isCurrent()
+            )
+                return;
             const current = owner.getSnapshot();
             if (current.intent?.type === 'create' && current.child)
                 setAccepted({
@@ -70,7 +89,7 @@ export function LinkedChildCreateAction({
         } catch {
             if (isCurrent()) setFailure(owner);
         } finally {
-            if (isCurrent()) setPending(null);
+            setPending((value) => (value?.ticket === ticket ? null : value));
         }
     };
 
@@ -82,7 +101,7 @@ export function LinkedChildCreateAction({
             {
                 type: 'button',
                 ref: button,
-                disabled: loading,
+                disabled: loading || !parentCurrent,
                 onClick: (event: MouseEvent<HTMLButtonElement>) =>
                     void open(event.currentTarget),
             },
@@ -90,7 +109,8 @@ export function LinkedChildCreateAction({
         ),
         failure === owner &&
             h('p', { role: 'alert' }, 'Could not open the linked form.'),
-        accepted?.owner === owner &&
+        parentCurrent &&
+            accepted?.owner === owner &&
             h(FormLinkedChildCreateDialog, {
                 owner,
                 opening: accepted.opening,

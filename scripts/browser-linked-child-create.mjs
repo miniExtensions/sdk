@@ -174,6 +174,90 @@ export async function checkLinkedChildCreateBrowser({
                     return opener;
                 };
 
+                await page.goto(origin);
+                await create.waitFor();
+                const pendingOpener = await create.elementHandle();
+                assert(pendingOpener);
+                await page.evaluate(() => window.holdNextCreateLoad());
+                await pendingOpener.press('Enter');
+                await page.waitForFunction(() => window.releaseCreateLoad);
+                assert(await create.isDisabled());
+                await page.evaluate(() =>
+                    window.setParentPresentationCurrent(false)
+                );
+                await page
+                    .locator('form[data-parent-current="false"]')
+                    .waitFor();
+                await page.evaluate(() => window.releaseCreateLoad());
+                await page.waitForFunction(() => {
+                    const { canCreate, phase } = window.readCreateProof();
+                    return canCreate || phase !== 'loading';
+                });
+                await page.evaluate(() =>
+                    window.setParentPresentationCurrent(true)
+                );
+                try {
+                    await page.waitForFunction(
+                        (opener) => !opener.disabled,
+                        pendingOpener,
+                        { timeout: 3000 }
+                    );
+                } catch (error) {
+                    if (error.name !== 'TimeoutError') throw error;
+                    assert.fail(
+                        `Retained Create opener stayed disabled after its stale load settled: ${JSON.stringify(
+                            {
+                                connected: await pendingOpener.evaluate(
+                                    (node) => node.isConnected
+                                ),
+                                disabled: await pendingOpener.evaluate(
+                                    (node) => node.disabled
+                                ),
+                                ...(await read()),
+                            }
+                        )}`
+                    );
+                }
+                assert.equal(await dialog.count(), 0);
+                const loadInput = fixtures.childLoadInput('edit');
+                assert.deepEqual((await read()).calls, {
+                    loads: [loadInput],
+                    saves: [],
+                    parentSubmits: 0,
+                });
+                await pendingOpener.press('Enter');
+                try {
+                    await dialog.waitFor();
+                } catch (error) {
+                    if (error.name !== 'TimeoutError') throw error;
+                    assert.fail(
+                        `Fresh Create did not open after stale settlement: ${JSON.stringify(await read())}`
+                    );
+                }
+                await title.fill('Fresh Create after a retired load');
+                await save.click();
+                await dialog.waitFor({ state: 'hidden' });
+                const afterFreshClick = await read();
+                assert.equal(afterFreshClick.phase, 'saved');
+                assert.deepEqual(afterFreshClick.calls.loads, [
+                    loadInput,
+                    loadInput,
+                ]);
+                assert.equal(afterFreshClick.calls.saves.length, 1);
+                assert.equal(
+                    afterFreshClick.calls.saves[0].extensionAccessToken,
+                    'synthetic_child_token'
+                );
+                assert.equal(
+                    afterFreshClick.calls.saves[0].formRecord.data.fld_title,
+                    'Fresh Create after a retired load'
+                );
+                assert.equal(afterFreshClick.calls.parentSubmits, 0);
+                assert.deepEqual(afterFreshClick.links, [
+                    ...initialLinks,
+                    'rec_created',
+                ]);
+
                 const exactOpener = await open();
                 assert(await focused(close));
                 await page.keyboard.press('Shift+Tab');
@@ -299,6 +383,79 @@ export async function checkLinkedChildCreateBrowser({
                     fixtures.childLoadInput('edit'),
                 ]);
                 assert.equal((await read()).calls.parentSubmits, 0);
+
+                const sameMountedOpener = await open();
+                await title.fill(
+                    'Keep current native child after the view retires'
+                );
+                await page.evaluate(() =>
+                    window.setParentPresentationCurrent(false)
+                );
+                await dialog.waitFor({ state: 'hidden' });
+                assert.equal(
+                    await sameMountedOpener.evaluate(
+                        (node) => node.isConnected
+                    ),
+                    true
+                );
+                await outside.focus();
+                assert(await focused(outside));
+                await page.evaluate(() =>
+                    window.setParentPresentationCurrent(true)
+                );
+                await page.waitForFunction(
+                    (opener) => !opener.disabled,
+                    sameMountedOpener
+                );
+                assert.equal(await dialog.count(), 0);
+                const retired = await read();
+                assert.equal(
+                    retired.childTitle,
+                    'Keep current native child after the view retires'
+                );
+                assert.deepEqual(retired.calls, {
+                    loads: [fixtures.childLoadInput('edit')],
+                    saves: [],
+                    parentSubmits: 0,
+                });
+
+                await open();
+                await title.fill('Held by the old native parent');
+                await page.evaluate(() => window.holdNextCreateSave());
+                await save.click();
+                await page.waitForFunction(() => window.releaseCreateSave);
+                const replacementLinks = [
+                    'rec_replacement_a',
+                    'rec_replacement_a',
+                    'rec_replacement_b',
+                ];
+                await page.evaluate(
+                    (links) => window.replaceNativeParent(links),
+                    replacementLinks
+                );
+                await dialog.waitFor({ state: 'hidden' });
+                assert.deepEqual((await read()).links, replacementLinks);
+                await outside.focus();
+                await page.evaluate(() => window.releaseCreateSave());
+                await page.waitForFunction(
+                    () =>
+                        window.previousCreateCompletion() ===
+                        'saved-not-reconciled'
+                );
+                const replacement = await read();
+                assert.deepEqual(replacement.links, replacementLinks);
+                assert.equal(replacement.parentTitle, 'Replacement parent');
+                assert.deepEqual(
+                    replacement.sibling,
+                    parent.payload.formRecord.data.fld_children_b
+                );
+                assert.equal(replacement.calls.saves.length, 1);
+                assert.equal(
+                    replacement.calls.saves[0].extensionAccessToken,
+                    'synthetic_child_token'
+                );
+                assert.equal(replacement.calls.parentSubmits, 0);
+                assert(await focused(outside));
                 assert.deepEqual(errors, []);
                 assert.deepEqual(external, []);
                 results.push({
@@ -311,6 +468,9 @@ export async function checkLinkedChildCreateBrowser({
                     invalidSaves: 0,
                     staleDismissalRefused: true,
                     settledSaveDidNotFocusReplacement: true,
+                    sameMountedParentRetirement: true,
+                    freshCreateAfterRetiredLoad: true,
+                    staleSavePreservedReplacementLinks: true,
                 });
                 console.log(
                     `Installed linked-child Create Chromium React ${react} passed`

@@ -176,7 +176,12 @@ function CreateDialog({
     );
     const [invalidRevision, setInvalidRevision] = useState<number | null>(null);
     const session = useMemo(
-        () => ({ closed: false, saving: false, live: false }),
+        () => ({
+            closed: false,
+            saving: false,
+            savedByDialog: false,
+            live: false,
+        }),
         [owner, opening, child, pages]
     );
     const confirm =
@@ -219,7 +224,7 @@ function CreateDialog({
             const next = owner.getSnapshot();
             const admittedClose = session.closed && next.phase === 'closed';
             const admittedSave =
-                session.saving &&
+                (session.saving || session.savedByDialog) &&
                 next.phase === 'saved' &&
                 next.completion === 'reconciled';
             node.close();
@@ -265,7 +270,8 @@ function CreateDialog({
         session.saving = true;
         setInvalidRevision(null);
         try {
-            await owner.save(state.revision);
+            const result = await owner.save(state.revision);
+            session.savedByDialog = result.type === 'saved';
         } catch {
             // Local page validation can refuse before the owner publishes a Save attempt.
             if (pages.getSnapshot().problems.length && current(state, 'save'))

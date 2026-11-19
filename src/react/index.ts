@@ -3674,6 +3674,11 @@ export {
     type FormLinkedChildCreateOpening,
 } from './FormLinkedChildCreateDialog.js';
 export {
+    FormLinkedChildEditDialog,
+    type FormLinkedChildEditDialogProps,
+    type FormLinkedChildEditOpening,
+} from './FormLinkedChildEditDialog.js';
+export {
     FormRecordDeleteConfirmation,
     FormRecordActionsFooter,
     FormRecordActionsMenu,

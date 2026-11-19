@@ -38,6 +38,10 @@ export type FormLinkedChildCreateDialogProps = Readonly<{
     labels?: Partial<typeof defaultLabels>;
 }>;
 
+type LinkedChildDialogProps = FormLinkedChildCreateDialogProps & {
+    editRecordId?: string;
+};
+
 const defaultLabels = {
     title: 'Create linked record',
     save: 'Save',
@@ -52,7 +56,7 @@ const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
 // The general React entry remains importable before the host boots a DOM.
-const CreateDialogPortal = lazy(async () => {
+const LinkedChildDialogPortal = lazy(async () => {
     const { createPortal } = await import('react-dom');
     return {
         default: ({
@@ -87,6 +91,16 @@ function tabStops(dialog: HTMLDialogElement): HTMLElement[] {
     );
 }
 
+function matchesIntent(
+    state: FormLinkedChildSnapshot,
+    editRecordId: string | undefined
+): boolean {
+    if (editRecordId === undefined) return state.intent?.type === 'create';
+    return (
+        state.intent?.type === 'edit' && state.intent.recordId === editRecordId
+    );
+}
+
 function useLinkedChildPresentation(owner: FormLinkedChildOwner) {
     const store = useMemo(() => {
         let snapshot = owner.getSnapshot();
@@ -100,7 +114,10 @@ function useLinkedChildPresentation(owner: FormLinkedChildOwner) {
                     next.child !== snapshot.child ||
                     next.pages !== snapshot.pages ||
                     next.error !== snapshot.error ||
-                    next.intent?.type !== snapshot.intent?.type
+                    next.intent?.type !== snapshot.intent?.type ||
+                    (next.intent?.type === 'edit' &&
+                        snapshot.intent?.type === 'edit' &&
+                        next.intent.recordId !== snapshot.intent.recordId)
                 )
                     snapshot = next;
                 return snapshot;
@@ -115,17 +132,24 @@ function useLinkedChildPresentation(owner: FormLinkedChildOwner) {
 }
 
 /** Presents an already-opened one-page Create. The supplied owner retains its draft and Save. */
-export function FormLinkedChildCreateDialog({
+export function FormLinkedChildCreateDialog(
+    props: FormLinkedChildCreateDialogProps
+): ReactElement | null {
+    return h(LinkedChildDialogPresentation, props);
+}
+
+export function LinkedChildDialogPresentation({
     owner,
     opening,
     renderFields,
     labels,
-}: FormLinkedChildCreateDialogProps): ReactElement | null {
+    editRecordId,
+}: LinkedChildDialogProps): ReactElement | null {
     const state = useLinkedChildPresentation(owner);
     const { child, pages } = state;
     if (
         !opening.isCurrent() ||
-        state.intent?.type !== 'create' ||
+        !matchesIntent(state, editRecordId) ||
         child !== opening.child ||
         !pages ||
         pages.getSnapshot().pages.length !== 1 ||
@@ -137,9 +161,9 @@ export function FormLinkedChildCreateDialog({
         Suspense,
         { fallback: null },
         h(
-            CreateDialogPortal,
+            LinkedChildDialogPortal,
             { container: opening.opener.ownerDocument.body },
-            h(CreateDialog, {
+            h(LinkedChildDialog, {
                 owner,
                 opening,
                 state,
@@ -147,12 +171,13 @@ export function FormLinkedChildCreateDialog({
                 pages,
                 renderFields,
                 labels,
+                editRecordId,
             })
         )
     );
 }
 
-function CreateDialog({
+function LinkedChildDialog({
     owner,
     opening,
     state,
@@ -160,7 +185,8 @@ function CreateDialog({
     pages,
     renderFields,
     labels: suppliedLabels,
-}: FormLinkedChildCreateDialogProps & {
+    editRecordId,
+}: LinkedChildDialogProps & {
     state: FormLinkedChildSnapshot;
     child: FormFieldBindings;
     pages: FormPageOwner;
@@ -182,7 +208,7 @@ function CreateDialog({
             savedByDialog: false,
             live: false,
         }),
-        [owner, opening, child, pages]
+        [owner, opening, child, pages, editRecordId]
     );
     const confirm =
         question?.child === child && question.revision === state.revision;
@@ -197,11 +223,13 @@ function CreateDialog({
         return (
             next.child === child &&
             next.pages === pages &&
-            next.intent?.type === 'create' &&
+            matchesIntent(next, editRecordId) &&
             next.revision === rendered.revision &&
             (next.phase === 'ready' ||
                 next.phase === 'error' ||
-                (action === 'close' && next.phase === 'unknown'))
+                (action === 'close' &&
+                    editRecordId === undefined &&
+                    next.phase === 'unknown'))
         );
     };
 
@@ -226,7 +254,11 @@ function CreateDialog({
             const admittedSave =
                 (session.saving || session.savedByDialog) &&
                 next.phase === 'saved' &&
-                next.completion === 'reconciled';
+                next.completion === 'reconciled' &&
+                (editRecordId === undefined ||
+                    (matchesIntent(next, editRecordId) &&
+                        next.child === child &&
+                        next.pages === pages));
             node.close();
             if (
                 fromDialog &&
@@ -234,11 +266,12 @@ function CreateDialog({
                 opening.isCurrent() &&
                 opener.isConnected &&
                 !opener.matches(':disabled') &&
+                !opener.closest('[hidden],[inert]') &&
                 isVisible(opener)
             )
                 opener.focus({ preventScroll: true });
         };
-    }, [owner, opening, session]);
+    }, [owner, opening, session, editRecordId, child, pages]);
 
     useCommitEffect(() => {
         if (confirm) keepEditing.current?.focus({ preventScroll: true });
@@ -246,6 +279,10 @@ function CreateDialog({
 
     const close = (rendered: FormLinkedChildSnapshot) => {
         if (!current(rendered, 'close')) return;
+        if (editRecordId !== undefined) {
+            session.closed = owner.closeEdit(rendered.revision);
+            return;
+        }
         session.closed = true;
         owner.close();
     };
@@ -323,7 +360,10 @@ function CreateDialog({
                 {
                     type: 'button',
                     ref: closeButton,
-                    disabled: state.phase === 'saving',
+                    disabled:
+                        state.phase === 'saving' ||
+                        (editRecordId !== undefined &&
+                            state.phase === 'unknown'),
                     onClick: dismiss,
                 },
                 labels.close

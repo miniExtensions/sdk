@@ -40,7 +40,8 @@ const api=format==='esm'?await import('@miniextensions/sdk/react'):require('@min
 const ui=format==='esm'?await import('@miniextensions/sdk/ui'):require('@miniextensions/sdk/ui');
 const {renderToString}=format==='esm'?await import('react-dom/server'):require('react-dom/server');
 assert.equal(typeof api.PortalPagingControls,'function','Missing public Portal paging controls');
-const fixture=createPagingFixture({React,api,ui,layout:format==='esm'?'list':'grid'});
+const layout=format==='esm'?'list':'grid';
+let fixture=createPagingFixture({React,api,ui,layout});
 const html=renderToString(fixture.element());
 assert.match(html,/First/);
 assert.match(html,/Más registros/);
@@ -65,10 +66,21 @@ try {
  container.addEventListener('submit',event=>{formSubmits++;event.preventDefault();});
  const errors=[];
  const {hydrateRoot}=format==='esm'?await import('react-dom/client'):require('react-dom/client');
- await React.act(async()=>{
-  root=hydrateRoot(container,fixture.element(),{onRecoverableError(error){errors.push(error);}});
- });
- fixture.connect(()=>root.render(fixture.element()));
+ const hydrate=async(paging)=>{
+  await React.act(async()=>{
+   root=hydrateRoot(container,paging.element(),{onRecoverableError(error){errors.push(error);}});
+  });
+  paging.connect(()=>root.render(paging.element()));
+ };
+ const unmount=async(paging)=>{
+  await React.act(async()=>root.unmount());
+  root=undefined;
+  assert.equal(paging.presenterSubscriptions,0);
+  assert.equal(paging.records.subscriptions,1);
+  paging.records.scope.destroy();
+  assert.equal(paging.records.subscriptions,0);
+ };
+ await hydrate(fixture);
  const button=()=>container.querySelector('button');
  const text=()=>container.textContent;
  const click=target=>target.dispatchEvent(new window.MouseEvent('click',{bubbles:true,cancelable:true}));
@@ -115,15 +127,40 @@ try {
  assert.equal(button(),null);
  assert.equal(fixture.guard()(),false);
  assert.equal(fixture.requests.length,3);
+ const postedReads=fixture.requests;
+ await unmount(fixture);
+
+ fixture=createPagingFixture({React,api,ui,layout,emptyAcceptedPage:true});
+ container.innerHTML=renderToString(fixture.element());
+ assert.doesNotMatch(text(),/First|Second/);
+ assert.equal(button().textContent,fixture.labels.loadMore);
+ await hydrate(fixture);
+ assert.equal(errors.length,0);
+ assert.doesNotMatch(text(),/First|Second/);
+ assert.equal(button().disabled,false);
+ assert.deepEqual(fixture.activations,[]);
+ assert.deepEqual(fixture.requests,[]);
+ await React.act(async()=>click(button()));
+ assert.deepEqual(fixture.activations,['next-page']);
+ assert.deepEqual(fixture.requests,[{intent:'next-page',offset:'after_empty_page'}]);
+ const pendingButton=button();
+ assert.ok(pendingButton);
+ assert.equal(pendingButton.hidden,false);
+ assert.notEqual(window.getComputedStyle(pendingButton).display,'none');
+ assert.equal(pendingButton.textContent,fixture.labels.loadMore);
+ assert.equal(pendingButton.disabled,true);
+ assert.equal(pendingButton.getAttribute('aria-busy'),'true');
+ assert.doesNotMatch(text(),/First|Second/);
+ await React.act(async()=>fixture.succeed());
+ assert.deepEqual(text().match(/Second/g),['Second']);
+ assert.doesNotMatch(text(),/First/);
+ assert.equal(button(),null);
+ assert.equal(fixture.requests.length,1);
  assert.equal(browserRequests,0);
  assert.equal(formSubmits,0);
- await React.act(async()=>root.unmount());
- root=undefined;
- assert.equal(fixture.presenterSubscriptions,0);
- assert.equal(fixture.records.subscriptions,1);
- fixture.records.scope.destroy();
- assert.equal(fixture.records.subscriptions,0);
- console.log(JSON.stringify({format,react:React.version,cases:8,postedReads:fixture.requests,hydrationErrors:errors.length,formSubmits,browserRequests}));
+ const emptyContinuationReads=fixture.requests;
+ await unmount(fixture);
+ console.log(JSON.stringify({format,react:React.version,cases:9,postedReads,emptyContinuationReads,hydrationErrors:errors.length,formSubmits,browserRequests}));
 } finally {
  if(root) await React.act(async()=>root.unmount());
  fixture.records.scope.destroy();

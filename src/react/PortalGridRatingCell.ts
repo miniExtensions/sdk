@@ -1,4 +1,9 @@
-import { createElement as h, type ReactElement } from 'react';
+import {
+    createElement as h,
+    useMemo,
+    useState,
+    type ReactElement,
+} from 'react';
 import {
     ControlledRatingField,
     type ControlledRatingFieldProps,
@@ -65,6 +70,13 @@ export function PortalGridRatingCell({
     // The host's owner may finish publishing its frame in a layout effect.
     // Read currentness at the user action rather than during render.
     const editing = selected && editor != null;
+    const ownerToken = editor?.owner.token;
+    const placement = useMemo(() => ({}), [cellIdentity, editing, ownerToken]);
+    const [control, setControl] = useState({ placement, key: 0 });
+    // A native click can finish on a reused icon after the press's owner changes.
+    // Retire the control without remounting the Grid cell.
+    if (control.placement !== placement)
+        setControl({ placement, key: control.key + 1 });
     const blank = !editing && (value === null || displayText === '');
 
     return h(PortalGridCellShell, {
@@ -83,6 +95,7 @@ export function PortalGridRatingCell({
         children: blank
             ? h('span', { className: 'read-only-text' })
             : h(ControlledRatingField, {
+                  key: control.key,
                   ...editor,
                   mode: 'controlled',
                   value,

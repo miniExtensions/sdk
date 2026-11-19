@@ -6,6 +6,7 @@ import {
     useRef,
     useState,
     type KeyboardEvent,
+    type ReactElement,
 } from 'react';
 import { createSelectionModel } from '../ui/model.js';
 import type {
@@ -328,7 +329,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
 /** Host-owned lookup for one explicitly configured Login field. */
 export function LoginExistingValuesPicker(
     props: LoginExistingValuesPickerProps
-) {
+): ReactElement | null {
     if (
         props.allowSearchFromExistingValuesInLogin !== true ||
         props.maskPasswordOnLoginScreen === true

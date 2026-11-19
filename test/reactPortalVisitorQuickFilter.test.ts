@@ -273,3 +273,31 @@ test('a held quick-Filter key continues on its own acknowledged successor and st
     assert.equal(f.host.calls.length, 3);
     assert.equal(f.host.calls[2].stamp.generation, 5);
 });
+
+test('an already-held key cannot borrow authority from a newly focused quick Filter', async (t) => {
+    const f = await mounted(t, quickFilterOwner(null));
+    await act(async () => f.status.focus());
+    await f.key(f.status, 'ArrowDown');
+    await f.change(f.status, ['red']);
+    assert.equal(f.host.calls.length, 1);
+
+    await act(async () => f.labels.focus());
+    assert.equal(f.window.document.activeElement, f.labels);
+    await f.key(f.labels, 'ArrowDown', true);
+    await f.change(f.labels, ['blue']);
+    assert.equal(f.host.calls.length, 1);
+    assert.deepEqual(f.host.port.read()?.criteria, f.host.calls[0].criteria);
+
+    await f.key(f.labels, 'ArrowDown', false, 'keyup');
+    await f.key(f.labels, 'ArrowDown');
+    await f.change(f.labels, ['blue']);
+    assert.equal(f.host.calls.length, 2);
+    const condition = f.host.calls[1].criteria?.conditions[0];
+    assert.equal(condition?.type, 'singleCondition');
+    assert.deepEqual(condition.setting, {
+        fieldType: 'multipleSelects',
+        type: 'hasAnyOf',
+        idOrName: { type: 'id', id: 'labels' },
+        value: ['blue'],
+    });
+});

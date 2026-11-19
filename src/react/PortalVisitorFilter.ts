@@ -705,15 +705,15 @@ export function PortalVisitorFilter(
                                 ) => {
                                     if (event.repeat) {
                                         const held = heldQuickKey.current;
-                                        if (
+                                        quickGesture.current =
                                             held?.fieldId === fieldId &&
                                             held.key === event.key
-                                        )
-                                            quickGesture.current = {
-                                                fieldId,
-                                                shown: held.shown,
-                                                held,
-                                            };
+                                                ? {
+                                                      fieldId,
+                                                      shown: held.shown,
+                                                      held,
+                                                  }
+                                                : null;
                                         return;
                                     }
                                     if (

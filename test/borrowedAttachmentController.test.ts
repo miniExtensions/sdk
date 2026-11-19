@@ -341,6 +341,87 @@ for (const when of ['before start', 'during capture'] as const) {
         f.controller.dispose();
     });
 }
+it('refuses the first allocation when the final attached read publishes a detach', async () => {
+    const f = fixture();
+    const attached = f.field;
+    const detached = {
+        ...attached,
+        visible: false,
+        presentation: 'detached' as const,
+    };
+    f.options.captureBatch = () => ({
+        receipt: f.receipt,
+        canAllocate: () => {
+            f.options.readField = () => {
+                f.options.readField = () => f.field;
+                f.field = detached;
+                f.notify();
+                return attached;
+            };
+            return true;
+        },
+    });
+
+    const outcome = await f.controller.start([file()]);
+
+    assert.equal(f.allocations.length, 0);
+    assert.equal(outcome.outcome, 'retired');
+    assert.equal(outcome.allocatedCount, 0);
+    assert.deepEqual(f.settled, []);
+    assert.deepEqual(f.canonical, [f.native]);
+    f.controller.dispose();
+});
+for (const reentry of ['getSnapshot', 'notification'] as const) {
+    it(`masks ${reentry} during the held detach read without retiring the admitted suffix`, async () => {
+        const f = fixture();
+        const held = deferred<object>();
+        const a = file('a');
+        const b = file('b');
+        const accepted = {};
+        f.options.allocate = (nativeFile, index, onProgress) => {
+            f.allocations.push({ file: nativeFile, index });
+            onProgress({ bytesTransferred: 1, totalBytes: 2 });
+            return {
+                completion:
+                    nativeFile === a ? held.promise : Promise.resolve(b),
+            };
+        };
+        const pending = f.controller.start([a, b]);
+        assert.deepEqual(f.controller.getSnapshot().progress, {
+            bytesTransferred: 1,
+            totalBytes: 2,
+        });
+        const nested: unknown[] = [];
+        const unsubscribe = f.controller.subscribe((value) =>
+            nested.push(value)
+        );
+        nested.length = 0;
+        const attached = f.field;
+        f.options.readField = () => {
+            f.options.readField = () => f.field;
+            f.field = { ...attached, visible: false, presentation: 'detached' };
+            if (reentry === 'getSnapshot')
+                nested.push(f.controller.getSnapshot());
+            else f.notify();
+            return f.field;
+        };
+
+        assert.deepEqual(f.controller.getSnapshot(), detachedSnapshot);
+        assert.deepEqual(nested, [detachedSnapshot]);
+        unsubscribe();
+        held.resolve(accepted);
+        const outcome = await pending;
+
+        assert.equal(outcome.outcome, 'completed');
+        assert.deepEqual(f.allocations, [
+            { file: a, index: 0 },
+            { file: b, index: 1 },
+        ]);
+        assert.deepEqual(f.canonical, [f.native, accepted, b]);
+        assert.deepEqual(f.settled, [outcome]);
+        f.controller.dispose();
+    });
+}
 for (const revokedBy of [
     'read-only',
     'owner change',

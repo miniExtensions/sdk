@@ -5534,10 +5534,11 @@ idle and empty, and the controller still holds its internal singleflight. A
 detached field cannot start a batch or allocate the first file. Every remaining
 file requires fresh `canAllocate` admission from the original host receipt.
 An observed owner or edit-policy change, a missing field, or an unmarked hidden
-field permanently stops further allocation. Synchronous host changes during a
-detached admission also stop further allocation. Retain the controller at the
-host lifetime while its presentation detaches, and use `dispose()` for actual
-retirement. All allocated work still settles once on the original receipt.
+field permanently stops further allocation. A synchronous host notification
+during the checks for a new allocation invalidates that admission. A snapshot
+requested reentrantly during a host read is idle and empty. Retain the controller
+at the host lifetime while its presentation detaches, and use `dispose()` for
+actual retirement. All allocated work still settles once on the original receipt.
 
 `start(files)` owns a serial batch immediately, including synchronous port and
 subscriber callbacks. A competing/reentrant start is `not-started`. There is no

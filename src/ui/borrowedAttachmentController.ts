@@ -177,6 +177,8 @@ export function createBorrowedAttachmentController<T, Receipt>(
     });
     const masked = () => unavailable('idle', false);
     const snapshot = (): BorrowedAttachmentSnapshot<T> => {
+        // A host read can reenter before it has returned the detach marker.
+        if (reading) return disposed ? unavailable() : masked();
         const observedNotifications = hostNotifications;
         const expired = () => observedNotifications !== hostNotifications;
         let detached = false;
@@ -308,8 +310,7 @@ export function createBorrowedAttachmentController<T, Receipt>(
                 if (
                     latest == null ||
                     observation.detached !== latest.detached ||
-                    (observation.detached &&
-                        observedNotifications !== hostNotifications)
+                    observedNotifications !== hostNotifications
                 )
                     flight.retired = true;
                 if (flight.retired || flight.cancelled || disposed) break;

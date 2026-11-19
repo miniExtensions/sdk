@@ -3754,6 +3754,11 @@ export type {
     PortalVisitorSortLabels,
     PortalVisitorSortProps,
 } from './PortalVisitorSort.js';
+export { PortalVisitorFilter } from './PortalVisitorFilter.js';
+export type {
+    PortalVisitorFilterLabels,
+    PortalVisitorFilterProps,
+} from './PortalVisitorFilter.js';
 export { PortalVisitorViewButtons } from './PortalVisitorViewButtons.js';
 export type {
     PortalVisitorViewButton,

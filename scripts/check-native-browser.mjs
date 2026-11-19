@@ -2509,6 +2509,7 @@ try {
             expectedReactVersion: nativeReactVersion,
             includeSearch: true,
             includeViewButtons: true,
+            includeFilter: true,
         });
         assert.equal(report.portalVisitorSort.passed, true);
         assert.deepEqual(report.portalVisitorSort.viewButtons, {
@@ -2523,6 +2524,17 @@ try {
             transientReadRecovered: true,
             replacementNotificationRecovered: true,
             sameTermGenerationReported: true,
+            cleanup: 'completed',
+        });
+        assert.deepEqual(report.portalVisitorSort.filter, {
+            allocation: 'filter-1',
+            editAndRevert: 'unchanged',
+            activeGroupDepth: 2,
+            staleDraft: 'refused',
+            paddingIsInert: true,
+            operandEnterSubmits: 0,
+            backdropAllocation: 'filter-2',
+            focusRestored: true,
             cleanup: 'completed',
         });
         report.imageAnnotation = {};

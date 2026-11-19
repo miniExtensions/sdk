@@ -20,6 +20,10 @@ const searchCases = [
     'portalVisitorSearch.test.ts',
     'reactPortalVisitorSearch.test.ts',
 ];
+const filterCases = [
+    'portalVisitorFilter.test.ts',
+    'reactPortalVisitorFilter.test.ts',
+];
 const viewButtonsCase = 'reactPortalVisitorViewButtons.test.ts';
 const fixture = 'fixtures/htmlPresentationFixture.ts';
 const profiles = [
@@ -66,6 +70,26 @@ void createPortalVisitorSearchDraft(port);
 void createElement(PortalVisitorSearch, { port });
 `;
 
+const typedFilter = `
+import { createElement } from 'react';
+import { PortalVisitorFilter, type PortalVisitorFilterProps } from '@miniextensions/sdk/react';
+import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterPort } from '@miniextensions/sdk/portals';
+const port: PortalVisitorFilterPort = {
+    read: () => null,
+    subscribe: () => () => undefined,
+    apply({stamp, criteria}) {
+        void criteria?.conditions;
+        // @ts-expect-error ownership is readonly
+        stamp.generation = 9;
+        return { type: 'refused' };
+    },
+};
+const draft: PortalVisitorFilterDraft | null = createPortalVisitorFilterDraft(port);
+void draft?.snapshot().criteria;
+const props: PortalVisitorFilterProps = { port };
+void createElement(PortalVisitorFilter, props);
+`;
+
 const typedViewButtons = `
 import { createElement } from 'react';
 import {
@@ -86,12 +110,12 @@ option.label = 'Do not mutate the host view';
 void createElement(PortalVisitorViewButtons, props);
 `;
 
-function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
+function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
     const archive = resolve(archivePath);
-    const cases = includeSearch
-        ? [...sortCases, ...searchCases, viewButtonsCase]
+    const cases = includeQuery
+        ? [...sortCases, ...searchCases, viewButtonsCase, ...filterCases]
         : sortCases;
-    const expectedTests = includeSearch ? 42 : 15;
+    const expectedTests = includeQuery ? 69 : 15;
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(
@@ -118,7 +142,7 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                 args: ['install', '--ignore-scripts'],
             });
             mkdirSync(join(directory, 'fixtures'));
-            if (includeSearch) {
+            if (includeQuery) {
                 const css = readFileSync(
                     join(
                         directory,
@@ -150,16 +174,20 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                 ['cjs', 'cjs', 'cts'],
             ]) {
                 writeFileSync(join(directory, 'consumer.' + typeSuffix), typed);
-                if (includeSearch)
+                if (includeQuery) {
                     writeFileSync(
                         join(directory, 'search-consumer.' + typeSuffix),
                         typedSearch
                     );
-                if (includeSearch)
                     writeFileSync(
                         join(directory, 'view-buttons-consumer.' + typeSuffix),
                         typedViewButtons
                     );
+                    writeFileSync(
+                        join(directory, 'filter-consumer.' + typeSuffix),
+                        typedFilter
+                    );
+                }
                 run([
                     typescriptBin,
                     '--noEmit',
@@ -171,10 +199,11 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                     '--module',
                     'NodeNext',
                     'consumer.' + typeSuffix,
-                    ...(includeSearch
+                    ...(includeQuery
                         ? [
                               'search-consumer.' + typeSuffix,
                               'view-buttons-consumer.' + typeSuffix,
+                              'filter-consumer.' + typeSuffix,
                           ]
                         : []),
                 ]);
@@ -197,6 +226,14 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
                         )
                         .replaceAll(
                             "'../src/react/PortalVisitorViewButtons.js'",
+                            "'@miniextensions/sdk/react'"
+                        )
+                        .replaceAll(
+                            "'../src/portals/visitorFilter.js'",
+                            "'@miniextensions/sdk/portals'"
+                        )
+                        .replaceAll(
+                            "'../src/react/PortalVisitorFilter.js'",
                             "'@miniextensions/sdk/react'"
                         )
                         .replaceAll(

@@ -210,6 +210,7 @@
         "./react/kanban.css": "./dist/esm/react/kanban.css",
         "./react/portal-map.css": "./dist/esm/react/portal-map.css",
         "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
+        "./react/attachment-device-input.css": "./dist/esm/react/attachment-device-input.css",
         "./react/attachment-url-input.css": "./dist/esm/react/attachment-url-input.css",
         "./react/attachment-upload-progress.css": "./dist/esm/react/attachment-upload-progress.css",
         "./react/readonly-url-gallery.css": "./dist/esm/react/readonly-url-gallery.css",

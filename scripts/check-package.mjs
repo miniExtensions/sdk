@@ -904,6 +904,9 @@ try {
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
         ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/AttachmentDeviceInput.js`,
+            `dist/${format}/react/AttachmentDeviceInput.d.ts`,
+            `dist/${format}/react/attachment-device-input.css`,
             `dist/${format}/react/AttachmentUrlInput.js`,
             `dist/${format}/react/AttachmentUrlInput.d.ts`,
             `dist/${format}/react/attachment-url-input.css`,

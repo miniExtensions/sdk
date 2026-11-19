@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     cpSync,
@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
     consumerAgePolicy,
     installAgeQualifiedConsumer,
@@ -151,6 +152,57 @@ test('consumer adapter preserves the caller execution boundary and arguments', (
     }, args);
     assert.equal(value, 'receipt');
 });
+
+test('consumer CLI keeps real pnpm config stderr out of its output', (t) => {
+    const { directory, installed } = fixture(t);
+    const bin = join(dirname(directory), 'bin');
+    mkdirSync(bin);
+    const lock = join(directory, 'pnpm-lock.yaml');
+    writeFileSync(lock, 'retained lock');
+    writeFileSync(
+        join(bin, 'pnpm'),
+        String.raw`#!/bin/sh
+printf '%s\n' "$*" >> pnpm-calls
+case "$*" in
+    --version) printf '%s\n' 10.28.2 ;;
+    'config list --json') printf '%s\n' 'synthetic config list sentinel' >&2; exit 71 ;;
+    'config get nodeLinker --json') printf '%s\n' 'synthetic config getter sentinel' >&2; exit 72 ;;
+    *) exit 73 ;;
+esac
+`,
+        { mode: 0o700 }
+    );
+    const installer = fileURLToPath(
+        new URL('./age-qualified-consumer-install.mjs', import.meta.url)
+    );
+    const result = spawnSync(process.execPath, [installer, 'install'], {
+        cwd: directory,
+        env: { ...process.env, PATH: bin },
+        encoding: 'utf8',
+        timeout: 10_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.deepEqual(
+        readFileSync(join(directory, 'pnpm-calls'), 'utf8').trim().split('\n'),
+        ['--version', 'config list --json', 'config get nodeLinker --json']
+    );
+    assert.match(
+        result.stderr,
+        /Consumer policy could not be read: nodeLinker/
+    );
+    assert.doesNotMatch(
+        result.stdout,
+        /synthetic config (?:list|getter) sentinel/
+    );
+    assert.doesNotMatch(
+        result.stderr,
+        /synthetic config (?:list|getter) sentinel/
+    );
+    assert.equal(readFileSync(lock, 'utf8'), 'retained lock');
+    assert(existsSync(installed));
+});
+
 for (const npmLock of [false, true])
     test(`consumer installation verifies policy before install and preserves provenance (${npmLock})`, (t) => {
         const f = fixture(t, { npmLock });

@@ -156,6 +156,8 @@ export function installAgeQualifiedConsumer({
             cwd,
             encoding: 'utf8',
             timeout: 120000,
+            // Explicit pipes prevent execFileSync from forwarding config stderr.
+            stdio: argv[0] === 'config' ? 'pipe' : undefined,
             env: {
                 ...process.env,
                 COREPACK_ENABLE_AUTO_PIN: '0',

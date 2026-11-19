@@ -305,6 +305,8 @@
         "examples/react-form-header/build.mjs",
         "examples/react-form-header/dev.mjs",
         "examples/react-form-header/tsconfig.json",
+        "examples/react-linked-child-create/README.md",
+        "examples/react-linked-child-create/main.ts",
         "docs/signature.md",
         "docs/single-line-text.md",
         "docs/customer-chat.md",

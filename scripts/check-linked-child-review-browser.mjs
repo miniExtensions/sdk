@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { checkStarterConfirmationRecovery } from './browser-linked-child-confirmation-native.mjs';
+import { checkLinkedChildCreateBrowser } from './browser-linked-child-create.mjs';
 const root = resolve(import.meta.dirname, '..');
 const output = process.argv[2]
     ? resolve(process.argv[2])
@@ -310,6 +311,19 @@ try {
             root,
         }
     );
+    report.installedCreate = await checkLinkedChildCreateBrowser({
+        archive,
+        browser,
+        fixtures,
+        install: (lane) =>
+            run(
+                'npm',
+                ['install', '--ignore-scripts', '--no-audit', '--no-fund'],
+                lane
+            ),
+        output,
+        root,
+    });
     report.passed = true;
 } catch (error) {
     report.error = String(error.stack ?? error);

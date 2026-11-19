@@ -677,7 +677,7 @@ export function createFormLinkedChildOwner(
                     throw Error(
                         'This child Form configuration is unsupported.'
                     );
-                activeLoad = null;
+                if (!resume) activeLoad = null;
                 // Next/Back change only the page owner. Include those local
                 // transitions in the coordinator's rendered Save revision,
                 // including navigation away and back without native edits.
@@ -691,12 +691,26 @@ export function createFormLinkedChildOwner(
                 const stop = fields.controller.subscribe(() => {
                     if (ownsIntent(candidate!) && !saving) emit();
                 });
-                if (!ownsIntent(candidate) || !parentCurrent()) {
+                if (
+                    !ownsIntent(candidate) ||
+                    !parentCurrent() ||
+                    (resume && (!ownsLoad() || !ownsIntent(candidate)))
+                ) {
                     stop();
+                    if (
+                        resume &&
+                        activeLoad === abort &&
+                        generation === ticket &&
+                        intent === candidate
+                    ) {
+                        intent = null;
+                        phase = 'closed';
+                    }
                     release(candidate);
                     return false;
                 }
                 candidate.stops.push(stop);
+                activeLoad = null;
                 if (retainedEdit === retainedAtOpen) retainedEdit = null;
                 phase = 'ready';
                 emit();
@@ -1097,7 +1111,9 @@ export function createFormLinkedChildOwner(
         },
         close() {
             if (disposed) return;
-            retainedEdit = null;
+            // Cancelling an unaccepted load leaves the previous selected draft
+            // available. A hard close of the accepted or closed owner clears it.
+            if (!activeLoad || intent) retainedEdit = null;
             closeIntent();
         },
         blocksForm: () =>

@@ -760,7 +760,9 @@ describe('browser starter standalone linked-child integration', () => {
         assert.equal(f.calls.saves.length, 0);
     });
 
-    it('preserves a retained draft when opening a different child fails', async (test) => {
+    it('preserves a retained draft when opening a different child fails or is cancelled', async (test) => {
+        const siblingLoad = deferred<void>();
+        let siblingAttempts = 0;
         const f = await fixture(test, {
             load: async (input) => {
                 assert.ok('childExtensionInfo' in input);
@@ -768,8 +770,11 @@ describe('browser starter standalone linked-child integration', () => {
                 if (
                     access.type === 'edit' &&
                     access.childExtensionRecordId === 'rec_sibling'
-                )
-                    throw Error('Synthetic sibling load failed.');
+                ) {
+                    if (++siblingAttempts === 1)
+                        throw Error('Synthetic sibling load failed.');
+                    await siblingLoad.promise;
+                }
                 return loadedChild(input);
             },
         });
@@ -789,6 +794,18 @@ describe('browser starter standalone linked-child integration', () => {
             ),
             false
         );
+        assert.equal(f.owner.getSnapshot().phase, 'error');
+        const cancelled = f.owner.openEdit(
+            'rec_sibling',
+            f.owner.getSnapshot().revision
+        );
+        try {
+            assert.equal(f.owner.getSnapshot().phase, 'loading');
+            button(f.panel.node, 'Cancel child').click();
+        } finally {
+            siblingLoad.resolve();
+        }
+        assert.equal(await cancelled, false);
         assert.equal(
             await f.owner.openEdit(
                 'rec_existing',
@@ -802,13 +819,18 @@ describe('browser starter standalone linked-child integration', () => {
         );
         assert.deepEqual(
             [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
-            [1, 2, 0]
+            [1, 3, 0]
         );
     });
 
     it('refuses a Close whose final parent observation starts a Save for that child', async (test) => {
-        const response = deferred<SaveFormResult>();
-        const f = await fixture(test, { save: async () => response.promise });
+        const response = deferred<void>();
+        const f = await fixture(test, {
+            save: async (input) => {
+                await response.promise;
+                return savedChild(input);
+            },
+        });
         button(f.panel.node, 'Load selected records').click();
         await waitFor(() =>
             f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
@@ -843,12 +865,58 @@ describe('browser starter standalone linked-child integration', () => {
         } finally {
             child.controller.getState = getChild;
             f.fields.controller.getState = getParent;
-            response.resolve(childSaved('edit'));
+            response.resolve();
         }
         assert.ok(save);
         assert.equal((await save).type, 'saved');
         assert.equal(f.calls.saves.length, 1);
         assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+    });
+
+    it('refuses an abort raised by a subscriber before publishing a resumed child', async (test) => {
+        const f = await fixture(test);
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const title = 'Draft survives an interrupted resume';
+        edit(f.window, f.panel.node, 'fld_title', title);
+        assert.equal(f.owner.closeEdit(f.owner.getSnapshot().revision), true);
+        const abort = new AbortController();
+        const stop = f.owner.subscribe(({ child, phase }) => {
+            if (child && phase === 'loading') abort.abort();
+        });
+        try {
+            assert.equal(
+                await f.owner.openEdit(
+                    'rec_existing',
+                    f.owner.getSnapshot().revision,
+                    { signal: abort.signal }
+                ),
+                false
+            );
+        } finally {
+            stop();
+        }
+        assert.equal(f.owner.getSnapshot().phase, 'closed');
+        assert.equal(f.owner.getSnapshot().child, null);
+        assert.equal(
+            await f.owner.openEdit(
+                'rec_existing',
+                f.owner.getSnapshot().revision
+            ),
+            true
+        );
+        assert.equal(
+            f.owner.getSnapshot().child!.field('fld_title').getSnapshot().value,
+            title
+        );
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 1, 0]
+        );
     });
 
     it('uses child manual pages and displays validation without a second automatic Save', async (test) => {

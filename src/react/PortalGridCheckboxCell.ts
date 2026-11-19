@@ -25,6 +25,7 @@ export type PortalGridCheckboxCellProps = Readonly<{
     value: boolean | null;
     displayText: string;
     title: string;
+    checkboxStyle?: 'checkbox' | 'toggle';
     /** Presentation identity. The editor owner independently admits writes. */
     cellIdentity: unknown;
     selected: boolean;
@@ -38,11 +39,12 @@ export type PortalGridCheckboxCellProps = Readonly<{
     copyDisabled?: boolean;
 }>;
 
-/** Ordinary Checkbox Grid presentation with host-owned value and writes. */
+/** Checkbox Grid presentation with host-owned value and writes. */
 export function PortalGridCheckboxCell({
     value,
     displayText,
     title,
+    checkboxStyle = 'checkbox',
     cellIdentity,
     selected,
     onSelect,
@@ -55,9 +57,12 @@ export function PortalGridCheckboxCell({
 }: PortalGridCheckboxCellProps): ReactElement {
     const editing = editor != null;
     const owner = editor?.owner.token;
-    const placement = useMemo(() => ({}), [cellIdentity, editing, owner]);
+    const placement = useMemo(
+        () => ({}),
+        [cellIdentity, checkboxStyle, editing, owner]
+    );
     const [control, setControl] = useState({ placement, key: 0 });
-    // Retire the native press target when the same Grid slot takes a new owner.
+    // Retire the native press target when the Grid slot changes owner or style.
     if (control.placement !== placement)
         setControl({ placement, key: control.key + 1 });
     const active = useRef<{
@@ -96,6 +101,7 @@ export function PortalGridCheckboxCell({
                   h(CompleteCheckboxField, {
                       value,
                       title,
+                      checkboxStyle,
                       showTitle: false,
                       readOnly: !editing,
                       isInGrid: true,

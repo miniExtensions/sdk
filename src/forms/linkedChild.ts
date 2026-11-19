@@ -5,8 +5,9 @@ import type {
     LoadExtensionInput,
 } from '../runtime/types.js';
 import type { FormFieldBindings } from './bindings.js';
-import type { FormDraftHandle } from './drafts.js';
+import { FormDraftStore, type FormDraftHandle } from './drafts.js';
 import type { FormOwnerScope, FormSaveLifecycle } from './controller.js';
+import { captureFormControllerDraftRevision } from './controller.js';
 import type { NormalizedFormSaveResult, FormSaveOptions } from './helpers.js';
 import {
     createFormPageOwner,
@@ -74,11 +75,22 @@ export type FormLinkedChildOwner = {
         renderedRevision: number,
         options?: { signal?: AbortSignal; clientTimeZone?: string }
     ): Promise<boolean>;
+    /** Call only after the admitted Edit child content is presented. Abort when its presenter retires. */
+    acknowledgeEditPresentation(
+        renderedRevision: number,
+        child: FormFieldBindings,
+        signal: AbortSignal
+    ): boolean;
     /** Captured rendered revision; existing page validation and Form Save remain authoritative. */
     save(
         renderedRevision: number,
         options?: { signal?: AbortSignal }
     ): Promise<NormalizedFormSaveResult>;
+    /**
+     * Close a ready Edit after the caller's confirmation. A dirty draft can
+     * resume only through an explicit Edit of the same selected record.
+     */
+    closeEdit(renderedRevision: number): boolean;
     /** Close cancels this intent only. A dispatched outcome is never replayed. */
     close(): void;
 };
@@ -98,6 +110,7 @@ type InternalOptions = FormLinkedChildRecovery & {
     createChild(options: {
         loaded: FormLoadedResult;
         saveOptions: FormSaveOptions;
+        store: FormDraftStore<AirtableValue>;
         isCurrent(): boolean;
     }): FormFieldBindings;
     /** Guarded native write and private receipt bookkeeping before publication. */
@@ -115,6 +128,11 @@ type InternalOptions = FormLinkedChildRecovery & {
     prepareEdited(
         result: Extract<NormalizedFormSaveResult, { type: 'saved' }>
     ): (() => void) | null;
+    creditEditPresentation(
+        recordId: string,
+        configuration: string | number,
+        presentationCurrent: () => boolean
+    ): boolean;
     changed(): void;
 };
 const parentIds = new WeakMap<FormDraftHandle, number>();
@@ -207,17 +225,24 @@ export function createFormLinkedChildOwner(
         receipt: Extract<NormalizedFormSaveResult, { type: 'saved' }> | null;
         reconciled: boolean;
         saveOptions: FormSaveOptions;
+        store: FormDraftStore<AirtableValue>;
         stops: (() => void)[];
         released: boolean;
         reviewSignal: AbortSignal | null;
     };
     let intent: Intent | null = null;
+    let retainedEdit:
+        | (Pick<Intent, 'loaded' | 'saveOptions' | 'store'> & {
+              recordId: string;
+          })
+        | null = null;
     let lastRecordId: string | null = null;
     const listeners = new Set<(snapshot: FormLinkedChildSnapshot) => void>();
     let notifying = false,
         notifyPending = false;
     const retirePresentation = () => {
         parentRetired = true;
+        retainedEdit = null;
         // Cancel presentation promptly, but retain a dispatched Save's receipt lease.
         if (intent?.reviewSignal) intent.pages?.dispose();
     };
@@ -322,6 +347,11 @@ export function createFormLinkedChildOwner(
                 .getSnapshot(),
         });
     };
+    const isSelected = (recordId: string) => {
+        const value =
+            options.form.controller.getState().draft?.data[options.fieldId];
+        return Array.isArray(value) && value.includes(recordId);
+    };
     const editableIds = (): string[] => {
         try {
             const ticket = generation;
@@ -358,6 +388,8 @@ export function createFormLinkedChildOwner(
     };
     const snapshot = (): FormLinkedChildSnapshot => {
         const live = parentCurrent();
+        if (retainedEdit && (!live || !isSelected(retainedEdit.recordId)))
+            retainedEdit = null;
         const p = live ? policy() : null;
         const unavailable =
             live &&
@@ -458,6 +490,15 @@ export function createFormLinkedChildOwner(
         recordId: string | null,
         request: { signal?: AbortSignal; clientTimeZone?: string }
     ): Promise<boolean> => {
+        const retainedAtOpen = retainedEdit;
+        const resume =
+            retainedAtOpen &&
+            recordId === retainedAtOpen.recordId &&
+            retainedAtOpen.loaded.extensionId === plan.childExtensionId &&
+            retainedAtOpen.loaded.payload.publicFields.state.tableId ===
+                plan.linkedTableId
+                ? retainedAtOpen
+                : null;
         const ticket = ++generation;
         lastRecordId = recordId;
         const abort = new AbortController();
@@ -475,11 +516,29 @@ export function createFormLinkedChildOwner(
         scope.tableId = plan.linkedTableId;
         scope.childExtensionId = plan.childExtensionId;
         emit();
+        const resumeCurrent = () => {
+            if (!resume) return true;
+            if (retainedEdit !== resume || !isSelected(resume.recordId))
+                return false;
+            const fresh = editPolicy(resume.recordId);
+            return (
+                fresh?.type === 'available' &&
+                fresh.childExtensionId === plan.childExtensionId &&
+                fresh.linkedTableId === plan.linkedTableId &&
+                retainedEdit === resume
+            );
+        };
         const ownsLoad = () =>
             activeLoad === abort &&
             generation === ticket &&
             !abort.signal.aborted &&
-            parentCurrent();
+            parentCurrent() &&
+            resumeCurrent() &&
+            activeLoad === abort &&
+            generation === ticket &&
+            !abort.signal.aborted &&
+            !parentRetired &&
+            !disposed;
         try {
             if (!ownsLoad()) return false;
             const input: LoadExtensionInput = {
@@ -519,10 +578,12 @@ export function createFormLinkedChildOwner(
                     ? { clientTimeZone: request.clientTimeZone }
                     : {}),
             };
-            const response = await options.client.loadExtension(input, {
-                signal: abort.signal,
-                session: { ...session },
-            });
+            const response =
+                resume?.loaded ??
+                (await options.client.loadExtension(input, {
+                    signal: abort.signal,
+                    session: { ...session },
+                }));
             if (!ownsLoad()) return false;
             if (
                 response.extensionScreen !== 'form_loaded' ||
@@ -556,7 +617,7 @@ export function createFormLinkedChildOwner(
                     'The configured child Form is unavailable in this flow.'
                 );
             const loaded = structuredClone(response);
-            const saveOptions: FormSaveOptions = {
+            const saveOptions: FormSaveOptions = resume?.saveOptions ?? {
                 captchaVal: null,
                 isComputeMode: false,
                 searchQuery: structuredClone(input.query ?? {}),
@@ -566,11 +627,13 @@ export function createFormLinkedChildOwner(
                 },
                 conditionalLinkedRecordFieldIdsToFilteringValues: {},
             };
+            const store = resume?.store ?? new FormDraftStore<AirtableValue>();
             let candidate: Intent | null = null;
             let initializing = true;
             const fields = options.createChild({
                 loaded,
                 saveOptions,
+                store,
                 isCurrent: () =>
                     initializing
                         ? ownsLoad()
@@ -595,6 +658,7 @@ export function createFormLinkedChildOwner(
                     receipt: null,
                     reconciled: false,
                     saveOptions,
+                    store,
                     stops: [],
                     released: false,
                     reviewSignal: null,
@@ -625,7 +689,7 @@ export function createFormLinkedChildOwner(
                     throw Error(
                         'This child Form configuration is unsupported.'
                     );
-                activeLoad = null;
+                if (!resume) activeLoad = null;
                 // Next/Back change only the page owner. Include those local
                 // transitions in the coordinator's rendered Save revision,
                 // including navigation away and back without native edits.
@@ -639,12 +703,27 @@ export function createFormLinkedChildOwner(
                 const stop = fields.controller.subscribe(() => {
                     if (ownsIntent(candidate!) && !saving) emit();
                 });
-                if (!ownsIntent(candidate) || !parentCurrent()) {
+                if (
+                    !ownsIntent(candidate) ||
+                    !parentCurrent() ||
+                    (resume && (!ownsLoad() || !ownsIntent(candidate)))
+                ) {
                     stop();
+                    if (
+                        resume &&
+                        activeLoad === abort &&
+                        generation === ticket &&
+                        intent === candidate
+                    ) {
+                        intent = null;
+                        phase = 'closed';
+                    }
                     release(candidate);
                     return false;
                 }
                 candidate.stops.push(stop);
+                activeLoad = null;
+                if (retainedEdit === retainedAtOpen) retainedEdit = null;
                 phase = 'ready';
                 emit();
                 return (
@@ -673,6 +752,25 @@ export function createFormLinkedChildOwner(
                 activeLoad = null;
                 emit();
             }
+        }
+    };
+    const closeIntent = () => {
+        const old = intent;
+        const ticket = ++generation;
+        const load = activeLoad;
+        activeLoad = null;
+        intent = null;
+        phase = blocking() ? 'unknown' : 'closed';
+        if (old) {
+            old.current = false;
+            old.fields.controller.cancel();
+            release(old);
+        }
+        load?.abort();
+        if (generation === ticket && intent === null && activeLoad === null) {
+            phase = blocking() ? 'unknown' : 'closed';
+            emit();
+            options.changed();
         }
     };
     const owner: ReturnType<typeof createFormLinkedChildOwner> = {
@@ -721,6 +819,48 @@ export function createFormLinkedChildOwner(
             )
                 return false;
             return open(plan, recordId, request);
+        },
+        acknowledgeEditPresentation(renderedRevision, child, signal) {
+            const candidate = intent;
+            if (
+                !candidate ||
+                candidate.recordId === null ||
+                candidate.fields !== child ||
+                !candidate.pages
+            )
+                return false;
+            const livePresentation = () =>
+                !signal.aborted &&
+                !disposed &&
+                !parentRetired &&
+                phase === 'ready' &&
+                revision === renderedRevision &&
+                ownsIntent(candidate);
+            if (!livePresentation()) return false;
+            try {
+                const controller = options.form.controller;
+                const draftCurrent = captureFormControllerDraftRevision(
+                    controller,
+                    controller.getState().draftRevision
+                );
+                if (
+                    !draftCurrent ||
+                    !options.canObserve() ||
+                    editPolicy(candidate.recordId)?.type !== 'available' ||
+                    !parentCurrent() ||
+                    options.configurationRevision() !== config ||
+                    !livePresentation() ||
+                    !draftCurrent()
+                )
+                    return false;
+                return options.creditEditPresentation(
+                    candidate.recordId,
+                    config,
+                    () => livePresentation() && draftCurrent()
+                );
+            } catch {
+                return false;
+            }
         },
         async save(renderedRevision, request = {}) {
             const candidate = intent;
@@ -986,29 +1126,49 @@ export function createFormLinkedChildOwner(
                 if (disposed || parentRetired) release(candidate);
             }
         },
+        closeEdit(renderedRevision) {
+            const candidate = intent;
+            if (
+                !candidate ||
+                candidate.recordId === null ||
+                revision !== renderedRevision ||
+                saving ||
+                !['ready', 'error'].includes(phase) ||
+                !parentCurrent() ||
+                !childCurrent(candidate) ||
+                blocking(candidate.recordId)
+            )
+                return false;
+            const draft = candidate.fields.controller.getState().draft;
+            const keep =
+                draft?.dirtyFieldIds.length && isSelected(candidate.recordId);
+            if (
+                !parentCurrent() ||
+                !childCurrent(candidate) ||
+                blocking(candidate.recordId) ||
+                revision !== renderedRevision ||
+                saving ||
+                !ownsIntent(candidate) ||
+                !['ready', 'error'].includes(phase)
+            )
+                return false;
+            retainedEdit = keep
+                ? {
+                      loaded: candidate.loaded,
+                      saveOptions: candidate.saveOptions,
+                      store: candidate.store,
+                      recordId: candidate.recordId,
+                  }
+                : null;
+            closeIntent();
+            return true;
+        },
         close() {
             if (disposed) return;
-            const old = intent;
-            const ticket = ++generation;
-            const load = activeLoad;
-            activeLoad = null;
-            intent = null;
-            phase = blocking() ? 'unknown' : 'closed';
-            if (old) {
-                old.current = false;
-                old.fields.controller.cancel();
-                release(old);
-            }
-            load?.abort();
-            if (
-                generation === ticket &&
-                intent === null &&
-                activeLoad === null
-            ) {
-                phase = blocking() ? 'unknown' : 'closed';
-                emit();
-                options.changed();
-            }
+            // Cancelling an unaccepted load leaves the previous selected draft
+            // available. A hard close of the accepted or closed owner clears it.
+            if (!activeLoad || intent) retainedEdit = null;
+            closeIntent();
         },
         blocksForm: () =>
             activeLoad !== null ||
@@ -1027,6 +1187,7 @@ export function createFormLinkedChildOwner(
             if (disposed) return;
             disposed = true;
             parentRetired = true;
+            retainedEdit = null;
             stopParent();
             stopField();
             stopRich();

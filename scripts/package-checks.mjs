@@ -5,8 +5,114 @@ import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const sdkPath = 'node_modules/@miniextensions/sdk';
+const tarBlockBytes = 512;
+const maxTarCaptureBytes = 1024 * 1024;
+const maxIndexedArchiveBytes = 64 * 1024 * 1024;
+const ustarSignature = Buffer.from('ustar\0' + '00');
+const ustarMetadataOctals = [
+    [100, 108], // mode
+    [108, 116], // uid
+    [116, 124], // gid
+    [136, 148], // mtime
+    [329, 337], // device major
+    [337, 345], // device minor
+];
+
+function readUstarText(field) {
+    const end = field.indexOf(0);
+    const text = end === -1 ? field : field.subarray(0, end);
+    if (
+        text.some((byte) => byte < 32 || byte > 126) ||
+        (end !== -1 && field.subarray(end).some(Boolean))
+    )
+        return null;
+    return text.toString('ascii');
+}
+
+function readUstarOctal(field) {
+    const digits = /^ *([0-7]+)[\0 ]*$/.exec(field.toString('latin1'));
+    return digits == null ? NaN : Number.parseInt(digits[1], 8);
+}
+
+// pnpm pack emits plain USTAR files. Index that layout from the admitted
+// bytes once. Leave any extended, malformed or ambiguous archive to tar.
+function indexPackedUstarMembers(snapshot) {
+    if (process.env.TAR_OPTIONS) return null;
+    let tar;
+    try {
+        tar = gunzipSync(snapshot, { maxOutputLength: maxIndexedArchiveBytes });
+    } catch {
+        return null;
+    }
+    if (tar.length % tarBlockBytes !== 0) return null;
+
+    const members = new Map();
+    let offset = 0;
+    while (offset + 2 * tarBlockBytes <= tar.length) {
+        const start = offset + tarBlockBytes;
+        const header = tar.subarray(offset, start);
+        if (!header.some(Boolean)) {
+            if (tar.subarray(offset).some(Boolean)) return null;
+            // tar may find descendants when asked for a parent path. Only
+            // index archives where regular member names cannot overlap that way.
+            for (const member of members.keys()) {
+                for (
+                    let parent = posix.dirname(member);
+                    parent !== 'package';
+                    parent = posix.dirname(parent)
+                ) {
+                    if (members.has(parent)) return null;
+                }
+            }
+            return members;
+        }
+        if (
+            header[156] !== 48 ||
+            header.subarray(157, 257).some(Boolean) ||
+            !header.subarray(257, 265).equals(ustarSignature) ||
+            header.subarray(500).some(Boolean) ||
+            ustarMetadataOctals.some(([first, last]) => {
+                const field = header.subarray(first, last);
+                return (
+                    field.some(Boolean) &&
+                    !Number.isSafeInteger(readUstarOctal(field))
+                );
+            })
+        )
+            return null;
+
+        let checksum = 0;
+        for (let index = 0; index < tarBlockBytes; index++) {
+            checksum += index >= 148 && index < 156 ? 32 : header[index];
+        }
+        if (checksum !== readUstarOctal(header.subarray(148, 156))) return null;
+
+        const name = readUstarText(header.subarray(0, 100));
+        const prefix = readUstarText(header.subarray(345, 500));
+        if (name == null || !name || prefix == null) return null;
+        const member = prefix ? `${prefix}/${name}` : name;
+        if (
+            !member.startsWith('package/') ||
+            member.endsWith('/') ||
+            member.includes('\\') ||
+            posix.normalize(member) !== member ||
+            members.has(member)
+        )
+            return null;
+
+        const size = readUstarOctal(header.subarray(124, 136));
+        if (!Number.isSafeInteger(size) || size > tar.length - start)
+            return null;
+        const end = start + size;
+        offset = start + Math.ceil(size / tarBlockBytes) * tarBlockBytes;
+        if (tar.subarray(end, offset).some(Boolean)) return null;
+        members.set(member, tar.subarray(start, end));
+    }
+    return null;
+}
 
 // One reader belongs to one admitted archive and one preparation run. Admit
 // the first snapshot by digest, then compare freshly read bytes with that
@@ -17,6 +123,7 @@ export function createArchiveMemberReader({ archivePath, expectedSha256 }) {
     const archive = resolve(archivePath);
     const members = new Map();
     let admittedSnapshot;
+    let indexedMembers;
     let requests = 0;
     let captures = 0;
     const read = (member) => {
@@ -49,6 +156,7 @@ export function createArchiveMemberReader({ archivePath, expectedSha256 }) {
                 'Admitted archive bytes changed'
             );
             admittedSnapshot = snapshot;
+            indexedMembers = indexPackedUstarMembers(snapshot);
         } else {
             assert(
                 snapshot.equals(admittedSnapshot),
@@ -58,12 +166,15 @@ export function createArchiveMemberReader({ archivePath, expectedSha256 }) {
         requests++;
         if (!members.has(member)) {
             captures++;
-            // Extract precisely the bytes just admitted, rather than reopen a
-            // pathname that could have changed. Keep Node's default capture
-            // limit and propagate tar failures without caching partial output.
-            const bytes = execFileSync('tar', ['-xzOf', '-', member], {
-                input: snapshot,
-            });
+            const indexed = indexedMembers?.get(member);
+            // Preserve tar's matching, capture limit and errors on all inputs
+            // the plain USTAR index cannot serve.
+            const bytes =
+                indexed != null && indexed.length <= maxTarCaptureBytes
+                    ? indexed
+                    : execFileSync('tar', ['-xzOf', '-', member], {
+                          input: snapshot,
+                      });
             members.set(member, Buffer.from(bytes));
         }
         return Buffer.from(members.get(member));

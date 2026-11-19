@@ -252,7 +252,7 @@ const failConfirmationPresentation = (
         };
     else
         element.focus = function (...args) {
-            if (this.closest('dialog')) {
+            if (this.closest('dialog[data-form-review]')) {
                 attempts++;
                 throw Error('Synthetic private presentation detail');
             }
@@ -373,13 +373,35 @@ const fixture = async (
     };
 };
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+const editDialog = (f: Fixture) => {
+    const dialog = f.window.document.querySelector(
+        'dialog.linked-child-edit[open]'
+    );
+    return dialog instanceof f.window.HTMLDialogElement ? dialog : null;
+};
+const childSurface = (f: Fixture) => editDialog(f) ?? f.panel.node;
+const closeConfirmation = (f: Fixture) => {
+    const dialog = f.window.document.querySelector(
+        'dialog[role="alertdialog"]'
+    );
+    assert.ok(dialog instanceof f.window.HTMLDialogElement);
+    return dialog;
+};
+const visibleEditOpener = (f: Fixture) => {
+    const opener = button(f.panel.node, 'Edit linked record rec_existing');
+    // Happy DOM supplies no layout. Only this known rendered control is visible.
+    Object.defineProperty(opener, 'getClientRects', {
+        value: () => ({ length: 1 }),
+    });
+    return opener;
+};
 const openCreate = async (f: Fixture) => {
     button(f.panel.node, 'Create linked record').click();
     await waitFor(() => f.owner.getSnapshot().phase === 'ready');
     assert.equal(f.calls.loads.length, 1);
 };
 const saveChild = async (f: Fixture) => {
-    button(f.panel.node, 'Save child').click();
+    button(childSurface(f), 'Save child').click();
     await waitFor(
         () => !['ready', 'saving'].includes(f.owner.getSnapshot().phase)
     );
@@ -519,7 +541,7 @@ describe('browser starter standalone linked-child integration', () => {
         await waitFor(() => f.owner.getSnapshot().phase === 'ready');
         edit(
             f.window,
-            f.panel.node,
+            childSurface(f),
             'fld_title',
             'Synthetic readonly-parent child edit'
         );
@@ -567,20 +589,49 @@ describe('browser starter standalone linked-child integration', () => {
     });
 
     it('edits a displayed child without changing parent selections or submitting the parent', async (test) => {
-        const f = await fixture(test);
+        const parent = configuredParent();
+        parent.payload.linkedRecordFieldIdToDetailFields[fieldId] = [
+            {
+                fieldId: 'fld_title',
+                fieldName: 'Title',
+                titleOverride: null,
+                miniExtConfig: {},
+                isHidden: false,
+                fieldIsInEditingChildForm: false,
+                childFormField: null,
+            },
+        ];
+        const f = await fixture(test, {
+            parent,
+            save: async (input) => {
+                const result = savedChild(input);
+                assert.equal(result.type, 'saved');
+                assert.equal(result.context.type, 'modal');
+                // The lookup and Save describe the same table. A mismatched
+                // schema would legitimately retire the selected Edit action.
+                result.context.newTableIdsToLinkedTableStates.tbl_child!.airtableFields =
+                    selectedRecords(parent).tbl_child.airtableFields;
+                return result;
+            },
+        });
+        const parentForm = f.window.document.createElement('form');
+        let parentSubmits = 0;
+        parentForm.addEventListener('submit', () => parentSubmits++);
+        f.window.document.body.append(parentForm);
+        parentForm.append(f.panel.node);
         const before = structuredClone(f.native());
         button(f.panel.node, 'Load selected records').click();
         await waitFor(
             () => f.owner.getSnapshot().editableRecordIds.length === 2
         );
-        button(f.panel.node, 'Edit linked record rec_existing').click();
+        const opener = visibleEditOpener(f);
+        opener.click();
         await waitFor(() => f.owner.getSnapshot().phase === 'ready');
-        edit(
-            f.window,
-            f.panel.node,
-            'fld_title',
-            'Synthetic edited child title'
-        );
+        const modal = editDialog(f);
+        assert.ok(modal);
+        assert.equal(modal.getAttribute('aria-label'), 'Edit linked record');
+        assert.equal(parentForm.contains(modal), false);
+        edit(f.window, modal, 'fld_title', 'Synthetic edited child title');
         await saveChild(f);
 
         assert.equal(f.calls.saves.length, 1);
@@ -590,8 +641,384 @@ describe('browser starter standalone linked-child integration', () => {
             'Synthetic edited child title'
         );
         assert.deepEqual(f.native(), before);
+        assert.equal(parentSubmits, 0);
         assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+        assert.ok(editDialog(f) === null, 'Confirmed Save must close Edit');
+        assert.ok(
+            f.window.document.activeElement === opener,
+            `Confirmed Save must restore the original opener; active=${f.window.document.activeElement?.tagName} ${f.window.document.activeElement?.textContent?.slice(0, 60)}`
+        );
         assert.deepEqual(f.calls.errors, []);
+    });
+
+    it('keeps a dirty child on refusal and resumes the same selected draft after confirmed Close', async (test) => {
+        const f = await fixture(test);
+        const parent = structuredClone(f.native());
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        const opener = visibleEditOpener(f);
+        opener.click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const original = f.owner.getSnapshot().child!;
+        const draftTitle = 'Unsaved child draft to resume';
+        const modal = editDialog(f);
+        assert.ok(modal);
+        edit(f.window, modal, 'fld_title', draftTitle);
+        const oldSave = button(modal, 'Save child');
+        const close = button(modal, 'Close child');
+        close.focus();
+        close.click();
+        const dialog = closeConfirmation(f);
+        assert.equal(dialog.getAttribute('role'), 'alertdialog');
+        assert.equal(
+            dialog.getAttribute('aria-labelledby'),
+            'confirmation-title'
+        );
+        assert.equal(
+            dialog.querySelector('h2')?.textContent,
+            'Close linked record?'
+        );
+        const keep = button(dialog, 'Keep editing');
+        assert.equal(f.window.document.activeElement, keep);
+        keep.click();
+        await settle();
+        assert.ok(f.window.document.activeElement === close);
+        assert.equal(f.owner.getSnapshot().child, original);
+        assert.equal(
+            original.field('fld_title').getSnapshot().value,
+            draftTitle
+        );
+        assert.equal(f.calls.saves.length, 0);
+
+        close.click();
+        button(closeConfirmation(f), 'Confirm close').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'closed');
+        assert.equal(f.owner.getSnapshot().child, null);
+        const reopen = button(f.panel.node, 'Edit linked record rec_existing');
+        assert.ok(reopen === opener);
+        assert.ok(editDialog(f) === null);
+        assert.ok(f.window.document.activeElement === reopen);
+        reopen.click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const resumed = f.owner.getSnapshot().child!;
+        assert.notEqual(resumed, original);
+        assert.equal(
+            resumed.field('fld_title').getSnapshot().value,
+            draftTitle
+        );
+        assert.deepEqual(resumed.controller.getState().draft?.dirtyFieldIds, [
+            'fld_title',
+        ]);
+        fire(f.window, oldSave);
+        await settle();
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 1, 0]
+        );
+        assert.deepEqual(f.native(), parent);
+    });
+
+    it('closes a clean selected child immediately and loads fresh on its next Edit', async (test) => {
+        const f = await fixture(test, {
+            load: async (input) => {
+                const child = loadedChild(input);
+                child.payload.formFieldIdsWithUnsavedChanges = [];
+                return child;
+            },
+        });
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        visibleEditOpener(f).click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        assert.deepEqual(
+            f.owner.getSnapshot().child?.controller.getState().draft
+                ?.dirtyFieldIds,
+            []
+        );
+        button(childSurface(f), 'Close child').click();
+        assert.equal(f.owner.getSnapshot().phase, 'closed');
+        assert.ok(f.window.document.querySelector('dialog') === null);
+        const reopen = button(f.panel.node, 'Edit linked record rec_existing');
+        assert.ok(f.window.document.activeElement === reopen);
+        reopen.click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 2, 0]
+        );
+    });
+
+    it('cannot accept a captured dirty Close after the parent configuration retires', async (test) => {
+        const f = await fixture(test);
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        edit(f.window, childSurface(f), 'fld_title', 'Retired child draft');
+        button(childSurface(f), 'Close child').click();
+        const confirm = button(closeConfirmation(f), 'Confirm close');
+        f.expireConfiguration();
+        f.panel.refresh();
+        fire(f.window, confirm);
+        await settle();
+        assert.equal(f.owner.getSnapshot().phase, 'retired');
+        assert.ok(
+            f.window.document.querySelector('dialog') === null,
+            'Retirement must remove both the Edit dialog and its Close prompt'
+        );
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 1, 0]
+        );
+    });
+
+    it('leaves replacement focus alone when a held Edit Save settles after retirement', async (test) => {
+        const response = deferred<void>();
+        const f = await fixture(test, {
+            save: async (input) => {
+                await response.promise;
+                return savedChild(input);
+            },
+        });
+        const before = structuredClone(f.native());
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        const original = visibleEditOpener(f);
+        original.click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const modal = editDialog(f);
+        assert.ok(modal);
+        edit(f.window, modal, 'fld_title', 'Synthetic held Edit save');
+        const save = button(modal, 'Save child');
+        save.click();
+        const replacement = f.window.document.createElement('button');
+        replacement.textContent = original.textContent;
+        try {
+            await waitFor(() => f.calls.saves.length === 1);
+            f.expireConfiguration();
+            f.retireControl();
+            f.panel.refresh();
+            f.window.document.body.append(replacement);
+            replacement.focus();
+        } finally {
+            response.resolve();
+        }
+        await settle();
+        assert.ok(editDialog(f) === null);
+        assert.ok(f.window.document.activeElement === replacement);
+        assert.ok(f.window.document.activeElement !== original);
+        fire(f.window, save);
+        await settle();
+        assert.equal(f.calls.saves.length, 1);
+        assert.deepEqual(f.native(), before);
+    });
+
+    it('does not resume a retained draft after removing and reselecting its record', async (test) => {
+        const f = await fixture(test);
+        const initialSelection = structuredClone(f.native());
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const loaded = f.owner
+            .getSnapshot()
+            .child!.field('fld_title')
+            .getSnapshot().value;
+        edit(
+            f.window,
+            childSurface(f),
+            'fld_title',
+            'Draft for previous selection'
+        );
+        assert.equal(f.owner.closeEdit(f.owner.getSnapshot().revision), true);
+        assert.equal(f.fields.controller.write(fieldId, ['rec_sibling']), true);
+        assert.equal(
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing'),
+            false
+        );
+        assert.notEqual(initialSelection, undefined);
+        assert.equal(
+            f.fields.controller.write(fieldId, initialSelection!),
+            true
+        );
+        await f.fields.linkedRecords(fieldId).readSelected();
+        const { revision } = f.owner.getSnapshot();
+        assert.equal(await f.owner.openEdit('rec_existing', revision), true);
+        assert.equal(
+            f.owner.getSnapshot().child!.field('fld_title').getSnapshot().value,
+            loaded
+        );
+        assert.equal(f.calls.loads.length, 2);
+        assert.equal(f.calls.saves.length, 0);
+    });
+
+    it('preserves a retained draft when opening a different child fails or is cancelled', async (test) => {
+        const siblingLoad = deferred<void>();
+        let siblingAttempts = 0;
+        const f = await fixture(test, {
+            load: async (input) => {
+                assert.ok('childExtensionInfo' in input);
+                const access = input.childExtensionInfo.accessType;
+                if (
+                    access.type === 'edit' &&
+                    access.childExtensionRecordId === 'rec_sibling'
+                ) {
+                    if (++siblingAttempts === 1)
+                        throw Error('Synthetic sibling load failed.');
+                    await siblingLoad.promise;
+                }
+                return loadedChild(input);
+            },
+        });
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const title = 'Keep the retained draft after a failed load';
+        edit(f.window, childSurface(f), 'fld_title', title);
+        assert.equal(f.owner.closeEdit(f.owner.getSnapshot().revision), true);
+        assert.equal(
+            await f.owner.openEdit(
+                'rec_sibling',
+                f.owner.getSnapshot().revision
+            ),
+            false
+        );
+        assert.equal(f.owner.getSnapshot().phase, 'error');
+        const cancelled = f.owner.openEdit(
+            'rec_sibling',
+            f.owner.getSnapshot().revision
+        );
+        try {
+            assert.equal(f.owner.getSnapshot().phase, 'loading');
+            button(f.panel.node, 'Cancel child').click();
+        } finally {
+            siblingLoad.resolve();
+        }
+        assert.equal(await cancelled, false);
+        assert.equal(
+            await f.owner.openEdit(
+                'rec_existing',
+                f.owner.getSnapshot().revision
+            ),
+            true
+        );
+        assert.equal(
+            f.owner.getSnapshot().child!.field('fld_title').getSnapshot().value,
+            title
+        );
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 3, 0]
+        );
+    });
+
+    it('refuses a Close whose final parent observation starts a Save for that child', async (test) => {
+        const response = deferred<void>();
+        const f = await fixture(test, {
+            save: async (input) => {
+                await response.promise;
+                return savedChild(input);
+            },
+        });
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        edit(f.window, childSurface(f), 'fld_title', 'Explicit reentrant Save');
+        const { child, revision } = f.owner.getSnapshot();
+        assert.ok(child);
+        const getChild = child.controller.getState;
+        const getParent = f.fields.controller.getState;
+        let observations = 0;
+        let afterDraft = false;
+        let save: ReturnType<typeof f.owner.save> | undefined;
+        child.controller.getState = () => {
+            const result = getChild();
+            afterDraft = true;
+            return result;
+        };
+        f.fields.controller.getState = () => {
+            const result = getParent();
+            // The first parent read checks selection after reading the draft.
+            // The next one belongs to the final parent lease check.
+            if (afterDraft && ++observations === 2) {
+                save = f.owner.save(revision);
+                void save.catch(() => {});
+            }
+            return result;
+        };
+        try {
+            assert.equal(f.owner.closeEdit(revision), false);
+        } finally {
+            child.controller.getState = getChild;
+            f.fields.controller.getState = getParent;
+            response.resolve();
+        }
+        assert.ok(save);
+        assert.equal((await save).type, 'saved');
+        assert.equal(f.calls.saves.length, 1);
+        assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+    });
+
+    it('refuses an abort raised by a subscriber before publishing a resumed child', async (test) => {
+        const f = await fixture(test);
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const title = 'Draft survives an interrupted resume';
+        edit(f.window, childSurface(f), 'fld_title', title);
+        assert.equal(f.owner.closeEdit(f.owner.getSnapshot().revision), true);
+        const abort = new AbortController();
+        const stop = f.owner.subscribe(({ child, phase }) => {
+            if (child && phase === 'loading') abort.abort();
+        });
+        try {
+            assert.equal(
+                await f.owner.openEdit(
+                    'rec_existing',
+                    f.owner.getSnapshot().revision,
+                    { signal: abort.signal }
+                ),
+                false
+            );
+        } finally {
+            stop();
+        }
+        assert.equal(f.owner.getSnapshot().phase, 'closed');
+        assert.equal(f.owner.getSnapshot().child, null);
+        assert.equal(
+            await f.owner.openEdit(
+                'rec_existing',
+                f.owner.getSnapshot().revision
+            ),
+            true
+        );
+        assert.equal(
+            f.owner.getSnapshot().child!.field('fld_title').getSnapshot().value,
+            title
+        );
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 1, 0]
+        );
     });
 
     it('uses child manual pages and displays validation without a second automatic Save', async (test) => {
@@ -900,7 +1327,7 @@ describe('browser starter standalone linked-child integration', () => {
         );
         button(f.panel.node, 'Edit linked record rec_existing').click();
         await waitFor(() => f.owner.getSnapshot().phase === 'ready');
-        const save = button(f.panel.node, 'Save child');
+        const save = button(childSurface(f), 'Save child');
         save.click();
         await waitFor(
             () => f.owner.getSnapshot().completion === 'saved-not-reconciled'
@@ -1115,7 +1542,10 @@ describe('actual starter root versus nested linked-child admission', () => {
                             error: true,
                         }
                     );
-                    assert.equal(body.querySelector('dialog'), null);
+                    assert.equal(
+                        body.querySelector('dialog[data-form-review]'),
+                        null
+                    );
                     assert.equal(saves.length, 0);
                     assert.equal(
                         body.textContent?.includes('PRIVATE_FORMULA_ANSWER'),
@@ -1143,7 +1573,10 @@ describe('actual starter root versus nested linked-child admission', () => {
                     button(body, 'Child Next').click();
                     await waitFor(() => !button(body, 'Review child').disabled);
                     assert.equal(saves.length, 0);
-                    assert.equal(body.querySelector('dialog'), null);
+                    assert.equal(
+                        body.querySelector('dialog[data-form-review]'),
+                        null
+                    );
                 }
                 const readCount = reads.length;
                 if (scenario === 'show-modal' || scenario === 'initial-focus') {
@@ -1159,7 +1592,10 @@ describe('actual starter root versus nested linked-child admission', () => {
                     assert.equal(fault.attempts(), 1);
                     assert.equal(saves.length, 0);
                     assert.equal(reads.length, readCount);
-                    assert.equal(body.querySelector('dialog'), null);
+                    assert.equal(
+                        body.querySelector('dialog[data-form-review]'),
+                        null
+                    );
                     assert.equal(parentTitle.value, 'Parent draft stays');
                     assert.deepEqual(
                         JSON.parse(parentLinks.value),
@@ -1202,8 +1638,8 @@ describe('actual starter root versus nested linked-child admission', () => {
                 else button(dialog, 'Edit').click();
                 await waitFor(
                     () =>
-                        body.querySelector('dialog') === null &&
-                        screen.getAttribute('aria-busy') === 'false'
+                        body.querySelector('dialog[data-form-review]') ===
+                            null && screen.getAttribute('aria-busy') === 'false'
                 );
                 assert.equal(saves.length, 0);
                 const banner = window.document.getElementById('status')!;
@@ -1237,7 +1673,8 @@ describe('actual starter root versus nested linked-child admission', () => {
                     cancel.click();
                     await waitFor(
                         () =>
-                            body.querySelector('dialog') === null &&
+                            body.querySelector('dialog[data-form-review]') ===
+                                null &&
                             screen.getAttribute('aria-busy') === 'false'
                     );
                     fire(window, staleConfirm);

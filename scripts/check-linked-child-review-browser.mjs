@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { checkStarterConfirmationRecovery } from './browser-linked-child-confirmation-native.mjs';
+import { checkLinkedChildCreateBrowser } from './browser-linked-child-create.mjs';
 const root = resolve(import.meta.dirname, '..');
 const output = process.argv[2]
     ? resolve(process.argv[2])
@@ -309,6 +310,58 @@ try {
             fixtures,
             root,
         }
+    );
+    report.installedEdit = [];
+    report.installedCreate = await checkLinkedChildCreateBrowser({
+        archive,
+        browser,
+        fixtures,
+        install: (lane) =>
+            run(
+                'npm',
+                ['install', '--ignore-scripts', '--no-audit', '--no-fund'],
+                lane
+            ),
+        output,
+        root,
+        async checkInstalledEdit({ consumer, reactVersion }) {
+            const editOutput = join(
+                output,
+                `selected-edit-react-${reactVersion}`
+            );
+            mkdirSync(editOutput);
+            try {
+                const proof = await checkStarterConfirmationRecovery({
+                    browser,
+                    consumer,
+                    output: editOutput,
+                    fixtures,
+                    root,
+                    onlySelectedEditDialog: true,
+                    reactVersion,
+                });
+                report.installedEdit.push({
+                    reactVersion,
+                    passed: true,
+                    ...proof,
+                });
+            } catch (error) {
+                report.installedEdit.push({
+                    reactVersion,
+                    passed: false,
+                    error: String(error.stack ?? error),
+                });
+            }
+        },
+    });
+    assert.deepEqual(
+        report.installedEdit.map((lane) => lane.reactVersion),
+        ['18.3.1', '19.2.0']
+    );
+    assert.deepEqual(
+        report.installedEdit.filter((lane) => !lane.passed),
+        [],
+        'Installed selected Edit dialog checks failed'
     );
     report.passed = true;
 } catch (error) {

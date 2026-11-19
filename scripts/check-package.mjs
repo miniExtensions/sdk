@@ -1,6 +1,7 @@
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkReadonlyPortalListReactMatrix } from './readonly-portal-list-consumer-checks.mjs';
+import { checkPortalPagingControlsReactMatrix } from './portal-paging-controls-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
     checkCanonicalFormConsumer,
@@ -15,6 +16,7 @@ import { checkKanbanReactMatrix } from './kanban-consumer-checks.mjs';
 import { checkPortalGalleryReactMatrix } from './portal-gallery-consumer-checks.mjs';
 import { checkNativeFormPagesReactMatrix } from './native-form-pages-consumer-checks.mjs';
 import { checkReadonlyPortalGridReactMatrix } from './readonly-portal-grid-consumer-checks.mjs';
+import { checkPortalVisitorQueryReactMatrix } from './portal-visitor-sort-consumer-checks.mjs';
 import { checkCompleteLinkedFinderReactMatrix } from './complete-linked-finder-consumer-checks.mjs';
 import { checkControlledRatingReactMatrix } from './controlled-rating-consumer-checks.mjs';
 import { checkFormCaptchaReactMatrix } from './form-captcha-consumer-checks.mjs';
@@ -86,6 +88,8 @@ import {
 import {
     checkChildNavigationConsumer,
     childNavigationTypedConsumer,
+    checkPortalSidePanelNavigationConsumer,
+    portalSidePanelNavigationTypedConsumer,
 } from './child-navigation-consumer-checks.mjs';
 import {
     checkFormulaCompatibilityConsumer,
@@ -161,6 +165,7 @@ import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
 import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
+import { checkInstalledLoginExistingValuesPicker } from './login-existing-values-consumer-checks.mjs';
 import { checkImageAnnotationReactMatrix } from './image-annotation-consumer-checks.mjs';
 import { checkPortalMapReactMatrix } from './portal-map-consumer-checks.mjs';
 import {
@@ -393,6 +398,7 @@ import {
     checkFormPageConsumer,
     formPageTypedConsumer,
 } from './form-page-consumer-checks.mjs';
+import { checkFormRequiredOpenConsumer } from './form-required-open-consumer-checks.mjs';
 import {
     checkFormCompositionConsumer,
     formCompositionTypedConsumer,
@@ -455,7 +461,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { build } from 'esbuild';
+import { build, stop } from 'esbuild';
 import {
     assertBrowserInputs,
     assertInstalledArchive,
@@ -607,6 +613,10 @@ const summaryCardsStarterFiles = linkedFinderStarterFiles.map((path) =>
     path.replace('react-complete-linked-finder/', 'react-portal-summary-cards/')
 );
 
+const linkedChildCreateExampleFiles = ['README.md', 'main.ts'].map(
+    (path) => `examples/react-linked-child-create/${path}`
+);
+
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
         cwd,
@@ -724,6 +734,7 @@ try {
                 path === 'docs/computed-fields.md' ||
                 headerStarterFiles.includes(path) ||
                 linkedFinderStarterFiles.includes(path) ||
+                linkedChildCreateExampleFiles.includes(path) ||
                 summaryCardsStarterFiles.includes(path) ||
                 completionStarterFiles.includes(path) ||
                 printableStarterFiles.includes(path) ||
@@ -798,6 +809,7 @@ try {
         'docs/portal-map.md',
         'docs/complete-linked-finder.md',
         ...linkedFinderStarterFiles,
+        ...linkedChildCreateExampleFiles,
         'docs/count.md',
         'docs/formula.md',
         'docs/complete-record-comments.md',
@@ -903,9 +915,20 @@ try {
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
         ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/AttachmentDeviceInput.js`,
+            `dist/${format}/react/AttachmentDeviceInput.d.ts`,
+            `dist/${format}/react/attachment-device-input.css`,
             `dist/${format}/react/AttachmentUrlInput.js`,
             `dist/${format}/react/AttachmentUrlInput.d.ts`,
             `dist/${format}/react/attachment-url-input.css`,
+            `dist/${format}/react/AttachmentUploadProgress.js`,
+            `dist/${format}/react/AttachmentUploadProgress.d.ts`,
+            `dist/${format}/react/attachment-upload-progress.css`,
+        ]),
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/PortalVisitorViewButtons.js`,
+            `dist/${format}/react/PortalVisitorViewButtons.d.ts`,
+            `dist/${format}/react/portal-visitor-view-buttons.css`,
         ]),
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
@@ -929,7 +952,17 @@ try {
         ...['esm', 'cjs'].flatMap((format) => [
             `dist/${format}/react/PortalGridSingleLineTextCell.js`,
             `dist/${format}/react/PortalGridSingleLineTextCell.d.ts`,
+            `dist/${format}/react/PortalGridEmailCell.js`,
+            `dist/${format}/react/PortalGridEmailCell.d.ts`,
+            `dist/${format}/react/PortalGridPhoneNumberCell.js`,
+            `dist/${format}/react/PortalGridPhoneNumberCell.d.ts`,
             `dist/${format}/react/portal-grid-single-line-text-cell.css`,
+            `dist/${format}/react/PortalGridEmptyCell.js`,
+            `dist/${format}/react/PortalGridEmptyCell.d.ts`,
+            `dist/${format}/react/portal-grid-empty-cell.css`,
+            `dist/${format}/react/PortalGridRatingCell.js`,
+            `dist/${format}/react/PortalGridRatingCell.d.ts`,
+            `dist/${format}/react/PortalGridCellShell.js`,
         ]),
         ...summaryCardsStarterFiles,
         'dist/esm/react/complete-collaborators.css',
@@ -965,6 +998,12 @@ try {
         'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
+        'dist/esm/react/login-existing-values-picker.css',
+        'dist/cjs/react/login-existing-values-picker.css',
+        'dist/esm/react/LoginExistingValuesPicker.js',
+        'dist/esm/react/LoginExistingValuesPicker.d.ts',
+        'dist/cjs/react/LoginExistingValuesPicker.js',
+        'dist/cjs/react/LoginExistingValuesPicker.d.ts',
         'dist/esm/react/complete-image-annotation.css',
         'dist/cjs/react/complete-image-annotation.css',
         'dist/esm/react/complete-readonly-text.css',
@@ -2207,6 +2246,12 @@ new Parser([]).parse({maxDepth:'48'});
         '@types/react@19.2.2',
         '@types/react-dom@19.2.2',
     ]);
+    assert.equal(
+        await checkPortalSidePanelNavigationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     for (const extension of ['mts', 'cts']) {
         const filename = `text-input-consumer.${extension}`;
         writeFileSync(
@@ -2227,7 +2272,8 @@ new Parser([]).parse({maxDepth:'48'});
                 dateInputCompatibilityTypedConsumer +
                 recoverableImageTypedConsumer +
                 fileSelectionTypedConsumer +
-                borrowedFormRenderReactTypedConsumer
+                borrowedFormRenderReactTypedConsumer +
+                portalSidePanelNavigationTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -2275,7 +2321,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             calendlyBookingJsxConsumer +
             personBadgeJsxConsumer +
             recoverableImageJsxConsumer +
-            borrowedFormRenderReactTypedConsumer
+            borrowedFormRenderReactTypedConsumer +
+            portalSidePanelNavigationTypedConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2677,7 +2724,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
         }),
-        23
+        25
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
     for (const name of [
@@ -3230,12 +3277,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             )
         );
     }
+    // Retire the completed browser/example build service before the matrices.
+    await stop();
     const portalShellProof = checkPortalShellReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(portalShellProof.versions.length, 2);
     assert.equal(portalShellProof.cleanup, 'completed');
     const readonlyPortalListProof = checkReadonlyPortalListReactMatrix({
@@ -3244,12 +3294,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(readonlyPortalListProof.versions.length, 2);
     assert.equal(readonlyPortalListProof.cleanup, 'completed');
+    const portalPagingControlsProof = checkPortalPagingControlsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        happyDomModulePath: require.resolve('happy-dom'),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(portalPagingControlsProof.results.length, 4);
+    assert.equal(portalPagingControlsProof.cleanup, 'completed');
     const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(nativePortalKernelProof.versions.length, 2);
     assert.equal(nativePortalKernelProof.cleanup, 'completed');
 
@@ -3259,6 +3318,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(savedProgressProof.versions.length, 2);
     assert.equal(savedProgressProof.cleanup, 'completed');
     const customerChatProof = checkCustomerChatMatrix({
@@ -3266,6 +3326,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(customerChatProof.versions.length, 2);
     assert.equal(customerChatProof.cleanup, 'completed');
     const buttonProof = checkButtonReactMatrix({
@@ -3274,6 +3335,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(buttonProof.versions.length, 2);
     assert.equal(buttonProof.cleanup, 'completed');
     const checkboxProof = checkCheckboxReactMatrix({
@@ -3282,6 +3344,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(checkboxProof.versions.length, 2);
     assert.equal(checkboxProof.cleanup, 'completed');
     const linkedRecordsRendererProof = await checkLinkedRecordsRendererConsumer(
@@ -3408,6 +3471,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(controlledFormulaMatrix.profiles.length, 4);
     console.log(
         `Installed Formula presentation: ${formulaProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
@@ -3422,6 +3486,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(rollupMatrix.versions.length, 2);
     console.log(
         `Installed Rollup presentation: ${rollupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
@@ -3518,6 +3583,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(countProof.versions.length, 2);
     assert.equal(countProof.cleanup, 'completed');
     console.log(
@@ -3541,6 +3607,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(controlledRatingProof.profiles.length, 2);
     assert.equal(controlledRatingProof.cleanup, 'completed');
     const formCaptchaProof = await checkFormCaptchaReactMatrix({
@@ -3548,6 +3615,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(formCaptchaProof.profiles.length, 2);
     assert.equal(formCaptchaProof.cleanup, 'completed');
     const printableProof = await checkPrintableFormReactMatrix({
@@ -3555,6 +3623,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         packedMetadata: packed,
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(printableProof.profiles.length, 2);
     assert.equal(printableProof.cleanup, 'completed');
     const automaticPrefillProof = await checkAutomaticPrefillReactMatrix({
@@ -3562,6 +3631,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         packedMetadata: packed,
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(automaticPrefillProof.profiles.length, 2);
     assert.equal(automaticPrefillProof.cleanup, 'completed');
     console.log(
@@ -3688,7 +3758,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkFormCompositionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
-        26
+        32
     );
     const conditionalValidationChecks =
         await checkConditionalPageValidationConsumer({
@@ -3800,6 +3870,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
     const completeEditorMatrix = checkCompleteRichTextReactMatrix({
@@ -3807,6 +3878,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(completeEditorMatrix.versions.length, 2);
     assert.equal(completeEditorMatrix.cleanup, 'completed');
     const numericMatrix = checkCompleteLocalizedNumericReactMatrix({
@@ -3814,6 +3886,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(numericMatrix.versions.length, 2);
     assert.equal(numericMatrix.cleanup, 'completed');
     const readOnlyPhoneMatrix = checkCompleteReadOnlyPhoneReactMatrix({
@@ -3821,6 +3894,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(readOnlyPhoneMatrix.versions.length, 2);
     assert.equal(readOnlyPhoneMatrix.cleanup, 'completed');
     const readOnlyTextMatrix = checkCompleteReadOnlyTextReactMatrix({
@@ -3828,6 +3902,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(readOnlyTextMatrix.versions.length, 2);
     assert.equal(readOnlyTextMatrix.cleanup, 'completed');
     const clearableInputMatrix = checkCompleteClearableInputReactMatrix({
@@ -3835,6 +3910,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(clearableInputMatrix.versions.length, 2);
     assert.equal(clearableInputMatrix.cleanup, 'completed');
     const singleLineTextMatrix = checkSingleLineTextReactMatrix({
@@ -3842,6 +3918,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(singleLineTextMatrix.versions.length, 2);
     assert.equal(singleLineTextMatrix.cleanup, 'completed');
     const completeMultilineMatrix = checkCompleteMultilineReactMatrix({
@@ -3849,6 +3926,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(completeMultilineMatrix.versions.length, 2);
     assert.equal(completeMultilineMatrix.cleanup, 'completed');
     const fieldPresentationMatrix = checkFieldPresentationReactMatrix({
@@ -3857,6 +3935,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(fieldPresentationMatrix.versions.length, 2);
     assert.equal(fieldPresentationMatrix.cleanup, 'completed');
     const kanbanMatrix = checkKanbanReactMatrix({
@@ -3865,6 +3944,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(kanbanMatrix.versions.length, 2);
     assert.equal(kanbanMatrix.cleanup, 'completed');
     const csvExportMatrix = checkCSVExportReactMatrix({
@@ -3873,6 +3953,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(csvExportMatrix.versions.length, 2);
     assert.equal(csvExportMatrix.cleanup, 'completed');
     const formGroupMatrix = checkFormGroupReactMatrix({
@@ -3881,6 +3962,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(formGroupMatrix.versions.length, 2);
     assert.equal(formGroupMatrix.cleanup, 'completed');
     const linkedFinderMatrix = checkCompleteLinkedFinderReactMatrix({
@@ -3888,18 +3970,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(linkedFinderMatrix.profiles.length, 4);
     assert.equal(linkedFinderMatrix.cleanup, 'completed');
     const attachmentPreviewMatrix = checkAttachmentPreviewReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(attachmentPreviewMatrix.profiles.length, 4);
     assert.equal(attachmentPreviewMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
     const summaryCardsMatrix = checkPortalSummaryCardsReactMatrix({
@@ -3908,6 +3993,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(summaryCardsMatrix.versions.length, 2);
     assert.equal(summaryCardsMatrix.cleanup, 'completed');
     const trackingMatrix = checkFormTrackingReactMatrix({
@@ -3916,6 +4002,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(trackingMatrix.profiles.length, 4);
     assert.equal(trackingMatrix.cleanup, 'completed');
     const collaboratorMatrix = checkCompleteCollaboratorReactMatrix({
@@ -3924,6 +4011,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(collaboratorMatrix.profiles.length, 4);
     assert.equal(collaboratorMatrix.cleanup, 'completed');
     const controlledLookupMatrix = checkControlledLookupReactMatrix({
@@ -3932,6 +4020,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(controlledLookupMatrix.profiles.length, 4);
     assert.equal(controlledLookupMatrix.cleanup, 'completed');
     const computedMatrix = checkComputedReactMatrix({
@@ -3940,6 +4029,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(computedMatrix.profiles.length, 4);
     assert.equal(computedMatrix.cleanup, 'completed');
     const htmlDescriptionMatrix = checkHTMLDescriptionReactMatrix({
@@ -3948,6 +4038,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(htmlDescriptionMatrix.profiles.length, 8);
     assert.equal(htmlDescriptionMatrix.cleanup, 'completed');
     const phoneMatrix = checkCompletePhoneReactMatrix({
@@ -3955,6 +4046,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(phoneMatrix.versions.length, 2);
     assert.equal(phoneMatrix.cleanup, 'completed');
     const themeMatrix = checkThemeReactMatrix({
@@ -3962,6 +4054,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(themeMatrix.versions.length, 2);
     assert.equal(themeMatrix.cleanup, 'completed');
     const createdTimeMatrix = await checkCreatedTimeReactMatrix({
@@ -3969,6 +4062,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(createdTimeMatrix.versions.length, 2);
     assert.equal(createdTimeMatrix.cleanup, 'completed');
     const modifiedTimeMatrix = await checkCreatedTimeReactMatrix({
@@ -3977,6 +4071,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         field: 'lastModifiedTime',
     });
+    await stop();
     assert.equal(modifiedTimeMatrix.versions.length, 2);
     assert.equal(modifiedTimeMatrix.cleanup, 'completed');
     const dateMatrix = await checkCompleteDateReactMatrix({
@@ -3984,6 +4079,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(dateMatrix.versions.length, 2);
     assert.equal(dateMatrix.cleanup, 'completed');
     const calendarMatrix = checkCalendarReactMatrix({
@@ -3991,6 +4087,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(calendarMatrix.versions.length, 2);
     assert.equal(calendarMatrix.cleanup, 'completed');
     const durationMatrix = checkCompleteDurationReactMatrix({
@@ -3998,6 +4095,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(durationMatrix.versions.length, 2);
     assert.equal(durationMatrix.cleanup, 'completed');
     const searchGateMatrix = checkSearchGateReactMatrix({
@@ -4005,6 +4103,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(searchGateMatrix.versions.length, 2);
     assert.equal(searchGateMatrix.cleanup, 'completed');
     const recordCommentsMatrix = checkRecordCommentsReactMatrix({
@@ -4012,6 +4111,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(recordCommentsMatrix.versions.length, 2);
     assert.equal(recordCommentsMatrix.cleanup, 'completed');
     const calendlyWidgetMatrix = checkCompleteCalendlyReactMatrix({
@@ -4019,6 +4119,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(calendlyWidgetMatrix.versions.length, 2);
     assert.equal(calendlyWidgetMatrix.cleanup, 'completed');
     const signatureMatrix = checkSignatureReactMatrix({
@@ -4026,6 +4127,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(signatureMatrix.versions.length, 2);
     assert.equal(signatureMatrix.cleanup, 'completed');
     const addressMatrix = checkCompleteAddressReactMatrix({
@@ -4033,6 +4135,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(addressMatrix.versions.length, 2);
     assert.equal(addressMatrix.cleanup, 'completed');
     const barcodeMatrix = checkCompleteBarcodeReactMatrix({
@@ -4040,25 +4143,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    await stop();
     assert.equal(barcodeMatrix.versions.length, 2);
     assert.equal(barcodeMatrix.cleanup, 'completed');
     const verificationMatrix = checkCompleteVerificationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
+        checkInstalledConsumer: checkInstalledLoginExistingValuesPicker,
     });
+    await stop();
     assert.equal(verificationMatrix.versions.length, 2);
     assert.equal(verificationMatrix.cleanup, 'completed');
     const annotationMatrix = checkImageAnnotationReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(annotationMatrix.versions.length, 2);
     assert.equal(annotationMatrix.cleanup, 'completed');
     const portalMapMatrix = checkPortalMapReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.deepEqual(
         portalMapMatrix.versions.map(({ react }) => react),
         ['18.3.1', '19.2.0']
@@ -4089,6 +4197,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(headerMatrix.versions.length, 2);
     assert.equal(headerMatrix.cleanup, 'completed');
     const recordActionsMatrix = checkFormRecordActionsReactMatrix({
@@ -4104,6 +4213,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
         esbuildModulePath: require.resolve('esbuild'),
     });
+    await stop();
     assert.equal(completionMatrix.versions.length, 2);
     assert.equal(completionMatrix.cleanup, 'completed');
     assert.equal(
@@ -4474,6 +4584,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 1118
             );
             assert.equal(
+                await checkFormRequiredOpenConsumer({
+                    consumerDirectory: temporaryDirectory,
+                }),
+                2
+            );
+            assert.equal(
                 await checkFormDispositionConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
@@ -4509,6 +4625,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                         path.startsWith('docs/') ||
                         headerStarterFiles.includes(path) ||
                         linkedFinderStarterFiles.includes(path) ||
+                        linkedChildCreateExampleFiles.includes(path) ||
                         summaryCardsStarterFiles.includes(path) ||
                         completionStarterFiles.includes(path) ||
                         [
@@ -4868,7 +4985,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
-    assert.equal(nativePagesProof.tests, 124);
+    await stop();
+    assert.equal(nativePagesProof.tests, 128);
     assert.equal(nativePagesProof.hydrationProfiles, 4);
     assert.equal(nativePagesProof.hydrationChecks, 52);
     assert.equal(nativePagesProof.cleanup, 'completed');
@@ -4880,16 +4998,31 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(gridProof.profiles.length, 4);
     assert.equal(gridProof.tests, 84);
-    assert.equal(gridProof.textCellTests, 16);
+    assert.equal(gridProof.textCellTests, 24);
+    assert.equal(gridProof.ratingCellTests, 32);
+    assert.equal(gridProof.checkboxCellTests, 64);
+    assert.equal(gridProof.phoneCellTests, 8);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
+    );
+    const visitorQueryProof = checkPortalVisitorQueryReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    await stop();
+    assert.equal(visitorQueryProof.tests, 328);
+    console.log(
+        'Installed Portal visitor Sort, Search, view buttons and quick/advanced Filter qualification passed.',
+        visitorQueryProof
     );
     const galleryProof = await checkPortalGalleryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
+    await stop();
     assert.equal(galleryProof.tests, 48);
     console.log(
         'Installed Portal Gallery React18/19 ESM/CJS/types/SSR/styles and source lifecycle assertions passed.',
@@ -4917,15 +5050,19 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS and optional React renderer consumers, declarations, installed React StrictMode/remount and synthetic picker-cancel group, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${linkedFilterRecipe.checks} cascade, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserPortalSortChecks} actual installed Portal-sort recipe/starter cases, ${browserPortalFilterChecks} installed scalar-filter groups, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${browserChildQueryChecks} actual packed Portal-child query cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${sectionProjectionChecks} canonical/installed section-projection checks, ${attachmentReviewChecks} installed attachment-review checkpoints and ${browserAttachmentReviewChecks} copied-starter attachment-review cases, ${linkedReviewRecipeChecks} installed linked-review checkpoints, ${formPageReviewRecipeChecks} installed multipage Review row/dialog cases, ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
-    if (packageConsumerCleanupSafe) {
-        rmSync(temporaryDirectory, { recursive: true, force: true });
-        rmSync(browserKitDirectory, { recursive: true, force: true });
-        rmSync(uiDirectory, { recursive: true, force: true });
-    } else {
-        console.error(
-            'Packed-tail process cleanup is unconfirmed; temporary package consumers were retained:',
-            { temporaryDirectory, browserKitDirectory, uiDirectory }
-        );
+    try {
+        await stop();
+    } finally {
+        if (packageConsumerCleanupSafe) {
+            rmSync(temporaryDirectory, { recursive: true, force: true });
+            rmSync(browserKitDirectory, { recursive: true, force: true });
+            rmSync(uiDirectory, { recursive: true, force: true });
+        } else {
+            console.error(
+                'Packed-tail process cleanup is unconfirmed; temporary package consumers were retained:',
+                { temporaryDirectory, browserKitDirectory, uiDirectory }
+            );
+        }
     }
 }
 import {

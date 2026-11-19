@@ -31,6 +31,7 @@ import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCalendarBrowser } from './calendar-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
+import { checkPortalPagingControlsBrowser } from './portal-paging-controls-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
@@ -60,6 +61,8 @@ import {
     checkAttachmentPresentationBrowser,
     cleanupAttachmentPresentation,
 } from './attachment-presentation-browser-checks.mjs';
+import { checkAttachmentUploadProgressBrowser } from './attachment-upload-progress-browser-checks.mjs';
+import { checkAttachmentSliderNavigationBrowser } from './attachment-slider-navigation-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
@@ -75,9 +78,12 @@ import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
+import { checkLoginExistingValuesBrowser } from './login-existing-values-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
 import { checkReadonlyPortalListBrowser } from './readonly-portal-list-browser-checks.mjs';
+import { checkPortalVisitorSortBrowser } from './portal-visitor-sort-browser-checks.mjs';
+import { checkPortalSidePanelNavigationBrowser } from './child-navigation-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -1566,7 +1572,10 @@ try {
             'scripts/build-privacy-browser-proof.mjs',
             'scripts/attachment-review-recipe-checks.mjs',
             'scripts/attachment-presentation-browser-checks.mjs',
+            'scripts/attachment-upload-progress-browser-checks.mjs',
+            'scripts/attachment-slider-navigation-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
+            'scripts/child-navigation-browser-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
             'scripts/browser-complete-rich-text-checks.mjs',
@@ -1601,6 +1610,8 @@ try {
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/external-sync-source-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
+            'scripts/portal-paging-controls-browser-checks.mjs',
+            'scripts/portal-paging-controls-fixture.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -2372,6 +2383,18 @@ try {
             evidence: report.completeDuration,
             output,
         });
+        report.attachmentUploadProgress = {};
+        await checkAttachmentUploadProgressBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.attachmentUploadProgress,
+        });
+        report.attachmentSliderNavigation = {};
+        await checkAttachmentSliderNavigationBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.attachmentSliderNavigation,
+        });
         report.theme = {};
         await checkThemeBrowser({
             browser,
@@ -2480,6 +2503,17 @@ try {
             evidence: report.completeVerification,
             output,
         });
+        report.loginExistingValues = {};
+        await checkLoginExistingValuesBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.loginExistingValues,
+            output,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.loginExistingValues.passed, true);
+        assert.equal(report.loginExistingValues.contextClosed, true);
+        assert.equal(report.loginExistingValues.scratchRemoved, true);
         report.readonlyPortalList = {};
         await checkReadonlyPortalListBrowser({
             browser,
@@ -2492,6 +2526,75 @@ try {
         assert.equal(report.readonlyPortalList.contextClosed, true);
         assert.equal(report.readonlyPortalList.serverClosed, true);
         assert.equal(report.readonlyPortalList.scratchRemoved, true);
+        report.portalSidePanelNavigation = {};
+        await checkPortalSidePanelNavigationBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalSidePanelNavigation,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.portalSidePanelNavigation.passed, true);
+        assert.equal(report.portalSidePanelNavigation.contextClosed, true);
+        assert.equal(report.portalSidePanelNavigation.serverClosed, true);
+        report.portalVisitorSort = {};
+        await checkPortalVisitorSortBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalVisitorSort,
+            expectedReactVersion: nativeReactVersion,
+            includeSearch: true,
+            includeViewButtons: true,
+            includeFilter: true,
+        });
+        assert.equal(report.portalVisitorSort.passed, true);
+        assert.deepEqual(report.portalVisitorSort.viewButtons, {
+            intents: 3,
+            tabFocus: true,
+            formSubmits: 0,
+            cleanup: 'completed',
+        });
+        assert.deepEqual(report.portalVisitorSort.search, {
+            commands: 5,
+            staleScanRejected: true,
+            transientReadRecovered: true,
+            replacementNotificationRecovered: true,
+            sameTermGenerationReported: true,
+            cleanup: 'completed',
+        });
+        assert.deepEqual(report.portalVisitorSort.filter, {
+            allocation: 'filter-1',
+            editAndRevert: 'unchanged',
+            activeGroupDepth: 2,
+            staleDraft: 'refused',
+            paddingIsInert: true,
+            operandEnterSubmits: 0,
+            backdropAllocation: 'filter-2',
+            quick: {
+                commands: 4,
+                staleGestureRefused: true,
+                priorTreeRestored: true,
+                clearFocus: true,
+                formSubmits: 0,
+            },
+            heldQuick: {
+                freshAndRepeatedCommands: 3,
+                retiredRepeatRefused: true,
+                trustedKeys: true,
+            },
+            focusRestored: true,
+            cleanup: 'completed',
+        });
+        report.portalPagingControls = {};
+        await checkPortalPagingControlsBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalPagingControls,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.portalPagingControls.passed, true);
+        assert.equal(report.portalPagingControls.contextClosed, true);
+        assert.equal(report.portalPagingControls.serverClosed, true);
+        assert.equal(report.portalPagingControls.scratchRemoved, true);
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

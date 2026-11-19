@@ -22,10 +22,12 @@ use the real reducer/thunk/publication and valid fixtures with external transpor
 doubles. Record expected native divergences rather than weakening assertions or
 replacing native behavior with an emulator.
 
-Respect the current session's native dependency hold. Prepared native test source
-is not executed evidence. Native shared owner hunks, authorization, transport,
-query controls, cell writes and child operations retain their existing owners.
-Do not use an SDK harness to route around a held native operation.
+Use the native checkout's maintained test entry point for the consumer revision
+under review. A dependency hold applies to the operation and environment named
+by its owner. When that operation is held, continue independent SDK checks.
+Record the native run separately from SDK results. Coordinate changes to shared
+ownership, authorization, transport, query, cell writes and child operations with
+their existing owners.
 
 On macOS, run package guards with `TMPDIR` pointing to a real directory in the
 isolated task workspace. The default `/var` temp alias resolves through

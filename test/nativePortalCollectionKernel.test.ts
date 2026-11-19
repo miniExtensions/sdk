@@ -193,13 +193,34 @@ describe('native-compatible Portal transition corpus (SDK contract; native harne
         const b = k.begin(state, { requestId: 'cleanup', mode: 'next' })!;
         const c = k.cleanup(b.state, b.receipt, 'sort', [{ id: 'safe' }])!;
         assert.equal(c.state.frame, state.frame);
+        assert.equal(c.state.generation, state.generation);
+        assert.equal(c.cleanup!.receipt.generation, state.generation);
+        assert.equal(c.cleanup!.receipt.read, b.receipt);
         assert.equal(c.compatibility, undefined);
+        assert.equal(k.isCurrent(c.state, b.receipt), false);
+        assert.equal(k.succeed(c.state, b.receipt, response()), null);
         assert.ok(k.isCleanupCurrent(c.state, c.cleanup!.receipt));
         const done = k.completeCleanup(c.state, c.cleanup!.receipt)!;
+        assert.equal(done.state.frame, state.frame);
         assert.equal(done.read.mode, 'first');
         assert.equal(done.read.onlyIfNotFetched, false);
         const newer = k.begin(c.state, { requestId: 'newer', mode: 'reload' })!;
         assert.equal(k.completeCleanup(newer.state, c.cleanup!.receipt), null);
+    });
+    it('G: a changed correction advances generation and ABA retires its continuation', () => {
+        const { k, state } = loaded();
+        const b = k.begin(state, { requestId: 'cleanup', mode: 'next' })!;
+        const corrected = { ...state.scope, bindingKey: 'corrected' };
+        const c = k.cleanup(b.state, b.receipt, 'filter', [], corrected)!;
+        assert.equal(c.state.generation, state.generation + 1);
+        assert.equal(c.state.frame, null);
+        assert.equal(c.cleanup!.receipt.read, b.receipt);
+        const restored = k.observe(c.state, state.scope);
+        const correctedAgain = k.observe(restored, corrected);
+        assert.equal(
+            k.completeCleanup(correctedAgain, c.cleanup!.receipt),
+            null
+        );
     });
     it('H: presentation unmount leaves canonical completion live; explicit retirement settles nothing', () => {
         const { k, state } = loaded();

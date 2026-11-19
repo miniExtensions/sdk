@@ -1,0 +1,47 @@
+.mx-sdk-attachment-upload-progress__body {
+    padding: 1.25rem 1rem 1rem;
+}
+
+.mx-sdk-attachment-upload-progress__body h3 {
+    margin: 0;
+    color: #111827;
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.mx-sdk-attachment-upload-progress__body p {
+    margin: 0;
+    text-align: end;
+}
+
+.mx-sdk-attachment-upload-progress__body progress {
+    display: block;
+    inline-size: 100%;
+    block-size: 0.5rem;
+    accent-color: var(
+        --mx-sdk-attachment-upload-progress-fill,
+        var(--mx-sdk-accent, #2563eb)
+    );
+}
+
+.mx-sdk-attachment-upload-progress__actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.75rem 1.25rem;
+    background: #f9fafb;
+}
+
+.mx-sdk-attachment-upload-progress__actions button {
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    background: #b91c1c;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+}
+
+.mx-sdk-attachment-upload-progress__actions button:focus-visible {
+    outline: 2px solid #991b1b;
+    outline-offset: 2px;
+}

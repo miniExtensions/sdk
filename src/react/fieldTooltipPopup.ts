@@ -21,6 +21,7 @@ export default function FieldTooltipPopup(props: {
     onMouseEnter: () => void;
     onMouseLeave: () => void;
     admitDescription?: () => boolean;
+    keepOpenOnAnchorInteraction?: boolean;
     children?: ReactNode;
 }): ReactElement | null {
     const markReady = useCallback(
@@ -56,6 +57,19 @@ export default function FieldTooltipPopup(props: {
                 onMouseEnter: props.onMouseEnter,
                 onMouseLeave: props.onMouseLeave,
                 onEscapeKeyDown: () => props.onOpenChange(false),
+                onInteractOutside: props.keepOpenOnAnchorInteraction
+                    ? (event) => {
+                          const anchor = props.anchorRef.current;
+                          const Node = anchor?.ownerDocument.defaultView?.Node;
+                          if (
+                              Node &&
+                              event.target instanceof Node &&
+                              anchor?.contains(event.target)
+                          ) {
+                              event.preventDefault();
+                          }
+                      }
+                    : undefined,
             },
             h('div', { ref: markReady }, props.children)
         )

@@ -1,15 +1,20 @@
 # Canonical Form frames
 
 `@miniextensions/sdk/forms` exports an additive immutable frame and transition
-kernel for accepted public direct-root Forms with Compute disabled. The host
-retains action admission, schema and validation algorithms, the existing
-generation allocator, transport, storage and atomic publication. Existing
-`FormDraftStore` and controller consumers keep their contracts.
+kernel for accepted public Forms. Choose the owner at an accepted installation
+and preserve it until a genuine reinstall. Current dirty values or transient
+loading state do not switch the cohort.
 
-The SDK-first implementation does not install a native adapter. Config preview,
-child Forms, Portal and Compute remain separate owners. Choose the owner at an
-accepted installation and preserve it until a genuine reinstall; current dirty
-values or transient loading state cannot switch an instance between owners.
+- `public-direct-root-non-compute` covers the existing direct-root frame and
+  its allocated Save settlement.
+- `public-child-or-portal` covers frame state for admitted modal, side-panel and
+  Portal inline Forms. The host keeps parent membership, revalidation, and
+  Save and Compute settlement in its existing lifecycle.
+
+Config preview remains outside the frame kernel. The host retains action
+admission, schema and validation algorithms, the existing generation allocator,
+transport, storage and atomic publication. Existing `FormDraftStore` and
+controller consumers keep their contracts.
 
 ## Host boundary
 
@@ -45,8 +50,10 @@ the kernel does not turn them into accepted state.
   accepted loaded-baseline event changes that baseline for the same installation.
 - Accepted context replacement retires the edit instance without installing a
   new loaded record. It preserves canonical values, dirty order, errors, the
-  loaded baseline and URL-retirement history; genuine installation resets that
-  history.
+  loaded baseline and URL-retirement history. A direct-root installation resets
+  that history. A retained child follows the host's verified parent identity
+  through pagination. A context replacement rotates its edit instance even if
+  the visible values did not change.
 - Accepted edits retire the readonly intent receipt and relevant URL-origin
   proof before equality. Equivalent values retain their exact presence, bytes,
   errors, dirty order and field generations and do not validate again.
@@ -56,7 +63,7 @@ the kernel does not turn them into accepted state.
 - Instance, field and policy generations remain distinct. Field-history
   exhaustion removes provenance while retaining the separate render lease;
   policy exhaustion removes both.
-- Ordinary Save settlement replaces values with the qualified returned record,
+- Ordinary direct-root Save settlement replaces values with the qualified returned record,
   retains the explicit deduplicated dirty-keep list and initializes fresh edit
   provenance. It does not refresh the loaded-policy baseline. Only the matching
   allocated operation may retain the prior render lease.
@@ -70,6 +77,35 @@ Validation and generation ports run synchronously. Their results are host policy
 inputs, not SDK network requests or a separate mutable state owner. Public writes
 use `CanonicalFormValue`; absence in a snapshot does not create a new undefined
 UI-write operation.
+
+## Settling an allocated Compute
+
+Use `transitionCanonicalFormCompute` from `@miniextensions/sdk/forms` for an
+accepted public direct-root Form with Compute enabled. The host projects its
+current immutable frame and captures the actual allocation, request ID,
+installation, record, edit generations, eligible submitted values and original
+dirty values. The host continues to own request admission, transport and atomic
+publication. Recheck the same native screen and request immediately before
+publishing the returned frame.
+
+- A returned result can adopt a create record ID and reconcile value data through
+  `reconcileFormComputeResult`. Newer and uncertain edit generations remain
+  dirty, even when an edit returns to its original value. Hidden or omitted
+  edits and explicit clears retain their native meaning. The loaded-policy
+  baseline stays the same.
+- A terminal failure only applies to the current allocation. A validation
+  result whose captured dirty values changed returns
+  `computeValidationSuperseded` so the host can finish the request silently.
+  `computeFailed` carries the actual failure for the host's existing
+  presentation policy.
+- A manual readonly receipt requires the matching pending request, exact echoes,
+  an intact render owner and an affirmative host context check. Supply the
+  native exact readonly comparator separately from the acknowledgment
+  comparator. Origin retention also requires the active binding and exact
+  retained values. A stale result leaves successor receipts untouched.
+
+The original non-Compute transition, child Forms, Portal Forms and preview
+Forms keep their existing paths. This API has no scheduling or transport.
 
 ## Evidence boundary
 

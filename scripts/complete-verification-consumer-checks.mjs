@@ -299,6 +299,7 @@ export function checkCompleteVerificationReactMatrix({
     archivePath,
     typescriptBin,
     happyDomModulePath,
+    checkInstalledConsumer,
 }) {
     const directory = mkdtempSync(join(tmpdir(), 'sdk-complete-verification-'));
     const versions = [];
@@ -381,6 +382,12 @@ export function checkCompleteVerificationReactMatrix({
             assert.equal(result.react, version.react);
             assert.equal(result.groups, 2);
             assert.equal(result.networkRequests, 0);
+            checkInstalledConsumer?.({
+                directory,
+                react: version.react,
+                typescriptBin,
+                happyDomModulePath,
+            });
             versions.push(result);
             console.log(
                 `Installed complete verification React${result.react}: ESM/CJS/types/CSS/SSR/hydration and private-result continuation retry passed; no network.`

@@ -59,6 +59,14 @@ export {
     type CanonicalFormTransitionResult,
 } from './canonicalFrame.js';
 export {
+    transitionCanonicalFormCompute,
+    type CanonicalFormComputeFrame,
+    type CanonicalFormComputeRequest,
+    type CanonicalFormComputeOutcome,
+    type CanonicalFormComputePorts,
+    type CanonicalFormComputeSettlement,
+} from './computeSettlement.js';
+export {
     createFormSaveInput,
     describeLoadedFormFields,
     formValidationMessages,
@@ -111,8 +119,11 @@ export {
 } from './projection.js';
 export {
     createLinkedFormRecordProjection,
+    createNonLinkedFormRecordProjection,
     type CreateLinkedFormRecordProjectionInput,
+    type CreateNonLinkedFormRecordProjectionInput,
     type LinkedFormRecordProjection,
+    type NonLinkedFormRecordProjection,
     type LinkedFormProjectionDiagnostic,
     type FormProjectionDriverPair,
     type FormProjectionLinkedFilters,
@@ -255,6 +266,13 @@ export {
     type NativeFormProgressStorage,
 } from './nativeProgressStorage.js';
 
+export {
+    createFormBackgroundComputeCoordinator,
+    createFormBackgroundComputeFieldBinding,
+    type FormBackgroundComputeCoordinator,
+    type FormBackgroundComputeClock,
+    type FormBackgroundComputeFieldBinding,
+} from './backgroundComputeCoordinator.js';
 export {
     createFormSaveCoordinator,
     type FormSaveCoordinator,

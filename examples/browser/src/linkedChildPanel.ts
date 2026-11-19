@@ -46,12 +46,21 @@ export function createLinkedChildPanel(options: Options) {
     node.dataset.linkedChildFieldId = options.fieldId;
     node.setAttribute('aria-label', 'Linked record actions');
     const actions = element('div', undefined, 'actions');
+    const closeActions = element('div');
+    closeActions.hidden = true;
     const notice = element('p');
     notice.setAttribute('role', 'status');
     const pane = element('section');
     pane.dataset.linkedChildPane = '';
     pane.setAttribute('aria-label', 'Linked child Form');
-    node.append(actions, notice, pane);
+    const editDialog = element(
+        'dialog',
+        undefined,
+        'confirmation linked-child-edit'
+    );
+    editDialog.setAttribute('aria-label', 'Edit linked record');
+    editDialog.append(element('h2', 'Edit linked record'));
+    node.append(actions, closeActions, notice, pane);
     // There is deliberately no nested form. Enter in a child input must not
     // submit the enclosing parent; textarea newlines keep their native meaning.
     pane.addEventListener('keydown', (event) => {
@@ -65,12 +74,124 @@ export function createLinkedChildPanel(options: Options) {
     let stopPages = () => {};
     let currentState: FormLinkedChildSnapshot = owner.getSnapshot();
     let refreshing = false;
+    let closePrompt: { revision: number; abort: AbortController } | null = null;
+    let closeAction: {
+        state: FormLinkedChildSnapshot;
+        node: HTMLButtonElement;
+    } | null = null;
+    let editOpening: {
+        recordId: string;
+        opener: HTMLButtonElement;
+        child: FormFieldBindings | null;
+        pages: FormPageOwner | null;
+        presentationFailed: boolean;
+        returnAfterSave: boolean;
+    } | null = null;
     const controls = new Map<string, FieldControl>();
     const wrappers = new Map<string, HTMLDivElement>();
     let childActions = element('div');
     let childProblems = element('p');
     let pageTitle = element('h4');
     const current = () => !destroyed && options.isCurrent();
+    const ownsDialogFocus = () => {
+        const { activeElement, body } = editDialog.ownerDocument;
+        return (
+            !activeElement?.isConnected ||
+            activeElement === body ||
+            editDialog.contains(activeElement)
+        );
+    };
+    const detachEditDialog = () => {
+        if (!editDialog.isConnected) return;
+        if (editDialog.open) editDialog.close();
+        node.append(closeActions, notice, pane);
+        editDialog.remove();
+    };
+    const focusEditOpener = (opener: HTMLButtonElement) => {
+        if (
+            current() &&
+            actions.contains(opener) &&
+            opener.isConnected &&
+            !opener.disabled &&
+            !opener.closest('[hidden],[inert]') &&
+            opener.getClientRects().length > 0 &&
+            ownsDialogFocus()
+        )
+            opener.focus({ preventScroll: true });
+    };
+    const presentEdit = (state: FormLinkedChildSnapshot) => {
+        const opening = editOpening;
+        const sameChild =
+            opening &&
+            state.intent?.type === 'edit' &&
+            state.intent.recordId === opening.recordId &&
+            state.child != null &&
+            state.pages != null &&
+            (opening.child == null ||
+                (opening.child === state.child &&
+                    opening.pages === state.pages));
+        if (
+            sameChild &&
+            !opening.presentationFailed &&
+            ['ready', 'error', 'saving'].includes(state.phase)
+        ) {
+            opening.child = state.child;
+            opening.pages = state.pages;
+            if (editDialog.open) {
+                // The Review trigger can be replaced by a draft render while
+                // the confirmation has focus. Recover only after it has closed.
+                const document = editDialog.ownerDocument;
+                if (
+                    options.canStart() &&
+                    !closePrompt &&
+                    document.activeElement === document.body
+                )
+                    closeAction?.node.focus({ preventScroll: true });
+                return;
+            }
+            if (!current() || !node.isConnected) return;
+            if (editDialog.ownerDocument.activeElement === opening.opener)
+                opening.opener.blur();
+            editDialog.append(closeActions, notice, pane);
+            editDialog.ownerDocument.body.append(editDialog);
+            try {
+                editDialog.showModal();
+                closeAction?.node.focus({ preventScroll: true });
+            } catch {
+                opening.presentationFailed = true;
+                detachEditDialog();
+                options.status('Could not display the Edit dialog.', true);
+            }
+            return;
+        }
+        if (
+            sameChild &&
+            state.phase === 'saved' &&
+            state.completion === 'reconciled' &&
+            state.editableRecordIds.includes(opening.recordId) &&
+            editDialog.open &&
+            ownsDialogFocus()
+        )
+            opening.returnAfterSave = true;
+        detachEditDialog();
+        if (
+            opening?.returnAfterSave &&
+            sameChild &&
+            state.phase === 'saved' &&
+            actions.contains(opening.opener) &&
+            options.canStart()
+        ) {
+            opening.returnAfterSave = false;
+            focusEditOpener(opening.opener);
+        }
+        if (
+            opening &&
+            !sameChild &&
+            state.phase !== 'loading' &&
+            !(state.phase === 'closed' && actions.contains(opening.opener))
+        )
+            editOpening = null;
+    };
     const unmount = () => {
         stopPages();
         stopChild();
@@ -86,6 +207,7 @@ export function createLinkedChildPanel(options: Options) {
         current() &&
         node.isConnected &&
         options.canStart() &&
+        closePrompt === null &&
         owner.getSnapshot().revision === revision;
     const request = (
         description: string,
@@ -343,11 +465,130 @@ export function createLinkedChildPanel(options: Options) {
         stopChild = child.controller.subscribe(() => updateChild());
         stopPages = state.pages.subscribe(() => updateChild());
     };
+    const closeEdit = async (state: FormLinkedChildSnapshot) => {
+        const recordId = state.intent?.type === 'edit' && state.intent.recordId;
+        const stillCurrent = () => {
+            if (!current() || !node.isConnected) return false;
+            const live = owner.getSnapshot();
+            return (
+                live.revision === state.revision &&
+                live.child === state.child &&
+                (live.phase === 'ready' || live.phase === 'error')
+            );
+        };
+        if (!recordId || !state.child || closePrompt || !stillCurrent()) return;
+        const dirty =
+            state.child.controller.getState().draft?.dirtyFieldIds.length;
+        if (dirty) {
+            const prompt = {
+                revision: state.revision,
+                abort: new AbortController(),
+            };
+            closePrompt = prompt;
+            try {
+                if (
+                    !(await requestConfirmation({
+                        title: 'Close linked record?',
+                        message:
+                            'You can keep editing or close now and resume your unsaved draft by reopening this linked record.',
+                        confirmLabel: 'Confirm close',
+                        cancelLabel: 'Keep editing',
+                        signal: prompt.abort.signal,
+                    }))
+                )
+                    return;
+            } catch {
+                if (stillCurrent())
+                    options.status(
+                        'Could not display the Close confirmation.',
+                        true
+                    );
+                return;
+            } finally {
+                if (closePrompt === prompt) closePrompt = null;
+            }
+        }
+        const opening = editOpening;
+        const restoreFocus =
+            opening?.recordId === recordId &&
+            opening.child === state.child &&
+            ownsDialogFocus();
+        if (!stillCurrent() || !owner.closeEdit(state.revision)) return;
+        refresh();
+        options.changed();
+        if (!current() || owner.getSnapshot().phase !== 'closed') return;
+        if (restoreFocus) focusEditOpener(opening.opener);
+        else if (opening?.recordId === recordId && opening.presentationFailed)
+            focusEditOpener(opening.opener);
+        else if (!opening) {
+            const opener = [...actions.querySelectorAll('button')].find(
+                (action) => action.dataset.childEditRecord === recordId
+            );
+            if (opener) focusEditOpener(opener);
+        }
+    };
+    editDialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        const state = owner.getSnapshot();
+        if (editOpening?.child === state.child && options.canStart())
+            void closeEdit(state);
+    });
+    editDialog.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab' || event.isComposing || event.defaultPrevented)
+            return;
+        const stops = [
+            ...editDialog.querySelectorAll<HTMLElement>(
+                'button,a[href],input,select,textarea,[contenteditable],[tabindex]'
+            ),
+        ].filter(
+            (control) =>
+                control.tabIndex >= 0 &&
+                !control.matches(':disabled') &&
+                !control.closest('[hidden],[inert]') &&
+                control.getClientRects().length > 0
+        );
+        const first = stops[0];
+        const last = stops.at(-1);
+        if (
+            !first ||
+            !last ||
+            editDialog.ownerDocument.activeElement !==
+                (event.shiftKey ? first : last)
+        )
+            return;
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+    });
+    const updateCloseAction = (state: FormLinkedChildSnapshot | null) => {
+        if (state?.child) {
+            // An input may commit on blur before the Close click arrives.
+            // Keep the mounted button, but bind it to the latest revision.
+            if (closeAction?.state.child === state.child) {
+                closeAction.state = state;
+                return;
+            }
+            const control = button('Close child', () => {
+                if (closeAction?.node === control)
+                    void closeEdit(closeAction.state);
+            });
+            closeAction = { state, node: control };
+            closeActions.replaceChildren(control);
+            closeActions.hidden = false;
+        } else if (closeAction) {
+            closeAction = null;
+            closeActions.replaceChildren();
+            closeActions.hidden = true;
+        }
+    };
     const refresh = () => {
         if (destroyed || refreshing) return;
         refreshing = true;
         try {
             if (!current()) {
+                updateCloseAction(null);
+                detachEditDialog();
+                closePrompt?.abort.abort();
+                editOpening = null;
                 node.hidden = false;
                 node.inert = true;
                 actions.replaceChildren();
@@ -357,6 +598,15 @@ export function createLinkedChildPanel(options: Options) {
                 return;
             }
             const state = owner.getSnapshot();
+            if (closePrompt) {
+                const ownsClose =
+                    state.child === mounted &&
+                    (state.phase === 'ready' || state.phase === 'error');
+                if (ownsClose && closePrompt.revision === state.revision)
+                    return;
+                if (!ownsClose) updateCloseAction(null);
+                closePrompt.abort.abort();
+            }
             currentState = state;
             const field = options.fields.field(options.fieldId).getSnapshot();
             const visible =
@@ -370,6 +620,10 @@ export function createLinkedChildPanel(options: Options) {
                 state.completion === 'saved-not-reconciled';
             node.hidden = !visible && !active;
             node.inert = false;
+            const focusedOpener =
+                editOpening?.opener === node.ownerDocument.activeElement
+                    ? editOpening.opener
+                    : null;
             actions.replaceChildren();
             const revision = state.revision;
             if (visible && state.canCreate)
@@ -400,20 +654,46 @@ export function createLinkedChildPanel(options: Options) {
                         )
                     )
                 );
-            for (const id of visible ? state.editableRecordIds : [])
-                actions.append(
-                    button(`Edit linked record ${id}`, () =>
-                        request(
-                            'Opening the configured linked record…',
-                            revision,
-                            (signal) => owner.openEdit(id, revision, { signal })
-                        )
-                    )
-                );
+            for (const id of visible ? state.editableRecordIds : []) {
+                const edit =
+                    editOpening?.recordId === id
+                        ? editOpening.opener
+                        : element(
+                              'button',
+                              `Edit linked record ${id}`,
+                              'secondary'
+                          );
+                edit.type = 'button';
+                edit.dataset.childEditRecord = id;
+                edit.onclick = () => {
+                    if (!actions.contains(edit) || edit.disabled) return;
+                    request(
+                        'Opening the configured linked record.',
+                        revision,
+                        (signal) => {
+                            editOpening = {
+                                recordId: id,
+                                opener: edit,
+                                child: null,
+                                pages: null,
+                                presentationFailed: false,
+                                returnAfterSave: false,
+                            };
+                            return owner.openEdit(id, revision, { signal });
+                        }
+                    );
+                };
+                actions.append(edit);
+            }
+            const editReady =
+                state.intent?.type === 'edit' &&
+                (state.phase === 'ready' || state.phase === 'error');
+            updateCloseAction(editReady ? state : null);
             if (
-                state.child != null ||
-                state.phase === 'loading' ||
-                state.phase === 'unknown'
+                !editReady &&
+                (state.child != null ||
+                    state.phase === 'loading' ||
+                    state.phase === 'unknown')
             )
                 actions.append(
                     button('Cancel child', () => {
@@ -435,6 +715,9 @@ export function createLinkedChildPanel(options: Options) {
             notice.textContent = childNotice(state);
             mount(state);
             updateChild();
+            presentEdit(state);
+            if (focusedOpener && !editDialog.open)
+                focusEditOpener(focusedOpener);
         } finally {
             refreshing = false;
         }
@@ -470,6 +753,10 @@ export function createLinkedChildPanel(options: Options) {
             if (destroyed) return;
             destroyed = true;
             stop();
+            updateCloseAction(null);
+            detachEditDialog();
+            closePrompt?.abort.abort();
+            editOpening = null;
             unmount();
         },
     };

@@ -5516,14 +5516,29 @@ an SDK-owned Form attachment controller. It requires four genuine host ports:
 constructs no Form/client, native draft or recovery journal and grants no server
 authorization. Default Form attachment/recovery APIs keep their existing behavior.
 
-The host supplies actual private owner identity and policy history. An observed
-owner/visible/editable replacement permanently retires new allocation for that
-batch, including ABA; `canAllocate(file, originalIndex, completedPrefix)` must
-also check unobserved host generations and current capacity. Native File and
+The host supplies actual private owner identity and policy history. By default,
+observed owner replacement, hiding or loss of editability permanently retires
+new allocation for that batch, including ABA.
+`canAllocate(file, originalIndex, completedPrefix)` must also check unobserved
+host generations and current capacity. Native File and
 attachment objects are borrowed unchanged. `valueReadable` is a separate actual
 host privacy gate: masked/hidden native getters are not read and old-owner File,
 progress or completion activity is not exposed by snapshots. A field revision alone does not
 retire allocated settlement or discard concurrent native values.
+
+For a retained batch whose first allocation has started, the host can explicitly
+return `presentation: 'detached'` from `readField()`. Use this marker only for a
+presentation detach under the same live Form and field owner with current edit
+authority, even when the field is no longer visible. The detached snapshot is
+idle and empty, and the controller still holds its internal singleflight. A
+detached field cannot start a batch or allocate the first file. Every remaining
+file requires fresh `canAllocate` admission from the original host receipt.
+An observed owner or edit-policy change, a missing field, or an unmarked hidden
+field permanently stops further allocation. A synchronous host notification
+during the checks for a new allocation invalidates that admission. A snapshot
+requested reentrantly during a host read is idle and empty. Retain the controller
+at the host lifetime while its presentation detaches, and use `dispose()` for
+actual retirement. All allocated work still settles once on the original receipt.
 
 `start(files)` owns a serial batch immediately, including synchronous port and
 subscriber callbacks. A competing/reentrant start is `not-started`. There is no
@@ -6584,3 +6599,75 @@ admission remains a separate policy. Word uses `docx-preview@0.3.0` and
 only to detached targets; a fulfilled vendor render does not promise that
 every image/font decoded successfully. PDF is the supplied URL followed by
 `#toolbar=0`, with the nonblank filename or localized Attachments title.
+
+## Login existing values picker
+
+`LoginExistingValuesPicker` supplies an existing-values chooser for one
+explicitly configured Login field. Pass the effective session, extension, field,
+and view mode as the owner. The picker exposes a button only when
+`allowSearchFromExistingValuesInLogin` is true and
+`maskPasswordOnLoginScreen` is false or unset. Set `disabled` when lookup is
+temporarily unavailable. Import
+`@miniextensions/sdk/react/login-existing-values-picker.css` for stock styling.
+
+```tsx
+import { createElement } from 'react';
+import {
+    LoginExistingValuesPicker,
+    type LoginExistingValuesPickerProps,
+} from '@miniextensions/sdk/react';
+
+export function renderPicker(
+    owner: LoginExistingValuesPickerProps['owner'],
+    lookup: LoginExistingValuesPickerProps['loadOptions'],
+    changeDraftValue: (value: string) => void,
+    openSettings: () => void
+) {
+    return createElement(LoginExistingValuesPicker, {
+        owner,
+        allowSearchFromExistingValuesInLogin: true,
+        loadOptions: lookup,
+        onSelect: changeDraftValue,
+        titleAction: createElement(
+            'button',
+            { type: 'button', onClick: openSettings },
+            'Settings'
+        ),
+    });
+}
+```
+
+The loader receives raw `searchTerm`, `offset`, `signal`, and the owner.
+It returns raw `labels` in page order and the next `offset`, or `null` for the
+last page. Typing waits 500 ms before a replacement read. Closing, changing
+owner, disabling lookup, or unmounting aborts the retired work. The chooser
+preserves duplicate labels and supplies the original string to `onSelect`,
+including whitespace or an empty string. Selection closes the chooser and
+returns focus to its button. The host owns the draft value and any subsequent
+Login submission. Override display text with `labels`.
+An optional `titleAction` renders beside the localized heading, which remains
+the dialog's accessible name. Use `type="button"` for a host button inside a
+Login form.
+
+### Navigate a linked record in a Portal side panel
+
+`PortalSidePanelNavigation` from `@miniextensions/sdk/react` renders the host's
+localized Previous and Next buttons. Set `frame` to `null` for a direct URL.
+With no neighbors it renders nothing. With only one neighbor it disables the
+other direction. The buttons have `type="button"` and work inside a Form.
+
+Provide the accepted record and session in `frame`, along with the exact
+neighbor IDs. Give each accepted frame a fresh `ownerToken` even when
+restoring the same record, session and neighbors. The request contains that
+token, the source record, direction, offered neighbor and an abort signal.
+
+Supply `isCurrent` from the host's live frame lease and use the existing
+dirty-draft flow for `confirmDismissal`. An accepted dismissal only proceeds
+if the same frame still owns the request. Do not defer the host's frame
+replacement until React renders. Update the live lease when that frame retires.
+
+In `openAdjacent`, pass the request to `findAdjacentChildSession(contexts, request)`
+for an exact current sibling lookup. The host guards the actual open against
+current authority and the request signal, including any await in the open
+path. The signal aborts on frame replacement, unmount or completion. The
+navigation controls never submit the parent Form or write record data.

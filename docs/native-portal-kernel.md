@@ -42,7 +42,9 @@ The runner checks currentness after begin observers, correction observers,
 notice scheduling and continuation observers. Deferred notice delivery must
 call the supplied `isCurrent` predicate again before showing feedback. Cleanup
 scope is calculated from the host's permitted correction and committed together
-with it. A changed cleanup binding retires the old accepted frame. Native
+with it. A changed cleanup binding advances generation and retires the old
+accepted frame. An unchanged binding preserves generation and the frame.
+Both corrections settle the read and issue an exact cleanup receipt. Native
 response metadata echoes can update the binding in the same success commit;
 they cannot change session, field, token owner, linked table or cache owner.
 
@@ -81,9 +83,8 @@ It does not establish installed native integration, deployment or hosted
 acceptance.
 
 The actual-native differential corpus is maintained separately in
-[the native differential notes](native-portal-differential.md). Its execution and
-the native adapter/publication/IDs-only writer cutover remain subject to the
-existing centralized native dependency hold. Do not resolve native dependencies,
-substitute a detached model, introduce another gate or treat SDK qualification
-as native execution. The existing whole implementation task stays open until
-the real consumer and its normal exact-head checks complete.
+[the native differential notes](native-portal-differential.md). The native owner
+qualifies the adapter, publication and IDs-only writer cutover on the actual
+consumer using its normal dependency and test procedures. Apply any active
+dependency hold to its specified operation. Record the tested revision and
+native results before closing the implementation task.

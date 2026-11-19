@@ -62,6 +62,99 @@ request and settlement for the original record. The controller never retries
 an uncertain result. The comments action hands off the current scope to the
 host's existing comments surface.
 
+## Nonlinked native Form projection
+
+`createNonLinkedFormRecordProjection` is an additive public entry point from
+`@miniextensions/sdk/forms`. It accepts `compatibility: 'native-form-v1'`, the
+complete accepted `formRecord`, complete ordered `formFields`, and current
+`airtableFields`. `formRecordForConditionEvaluation` may supply the separate
+complete decision record. Both sources stay detached from the returned output.
+It does not change the existing scalar projection APIs or their conservative
+driver policy.
+
+This entry accepts saved field IDs and the following finite condition cohort:
+
+- Physical single-line Text supports `is`, `isNot`, `contains`,
+  `doesNotContain`, `isEmpty`, and `isNotEmpty`.
+- Single-select supports `is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`,
+  and `isNotEmpty`.
+- Multiple-select supports `hasAllOf`, `hasAnyOf`, `hasNoneOf`, `isExactly`,
+  `isEmpty`, and `isNotEmpty`.
+- Number, Percent, Currency, and Rating support `equals`, `notEquals`,
+  `greaterThan`, `lessThan`, `greaterThanOrEqualsTo`, `lessThanOrEqualsTo`,
+  `isEmpty`, and `isNotEmpty`.
+
+Text `is` and `isNot` compare case-sensitively and require a nonempty string
+operand. Substring operators ignore case and accept an explicitly configured
+empty string. It matches every Text value, so `doesNotContain` returns false.
+The emptiness operators take no operand. They treat absent, null, and empty
+cells as empty and count whitespace as text.
+
+A valid supplied Formula result additionally permits Text
+`is` or Number, Percent and Currency `equals`. Formula expressions and their
+dependencies are never calculated or loaded by this helper.
+
+Physical drivers require matching noncomputed metadata. Select choices need
+distinct nonempty IDs and names; operands contain saved choice IDs, while
+accepted answer values retain native names. Unknown choice IDs retain native
+compatibility behavior, including false results for an unknown equality choice.
+Number and Percent precision must be finite; Currency also requires a symbol;
+Rating requires a positive integer maximum and string icon/color metadata.
+Formula metadata must be computed, valid, and describe the matching supported
+scalar result. Numeric operands must be finite numbers; text and choice
+operands must have the admitted scalar or list shape. An incomplete or
+unsupported predicate blocks the whole projection instead of dropping a leaf.
+Supplied Formula results must be strings for Text or finite numbers for numeric
+results; null and absent results retain native empty-value behavior. The Form
+schema and current physical configuration must agree, including choice and
+Formula-result metadata. Equivalent object key order does not affect admission.
+Admission still checks every condition when `evaluateConditionalFields: false`;
+that switch disables pruning of an admitted snapshot, not its validation.
+
+The result uses the same native JSON normalization and code-only diagnostics as
+the linked projection below. It preserves the entire output record and its
+metadata, then removes only condition-hidden fields. Every condition reads the
+same unpruned evaluation snapshot. Retained section titles continue to define
+conditional sections even when their display header is disabled.
+
+Linked loading states and linked filter inputs are absent from this API and
+are rejected if supplied at runtime, even as empty objects. Active linked
+filter configuration also blocks. The caller must first establish that its
+native linked-loading boundary is clear; this API does not replace that check
+with an assumed empty cache. Other stored values, including linked values that
+are not condition drivers, are retained without cache pruning. The helper owns
+no draft, dirty state, Review transition or Save action.
+
+```ts
+import {
+    createNonLinkedFormRecordProjection,
+    type CreateNonLinkedFormRecordProjectionInput,
+} from '@miniextensions/sdk/forms';
+
+export function projectCommittedFormSnapshot(
+    snapshot: Omit<CreateNonLinkedFormRecordProjectionInput, 'compatibility'>
+) {
+    return createNonLinkedFormRecordProjection({
+        ...snapshot,
+        compatibility: 'native-form-v1',
+    });
+}
+```
+
+Use `projection.formRecord` only when `projection.type === 'available'`.
+Otherwise call the complete existing native projection with its original
+arguments, outside the SDK exception boundary. A blocked result carries no
+partially filtered record. Do not use the returned projection as the accepted
+draft or infer permission to submit it.
+
+The existing packed-package qualification checks cover this public entry in
+fresh ESM and CommonJS processes and in the installed `.mts`, `.cts` and
+Bundler declaration consumers. The finite 49-family runtime corpus exercises
+both visibility outcomes for create and edit records, plus whole-result
+refusals, JSON normalization and unchanged legacy APIs. These checks use the
+same installed TGZ as the linked projection checks; they do not import private
+source modules or start a browser or Form operation.
+
 ## Linked and two-source projection candidate
 
 `createLinkedFormRecordProjection` is an additive, synchronous projection
@@ -1385,6 +1478,64 @@ does not dispatch requests, authenticate, evaluate formulas, update
 `FormDraftStore` or clear final-save state. It does not enable automatic compute
 in the controller, browser starter, Review, pages or linked-child flows.
 
+## Complete Form presentation
+
+Use `CompleteFormComposition` with field nodes from an existing render scope.
+It renders ordered fields and sections, the associated form, and the supplied
+header, navigation, CAPTCHA, validation, footer, tracking, Review, and completion
+presentations. The host supplies the accepted field and error projections,
+localized text, and current action admission. Import
+`@miniextensions/sdk/react/form-composition.css` for the shipped styles.
+
+This single-page example uses the existing `AirtableForm` callback, a
+`scope`, and `renderers` that associate their input nodes with
+`'contact-form'`.
+
+```tsx
+import {
+    AirtableForm,
+    CompleteFormComposition,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/form-composition.css';
+
+<AirtableForm scope={scope} renderers={renderers}>
+    {(state) => (
+        <CompleteFormComposition
+            formId="contact-form"
+            items={state.fields.map(({ fieldId, node }) => ({
+                kind: 'field',
+                key: fieldId,
+                node,
+            }))}
+            primary={{
+                kind: 'terminal',
+                mode: 'save',
+                label: 'Save',
+                canSubmit: state.canSave,
+                saving,
+            }}
+            validation={{
+                heading: 'Check these fields',
+                diagnostics: state.validationErrors,
+            }}
+            onSubmit={() => {
+                void state.actions.submit().catch(reportSaveError);
+            }}
+        />
+    )}
+</AirtableForm>;
+```
+
+A section item has `kind: 'group'`, an existing stable key, the accepted
+`FormGroup` presentation props, and its ordered field nodes. A `next`
+primary action and a terminal primary action both submit through the same
+associated form. Back and Review confirmation use their supplied host actions.
+Recheck current ownership at deferred Review confirmation before issuing Save.
+
+Use `slots` for existing individual host adapters when they own a preview
+settings wrapper, a scroll ref, or a modal frame. The composition keeps the
+supplied nodes at their respective positions in the layout.
+
 ## Headless controller with explicit Save
 
 `createFormController` binds one loaded Form, complete save options and the
@@ -2580,8 +2731,21 @@ or static Create query, while retaining applicable token-bound parent
 relationship context. The server remains authoritative for child access; this
 local displayed-row subset is not a server allowlist. Applications cannot
 supply a Save receipt or validation exemption. Save invokes
-`save(snapshot.revision)` using the rendered revision; Close invokes `close()`.
-Give every button an explicit `type="button"`.
+`save(snapshot.revision)` using the rendered revision. The low-level `close()`
+cancels the intent and discards its draft. Give every button an explicit
+`type="button"`.
+
+For an interactive Close on an existing record, check the child snapshot's
+dirty field IDs and ask for confirmation when they are nonempty. The browser
+starter uses a labelled dialog with **Keep editing** initially focused.
+Keep editing leaves the current owner and draft active. **Confirm close** calls
+`closeEdit(snapshot.revision)` with the revision captured before the prompt.
+It releases the old controls without a Save. A clean Edit can use
+`closeEdit(snapshot.revision)` directly. Explicitly opening the same still
+selected record through `openEdit(recordId, revision)` restores the retained
+dirty values and IDs under fresh controls. It uses the existing accepted load
+and its Save authority. Selection loss, another accepted child intent, or
+parent retirement ends draft retention.
 
 A React presentation borrows this owner. Subscribe in an effect and return only
 the unsubscribe function. Render `snapshot.child` using `AirtableForm` with a

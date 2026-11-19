@@ -1,4 +1,6 @@
-.mx-sdk-portal-grid-text-cell {
+@import './field-presentation.css';
+
+:is(.mx-sdk-portal-grid-cell, .mx-sdk-portal-grid-text-cell) {
     position: relative;
     border-left: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
@@ -9,11 +11,17 @@
     line-height: 1.25rem;
 }
 
-.mx-sdk-portal-grid-text-cell[data-last-row='true'] {
+:is(
+    .mx-sdk-portal-grid-cell,
+    .mx-sdk-portal-grid-text-cell
+)[data-last-row='true'] {
     border-bottom: 0;
 }
 
-.mx-sdk-portal-grid-text-cell[data-sticky='true'] {
+:is(
+    .mx-sdk-portal-grid-cell,
+    .mx-sdk-portal-grid-text-cell
+)[data-sticky='true'] {
     z-index: 10;
     border-right: 1px solid #e5e7eb;
     background: inherit;
@@ -21,12 +29,18 @@
     font-weight: 500;
 }
 
-.mx-sdk-portal-grid-text-cell[data-sticky='true'][data-editing='true'] {
+:is(
+        .mx-sdk-portal-grid-cell,
+        .mx-sdk-portal-grid-text-cell
+    )[data-sticky='true'][data-editing='true'] {
     z-index: 15;
 }
 
 @media (min-width: 640px) {
-    .mx-sdk-portal-grid-text-cell[data-sticky='true'] {
+    :is(
+        .mx-sdk-portal-grid-cell,
+        .mx-sdk-portal-grid-text-cell
+    )[data-sticky='true'] {
         position: sticky;
         left: var(--mx-sdk-grid-text-left);
     }
@@ -37,7 +51,10 @@
     min-width: 100%;
 }
 
-.mx-sdk-portal-grid-text-cell[data-editing='false']
+:is(
+        .mx-sdk-portal-grid-cell,
+        .mx-sdk-portal-grid-text-cell
+    )[data-editing='false']
     .mx-sdk-portal-grid-text-cell__content {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -89,7 +106,23 @@
     pointer-events: none;
 }
 
-.mx-sdk-portal-grid-text-cell[data-first-row='true']
+.mx-sdk-portal-grid-cell__guidance {
+    position: absolute;
+    z-index: 10;
+    inset-block-start: 0.25rem;
+    inset-inline-end: 0.25rem;
+}
+
+.mx-sdk-portal-grid-text-cell[data-has-guidance='true']
+    > .mx-sdk-portal-grid-text-cell__content {
+    box-sizing: border-box;
+    padding-inline-end: 1.25rem;
+}
+
+:is(
+        .mx-sdk-portal-grid-cell,
+        .mx-sdk-portal-grid-text-cell
+    )[data-first-row='true']
     .mx-sdk-portal-grid-text-cell__selection {
     border-top: 0;
     border-top-left-radius: 0;

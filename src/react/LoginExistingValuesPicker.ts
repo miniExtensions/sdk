@@ -104,6 +104,8 @@ function Picker(props: LoginExistingValuesPickerProps) {
     const useCommittedEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
     const openedLookup = view?.lookup;
+    const loading =
+        view !== null && (view.state.loading || view.lookup.timer !== null);
 
     useCommittedEffect(() => {
         callbacks.current = props;
@@ -161,12 +163,11 @@ function Picker(props: LoginExistingValuesPickerProps) {
     function changeQuery(lookup: Lookup, query: string) {
         if (active.current !== lookup) return;
         cancelDelay(lookup);
-        lookup.model.setSearchInput(query);
-        if (active.current !== lookup) return;
         lookup.timer = setTimeout(() => {
             lookup.timer = null;
             if (active.current === lookup) void lookup.model.reload();
         }, 500);
+        lookup.model.setSearchInput(query);
     }
 
     function load(lookup: Lookup, append: boolean) {
@@ -234,7 +235,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
                   'ul',
                   {
                       className: 'mx-sdk-login-values-options',
-                      'aria-busy': view.state.loading,
+                      'aria-busy': loading,
                   },
                   view.state.options.map((option) =>
                       h(
@@ -258,7 +259,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
               h(
                   'div',
                   { role: 'status' },
-                  view.state.loading
+                  loading
                       ? labels.loading
                       : view.state.error === null &&
                           view.state.options.length === 0
@@ -288,7 +289,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
                           'button',
                           {
                               type: 'button',
-                              disabled: view.state.loading,
+                              disabled: loading,
                               onClick: () => load(view.lookup, true),
                           },
                           labels.more

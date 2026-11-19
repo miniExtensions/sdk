@@ -234,17 +234,27 @@ for (const [index, value] of [
 it('debounces raw input for 500 ms and retires superseded reads immediately', async (t) => {
     const old = deferred<LoginExistingValuesPage>();
     const ui = await fixture(t, {
-        loadOptions: (request) =>
-            request.searchTerm === ''
-                ? old.promise
-                : Promise.resolve({ labels: ['Fresh match'], offset: null }),
+        async loadOptions({ searchTerm }) {
+            if (searchTerm === '') return old.promise;
+            return {
+                labels: searchTerm === 'No results' ? [] : ['Fresh match'],
+                offset: null,
+            };
+        },
     });
+    const status = () =>
+        ui.container.querySelector('[role=status]')?.textContent;
     await ui.click(openLabel);
     t.mock.timers.enable({ apis: ['setTimeout'] });
     await ui.edit('  Needle_*  ');
     assert.equal(ui.requests[0].signal.aborted, true);
     await act(async () => t.mock.timers.tick(499));
     assert.equal(ui.requests.length, 1);
+    assert.equal(status(), 'Loading values…');
+    assert.equal(
+        ui.container.querySelector('ul')?.getAttribute('aria-busy'),
+        'true'
+    );
     await act(async () => t.mock.timers.tick(1));
     assert.equal(ui.requests[1].searchTerm, '  Needle_*  ');
     assert.equal(ui.requests[1].offset, null);
@@ -253,6 +263,14 @@ it('debounces raw input for 500 ms and retires superseded reads immediately', as
         old.resolve({ labels: ['Late'], offset: 'stale-page' })
     );
     assert.deepEqual(ui.text(), ['Fresh match']);
+    await ui.edit('No results');
+    assert.equal(status(), 'Loading values…');
+    await act(async () => t.mock.timers.tick(500));
+    assert.equal(status(), 'No matching values.');
+    assert.equal(
+        ui.container.querySelector('ul')?.getAttribute('aria-busy'),
+        'false'
+    );
     assert.equal(ui.submits(), 0);
 });
 

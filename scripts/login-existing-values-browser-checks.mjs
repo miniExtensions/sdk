@@ -203,7 +203,11 @@ export async function checkLoginExistingValuesBrowser({
 
         await page.keyboard.press('Enter');
         await choices.nth(2).waitFor();
-        await choices.nth(2).focus();
+        await focus(search);
+        for (let index = 0; index < 3; index++) {
+            await page.keyboard.press('Tab');
+            await focus(choices.nth(index));
+        }
         await page.keyboard.press('Space');
         await dialog.waitFor({ state: 'hidden' });
         await focus(trigger);
@@ -229,7 +233,6 @@ export async function checkLoginExistingValuesBrowser({
         await trigger.click();
         await choices.nth(2).waitFor();
         await page.evaluate(() => window.pickerProof.release());
-        // Releasing the retired request is followed by a real current choice.
         assert.equal(await button('Retired owner result').count(), 0);
         assert(
             await read().then(
@@ -237,6 +240,7 @@ export async function checkLoginExistingValuesBrowser({
                     calls.find(({ owner }) => owner === 'held').aborted
             )
         );
+        await focus(search);
         await button('Close').click();
         await focus(trigger);
 

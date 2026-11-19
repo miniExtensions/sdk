@@ -73,15 +73,14 @@ const checkboxEditor:PortalGridCheckboxCellEditor={owner:{token:Symbol(),isCurre
 const checkboxCell:PortalGridCheckboxCellProps={value:false,displayText:'false',title:'Approved',cellIdentity:'row-checked',selected:false,onSelect(){},rowHeight:'medium',editor:checkboxEditor};
 createElement(PortalGridCheckboxCell,checkboxCell);
 createElement(PortalGridCheckboxCell,{...checkboxCell,checkboxStyle:'toggle'});
-// @ts-expect-error button is outside the Grid Checkbox presenter contract
-const gridCheckboxButton:PortalGridCheckboxCellProps={...checkboxCell,checkboxStyle:'button'};
+createElement(PortalGridCheckboxCell,{...checkboxCell,checkboxStyle:'button',checkedStateLabel:'Approved',uncheckedStateLabel:'Approve'});
 // @ts-expect-error an admitted Checkbox port requires a captured owner
 const unownedCheckbox:PortalGridCheckboxCellProps={...checkboxCell,editor:{onChange(){}}};
 // @ts-expect-error native Checkbox values are boolean or explicitly null
 const stringCheckbox:PortalGridCheckboxCellProps={...checkboxCell,value:'false'};
 // @ts-expect-error ordinary Checkbox cells do not grant provider or transport capability
 const providerCheckbox:PortalGridCheckboxCellProps={...checkboxCell,calendly:{url:'https://example.com'}};
-void gridCheckboxButton;void unownedCheckbox;void stringCheckbox;void providerCheckbox;
+void unownedCheckbox;void stringCheckbox;void providerCheckbox;
 `;
 
 /** Run unchanged parity assertions against the installed public package. */
@@ -147,7 +146,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const textCellCases = 6;
     const emptyCellCases = 3;
     const ratingCellCases = 8;
-    const checkboxCellCases = 15;
+    const checkboxCellCases = 16;
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
         ['19.2.0', '19.2.2', '19.2.2'],

@@ -25,7 +25,9 @@ export type PortalGridCheckboxCellProps = Readonly<{
     value: boolean | null;
     displayText: string;
     title: string;
-    checkboxStyle?: 'checkbox' | 'toggle';
+    checkboxStyle?: CompleteCheckboxFieldProps['checkboxStyle'];
+    checkedStateLabel?: string;
+    uncheckedStateLabel?: string;
     /** Presentation identity. The editor owner independently admits writes. */
     cellIdentity: unknown;
     selected: boolean;
@@ -45,6 +47,8 @@ export function PortalGridCheckboxCell({
     displayText,
     title,
     checkboxStyle = 'checkbox',
+    checkedStateLabel,
+    uncheckedStateLabel,
     cellIdentity,
     selected,
     onSelect,
@@ -102,6 +106,8 @@ export function PortalGridCheckboxCell({
                       value,
                       title,
                       checkboxStyle,
+                      checkedStateLabel,
+                      uncheckedStateLabel,
                       showTitle: false,
                       readOnly: !editing,
                       isInGrid: true,

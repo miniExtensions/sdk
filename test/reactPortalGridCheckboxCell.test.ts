@@ -92,6 +92,14 @@ it('server-renders the default checkbox leaf or exact blank without a form or wr
     assert.match(editable, /<input[^>]+aria-label="Approved"/);
     assert.match(editable, /type="checkbox"/);
     assert.doesNotMatch(editable, /<form|<button|disabled=""/);
+    const button = renderToString(
+        table({
+            editor,
+            checkboxStyle: 'button',
+            uncheckedStateLabel: '  Approve  ',
+        })
+    );
+    assert.match(button, /<button[^>]+type="button"[^>]*>Approve<\/button>/);
     const readonly = renderToString(table({ value: true }));
     assert.match(readonly, /data-checkbox-grid-value="true"/);
     assert.doesNotMatch(readonly, /<input|<button|<label/);
@@ -178,6 +186,77 @@ it('renders controlled toggle style and retires the previous style for the same 
         fixture.container.querySelector('[data-checkbox-grid-value="true"]')
     );
     assert.deepEqual(writes, [false]);
+});
+
+it('renders a controlled Checkbox button with literal captions and retires a replaced press target', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const writes: boolean[] = [];
+    const editor: Editor = {
+        owner: { token: {}, isCurrent: () => true },
+        onChange: (value) => writes.push(value),
+        id: 'approve-record',
+        form: fixture.container.id,
+        ariaDescribedBy: 'approval-policy',
+    };
+    const props = {
+        checkboxStyle: 'button' as const,
+        checkedStateLabel: '  Approved  ',
+        uncheckedStateLabel: '  Approve  ',
+        editor,
+    };
+    const button = () => {
+        const node = fixture.container.querySelector(
+            '.mx-sdk-complete-checkbox__button'
+        );
+        assert.ok(node instanceof fixture.window.HTMLButtonElement);
+        return node;
+    };
+    await fixture.render(table(props));
+    const first = button();
+    assert.equal(first.form, fixture.container);
+    assert.equal(first.type, 'button');
+    assert.equal(first.textContent, 'Approve');
+    assert.equal(first.getAttribute('aria-pressed'), 'false');
+    assert.equal(first.getAttribute('aria-describedby'), 'approval-policy');
+    await fixture.click(first);
+    assert.deepEqual(writes, [true]);
+    assert.equal(first.textContent, 'Approve');
+
+    await fixture.render(table({ ...props, value: true }));
+    assert.equal(button(), first);
+    assert.equal(first.textContent, 'Approved');
+    assert.equal(first.getAttribute('aria-pressed'), 'true');
+    await fixture.click(first);
+    assert.deepEqual(writes, [true, false]);
+
+    const key = Object.keys(first).find((name) =>
+        name.startsWith('__reactProps$')
+    );
+    assert.ok(key);
+    const { onClick } = Reflect.get(first, key);
+    assert.equal(typeof onClick, 'function');
+    await fixture.render(
+        table({
+            ...props,
+            cellIdentity: 'record-B-approved',
+            uncheckedStateLabel: '   ',
+            editor: { ...editor, owner: { token: {}, isCurrent: () => true } },
+        })
+    );
+    assert.equal(first.isConnected, false);
+    assert.equal(button().textContent, 'false');
+    await act(async () => onClick());
+    assert.deepEqual(writes, [true, false]);
+
+    await fixture.render(table({ ...props, value: true, editor: undefined }));
+    assert.equal(
+        fixture.container.querySelector('.mx-sdk-complete-checkbox__button'),
+        null
+    );
+    assert.ok(
+        fixture.container.querySelector('[data-checkbox-grid-value="true"]')
+    );
+    fixture.unchangedEffects();
 });
 
 it('keeps null, checked and unchecked values controlled on the same mounted input', async (t) => {

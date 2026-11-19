@@ -948,6 +948,8 @@ try {
         ...['esm', 'cjs'].flatMap((format) => [
             `dist/${format}/react/PortalGridSingleLineTextCell.js`,
             `dist/${format}/react/PortalGridSingleLineTextCell.d.ts`,
+            `dist/${format}/react/PortalGridEmailCell.js`,
+            `dist/${format}/react/PortalGridEmailCell.d.ts`,
             `dist/${format}/react/portal-grid-single-line-text-cell.css`,
             `dist/${format}/react/PortalGridEmptyCell.js`,
             `dist/${format}/react/PortalGridEmptyCell.d.ts`,

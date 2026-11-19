@@ -8,7 +8,7 @@ const fixture = String.raw`
 import React, { createElement as h, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
-import { LoginExistingValuesPicker } from '@miniextensions/sdk/react';
+import { LoginExistingValuesPicker, LoginSignupConfirmationDialog } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/login-existing-values-picker.css';
 
 const duplicate = '  duplicate@example.com  ';
@@ -18,6 +18,10 @@ const calls = [];
 const selections = [];
 const trusted = [];
 const settingsActivations = [];
+const signupDraft = 'masked-signup@example.invalid';
+const unmaskedDraft = 'visible-signup@example.invalid';
+let signupCancels = 0;
+let signupCreates = 0;
 let submits = 0;
 let update;
 let release;
@@ -29,12 +33,26 @@ function App() {
         allowed: true,
         disabled: false,
         masked: false,
+        signup: null,
     });
     update = (patch) => flushSync(() => setState(current => ({ ...current, ...patch })));
     return h('form', {
         onSubmit(event) { event.preventDefault(); submits++; },
     },
-    h('label', null, 'Sign-in value', h('input', { type: 'password' })),
+    h('label', null, 'Sign-in value', h('input', { type: 'password', defaultValue: signupDraft })),
+    h('button', { type: 'button', onClick: () => update({ signup: 'masked' }) }, 'Confirm masked signup'),
+    h('button', { type: 'button', onClick: () => update({ signup: 'visible' }) }, 'Confirm visible signup'),
+    h(LoginSignupConfirmationDialog, {
+        open: state.signup !== null,
+        copy: {
+            title: (state.signup === 'masked' ? '••••••••' : unmaskedDraft) + ' n’existe pas',
+            body: 'Vérifiez la valeur ou créez un nouvel enregistrement.',
+            back: 'Retour',
+            create: 'Créer',
+        },
+        onCancel() { signupCancels++; update({ signup: null }); },
+        onCreate() { signupCreates++; },
+    }),
     h(LoginExistingValuesPicker, {
         owner: {
             extensionSessionId: state.session,
@@ -81,7 +99,7 @@ createRoot(document.querySelector('main')).render(h(StrictMode, null, h(App)));
 window.pickerProof = {
     update: (patch) => update(patch),
     release: () => release({ labels: ['Retired owner result'], offset: 'old-page' }),
-    snapshot: () => ({ react: React.version, selections, calls, submits, trusted, settingsActivations }),
+    snapshot: () => ({ react: React.version, selections, calls, submits, trusted, settingsActivations, signupCancels, signupCreates }),
 };
 `;
 
@@ -266,6 +284,71 @@ export async function checkLoginExistingValuesBrowser({
         await focus(search);
         await button('Close').click();
         await focus(trigger);
+
+        const beforeSignup = await read();
+        const draft = page.getByLabel('Sign-in value');
+        const maskedSignup = button('Confirm masked signup');
+        const visibleSignup = button('Confirm visible signup');
+        const signupDialog = page.getByRole('dialog', {
+            name: '•••••••• n’existe pas',
+            exact: true,
+        });
+        const back = signupDialog.getByRole('button', { name: 'Retour' });
+        const create = signupDialog.getByRole('button', { name: 'Créer' });
+        await maskedSignup.click();
+        await focus(back);
+        assert.doesNotMatch(
+            await signupDialog.ariaSnapshot(),
+            /masked-signup@example\.invalid/
+        );
+        assert.doesNotMatch(
+            await signupDialog.evaluate((node) => node.outerHTML),
+            /masked-signup@example\.invalid/
+        );
+        await page.keyboard.press('Enter');
+        await signupDialog.waitFor({ state: 'hidden' });
+        await focus(maskedSignup);
+        assert.equal((await read()).signupCancels, 1);
+        assert.equal((await read()).signupCreates, 0);
+        assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
+
+        await maskedSignup.click();
+        await focus(back);
+        await page.keyboard.press('Escape');
+        await signupDialog.waitFor({ state: 'hidden' });
+        await focus(maskedSignup);
+        assert.equal((await read()).signupCancels, 2);
+        assert.equal((await read()).signupCreates, 0);
+        assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
+
+        await maskedSignup.click();
+        await focus(back);
+        await page.keyboard.press('Tab');
+        await focus(create);
+        await page.keyboard.press('Space');
+        await page.keyboard.press('Space');
+        assert.equal((await read()).signupCreates, 1);
+        assert.equal((await read()).signupCancels, 2);
+        assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
+        await patch({ signup: null });
+        await signupDialog.waitFor({ state: 'hidden' });
+
+        await visibleSignup.click();
+        const visible = page.getByRole('dialog', {
+            name: 'visible-signup@example.invalid n’existe pas',
+            exact: true,
+        });
+        await visible
+            .getByText('Vérifiez la valeur ou créez un nouvel enregistrement.')
+            .waitFor();
+        await focus(visible.getByRole('button', { name: 'Retour' }));
+        await patch({ signup: null });
+        await visible.waitFor({ state: 'hidden' });
+        const afterSignup = await read();
+        assert.deepEqual(afterSignup.calls, beforeSignup.calls);
+        assert.equal(afterSignup.signupCreates, 1);
+        assert.equal(afterSignup.signupCancels, 2);
+        assert.equal(afterSignup.submits, 0);
 
         const beforeDenied = (await read()).calls.length;
         await patch({ disabled: true });

@@ -3835,6 +3835,11 @@ export {
     PortalGridButtonCell,
     type PortalGridButtonCellProps,
 } from './PortalGridButtonCell.js';
+export {
+    PortalGridSingleSelectCell,
+    type PortalGridSingleSelectCellEditor,
+    type PortalGridSingleSelectCellProps,
+} from './PortalGridSingleSelectCell.js';
 
 export { PortalSidePanelNavigation } from './PortalSidePanelNavigation.js';
 export type {

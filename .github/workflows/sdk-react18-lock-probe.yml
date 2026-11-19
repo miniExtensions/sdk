@@ -1,0 +1,102 @@
+name: Disposable React 18 lock probe
+
+on:
+    push:
+        branches: [codex/seven-sdk-react18-lock-probe-run-20261119]
+
+permissions:
+    contents: read
+    actions: read
+
+concurrency:
+    group: sdk-react18-lock-probe-20261119
+    cancel-in-progress: false
+
+jobs:
+    lock-probe:
+        if: >-
+            github.repository == 'miniExtensions/sdk' &&
+            github.event.created && !github.event.deleted &&
+            github.run_attempt == '1'
+        runs-on: ubuntu-latest
+        timeout-minutes: 12
+        env:
+            npm_config_before: '2026-11-17T05:52:12.756Z'
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+            - name: Check out the two pinned installer revisions
+              uses: actions/checkout@v4
+              with:
+                  ref: 103e949477a2f973a8d4b120fed91052efd0e3be
+                  fetch-depth: 2
+                  path: .sdk-react18-lock-input
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '24.22.2'
+            - name: Allocate private diagnostic scratch
+              id: scratch
+              run: |
+                  probe_dir=$(mktemp -d "$RUNNER_TEMP/sdk-react18-lock-probe.XXXXXX")
+                  printf 'directory=%s\n' "$probe_dir" >> "$GITHUB_OUTPUT"
+            - name: Retrieve the original tested kit
+              uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+              with:
+                  github-token: ${{ github.token }}
+                  repository: miniExtensions/sdk
+                  run-id: '44476524324'
+                  artifact-ids: '14508808295'
+                  merge-multiple: true
+                  path: ${{ steps.scratch.outputs.directory }}/kit
+            - name: Verify the driver, kit and pinned Git objects
+              env:
+                  PROBE_DIR: ${{ steps.scratch.outputs.directory }}
+              run: |
+                  sha256sum --check - <<'EOF'
+                  0c9a7974a3218d8efee884b272b58f3f134e68a9fe3ca78c76d3da862d0c99d6  scripts/react18-ubuntu-probe.mjs
+                  EOF
+                  node --check scripts/react18-ubuntu-probe.mjs
+                  node scripts/react18-ubuntu-probe.mjs --verify .sdk-react18-lock-input "$PROBE_DIR/kit"
+            - name: Enforce the original npm cutoff and bootstrap exact pnpm
+              env:
+                  PROBE_DIR: ${{ steps.scratch.outputs.directory }}
+              run: |
+                  age_guard="$PROBE_DIR/npm-release-age.mjs"
+                  git -C .sdk-react18-lock-input show \
+                    '55a621b5d0586a6e8a0f5d2640d89ce3e91ec04f:scripts/npm-release-age.mjs' > "$age_guard"
+                  printf '4e330a48e58928531a0e78f2fad6d639a8a747bc248fd64ed0c131ab00919ad6  %s\n' \
+                    "$age_guard" | sha256sum --check -
+                  node "$age_guard" --github-env "$GITHUB_ENV"
+                  npm install --global --ignore-scripts --prefix "$PROBE_DIR/tools" \
+                    --cache "$PROBE_DIR/bootstrap-cache" pnpm@10.28.2
+                  printf '%s/tools/bin\n' "$PROBE_DIR" >> "$GITHUB_PATH"
+            - name: Compare one fresh React 18 consumer per installer
+              id: probe
+              env:
+                  PROBE_DIR: ${{ steps.scratch.outputs.directory }}
+                  TMPDIR: ${{ steps.scratch.outputs.directory }}
+              run: |
+                  node scripts/react18-ubuntu-probe.mjs --run .sdk-react18-lock-input \
+                    "$PROBE_DIR/kit" "$PROBE_DIR/receipts"
+            - name: Retain diagnostic lock and install evidence
+              if: always() && steps.probe.outcome != 'skipped' && steps.probe.outcome != ''
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-diagnostic-react18-lock-pair-${{ github.run_id }}
+                  path: ${{ steps.scratch.outputs.directory }}/receipts
+                  if-no-files-found: error
+                  retention-days: 7
+            - name: Remove owned diagnostic scratch
+              if: always() && steps.scratch.outcome == 'success'
+              env:
+                  PROBE_DIR: ${{ steps.scratch.outputs.directory }}
+              run: |
+                  case "$PROBE_DIR" in
+                    "$RUNNER_TEMP"/sdk-react18-lock-probe.*) ;;
+                    *) exit 1 ;;
+                  esac
+                  rm -rf -- "$PROBE_DIR"
+                  test ! -e "$PROBE_DIR"

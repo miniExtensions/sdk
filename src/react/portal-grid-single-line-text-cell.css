@@ -113,7 +113,10 @@
     inset-inline-end: 0.25rem;
 }
 
-.mx-sdk-portal-grid-text-cell[data-has-guidance='true']
+:is(
+        .mx-sdk-portal-grid-cell,
+        .mx-sdk-portal-grid-text-cell
+    )[data-has-guidance='true']
     > .mx-sdk-portal-grid-text-cell__content {
     box-sizing: border-box;
     padding-inline-end: 1.25rem;

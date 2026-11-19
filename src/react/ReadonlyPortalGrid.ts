@@ -500,7 +500,8 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
     // This fences only this presentation's controls, never the borrowed read.
     const token = useMemo(() => ({}), [identity, ready]);
     const activeToken = useRef<object | null>(token);
-    useEffect(() => {
+    const commit = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    commit(() => {
         activeToken.current = token;
         return () => {
             if (activeToken.current === token) activeToken.current = null;

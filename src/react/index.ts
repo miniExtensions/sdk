@@ -60,6 +60,10 @@ import type {
     BorrowedPortalRenderSnapshot,
 } from '../ui/borrowedPortalRenderScope.js';
 import {
+    ReadonlyPortalGrid,
+    type ReadonlyPortalGridProps,
+} from './ReadonlyPortalGrid.js';
+import {
     CompletePhoneNumberField,
     type CompletePhoneNumberFieldProps,
 } from './CompletePhoneNumberField.js';
@@ -2964,12 +2968,9 @@ export type AirtableListProps<
     S extends PortalPresentationSnapshot = PortalRenderSnapshot,
 > = AirtableGridProps<S>;
 
-function AirtablePortal<S extends PortalPresentationSnapshot>({
-    scope,
-    renderers,
-    fallback,
-    children,
-}: AirtableGridProps<S>): ReactNode {
+function usePortalPresentation<S extends PortalPresentationSnapshot>(
+    scope: PortalPresentationSource<S>
+): S {
     const store = useMemo(() => {
         let value = scope.getSnapshot();
         const read = () => {
@@ -2991,13 +2992,19 @@ function AirtablePortal<S extends PortalPresentationSnapshot>({
             },
         };
     }, [scope]);
-    const state = useSyncExternalStore(
+    return useSyncExternalStore(
         store.subscribe,
         store.getSnapshot,
         store.getSnapshot
     );
-    if (state.retired) return null;
-    return children({
+}
+
+function renderPortalRows<S extends PortalPresentationSnapshot>(
+    state: S,
+    renderers: AirtableGridProps<S>['renderers'],
+    fallback: AirtableGridProps<S>['fallback']
+): AirtablePortalRenderState<S> {
+    return {
         ...state,
         rows: state.rows.map(({ recordId, cells }) => ({
             recordId,
@@ -3015,7 +3022,19 @@ function AirtablePortal<S extends PortalPresentationSnapshot>({
                 }),
             })),
         })),
-    });
+    };
+}
+
+function AirtablePortal<S extends PortalPresentationSnapshot>({
+    scope,
+    renderers,
+    fallback,
+    children,
+}: AirtableGridProps<S>): ReactNode {
+    const state = usePortalPresentation(scope);
+    return state.retired
+        ? null
+        : children(renderPortalRows(state, renderers, fallback));
 }
 
 /** Grid layout shell only. Unmount never disposes the supplied scope or owner. */
@@ -3051,6 +3070,75 @@ export type ReadonlyPortalListProps<
     openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
 };
 
+function usePortalOpen<S extends ReadonlyPortalListSnapshot>(
+    scope: PortalPresentationSource<S>,
+    revision: number,
+    openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>,
+    preferenceScopeKey?: string | null
+) {
+    type Registration = { readonly action: ReadonlyPortalListOpenAction };
+    const lifetime = useMemo(() => ({}), [scope, revision, preferenceScopeKey]);
+    const committed = useRef<{
+        lifetime: object;
+        registrations: ReadonlyMap<string, Registration>;
+    } | null>(null);
+    const commit = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    commit(
+        () => () => {
+            committed.current = null;
+        },
+        []
+    );
+    commit(() => {
+        const previous = committed.current;
+        const retained =
+            previous?.lifetime === lifetime ? previous.registrations : null;
+        const registrations = new Map<string, Registration>();
+        for (const [recordId, action] of openActions ?? []) {
+            const registration = retained?.get(recordId);
+            // Equivalent host maps preserve each continuous registration.
+            // A replacement or removal ends it even if the same action returns.
+            registrations.set(
+                recordId,
+                registration?.action === action ? registration : { action }
+            );
+        }
+        committed.current = { lifetime, registrations };
+    });
+    return (
+        recordId: string,
+        action: ReadonlyPortalListOpenAction,
+        trigger: HTMLButtonElement
+    ) => {
+        const registration = committed.current?.registrations.get(recordId);
+        if (registration?.action !== action) return;
+        const isCurrent = () => {
+            const accepted = committed.current;
+            if (
+                !trigger.isConnected ||
+                accepted?.lifetime !== lifetime ||
+                accepted.registrations.get(recordId) !== registration ||
+                action.revision !== revision
+            )
+                return false;
+            try {
+                const snapshot = scope.getSnapshot();
+                return (
+                    !snapshot.retired &&
+                    snapshot.revision === revision &&
+                    snapshot.rows.some((row) => row.recordId === recordId)
+                );
+            } catch {
+                return false;
+            }
+        };
+        if (!isCurrent()) return;
+        action.activate(isCurrent, () => {
+            if (isCurrent()) trigger.focus({ preventScroll: true });
+        });
+    };
+}
+
 function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
     scope,
     state,
@@ -3064,46 +3152,7 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
     label?: string;
     openRecordLabel: string;
 }): ReactNode {
-    const committed = useRef<{
-        scope: PortalPresentationSource<S>;
-        revision: number;
-        actions: ReadonlyMap<string, ReadonlyPortalListOpenAction> | undefined;
-    } | null>(null);
-    const commit = typeof window === 'undefined' ? useEffect : useLayoutEffect;
-    commit(() => {
-        const accepted = {
-            scope,
-            revision: state.revision,
-            actions: openActions,
-        };
-        committed.current = accepted;
-        return () => {
-            if (committed.current === accepted) committed.current = null;
-        };
-    });
-    const current = (
-        recordId: string,
-        action: ReadonlyPortalListOpenAction
-    ) => {
-        const accepted = committed.current;
-        if (
-            accepted?.scope !== scope ||
-            accepted.revision !== state.revision ||
-            accepted.actions?.get(recordId) !== action ||
-            action.revision !== state.revision
-        )
-            return false;
-        try {
-            const snapshot = scope.getSnapshot();
-            return (
-                !snapshot.retired &&
-                snapshot.revision === state.revision &&
-                snapshot.rows.some((row) => row.recordId === recordId)
-            );
-        } catch {
-            return false;
-        }
-    };
+    const open = usePortalOpen(scope, state.revision, openActions);
     return createElement(
         'div',
         { className: 'mx-sdk-readonly-portal-list' },
@@ -3157,17 +3206,11 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                                   ) => {
                                       event.preventDefault();
                                       event.stopPropagation();
-                                      if (!current(row.recordId, action))
-                                          return;
-                                      const button = event.currentTarget;
-                                      const isCurrent = () =>
-                                          current(row.recordId, action);
-                                      action.activate(isCurrent, () => {
-                                          if (isCurrent() && button.isConnected)
-                                              button.focus({
-                                                  preventScroll: true,
-                                              });
-                                      });
+                                      open(
+                                          row.recordId,
+                                          action,
+                                          event.currentTarget
+                                      );
                                   },
                               },
                               openRecordLabel
@@ -3207,6 +3250,172 @@ export function ReadonlyPortalList<
                 openRecordLabel,
             }),
     });
+}
+
+export type ReadonlyPortalRecordsGridOptions = Omit<
+    ReadonlyPortalGridProps,
+    | 'columns'
+    | 'rows'
+    | 'revision'
+    | 'isCurrent'
+    | 'onOpenRecord'
+    | 'openRecordTestIds'
+> & {
+    /** Optional accessible Open label for a record already in the accepted scope. */
+    recordLabel?: (recordId: string) => string | null;
+    /** Optional host bindings for the supplied preferences, scoped to admitted columns. */
+    renderPreferenceBindings?: (
+        columns: ReadonlyPortalListSnapshot['columns'],
+        revision: number
+    ) => { ready: boolean; nodes: ReactNode };
+};
+
+export type ReadonlyPortalRecordsProps<
+    S extends ReadonlyPortalListSnapshot = ReadonlyPortalListSnapshot,
+> = Omit<ReadonlyPortalListProps<S>, 'openActions'> & {
+    layout: 'grid' | 'list';
+    grid: ReadonlyPortalRecordsGridOptions;
+    /** Bind host registrations to their exact source as well as their accepted revision. */
+    openActions?: {
+        scope: PortalPresentationSource<S>;
+        byRecordId: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
+    };
+    /** A host-owned readiness state. Omit to display the accepted records. */
+    status?: {
+        kind: 'loading' | 'unavailable' | 'error';
+        message: string;
+    };
+    /** Optional existing host command registration for one accepted record. */
+    renderChildRegistration?: (
+        snapshot: S,
+        recordId: string,
+        index: number
+    ) => ReactNode;
+};
+
+function ReadonlyPortalRecordsGrid<S extends ReadonlyPortalListSnapshot>({
+    scope,
+    state,
+    options,
+    openActions,
+}: {
+    scope: PortalPresentationSource<S>;
+    state: AirtablePortalRenderState<S>;
+    options: ReadonlyPortalRecordsGridOptions;
+    openActions: ReadonlyMap<string, ReadonlyPortalListOpenAction> | undefined;
+}): ReactNode {
+    const { recordLabel, renderPreferenceBindings, ...grid } = options;
+    const bindings = renderPreferenceBindings?.(state.columns, state.revision);
+    const ready = grid.ready && (bindings?.ready ?? true);
+    const controlsReady =
+        ready &&
+        openActions != null &&
+        state.rows.every(
+            (row) => openActions.get(row.recordId)?.revision === state.revision
+        );
+    const open = usePortalOpen(
+        scope,
+        state.revision,
+        controlsReady ? openActions : undefined,
+        grid.preferenceScopeKey
+    );
+    // A different scope can publish the same revision and preference key.
+    // Remount only the Grid to release that previous owner's controls and gestures.
+    const [owner, setOwner] = useState({ scope, generation: 0 });
+    if (owner.scope !== scope) {
+        setOwner({ scope, generation: owner.generation + 1 });
+        return null;
+    }
+    const view = createElement(ReadonlyPortalGrid, {
+        ...grid,
+        ready,
+        revision: state.revision,
+        columns: state.columns,
+        rows: state.rows.map((row) => ({
+            ...row,
+            label: recordLabel?.(row.recordId),
+        })),
+        isCurrent: () => {
+            const live = scope.getSnapshot();
+            return !live.retired && live.revision === state.revision;
+        },
+        openRecordTestIds: controlsReady
+            ? Object.fromEntries(
+                  state.rows.map(({ recordId }) => [
+                      recordId,
+                      openActions.get(recordId)?.testId,
+                  ])
+              )
+            : undefined,
+        onOpenRecord: controlsReady
+            ? (recordId, trigger) => {
+                  const action = openActions.get(recordId);
+                  if (action) open(recordId, action, trigger);
+              }
+            : undefined,
+    });
+    return createElement(
+        Fragment,
+        { key: owner.generation },
+        bindings?.nodes,
+        view
+    );
+}
+
+/** Complete Grid/List layout over one host-owned collection and action scope. */
+export function ReadonlyPortalRecords<
+    S extends ReadonlyPortalListSnapshot = ReadonlyPortalListSnapshot,
+>({
+    scope,
+    layout,
+    grid,
+    renderers,
+    fallback,
+    openActions,
+    label,
+    openRecordLabel = 'Open record',
+    status,
+    renderChildRegistration,
+}: ReadonlyPortalRecordsProps<S>): ReactNode {
+    const snapshot = usePortalPresentation(scope);
+    if (status)
+        return createElement(
+            'div',
+            { role: status.kind === 'error' ? 'alert' : 'status' },
+            status.message
+        );
+    if (snapshot.retired) return null;
+    const state = renderPortalRows(snapshot, renderers, fallback);
+    const currentActions =
+        openActions?.scope === scope ? openActions.byRecordId : undefined;
+    const view =
+        layout === 'grid'
+            ? createElement(ReadonlyPortalRecordsGrid<S>, {
+                  scope,
+                  state,
+                  options: grid,
+                  openActions: currentActions,
+              })
+            : createElement(ReadonlyPortalListContent<S>, {
+                  scope,
+                  state,
+                  openActions: currentActions,
+                  label,
+                  openRecordLabel,
+              });
+    return createElement(
+        Fragment,
+        null,
+        view,
+        renderChildRegistration &&
+            snapshot.rows.map(({ recordId }, index) =>
+                createElement(
+                    Fragment,
+                    { key: recordId },
+                    renderChildRegistration(snapshot, recordId, index)
+                )
+            )
+    );
 }
 
 export {
@@ -3529,7 +3738,7 @@ export {
     type FormReviewDialogFrameProps,
     type CompleteFormReviewProps,
 } from './CompleteFormReview.js';
-export { ReadonlyPortalGrid } from './ReadonlyPortalGrid.js';
+export { ReadonlyPortalGrid };
 export { PortalVisitorSearch } from './PortalVisitorSearch.js';
 export type {
     PortalVisitorSearchLabels,

@@ -6,10 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { readonlyPortalListFixture } from './readonly-portal-list-fixture.mjs';
+import { readonlyPortalRecordsConsumer } from './readonly-portal-records-consumer.mjs';
 
 const typed = String.raw`
 import {createElement} from 'react';
-import {ReadonlyPortalList,AirtableList,type ReadonlyPortalListProps,type ReadonlyPortalListOpenAction} from '@miniextensions/sdk/react';
+import {ReadonlyPortalList,AirtableList,ReadonlyPortalRecords,type ReadonlyPortalListProps,type ReadonlyPortalListOpenAction,type ReadonlyPortalRecordsProps,type ReadonlyPortalRecordsGridOptions} from '@miniextensions/sdk/react';
 import type {BorrowedPortalRenderScope} from '@miniextensions/sdk/ui';
 declare const scope:BorrowedPortalRenderScope;
 const action:ReadonlyPortalListOpenAction={revision:1,activate(isCurrent,returnFocus){if(isCurrent())returnFocus();}};
@@ -33,7 +34,17 @@ const noCommand:ReadonlyPortalListOpenAction={revision:1};
 actions.set('rec_A',action);
 // @ts-expect-error the older shell retains its mandatory children contract
 createElement(AirtableList,{scope,renderers:{}});
-void [children,transport,writer,wrongRevision,noCommand];
+const grid:ReadonlyPortalRecordsGridOptions={ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{}};
+const records:ReadonlyPortalRecordsProps={scope,grid,layout:'grid',renderers:{},openActions:{scope,byRecordId:actions}};
+createElement(ReadonlyPortalRecords,records);
+createElement(ReadonlyPortalRecords,{...records,layout:'list',status:{kind:'loading',message:'Loading records'}});
+// @ts-expect-error the public composed presenter owns both layouts
+const recordLayout:ReadonlyPortalRecordsProps={...records,children(){return null;}};
+// @ts-expect-error preferences cannot introduce a host-supplied row or cell
+const recordGrid:ReadonlyPortalRecordsGridOptions={...grid,rows:[]};
+// @ts-expect-error registration from a different source is never implicit
+const recordActions:ReadonlyPortalRecordsProps={...records,openActions:{byRecordId:actions}};
+void [children,transport,writer,wrongRevision,noCommand,recordLayout,recordGrid,recordActions];
 `;
 
 const runtime = String.raw`
@@ -107,6 +118,10 @@ export function checkReadonlyPortalListReactMatrix({
             readonlyPortalListFixture
         );
         writeFileSync(join(directory, 'runtime.mjs'), runtime);
+        writeFileSync(
+            join(directory, 'records.mjs'),
+            readonlyPortalRecordsConsumer
+        );
         for (const version of [
             { react: '18.3.1', types: '18.3.12', domTypes: '18.3.1' },
             { react: '19.2.0', types: '19.2.2', domTypes: '19.2.2' },
@@ -154,7 +169,20 @@ export function checkReadonlyPortalListReactMatrix({
                 );
                 assert.equal(result.react, version.react);
                 assert.equal(result.opens, 1);
-                return result;
+                const records = JSON.parse(
+                    run(
+                        process.execPath,
+                        ['records.mjs', format, happyDomModulePath],
+                        {
+                            encoding: 'utf8',
+                            stdio: ['ignore', 'pipe', 'inherit'],
+                        }
+                    )
+                );
+                assert.equal(records.react, version.react);
+                assert.equal(records.subscriptions, 1);
+                assert.equal(records.opens, 1);
+                return { ...result, records };
             });
             const installed = join(
                 directory,

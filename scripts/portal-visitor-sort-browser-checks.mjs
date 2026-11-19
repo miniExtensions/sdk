@@ -214,15 +214,20 @@ const filterListeners = new Set();
 const filterCommands = [];
 const filterOutcomes = [];
 const heldSelectKeys = [];
+const heldSelectChanges = [];
 let filterFormSubmits = 0;
 filterForm.addEventListener('submit', (event) => {
     filterFormSubmits++;
     event.preventDefault();
 });
 filterForm.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowDown' && event.target instanceof HTMLSelectElement && event.target.multiple)
-        heldSelectKeys.push({repeat: event.repeat, trusted: event.isTrusted});
+    if (event.target instanceof HTMLSelectElement && event.target.multiple)
+        heldSelectKeys.push({key: event.key, repeat: event.repeat, trusted: event.isTrusted});
 });
+filterForm.addEventListener('change', (event) => {
+    if (event.target instanceof HTMLSelectElement && event.target.multiple)
+        heldSelectChanges.push({trusted: event.isTrusted, values: Array.from(event.target.selectedOptions, (option) => option.value)});
+}, {capture: true});
 const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
@@ -278,7 +283,7 @@ filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
     port: filterPort, showDropdowns: true, onOutcome: (outcome) => filterOutcomes.push(outcome),
 })));
 globalThis.filterFixture = {
-    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits, heldSelectKeys}),
+    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits, heldSelectKeys, heldSelectChanges}),
     seedHeldChoice() {
         const criteria = filterFrame.criteria ?? {logicalOperator: 'and', conditions: []};
         publishFilter({ ...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1},
@@ -326,24 +331,36 @@ async function checkHeldQuickFilter(page) {
         );
         await page.evaluate(() => globalThis.filterFixture.cycleViews());
         await page.keyboard.down('ArrowDown');
-        await page.getByRole('status').waitFor({ state: 'visible' });
+        assert.match(await page.getByRole('status').textContent(), /changed/);
         assert.equal((await summary()).commands.length, offset + 2);
     } finally {
         await page.keyboard.up('ArrowDown');
         await retained.dispose();
     }
-    await page.keyboard.press('ArrowDown');
+    // Chromium's native navigation anchor can advance even on the refused change.
+    await page.keyboard.press('Home');
     await waitForCount(offset + 3);
     const end = await summary();
     assert.deepEqual(
         end.commands
             .slice(offset)
             .map((command) => command.criteria.conditions[0].setting.value),
-        [['blue'], ['green'], ['yellow']]
+        [['blue'], ['green'], ['red']]
     );
     assert.deepEqual(
         end.heldSelectKeys.slice(initial.heldSelectKeys.length),
-        [false, true, true, false].map((repeat) => ({ repeat, trusted: true }))
+        [false, true, true, false].map((repeat, index) => ({
+            key: index === 3 ? 'Home' : 'ArrowDown',
+            repeat,
+            trusted: true,
+        }))
+    );
+    assert.deepEqual(
+        end.heldSelectChanges.slice(initial.heldSelectChanges.length),
+        ['blue', 'green', 'yellow', 'red'].map((value) => ({
+            trusted: true,
+            values: [value],
+        }))
     );
     assert.equal(end.submits, 0);
     return {

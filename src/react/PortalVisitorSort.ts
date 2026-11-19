@@ -49,6 +49,10 @@ export type PortalVisitorSortProps = {
 
 type Draft = NonNullable<ReturnType<typeof createPortalVisitorSortDraft>>;
 type Open = { port: PortalVisitorSortPort; draft: Draft };
+type Status = {
+    type: PortalVisitorSortOutcome['type'];
+    owner?: { port: PortalVisitorSortPort; canReport(): boolean };
+};
 type Labels = typeof defaultLabels;
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
@@ -328,9 +332,7 @@ function SortDialog({
 export function PortalVisitorSort(props: PortalVisitorSortProps): ReactElement {
     const labels = { ...defaultLabels, ...props.labels };
     const [active, setActive] = useState<Open | null>(null);
-    const [status, setStatus] = useState<
-        PortalVisitorSortOutcome['type'] | null
-    >(null);
+    const [status, setStatus] = useState<Status | null>(null);
     const occupied = useRef<Open | null>(null);
     const trigger = useRef<HTMLButtonElement>(null);
     const inFlight = useRef<Open | null>(null);
@@ -351,12 +353,23 @@ export function PortalVisitorSort(props: PortalVisitorSortProps): ReactElement {
         if (active && active.port !== props.port) setActive(null);
         if (active && props.disabled) active.draft.retire();
     }, [active, props.disabled, props.port]);
+    useCommitEffect(() => {
+        const owner = status?.owner;
+        if (owner?.port !== props.port) return;
+        const revalidate = () => {
+            if (!owner.canReport())
+                setStatus((current) => (current === status ? null : current));
+        };
+        const unsubscribe = owner.port.subscribe(revalidate);
+        revalidate();
+        return unsubscribe;
+    }, [props.port, status]);
 
     const open = () => {
         if (occupied.current || inFlight.current || props.disabled) return;
         const draft = createPortalVisitorSortDraft(props.port);
         if (!draft) {
-            setStatus('refused');
+            setStatus({ type: 'refused' });
             return;
         }
         lifetime.current++;
@@ -381,16 +394,26 @@ export function PortalVisitorSort(props: PortalVisitorSortProps): ReactElement {
                 return;
             inFlight.current = null;
             if (!shown.draft.canReport(outcome)) {
-                setStatus('stale');
+                setStatus({ type: 'stale' });
                 return;
             }
-            setStatus(outcome.type);
+            const owner =
+                outcome.type === 'refused' || outcome.type === 'uncertain'
+                    ? {
+                          port: shown.port,
+                          canReport: () => shown.draft.canReport(outcome),
+                      }
+                    : undefined;
+            setStatus({ type: outcome.type, owner });
             props.onOutcome?.(outcome);
         });
     };
+    const feedbackType = status?.type;
     const feedback =
-        status === 'stale' || status === 'refused' || status === 'uncertain'
-            ? labels[status]
+        feedbackType === 'stale' ||
+        feedbackType === 'refused' ||
+        feedbackType === 'uncertain'
+            ? labels[feedbackType]
             : null;
     return h(
         'div',

@@ -1,9 +1,9 @@
 # Prepared native Portal differential corpus
 
-Status: **prepared and unrun**. The native dependency/execution hold remains in
-force. The SDK local tests are independent kernel tests; they do not execute the
-native reducer, thunk, or borrowed List/Grid consumer. Neither source inspection
-nor the historical six frame probes establishes full native collection parity.
+The original November 13 source trace prepared this corpus while native
+dependency execution was on hold. For current qualification, use the native
+owner's run on the revision under review. SDK kernel tests, source inspection
+and the historical six frame probes cover only their respective paths.
 
 `test/fixtures/nativePortalCollectionDifferential.test.ts.txt` is a native Jest
 test source kept inert in the SDK repository. When the native owner admits normal
@@ -62,11 +62,12 @@ accept another session, token, cache owner, or linked table. The test compares
 raw legacy IDs and accepted deduplicated frame independently because native
 legacy publication still occurs when the response-only frame is ineligible.
 
-## Required failures and later owner work
+## Findings from November 13 and later owner work
 
-The inspected native source does not already meet every target invariant. Keep
-these stronger requirements explicit when adapting the host; do not weaken
-assertions to obtain a parity result:
+The November 13 native source inspection found the gaps below. The listed
+failures describe that revision. Check the relevant assertions on the native
+revision under review to determine which gaps remain. Keep the target behavior
+and regression coverage when adapting the host.
 
 1. Start reentrancy: a subscriber may supersede a begin before the old thunk
    reads `owner.active`; the old thunk still performs transport. The prepared

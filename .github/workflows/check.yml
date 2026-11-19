@@ -94,6 +94,7 @@ jobs:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
             - name: Qualify packed Portal parent summary cards
               run: node scripts/portal-summary-cards-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
               env:
@@ -198,9 +199,10 @@ jobs:
                   SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
                   SDK_FORMULA_RESULT_DIR: ${{ runner.temp }}/sdk-formula-browser-results
               run: |
-                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR', 'SDK_FORMULA_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
+                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR', 'SDK_NATIVE_SCRATCH_DIR', 'SDK_FORMULA_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
     check:
         name: check (24)
         needs: [source, package]

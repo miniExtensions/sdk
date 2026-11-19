@@ -5,13 +5,12 @@ import {
     existsSync,
     lstatSync,
     mkdirSync,
-    mkdtempSync,
     readFileSync,
     readdirSync,
     realpathSync,
     rmSync,
 } from 'node:fs';
-import { availableParallelism, tmpdir, totalmem } from 'node:os';
+import { availableParallelism, totalmem } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -225,18 +224,20 @@ export async function checkNativeBrowserPair({
     const packageDirectory = readDirectory(env, 'SDK_NATIVE_PACKAGE_DIR');
     const proofDirectory = readDirectory(env, 'SDK_NATIVE_PROOF_DIR');
     const resultsDirectory = readDirectory(env, 'SDK_NATIVE_RESULT_DIR');
+    const scratch = readDirectory(env, 'SDK_NATIVE_SCRATCH_DIR');
     const qualified = verifyInputs(env, packageDirectory, proofDirectory);
     assert(!existsSync(resultsDirectory), 'Refuse existing browser results');
+    assert(!existsSync(scratch), 'Refuse existing browser scratch');
     mkdirSync(resultsDirectory, { recursive: true });
+    // Keep lane scratch out of the uploaded results. The workflow always
+    // cleans this same owned path even if its step timeout stops this process.
+    mkdirSync(scratch);
     console.log(
         'Native Chromium runner:',
         JSON.stringify({
             availableParallelism: availableParallelism(),
             memoryBytes: totalmem(),
         })
-    );
-    const scratch = mkdtempSync(
-        join(realpathSync(tmpdir()), 'sdk-native-pair-')
     );
     try {
         const results = await Promise.allSettled(

@@ -38,10 +38,15 @@ function setup(t) {
         SDK_NATIVE_PACKAGE_DIR: join(root, 'package'),
         SDK_NATIVE_PROOF_DIR: join(root, 'proof'),
         SDK_NATIVE_RESULT_DIR: join(root, 'results'),
+        SDK_NATIVE_SCRATCH_DIR: join(root, 'scratch'),
         PAIR_FIXTURE_BARRIER: join(root, 'barrier'),
     };
     for (const [name, dir] of Object.entries(dirs))
-        if (name !== 'SDK_NATIVE_RESULT_DIR') mkdirSync(dir);
+        if (
+            name !== 'SDK_NATIVE_RESULT_DIR' &&
+            name !== 'SDK_NATIVE_SCRATCH_DIR'
+        )
+            mkdirSync(dir);
     const archive = 'synthetic fixture archive';
     const filename = 'miniextensions-sdk-fixture.tgz';
     const sha256 = createHash('sha256').update(archive).digest('hex');
@@ -102,6 +107,7 @@ function assertCleaned(env) {
         );
         assert(!existsSync(scratch), `${lane} scratch retained`);
     }
+    assert(!existsSync(env.SDK_NATIVE_SCRATCH_DIR));
 }
 
 it('starts both isolated consumers, keeps both complete receipts and passes the required check', async (t) => {

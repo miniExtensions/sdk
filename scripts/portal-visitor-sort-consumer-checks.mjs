@@ -23,9 +23,12 @@ const searchCases = [
 const filterCases = [
     'portalVisitorFilter.test.ts',
     'reactPortalVisitorFilter.test.ts',
+    'portalVisitorFilterDropdown.test.ts',
+    'reactPortalVisitorQuickFilter.test.ts',
 ];
 const viewButtonsCase = 'reactPortalVisitorViewButtons.test.ts';
 const fixture = 'fixtures/htmlPresentationFixture.ts';
+const quickFilterFixture = 'fixtures/portalVisitorQuickFilterFixture.ts';
 const profiles = [
     ['18.3.1', '18.3.12', '18.3.1'],
     ['19.2.0', '19.2.2', '19.2.2'],
@@ -73,7 +76,7 @@ void createElement(PortalVisitorSearch, { port });
 const typedFilter = `
 import { createElement } from 'react';
 import { PortalVisitorFilter, type PortalVisitorFilterProps } from '@miniextensions/sdk/react';
-import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterPort } from '@miniextensions/sdk/portals';
+import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterDropdown, type PortalVisitorFilterPort } from '@miniextensions/sdk/portals';
 const port: PortalVisitorFilterPort = {
     read: () => null,
     subscribe: () => () => undefined,
@@ -86,7 +89,9 @@ const port: PortalVisitorFilterPort = {
 };
 const draft: PortalVisitorFilterDraft | null = createPortalVisitorFilterDraft(port);
 void draft?.snapshot().criteria;
-const props: PortalVisitorFilterProps = { port };
+const quickFilters: readonly PortalVisitorFilterDropdown[] = draft?.dropdowns() ?? [];
+void quickFilters.map(({selected}) => selected);
+const props: PortalVisitorFilterProps = { port, showDropdowns: true };
 void createElement(PortalVisitorFilter, props);
 `;
 
@@ -115,7 +120,8 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
     const cases = includeQuery
         ? [...sortCases, ...searchCases, viewButtonsCase, ...filterCases]
         : sortCases;
-    const expectedTests = includeQuery ? 69 : 15;
+    const expectedTests = includeQuery ? 78 : 15;
+    const fixtures = includeQuery ? [fixture, quickFilterFixture] : [fixture];
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(
@@ -207,7 +213,7 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
                           ]
                         : []),
                 ]);
-                for (const file of [...cases, fixture]) {
+                for (const file of [...cases, ...fixtures]) {
                     const source = readFileSync(
                         new URL('../test/' + file, import.meta.url),
                         'utf8'
@@ -239,6 +245,10 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
                         .replaceAll(
                             'htmlPresentationFixture.js',
                             'htmlPresentationFixture.' + suffix
+                        )
+                        .replaceAll(
+                            'portalVisitorQuickFilterFixture.js',
+                            'portalVisitorQuickFilterFixture.' + suffix
                         );
                     writeFileSync(
                         join(directory, file.replace(/\.ts$/, '.' + suffix)),

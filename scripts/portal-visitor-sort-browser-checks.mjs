@@ -222,12 +222,22 @@ const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
 };
+const quickChoices = [{value: 'red', label: 'Red'}, {value: 'blue', label: 'Blue'}];
 let filterFrame = {
     stamp: {...frame.stamp, fieldId: 'filter-portal'},
     fields: [{
         id: 'title', name: 'Title',
         operators: [{label: 'Contains', setting: currentTitle, operand: {kind: 'text'}}],
+    }, {
+        id: 'status', name: 'Status',
+        operators: [{label: 'Is', operand: {kind: 'choice', choices: quickChoices},
+            setting: {fieldType: 'singleSelect', type: 'is', idOrName: {type: 'id', id: 'status'}, value: 'red'}}],
+    }, {
+        id: 'labels', name: 'Labels',
+        operators: [{label: 'Any of', operand: {kind: 'choices', choices: quickChoices},
+            setting: {fieldType: 'multipleSelects', type: 'hasAnyOf', idOrName: {type: 'id', id: 'labels'}, value: []}}],
     }],
+    dropdownFieldIds: ['status', 'labels'],
     criteria: {
         logicalOperator: 'or',
         conditions: [{
@@ -260,7 +270,7 @@ const filterPort = {
     },
 };
 filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
-    port: filterPort, onOutcome: (outcome) => filterOutcomes.push(outcome),
+    port: filterPort, showDropdowns: true, onOutcome: (outcome) => filterOutcomes.push(outcome),
 })));
 globalThis.filterFixture = {
     summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits}),
@@ -271,6 +281,87 @@ globalThis.filterFixture = {
     unmount: () => filterRoot.unmount(),
 };
 `;
+
+async function checkQuickFilter(page, startingCriteria) {
+    const root = page.getByRole('group', { name: 'Quick filters' });
+    const status = root.getByRole('combobox', { name: 'Status' });
+    const labels = root.getByRole('listbox', { name: 'Labels' });
+    const summary = () =>
+        page.evaluate(() => globalThis.filterFixture.summary());
+    const waitForCount = (count) =>
+        page.waitForFunction(
+            (expected) =>
+                globalThis.filterFixture.summary().commands.length === expected,
+            count
+        );
+    const choose = async (control, values, count) => {
+        await control.dispatchEvent('pointerdown', {
+            button: 0,
+            isPrimary: true,
+        });
+        await control.selectOption(values);
+        await waitForCount(count);
+    };
+    await status.waitFor();
+    await labels.waitFor();
+    await status.focus();
+    const retained = await status.elementHandle();
+    assert.ok(retained);
+    try {
+        await page.evaluate(() => globalThis.filterFixture.cycleViews());
+        assert.equal(
+            await retained.evaluate(
+                (element) =>
+                    element.isConnected && element === document.activeElement
+            ),
+            true
+        );
+        await retained.selectOption('red');
+        assert.equal((await summary()).commands.length, 2);
+        assert.match(await page.getByRole('status').textContent(), /changed/);
+    } finally {
+        await retained.dispose();
+    }
+    await choose(status, 'red', 3);
+    let current = await summary();
+    assert.deepEqual(current.commands[2].criteria.conditions[0].setting, {
+        fieldType: 'singleSelect',
+        type: 'is',
+        idOrName: { type: 'id', id: 'status' },
+        value: 'red',
+    });
+    assert.deepEqual(
+        current.commands[2].criteria.conditions.slice(1),
+        startingCriteria.conditions
+    );
+    await choose(labels, ['blue', 'red'], 4);
+    current = await summary();
+    assert.deepEqual(current.commands[3].criteria.conditions[0].setting.value, [
+        'red',
+        'blue',
+    ]);
+    await root
+        .getByRole('button', { name: 'Clear filters Labels' })
+        .press('Enter');
+    await waitForCount(5);
+    assert.equal(
+        await labels.evaluate((element) => element === document.activeElement),
+        true
+    );
+    const hadStatus = (await summary()).commands[2].criteria;
+    assert.deepEqual((await summary()).commands[4].criteria, hadStatus);
+    await choose(status, '', 6);
+    const end = await summary();
+    assert.deepEqual(end.commands[5].criteria, startingCriteria);
+    assert.equal(end.submits, 0);
+    return {
+        commands: 4,
+        staleGestureRefused: true,
+        priorTreeRestored: true,
+        clearFocus: true,
+        formSubmits: 0,
+    };
+}
 
 async function checkFilter(page) {
     const trigger = page.getByRole('button', { name: 'Filter', exact: true });
@@ -391,6 +482,7 @@ async function checkFilter(page) {
     );
     assert.equal(dismissed.outcomes.at(-1).requestId, 'filter-2');
     assert.equal(dismissed.submits, 0);
+    const quick = await checkQuickFilter(page, dismissed.commands[1].criteria);
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -401,6 +493,7 @@ async function checkFilter(page) {
         paddingIsInert: true,
         operandEnterSubmits: 0,
         backdropAllocation: 'filter-2',
+        quick,
         focusRestored: true,
         cleanup: 'completed',
     };

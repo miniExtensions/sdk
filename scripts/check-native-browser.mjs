@@ -2546,6 +2546,13 @@ try {
             paddingIsInert: true,
             operandEnterSubmits: 0,
             backdropAllocation: 'filter-2',
+            quick: {
+                commands: 4,
+                staleGestureRefused: true,
+                priorTreeRestored: true,
+                clearFocus: true,
+                formSubmits: 0,
+            },
             focusRestored: true,
             cleanup: 'completed',
         });

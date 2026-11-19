@@ -208,6 +208,23 @@ for (const format of ['esm', 'cjs']) {
         });
     }
 
+    for (const name of ['index.cjs', 'upstream.cjs']) {
+        test(`${format} Collaborator provenance binds exact date runtime ${name} to the archive`, async (t) => {
+            const { record, sdkInput, pack, report } = fixture(t, format);
+            const member = `dist/vendor/date-time/${name}`;
+            const path = sdkInput(member);
+            pack();
+            await record();
+            assert.ok(
+                report.completeCollaborators[format].bundleInputs.some(
+                    (input) => input.archiveMember === `package/${member}`
+                )
+            );
+            writeFileSync(path, 'changed installed date runtime');
+            await assert.rejects(record, assert.AssertionError);
+        });
+    }
+
     for (const member of [
         `dist/${format === 'esm' ? 'cjs' : 'esm'}/react/index.js`,
         'src/react/CompleteCollaboratorField.ts',
@@ -218,6 +235,8 @@ for (const format of ['esm', 'cjs']) {
         'dist/vendor/headlessui-address/unreviewed.js',
         'dist/vendor/portal-sidebar-other/index.js',
         'dist/vendor/portal-sidebar/unreviewed.js',
+        'dist/vendor/date-time-other/index.cjs',
+        'dist/vendor/date-time/unreviewed.cjs',
     ]) {
         test(`${format} Collaborator provenance rejects ${member} even with matching archive bytes`, async (t) => {
             const { record, sdkInput, pack } = fixture(t, format);

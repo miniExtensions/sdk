@@ -82,7 +82,7 @@ type Status = {
     owner?: Open;
     outcome?: PortalVisitorFilterOutcome;
 };
-const FilterDateField = lazy(async () => ({
+const FilterDateField = /* @__PURE__ */ lazy(async () => ({
     default: (await import('./date/DateField.js')).DateField,
 }));
 const useCommitEffect =

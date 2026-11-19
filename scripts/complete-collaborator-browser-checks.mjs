@@ -287,8 +287,8 @@ export async function prepareCompleteCollaboratorFixtures({
                     '\\',
                     '/'
                 );
-                // The barrel reaches shared Address and lazy sidebar closures.
-                // Admit only their shipped runtime files, archive-bound below.
+                // The React barrel graph also reaches private shared runtimes.
+                // Bind their exact installed files to the packed archive.
                 assert(
                     within(join(installed, 'dist', format), path) ||
                         within(
@@ -304,6 +304,8 @@ export async function prepareCompleteCollaboratorFixtures({
                             'dist/vendor/headlessui-address/react-peer.js',
                             'dist/vendor/headlessui-address/sdk-runtime.js',
                             'dist/vendor/portal-sidebar/index.js',
+                            'dist/vendor/date-time/index.cjs',
+                            'dist/vendor/date-time/upstream.cjs',
                         ].includes(packagePath),
                     `Collaborator browser imported source or wrong SDK format: ${packagePath}`
                 );

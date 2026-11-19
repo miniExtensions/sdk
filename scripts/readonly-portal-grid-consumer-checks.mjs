@@ -147,7 +147,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const textCellCases = 6;
     const emptyCellCases = 3;
     const ratingCellCases = 8;
-    const checkboxCellCases = 14;
+    const checkboxCellCases = 15;
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
         ['19.2.0', '19.2.2', '19.2.2'],

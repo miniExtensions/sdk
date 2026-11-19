@@ -922,6 +922,22 @@ observes the same state and returns an unsubscribe function. Every snapshot's
 actions capture its page revision; retained callbacks cannot act against a later
 page revision or retired context.
 
+For a linked field configured to require opening its selected records, call
+`childOwner.acknowledgeEditPresentation(snapshot.revision, snapshot.child, signal)`
+from the mounted Edit content after it is shown. Use the exact ready Edit snapshot
+rendered by that presenter and abort its signal when the presentation retires.
+Loading, clicking Edit and showing Create do not supply credit. The method returns
+false for a stale owner, child, revision or presentation. It never performs a Save.
+
+The current parent retains credit per linked field and record. Next checks the
+current page. Final Submit rechecks all applicable fields against the unfiltered
+native selection. Closing a child or removing and re-adding the same record keeps
+credit within the same accepted parent. Parent or configuration replacement requires
+fresh presentations. The binding's configuration revision getter is a synchronous
+read of the current epoch and must not change the owner or session. Hosts that
+omit this acknowledgment keep the existing refusal for visible nonempty
+required-open selections.
+
 Optional React `AirtableForm` takes a scope, `FieldRendererSlots<ReactNode>`, an
 optional field `fallback` and a required `children(state)` layout render prop.
 Its state supplies `{ fieldId, node }` field entries, the same page/controller

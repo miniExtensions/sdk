@@ -22,7 +22,10 @@ import {
     type LoadedFormFieldDescriptor,
     type NormalizedFormSaveResult,
 } from './helpers.js';
-import { requireFormSaveAdmission } from './saveAdmission.js';
+import {
+    requireFinalFormSaveAdmission,
+    requireFormSaveAdmission,
+} from './saveAdmission.js';
 import { admitsFormWrite } from './writeAdmission.js';
 
 /** Applications change revision for visitor, connection, token and context changes. */
@@ -557,8 +560,9 @@ export const createFormController = (
                 requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
                 // Admission can replace the session; observing it can invalidate
-                // the Review signal or native draft. Finish with local state only.
+                // the Review signal, linked field configuration or native draft.
                 requireScope();
+                requireFinalFormSaveAdmission(requestOptions.lifecycle);
                 requireCapturedAttempt(true);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {

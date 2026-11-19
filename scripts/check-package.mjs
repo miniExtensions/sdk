@@ -395,6 +395,7 @@ import {
     checkFormPageConsumer,
     formPageTypedConsumer,
 } from './form-page-consumer-checks.mjs';
+import { checkFormRequiredOpenConsumer } from './form-required-open-consumer-checks.mjs';
 import {
     checkFormCompositionConsumer,
     formCompositionTypedConsumer,
@@ -4523,6 +4524,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     consumerDirectory: temporaryDirectory,
                 }),
                 1118
+            );
+            assert.equal(
+                await checkFormRequiredOpenConsumer({
+                    consumerDirectory: temporaryDirectory,
+                }),
+                2
             );
             assert.equal(
                 await checkFormDispositionConsumer({

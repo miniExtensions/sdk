@@ -57,6 +57,10 @@ import {
     type FormLinkedChildRecovery,
 } from './linkedChild.js';
 import { withFormWriteAdmission } from './writeAdmission.js';
+import {
+    registerLinkedRecordOpenHistory,
+    type LinkedRecordOpenHistory,
+} from './linkedRecordOpenHistory.js';
 
 export type FieldActionResult =
     | { accepted: true }
@@ -200,6 +204,10 @@ export function createFormFieldBindings(
     const controller = createFormController({ ...initial, loaded, store });
     let epoch = controller.getState().epoch;
     let contextRevision = controller.getState().contextRevision;
+    let openedLinkedRecords: {
+        configuration: string | number;
+        records: LinkedRecordOpenHistory;
+    } | null = null;
     const choiceCreators = new Map<string, FormSelectChoiceController>();
     const choiceBlocked = () =>
         [...choiceCreators.values()].some((model) => model.blocksForm());
@@ -251,6 +259,7 @@ export function createFormFieldBindings(
         }
     >();
     const retireEntries = () => {
+        openedLinkedRecords = null;
         const oldLinkedRecords = linkedRecordsOwner;
         linkedRecordsOwner = null;
         oldLinkedRecords?.destroy();
@@ -775,6 +784,35 @@ export function createFormFieldBindings(
                             ) ?? null
                         );
                     },
+                    creditEditPresentation: (recordId, configuration) => {
+                        const schema = loaded.payload.fieldIdsToSchemas[id];
+                        const settings = schema?.miniExtConfig;
+                        if (
+                            retired ||
+                            disposed ||
+                            pendingRead !== null ||
+                            schema?.fieldType !== 'multipleRecordLinks' ||
+                            !settings ||
+                            !('requireOpenLinkedRecords' in settings) ||
+                            settings.requireOpenLinkedRecords !== true
+                        )
+                            return false;
+                        const history =
+                            openedLinkedRecords?.configuration === configuration
+                                ? openedLinkedRecords.records
+                                : null;
+                        const previous = history?.get(id);
+                        if (!previous?.has(recordId)) {
+                            const records = new Map(history);
+                            records.set(
+                                id,
+                                new Set([...(previous ?? []), recordId])
+                            );
+                            openedLinkedRecords = { configuration, records };
+                            notify();
+                        }
+                        return true;
+                    },
                     changed: refresh,
                 });
                 linkedChildren.set(id, {
@@ -1283,6 +1321,26 @@ export function createFormFieldBindings(
         return draftCurrent === null
             ? null
             : () => !retired && !disposed && draftCurrent();
+    });
+    registerLinkedRecordOpenHistory(owner, {
+        observe: () => {
+            const captured = openedLinkedRecords;
+            if (!captured) return null;
+            let live = false;
+            try {
+                live =
+                    (options.configurationRevision?.() ?? 0) ===
+                    captured.configuration;
+            } catch {
+                // A host that cannot establish the current epoch supplies no credit.
+            }
+            if (openedLinkedRecords !== captured) return null;
+            // The page already observes controller scope. Here, check only the
+            // binding configuration and local lifetime, without calling getState.
+            if (!live || retired || disposed) openedLinkedRecords = null;
+            return openedLinkedRecords?.records ?? null;
+        },
+        peek: () => openedLinkedRecords?.records ?? null,
     });
     return owner;
 }

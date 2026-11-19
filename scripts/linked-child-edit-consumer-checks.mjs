@@ -24,6 +24,21 @@ owner.complete({ recordId: 'arbitrary' });
 void editableIds;
 `;
 
+export const linkedChildReactEditTypedConsumer = `
+import type { FormLinkedChildOwner } from '@miniextensions/sdk/forms';
+import { FormLinkedChildEditDialog, type FormLinkedChildEditDialogProps, type FormLinkedChildEditOpening } from '@miniextensions/sdk/react';
+declare const owner: FormLinkedChildOwner;
+declare const opener: HTMLButtonElement;
+declare const isCurrent: () => boolean;
+const state = owner.getSnapshot();
+if (state.intent?.type === 'edit' && state.child) {
+    const opening: FormLinkedChildEditOpening = { opener, child: state.child, recordId: state.intent.recordId, isCurrent };
+    const props: FormLinkedChildEditDialogProps = { owner, opening, renderFields: () => null };
+    void FormLinkedChildEditDialog;
+    void props;
+}
+`;
+
 export const linkedChildEditConsumerCheckCount = 40;
 
 const editChild = (fixtures, recordId) => {

@@ -2747,6 +2747,25 @@ dirty values and IDs under fresh controls. It uses the existing accepted load
 and its Save authority. Selection loss, another accepted child intent, or
 parent retirement ends draft retention.
 
+`FormLinkedChildEditDialog` from `@miniextensions/sdk/react` presents an
+accepted one-page Edit. After the owner opens the selected record, pass the
+owner, an `opening` with its exact opener, child, record ID and currentness
+check, and a `renderFields(child, pages)` callback. The dialog handles Close
+and Save using that owner, and restores focus to the current opener.
+
+If a Save response is lost, Close and Escape dismiss this presentation. The
+owner keeps the child draft and unresolved Save, which must be inspected before
+another submission. Parent rerenders preserve that dismissal. An explicitly
+admitted new Edit can open its own dialog. A Save still in flight keeps the
+dialog open.
+
+Required-open credit belongs to the host's presentation lifecycle. Rendering
+this dialog leaves the parent's open history unchanged. To record credit, the
+host must acknowledge the exact visible Edit with
+`owner.acknowledgeEditPresentation(revision, child, signal)` under its current
+authority revision and abort the signal when the presentation retires. See
+[the required-open host contract](field-bindings.md#form-composition-with-app-owned-layout).
+
 A React presentation borrows this owner. Subscribe in an effect and return only
 the unsubscribe function. Render `snapshot.child` using `AirtableForm` with a
 `createFormRenderScope` that borrows `snapshot.pages`; create and destroy that

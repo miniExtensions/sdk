@@ -358,6 +358,7 @@ import {
 import {
     checkLinkedChildEditConsumer,
     linkedChildEditTypedConsumer,
+    linkedChildReactEditTypedConsumer,
 } from './linked-child-edit-consumer-checks.mjs';
 import {
     checkLinkedChildEditFreshnessConsumer,
@@ -2218,6 +2219,7 @@ new Parser([]).parse({maxDepth:'48'});
     );
     for (const extension of ['mts', 'cts']) {
         const filename = `text-input-consumer.${extension}`;
+        const reactEditFilename = `linked-child-react-edit-consumer.${extension}`;
         writeFileSync(
             join(temporaryDirectory, filename),
             textInputTypedConsumer +
@@ -2239,6 +2241,10 @@ new Parser([]).parse({maxDepth:'48'});
                 borrowedFormRenderReactTypedConsumer +
                 portalSidePanelNavigationTypedConsumer
         );
+        writeFileSync(
+            join(temporaryDirectory, reactEditFilename),
+            linkedChildReactEditTypedConsumer
+        );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',
@@ -2252,6 +2258,7 @@ new Parser([]).parse({maxDepth:'48'});
             '--moduleResolution',
             'NodeNext',
             filename,
+            reactEditFilename,
         ]);
     }
     const reactSources = reactRecipes.map(([, code], index) => {

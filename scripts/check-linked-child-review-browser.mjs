@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { checkStarterConfirmationRecovery } from './browser-linked-child-confirmation-native.mjs';
+import { checkInstalledReactLinkedChildEdit } from './browser-linked-child-react-edit.mjs';
 import { checkLinkedChildCreateBrowser } from './browser-linked-child-create.mjs';
 const root = resolve(import.meta.dirname, '..');
 const output = process.argv[2]
@@ -312,6 +313,7 @@ try {
         }
     );
     report.installedEdit = [];
+    report.installedReactEdit = [];
     report.installedCreate = await checkLinkedChildCreateBrowser({
         archive,
         browser,
@@ -352,6 +354,25 @@ try {
                     error: String(error.stack ?? error),
                 });
             }
+            try {
+                const proof = await checkInstalledReactLinkedChildEdit({
+                    browser,
+                    consumer,
+                    fixtures,
+                    root,
+                });
+                report.installedReactEdit.push({
+                    reactVersion,
+                    passed: true,
+                    ...proof,
+                });
+            } catch (error) {
+                report.installedReactEdit.push({
+                    reactVersion,
+                    passed: false,
+                    error: String(error.stack ?? error),
+                });
+            }
         },
     });
     assert.deepEqual(
@@ -362,6 +383,15 @@ try {
         report.installedEdit.filter((lane) => !lane.passed),
         [],
         'Installed selected Edit dialog checks failed'
+    );
+    assert.deepEqual(
+        report.installedReactEdit.map((lane) => lane.reactVersion),
+        ['18.3.1', '19.2.0']
+    );
+    assert.deepEqual(
+        report.installedReactEdit.filter((lane) => !lane.passed),
+        [],
+        'Installed public React Edit dialog checks failed'
     );
     report.passed = true;
 } catch (error) {

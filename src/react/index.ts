@@ -3071,33 +3071,48 @@ function usePortalOpen<S extends ReadonlyPortalListSnapshot>(
     openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>,
     preferenceScopeKey?: string | null
 ) {
+    type Registration = { readonly action: ReadonlyPortalListOpenAction };
     const lifetime = useMemo(() => ({}), [scope, revision, preferenceScopeKey]);
     const committed = useRef<{
         lifetime: object;
-        actions: ReadonlyMap<string, ReadonlyPortalListOpenAction> | undefined;
+        registrations: ReadonlyMap<string, Registration>;
     } | null>(null);
     const commit = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+    commit(
+        () => () => {
+            committed.current = null;
+        },
+        []
+    );
     commit(() => {
-        const accepted = {
-            lifetime,
-            actions: openActions,
-        };
-        committed.current = accepted;
-        return () => {
-            if (committed.current === accepted) committed.current = null;
-        };
+        const previous = committed.current;
+        const retained =
+            previous?.lifetime === lifetime ? previous.registrations : null;
+        const registrations = new Map<string, Registration>();
+        for (const [recordId, action] of openActions ?? []) {
+            const registration = retained?.get(recordId);
+            // Equivalent host maps preserve each continuous registration.
+            // A replacement or removal ends it even if the same action returns.
+            registrations.set(
+                recordId,
+                registration?.action === action ? registration : { action }
+            );
+        }
+        committed.current = { lifetime, registrations };
     });
     return (
         recordId: string,
         action: ReadonlyPortalListOpenAction,
         trigger: HTMLButtonElement
     ) => {
+        const registration = committed.current?.registrations.get(recordId);
+        if (registration?.action !== action) return;
         const isCurrent = () => {
             const accepted = committed.current;
             if (
                 !trigger.isConnected ||
                 accepted?.lifetime !== lifetime ||
-                accepted.actions?.get(recordId) !== action ||
+                accepted.registrations.get(recordId) !== registration ||
                 action.revision !== revision
             )
                 return false;

@@ -30,6 +30,7 @@ let openActions;
 let status;
 let commandIsCurrent;
 let restoreFocus;
+let releaseOpen;
 let holdOpen = false;
 let preferenceWrites = 0;
 let legacyOpens = 0;
@@ -67,6 +68,10 @@ function admitChildren() {
         activate(isCurrent, returnFocus) {
             commandIsCurrent = isCurrent;
             restoreFocus = returnFocus;
+            releaseOpen = async () => {
+                if (isCurrent()) await snapshot.actions.openChild(row.recordId);
+                returnFocus();
+            };
             if (!holdOpen && isCurrent()) void snapshot.actions.openChild(row.recordId);
         },
     }]));
@@ -136,6 +141,46 @@ try {
     assert.equal(container.querySelector('[data-testid="open-rec_B"]'), null);
     assert.match(container.querySelector('li').textContent, /B detail/);
     openActions = admitChildren();
+    await React.act(async () => root.render(element()));
+    const listOpen = container.querySelector('[data-testid="open-rec_B"]');
+    const siblingOpen = container.querySelector('[data-testid="open-rec_A"]');
+    const originalActions = openActions;
+    const registrationRevision = scope.getSnapshot().revision;
+    holdOpen = true;
+    await click(siblingOpen);
+    const siblingIsCurrent = commandIsCurrent;
+    await click(listOpen);
+    const oldRegistrationIsCurrent = commandIsCurrent;
+    const completeOldOpen = releaseOpen;
+    openActions = new Map(originalActions);
+    await React.act(async () => root.render(element()));
+    assert.equal(oldRegistrationIsCurrent(), true, 'An equivalent map preserves the current registration');
+
+    openActions = new Map(originalActions).set('rec_B', { ...originalActions.get('rec_B') });
+    await React.act(async () => root.render(element()));
+    assert.equal(oldRegistrationIsCurrent(), false);
+    openActions = originalActions;
+    await React.act(async () => root.render(element()));
+    assert.equal(scope.getSnapshot().revision, registrationRevision);
+    assert.equal(container.querySelector('[data-testid="open-rec_B"]'), listOpen);
+    assert.equal(siblingIsCurrent(), true, 'Replacing one row keeps its sibling registration current');
+    const otherFocus = window.document.createElement('button');
+    window.document.body.append(otherFocus);
+    otherFocus.focus();
+    await completeOldOpen();
+    const staleRegistration = {
+        oldRegistrationCurrent: oldRegistrationIsCurrent(),
+        opened: fixture.calls.length,
+        focusStayed: window.document.activeElement === otherFocus,
+    };
+    assert.deepEqual(staleRegistration, { oldRegistrationCurrent: false, opened: 0, focusStayed: true }, 'A restored registration must not revive its old command');
+    holdOpen = false;
+    await click(listOpen);
+    assert.deepEqual(fixture.calls.map(call => call.recordId), ['rec_B']);
+    restoreFocus();
+    assert.equal(window.document.activeElement, listOpen);
+    const freshRegistration = { opened: fixture.calls.length, focusRestored: window.document.activeElement === listOpen };
+
     layout = 'grid';
     await React.act(async () => root.render(element()));
     assertOrder('tbody tr');
@@ -143,6 +188,7 @@ try {
     assert.equal(container.querySelector('[data-field-id="fld_detail"]'), null);
     const freshOpen = container.querySelector('[data-testid="open-rec_B"]');
     assert.equal(freshOpen.type, 'button');
+    holdOpen = true;
     await click(freshOpen);
     assert.deepEqual(fixture.calls.map(call => call.recordId), ['rec_B']);
     assert.equal(commandIsCurrent(), true);
@@ -196,7 +242,7 @@ try {
     root = undefined;
     assert.equal(active, 0);
     assert.equal(fixture.subscriptions, 1, 'Unmount must keep the host-owned scope alive');
-    console.log(JSON.stringify({ format, react: React.version, subscriptions, opens: fixture.calls.length, requests, preferenceWrites, submits }));
+    console.log(JSON.stringify({ format, react: React.version, subscriptions, opens: fixture.calls.length, requests, preferenceWrites, submits, staleRegistration, freshRegistration }));
 } finally {
     if (root) await React.act(async () => root.unmount());
     fixture.scope.destroy();

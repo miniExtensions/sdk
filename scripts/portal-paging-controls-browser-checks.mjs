@@ -30,6 +30,13 @@ window.pagingProof={
  replaceOffer:()=>fixture.replaceOffer(),
  firstFailure:()=>fixture.firstFailure(),
  configurationError:()=>fixture.configurationError(),
+ unmount(){
+  root.unmount();
+  const presenters=fixture.presenterSubscriptions;
+  const hostBefore=fixture.records.subscriptions;
+  fixture.records.scope.destroy();
+  return {presenters,hostBefore,hostAfter:fixture.records.subscriptions};
+ },
  snapshot:()=>({react:React.version,requests:fixture.requests,activations:fixture.activations,keyboard,submits,guard:fixture.guard()?.()??null}),
 };
 `;
@@ -164,7 +171,16 @@ export async function checkPortalPagingControlsBrowser({
         assert.deepEqual(remote, []);
         assert.deepEqual(transports, []);
         assert.deepEqual(errors, []);
+        const subscriptions = await page.evaluate(() =>
+            window.pagingProof.unmount()
+        );
+        assert.deepEqual(subscriptions, {
+            presenters: 0,
+            hostBefore: 1,
+            hostAfter: 0,
+        });
         Object.assign(evidence, result, {
+            subscriptions,
             remote,
             transports,
             errors,

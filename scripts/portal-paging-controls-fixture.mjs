@@ -6,6 +6,15 @@ import {createListFixture} from './list-fixture.mjs';
 export function createPagingFixture({React,api,ui,layout='list'}) {
  const h=React.createElement;
  const records=createListFixture(ui);
+ let presenterSubscriptions=0;
+ const scope={
+  getSnapshot:()=>records.scope.getSnapshot(),
+  subscribe(listener){
+   presenterSubscriptions++;
+   const unsubscribe=records.scope.subscribe(listener);
+   return()=>{presenterSubscriptions--;unsubscribe();};
+  },
+ };
  const [first,second]=records.initial.records.map((record,index)=>({
   ...record,fields:{...record.fields,fld_title:index?'Second':'First'},
  }));
@@ -46,6 +55,7 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
  publish(state,'next-page');
  return {
   records,
+  get presenterSubscriptions(){return presenterSubscriptions;},
   requests,
   activations,
   labels:{loadMore:'Más registros',retry:'Reintentar'},
@@ -84,7 +94,7 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
   },
   element(options={}) {
    const rowProps={
-    scope:records.scope,layout,label:'Records',
+    scope,layout,label:'Records',
     grid:{ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{}},
     renderers:{renderSingleLineTextField(field){return h('span',null,String(field.value??''));}},
    };

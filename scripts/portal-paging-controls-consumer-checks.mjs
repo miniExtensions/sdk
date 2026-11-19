@@ -119,6 +119,9 @@ try {
  assert.equal(formSubmits,0);
  await React.act(async()=>root.unmount());
  root=undefined;
+ assert.equal(fixture.presenterSubscriptions,0);
+ assert.equal(fixture.records.subscriptions,1);
+ fixture.records.scope.destroy();
  assert.equal(fixture.records.subscriptions,0);
  console.log(JSON.stringify({format,react:React.version,cases:8,postedReads:fixture.requests,hydrationErrors:errors.length,formSubmits,browserRequests}));
 } finally {

@@ -5516,14 +5516,29 @@ an SDK-owned Form attachment controller. It requires four genuine host ports:
 constructs no Form/client, native draft or recovery journal and grants no server
 authorization. Default Form attachment/recovery APIs keep their existing behavior.
 
-The host supplies actual private owner identity and policy history. An observed
-owner/visible/editable replacement permanently retires new allocation for that
-batch, including ABA; `canAllocate(file, originalIndex, completedPrefix)` must
-also check unobserved host generations and current capacity. Native File and
+The host supplies actual private owner identity and policy history. By default,
+observed owner replacement, hiding or loss of editability permanently retires
+new allocation for that batch, including ABA.
+`canAllocate(file, originalIndex, completedPrefix)` must also check unobserved
+host generations and current capacity. Native File and
 attachment objects are borrowed unchanged. `valueReadable` is a separate actual
 host privacy gate: masked/hidden native getters are not read and old-owner File,
 progress or completion activity is not exposed by snapshots. A field revision alone does not
 retire allocated settlement or discard concurrent native values.
+
+For a retained batch whose first allocation has started, the host can explicitly
+return `presentation: 'detached'` from `readField()`. Use this marker only for a
+presentation detach under the same live Form and field owner with current edit
+authority, even when the field is no longer visible. The detached snapshot is
+idle and empty, and the controller still holds its internal singleflight. A
+detached field cannot start a batch or allocate the first file. Every remaining
+file requires fresh `canAllocate` admission from the original host receipt.
+An observed owner or edit-policy change, a missing field, or an unmarked hidden
+field permanently stops further allocation. A synchronous host notification
+during the checks for a new allocation invalidates that admission. A snapshot
+requested reentrantly during a host read is idle and empty. Retain the controller
+at the host lifetime while its presentation detaches, and use `dispose()` for
+actual retirement. All allocated work still settles once on the original receipt.
 
 `start(files)` owns a serial batch immediately, including synchronous port and
 subscriber callbacks. A competing/reentrant start is `not-started`. There is no

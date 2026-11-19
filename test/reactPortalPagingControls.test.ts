@@ -76,7 +76,13 @@ it('delivers at most one intent per offer while the host retains admission and r
 
     await render({ type: 'next-error', message: 'Page unavailable' }, action());
     assert.equal(button().textContent, labels.retry);
-    await act(async () => button().click());
+    const pointerClick = (detail: number) =>
+        button().dispatchEvent(
+            new f.window.MouseEvent('click', { bubbles: true, detail })
+        );
+    await act(async () => pointerClick(2));
+    assert.deepEqual(received, ['next-page']);
+    await act(async () => pointerClick(1));
     await render(
         { type: 'first-error', message: 'First unavailable' },
         action()

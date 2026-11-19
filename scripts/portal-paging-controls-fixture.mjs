@@ -28,6 +28,17 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
  let offer;
  let currentRequest;
  let lastGuard;
+ let failNextPageImmediately=false;
+
+ function fail() {
+  if(!currentRequest) throw new Error('No read to fail');
+  const firstPage=currentRequest.offset===null;
+  currentRequest=undefined;
+  publish(
+   {type:firstPage?'first-error':'next-error',message:firstPage?'First page unavailable':'Next page unavailable'},
+   firstPage?'retry-first-page':'retry-next-page'
+  );
+ }
 
  function publish(next,intent) {
   state=next;
@@ -45,6 +56,10 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
      // The controller's publication follows the event. A duplicate activation
      // before React processes the publication must have no additional effect.
      publish({type:offset===null?'initial-loading':'next-loading'});
+     if(actual==='next-page'&&failNextPageImmediately) {
+      failNextPageImmediately=false;
+      fail();
+     }
     },
    };
    offer=issued;
@@ -62,15 +77,8 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
   connect(render){redraw=render;},
   guard(){return lastGuard;},
   replaceOffer(){publish({type:'ready',hasNextPage:true},'next-page');},
-  fail() {
-   if(!currentRequest) throw new Error('No read to fail');
-   const firstPage=currentRequest.offset===null;
-   currentRequest=undefined;
-   publish(
-    {type:firstPage?'first-error':'next-error',message:firstPage?'First page unavailable':'Next page unavailable'},
-    firstPage?'retry-first-page':'retry-next-page'
-   );
-  },
+  fail,
+  failNextPageImmediately(){failNextPageImmediately=true;},
   succeed() {
    if(!currentRequest) throw new Error('No read to complete');
    const firstPage=currentRequest.offset===null;

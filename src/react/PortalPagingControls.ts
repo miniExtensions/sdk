@@ -121,6 +121,8 @@ export function PortalPagingControls({
                           const started = press.current;
                           press.current = undefined;
                           if (
+                              // A later click from the same gesture can reach a new Retry offer.
+                              event.detail > 1 ||
                               captured == null ||
                               current.current !== captured ||
                               (started !== undefined && started !== captured) ||

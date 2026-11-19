@@ -153,6 +153,11 @@ function RatingCellProbe() {
                 currentFrame.current = frame;
                 setCell({ record: 'rating-B', frame, value: 4, selected: true, enabled: true, revision: 0 });
             },
+            rebind: record => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell(current => ({ ...current, record, frame, revision: current.revision + 1 }));
+            },
         };
         return () => {
             window.removeEventListener('keydown', cancel, true);
@@ -186,6 +191,7 @@ function RatingCellProbe() {
                 setCell(current => ({ ...current, selected: true }));
             },
             editor: cell.enabled ? {
+                key: 'stable external editor metadata',
                 owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
                 onChange(value) {
                     log.current.writes.push({ record: cell.record, value });
@@ -1382,7 +1388,7 @@ async function checkEmptyCellBrowser(page) {
     return { status: 'passed', desktop, narrow, actions };
 }
 
-async function checkRatingCellBrowser(page) {
+export async function checkRatingCellBrowser(page) {
     await page.evaluate(() => window.__nativeProbe.startRatingCell());
     const table = page.getByRole('table', { name: 'Rating Grid fixture' });
     await table.waitFor({ state: 'visible' });
@@ -1575,14 +1581,60 @@ async function checkRatingCellBrowser(page) {
     await page.waitForFunction(
         () => window.__ratingCellProbe.snapshot().writes.length === 4
     );
-    const result = await state();
-    assert.deepEqual(result.writes, [
+    assert.deepEqual((await state()).writes, [
         { record: 'rating-A', value: 3 },
         { record: 'rating-A', value: null },
         { record: 'rating-A', value: null },
         { record: 'rating-B', value: 2 },
     ]);
-    assert.equal(result.value, 2);
+
+    for (const [record, transition] of [
+        ['rating-C', 'replacement record'],
+        ['rating-C', 'new owner of the same record'],
+    ]) {
+        const before = await state();
+        const box = await icons.nth(4).boundingBox();
+        assert(box);
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        try {
+            await page.evaluate(
+                (nextRecord) => window.__ratingCellProbe.rebind(nextRecord),
+                record
+            );
+            await page.waitForFunction(
+                (revision) =>
+                    window.__ratingCellProbe.snapshot().revision === revision,
+                before.revision + 1
+            );
+        } finally {
+            await page.mouse.up();
+        }
+        const after = await state();
+        assert.equal(after.record, record);
+        assert.deepEqual(
+            after.writes,
+            before.writes,
+            `Releasing a press started before ${transition} must not write`
+        );
+        assert.equal(after.value, before.value);
+    }
+
+    await icons.nth(4).click();
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true,
+        'A fresh Rating icon click must focus the current slider'
+    );
+    await input.press('Delete');
+    const result = await state();
+    assert.deepEqual(result.writes.slice(4), [
+        { record: 'rating-C', value: 5 },
+        { record: 'rating-C', value: null },
+    ]);
+    assert.equal(result.value, null);
     assert.equal(result.opens, 0);
     assert.equal(result.submits, 0);
     return {

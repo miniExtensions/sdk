@@ -13,7 +13,7 @@ import {
     writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const consumerAgePolicy = Object.freeze({
@@ -25,15 +25,66 @@ export const consumerAgePolicy = Object.freeze({
     ignoreScripts: true,
 });
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
-function files(root, prefix = '') {
+function nonFileType(entry) {
+    const types = {
+        'symbolic link': entry.isSymbolicLink(),
+        'block device': entry.isBlockDevice(),
+        'character device': entry.isCharacterDevice(),
+        FIFO: entry.isFIFO(),
+        socket: entry.isSocket(),
+    };
+    return Object.keys(types).find((type) => types[type]) ?? 'unknown type';
+}
+function files(root, description, prefix = '', omitInstallOnlyModules = false) {
     return readdirSync(join(root, prefix), { withFileTypes: true })
         .flatMap((entry) => {
             const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-            if (entry.isDirectory()) return files(root, path);
-            assert(entry.isFile(), 'Consumer SDK contains a non-file');
+            if (entry.isDirectory()) {
+                if (omitInstallOnlyModules && path === 'node_modules')
+                    return [];
+                return files(root, description, path);
+            }
+            if (!entry.isFile())
+                assert.fail(
+                    `Consumer SDK contains a non-file in ${description}: ${JSON.stringify(path)} (${nonFileType(entry)})`
+                );
             return path;
         })
         .sort();
+}
+
+function isInside(directory, path) {
+    const child = relative(directory, path);
+    return (
+        child !== '' &&
+        child !== '..' &&
+        !child.startsWith(`..${sep}`) &&
+        !isAbsolute(child)
+    );
+}
+
+function assertInstalledDependencyBins(installed, modules, description) {
+    const dependencies = join(installed, 'node_modules');
+    if (!lstatSync(dependencies, { throwIfNoEntry: false })?.isDirectory())
+        return;
+    const bin = join(dependencies, '.bin');
+    const binEntry = lstatSync(bin, { throwIfNoEntry: false });
+    if (!binEntry) return;
+    assert(
+        binEntry.isDirectory(),
+        `Invalid dependency bin directory in ${description}`
+    );
+    for (const entry of readdirSync(bin, { withFileTypes: true })) {
+        if (!entry.isSymbolicLink()) continue;
+        const target = realpathSync(join(bin, entry.name));
+        assert(
+            isInside(modules, target) &&
+                lstatSync(target).isFile() &&
+                (!isInside(installed, target) ||
+                    isInside(dependencies, target)),
+            `Consumer SDK contains an invalid dependency executable in ${description}: ${JSON.stringify(`node_modules/.bin/${entry.name}`)} (symbolic link)`
+        );
+    }
 }
 
 /** Preserve callers' cwd, capture, timeout and existing recipe assertions. */
@@ -205,6 +256,7 @@ export function installAgeQualifiedConsumer({
         assert(!existsSync(npmLockPath), 'pnpm must not fabricate an npm lock');
     assert(lstatSync(lockPath).isFile());
     const lock = readFileSync(lockPath);
+    const lockSha256 = sha(lock);
     assert(
         lock.toString().includes(integrity),
         'pnpm lock omitted SDK archive integrity'
@@ -230,12 +282,23 @@ export function installAgeQualifiedConsumer({
                 .name,
             '@miniextensions/sdk'
         );
-        const expectedFiles = files(expectedRoot);
+        const expectedFiles = files(expectedRoot, 'packed archive');
+        // A hoisted install can place dependency packages and executables
+        // beside the SDK payload. Verify any node_modules the archive ships.
+        const omitInstallOnlyModules = !existsSync(
+            join(expectedRoot, 'node_modules')
+        );
         for (const name of sdkCopies) {
             const installed = join(modules, name);
             assert(lstatSync(installed).isDirectory());
             assert.equal(realpathSync(installed), installed);
-            assert.deepEqual(files(installed), expectedFiles);
+            const description = `installed SDK copy ${name}, lock SHA-256 ${lockSha256}`;
+            assert.deepEqual(
+                files(installed, description, '', omitInstallOnlyModules),
+                expectedFiles
+            );
+            if (omitInstallOnlyModules)
+                assertInstalledDependencyBins(installed, modules, description);
             for (const path of expectedFiles)
                 assert.deepEqual(
                     readFileSync(join(installed, path)),
@@ -247,7 +310,7 @@ export function installAgeQualifiedConsumer({
             manifestSha256: sha(readFileSync(join(root, 'package.json'))),
             minimumReleaseAge: 2880,
             exclusions: [],
-            lockSha256: sha(lock),
+            lockSha256,
             archiveSha256: sha(archive),
             files: expectedFiles.length,
             sdkCopies,

@@ -60,6 +60,7 @@ import {
     checkAttachmentPresentationBrowser,
     cleanupAttachmentPresentation,
 } from './attachment-presentation-browser-checks.mjs';
+import { checkAttachmentUploadProgressBrowser } from './attachment-upload-progress-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
@@ -1567,6 +1568,7 @@ try {
             'scripts/build-privacy-browser-proof.mjs',
             'scripts/attachment-review-recipe-checks.mjs',
             'scripts/attachment-presentation-browser-checks.mjs',
+            'scripts/attachment-upload-progress-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
@@ -2373,6 +2375,12 @@ try {
             evidence: report.completeDuration,
             output,
         });
+        report.attachmentUploadProgress = {};
+        await checkAttachmentUploadProgressBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.attachmentUploadProgress,
+        });
         report.theme = {};
         await checkThemeBrowser({
             browser,
@@ -2499,8 +2507,17 @@ try {
             consumer: temporary,
             evidence: report.portalVisitorSort,
             expectedReactVersion: nativeReactVersion,
+            includeSearch: true,
         });
         assert.equal(report.portalVisitorSort.passed, true);
+        assert.deepEqual(report.portalVisitorSort.search, {
+            commands: 5,
+            staleScanRejected: true,
+            transientReadRecovered: true,
+            replacementNotificationRecovered: true,
+            sameTermGenerationReported: true,
+            cleanup: 'completed',
+        });
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

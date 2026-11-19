@@ -30,6 +30,11 @@ const rejectedUrlEntry:AttachmentUrlInputProps={
     async appendCurrent(){return true;}
 };
 void urlEntryComponent;void rejectedUrlEntry;
+import {AttachmentUploadProgress,type AttachmentUploadProgressProps} from '@miniextensions/sdk/react';
+const uploadProgress:AttachmentUploadProgressProps={percentage:50,labels:{uploading:'Téléversement',cancel:'Annuler'},onCancel(){}};
+AttachmentUploadProgress(uploadProgress);
+// @ts-expect-error progress remains a numeric percentage
+AttachmentUploadProgress({...uploadProgress,percentage:'50%'});
 void attachmentPercent;void attachmentName;void attachmentUrlCompatible;void emptyFileWeight;
 `;
 

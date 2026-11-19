@@ -91,6 +91,125 @@ it('server-renders complete cell markup, literal empty display and named admitte
     assert.doesNotMatch(editable, /<form|<button[^>]+type="submit"/);
 });
 
+it('shows guidance only for the selected readonly cell and preserves its literal value', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const readOnlyGuidance = {
+        label: 'Edit form required',
+        text: 'Use the edit form for conditional fields.',
+    };
+    let selections = 0;
+    const onSelect = () => {
+        selections++;
+    };
+    const marker = '[aria-label="Edit form required"]';
+    const popup = () =>
+        fixture.window.document.body.querySelector('[role="tooltip"]');
+    await fixture.render(table({ readOnlyGuidance, onSelect }));
+    assert.equal(fixture.container.querySelector(marker), null);
+    await fixture.render(table({ readOnlyGuidance, onSelect, selected: true }));
+    const trigger = fixture.container.querySelector(marker);
+    assert.ok(trigger instanceof fixture.window.HTMLElement);
+    assert.equal(trigger.getAttribute('type'), 'button');
+    assert.equal(fixture.container.querySelector('input'), null);
+    assert.equal(
+        fixture.container.querySelector('.read-only-text')?.textContent,
+        'Baseline'
+    );
+    await act(async () =>
+        trigger.dispatchEvent(
+            new fixture.window.MouseEvent('mouseover', { bubbles: true })
+        )
+    );
+    assert.ok(popup());
+    await act(async () => trigger.focus());
+    const help = popup();
+    assert.ok(help);
+    assert.equal(help.textContent, readOnlyGuidance.text);
+    assert.equal(trigger.getAttribute('aria-describedby'), help.id);
+    await act(async () =>
+        trigger.dispatchEvent(
+            new fixture.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        )
+    );
+    assert.equal(popup(), null);
+    assert.equal(trigger.getAttribute('aria-describedby'), null);
+    await fixture.click(trigger);
+    assert.ok(popup());
+    assert.equal(selections, 0);
+    await fixture.render(
+        table({
+            readOnlyGuidance,
+            selected: true,
+            editor: {
+                onChange: () => assert.fail('No explicit edit was made'),
+                owner: { token: 'restored', isCurrent: () => true },
+            },
+        })
+    );
+    assert.equal(fixture.container.querySelector(marker), null);
+    assert.equal(popup(), null);
+    assert.equal(input(fixture).value, 'Baseline');
+    fixture.unchangedEffects();
+});
+
+it('retires focused guidance when the selected cell identity changes', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const rowA = {};
+    const rowB = {};
+    const present = (cellIdentity: object, text: string) =>
+        fixture.render(
+            table({
+                cellIdentity,
+                selected: true,
+                value: text,
+                displayText: text,
+                readOnlyGuidance: {
+                    label: 'Edit form required',
+                    text: `Use the edit form for ${text}.`,
+                },
+                onSelect: () => assert.fail('Help must not select the cell'),
+            })
+        );
+    const trigger = () => {
+        const node = fixture.container.querySelector('button');
+        assert.ok(node instanceof fixture.window.HTMLButtonElement);
+        return node;
+    };
+    const popup = () =>
+        fixture.window.document.body.querySelector('[role="tooltip"]');
+    await present(rowA, 'A');
+    const cell = fixture.container.querySelector('td');
+    await act(async () => trigger().focus());
+    assert.equal(popup()?.textContent, 'Use the edit form for A.');
+    await present(rowA, 'Updated A');
+    assert.equal(popup()?.textContent, 'Use the edit form for Updated A.');
+    assert.equal(fixture.window.document.activeElement === trigger(), true);
+
+    await present(rowB, 'B');
+    assert.equal(fixture.container.querySelector('td') === cell, true);
+    assert.equal(
+        popup() === null,
+        true,
+        'The replacement must close prior help'
+    );
+    assert.equal(trigger().getAttribute('aria-describedby'), null);
+    assert.equal(fixture.window.document.activeElement === trigger(), false);
+    assert.equal(cell?.querySelector('.read-only-text')?.textContent, 'B');
+    await act(async () => trigger().focus());
+    assert.equal(popup()?.textContent, 'Use the edit form for B.');
+    assert.equal(trigger().getAttribute('aria-describedby'), popup()?.id);
+
+    await present(rowA, 'A again');
+    assert.equal(popup() === null, true);
+    assert.equal(trigger().getAttribute('aria-describedby'), null);
+    assert.equal(fixture.window.document.activeElement === trigger(), false);
+    fixture.unchangedEffects();
+});
+
 it('selects and focuses without admission, retains composing Enter and commits once with ordinary Enter', async (t) => {
     const fixture = await htmlPresentationFixture(t);
     const writes: string[] = [];

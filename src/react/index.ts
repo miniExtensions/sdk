@@ -279,6 +279,11 @@ export {
     type AttachmentUrlInputProps,
 } from './AttachmentUrlInput.js';
 export {
+    AttachmentUploadProgress,
+    type AttachmentUploadProgressLabels,
+    type AttachmentUploadProgressProps,
+} from './AttachmentUploadProgress.js';
+export {
     ReadonlyAttachmentsField,
     renderReadonlyAttachmentsField,
     type ReadonlyAttachmentsFieldProps,
@@ -3430,6 +3435,14 @@ export type {
 } from './CompletePortalShell.js';
 
 export {
+    CompleteFormComposition,
+    type CompleteFormCompositionProps,
+    type FormCompositionField,
+    type FormCompositionHostSlots,
+    type FormCompositionItem,
+    type FormCompositionPrimaryAction,
+} from './CompleteFormComposition.js';
+export {
     FormSubmitButton,
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
@@ -3512,6 +3525,11 @@ export {
     type CompleteFormReviewProps,
 } from './CompleteFormReview.js';
 export { ReadonlyPortalGrid } from './ReadonlyPortalGrid.js';
+export { PortalVisitorSearch } from './PortalVisitorSearch.js';
+export type {
+    PortalVisitorSearchLabels,
+    PortalVisitorSearchProps,
+} from './PortalVisitorSearch.js';
 export { PortalVisitorSort } from './PortalVisitorSort.js';
 export type {
     PortalVisitorSortLabels,
@@ -3534,3 +3552,13 @@ export {
     PortalGridEmptyCell,
     type PortalGridEmptyCellProps,
 } from './PortalGridEmptyCell.js';
+export {
+    PortalGridRatingCell,
+    type PortalGridRatingCellProps,
+    type PortalGridRatingCellEditor,
+} from './PortalGridRatingCell.js';
+export {
+    PortalGridCheckboxCell,
+    type PortalGridCheckboxCellProps,
+    type PortalGridCheckboxCellEditor,
+} from './PortalGridCheckboxCell.js';

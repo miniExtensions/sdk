@@ -10,11 +10,14 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmptyCell}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
 import'@miniextensions/sdk/react/portal-grid-empty-cell.css';
+import'@miniextensions/sdk/react/portal-grid-cell.css';
+import'@miniextensions/sdk/react/rating.css';
+import'@miniextensions/sdk/react/complete-checkbox.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -32,7 +35,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
 }
 function TextCellProbe() {
     const [cell, setCell] = useState(() => ({
-        record: 'A', frame: {}, value: 'Committed A', selected: false
+        record: 'A', frame: {}, value: 'Committed A', selected: false, conditional: false
     }));
     const writeLog = useRef([]);
     const openCount = useRef(0);
@@ -52,7 +55,17 @@ function TextCellProbe() {
             replace: () => {
                 const frame = {};
                 currentFrame.current = frame;
-                setCell({ record: 'B', frame, value: 'Committed B', selected: true });
+                setCell({ record: 'B', frame, value: 'Committed B', selected: true, conditional: false });
+            },
+            replaceReadonly: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'C', frame, value: 'Readonly C', selected: true, conditional: true });
+            },
+            setConditional: (conditional) => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell(current => ({ ...current, frame, conditional }));
             },
         };
         return () => { delete window.__textCellProbe; };
@@ -69,7 +82,13 @@ function TextCellProbe() {
             selected: cell.selected,
             rowHeight: 'medium',
             onSelect: () => setCell(current => ({ ...current, selected: true })),
-            editor: {
+            readOnlyGuidance: cell.conditional ? {
+                label: 'Edit form required',
+                text: cell.record === 'C'
+                    ? 'Use the edit form for the replacement record.'
+                    : 'Use the edit form for conditional fields.',
+            } : undefined,
+            editor: cell.conditional ? undefined : {
                 owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
                 onChange(value) {
                     writeLog.current.push({ record: cell.record, value });
@@ -103,10 +122,160 @@ function EmptyCellProbe() {
         ))
     )));
 }
+function RatingCellProbe() {
+    const [cell, setCell] = useState(() => ({
+        record: 'rating-A', frame: {}, value: 2, selected: false, enabled: true, revision: 0,
+    }));
+    const log = useRef({ writes: [], selects: 0, opens: 0, submits: 0, keys: [] });
+    const currentFrame = useRef(cell.frame);
+    const cancelNext = useRef(false);
+    useEffect(() => {
+        const belongs = event => event.target instanceof Element && event.target.closest('[data-rating-probe]');
+        const cancel = event => {
+            if (belongs(event) && cancelNext.current) {
+                cancelNext.current = false;
+                event.preventDefault();
+            }
+        };
+        const record = event => {
+            if (belongs(event)) log.current.keys.push({ key: event.key, repeat: event.repeat, composing: event.isComposing, trusted: event.isTrusted, prevented: event.defaultPrevented });
+        };
+        window.addEventListener('keydown', cancel, true);
+        window.addEventListener('keydown', record);
+        window.__ratingCellProbe = {
+            snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, ...log.current }),
+            patch: patch => setCell(current => ({ ...current, ...patch })),
+            cancelNext: () => { cancelNext.current = true; },
+            retire: () => { currentFrame.current = {}; },
+            rerender: () => setCell(current => ({ ...current, revision: current.revision + 1 })),
+            replace: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'rating-B', frame, value: 4, selected: true, enabled: true, revision: 0 });
+            },
+        };
+        return () => {
+            window.removeEventListener('keydown', cancel, true);
+            window.removeEventListener('keydown', record);
+            delete window.__ratingCellProbe;
+        };
+    }, [cell]);
+    return h('form', {
+        'data-rating-probe': true,
+        onSubmit(event) { event.preventDefault(); log.current.submits++; },
+    }, h('table', {
+        'aria-label': 'Rating Grid fixture',
+        style: { width: 'max-content', borderCollapse: 'separate', borderSpacing: 0 },
+    }, h('thead', null, h('tr', null,
+        h('th', { scope: 'col', style: { width: 200 } }, 'Priority rating'),
+        h('th', { scope: 'col', style: { width: 160 } }, 'Record action')
+    )), h('tbody', null, h('tr', null,
+        h(PortalGridRatingCell, {
+            value: cell.value,
+            displayText: cell.value == null ? '' : String(cell.value),
+            title: 'Priority rating',
+            max: 5,
+            icon: 'star',
+            color: 'yellow',
+            labels: { empty: 'No priority', repair: 'Repair priority' },
+            cellIdentity: cell.record,
+            selected: cell.selected,
+            rowHeight: 'medium',
+            onSelect() {
+                log.current.selects++;
+                setCell(current => ({ ...current, selected: true }));
+            },
+            editor: cell.enabled ? {
+                owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
+                onChange(value) {
+                    log.current.writes.push({ record: cell.record, value });
+                    setCell(current => ({ ...current, value }));
+                },
+            } : undefined,
+        }), h('td', null, h('button', {
+            type: 'button', onClick() { log.current.opens++; },
+        }, 'Open from rating Grid'))
+    ))), h('button', { type: 'submit' }, 'Submit synthetic rating'));
+}
+function CheckboxCellProbe() {
+    const [cell, setCell] = useState(() => ({
+        record: 'checkbox-A', frame: {}, value: false, selected: false, enabled: true, revision: 0,
+    }));
+    const currentFrame = useRef(cell.frame);
+    const log = useRef({ writes: [], selections: 0, opens: 0, submits: 0, rejections: [], activations: [], pointerPhases: [] });
+    useEffect(() => {
+        window.__checkboxCellProbe = {
+            snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, ...log.current }),
+            patch: patch => setCell(current => ({ ...current, ...patch })),
+            reject: () => {
+                log.current.rejections.push({ record: cell.record, attempt: log.current.writes.length });
+                setCell(current => ({ ...current, value: false }));
+            },
+            retire: () => { currentFrame.current = {}; },
+            rerender: () => setCell(current => ({ ...current, revision: current.revision + 1 })),
+            replace: () => {
+                const frame = {};
+                currentFrame.current = frame;
+                setCell({ record: 'checkbox-B', frame, value: false, selected: false, enabled: true, revision: 0 });
+            },
+        };
+        return () => { delete window.__checkboxCellProbe; };
+    }, [cell]);
+    return h('form', {
+        id: 'checkbox-probe-form',
+        onSubmit(event) { event.preventDefault(); log.current.submits++; },
+        onClickCapture(event) {
+            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+                log.current.activations.push({ trusted: event.isTrusted, detail: event.detail });
+        },
+        onPointerDownCapture(event) {
+            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+                log.current.pointerPhases.push({ phase: 'down', record: cell.record, pointerType: event.pointerType, button: event.button, primary: event.isPrimary, trusted: event.isTrusted });
+        },
+        onPointerUpCapture(event) {
+            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+                log.current.pointerPhases.push({ phase: 'up', record: cell.record, pointerType: event.pointerType, button: event.button, primary: event.isPrimary, trusted: event.isTrusted });
+        },
+    }, h('p', { id: 'checkbox-help' }, 'Approval policy.'), h('table', {
+        'aria-label': 'Checkbox Grid fixture',
+        style: { width: 'max-content', borderCollapse: 'separate', borderSpacing: 0 },
+    }, h('thead', null, h('tr', null,
+        h('th', { scope: 'col', style: { width: 200 } }, 'Approved'),
+        h('th', { scope: 'col', style: { width: 160 } }, 'Record action')
+    )), h('tbody', null, h('tr', null,
+        h(PortalGridCheckboxCell, {
+            value: cell.value,
+            displayText: cell.value == null ? '' : String(cell.value),
+            title: 'Approved',
+            cellIdentity: cell.record,
+            selected: cell.selected,
+            rowHeight: 'medium',
+            onSelect() {
+                log.current.selections++;
+                setCell(current => ({ ...current, selected: true }));
+            },
+            editor: cell.enabled ? {
+                owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
+                id: 'checkbox-approval',
+                form: 'checkbox-probe-form',
+                ariaDescribedBy: 'checkbox-help',
+                ariaInvalid: false,
+                onChange(checked) {
+                    log.current.writes.push({ record: cell.record, value: checked });
+                    setCell(current => ({ ...current, value: checked }));
+                },
+            } : undefined,
+        }), h('td', null, h('button', {
+            type: 'button', onClick() { log.current.opens++; },
+        }, 'Open from checkbox Grid'))
+    ))), h('button', { type: 'submit' }, 'Submit synthetic checkbox'));
+}
 const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
-    startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe)))
+    startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
+    startRatingCell: () => root.render(h(StrictMode, null, h(RatingCellProbe))),
+    startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key })))
 };
 root.render(h(StrictMode,null,h(App)));
 `;
@@ -149,6 +318,14 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/portal-grid-single-line-text-cell.css',
         '/react/PortalGridEmptyCell.js',
         '/react/portal-grid-empty-cell.css',
+        '/react/PortalGridRatingCell.js',
+        '/react/ControlledRatingField.js',
+        '/react/RatingInput.js',
+        '/react/rating.css',
+        '/react/PortalGridCheckboxCell.js',
+        '/react/CompleteCheckboxField.js',
+        '/react/CheckboxField.js',
+        '/react/complete-checkbox.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -895,6 +1072,8 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.canonicalUnchanged, true);
     const textCell = await checkPlainTextCellBrowser(page);
     const emptyCell = await checkEmptyCellBrowser(page);
+    const ratingCell = await checkRatingCellBrowser(page);
+    const checkboxCell = await checkCheckboxCellBrowser(page);
     end = await snapshot();
     assert.deepEqual(end.errors, []);
     Object.assign(evidence, {
@@ -911,6 +1090,8 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         canonicalUnchanged: true,
         textCell,
         emptyCell,
+        ratingCell,
+        checkboxCell,
         errors: end.errors,
         limits: [
             'Installed SDK presentation only; actual native borrowed-route, child admission and persistent preference qualification remain separate.',
@@ -981,6 +1162,96 @@ async function checkPlainTextCellBrowser(page) {
     await page.waitForFunction(
         () => window.__textCellProbe.snapshot().writes.length === 2
     );
+    await input.fill('Retired by conditional policy');
+    await page.evaluate(() => window.__textCellProbe.setConditional(true));
+    const guidance = cell.getByRole('button', { name: 'Edit form required' });
+    await guidance.waitFor({ state: 'visible' });
+    assert.equal(await input.count(), 0);
+    assert.equal(
+        await cell.locator('.read-only-text').textContent(),
+        'Current B'
+    );
+    await guidance.hover();
+    const tooltip = page.getByRole('tooltip');
+    await tooltip.waitFor({ state: 'visible' });
+    assert.equal(
+        await tooltip.textContent(),
+        'Use the edit form for conditional fields.'
+    );
+    await guidance.focus();
+    assert.equal(
+        await guidance.getAttribute('aria-describedby'),
+        await tooltip.getAttribute('id')
+    );
+    await guidance.press('Escape');
+    await tooltip.waitFor({ state: 'hidden' });
+    assert.equal(await guidance.getAttribute('aria-describedby'), null);
+    await guidance.click();
+    assert.equal(
+        await cell.evaluate((node) => document.activeElement === node),
+        true
+    );
+    const copied = await cell.evaluate((node) => {
+        const clipboardData = new DataTransfer();
+        node.dispatchEvent(
+            new ClipboardEvent('copy', {
+                bubbles: true,
+                cancelable: true,
+                clipboardData,
+            })
+        );
+        return clipboardData.getData('text/plain');
+    });
+    assert.equal(copied, 'Current B');
+    await page.keyboard.press('Tab');
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        true
+    );
+    await guidance.press('Enter');
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        true
+    );
+    await tooltip.waitFor({ state: 'visible' });
+    assert.equal((await state()).writes.length, 2);
+    const previousCell = await cell.elementHandle();
+    assert.ok(previousCell);
+    try {
+        await page.evaluate(() => window.__textCellProbe.replaceReadonly());
+        await page.waitForFunction(
+            () => window.__textCellProbe.snapshot().record === 'C'
+        );
+        assert.equal(
+            await cell.evaluate(
+                (node, previous) => node === previous,
+                previousCell
+            ),
+            true
+        );
+    } finally {
+        await previousCell.dispose();
+    }
+    assert.equal(await tooltip.count(), 0);
+    assert.equal(await guidance.getAttribute('aria-describedby'), null);
+    assert.equal(
+        await guidance.evaluate((node) => document.activeElement === node),
+        false
+    );
+    assert.equal(
+        await cell.locator('.read-only-text').textContent(),
+        'Readonly C'
+    );
+    await guidance.focus();
+    await tooltip.waitFor({ state: 'visible' });
+    assert.equal(
+        await tooltip.textContent(),
+        'Use the edit form for the replacement record.'
+    );
+    await page.evaluate(() => window.__textCellProbe.setConditional(false));
+    await input.waitFor({ state: 'visible' });
+    assert.equal(await input.inputValue(), 'Readonly C');
+    assert.equal(await guidance.count(), 0);
     const result = await state();
     assert.deepEqual(result.writes, [
         { record: 'A', value: 'Rejected A' },
@@ -988,7 +1259,12 @@ async function checkPlainTextCellBrowser(page) {
     ]);
     assert.equal(result.submits, 0);
     assert.equal(result.opens, 0);
-    return { status: 'passed', ...result };
+    return {
+        status: 'passed',
+        conditionalGuidance: true,
+        guidanceIdentityRetired: true,
+        ...result,
+    };
 }
 
 async function checkEmptyCellBrowser(page) {
@@ -1099,6 +1375,620 @@ async function checkEmptyCellBrowser(page) {
     );
     await page.setViewportSize({ width: 1200, height: 900 });
     return { status: 'passed', desktop, narrow, actions };
+}
+
+async function checkRatingCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startRatingCell());
+    const table = page.getByRole('table', { name: 'Rating Grid fixture' });
+    await table.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => window.__ratingCellProbe != null);
+    const state = () =>
+        page.evaluate(() => window.__ratingCellProbe.snapshot());
+    const patch = async (value) => {
+        await page.evaluate(
+            (next) => window.__ratingCellProbe.patch(next),
+            value
+        );
+        await page.waitForFunction((expected) => {
+            const current = window.__ratingCellProbe.snapshot();
+            return Object.entries(expected).every(
+                ([key, value]) => current[key] === value
+            );
+        }, value);
+    };
+    const cell = table.locator('.mx-sdk-portal-grid-rating-cell');
+    const icons = cell.locator('.mx-sdk-rating-icon');
+    const input = cell.getByRole('slider', {
+        name: 'Priority rating',
+        exact: true,
+    });
+    assert.equal(await cell.count(), 1);
+    assert.equal(await icons.count(), 5);
+    assert.equal(await input.count(), 0);
+    assert.equal(
+        await cell.locator('.mx-sdk-rating-sr-only').textContent(),
+        '(2/5)'
+    );
+    const geometry = await cell.evaluate((node) => {
+        const icon = node.querySelector('.mx-sdk-rating-icon');
+        const thirdIcon = node.querySelectorAll('.mx-sdk-rating-icon')[2];
+        const hitBox = thirdIcon.getBoundingClientRect();
+        const hit = node.ownerDocument.elementFromPoint(
+            hitBox.left + hitBox.width / 2,
+            hitBox.top + hitBox.height / 2
+        );
+        const content = node.querySelector(
+            '.mx-sdk-portal-grid-text-cell__content'
+        );
+        const style = getComputedStyle(node);
+        const iconStyle = getComputedStyle(icon);
+        return {
+            tag: node.tagName,
+            parentTag: node.parentElement.tagName,
+            neutralShell: node.classList.contains('mx-sdk-portal-grid-cell'),
+            legacyTextCell: node.classList.contains(
+                'mx-sdk-portal-grid-text-cell'
+            ),
+            padding: [style.paddingTop, style.paddingLeft],
+            contentHeight: content.getBoundingClientRect().height,
+            iconWidth: iconStyle.width,
+            iconHeight: iconStyle.height,
+            iconDisplay: getComputedStyle(icon.parentElement).display,
+            thirdIconHit: thirdIcon.contains(hit),
+        };
+    });
+    assert.deepEqual(geometry, {
+        tag: 'TD',
+        parentTag: 'TR',
+        neutralShell: true,
+        legacyTextCell: false,
+        padding: ['8px', '12px'],
+        contentHeight: 52,
+        iconWidth: '24px',
+        iconHeight: '24px',
+        iconDisplay: 'flex',
+        thirdIconHit: true,
+    });
+    await icons.nth(2).click();
+    await input.waitFor({ state: 'visible' });
+    assert.equal((await state()).selected, true);
+    assert.equal((await state()).selects, 1);
+    assert.deepEqual((await state()).writes, []);
+
+    await icons.nth(2).click();
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().writes.length === 1
+    );
+    assert.deepEqual((await state()).writes, [
+        { record: 'rating-A', value: 3 },
+    ]);
+    assert.equal(await input.inputValue(), '3');
+    assert.equal(
+        await cell.locator('.mx-sdk-rating-print').textContent(),
+        '(3/5)'
+    );
+
+    for (const [key, count] of [
+        ['Delete', 2],
+        ['Backspace', 3],
+    ]) {
+        await patch({ value: 3 });
+        await input.focus();
+        await input.press(key);
+        await page.waitForFunction(
+            (expected) =>
+                window.__ratingCellProbe.snapshot().writes.length === expected,
+            count
+        );
+        const observed = await state();
+        assert.deepEqual(observed.writes.at(-1), {
+            record: 'rating-A',
+            value: null,
+        });
+        assert.equal(observed.value, null);
+        assert.equal(observed.keys.at(-1).key, key);
+        assert.equal(observed.keys.at(-1).prevented, true);
+        assert.equal(observed.keys.at(-1).trusted, true);
+        assert.equal(observed.submits, 0);
+        await input.press(key);
+        assert.equal((await state()).writes.length, count);
+    }
+
+    await patch({ value: 3 });
+    await input.dispatchEvent('keydown', {
+        key: 'Delete',
+        repeat: true,
+        cancelable: true,
+    });
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).keys.at(-1).repeat, true);
+    assert.equal((await state()).keys.at(-1).prevented, true);
+    await input.dispatchEvent('keydown', {
+        key: 'Backspace',
+        isComposing: true,
+        cancelable: true,
+    });
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).keys.at(-1).composing, true);
+    await page.evaluate(() => window.__ratingCellProbe.cancelNext());
+    await input.press('Delete');
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).keys.at(-1).prevented, true);
+    await input.press('Escape');
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).value, 3);
+
+    await patch({ enabled: false });
+    assert.equal(await input.count(), 0);
+    await icons.nth(4).click();
+    await cell.focus();
+    await page.keyboard.press('Delete');
+    assert.equal((await state()).writes.length, 3);
+    const readonlySummary = await cell
+        .locator('.mx-sdk-rating-sr-only')
+        .textContent();
+    assert.equal(readonlySummary, '(3/5)');
+    await patch({ value: null });
+    assert.equal(await cell.textContent(), '');
+    assert.equal(await icons.count(), 0);
+
+    await patch({ enabled: true, value: 3 });
+    await input.waitFor({ state: 'visible' });
+    await page.evaluate(() => window.__ratingCellProbe.retire());
+    await input.focus();
+    await input.press('Delete');
+    await icons.nth(3).click();
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).value, 3);
+
+    await page.evaluate(() => window.__ratingCellProbe.replace());
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().record === 'rating-B'
+    );
+    assert.equal(await input.inputValue(), '4');
+    const mounted = await input.elementHandle();
+    assert(mounted);
+    await input.focus();
+    await page.evaluate(() => window.__ratingCellProbe.rerender());
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().revision === 1
+    );
+    assert.equal(
+        await input.evaluate((node, previous) => node === previous, mounted),
+        true,
+        'An ordinary canonical rerender must retain the Rating input'
+    );
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true
+    );
+    assert.equal((await state()).writes.length, 3);
+    await mounted.dispose();
+    await icons.nth(1).click();
+    await page.waitForFunction(
+        () => window.__ratingCellProbe.snapshot().writes.length === 4
+    );
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        { record: 'rating-A', value: 3 },
+        { record: 'rating-A', value: null },
+        { record: 'rating-A', value: null },
+        { record: 'rating-B', value: 2 },
+    ]);
+    assert.equal(result.value, 2);
+    assert.equal(result.opens, 0);
+    assert.equal(result.submits, 0);
+    return {
+        status: 'passed',
+        geometry,
+        readonlySummary,
+        nonMutating: [
+            'repeat',
+            'composition',
+            'cancelled key',
+            'Escape',
+            'readonly',
+            'stale owner',
+        ],
+        ...result,
+    };
+}
+
+async function checkCheckboxCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startCheckboxCell());
+    const table = page.getByRole('table', { name: 'Checkbox Grid fixture' });
+    await table.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => window.__checkboxCellProbe != null);
+    const state = () =>
+        page.evaluate(() => window.__checkboxCellProbe.snapshot());
+    const patch = async (value) => {
+        await page.evaluate(
+            (next) => window.__checkboxCellProbe.patch(next),
+            value
+        );
+        await page.waitForFunction((expected) => {
+            const current = window.__checkboxCellProbe.snapshot();
+            return Object.entries(expected).every(
+                ([key, value]) => current[key] === value
+            );
+        }, value);
+    };
+    const waitForWrites = (count) =>
+        page.waitForFunction(
+            (expected) =>
+                window.__checkboxCellProbe.snapshot().writes.length ===
+                expected,
+            count
+        );
+    const cell = table.locator('.mx-sdk-portal-grid-checkbox-cell');
+    const input = cell.getByRole('checkbox', { name: 'Approved', exact: true });
+    assert.equal(await cell.count(), 1);
+    assert.equal((await state()).selected, false);
+    assert.equal(await input.isEnabled(), true);
+    assert.equal(await input.isChecked(), false);
+    assert.equal(await input.getAttribute('id'), 'checkbox-approval');
+    assert.equal(await input.getAttribute('aria-describedby'), 'checkbox-help');
+    assert.equal(await input.getAttribute('aria-invalid'), 'false');
+    assert.equal(
+        await input.evaluate((node) => node.form?.id),
+        'checkbox-probe-form'
+    );
+    const originalCell = await cell.elementHandle();
+    const originalInput = await input.elementHandle();
+    assert(originalCell && originalInput);
+    const geometry = await input.evaluate((node) => {
+        const cell = node.closest('td');
+        const style = getComputedStyle(node);
+        return {
+            cellTag: cell.tagName,
+            parentTag: cell.parentElement.tagName,
+            neutralShell: cell.classList.contains('mx-sdk-portal-grid-cell'),
+            width: style.width,
+            height: style.height,
+            contentHeight: cell
+                .querySelector('.mx-sdk-portal-grid-text-cell__content')
+                .getBoundingClientRect().height,
+        };
+    });
+    assert.deepEqual(geometry, {
+        cellTag: 'TD',
+        parentTag: 'TR',
+        neutralShell: true,
+        width: '20px',
+        height: '20px',
+        contentHeight: 20,
+    });
+
+    await input.click();
+    await waitForWrites(1);
+    assert.deepEqual((await state()).writes, [
+        { record: 'checkbox-A', value: true },
+    ]);
+    assert.equal((await state()).selected, true);
+    assert.equal(await input.isChecked(), true);
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true,
+        'The native checkbox keeps focus after its first pointer activation'
+    );
+    assert.deepEqual((await state()).activations[0], {
+        trusted: true,
+        detail: 1,
+    });
+
+    await page.evaluate(() => window.__checkboxCellProbe.reject());
+    await page.waitForFunction(
+        () => window.__checkboxCellProbe.snapshot().value === false
+    );
+    assert.equal(await input.isChecked(), false);
+    assert.equal((await state()).writes.length, 1);
+    assert.deepEqual((await state()).rejections, [
+        { record: 'checkbox-A', attempt: 1 },
+    ]);
+    assert.equal(
+        await input.evaluate(
+            (node, original) => node === original,
+            originalInput
+        ),
+        true,
+        'Host rollback restores the existing controlled input'
+    );
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true
+    );
+
+    await input.press('Space');
+    await waitForWrites(2);
+    assert.deepEqual((await state()).writes.at(-1), {
+        record: 'checkbox-A',
+        value: true,
+    });
+    assert.deepEqual((await state()).activations.at(-1), {
+        trusted: true,
+        detail: 0,
+    });
+    await input.press('Space');
+    await waitForWrites(3);
+    assert.deepEqual((await state()).writes.at(-1), {
+        record: 'checkbox-A',
+        value: false,
+    });
+    assert.equal(await input.isChecked(), false);
+
+    await patch({ selected: false });
+    const bounds = await cell.boundingBox();
+    assert(bounds);
+    await cell.click({
+        position: { x: bounds.width - 4, y: bounds.height - 4 },
+    });
+    await page.waitForFunction(
+        () => window.__checkboxCellProbe.snapshot().selected === true
+    );
+    assert.equal((await state()).writes.length, 3);
+    assert.equal(
+        await cell.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true,
+        'Only a background click moves focus to the cell surface'
+    );
+    await input.focus();
+    await page.evaluate(() => window.__checkboxCellProbe.rerender());
+    await page.waitForFunction(
+        () => window.__checkboxCellProbe.snapshot().revision === 1
+    );
+    assert.equal(
+        await cell.evaluate(
+            (node, original) => node === original,
+            originalCell
+        ),
+        true
+    );
+    assert.equal(
+        await input.evaluate(
+            (node, original) => node === original,
+            originalInput
+        ),
+        true
+    );
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true,
+        'Ordinary canonical rerenders preserve checkbox focus'
+    );
+    assert.equal((await state()).writes.length, 3);
+
+    await page.evaluate(() => window.__checkboxCellProbe.retire());
+    await input.press('Space');
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).value, false);
+    await input.click();
+    assert.equal((await state()).writes.length, 3);
+    assert.equal((await state()).value, false);
+    await input.focus();
+    await page.evaluate(() => window.__checkboxCellProbe.replace());
+    await page.waitForFunction(
+        () => window.__checkboxCellProbe.snapshot().record === 'checkbox-B'
+    );
+    assert.equal(
+        await cell.evaluate(
+            (node, original) => node === original,
+            originalCell
+        ),
+        true,
+        'The mounted table cell survives record and owner replacement'
+    );
+    assert.equal(
+        await originalInput.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        false,
+        'Replacing the owner and identity clears the old control focus'
+    );
+    assert.equal(await input.isChecked(), false);
+    await input.click();
+    await waitForWrites(4);
+    assert.deepEqual((await state()).writes.at(-1), {
+        record: 'checkbox-B',
+        value: true,
+    });
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true
+    );
+
+    await patch({ enabled: false });
+    assert.equal(await input.count(), 0);
+    const indicator = cell.locator('[data-checkbox-grid-value]');
+    assert.equal(
+        await indicator.getAttribute('data-checkbox-grid-value'),
+        'true'
+    );
+    await indicator.click();
+    assert.equal((await state()).writes.length, 4);
+    await patch({ value: false });
+    assert.equal(
+        await indicator.getAttribute('data-checkbox-grid-value'),
+        'false'
+    );
+    await indicator.click();
+    assert.equal((await state()).writes.length, 4);
+    await patch({ value: null });
+    assert.equal(await input.count(), 0);
+    assert.equal(await indicator.count(), 0);
+    assert.equal(await cell.textContent(), '');
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        { record: 'checkbox-A', value: true },
+        { record: 'checkbox-A', value: true },
+        { record: 'checkbox-A', value: false },
+        { record: 'checkbox-B', value: true },
+    ]);
+    assert(result.writes.every((write) => typeof write.value === 'boolean'));
+    assert.equal(result.opens, 0);
+    assert.equal(result.submits, 0);
+    await originalInput.dispose();
+    await originalCell.dispose();
+    const splitPointer = await checkCheckboxSplitPointerBrowser(page);
+    return {
+        status: 'passed',
+        geometry,
+        nonMutating: [
+            'host rollback',
+            'background selection',
+            'rerender',
+            'retired owner',
+            'readonly',
+            'blank',
+        ],
+        ...result,
+        splitPointer,
+    };
+}
+
+async function checkCheckboxSplitPointerBrowser(page) {
+    await page.evaluate(() =>
+        window.__nativeProbe.startCheckboxCell('split-pointer')
+    );
+    await page.waitForFunction(() => {
+        const current = window.__checkboxCellProbe?.snapshot();
+        return current?.record === 'checkbox-A' && current.writes.length === 0;
+    });
+    const table = page.getByRole('table', { name: 'Checkbox Grid fixture' });
+    const input = table.getByRole('checkbox', {
+        name: 'Approved',
+        exact: true,
+    });
+    const state = () =>
+        page.evaluate(() => window.__checkboxCellProbe.snapshot());
+    assert.equal((await state()).selected, false);
+    assert.equal(await input.isEnabled(), true);
+    assert.equal(await input.isChecked(), false);
+    const before = await input.boundingBox();
+    assert(before);
+    let pointerHeld = false;
+    let failure;
+    let after;
+    let released;
+    try {
+        await page.mouse.move(
+            before.x + before.width / 2,
+            before.y + before.height / 2
+        );
+        await page.mouse.down({ button: 'left' });
+        pointerHeld = true;
+        assert.deepEqual((await state()).writes, []);
+        await page.evaluate(() => window.__checkboxCellProbe.replace());
+        await page.waitForFunction(
+            () => window.__checkboxCellProbe.snapshot().record === 'checkbox-B'
+        );
+        assert.equal((await state()).selected, false);
+        assert.equal(await input.isEnabled(), true);
+        after = await input.boundingBox();
+        assert(after);
+        assert.deepEqual(
+            after,
+            before,
+            'The successor checkbox occupies the same position'
+        );
+        assert.deepEqual((await state()).writes, []);
+        await page.mouse.up({ button: 'left' });
+        pointerHeld = false;
+        released = await state();
+        assert.deepEqual(
+            released.writes,
+            [],
+            'An A pointer-down followed by B pointer-up must reach neither writer'
+        );
+        assert.equal(released.value, false);
+        assert.equal(released.opens, 0);
+        assert.equal(released.submits, 0);
+        assert.deepEqual(released.pointerPhases, [
+            {
+                phase: 'down',
+                record: 'checkbox-A',
+                pointerType: 'mouse',
+                button: 0,
+                primary: true,
+                trusted: true,
+            },
+            {
+                phase: 'up',
+                record: 'checkbox-B',
+                pointerType: 'mouse',
+                button: 0,
+                primary: true,
+                trusted: true,
+            },
+        ]);
+    } catch (error) {
+        failure = error;
+    } finally {
+        if (pointerHeld) {
+            try {
+                await page.mouse.up({ button: 'left' });
+            } catch (error) {
+                failure ??= error;
+            }
+        }
+    }
+    if (failure) throw failure;
+
+    const currentInput = await input.elementHandle();
+    assert(currentInput);
+    try {
+        await input.click();
+        await page.waitForFunction(
+            () => window.__checkboxCellProbe.snapshot().writes.length === 1
+        );
+        assert.deepEqual((await state()).writes, [
+            { record: 'checkbox-B', value: true },
+        ]);
+        assert.equal(await input.isChecked(), true);
+        assert.equal(
+            await input.evaluate(
+                (node) => node === node.ownerDocument.activeElement
+            ),
+            true,
+            'A fresh B click retains native input focus'
+        );
+        await page.evaluate(() => window.__checkboxCellProbe.rerender());
+        await page.waitForFunction(
+            () => window.__checkboxCellProbe.snapshot().revision === 1
+        );
+        assert.equal(
+            await input.evaluate(
+                (node, original) => node === original,
+                currentInput
+            ),
+            true,
+            'The current placement retains its input through an ordinary rerender'
+        );
+        assert.equal(
+            await input.evaluate(
+                (node) => node === node.ownerDocument.activeElement
+            ),
+            true
+        );
+        const fresh = await state();
+        assert.deepEqual(fresh.writes, [{ record: 'checkbox-B', value: true }]);
+        assert.equal(fresh.opens, 0);
+        assert.equal(fresh.submits, 0);
+        return { status: 'passed', before, after, released, fresh };
+    } finally {
+        await currentInput.dispose();
+    }
 }
 
 export async function checkReadonlyPortalGridProfile({

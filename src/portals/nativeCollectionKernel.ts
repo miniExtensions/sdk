@@ -523,7 +523,10 @@ export function createNativePortalCollectionKernel<
                 !metadataEcho(state.scope, scopeAfter)
             )
                 return null;
-            const generation = increment(state.generation);
+            const bindingChanged = !sameScope(state.scope, scopeAfter);
+            const generation = bindingChanged
+                ? increment(state.generation)
+                : state.generation;
             const cleanupReceipt = freeze({
                 read: receipt,
                 scope: detached(scopeAfter),
@@ -537,9 +540,7 @@ export function createNativePortalCollectionKernel<
                     generation,
                     active: null,
                     cleanup: cleanupReceipt,
-                    frame: sameScope(state.scope, scopeAfter)
-                        ? state.frame
-                        : null,
+                    frame: bindingChanged ? null : state.frame,
                     paging: {
                         ...state.paging,
                         isPaginating: false,

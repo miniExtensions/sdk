@@ -284,6 +284,11 @@ export function DocumentThumbnail(props: Props): ReactNode {
         let active = true;
         const live = () => active && flight.current === run && current();
         void (async () => {
+            if (source.kind === 'uri') {
+                // Let synchronous effect retirement finish before opening transport.
+                await Promise.resolve();
+                if (!live()) return;
+            }
             const document =
                 source.kind === 'bytes'
                     ? copied

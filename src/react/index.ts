@@ -3756,6 +3756,14 @@ export {
     type CompleteFormReviewProps,
 } from './CompleteFormReview.js';
 export { ReadonlyPortalGrid };
+export {
+    PortalPagingControls,
+    type PortalPagingControlsLabels,
+    type PortalPagingControlsProps,
+    type PortalPagingControlsState,
+    type PortalPagingIntent,
+    type PortalPagingOffer,
+} from './PortalPagingControls.js';
 export { PortalVisitorSearch } from './PortalVisitorSearch.js';
 export type {
     PortalVisitorSearchLabels,

@@ -1,6 +1,7 @@
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import { checkPortalShellReactMatrix } from './portal-shell-consumer-checks.mjs';
 import { checkReadonlyPortalListReactMatrix } from './readonly-portal-list-consumer-checks.mjs';
+import { checkPortalPagingControlsReactMatrix } from './portal-paging-controls-consumer-checks.mjs';
 import { checkSavedProgressReactMatrix } from './saved-progress-package-checks.mjs';
 import {
     checkCanonicalFormConsumer,
@@ -3248,6 +3249,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     await stop();
     assert.equal(readonlyPortalListProof.versions.length, 2);
     assert.equal(readonlyPortalListProof.cleanup, 'completed');
+    const portalPagingControlsProof = checkPortalPagingControlsReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        happyDomModulePath: require.resolve('happy-dom'),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(portalPagingControlsProof.results.length, 4);
+    assert.equal(portalPagingControlsProof.cleanup, 'completed');
     const nativePortalKernelProof = checkNativePortalKernelReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

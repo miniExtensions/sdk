@@ -1,9 +1,9 @@
 # Prepared native Portal differential corpus
 
-Status: **prepared and unrun**. The native dependency/execution hold remains in
-force. The SDK local tests are independent kernel tests; they do not execute the
-native reducer, thunk, or borrowed List/Grid consumer. Neither source inspection
-nor the historical six frame probes establishes full native collection parity.
+The original November 13 source trace prepared this corpus while native
+dependency execution was on hold. For current qualification, use the native
+owner's run on the revision under review. SDK kernel tests, source inspection
+and the historical six frame probes cover only their respective paths.
 
 `test/fixtures/nativePortalCollectionDifferential.test.ts.txt` is a native Jest
 test source kept inert in the SDK repository. When the native owner admits normal

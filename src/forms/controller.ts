@@ -562,7 +562,10 @@ export const createFormController = (
                 // Admission can replace the session; observing it can invalidate
                 // the Review signal, linked field configuration or native draft.
                 requireScope();
-                requireFinalFormSaveAdmission(requestOptions.lifecycle);
+                requireFinalFormSaveAdmission(
+                    requestOptions.lifecycle,
+                    requireScope
+                );
                 requireCapturedAttempt(true);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {

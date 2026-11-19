@@ -906,15 +906,32 @@ export function createFormPageOwner(
                             requireFormSaveAdmission(saveOptions?.lifecycle);
                             admission();
                         },
-                        () => {
+                        (requireScope) => {
                             requireFinalFormSaveAdmission(
-                                saveOptions?.lifecycle
+                                saveOptions?.lifecycle,
+                                requireScope
                             );
                             if (openHistory === null) return;
-                            const observed =
-                                readLinkedRecordOpenHistory(fields);
                             if (
-                                observed !== openHistory ||
+                                readLinkedRecordOpenHistory(fields) !==
+                                openHistory
+                            )
+                                throw new FormPageError('stale-revision');
+                            // Each observation can invalidate the other. Confirm
+                            // the same configuration after the scope read, then
+                            // fence the owner before relying on local state.
+                            requireScope();
+                            if (
+                                readLinkedRecordOpenHistory(fields) !==
+                                openHistory
+                            )
+                                throw new FormPageError('stale-revision');
+                            requireScope();
+                            if (
+                                !isCurrentLinkedRecordOpenHistory(
+                                    fields,
+                                    openHistory
+                                ) ||
                                 retired ||
                                 disposed ||
                                 operation.abort.signal.aborted ||

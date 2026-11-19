@@ -933,10 +933,9 @@ The current parent retains credit per linked field and record. Next checks the
 current page. Final Submit rechecks all applicable fields against the unfiltered
 native selection. Closing a child or removing and re-adding the same record keeps
 credit within the same accepted parent. Parent or configuration replacement requires
-fresh presentations. The binding's configuration revision getter is a synchronous
-read of the current epoch and must not change the owner or session. Hosts that
-omit this acknowledgment keep the existing refusal for visible nonempty
-required-open selections.
+fresh presentations. Advance the binding's configuration revision when a new
+linked-record configuration takes effect. Hosts that omit this acknowledgment
+keep the existing refusal for visible nonempty required-open selections.
 
 Optional React `AirtableForm` takes a scope, `FieldRendererSlots<ReactNode>`, an
 optional field `fallback` and a required `children(state)` layout render prop.

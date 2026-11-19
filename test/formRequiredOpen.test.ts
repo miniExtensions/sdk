@@ -3,9 +3,11 @@ import { it } from 'node:test';
 import {
     createFormFieldBindings,
     createFormPageOwner,
+    FormControllerError,
     FormPageError,
     RecoveryJournal,
 } from '../src/forms/index.js';
+import { withFormSaveAdmission } from '../src/forms/saveAdmission.js';
 import { createMiniExtensionsClient } from '../src/runtime/client.js';
 import type { SaveFormInput } from '../src/runtime/types.js';
 import {
@@ -40,6 +42,7 @@ function requiredOpenFixture(
         headerSectionTitle: 'Finish',
     };
     let configuration = 0;
+    let scopeRevision = 0;
     const writes: SaveFormInput[] = [];
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
@@ -91,7 +94,7 @@ function requiredOpenFixture(
         client,
         getScope: () => {
             observations.scope?.();
-            return { ownerId: 'synthetic-parent', revision: 0 };
+            return { ownerId: 'synthetic-parent', revision: scopeRevision };
         },
         configurationRevision: () => {
             observations.configuration?.();
@@ -127,6 +130,10 @@ function requiredOpenFixture(
         client,
         writes,
         open,
+        replaceOwner: (kind: 'scope' | 'session') => {
+            if (kind === 'scope') scopeRevision++;
+            else client.setSession({ visitor: 'synthetic-successor' });
+        },
         rotateConfiguration: () => {
             configuration++;
         },
@@ -316,3 +323,75 @@ it('refuses transport when the final owner observation advances the linked confi
         f.dispose();
     }
 });
+
+for (const kind of ['scope', 'session', 'configuration'] as const) {
+    it(
+        'refuses a change to ' + kind + ' during final linked admission',
+        async () => {
+            let finalAdmission = false;
+            let checkScope = false;
+            let changed = false;
+            const f = requiredOpenFixture([first], {
+                configuration() {
+                    if (!finalAdmission || changed) return;
+                    if (kind === 'configuration') checkScope = true;
+                    else {
+                        changed = true;
+                        f.replaceOwner(kind);
+                    }
+                },
+                scope() {
+                    if (!checkScope) return;
+                    checkScope = false;
+                    changed = true;
+                    f.rotateConfiguration();
+                },
+            });
+            const finishes: string[] = [];
+            try {
+                assert(await f.fields.linkedRecords(links).readSelected());
+                assert((await f.open(first))());
+                f.owner.close();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                const lifecycle = withFormSaveAdmission(
+                    {
+                        dispatch() {
+                            return {
+                                accepted() {},
+                                finish(disposition) {
+                                    finishes.push(disposition);
+                                },
+                            };
+                        },
+                    },
+                    () => {},
+                    () => {
+                        finalAdmission = true;
+                    }
+                );
+                const outcome = await f.pages
+                    .submit(f.pages.getSnapshot().revision, {
+                        lifecycle,
+                    })
+                    .then(
+                        () => null,
+                        (error: unknown) => error
+                    );
+                assert.equal(changed, true);
+                assert.deepEqual(
+                    { writes: f.writes.length, finishes },
+                    { writes: 0, finishes: ['not-dispatched'] }
+                );
+                if (kind === 'configuration') {
+                    assert(outcome instanceof FormPageError);
+                    assert.equal(outcome.reason, 'stale-revision');
+                } else {
+                    assert(outcome instanceof FormControllerError);
+                    assert.equal(outcome.code, 'scope-changed');
+                }
+            } finally {
+                f.dispose();
+            }
+        }
+    );
+}

@@ -162,6 +162,7 @@ export async function checkStarterConfirmationRecovery({
     fixtures,
     root,
     onlyClose = false,
+    onlySelectedEditDialog = false,
     reactVersion,
 }) {
     const prepared = await prepareStarterConfirmationProof({
@@ -196,25 +197,40 @@ export async function checkStarterConfirmationRecovery({
     const origin = `http://127.0.0.1:${server.address().port}`;
     try {
         const closeCase = { mode: 'edit', close: true };
-        const scenarios = onlyClose
-            ? [closeCase]
-            : [
-                  { mode: 'create', multiPage: false },
-                  { mode: 'edit', multiPage: false },
-                  { mode: 'create', multiPage: true },
-                  { mode: 'create', multiPage: false, mouseBlur: true },
-                  closeCase,
-              ];
-        for (const { mode, multiPage, mouseBlur, close } of scenarios) {
-            const label = close
-                ? 'dirty Close and explicit resume'
-                : mouseBlur
-                  ? 'mouse-blur confirmation recovery'
-                  : multiPage
-                    ? 'multi-page Review'
-                    : 'confirmation recovery';
+        const scenarios = onlySelectedEditDialog
+            ? [{ ...closeCase, editDialog: true }]
+            : onlyClose
+              ? [closeCase]
+              : [
+                    { mode: 'create', multiPage: false },
+                    { mode: 'edit', multiPage: false },
+                    { mode: 'create', multiPage: true },
+                    { mode: 'create', multiPage: false, mouseBlur: true },
+                    closeCase,
+                ];
+        for (const {
+            mode,
+            multiPage,
+            mouseBlur,
+            close,
+            editDialog,
+        } of scenarios) {
+            const label = editDialog
+                ? 'selected Edit dialog'
+                : close
+                  ? 'dirty Close and explicit resume'
+                  : mouseBlur
+                    ? 'mouse-blur confirmation recovery'
+                    : multiPage
+                      ? 'multi-page Review'
+                      : 'confirmation recovery';
             console.log(`Installed starter ${mode} ${label}: starting`);
-            const calls = { reads: 0, childLoads: 0, saves: [] };
+            const calls = {
+                reads: 0,
+                childLoads: 0,
+                childRecords: [],
+                saves: [],
+            };
             const parent = fixtures.parentForm('edit');
             parent.payload.fieldIdsInForm = ['fld_title', 'fld_children_a'];
             parent.payload.fieldIdsToSchemas.fld_children_a.miniExtConfig.recordFinderMode =
@@ -228,6 +244,24 @@ export async function checkStarterConfirmationRecovery({
                 const page = await context.newPage();
                 page.setDefaultTimeout(10000);
                 page.on('pageerror', (error) => errors.push(error.message));
+                if (editDialog)
+                    await page.addInitScript(() => {
+                        let parentSubmits = 0;
+                        document.addEventListener(
+                            'submit',
+                            (event) => {
+                                if (
+                                    event.target instanceof HTMLFormElement &&
+                                    event.target.querySelector(
+                                        '[data-field-id="fld_children_a"]'
+                                    )
+                                )
+                                    parentSubmits++;
+                            },
+                            true
+                        );
+                        window.selectedEditParentSubmits = () => parentSubmits;
+                    });
                 await context.route('**/*', async (route) => {
                     const request = route.request();
                     const url = new URL(request.url());
@@ -251,6 +285,11 @@ export async function checkStarterConfirmationRecovery({
                                     : structuredClone(parent);
                             if ('childExtensionInfo' in input) {
                                 calls.childLoads++;
+                                if (editDialog)
+                                    calls.childRecords.push(
+                                        input.childExtensionInfo.accessType
+                                            .childExtensionRecordId
+                                    );
                                 loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
                                 if (close)
                                     loaded.payload.formFieldIdsWithUnsavedChanges =
@@ -358,6 +397,17 @@ export async function checkStarterConfirmationRecovery({
                 const parentTitle = page
                     .locator('#screen [data-field-id="fld_title"]')
                     .first();
+                if (editDialog)
+                    assert(
+                        await parentTitle.evaluate((node) =>
+                            Boolean(
+                                node.form?.querySelector(
+                                    '[data-field-id="fld_children_a"]'
+                                )
+                            )
+                        ),
+                        'The parent form submit observer must match the loaded Form'
+                    );
                 await parentTitle.fill('Parent draft retained');
                 // Native change on blur refreshes the action controls. Commit
                 // the edit before Playwright resolves the next action button.
@@ -378,12 +428,14 @@ export async function checkStarterConfirmationRecovery({
                             exact: true,
                         })
                         .click();
-                    await page
-                        .getByRole('button', {
-                            name: 'Edit linked record rec_existing',
-                            exact: true,
-                        })
-                        .click();
+                    const edit = page.getByRole('button', {
+                        name: 'Edit linked record rec_existing',
+                        exact: true,
+                    });
+                    if (editDialog) {
+                        await edit.focus();
+                        await page.keyboard.press('Enter');
+                    } else await edit.click();
                 } else
                     await page
                         .getByRole('button', {
@@ -395,7 +447,44 @@ export async function checkStarterConfirmationRecovery({
                 const childTitle = page.locator(
                     '[data-linked-child-pane] [data-field-id="fld_title"]'
                 );
+                const editor = page.getByRole('dialog', {
+                    name: 'Edit linked record',
+                    exact: true,
+                });
+                const capture = () => [
+                    calls.reads,
+                    calls.childLoads,
+                    calls.saves.length,
+                ];
+                const assertEditorFocus = async () => {
+                    assert(
+                        await editor.evaluate((dialog) =>
+                            dialog.contains(document.activeElement)
+                        ),
+                        'Focus left the selected Edit dialog'
+                    );
+                };
                 expected.reads = calls.reads;
+                if (editDialog) {
+                    await childTitle.waitFor();
+                    assert.deepEqual(capture(), [1, 1, 0]);
+                    assert.deepEqual(calls.childRecords, ['rec_existing']);
+                    assert.equal(
+                        await editor.count(),
+                        1,
+                        'Keyboard Edit loaded the selected child with one read, one load and zero Saves, but did not open a named dialog'
+                    );
+                    assert(
+                        await editor.evaluate((node) => node.matches(':modal'))
+                    );
+                    await assertEditorFocus();
+                    await page.keyboard.press('Tab');
+                    await assertEditorFocus();
+                    await page.keyboard.press('Shift+Tab');
+                    await assertEditorFocus();
+                    await parentTitle.evaluate((node) => node.focus());
+                    await assertEditorFocus();
+                }
                 await childTitle.fill(expected.childTitle);
                 if (close) {
                     const closeButton = page.getByRole('button', {
@@ -405,11 +494,6 @@ export async function checkStarterConfirmationRecovery({
                     const dialog = page.getByRole('alertdialog', {
                         name: 'Close linked record?',
                     });
-                    const capture = () => [
-                        calls.reads,
-                        calls.childLoads,
-                        calls.saves.length,
-                    ];
                     const focus = (locator) =>
                         locator.evaluate(
                             (node) => document.activeElement === node
@@ -435,6 +519,7 @@ export async function checkStarterConfirmationRecovery({
                         .getByRole('button', { name: 'Confirm close' })
                         .click();
                     await childTitle.waitFor({ state: 'detached' });
+                    if (editDialog) await editor.waitFor({ state: 'hidden' });
                     const reopen = page.getByRole('button', {
                         name: 'Edit linked record rec_existing',
                         exact: true,
@@ -442,7 +527,8 @@ export async function checkStarterConfirmationRecovery({
                     assert.equal(await focus(reopen), true);
                     const confirmed = capture();
                     assert.deepEqual(confirmed, [1, 1, 0]);
-                    await reopen.press('Enter');
+                    if (editDialog) await page.keyboard.press('Enter');
+                    else await reopen.press('Enter');
                     await idle();
                     assert.equal(
                         await childTitle.inputValue(),
@@ -450,6 +536,73 @@ export async function checkStarterConfirmationRecovery({
                     );
                     const resumed = capture();
                     assert.deepEqual(resumed, [1, 1, 0]);
+
+                    if (editDialog) {
+                        await editor.waitFor();
+                        await assertEditorFocus();
+                        await editor
+                            .getByRole('button', {
+                                name: 'Review child',
+                                exact: true,
+                            })
+                            .press('Enter');
+                        const review = page.getByRole('dialog', {
+                            name: 'Review child answers',
+                            exact: true,
+                        });
+                        await review.waitFor();
+                        assert.deepEqual(capture(), [1, 1, 0]);
+                        const [response] = await Promise.all([
+                            page.waitForResponse((response) => {
+                                const url = new URL(response.url());
+                                return (
+                                    url.origin ===
+                                        'https://synthetic-sdk.invalid' &&
+                                    url.searchParams.get('route') ===
+                                        'saveForm' &&
+                                    response.request().method() === 'POST'
+                                );
+                            }),
+                            review
+                                .getByRole('button', {
+                                    name: 'Confirm',
+                                    exact: true,
+                                })
+                                .press('Enter'),
+                        ]);
+                        assert(response.ok());
+                        await idle();
+                        assert.deepEqual(capture(), [1, 1, 1]);
+                        assertChildSaveRouting(calls.saves[0], 'edit');
+                        assert.equal(
+                            calls.saves[0].formRecord.data.fld_title,
+                            expected.childTitle
+                        );
+                        assert.equal(
+                            await parentTitle.inputValue(),
+                            expected.parentTitle
+                        );
+                        assert.deepEqual(
+                            JSON.parse(await parentLinks.inputValue()),
+                            expected.parentLinks
+                        );
+                        const parentSubmits = await page.evaluate(() =>
+                            window.selectedEditParentSubmits()
+                        );
+                        assert.equal(parentSubmits, 0);
+                        assert.deepEqual(errors, []);
+                        assert.deepEqual(unexpectedRequests, []);
+                        report.cases.push({
+                            mode,
+                            scenario: 'selected-edit-dialog',
+                            kept,
+                            confirmed,
+                            resumed,
+                            saved: capture(),
+                            parentSubmits,
+                        });
+                        continue;
+                    }
 
                     await closeButton.click();
                     await dialog

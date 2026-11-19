@@ -144,6 +144,14 @@ export {
     type CompleteVerificationErrorPart,
     type CompleteVerificationErrorPresentation,
 } from './CompleteVerificationScreen.js';
+export {
+    LoginExistingValuesPicker,
+    type LoginExistingValuesOwner,
+    type LoginExistingValuesRequest,
+    type LoginExistingValuesPage,
+    type LoginExistingValuesLabels,
+    type LoginExistingValuesPickerProps,
+} from './LoginExistingValuesPicker.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';
 export {

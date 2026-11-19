@@ -118,6 +118,7 @@
         "./react/complete-calendly.css": "./dist/esm/react/complete-calendly.css",
         "./react/complete-record-comments.css": "./dist/esm/react/complete-record-comments.css",
         "./react/complete-verification.css": "./dist/esm/react/complete-verification.css",
+        "./react/login-existing-values-picker.css": "./dist/esm/react/login-existing-values-picker.css",
         "./react/complete-image-annotation.css": "./dist/esm/react/complete-image-annotation.css",
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",

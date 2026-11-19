@@ -104,4 +104,14 @@ it('keeps action activation and its captured authority independent of Grid selec
     await act(async () => cell.click());
     assert.equal(selected, 1);
     assert.equal(fixture.window.document.activeElement, cell);
+
+    current = true;
+    await render({ cellIdentity: 'row-B-button' });
+    const replacement = fixture.container.querySelector('button');
+    assert.ok(replacement instanceof fixture.window.HTMLButtonElement);
+    assert.notEqual(replacement, control);
+    assert.equal(fixture.container.querySelector('td'), cell);
+    await act(async () => replacement.click());
+    assert.equal(activations, 2);
+    assert.equal(selected, 1);
 });

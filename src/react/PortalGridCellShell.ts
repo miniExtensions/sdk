@@ -6,6 +6,7 @@ import {
     type ClipboardEvent,
     type CSSProperties,
     type MouseEvent,
+    type PointerEvent,
     type ReactElement,
     type ReactNode,
 } from 'react';
@@ -26,6 +27,9 @@ type PortalGridCellShellProps = Readonly<{
     /** Additional leaf controls that retain their own focus. */
     interactiveSelector?: string;
     guidance?: ReactNode;
+    onPointerDownCapture?: (event: PointerEvent<HTMLTableCellElement>) => void;
+    onClickCapture?: (event: MouseEvent<HTMLTableCellElement>) => void;
+    onAuxClickCapture?: (event: MouseEvent<HTMLTableCellElement>) => void;
     children: ReactNode;
 }>;
 
@@ -47,6 +51,9 @@ export function PortalGridCellShell({
     className,
     interactiveSelector,
     guidance,
+    onPointerDownCapture,
+    onClickCapture,
+    onAuxClickCapture,
     children,
 }: PortalGridCellShellProps): ReactElement {
     const cell = useRef<HTMLTableCellElement>(null);
@@ -70,6 +77,9 @@ export function PortalGridCellShell({
             'data-first-row': firstRow,
             'data-last-row': lastRow,
             'data-sticky': stickyLeft != null,
+            onPointerDownCapture,
+            onClickCapture,
+            onAuxClickCapture,
             style:
                 stickyLeft == null
                     ? undefined

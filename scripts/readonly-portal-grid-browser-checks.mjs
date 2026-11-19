@@ -381,26 +381,41 @@ function CheckboxCellProbe() {
 }
 function ButtonCellProbe() {
     const [busy, setBusy] = useState(false);
+    const [row, setRow] = useState('A');
     const pending = useRef(false);
     const current = useRef(true);
     const log = useRef({ actions: 0, selects: 0, submits: 0 });
+    const pointerPhases = useRef([]);
+    const actionRows = useRef([]);
     useEffect(() => {
         window.__buttonCellProbe = {
             snapshot: () => ({ ...log.current, busy }),
             finish: () => { pending.current = false; setBusy(false); },
             retire: () => { current.current = false; },
+            currentRow: () => row,
+            replace: () => setRow('B'),
+            gestures: () => ({ pointerPhases: pointerPhases.current, actionRows: actionRows.current }),
         };
         return () => { delete window.__buttonCellProbe; };
-    }, [busy]);
+    }, [busy, row]);
     const owner = { isCurrent: () => current.current };
     const frame = { displayText: '', selected: false, rowHeight: 'medium',
         onSelect() { log.current.selects++; } };
     return h('form', {
         id: 'button-probe-form',
         onSubmit(event) { event.preventDefault(); log.current.submits++; },
-    }, h('table', { 'aria-label': 'Grid Button fixture' }, h('tbody', null, h('tr', null,
+    }, h('table', {
+        'aria-label': 'Grid Button fixture',
+        style: { width: '440px', tableLayout: 'fixed' },
+        onPointerDownCapture(event) {
+            pointerPhases.current.push({ phase: 'down', row, trusted: event.isTrusted, button: Boolean(event.target.closest('button')) });
+        },
+        onPointerUpCapture(event) {
+            pointerPhases.current.push({ phase: 'up', row, trusted: event.isTrusted, button: Boolean(event.target.closest('button')) });
+        },
+    }, h('tbody', null, h('tr', null,
         h(PortalGridButtonCell, {
-            ...frame, cellIdentity: 'row-A-webhook', button: {
+            ...frame, cellIdentity: row + '-webhook', button: {
                 mode: 'controlled', form: 'button-probe-form', owner, busy,
                 value: { label: 'Run Grid action', url: '/synthetic-action' },
                 config: { openLinkType: 'triggerWebhookPOST' },
@@ -408,6 +423,7 @@ function ButtonCellProbe() {
                     if (pending.current) return;
                     pending.current = true;
                     log.current.actions++;
+                    actionRows.current.push(row);
                     setBusy(true);
                 },
             },
@@ -1265,13 +1281,15 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     });
 }
 
-async function checkButtonCellBrowser(page) {
+export async function checkButtonCellBrowser(page) {
     await page.evaluate(() => window.__nativeProbe.startButtonCell());
     const table = page.getByRole('table', { name: 'Grid Button fixture' });
     const button = table.getByRole('button', { name: 'Run Grid action' });
     const link = table.getByRole('link', { name: 'Open Grid link' });
     const snapshot = () =>
         page.evaluate(() => window.__buttonCellProbe.snapshot());
+    const gestures = () =>
+        page.evaluate(() => window.__buttonCellProbe.gestures());
     const waitForBusy = () =>
         page.waitForFunction(() => window.__buttonCellProbe.snapshot().busy);
     const finish = async () => {
@@ -1282,8 +1300,55 @@ async function checkButtonCellBrowser(page) {
     };
     await button.waitFor({ state: 'visible' });
     assert.equal(await button.getAttribute('type'), 'button');
+    await button.scrollIntoViewIfNeeded();
+    const point = await button.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        for (const fraction of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+            const x = box.x + box.width * fraction;
+            const y = box.y + box.height / 2;
+            if (node.contains(node.ownerDocument.elementFromPoint(x, y)))
+                return { x, y };
+        }
+        return null;
+    });
+    assert.ok(point, 'The pointer must start on the Button control');
+    const { x, y } = point;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    try {
+        await page.evaluate(() => window.__buttonCellProbe.replace());
+        await page.waitForFunction(
+            () => window.__buttonCellProbe.currentRow() === 'B'
+        );
+        assert.equal(
+            await button.evaluate(
+                (node, { x, y }) =>
+                    node.contains(node.ownerDocument.elementFromPoint(x, y)),
+                point
+            ),
+            true,
+            'The replacement Button must be under the original press'
+        );
+    } finally {
+        await page.mouse.up();
+    }
+    const released = await gestures();
+    assert.deepEqual(released, {
+        pointerPhases: [
+            { phase: 'down', row: 'A', trusted: true, button: true },
+            { phase: 'up', row: 'B', trusted: true, button: true },
+        ],
+        actionRows: [],
+    });
+    assert.deepEqual(await snapshot(), {
+        actions: 0,
+        selects: 0,
+        submits: 0,
+        busy: false,
+    });
     await button.click();
     await waitForBusy();
+    assert.deepEqual((await gestures()).actionRows, ['B']);
     const busyContent = button.locator('.mx-sdk-button-content');
     const bounds = await busyContent.boundingBox();
     assert.ok(bounds);
@@ -1324,8 +1389,11 @@ async function checkButtonCellBrowser(page) {
         submits: 0,
         busy: false,
     });
+    assert.deepEqual((await gestures()).actionRows, ['B', 'B', 'B']);
     return {
         ...(await snapshot()),
+        splitPointer: released,
+        actionRows: (await gestures()).actionRows,
         busyClickIgnored: true,
         linkActivated: true,
         retiredLinkRefused: true,

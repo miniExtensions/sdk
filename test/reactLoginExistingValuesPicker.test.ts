@@ -142,7 +142,7 @@ async function fixture(
     const text = () => options().map((node) => node.textContent);
     const search = () => {
         const node = container.querySelector('input[type=search]');
-        assert(node);
+        assert(node instanceof window.HTMLInputElement);
         return node;
     };
     const edit = async (value: string) => {
@@ -269,6 +269,64 @@ for (const [index, value] of [
         assert(!ui.container.innerHTML.includes('login-option:'));
     });
 }
+
+it('navigates the rendered occurrences and preserves search, dismissal and form ownership', async (t) => {
+    const ui = await fixture(t);
+    const focused = () => ui.window.document.activeElement;
+    const key = async (
+        value: string,
+        init: { shiftKey?: boolean; repeat?: boolean } = {}
+    ) => {
+        const event = new ui.window.KeyboardEvent('keydown', {
+            ...init,
+            key: value,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            focused()?.dispatchEvent(event);
+        });
+        return event.defaultPrevented;
+    };
+    await ui.click(openLabel);
+    await ui.click('Load more');
+    const options = ui.options();
+    ui.search().focus();
+    assert(await key('Enter'));
+    assert.equal(await key('ArrowDown', { shiftKey: true }), false);
+    assert(await key('ArrowDown'), 'ArrowDown must focus an option');
+    assert(focused() === options[0]);
+    assert(await key('ArrowDown'));
+    assert(focused() === options[1]);
+    assert(await key('ArrowDown'));
+    assert(focused() === options[2]);
+    assert.equal(options[0].textContent, options[2].textContent);
+    assert(await key('ArrowDown'));
+    assert(focused() === options[3]);
+
+    // A browser activates this exact type=button with Enter while it is focused.
+    await act(async () => options[3].click());
+    assert.deepEqual(ui.choices, ['']);
+    assert.equal(ui.dialog(), null);
+    assert(focused() === ui.button(openLabel));
+    assert(await key('Enter', { repeat: true }));
+
+    await ui.click(openLabel);
+    const last = ui.options().at(-1);
+    assert(await key('ArrowUp'));
+    assert(focused() === last);
+    assert(await key('ArrowDown'));
+    assert(focused() === last);
+    await key('ArrowUp');
+    await key('ArrowUp');
+    await key('ArrowUp');
+    assert(focused() === ui.search());
+    await key('ArrowDown');
+    assert(await key('Escape'));
+    assert.equal(ui.dialog(), null);
+    assert(focused() === ui.button(openLabel));
+    assert.equal(ui.submits(), 0);
+});
 
 it('debounces raw input for 500 ms and retires superseded reads immediately', async (t) => {
     const old = deferred<LoginExistingValuesPage>();

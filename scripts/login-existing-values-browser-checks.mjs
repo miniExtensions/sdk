@@ -263,12 +263,54 @@ export async function checkLoginExistingValuesBrowser({
         await focus(trigger);
         assert.deepEqual((await read()).selections, ['', duplicate]);
 
+        const beforeArrowSelection = (await read()).calls.length;
         await trigger.click();
+        await choices.nth(2).waitFor();
+        await focus(search);
+        await page.keyboard.press('ArrowDown');
+        await focus(choices.nth(0));
+        await page.keyboard.down('Enter');
+        await dialog.waitFor({ state: 'hidden' });
+        await focus(trigger);
+        await page.keyboard.down('Enter');
+        await page.keyboard.up('Enter');
+        assert.equal(await dialog.count(), 0);
+        assert.deepEqual((await read()).selections, ['', duplicate, duplicate]);
+        assert.equal((await read()).calls.length, beforeArrowSelection + 1);
+
+        await trigger.click();
+        await choices.nth(2).waitFor();
+        await button('Load more').click();
+        await choices.nth(5).waitFor();
+        await search.click();
+        // Follow each occurrence, including matching labels on both pages.
+        for (const index of [0, 1, 2, 3, 4]) {
+            await page.keyboard.press('ArrowDown');
+            await focus(choices.nth(index));
+        }
+        await page.keyboard.press('ArrowUp');
+        await focus(choices.nth(3));
+        await page.keyboard.press('Enter');
+        await dialog.waitFor({ state: 'hidden' });
+        await focus(trigger);
+        const selectedLabels = ['', duplicate, duplicate, ''];
+        assert.deepEqual((await read()).selections, selectedLabels);
+
+        await trigger.click();
+        await choices.nth(0).waitFor();
+        await page.keyboard.press('ArrowDown');
+        await focus(choices.nth(0));
+        await page.keyboard.press('ArrowUp');
+        await focus(search);
         await search.fill('  Needle_*  ');
         await page.keyboard.press('Enter');
         await button('Current query result').waitFor();
         assert.equal((await read()).calls.at(-1).query, '  Needle_*  ');
         await focus(search);
+        await page.keyboard.press('Enter');
+        assert.deepEqual((await read()).selections, selectedLabels);
+        await page.keyboard.press('ArrowDown');
+        await focus(choices.nth(0));
         await page.keyboard.press('Escape');
         await dialog.waitFor({ state: 'hidden' });
         await focus(trigger);
@@ -448,8 +490,14 @@ export async function checkLoginExistingValuesBrowser({
         await focus(maskedSignup);
         await assertSignupIntents(['A', 'B', 'D', 'E', 'G'], 4);
 
+        await trigger.click();
+        await choices.nth(0).waitFor();
+        await page.keyboard.press('ArrowDown');
+        await focus(choices.nth(0));
         const beforeDenied = (await read()).calls.length;
         await patch({ disabled: true });
+        await dialog.waitFor({ state: 'hidden' });
+        await page.keyboard.press('Enter');
         assert.equal(await trigger.isDisabled(), true);
         await trigger.evaluate((element) => element.click());
         await patch({ masked: true, disabled: false });
@@ -458,8 +506,8 @@ export async function checkLoginExistingValuesBrowser({
         assert.equal(await trigger.count(), 0);
         const proof = await read();
         assert.equal(proof.calls.length, beforeDenied);
-        assert.deepEqual(proof.selections, ['', duplicate]);
-        assert.deepEqual(proof.trusted, [true, true]);
+        assert.deepEqual(proof.selections, selectedLabels);
+        assert.deepEqual(proof.trusted, [true, true, true, true]);
         assert.deepEqual(proof.settingsActivations, [true, true]);
         assert.equal(proof.submits, 0);
         assert.equal(proof.react, expectedReactVersion);

@@ -95,8 +95,8 @@ export function PortalGridRatingCell({
         children: blank
             ? h('span', { className: 'read-only-text' })
             : h(ControlledRatingField, {
-                  key: control.key,
                   ...editor,
+                  key: control.key,
                   mode: 'controlled',
                   value,
                   max,

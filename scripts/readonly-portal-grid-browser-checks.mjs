@@ -191,6 +191,7 @@ function RatingCellProbe() {
                 setCell(current => ({ ...current, selected: true }));
             },
             editor: cell.enabled ? {
+                key: 'stable external editor metadata',
                 owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
                 onChange(value) {
                     log.current.writes.push({ record: cell.record, value });
@@ -1620,6 +1621,13 @@ export async function checkRatingCellBrowser(page) {
     }
 
     await icons.nth(4).click();
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true,
+        'A fresh Rating icon click must focus the current slider'
+    );
     await input.press('Delete');
     const result = await state();
     assert.deepEqual(result.writes.slice(4), [

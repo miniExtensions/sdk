@@ -6,7 +6,11 @@ export type PortalVisitorSortStamp = Readonly<{
     viewId: string | null;
     configurationRevision: string | number;
     metadataRevision: string | number;
-    /** Increases on owner transitions, including a return to the same view. */
+    /**
+     * Increases on owner transitions, including a return to the same view.
+     * After reporting a committed generation, advance it on a later criteria
+     * change, including a return to the same criteria.
+     */
     generation: number;
 }>;
 
@@ -305,21 +309,21 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
             const live = readFrame(port);
             if (!live || !equalScope(captured, live)) return false;
             const generation = live.stamp.generation;
-            if (generation === captured.stamp.generation)
+            if (generation < captured.stamp.generation) return false;
+            if (
+                (outcome.type === 'refused' || outcome.type === 'uncertain') &&
+                outcome.committedGeneration !== undefined
+            )
                 return (
-                    equalRules(live.criteria, captured.criteria) ||
+                    generation === outcome.committedGeneration &&
                     equalRules(live.criteria, submitted)
                 );
-            const attributedGeneration =
-                outcome.type === 'allocated'
-                    ? outcome.generation
-                    : outcome.type === 'refused' || outcome.type === 'uncertain'
-                      ? outcome.committedGeneration
-                      : undefined;
             return (
-                generation > captured.stamp.generation &&
-                generation === attributedGeneration &&
-                equalRules(live.criteria, submitted)
+                (generation === captured.stamp.generation ||
+                    (outcome.type === 'allocated' &&
+                        generation === outcome.generation)) &&
+                (equalRules(live.criteria, captured.criteria) ||
+                    equalRules(live.criteria, submitted))
             );
         },
         async commit(): Promise<PortalVisitorSortOutcome> {

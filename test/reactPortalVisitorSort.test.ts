@@ -104,8 +104,79 @@ for (const type of ['refused', 'uncertain'] as const) {
             feedback
         );
         assert.deepEqual(outcomes, [outcome]);
+
+        const published = host.frame();
+        await act(async () => host.update({ ...published }));
+        assert.equal(
+            f.container.querySelector('[role="status"]')?.textContent,
+            feedback
+        );
+        await act(async () => {
+            host.update({
+                ...published,
+                stamp: { ...published.stamp, generation: 3 },
+                criteria: [],
+            });
+            host.update({
+                ...published,
+                stamp: { ...published.stamp, generation: 4 },
+            });
+        });
+        assert.equal(
+            f.container.querySelector('[role="status"]')?.textContent ?? null,
+            null
+        );
+        assert.equal(host.listeners.size, 0);
+        assert.deepEqual(outcomes, [outcome]);
     });
 }
+
+it('requires both the claimed generation and submitted criteria for explicit failure feedback', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    for (const scenario of [
+        { claim: 2, live: 1, publish: false, visible: false },
+        { claim: 1, live: 1, publish: false, visible: false },
+        { claim: 2, live: 2, publish: false, visible: false },
+        { claim: 1, live: 1, publish: true, visible: true },
+    ]) {
+        const host = owner();
+        const outcome = {
+            type: 'refused',
+            committedGeneration: scenario.claim,
+        } as const;
+        const outcomes: PortalVisitorSortOutcome[] = [];
+        const port: PortalVisitorSortPort = {
+            ...host.port,
+            apply(command) {
+                const previous = host.frame();
+                host.update({
+                    ...previous,
+                    stamp: { ...previous.stamp, generation: scenario.live },
+                    criteria: scenario.publish ? command.criteria : [],
+                });
+                return outcome;
+            },
+        };
+        await f.render(
+            h(PortalVisitorSort, {
+                port,
+                onOutcome: (value) => outcomes.push(value),
+            })
+        );
+        await f.click(button(f, 'Sort'));
+        await f.click(button(f, 'Add sort condition'));
+        await f.click(button(f, 'Done'));
+        assert.deepEqual(
+            outcomes,
+            scenario.visible ? [outcome] : [],
+            JSON.stringify(scenario)
+        );
+        assert.match(
+            f.container.querySelector('[role="status"]')?.textContent ?? '',
+            scenario.visible ? /could not apply/ : /Open Sort again/
+        );
+    }
+});
 
 function button(f: Fixture, label: string) {
     const element = [...f.container.querySelectorAll('button')].find(

@@ -98,6 +98,56 @@ function host() {
     };
 }
 
+test('date-only operands reject invalid days and accept leap days and clearing', async () => {
+    const owner = host();
+    const setting = {
+        fieldType: 'date',
+        type: 'isBefore',
+        idOrName: { type: 'id', id: 'date' },
+        value: '2024-02-01',
+    } as const;
+    owner.update({
+        ...owner.read(),
+        fields: [
+            {
+                id: 'date',
+                name: 'Date',
+                operators: [
+                    { label: 'Is before', setting, operand: { kind: 'date' } },
+                ],
+            },
+        ],
+        criteria: {
+            logicalOperator: 'and',
+            conditions: [leaf('date', setting)],
+        },
+        effectiveSettings: {},
+    });
+    const draft = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(draft);
+    for (const invalid of [
+        '2023-02-29',
+        '2024-13-01',
+        '2024-2-01',
+        '2024-02-01T00:00:00Z',
+        20240201,
+    ]) {
+        assert.equal(draft.setOperand('date', invalid), false, String(invalid));
+    }
+    assert.deepEqual(draft.settingForEditor('date'), setting);
+    assert.equal(draft.setOperand('date', '2024-02-29'), true);
+    assert.deepEqual(draft.settingForEditor('date'), {
+        ...setting,
+        value: '2024-02-29',
+    });
+    assert.equal(draft.setOperand('date', null), true);
+    assert.equal(owner.calls.length, 0);
+    assert.equal((await draft.commit()).type, 'allocated');
+    assert.deepEqual(owner.calls[0].criteria?.conditions, [
+        leaf('date', { ...setting, value: null }),
+    ]);
+});
+
 test('a targeted nested edit preserves unresolved siblings, wire ids and order', async () => {
     const owner = host();
     const draft = createPortalVisitorFilterDraft(owner.port)!;

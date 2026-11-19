@@ -5173,6 +5173,13 @@ Tailwind and a host picker/render slot are unnecessary. Moment locale assets
 are loaded by this calendar entry. Core and generic React imports do not load the picker.
 Install matching supported React and ReactDOM versions; both remain SDK peers.
 
+A visitor Filter operator can set `operand: { kind: 'date', dateFormat }` for
+date-only comparisons on Date or DateTime fields. The default display format is
+`YYYY-MM-DD`, and `PortalVisitorFilter.language` controls the calendar locale.
+Import `@miniextensions/sdk/react/complete-date.css` for the picker. Selection and
+clearing update the draft. Applying it sends a canonical date string or `null`
+to the host with the rest of the filter criteria.
+
 ```tsx
 import { useState } from 'react';
 import { DateTimeField } from '@miniextensions/sdk/react/date';

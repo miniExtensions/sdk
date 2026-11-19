@@ -14,6 +14,8 @@ import type {
 
 export type PortalVisitorFilterOperand =
     | Readonly<{ kind: 'none' | 'text' | 'number' | 'boolean' }>
+    /** Date-only comparison, persisted as YYYY-MM-DD or null. */
+    | Readonly<{ kind: 'date'; dateFormat?: string }>
     | Readonly<{
           kind: 'choice' | 'choices';
           choices: readonly Readonly<{ value: string; label: string }>[];
@@ -153,6 +155,16 @@ function validOperand(operand: PortalVisitorFilterOperand, value: unknown) {
             return typeof value === 'number' && Number.isFinite(value);
         case 'boolean':
             return typeof value === 'boolean';
+        case 'date': {
+            if (value === null) return true;
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+                return false;
+            const day = new Date(value);
+            return (
+                Number.isFinite(day.getTime()) &&
+                day.toISOString().startsWith(value + 'T')
+            );
+        }
         case 'choice':
             return operand.choices.some((option) => option.value === value);
         case 'choices':

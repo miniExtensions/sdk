@@ -39,6 +39,9 @@ function fixture(t, format) {
     sdkInput('dist/vendor/phone-number-input/index.cjs');
     const rich = sdkInput('dist/vendor/rich-markdown-editor/dist/index.js');
     const sidebar = sdkInput('dist/vendor/portal-sidebar/index.js');
+    const date = ['index.cjs', 'upstream.cjs'].map((name) =>
+        sdkInput(`dist/vendor/date-time/${name}`)
+    );
     const address = ['combobox.js', 'react-peer.js', 'sdk-runtime.js'].map(
         (name) => sdkInput(`dist/vendor/headlessui-address/${name}`)
     );
@@ -64,7 +67,7 @@ function fixture(t, format) {
             chartRoot,
         });
     pack();
-    return { record, sdkInput, pack, rich, address, sidebar };
+    return { record, sdkInput, pack, rich, address, sidebar, date };
 }
 
 for (const format of ['esm', 'cjs']) {
@@ -127,6 +130,21 @@ for (const format of ['esm', 'cjs']) {
         });
     }
 
+    for (const [index, name] of ['index.cjs', 'upstream.cjs'].entries()) {
+        test(`${format} Chart provenance binds exact date runtime ${name} to the archive`, (t) => {
+            const { record, date } = fixture(t, format);
+            assert.ok(
+                record().some(
+                    (input) =>
+                        input.archiveMember ===
+                        `package/dist/vendor/date-time/${name}`
+                )
+            );
+            writeFileSync(date[index], 'changed installed date runtime');
+            assert.throws(record, assert.AssertionError);
+        });
+    }
+
     for (const member of [
         `dist/${format === 'esm' ? 'cjs' : 'esm'}/react/index.js`,
         'src/react/CompletePortalChart.ts',
@@ -137,6 +155,8 @@ for (const format of ['esm', 'cjs']) {
         'dist/vendor/headlessui-address/unreviewed.js',
         'dist/vendor/portal-sidebar-other/index.js',
         'dist/vendor/portal-sidebar/unreviewed.js',
+        'dist/vendor/date-time-other/index.cjs',
+        'dist/vendor/date-time/unreviewed.cjs',
     ]) {
         test(`${format} Chart provenance rejects ${member} even when its archive bytes match`, (t) => {
             const { record, sdkInput, pack } = fixture(t, format);

@@ -146,6 +146,96 @@ for (const finish of ['Done', 'Close', 'Escape'] as const) {
     });
 }
 
+for (const type of ['isBefore', 'isAfter'] as const) {
+    test(`mounted advanced Filter uses a date picker for ${type}`, async (t) => {
+        const dateSetting = {
+            fieldType: 'dateTime',
+            type,
+            idOrName: { type: 'id', id: 'date' },
+            value: '2024-02-01',
+        } as const;
+        const host = owner([
+            {
+                id: 'date',
+                name: 'Date',
+                operators: [
+                    {
+                        label: type,
+                        operand: { kind: 'date' },
+                        setting: dateSetting,
+                    },
+                ],
+            },
+        ]);
+        const criteria: NonNullable<PortalVisitorFilterFrame['criteria']> = {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    type: 'groupCondition',
+                    id: 'group',
+                    logicalOperator: 'or',
+                    conditions: [
+                        {
+                            type: 'singleCondition',
+                            id: 'date',
+                            setting: dateSetting,
+                        },
+                        {
+                            type: 'singleCondition',
+                            id: 'sibling',
+                            setting: {
+                                fieldType: 'singleLineText',
+                                type: 'contains',
+                                idOrName: {
+                                    type: 'name',
+                                    name: 'Former title',
+                                },
+                                value: 'Keep',
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+        host.seed({ criteria });
+        const initialGroup = criteria.conditions[0];
+        assert.equal(initialGroup.type, 'groupCondition');
+        const f = await htmlPresentationFixture(t);
+        await f.render(h(PortalVisitorFilter, { port: host.port }));
+        await f.click(button(f, 'Filter'));
+        const input = f.container.querySelector(
+            'input[aria-haspopup="dialog"]'
+        );
+        assert.ok(input, 'Expected a date operand with a calendar');
+        await act(async () => {
+            input.dispatchEvent(
+                new f.window.FocusEvent('focusin', { bubbles: true })
+            );
+        });
+        const dialog = f.container.querySelector('dialog[open]');
+        assert.ok(dialog);
+        const day = dialog.querySelector('.rdtOld[data-value="31"]');
+        assert.ok(day instanceof f.window.HTMLElement);
+        await f.click(day);
+        assert.equal(host.commands.length, 0);
+        await f.click(button(f, 'Done'));
+        assert.equal(host.commands.length, 1);
+        const group = host.commands[0].criteria?.conditions[0];
+        assert.equal(group?.type, 'groupCondition');
+        assert.deepEqual(group.conditions, [
+            {
+                ...initialGroup.conditions[0],
+                setting: { ...dateSetting, value: '2024-01-31' },
+            },
+            initialGroup.conditions[1],
+        ]);
+        host.seed({ criteria: host.commands[0].criteria });
+        await f.click(button(f, 'Filter'));
+        await f.click(button(f, 'Done'));
+        assert.equal(host.commands.length, 1);
+    });
+}
+
 test('mounted advanced Filter closes a retired A→B→A draft with zero commands', async (t) => {
     const host = owner();
     const f = await htmlPresentationFixture(t);

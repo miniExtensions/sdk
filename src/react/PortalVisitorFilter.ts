@@ -1,5 +1,7 @@
 import {
     createElement as h,
+    lazy,
+    Suspense,
     useEffect,
     useId,
     useLayoutEffect,
@@ -22,6 +24,7 @@ import {
 import type {
     RuntimeConditionSetting,
     RuntimeConditionsDefinition,
+    RuntimeLanguage,
 } from '../runtime/types.js';
 
 const defaultLabels = {
@@ -43,6 +46,7 @@ const defaultLabels = {
     field: 'Field',
     operator: 'Operator',
     value: 'Value',
+    calendar: 'Calendar',
     yes: 'Yes',
     no: 'No',
     unavailableGroup:
@@ -63,6 +67,8 @@ export type PortalVisitorFilterProps = {
     /** Show the quick filters admitted by the current host frame. */
     showDropdowns?: boolean;
     labels?: PortalVisitorFilterLabels;
+    /** Calendar locale for date operands. Defaults to English. */
+    language?: RuntimeLanguage;
     className?: string;
     style?: CSSProperties;
     onOutcome?(outcome: PortalVisitorFilterOutcome): void;
@@ -76,6 +82,9 @@ type Status = {
     owner?: Open;
     outcome?: PortalVisitorFilterOutcome;
 };
+const FilterDateField = /* @__PURE__ */ lazy(async () => ({
+    default: (await import('./date/DateField.js')).DateField,
+}));
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 const buttons: CSSProperties = {
@@ -115,12 +124,14 @@ function readFilterDraft(port: PortalVisitorFilterPort): Open | null {
 function FilterDialog({
     shown,
     labels,
+    language,
     disabled,
     close,
     opener,
 }: {
     shown: Open;
     labels: Labels;
+    language: RuntimeLanguage;
     disabled: boolean;
     close(): void;
     opener: { readonly current: HTMLButtonElement | null };
@@ -205,10 +216,11 @@ function FilterDialog({
     const editOperand = (
         nodeId: string,
         setting: RuntimeConditionSetting,
-        descriptor: NonNullable<
+        selected: NonNullable<
             ReturnType<typeof resolvePortalVisitorFilterOperator>
-        >['operator']['operand']
+        >
     ) => {
+        const descriptor = selected.operator.operand;
         if (descriptor.kind === 'none') return null;
         const value = 'value' in setting ? setting.value : undefined;
         const label = { 'aria-label': labels.value, disabled: inactive };
@@ -242,6 +254,35 @@ function FilterDialog({
                         option.label
                     )
                 )
+            );
+        }
+        if (descriptor.kind === 'date') {
+            return h(
+                Suspense,
+                { fallback: null },
+                h(FilterDateField, {
+                    id: `${id}-${nodeId}-date`,
+                    sessionId: `${selected.field.id}:${setting.type}`,
+                    airtableDateConfig: {
+                        type: 'date',
+                        options: {
+                            dateFormat: {
+                                format: descriptor.dateFormat ?? 'YYYY-MM-DD',
+                            },
+                        },
+                    },
+                    title: labels.value,
+                    calendarLabel: labels.calendar,
+                    language,
+                    readOnly: inactive,
+                    owner: { token: draft, isCurrent: draft.current },
+                    value: typeof value === 'string' ? value : null,
+                    setValue(date) {
+                        const accepted = draft.setOperand(nodeId, date);
+                        update(accepted);
+                        return accepted;
+                    },
+                })
             );
         }
         if (descriptor.kind === 'boolean') {
@@ -447,11 +488,7 @@ function FilterDialog({
                                 )
                             )
                         ),
-                        editOperand(
-                            node.id,
-                            setting,
-                            selected.operator.operand
-                        ),
+                        editOperand(node.id, setting, selected),
                         remove
                     );
                 })
@@ -479,6 +516,7 @@ function FilterDialog({
         'dialog',
         {
             ref: dialog,
+            role: 'dialog',
             'aria-labelledby': titleId,
             style: {
                 width: 'min(42rem, calc(100% - 2rem))',
@@ -872,6 +910,7 @@ export function PortalVisitorFilter(
             ? h(FilterDialog, {
                   shown: active,
                   labels,
+                  language: props.language ?? 'en',
                   opener: trigger,
                   disabled: props.disabled === true,
                   close: () => close(active),

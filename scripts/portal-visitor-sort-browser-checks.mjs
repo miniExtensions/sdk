@@ -205,6 +205,7 @@ globalThis.viewButtonsFixture = {
 
 const filterFixture = `
 import { PortalVisitorFilter } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-date.css';
 import { flushSync } from 'react-dom';
 const filterForm = document.createElement('form');
 const filterHost = document.createElement('section');
@@ -233,6 +234,10 @@ const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
 };
+const dateOperators = [
+    {label: 'Is before', setting: {fieldType: 'date', type: 'isBefore', idOrName: {type: 'id', id: 'before'}, value: '2024-02-01'}},
+    {label: 'Is after', setting: {fieldType: 'dateTime', type: 'isAfter', idOrName: {type: 'id', id: 'after'}, value: '2024-02-01'}},
+];
 const quickChoices = [{value: 'red', label: 'Red'}, {value: 'blue', label: 'Blue'}, {value: 'green', label: 'Green'}, {value: 'yellow', label: 'Yellow'}];
 let filterFrame = {
     stamp: {...frame.stamp, fieldId: 'filter-portal'},
@@ -247,7 +252,10 @@ let filterFrame = {
         id: 'labels', name: 'Labels',
         operators: [{label: 'Any of', operand: {kind: 'choices', choices: quickChoices},
             setting: {fieldType: 'multipleSelects', type: 'hasAnyOf', idOrName: {type: 'id', id: 'labels'}, value: []}}],
-    }],
+    }, ...dateOperators.map((operator) => ({
+        id: operator.setting.idOrName.id, name: operator.label,
+        operators: [{...operator, operand: {kind: 'date', dateFormat: 'D/M/YYYY'}}],
+    }))],
     dropdownFieldIds: ['status', 'labels'],
     criteria: {
         logicalOperator: 'or',
@@ -285,6 +293,15 @@ filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
 })));
 globalThis.filterFixture = {
     summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits, heldSelectKeys, heldSelectChanges}),
+    seedDates() {
+        const sibling = {id: 'legacy', type: 'singleCondition', setting: {...currentTitle, idOrName: {type: 'name', name: 'Former title'}}};
+        const criteria = {logicalOperator: 'and', conditions: [{
+            id: 'date-group', type: 'groupCondition', logicalOperator: 'or',
+            conditions: [...dateOperators.map(({setting}) => ({id: setting.idOrName.id, type: 'singleCondition', setting})), sibling],
+        }]};
+        publishFilter({...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1}, criteria, effectiveSettings: {legacy: currentTitle}});
+        return criteria;
+    },
     seedHeldChoice() {
         const criteria = filterFrame.criteria ?? {logicalOperator: 'and', conditions: []};
         publishFilter({ ...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1},
@@ -460,6 +477,69 @@ async function checkQuickFilter(page, startingCriteria) {
     };
 }
 
+async function checkDateFilter(page, { open, closed, dialog, done, summary }) {
+    const criteria = await page.evaluate(() =>
+        globalThis.filterFixture.seedDates()
+    );
+    const dates = dialog.locator('input[aria-haspopup="dialog"]');
+    const calendar = dialog.getByRole('dialog', {
+        name: 'Calendar',
+        exact: true,
+    });
+    await open();
+    const starting = await summary();
+    assert.equal(await dates.first().inputValue(), '1/2/2024');
+    await dates.first().click();
+    await calendar.waitFor({ state: 'visible' });
+    await dates.first().press('Escape');
+    await calendar.waitFor({ state: 'hidden' });
+    assert.equal(await dialog.isVisible(), true);
+    assert.deepEqual(await summary(), starting);
+
+    for (const index of [0, 1]) {
+        await done.focus();
+        await dates.nth(index).click();
+        await calendar.locator('.rdtOld[data-value="31"]').click();
+        await calendar.waitFor({ state: 'hidden' });
+        assert.equal(await dates.nth(index).inputValue(), '31/1/2024');
+    }
+    assert.deepEqual(await summary(), starting);
+    await done.press('Enter');
+    await closed(starting.outcomes.length + 1);
+    const edited = await summary();
+    assert.equal(edited.commands.length, starting.commands.length + 1);
+    const group = criteria.conditions[0];
+    assert.deepEqual(edited.commands.at(-1).criteria, {
+        ...criteria,
+        conditions: [
+            {
+                ...group,
+                conditions: group.conditions.map((leaf) =>
+                    leaf.id === 'legacy'
+                        ? leaf
+                        : {
+                              ...leaf,
+                              setting: { ...leaf.setting, value: '2024-01-31' },
+                          }
+                ),
+            },
+        ],
+    });
+    await open();
+    assert.equal(await dates.last().inputValue(), '31/1/2024');
+    await done.press('Enter');
+    await closed(starting.outcomes.length + 2);
+    const finished = await summary();
+    assert.deepEqual(finished.commands, edited.commands);
+    assert.deepEqual(finished.outcomes.at(-1), { type: 'unchanged' });
+    assert.equal(finished.submits, 0);
+    return {
+        commands: 1,
+        calendarEscapeKeptFilterOpen: true,
+        unchangedReopen: true,
+    };
+}
+
 async function checkFilter(page) {
     const trigger = page.getByRole('button', { name: 'Filter', exact: true });
     const dialog = page.getByRole('dialog', { name: 'Filter records' });
@@ -581,6 +661,13 @@ async function checkFilter(page) {
     assert.equal(dismissed.submits, 0);
     const quick = await checkQuickFilter(page, dismissed.commands[1].criteria);
     const heldQuick = await checkHeldQuickFilter(page);
+    const date = await checkDateFilter(page, {
+        open,
+        closed,
+        dialog,
+        done,
+        summary,
+    });
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -593,6 +680,7 @@ async function checkFilter(page) {
         backdropAllocation: 'filter-2',
         quick,
         heldQuick,
+        date,
         focusRestored: true,
         cleanup: 'completed',
     };

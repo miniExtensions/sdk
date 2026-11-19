@@ -20,7 +20,8 @@ assert.ok(archive && executablePath && expectedSha256);
 assert.ok(
     queryFlag === undefined ||
         queryFlag === '--include-search' ||
-        queryFlag === '--include-view-buttons'
+        queryFlag === '--include-view-buttons' ||
+        queryFlag === '--include-filter'
 );
 assert.deepEqual(unexpected, []);
 assert.equal(realpathSync(archive), archive);
@@ -67,6 +68,7 @@ try {
                 expectedReactVersion: react,
                 includeSearch: queryFlag === '--include-search',
                 includeViewButtons: queryFlag === '--include-view-buttons',
+                includeFilter: queryFlag === '--include-filter',
             });
             assert.equal(archiveDigest(), expectedSha256);
         } finally {

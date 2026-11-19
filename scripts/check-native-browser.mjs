@@ -2581,6 +2581,11 @@ try {
                 retiredRepeatRefused: true,
                 trustedKeys: true,
             },
+            date: {
+                commands: 1,
+                calendarEscapeKeptFilterOpen: true,
+                unchangedReopen: true,
+            },
             focusRestored: true,
             cleanup: 'completed',
         });

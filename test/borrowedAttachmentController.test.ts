@@ -86,6 +86,15 @@ const fixture = (
         stops: () => stops,
     };
 };
+const detachedSnapshot = {
+    phase: 'idle',
+    busy: false,
+    files: [],
+    fieldRevision: null,
+    value: null,
+    progress: null,
+    result: null,
+};
 
 it('borrows native identity and original occurrence order, without implicit dispatch', async () => {
     const f = fixture();
@@ -236,6 +245,228 @@ it('rebases only through the host writer after concurrent native values/revision
     assert.equal(f.canonical[1], concurrent);
     f.controller.dispose();
 });
+it('continues an admitted same-owner batch while its presentation is detached', async () => {
+    const first = deferred<object>();
+    const a = file('a');
+    const b = file('b');
+    const accepted = {};
+    const admissionCalls: unknown[] = [];
+    const allocations: File[] = [];
+    let presentationReads = 0;
+    const f = fixture({
+        allocate: (nativeFile) => {
+            allocations.push(nativeFile);
+            return {
+                completion:
+                    nativeFile === a ? first.promise : Promise.resolve(b),
+            };
+        },
+    });
+    f.options.captureBatch = () => ({
+        receipt: f.receipt,
+        canAllocate: (nativeFile, index, prefix) => {
+            admissionCalls.push({ nativeFile, index, prefix });
+            return true;
+        },
+    });
+    const pending = f.controller.start([a, b]);
+    const attached = f.field;
+    const detached = {
+        ...attached,
+        visible: false,
+        presentation: 'detached' as const,
+        get revision(): number {
+            presentationReads++;
+            throw Error('detached revision');
+        },
+        get value(): readonly object[] {
+            presentationReads++;
+            throw Error('detached value');
+        },
+    };
+    f.field = detached;
+    f.notify();
+    const snapshots: unknown[] = [];
+    const unsubscribe = f.controller.subscribe((value) =>
+        snapshots.push(value)
+    );
+    assert.equal(
+        (await f.controller.start([file('duplicate')])).outcome,
+        'not-started'
+    );
+
+    first.resolve(accepted);
+    const outcome = await pending;
+    assert.deepEqual(allocations, [a, b]);
+    assert.deepEqual(admissionCalls, [
+        { nativeFile: a, index: 0, prefix: [] },
+        {
+            nativeFile: b,
+            index: 1,
+            prefix: [{ file: a, index: 0, attachment: accepted }],
+        },
+    ]);
+    assert.equal(outcome.outcome, 'completed');
+    assert.equal(outcome.completed[1].attachment, b);
+    assert.deepEqual(f.canonical, [f.native, accepted, b]);
+    assert.deepEqual(f.settled, [outcome]);
+    assert.deepEqual(f.controller.getSnapshot(), detachedSnapshot);
+    assert.ok(snapshots.length > 0);
+    for (const snapshot of snapshots)
+        assert.deepEqual(snapshot, detachedSnapshot);
+    assert.equal(presentationReads, 0);
+    unsubscribe();
+    f.field = attached;
+    f.notify();
+    assert.deepEqual(f.controller.getSnapshot().value, [f.native, accepted, b]);
+    f.controller.dispose();
+});
+for (const when of ['before start', 'during capture'] as const) {
+    it(`refuses first allocation when presentation detaches ${when}`, async () => {
+        const f = fixture();
+        const detached = { ...f.field, presentation: 'detached' as const };
+        let captures = 0;
+        if (when === 'before start') f.field = detached;
+        f.options.captureBatch = () => {
+            captures++;
+            f.field = detached;
+            f.notify();
+            return { receipt: f.receipt, canAllocate: () => true };
+        };
+        const outcome = await f.controller.start([file()]);
+        assert.equal(outcome.outcome, 'retired');
+        assert.equal(captures, when === 'before start' ? 0 : 1);
+        assert.equal(f.allocations.length, 0);
+        assert.equal(f.settled.length, 0);
+        f.controller.dispose();
+    });
+}
+for (const revokedBy of [
+    'read-only',
+    'owner change',
+    'reentrant notification',
+    'presentation change without notification',
+    'transient presentation read',
+] as const) {
+    it(`stops detached suffix after ${revokedBy} and settles the allocated prefix once`, async () => {
+        const held = deferred<object>();
+        const accepted = {};
+        const a = file('a');
+        const b = file('b');
+        const f = fixture();
+        const detached = {
+            ...f.field,
+            visible: false,
+            presentation: 'detached' as const,
+        };
+        const admissions: File[] = [];
+        const switchDuringAdmission =
+            revokedBy === 'presentation change without notification' ||
+            revokedBy === 'transient presentation read';
+        const notifyDuringAdmission = revokedBy === 'reentrant notification';
+        let presentationReads = 0;
+        const transient = {
+            ...detached,
+            get presentation(): 'detached' | undefined {
+                return presentationReads++ === 0 ? 'detached' : undefined;
+            },
+        };
+        f.options.captureBatch = () => ({
+            receipt: f.receipt,
+            canAllocate: (nativeFile) => {
+                admissions.push(nativeFile);
+                if (nativeFile === b && switchDuringAdmission)
+                    f.field =
+                        revokedBy === 'transient presentation read'
+                            ? transient
+                            : detached;
+                if (nativeFile === b && notifyDuringAdmission) f.notify();
+                return true;
+            },
+        });
+        f.options.allocate = (nativeFile, index) => {
+            f.allocations.push({ file: nativeFile, index });
+            return { completion: held.promise };
+        };
+        const pending = f.controller.start([a, b]);
+        if (!switchDuringAdmission) {
+            f.field = detached;
+            f.notify();
+        }
+        if (!switchDuringAdmission && !notifyDuringAdmission) {
+            f.field = {
+                ...detached,
+                owner: revokedBy === 'owner change' ? {} : detached.owner,
+                editable: revokedBy !== 'read-only',
+            };
+            f.notify();
+            f.field = detached;
+            f.notify();
+        }
+        held.resolve(accepted);
+        const outcome = await pending;
+        assert.equal(outcome.outcome, 'retired');
+        assert.deepEqual(
+            admissions,
+            switchDuringAdmission || notifyDuringAdmission ? [a, b] : [a]
+        );
+        assert.deepEqual(f.allocations, [{ file: a, index: 0 }]);
+        assert.deepEqual(outcome.completed, [
+            { file: a, index: 0, attachment: accepted },
+        ]);
+        assert.deepEqual(f.settled, [outcome]);
+        assert.deepEqual(f.canonical, [f.native, accepted]);
+        f.controller.dispose();
+    });
+}
+it('masks detached snapshots even if the edit authority getter throws', async () => {
+    const held = deferred<object>();
+    const f = fixture({ allocate: () => ({ completion: held.promise }) });
+    const originalError = Error('edit authority unavailable');
+    const pending = f.controller.start([file(), file('refused')]);
+    f.field = {
+        ...f.field,
+        presentation: 'detached',
+        get editable(): boolean {
+            throw originalError;
+        },
+    };
+    assert.deepEqual(f.controller.getSnapshot(), detachedSnapshot);
+    held.resolve(f.native);
+    const outcome = await pending;
+    assert.equal(outcome.failure?.error, originalError);
+    assert.equal(outcome.allocatedCount, 1);
+    assert.equal(outcome.completed[0].attachment, f.native);
+    assert.deepEqual(f.settled, [outcome]);
+    f.controller.dispose();
+});
+for (const access of ['getSnapshot', 'subscribe'] as const) {
+    it(`masks a projection invalidated by reentrant detach during ${access}`, async () => {
+        const held = deferred<object>();
+        const f = fixture({ allocate: () => ({ completion: held.promise }) });
+        const pending = f.controller.start([file()]);
+        const attached = f.field;
+        f.field = {
+            ...attached,
+            get value() {
+                f.field = { ...attached, presentation: 'detached' };
+                f.notify();
+                return [f.native];
+            },
+        };
+        const snapshots: unknown[] = [];
+        if (access === 'getSnapshot')
+            snapshots.push(f.controller.getSnapshot());
+        else f.controller.subscribe((current) => snapshots.push(current));
+        assert.ok(snapshots.length > 0);
+        for (const snapshot of snapshots)
+            assert.deepEqual(snapshot, detachedSnapshot);
+        held.resolve(f.native);
+        assert.equal((await pending).outcome, 'completed');
+        assert.equal(f.settled.length, 1);
+        f.controller.dispose();
+    });
+}
 it('host next-allocation capacity refusal retains the completed prefix', async () => {
     const f = fixture({
         captureBatch: () => ({

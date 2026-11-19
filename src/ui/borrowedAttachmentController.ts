@@ -6,9 +6,11 @@ export type BorrowedAttachmentField<T> = {
     revision: string | number;
     visible: boolean;
     editable: boolean;
+    /** Host confirms only the presentation detached. Owner and edit policy still apply. */
+    presentation?: 'detached';
     /** Actual host privacy gate, separate from editability. */
     valueReadable: boolean;
-    /** Borrowed native objects. Not read while the field is hidden. */
+    /** Borrowed native objects. Read only in visible, attached snapshots. */
     value: readonly T[];
 };
 export type BorrowedAttachmentProgress = {
@@ -105,6 +107,7 @@ type Flight<T, Receipt> = {
     allocation: BorrowedAttachmentAllocation<T> | null;
     cancelRequested: boolean;
 };
+
 const result = <T>(
     outcome: BorrowedAttachmentBatchResult<T>['outcome'],
     completed: readonly OrderedAttachmentUpload<T>[] = [],
@@ -133,45 +136,61 @@ export function createBorrowedAttachmentController<T, Receipt>(
     let last: BorrowedAttachmentBatchResult<T> | null = null;
     let lastOwner: BorrowedAttachmentField<T>['owner'] | null = null;
     let notification = 0;
+    let hostNotifications = 0;
     let stop = () => {};
     const listeners = new Set<
         (snapshot: BorrowedAttachmentSnapshot<T>) => void
     >();
-    const read = () => {
+    const read = (onDetached?: () => void) => {
         if (disposed || reading) return null;
         reading = true;
         try {
             const field = options.readField();
+            const detached = field?.presentation === 'detached';
+            if (detached) onDetached?.();
             if (
                 active?.owner != null &&
                 (field == null ||
                     !Object.is(field.owner, active.owner) ||
-                    !field.visible ||
+                    (detached ? active.allocatedCount === 0 : !field.visible) ||
                     !field.editable)
             )
                 active.retired = true;
-            return field;
+            return field == null ? null : { field, detached };
         } finally {
             reading = false;
         }
     };
-    const unavailable = (): BorrowedAttachmentSnapshot<T> => ({
-        phase: disposed ? 'disposed' : phase,
-        busy: active !== null,
+    const unavailable = (
+        unavailablePhase: BorrowedAttachmentSnapshot<T>['phase'] = disposed
+            ? 'disposed'
+            : phase,
+        busy = active !== null
+    ): BorrowedAttachmentSnapshot<T> => ({
+        phase: unavailablePhase,
+        busy,
         files: [],
         value: null,
         fieldRevision: null,
         progress: null,
         result: null,
     });
+    const masked = () => unavailable('idle', false);
     const snapshot = (): BorrowedAttachmentSnapshot<T> => {
+        const observedNotifications = hostNotifications;
+        const expired = () => observedNotifications !== hostNotifications;
+        let detached = false;
         try {
-            const field = read();
-            if (field == null) return unavailable();
+            const observation = read(() => {
+                detached = true;
+            });
+            if (detached || expired()) return masked();
+            if (observation == null) return unavailable();
+            const { field } = observation;
             // Every host-owned metadata/native getter belongs to this guarded
             // presentation projection. Nothing outside it may veto settlement.
             const visible = field.visible === true;
-            if (!visible) return unavailable();
+            if (!visible) return expired() ? masked() : unavailable();
             const readable = field.valueReadable === true;
             const owner = readable ? field.owner : null;
             const fieldRevision = visible ? field.revision : null;
@@ -180,6 +199,7 @@ export function createBorrowedAttachmentController<T, Receipt>(
                 (last == null ||
                     lastOwner == null ||
                     Object.is(lastOwner, owner));
+            if (expired()) return masked();
             const value = readable && ownerMatches ? field.value : null;
             const activityVisible =
                 readable &&
@@ -189,6 +209,7 @@ export function createBorrowedAttachmentController<T, Receipt>(
                     (last.outcome !== 'retired' &&
                         Object.is(lastOwner, owner)));
             if (disposed) return unavailable();
+            if (expired()) return masked();
             return {
                 phase,
                 busy: active !== null,
@@ -203,7 +224,7 @@ export function createBorrowedAttachmentController<T, Receipt>(
             };
         } catch {
             // Includes revision/visibility/owner metadata, not just field.value.
-            return unavailable();
+            return detached || expired() ? masked() : unavailable();
         }
     };
     const emit = () => {
@@ -239,10 +260,16 @@ export function createBorrowedAttachmentController<T, Receipt>(
             flight.files = Object.freeze([...input]);
             files = flight.files;
             const first = read();
-            if (!first?.visible || !first.editable || flight.files.length === 0)
+            if (
+                first == null ||
+                first.detached ||
+                !first.field.visible ||
+                !first.field.editable ||
+                flight.files.length === 0
+            )
                 flight.retired = true;
             else {
-                flight.owner = first.owner;
+                flight.owner = first.field.owner;
                 failurePhase = 'capture';
                 flight.admission = options.captureBatch(flight.files);
                 if (flight.admission == null) flight.retired = true;
@@ -254,8 +281,12 @@ export function createBorrowedAttachmentController<T, Receipt>(
                 progress = null;
                 emit();
                 failurePhase = 'read';
-                const field = read();
-                if (!field?.visible || !field.editable) flight.retired = true;
+                const observedNotifications = hostNotifications;
+                const observation = read();
+                if (observation == null) {
+                    flight.retired = true;
+                    break;
+                }
                 if (flight.retired || flight.cancelled || disposed) break;
                 const file = flight.files[index];
                 failurePhase = 'admission';
@@ -273,7 +304,14 @@ export function createBorrowedAttachmentController<T, Receipt>(
                     flight.retired = true;
                 // Admission/notifications can synchronously replace policy or cancel.
                 failurePhase = 'read';
-                read();
+                const latest = read();
+                if (
+                    latest == null ||
+                    observation.detached !== latest.detached ||
+                    (observation.detached &&
+                        observedNotifications !== hostNotifications)
+                )
+                    flight.retired = true;
                 if (flight.retired || flight.cancelled || disposed) break;
                 failurePhase = 'allocation';
                 flight.allocatedCount++;
@@ -400,6 +438,7 @@ export function createBorrowedAttachmentController<T, Receipt>(
         },
     };
     stop = options.subscribe(() => {
+        hostNotifications++;
         try {
             read();
         } catch {

@@ -3661,6 +3661,11 @@ export {
     type FormSubmitButtonProps,
 } from './FormSubmitButton.js';
 export {
+    FormLinkedChildCreateDialog,
+    type FormLinkedChildCreateDialogProps,
+    type FormLinkedChildCreateOpening,
+} from './FormLinkedChildCreateDialog.js';
+export {
     FormRecordDeleteConfirmation,
     FormRecordActionsFooter,
     FormRecordActionsMenu,

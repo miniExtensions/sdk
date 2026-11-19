@@ -143,6 +143,14 @@ try {
  await React.act(async()=>click(button()));
  assert.deepEqual(fixture.activations,['next-page']);
  assert.deepEqual(fixture.requests,[{intent:'next-page',offset:'after_empty_page'}]);
+ const pendingButton=button();
+ assert.ok(pendingButton);
+ assert.equal(pendingButton.hidden,false);
+ assert.notEqual(window.getComputedStyle(pendingButton).display,'none');
+ assert.equal(pendingButton.textContent,fixture.labels.loadMore);
+ assert.equal(pendingButton.disabled,true);
+ assert.equal(pendingButton.getAttribute('aria-busy'),'true');
+ assert.doesNotMatch(text(),/First|Second/);
  await React.act(async()=>fixture.succeed());
  assert.deepEqual(text().match(/Second/g),['Second']);
  assert.doesNotMatch(text(),/First/);

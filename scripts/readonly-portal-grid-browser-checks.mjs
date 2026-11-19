@@ -199,13 +199,13 @@ function RatingCellProbe() {
 }
 function CheckboxCellProbe() {
     const [cell, setCell] = useState(() => ({
-        record: 'checkbox-A', frame: {}, value: false, selected: false, enabled: true, revision: 0,
+        record: 'checkbox-A', frame: {}, value: false, selected: false, enabled: true, revision: 0, checkboxStyle: 'checkbox',
     }));
     const currentFrame = useRef(cell.frame);
     const log = useRef({ writes: [], selections: 0, opens: 0, submits: 0, rejections: [], activations: [], pointerPhases: [] });
     useEffect(() => {
         window.__checkboxCellProbe = {
-            snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, ...log.current }),
+            snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, checkboxStyle: cell.checkboxStyle, ...log.current }),
             patch: patch => setCell(current => ({ ...current, ...patch })),
             reject: () => {
                 log.current.rejections.push({ record: cell.record, attempt: log.current.writes.length });
@@ -216,7 +216,7 @@ function CheckboxCellProbe() {
             replace: () => {
                 const frame = {};
                 currentFrame.current = frame;
-                setCell({ record: 'checkbox-B', frame, value: false, selected: false, enabled: true, revision: 0 });
+                setCell({ record: 'checkbox-B', frame, value: false, selected: false, enabled: true, revision: 0, checkboxStyle: cell.checkboxStyle });
             },
         };
         return () => { delete window.__checkboxCellProbe; };
@@ -245,6 +245,7 @@ function CheckboxCellProbe() {
     )), h('tbody', null, h('tr', null,
         h(PortalGridCheckboxCell, {
             value: cell.value,
+            checkboxStyle: cell.checkboxStyle,
             displayText: cell.value == null ? '' : String(cell.value),
             title: 'Approved',
             cellIdentity: cell.record,
@@ -1841,6 +1842,7 @@ async function checkCheckboxCellBrowser(page) {
     await originalInput.dispose();
     await originalCell.dispose();
     const splitPointer = await checkCheckboxSplitPointerBrowser(page);
+    const toggleStyle = await checkCheckboxToggleStyleBrowser(page);
     return {
         status: 'passed',
         geometry,
@@ -1854,6 +1856,7 @@ async function checkCheckboxCellBrowser(page) {
         ],
         ...result,
         splitPointer,
+        toggleStyle,
     };
 }
 
@@ -1989,6 +1992,86 @@ async function checkCheckboxSplitPointerBrowser(page) {
     } finally {
         await currentInput.dispose();
     }
+}
+
+async function checkCheckboxToggleStyleBrowser(page) {
+    await page.evaluate(() =>
+        window.__nativeProbe.startCheckboxCell('toggle-style')
+    );
+    await page.waitForFunction(() => {
+        const current = window.__checkboxCellProbe?.snapshot();
+        return current?.record === 'checkbox-A' && current.writes.length === 0;
+    });
+    const table = page.getByRole('table', { name: 'Checkbox Grid fixture' });
+    const input = table.getByRole('checkbox', {
+        name: 'Approved',
+        exact: true,
+    });
+    const previous = await input.elementHandle();
+    assert(previous);
+    const before = await previous.boundingBox();
+    assert(before);
+    const x = before.x + before.width / 2;
+    const y = before.y + before.height / 2;
+    const toggle = table.locator('[data-style="toggle"] input');
+    const state = () =>
+        page.evaluate(() => window.__checkboxCellProbe.snapshot());
+
+    try {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        try {
+            await page.evaluate(() =>
+                window.__checkboxCellProbe.patch({ checkboxStyle: 'toggle' })
+            );
+            await toggle.waitFor({ state: 'visible' });
+            assert.equal(
+                await previous.evaluate((node) => node.isConnected),
+                false
+            );
+            const bounds = await toggle.boundingBox();
+            assert(bounds);
+            assert(x > bounds.x && x < bounds.x + bounds.width);
+            assert(y > bounds.y && y < bounds.y + bounds.height);
+        } finally {
+            await page.mouse.up();
+        }
+    } finally {
+        await previous.dispose();
+    }
+
+    const released = await state();
+    assert.deepEqual(released.writes, []);
+    assert.deepEqual(
+        released.pointerPhases.map(({ phase, record, trusted }) => ({
+            phase,
+            record,
+            trusted,
+        })),
+        [
+            { phase: 'down', record: 'checkbox-A', trusted: true },
+            { phase: 'up', record: 'checkbox-A', trusted: true },
+        ]
+    );
+    assert.equal(await input.isChecked(), false);
+    await input.click();
+    assert.equal(await input.isChecked(), true);
+    assert.equal(
+        await input.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true
+    );
+    await input.press('Space');
+    assert.equal(await input.isChecked(), false);
+    const fresh = await state();
+    assert.deepEqual(fresh.writes, [
+        { record: 'checkbox-A', value: true },
+        { record: 'checkbox-A', value: false },
+    ]);
+    assert.equal(fresh.opens, 0);
+    assert.equal(fresh.submits, 0);
+    return { status: 'passed', released, fresh };
 }
 
 export async function checkReadonlyPortalGridProfile({

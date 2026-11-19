@@ -130,6 +130,56 @@ it('edits immediately while unselected, while the background only selects and fo
     assert.equal(node.checked, false, 'Only the host can echo a new value');
 });
 
+it('renders controlled toggle style and retires the previous style for the same owner', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const writes: boolean[] = [];
+    let selections = 0;
+    const editor: Editor = {
+        owner: { token: {}, isCurrent: () => true },
+        onChange: (value) => writes.push(value),
+        id: 'approved',
+        ariaDescribedBy: 'approval-policy',
+    };
+    const props = {
+        editor,
+        value: true,
+        displayText: 'Checked',
+        onSelect: () => selections++,
+    };
+    await fixture.render(table(props));
+    const previous = input(fixture);
+    const retainedChange = retainChange(previous);
+    await act(async () => previous.focus());
+
+    await fixture.render(table({ ...props, checkboxStyle: 'toggle' }));
+    const toggle = input(fixture);
+    assert.ok(toggle.closest('[data-style="toggle"]'));
+    assert.equal(toggle.getAttribute('aria-label'), 'Approved');
+    assert.equal(toggle.getAttribute('aria-describedby'), 'approval-policy');
+    assert.equal(previous.isConnected, false);
+    assert.notEqual(fixture.window.document.activeElement, toggle);
+    await act(async () => retainedChange(false));
+    assert.deepEqual(writes, []);
+    assert.equal(selections, 0);
+
+    await fixture.click(cell(fixture));
+    assert.equal(selections, 1);
+    assert.deepEqual(writes, []);
+    await fixture.click(toggle);
+    assert.deepEqual(writes, [false]);
+    assert.equal(toggle.checked, true, 'Only the host can echo a new value');
+    assert.equal(selections, 2, 'The active checkbox also selects its cell');
+
+    await fixture.render(
+        table({ ...props, editor: undefined, checkboxStyle: 'toggle' })
+    );
+    assert.equal(fixture.container.querySelector('input'), null);
+    assert.ok(
+        fixture.container.querySelector('[data-checkbox-grid-value="true"]')
+    );
+    assert.deepEqual(writes, [false]);
+});
+
 it('keeps null, checked and unchecked values controlled on the same mounted input', async (t) => {
     const fixture = await htmlPresentationFixture(t);
     const writes: boolean[] = [];

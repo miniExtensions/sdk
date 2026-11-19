@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const canonicalFormTypedConsumer = `
-import {createCanonicalFormFrame,transitionCanonicalFormFrame,type CanonicalFormFrame,type CanonicalFormEvent,type CanonicalFormTransitionPorts,type CanonicalFormTransitionResult} from '@miniextensions/sdk/forms';
+import {createCanonicalFormFrame,transitionCanonicalFormFrame,type CanonicalFormFrame,type CanonicalFormOwner,type CanonicalFormEvent,type CanonicalFormTransitionPorts,type CanonicalFormTransitionResult} from '@miniextensions/sdk/forms';
 import {transitionCanonicalFormCompute,type CanonicalFormComputeFrame,type CanonicalFormComputeOutcome,type CanonicalFormComputePorts,type CanonicalFormComputeRequest} from '@miniextensions/sdk/forms';
 type CanonicalConsumerAuthority={request:'accepted-native-action'};
 type CanonicalConsumerAllocation={requestId:string};
@@ -15,6 +15,8 @@ declare const canonicalConsumerEvent:CanonicalFormEvent<CanonicalConsumerAuthori
 declare const canonicalConsumerPorts:CanonicalFormTransitionPorts<CanonicalConsumerAuthority,CanonicalConsumerAllocation>;
 const canonicalConsumerSnapshot:CanonicalFormFrame=createCanonicalFormFrame(canonicalConsumerFrame);
 const canonicalConsumerResult:CanonicalFormTransitionResult=transitionCanonicalFormFrame(canonicalConsumerSnapshot,canonicalConsumerEvent,canonicalConsumerPorts);
+const childOwner:CanonicalFormOwner={cohort:'public-child-or-portal',installation:'accepted_child_installation'};
+const childInstall=transitionCanonicalFormFrame(null,{type:'install',authority:canonicalConsumerAuthority,frame:{...canonicalConsumerSnapshot,owner:childOwner}},canonicalConsumerPorts);
 // @ts-expect-error canonical values are readonly compatibility views
 canonicalConsumerSnapshot.values.fld_amount=2;
 // @ts-expect-error dirty order cannot be mutated by a consumer
@@ -27,6 +29,7 @@ transitionCanonicalFormFrame(canonicalConsumerSnapshot,canonicalConsumerEvent,{.
 // @ts-expect-error the frame is not a second controller or transport client
 canonicalConsumerSnapshot.client.forms.save({});
 void canonicalConsumerResult;
+void childInstall;
 declare const computeFrame:CanonicalFormComputeFrame;
 declare const computeRequest:CanonicalFormComputeRequest<CanonicalConsumerAllocation>;
 declare const computePorts:CanonicalFormComputePorts<CanonicalConsumerAllocation>;
@@ -152,6 +155,154 @@ function checkComputeSettlement(api) {
     }
 }
 
+export function checkCanonicalChildPortalOwnership(api) {
+    const installation = {
+        owner: {
+            cohort: 'public-child-or-portal',
+            installation: 'accepted_portal_child',
+        },
+        record: { type: 'edit', tableId: 'tbl_child', recordId: 'rec_child' },
+        values: { notes: 'Loaded child', title: 'Loaded title' },
+        dirtyFieldIds: [],
+        errors: {},
+        loadedPolicyBaseline: { notes: 'Loaded child', title: 'Loaded title' },
+        isFormReadOnly: false,
+        provenance: null,
+        renderLease: null,
+        manualReadonlyRetiredUrlFieldIds: ['notes'],
+    };
+    let current = null;
+    let editAuthority = {};
+    let nextGeneration = 0;
+    let validationCalls = 0;
+    let retireDuringValidation = false;
+    const dispatch = (event) => {
+        const before = current;
+        let generation = nextGeneration;
+        const result = api.transitionCanonicalFormFrame(before, event, {
+            admit: (frame, action) =>
+                frame === current && action.authority === editAuthority,
+            allocateGeneration: () => ++generation,
+            areValuesEquivalent: (_fieldId, left, right) => left === right,
+            isReadonlyUrlPrefill: () => false,
+            validateEdit: (_prior, next, fieldId) => {
+                validationCalls++;
+                if (retireDuringValidation) editAuthority = {};
+                assert.deepEqual(
+                    next.loadedPolicyBaseline,
+                    installation.loadedPolicyBaseline
+                );
+                return fieldId === 'notes'
+                    ? { notes: 'Review child notes' }
+                    : next.errors;
+            },
+            retainRenderLease: () => false,
+        });
+        if (
+            ['installed', 'edited', 'editInstanceReplaced'].includes(
+                result.disposition
+            )
+        ) {
+            current = result.frame;
+            nextGeneration = generation;
+        }
+        return result;
+    };
+    assert.equal(
+        dispatch({
+            type: 'install',
+            authority: editAuthority,
+            frame: installation,
+        }).disposition,
+        'installed'
+    );
+    assert.deepEqual(current.manualReadonlyRetiredUrlFieldIds, ['notes']);
+    for (const event of [
+        {
+            type: 'settleSave',
+            allocation: {},
+            record: installation.record,
+            values: { notes: 'Unexpected Save' },
+            dirtyFieldIdsToKeep: [],
+        },
+        { type: 'saveFailed', failure: new Error('Unexpected Save') },
+    ]) {
+        const frame = current;
+        const refused = dispatch({ ...event, authority: editAuthority });
+        assert.equal(refused.disposition, 'unsupportedCohort');
+        assert.equal(refused.frame, frame);
+    }
+    const edit = (authority, fieldId, value) =>
+        dispatch({ type: 'edit', authority, fieldId, value, dirty: 'append' });
+    assert.equal(
+        edit(editAuthority, 'notes', 'Draft child').disposition,
+        'edited'
+    );
+    assert.equal(
+        edit(editAuthority, 'title', 'Draft title').disposition,
+        'edited'
+    );
+    const edited = current;
+    const generationBeforePage = nextGeneration;
+    // The host has verified that the appended page retained this installed child.
+    const retained = dispatch({ type: 'preserve', authority: editAuthority });
+    assert.equal(retained.disposition, 'preserved');
+    assert.equal(retained.frame, edited);
+    assert.equal(retained.frame.renderLease, edited.renderLease);
+    assert.deepEqual(edited.dirtyFieldIds, ['notes', 'title']);
+    assert.deepEqual(edited.errors, { notes: 'Review child notes' });
+    assert.deepEqual(
+        edited.loadedPolicyBaseline,
+        installation.loadedPolicyBaseline
+    );
+    assert.equal(nextGeneration, generationBeforePage);
+    assert.equal(validationCalls, 2);
+
+    const oldAuthority = editAuthority;
+    const replacement = dispatch({
+        type: 'replaceEditInstance',
+        authority: oldAuthority,
+    });
+    assert.equal(replacement.disposition, 'editInstanceReplaced');
+    editAuthority = {};
+    assert.equal(replacement.frame.values, edited.values);
+    assert.equal(replacement.frame.dirtyFieldIds, edited.dirtyFieldIds);
+    assert.equal(replacement.frame.errors, edited.errors);
+    assert.equal(
+        replacement.frame.loadedPolicyBaseline,
+        edited.loadedPolicyBaseline
+    );
+    assert.notEqual(
+        replacement.frame.renderLease.ownerGeneration,
+        edited.renderLease.ownerGeneration
+    );
+    const generationAfterReplacement = nextGeneration;
+    const stale = edit(oldAuthority, 'notes', 'Late old edit');
+    assert.equal(stale.disposition, 'stale');
+    assert.equal(stale.frame, replacement.frame);
+    assert.equal(current, replacement.frame);
+    assert.equal(nextGeneration, generationAfterReplacement);
+    assert.equal(validationCalls, 2);
+    assert.equal(
+        edit(editAuthority, 'notes', 'Fresh child edit').disposition,
+        'edited'
+    );
+    assert.equal(current.values.notes, 'Fresh child edit');
+    assert.equal(current.values.title, 'Draft title');
+    assert.deepEqual(current.dirtyFieldIds, ['notes', 'title']);
+    assert.equal(validationCalls, 3);
+
+    const beforeValidation = current;
+    const beforeAllocation = nextGeneration;
+    retireDuringValidation = true;
+    const retired = edit(editAuthority, 'notes', 'Retired during validation');
+    assert.equal(retired.disposition, 'stale');
+    assert.equal(retired.frame, beforeValidation);
+    assert.equal(current, beforeValidation);
+    assert.equal(nextGeneration, beforeAllocation);
+    assert.equal(validationCalls, 4);
+}
+
 /** Actual packed public ESM and CJS entrypoints, without React or host transport. */
 export async function checkCanonicalFormConsumer({ consumerDirectory }) {
     const loader = join(consumerDirectory, 'canonical-form-public.mjs');
@@ -162,6 +313,7 @@ export async function checkCanonicalFormConsumer({ consumerDirectory }) {
     const esm = await import(pathToFileURL(loader).href);
     const require = createRequire(join(consumerDirectory, 'package.json'));
     for (const api of [esm, require('@miniextensions/sdk/forms')]) {
+        checkCanonicalChildPortalOwnership(api);
         const authority = {};
         const allocation = { requestId: 'native_request' };
         let current = false;

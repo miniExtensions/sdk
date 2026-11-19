@@ -9,6 +9,7 @@ import {
     type FormDraftHandle,
     type FormDraftSnapshot,
     FormDraftStore,
+    readOwnedFormDraftRevision,
     type ParentFormDraftScope,
 } from './drafts.js';
 import {
@@ -22,7 +23,10 @@ import {
     type LoadedFormFieldDescriptor,
     type NormalizedFormSaveResult,
 } from './helpers.js';
-import { requireFormSaveAdmission } from './saveAdmission.js';
+import {
+    requireFinalFormSaveAdmission,
+    requireFormSaveAdmission,
+} from './saveAdmission.js';
 import { admitsFormWrite } from './writeAdmission.js';
 
 /** Applications change revision for visitor, connection, token and context changes. */
@@ -519,12 +523,14 @@ export const createFormController = (
                 active === controller;
             // This fence must follow every application callback, including
             // page admission and ownership observations.
-            const requireCapturedAttempt = (beforeDispatch = false) => {
+            const requireCapturedAttempt = (
+                beforeDispatch = false,
+                readRevision = () => owner.store.revision(owner.handle)
+            ) => {
                 controller.signal.throwIfAborted();
                 if (
                     !ownsAttempt() ||
-                    (beforeDispatch &&
-                        owner.store.revision(owner.handle) !== draftRevision)
+                    (beforeDispatch && readRevision() !== draftRevision)
                 )
                     throw scopeError();
             };
@@ -556,15 +562,31 @@ export const createFormController = (
                 );
                 requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
+                // Resolve the host transport before the final ownership fence.
+                const transport = owner.client.forms;
+                const save = transport.save;
                 // Admission can replace the session; observing it can invalidate
-                // the Review signal or native draft. Finish with local state only.
+                // the Review signal, linked field configuration or native draft.
                 requireScope();
-                requireCapturedAttempt(true);
+                const authorityChecked = requireFinalFormSaveAdmission(
+                    requestOptions.lifecycle,
+                    requireScope
+                );
+                if (authorityChecked) {
+                    // An injected store may override revision(). There must be
+                    // no host method between the coherent read and transport.
+                    requireCapturedAttempt(true, () =>
+                        readOwnedFormDraftRevision(owner.store, owner.handle)
+                    );
+                } else requireCapturedAttempt(true);
                 transportInvoked = true;
-                const response = await owner.client.forms.save(input, {
-                    signal: controller.signal,
-                    session: { ...owner.session },
-                });
+                const response = await Reflect.apply(save, transport, [
+                    input,
+                    {
+                        signal: controller.signal,
+                        session: { ...owner.session },
+                    },
+                ]);
                 controller.signal.throwIfAborted();
                 if (saveGeneration !== generation || owner !== context)
                     throw scopeError();
@@ -751,7 +773,10 @@ export const createFormController = (
             try {
                 // Draft writes commit before emit(); nested emissions may be queued.
                 // Read only the store's scalar revision, never getState()/observeScope().
-                const latest = owner.store.revision(owner.handle);
+                const latest = readOwnedFormDraftRevision(
+                    owner.store,
+                    owner.handle
+                );
                 return (
                     revision !== null &&
                     latest === revision &&

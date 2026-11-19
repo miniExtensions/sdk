@@ -95,7 +95,8 @@ const validateOrdinaryPageField = (
     field: LoadedFormFieldDescriptor,
     value: AirtableValue | undefined,
     stored: AirtableValue | undefined,
-    hidden: boolean
+    hidden: boolean,
+    openedLinkedRecordIds?: ReadonlySet<string>
 ): FormPageProblem | null => {
     const type = field.fieldType;
     const config: Record<string, unknown> = field.schema.miniExtConfig ?? {};
@@ -103,10 +104,9 @@ const validateOrdinaryPageField = (
         fieldId: field.fieldId,
         code,
     });
-    // Open-tracking remains unsupported when selected visible records need it.
-    // Hidden linked fields and canonical empty selections have no review debt.
-    // This exemption supplies no receipt and must not admit malformed values,
-    // mismatched physical kinds or computed presentation as review authority.
+    // Only the current parent's admitted Edit presentations can clear debt for
+    // a visible nonempty native selection. Hidden and empty values keep their
+    // existing exemption only when the physical field and value are valid.
     if (config.requireOpenLinkedRecords === true) {
         const validLinkedValue =
             value == null ||
@@ -124,7 +124,13 @@ const validateOrdinaryPageField = (
             validLinkedValue &&
             (hidden ||
                 value == null ||
-                (Array.isArray(value) && value.length === 0));
+                (Array.isArray(value) &&
+                    (value.length === 0 ||
+                        value.every(
+                            (id) =>
+                                typeof id === 'string' &&
+                                openedLinkedRecordIds?.has(id) === true
+                        ))));
         if (!noReviewDebt) return problem('unsupported-validation');
     }
     if (field.isComputed) return null;
@@ -316,13 +322,15 @@ export const validatePageField = (
     value: AirtableValue | undefined,
     stored: AirtableValue | undefined,
     hidden: boolean,
-    context?: ConditionalPageContext
+    context?: ConditionalPageContext,
+    openedLinkedRecordIds?: ReadonlySet<string>
 ): FormPageProblem | null => {
     const ordinaryProblem = validateOrdinaryPageField(
         field,
         value,
         stored,
-        hidden
+        hidden,
+        openedLinkedRecordIds
     );
     if (ordinaryProblem) return ordinaryProblem;
     const config = field.schema.miniExtConfig;

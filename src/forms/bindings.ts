@@ -57,6 +57,10 @@ import {
     type FormLinkedChildRecovery,
 } from './linkedChild.js';
 import { withFormWriteAdmission } from './writeAdmission.js';
+import {
+    registerLinkedRecordOpenHistory,
+    type LinkedRecordOpenHistory,
+} from './linkedRecordOpenHistory.js';
 
 export type FieldActionResult =
     | { accepted: true }
@@ -101,6 +105,11 @@ export type FormFieldBinding = {
 export type FormFieldBindingsOptions = FormControllerOptions & {
     /** Advance for accepted linked-record configuration replacement, including observed ABA. */
     configurationRevision?(): string | number;
+    /** Coherent epoch for this parent's scope, session and linked configuration.
+     * Required for crediting linked Edit presentations. Advance on any replacement,
+     * including changes inside callbacks and replacement followed by restoration.
+     */
+    linkedRecordOpenAuthorityRevision?(): number;
     /** Explicit client zone for dateTime presentation; never a local-time parser. */
     getClientTimeZone?(): string;
     /** Additional explicit UI/recovery lease. It never clears native data. */
@@ -191,15 +200,45 @@ export function createFormFieldBindings(
     initial: FormFieldBindingsOptions
 ): FormFieldBindings {
     let options = initial;
+    let readingLinkedOpenAuthority = false;
+    const readLinkedOpenAuthority = () => {
+        if (readingLinkedOpenAuthority) return null;
+        readingLinkedOpenAuthority = true;
+        try {
+            const value = options.linkedRecordOpenAuthorityRevision?.();
+            return typeof value === 'number' &&
+                Number.isSafeInteger(value) &&
+                value >= 0
+                ? value
+                : null;
+        } catch {
+            return null;
+        } finally {
+            readingLinkedOpenAuthority = false;
+        }
+    };
     const store = initial.store ?? new FormDraftStore<AirtableValue>();
     let loaded = structuredClone(initial.loaded);
     // Server-accepted selection IDs stay separate from dirty values kept across reload.
     let originalLinkedRecordData = structuredClone(
         initial.loaded.payload.formRecord.data
     );
+    let linkedOpenAuthority = readLinkedOpenAuthority();
     const controller = createFormController({ ...initial, loaded, store });
     let epoch = controller.getState().epoch;
     let contextRevision = controller.getState().contextRevision;
+    let openedLinkedRecords: {
+        configuration: string | number;
+        records: LinkedRecordOpenHistory;
+    } | null = null;
+    const currentLinkedOpenAuthority = () => {
+        if (linkedOpenAuthority === null || retired || disposed) return false;
+        if (readLinkedOpenAuthority() !== linkedOpenAuthority) {
+            linkedOpenAuthority = null;
+            openedLinkedRecords = null;
+        }
+        return linkedOpenAuthority !== null && !retired && !disposed;
+    };
     const choiceCreators = new Map<string, FormSelectChoiceController>();
     const choiceBlocked = () =>
         [...choiceCreators.values()].some((model) => model.blocksForm());
@@ -251,6 +290,7 @@ export function createFormFieldBindings(
         }
     >();
     const retireEntries = () => {
+        openedLinkedRecords = null;
         const oldLinkedRecords = linkedRecordsOwner;
         linkedRecordsOwner = null;
         oldLinkedRecords?.destroy();
@@ -775,6 +815,44 @@ export function createFormFieldBindings(
                             ) ?? null
                         );
                     },
+                    creditEditPresentation: (
+                        recordId,
+                        configuration,
+                        presentationCurrent
+                    ) => {
+                        if (
+                            !currentLinkedOpenAuthority() ||
+                            !presentationCurrent()
+                        )
+                            return false;
+                        const schema = loaded.payload.fieldIdsToSchemas[id];
+                        const settings = schema?.miniExtConfig;
+                        if (
+                            retired ||
+                            disposed ||
+                            pendingRead !== null ||
+                            schema?.fieldType !== 'multipleRecordLinks' ||
+                            !settings ||
+                            !('requireOpenLinkedRecords' in settings) ||
+                            settings.requireOpenLinkedRecords !== true
+                        )
+                            return false;
+                        const history =
+                            openedLinkedRecords?.configuration === configuration
+                                ? openedLinkedRecords.records
+                                : null;
+                        const previous = history?.get(id);
+                        if (!previous?.has(recordId)) {
+                            const records = new Map(history);
+                            records.set(
+                                id,
+                                new Set([...(previous ?? []), recordId])
+                            );
+                            openedLinkedRecords = { configuration, records };
+                            notify();
+                        }
+                        return true;
+                    },
                     changed: refresh,
                 });
                 linkedChildren.set(id, {
@@ -1283,6 +1361,30 @@ export function createFormFieldBindings(
         return draftCurrent === null
             ? null
             : () => !retired && !disposed && draftCurrent();
+    });
+    registerLinkedRecordOpenHistory(owner, {
+        observe: () => {
+            const captured = openedLinkedRecords;
+            if (!captured) return null;
+            let live = false;
+            try {
+                live =
+                    (options.configurationRevision?.() ?? 0) ===
+                    captured.configuration;
+            } catch {
+                // A host that cannot establish the current epoch supplies no credit.
+            }
+            live = live && currentLinkedOpenAuthority();
+            if (openedLinkedRecords !== captured) return null;
+            // The page already observes controller scope. Here, check only the
+            // binding configuration and local lifetime, without calling getState.
+            if (!live || retired || disposed) openedLinkedRecords = null;
+            return openedLinkedRecords?.records ?? null;
+        },
+        peek: () => openedLinkedRecords?.records ?? null,
+        verifyAuthority: (captured) =>
+            currentLinkedOpenAuthority() &&
+            openedLinkedRecords?.records === captured,
     });
     return owner;
 }

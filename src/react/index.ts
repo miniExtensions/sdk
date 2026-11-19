@@ -3625,6 +3625,10 @@ export {
     type AttachmentPreviewLabels,
 } from './AttachmentPreview.js';
 export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
+export {
+    AttachmentSliderNavigation,
+    type AttachmentSliderNavigationProps,
+} from './AttachmentSliderNavigation.js';
 
 export {
     PortalSummaryCards,

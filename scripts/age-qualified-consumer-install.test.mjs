@@ -30,6 +30,7 @@ function fixture(
         npmLock = false,
         alias = false,
         packedFiles = {},
+        readConfigList = JSON.stringify,
     } = {}
 ) {
     const root = realpathSync(
@@ -89,8 +90,12 @@ function fixture(
         assert.equal(cwd, directory);
         calls.push(args);
         if (args[0] === '--version') return version;
-        if (args[0] === 'config')
-            return JSON.stringify({ ...consumerAgePolicy, ...policy }[args[2]]);
+        if (args[0] === 'config') {
+            const effective = { ...consumerAgePolicy, ...policy };
+            return args[1] === 'list'
+                ? readConfigList(effective)
+                : JSON.stringify(effective[args[2]]);
+        }
         assert.deepEqual(args, [
             'install',
             '--strict-peer-dependencies',
@@ -159,15 +164,99 @@ for (const npmLock of [false, true])
         assert.equal(manifest.dependencies['host-moment'], 'npm:moment@2.30.1');
         assert.equal(manifest.dependencies.react, '19.2.0');
         assert.equal(manifest.dependencies['@types/react'], '19.2.2');
-        assert.deepEqual(
-            f.calls.slice(1, -1),
-            Object.keys(consumerAgePolicy).map((key) => [
-                'config',
-                'get',
-                key,
-                '--json',
+        assert.deepEqual(f.calls.slice(1, -1), [['config', 'list', '--json']]);
+        if (npmLock) return;
+
+        const getterCalls = Object.keys(consumerAgePolicy).map((key) => [
+            'config',
+            'get',
+            key,
+            '--json',
+        ]);
+        const aliases = Object.fromEntries(
+            Object.entries(consumerAgePolicy).map(([key, value]) => [
+                key.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase()),
+                value,
             ])
         );
+        for (const snapshot of [
+            aliases,
+            { ...consumerAgePolicy, ...aliases },
+        ]) {
+            const aliased = fixture(t, {
+                readConfigList: () => JSON.stringify(snapshot),
+            });
+            installAgeQualifiedConsumer(aliased);
+            assert.equal(aliased.installs, 1);
+            assert.deepEqual(aliased.calls.slice(1, -1), [
+                ['config', 'list', '--json'],
+            ]);
+        }
+        for (const response of [
+            () => '{}',
+            () => 'null',
+            () => '[]',
+            () => 'invalid JSON',
+            () => {
+                throw new Error('Unprinted config stderr sentinel');
+            },
+        ]) {
+            const fallback = fixture(t, { readConfigList: response });
+            installAgeQualifiedConsumer(fallback);
+            assert.equal(fallback.installs, 1);
+            assert.deepEqual(fallback.calls.slice(1, -1), [
+                ['config', 'list', '--json'],
+                ...getterCalls,
+            ]);
+        }
+
+        const sentinel = 'Unprinted config value sentinel';
+        for (const [policy, readConfigList, failure] of [
+            [
+                { ignoreScripts: false },
+                () => '{}',
+                /Consumer policy differs: ignoreScripts/,
+            ],
+            [
+                { ignoreScripts: undefined },
+                () => '{}',
+                /Consumer policy could not be read: ignoreScripts/,
+            ],
+            [
+                {},
+                () => JSON.stringify({ ignoreScripts: false }),
+                /Consumer policy differs: ignoreScripts/,
+            ],
+            [
+                {},
+                () => JSON.stringify({ ignoreScripts: sentinel }),
+                /Consumer policy differs: ignoreScripts/,
+            ],
+            [
+                {},
+                () =>
+                    JSON.stringify({
+                        ignoreScripts: true,
+                        'ignore-scripts': sentinel,
+                    }),
+                /Consumer policy aliases differ: ignoreScripts/,
+            ],
+        ]) {
+            const rejected = fixture(t, { policy, readConfigList });
+            const retainedLock = join(rejected.directory, 'pnpm-lock.yaml');
+            writeFileSync(retainedLock, 'retained lock');
+            assert.throws(
+                () => installAgeQualifiedConsumer(rejected),
+                (error) => {
+                    assert.match(error.message, failure);
+                    assert.doesNotMatch(String(error), /Unprinted config/);
+                    return true;
+                }
+            );
+            assert.equal(rejected.installs, 0);
+            assert(existsSync(rejected.installed));
+            assert.equal(readFileSync(retainedLock, 'utf8'), 'retained lock');
+        }
     });
 for (const policy of [
     { minimumReleaseAge: 0 },

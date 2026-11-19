@@ -25,6 +25,7 @@ import {PortalGridPhoneNumberCell,type PortalGridPhoneNumberCellProps,type Porta
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
 import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,RatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import {PortalGridCheckboxCell,type PortalGridCheckboxCellProps,type PortalGridCheckboxCellEditor} from '@miniextensions/sdk/react';
+import {PortalGridButtonCell,type PortalGridButtonCellProps} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import '@miniextensions/sdk/react/portal-grid-empty-cell.css';
@@ -33,6 +34,7 @@ import '@miniextensions/sdk/react/rating.css';
 import '@miniextensions/sdk/react/complete-checkbox.css';
 import '@miniextensions/sdk/react/text.css';
 import '@miniextensions/sdk/react/complete-phone.css';
+import '@miniextensions/sdk/react/button.css';
 const columns:readonly ReadonlyPortalGridColumn[]=[{fieldId:'name',title:'Name',icon:'text'}];
 const rows:readonly ReadonlyPortalGridRow[]=[{recordId:'row',cells:[{fieldId:'name',node:'Admitted display'}]}];
 const props:ReadonlyPortalGridProps={columns,rows,primaryFieldId:'name',revision:1,preferenceScopeKey:'consumer-view',ready:true,isCurrent:()=>true,hiddenColumns:{},columnWidths:{name:'200'},allowHideColumns:true,onFieldHiddenChange(change){void change.isHidden;},onColumnWidthCommit(change){void change.width;},onOpenRecord(id,trigger){void id;trigger.focus();},doNotAllowUserToCopyTextOnGrid:false,rowHeight:'short'};
@@ -68,6 +70,11 @@ createElement(PortalGridPhoneNumberCell,phoneCell);
 // @ts-expect-error a country or plain editor requires the current host owner
 const unownedPhone:PortalGridPhoneNumberCellProps={...phoneCell,editor:{onValueChange(){}}};
 void unownedPhone;
+const buttonCell:PortalGridButtonCellProps={button:{mode:'controlled',value:{label:'Run action',url:'/action'},config:{openLinkType:'triggerWebhookPOST'},form:'button-grid',owner:{isCurrent:()=>true},onTriggerWebhook(){}},displayText:'',cellIdentity:'row-button',selected:false,onSelect(){},rowHeight:'medium'};
+createElement(PortalGridButtonCell,buttonCell);
+// @ts-expect-error a Grid Button has no inline value editor
+const editableButton:PortalGridButtonCellProps={...buttonCell,editor:{onChange(){}}};
+void editableButton;
 const placeholder:PortalGridEmptyCellProps={rowHeight:'extra-tall',stickyLeft:0,lastRow:true};
 createElement(PortalGridEmptyCell,placeholder);
 // @ts-expect-error a blank column slot has no selection port
@@ -173,6 +180,15 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const buttonCellSource = readFileSync(
+        fileURLToPath(
+            new URL(
+                '../test/reactPortalGridButtonCell.test.ts',
+                import.meta.url
+            )
+        ),
+        'utf8'
+    );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
@@ -182,6 +198,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const emptyCellCases = 3;
     const ratingCellCases = 8;
     const checkboxCellCases = 16;
+    const buttonCellCases = 2;
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
         ['19.2.0', '19.2.2', '19.2.2'],
@@ -289,10 +306,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                         checkboxCellSource,
                         checkboxCellCases,
                     ],
+                    ['grid-button-cell', buttonCellSource, buttonCellCases],
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -340,6 +358,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     emptyCellTests: emptyCellCases,
                     ratingCellTests: ratingCellCases,
                     checkboxCellTests: checkboxCellCases,
+                    buttonCellTests: buttonCellCases,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -467,6 +486,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                     name.endsWith('/react/text.css')
                 )
             );
+            assert(
+                Object.keys(styles.metafile.inputs).some((name) =>
+                    name.endsWith('/react/button.css')
+                )
+            );
             assert.equal(
                 createHash('sha256')
                     .update(readFileSync(archivePath))
@@ -483,6 +507,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 emptyCellTests: emptyCellCases * 2,
                 ratingCellTests: ratingCellCases * 2,
                 checkboxCellTests: checkboxCellCases * 2,
+                buttonCellTests: buttonCellCases * 2,
                 strictTypes: ['ESM', 'CJS', 'Bundler'],
                 styles: 'owned table, controls and cell geometry',
                 ...receipt,
@@ -511,6 +536,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         checkboxCellTests: profiles.reduce(
             (total, profile) => total + profile.checkboxCellTests,
+            0
+        ),
+        buttonCellTests: profiles.reduce(
+            (total, profile) => total + profile.buttonCellTests,
             0
         ),
         phoneCellTests: profiles.reduce(

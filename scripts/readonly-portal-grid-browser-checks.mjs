@@ -10,7 +10,7 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -18,6 +18,7 @@ import'@miniextensions/sdk/react/portal-grid-empty-cell.css';
 import'@miniextensions/sdk/react/portal-grid-cell.css';
 import'@miniextensions/sdk/react/rating.css';
 import'@miniextensions/sdk/react/complete-checkbox.css';
+import'@miniextensions/sdk/react/text.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -121,6 +122,49 @@ function EmptyCellProbe() {
             }, 'Sibling action ' + rowHeight))
         ))
     )));
+}
+function EmailCellProbe() {
+    const [cell,setCell] = useState(() => ({
+        record:'email-A',value:'seed@example.com',selected:false,frame:{},
+    }));
+    const authority = useRef(cell.frame);
+    const log = useRef({ selections:0,writes:[],submits:0 });
+    useEffect(() => {
+        window.__emailCellProbe = {
+            snapshot: () => ({ record:cell.record,value:cell.value,selected:cell.selected,...log.current }),
+            replace() {
+                const frame = {};
+                authority.current = frame;
+                setCell({ record:'email-B',value:'successor@example.com',selected:true,frame });
+            },
+        };
+        return () => { delete window.__emailCellProbe; };
+    },[cell]);
+    return h('form',{id:'grid-email-form',onSubmit(event){
+        event.preventDefault();
+        log.current.submits++;
+    }},h('table',{
+        'aria-label':'Email Grid fixture',
+        style:{width:'max-content',borderCollapse:'separate',borderSpacing:0},
+    },h('thead',null,h('tr',null,h('th',{scope:'col',style:{width:240}},'Email'))),
+    h('tbody',null,h('tr',null,
+        h(PortalGridEmailCell,{
+            value:cell.value,displayText:cell.value,title:'Contact email',language:'en',
+            cellIdentity:cell.record,selected:cell.selected,rowHeight:'medium',
+            onSelect() {
+                log.current.selections++;
+                setCell(current => ({ ...current,selected:true }));
+            },
+            editor:{
+                form:'grid-email-form',
+                owner:{token:cell.frame,isCurrent:()=>authority.current===cell.frame},
+                onChange(value) {
+                    log.current.writes.push({ record:cell.record,value });
+                    setCell(current => ({ ...current,value }));
+                },
+            },
+        })
+    ))),h('button',{type:'submit'},'Submit Email fixture'));
 }
 function RatingCellProbe() {
     const [cell, setCell] = useState(() => ({
@@ -284,6 +328,7 @@ function CheckboxCellProbe() {
 const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
+    startEmailCell: () => root.render(h(StrictMode, null, h(EmailCellProbe))),
     startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
     startRatingCell: () => root.render(h(StrictMode, null, h(RatingCellProbe))),
     startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key })))
@@ -327,6 +372,9 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/PortalGridSingleLineTextCell.js',
         '/react/SingleLineTextField.js',
         '/react/portal-grid-single-line-text-cell.css',
+        '/react/PortalGridEmailCell.js',
+        '/react/ControlledEmailField.js',
+        '/react/text.css',
         '/react/PortalGridEmptyCell.js',
         '/react/portal-grid-empty-cell.css',
         '/react/PortalGridRatingCell.js',
@@ -1082,6 +1130,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     assert.equal(end.submits, 0);
     assert.equal(end.canonicalUnchanged, true);
     const textCell = await checkPlainTextCellBrowser(page);
+    const emailCell = await checkEmailCellBrowser(page);
     const emptyCell = await checkEmptyCellBrowser(page);
     const ratingCell = await checkRatingCellBrowser(page);
     const checkboxCell = await checkCheckboxCellBrowser(page);
@@ -1100,6 +1149,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         },
         canonicalUnchanged: true,
         textCell,
+        emailCell,
         emptyCell,
         ratingCell,
         checkboxCell,
@@ -1276,6 +1326,68 @@ async function checkPlainTextCellBrowser(page) {
         guidanceIdentityRetired: true,
         ...result,
     };
+}
+
+async function checkEmailCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startEmailCell());
+    const table = page.getByRole('table', { name: 'Email Grid fixture' });
+    const cell = table.locator('.mx-sdk-portal-grid-email-cell');
+    const input = cell.getByRole('textbox', { name: 'Contact email' });
+    const state = () => page.evaluate(() => window.__emailCellProbe.snapshot());
+    const link = cell.getByRole('link', { name: 'seed@example.com' });
+    assert.equal(await link.getAttribute('href'), 'mailto:seed@example.com');
+    await link.evaluate((node) =>
+        node.addEventListener('click', (event) => event.preventDefault())
+    );
+    await link.click();
+    assert.equal((await state()).selections, 0);
+    await cell.click({ position: { x: 2, y: 2 } });
+    await input.waitFor();
+    assert.equal((await state()).selections, 1);
+    assert.deepEqual((await state()).writes, []);
+    assert.equal(await input.getAttribute('type'), 'email');
+    assert.equal(
+        await input.evaluate((node) => node.form?.id),
+        'grid-email-form'
+    );
+    await input.fill('Changed@example.com');
+    assert.deepEqual((await state()).writes, []);
+    await input.press('Enter');
+    const first = [{ record: 'email-A', value: 'Changed@example.com' }];
+    assert.deepEqual((await state()).writes, first);
+    assert.equal(
+        await input.evaluate(
+            (node) => node.ownerDocument.activeElement === node
+        ),
+        false
+    );
+
+    await input.fill('stale@example.com');
+    const previous = await input.elementHandle();
+    assert(previous);
+    try {
+        await page.evaluate(() => window.__emailCellProbe.replace());
+        await page.waitForFunction(
+            () => window.__emailCellProbe.snapshot().record === 'email-B'
+        );
+        assert.equal(
+            await previous.evaluate((node) => node.isConnected),
+            false
+        );
+    } finally {
+        await previous.dispose();
+    }
+    assert.equal(await input.inputValue(), 'successor@example.com');
+    assert.deepEqual((await state()).writes, first);
+    await input.fill('fresh@example.com');
+    await input.press('Tab');
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        ...first,
+        { record: 'email-B', value: 'fresh@example.com' },
+    ]);
+    assert.equal(result.submits, 0);
+    return { status: 'passed', ...result };
 }
 
 async function checkEmptyCellBrowser(page) {

@@ -7,7 +7,9 @@ import {
     useState,
     type ChangeEvent,
     type CSSProperties,
+    type KeyboardEvent,
     type MouseEvent,
+    type PointerEvent,
     type ReactElement,
     type SyntheticEvent,
 } from 'react';
@@ -24,6 +26,8 @@ import type {
 
 const defaultLabels = {
     trigger: 'Filter',
+    quickFilters: 'Quick filters',
+    allValues: 'All values',
     title: 'Filter records',
     done: 'Done',
     close: 'Close',
@@ -56,6 +60,8 @@ export type PortalVisitorFilterLabels = Partial<Labels>;
 export type PortalVisitorFilterProps = {
     port: PortalVisitorFilterPort;
     disabled?: boolean;
+    /** Show the quick filters admitted by the current host frame. */
+    showDropdowns?: boolean;
     labels?: PortalVisitorFilterLabels;
     className?: string;
     style?: CSSProperties;
@@ -63,8 +69,10 @@ export type PortalVisitorFilterProps = {
 };
 type Draft = NonNullable<ReturnType<typeof createPortalVisitorFilterDraft>>;
 type Open = { port: PortalVisitorFilterPort; draft: Draft };
+type HeldQuickKey = { fieldId: string; key: string; shown: Open };
+type QuickGesture = { fieldId: string; shown: Open; held?: HeldQuickKey };
 type Status = {
-    type: PortalVisitorFilterOutcome['type'];
+    type: PortalVisitorFilterOutcome['type'] | 'pending';
     owner?: Open;
     outcome?: PortalVisitorFilterOutcome;
 };
@@ -76,6 +84,15 @@ const buttons: CSSProperties = {
     alignItems: 'center',
     gap: '0.5rem',
 };
+const selectKeys = new Set([
+    'ArrowUp',
+    'ArrowDown',
+    'Home',
+    'End',
+    'PageUp',
+    'PageDown',
+    'Enter',
+]);
 
 function hitsBackdrop(event: MouseEvent<HTMLDialogElement>) {
     if (event.target !== event.currentTarget) return false;
@@ -88,6 +105,11 @@ function hitsBackdrop(event: MouseEvent<HTMLDialogElement>) {
         event.clientY < top ||
         event.clientY >= bottom
     );
+}
+
+function readFilterDraft(port: PortalVisitorFilterPort): Open | null {
+    const draft = createPortalVisitorFilterDraft(port);
+    return draft ? { port, draft } : null;
 }
 
 function FilterDialog({
@@ -510,10 +532,14 @@ export function PortalVisitorFilter(
 ): ReactElement {
     const labels = { ...defaultLabels, ...props.labels };
     const [active, setActive] = useState<Open | null>(null);
+    const [quick, setQuick] = useState<Open | null>(null);
     const [status, setStatus] = useState<Status | null>(null);
     const occupied = useRef<Open | null>(null);
     const inFlight = useRef<Open | null>(null);
+    const quickGesture = useRef<QuickGesture | null>(null);
+    const heldQuickKey = useRef<HeldQuickKey | null>(null);
     const trigger = useRef<HTMLButtonElement>(null);
+    const quickId = useId();
     const owner = useRef(props.port);
     const notify = useRef(props.onOutcome);
     useCommitEffect(() => {
@@ -527,12 +553,31 @@ export function PortalVisitorFilter(
             occupied.current = null;
             inFlight.current = null;
             old?.draft.retire();
+            quickGesture.current = null;
+            heldQuickKey.current = null;
         };
     }, [props.port]);
+    useCommitEffect(() => {
+        if (!props.showDropdowns) {
+            setQuick(null);
+            quickGesture.current = null;
+            heldQuickKey.current = null;
+            return;
+        }
+        const refresh = () => setQuick(readFilterDraft(props.port));
+        const unsubscribe = props.port.subscribe(refresh);
+        refresh();
+        return unsubscribe;
+    }, [props.port, props.showDropdowns]);
     useCommitEffect(() => {
         if (active && active.port !== props.port) setActive(null);
         if (active && props.disabled) active.draft.retire();
     }, [active, props.disabled, props.port]);
+    useCommitEffect(() => {
+        if (!props.disabled) return;
+        quickGesture.current = null;
+        heldQuickKey.current = null;
+    }, [props.disabled]);
     useCommitEffect(() => {
         if (
             !status?.owner ||
@@ -551,27 +596,33 @@ export function PortalVisitorFilter(
     }, [props.port, status]);
     const open = () => {
         if (occupied.current || inFlight.current || props.disabled) return;
-        const draft = createPortalVisitorFilterDraft(props.port);
-        if (!draft) {
+        const shown = readFilterDraft(props.port);
+        if (!shown) {
             setStatus({ type: 'refused' });
             return;
         }
-        const shown = { port: props.port, draft };
         occupied.current = shown;
         setStatus(null);
         setActive(shown);
     };
-    const close = (shown: Open) => {
-        if (occupied.current !== shown) return;
-        occupied.current = null;
+    const submit = (shown: Open, held?: HeldQuickKey) => {
         inFlight.current = shown;
-        setActive(null);
-        if (props.disabled) shown.draft.retire();
+        setStatus({ type: 'pending' });
         void shown.draft.commit().then((outcome) => {
             if (inFlight.current !== shown || owner.current !== shown.port)
                 return;
             inFlight.current = null;
-            if (!shown.draft.canReport(outcome)) {
+            if (props.showDropdowns) setQuick(readFilterDraft(shown.port));
+            const current = shown.draft.canReport(outcome);
+            if (held && heldQuickKey.current === held) {
+                const resumed = current
+                    ? shown.draft.resumeAfterAllocation()
+                    : null;
+                heldQuickKey.current = resumed
+                    ? { ...held, shown: { port: shown.port, draft: resumed } }
+                    : null;
+            }
+            if (!current) {
                 setStatus({ type: 'stale' });
                 return;
             }
@@ -582,6 +633,215 @@ export function PortalVisitorFilter(
             );
             notify.current?.(outcome);
         });
+    };
+    const close = (shown: Open) => {
+        if (occupied.current !== shown) return;
+        occupied.current = null;
+        setActive(null);
+        if (props.disabled) shown.draft.retire();
+        submit(shown);
+    };
+    const applyDropdown = (fieldId: string, values: string[]) => {
+        const gesture = quickGesture.current;
+        quickGesture.current = null;
+        if (
+            !gesture ||
+            gesture.fieldId !== fieldId ||
+            gesture.shown.port !== owner.current ||
+            occupied.current ||
+            inFlight.current ||
+            props.disabled
+        )
+            return false;
+        const { shown } = gesture;
+        if (!shown.draft.current()) {
+            if (gesture.held && heldQuickKey.current === gesture.held)
+                heldQuickKey.current = null;
+            setStatus({ type: 'stale' });
+            return false;
+        }
+        if (!shown.draft.setDropdown(fieldId, values)) return false;
+        submit(shown, gesture.held);
+        return true;
+    };
+    const renderDropdowns = (shown: Open) => {
+        const dropdowns = shown.draft.dropdowns();
+        if (!dropdowns.length) return null;
+        return h(
+            'div',
+            {
+                role: 'group',
+                'aria-label': labels.quickFilters,
+                style: buttons,
+            },
+            dropdowns.map(({ fieldId, label, multiple, choices, selected }) => {
+                const selectId = `${quickId}-${fieldId}`;
+                const remember = () => {
+                    quickGesture.current = { fieldId, shown };
+                };
+                const gestureEvents = {
+                    onFocus: remember,
+                    onPointerDown: (event: PointerEvent) => {
+                        if (event.button !== 0) return;
+                        heldQuickKey.current = null;
+                        remember();
+                    },
+                };
+                return h(
+                    'div',
+                    { key: fieldId },
+                    h(
+                        'label',
+                        null,
+                        label,
+                        ' ',
+                        h(
+                            'select',
+                            {
+                                ...gestureEvents,
+                                id: selectId,
+                                onKeyDown: (
+                                    event: KeyboardEvent<HTMLSelectElement>
+                                ) => {
+                                    if (event.repeat) {
+                                        const held = heldQuickKey.current;
+                                        quickGesture.current =
+                                            held?.fieldId === fieldId &&
+                                            held.key === event.key
+                                                ? {
+                                                      fieldId,
+                                                      shown: held.shown,
+                                                      held,
+                                                  }
+                                                : null;
+                                        return;
+                                    }
+                                    if (
+                                        selectKeys.has(event.key) ||
+                                        (event.key.length === 1 &&
+                                            !event.ctrlKey &&
+                                            !event.metaKey &&
+                                            !event.altKey)
+                                    ) {
+                                        const held = {
+                                            fieldId,
+                                            key: event.key,
+                                            shown,
+                                        };
+                                        heldQuickKey.current = held;
+                                        quickGesture.current = {
+                                            fieldId,
+                                            shown,
+                                            held,
+                                        };
+                                    }
+                                },
+                                onKeyUp: (
+                                    event: KeyboardEvent<HTMLSelectElement>
+                                ) => {
+                                    const held = heldQuickKey.current;
+                                    if (
+                                        held?.fieldId === fieldId &&
+                                        held.key === event.key
+                                    )
+                                        heldQuickKey.current = null;
+                                },
+                                onBlur: () => {
+                                    if (
+                                        heldQuickKey.current?.fieldId ===
+                                        fieldId
+                                    )
+                                        heldQuickKey.current = null;
+                                    if (
+                                        quickGesture.current?.fieldId ===
+                                        fieldId
+                                    )
+                                        quickGesture.current = null;
+                                },
+                                multiple,
+                                value: multiple
+                                    ? [...selected]
+                                    : (selected[0] ?? ''),
+                                disabled: props.disabled,
+                                'aria-disabled':
+                                    Boolean(inFlight.current) || undefined,
+                                onChange: (
+                                    event: ChangeEvent<HTMLSelectElement>
+                                ) => {
+                                    const input = event.currentTarget;
+                                    const values = multiple
+                                        ? Array.from(input.options)
+                                              .filter(
+                                                  (option) => option.selected
+                                              )
+                                              .map((option) => option.value)
+                                        : input.value
+                                          ? [input.value]
+                                          : [];
+                                    applyDropdown(fieldId, values);
+                                },
+                            },
+                            !multiple
+                                ? h('option', { value: '' }, labels.allValues)
+                                : null,
+                            selected
+                                .filter(
+                                    (value) =>
+                                        !choices.some(
+                                            (choice) => choice.value === value
+                                        )
+                                )
+                                .map((value) =>
+                                    h(
+                                        'option',
+                                        { key: value, value, disabled: true },
+                                        labels.unavailable
+                                    )
+                                ),
+                            choices.map((choice) =>
+                                h(
+                                    'option',
+                                    { key: choice.value, value: choice.value },
+                                    choice.label
+                                )
+                            )
+                        )
+                    ),
+                    multiple
+                        ? h(
+                              'button',
+                              {
+                                  ...gestureEvents,
+                                  onKeyDown: (
+                                      event: KeyboardEvent<HTMLButtonElement>
+                                  ) => {
+                                      if (
+                                          !event.repeat &&
+                                          (event.key === 'Enter' ||
+                                              event.key === ' ')
+                                      )
+                                          remember();
+                                  },
+                                  type: 'button',
+                                  disabled: props.disabled || !selected.length,
+                                  'aria-disabled':
+                                      Boolean(inFlight.current) || undefined,
+                                  'aria-label': `${labels.clear} ${label}`,
+                                  onClick: (
+                                      event: MouseEvent<HTMLButtonElement>
+                                  ) => {
+                                      if (applyDropdown(fieldId, []))
+                                          event.currentTarget.ownerDocument
+                                              .getElementById(selectId)
+                                              ?.focus();
+                                  },
+                              },
+                              labels.clear
+                          )
+                        : null
+                );
+            })
+        );
     };
     const type = status?.type;
     const feedback =
@@ -604,6 +864,9 @@ export function PortalVisitorFilter(
             },
             labels.trigger
         ),
+        props.showDropdowns && quick?.port === props.port
+            ? renderDropdowns(quick)
+            : null,
         feedback ? h('p', { role: 'status' }, feedback) : null,
         active?.port === props.port
             ? h(FilterDialog, {

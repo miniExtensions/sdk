@@ -3317,6 +3317,31 @@ an explicit new native intent; the native owner decides whether retry is safe.
 or changing an allocated Save. This is not `FormFieldBindings.linkedChild`, whose
 accepted-client and child-draft ownership contract remains separate.
 
+### Borrowing native required-open review
+
+Use `projectBorrowedFormRequiredOpenDebt` and
+`resolveBorrowedFormRequiredOpenCredit` from `@miniextensions/sdk/forms` when
+the host already owns Form state, review history and Save. Both functions are
+synchronous decisions over supplied data. The host keeps its existing field
+visibility rules, selects only visible configured required-open fields and
+supplies each field’s current unfiltered links and existing reviewed IDs.
+A null projection denotes invalid input and must withhold admission.
+
+Give each accepted Form load its own opaque parent identity, even when it reloads
+the same record. Issue a new receipt object when the native Edit content actually
+mounts with a nonnull envelope. Revoke the receipt when the mount, accepted
+envelope, child identity, field/configuration or parent ownership changes. A
+mounted native error envelope can qualify when the host actually presents its
+content. Pending reads, absent envelopes, and Create have no Edit receipt.
+
+Evaluate `resolveBorrowedFormRequiredOpenCredit` inside the current native
+history update. Supply the exact current mounted receipt and the immutable
+selection and review state that the update will use. Append the returned
+field/record pair to the existing native history in that same update. A null
+result leaves the ledger untouched. Use a new empty ledger for a fresh Form load
+and keep existing review IDs when a record is removed and reselected within
+one load. The native Submit path owns Save admission, allocation and settlement.
+
 ### Runnable borrowed native Form composition
 
 This adapter borrows two independent native boundaries: linked-option cache reads

@@ -165,6 +165,13 @@ export {
     type FieldActionResult,
 } from './bindings.js';
 export { formChoiceConditionRecord } from './choiceRecord.js';
+export {
+    projectBorrowedFormRequiredOpenDebt,
+    resolveBorrowedFormRequiredOpenCredit,
+    type BorrowedFormRequiredOpenField,
+    type BorrowedFormRequiredOpenFrame,
+    type BorrowedFormRequiredOpenPresentation,
+} from './borrowedRequiredOpen.js';
 export type {
     FormLinkedRecordsFacet,
     FormLinkedRecordsSnapshot,

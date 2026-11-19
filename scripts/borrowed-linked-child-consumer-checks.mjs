@@ -19,12 +19,37 @@ borrowedChild.acceptRead({},()=>true);
 createBorrowedLinkedChildController({readScope:()=>({source:['session']})});
 // @ts-expect-error a callback, not a client or second store, owns canonical Save
 borrowedChild.save(childSave!,{save:async()=>true});
+
+import {
+    projectBorrowedFormRequiredOpenDebt,
+    resolveBorrowedFormRequiredOpenCredit,
+    type BorrowedFormRequiredOpenFrame,
+    type BorrowedFormRequiredOpenPresentation,
+} from '@miniextensions/sdk/forms';
+const parentOwner = {};
+const editPresentation: BorrowedFormRequiredOpenPresentation = {
+    kind: 'edit', parentOwner, fieldId: 'projects', recordId: 'A',
+    envelope: { type: 'error' },
+};
+const reviewFrame: BorrowedFormRequiredOpenFrame = {
+    parentOwner,
+    fields: [{fieldId: 'projects', selectedRecordIds: ['A'], reviewedRecordIds: []}],
+    currentPresentation: editPresentation,
+};
+const reviewDebt: Readonly<Record<string, readonly string[]>> | null =
+    projectBorrowedFormRequiredOpenDebt(reviewFrame.fields);
+const credit: Readonly<{fieldId: string; recordId: string}> | null =
+    resolveBorrowedFormRequiredOpenCredit(reviewFrame, editPresentation);
+// @ts-expect-error a Create receipt cannot credit an existing linked record
+resolveBorrowedFormRequiredOpenCredit(reviewFrame, {...editPresentation,kind:'create'});
+// @ts-expect-error pending child data is not an accepted presentation envelope
+resolveBorrowedFormRequiredOpenCredit(reviewFrame, {...editPresentation,envelope:null});
 `;
 export async function checkBorrowedLinkedChildConsumer({ consumerDirectory }) {
     const loader = join(consumerDirectory, 'borrowed-linked-child-public.mjs');
     writeFileSync(
         loader,
-        "export {createBorrowedLinkedChildController} from '@miniextensions/sdk/forms';\n"
+        "export {createBorrowedLinkedChildController, projectBorrowedFormRequiredOpenDebt, resolveBorrowedFormRequiredOpenCredit} from '@miniextensions/sdk/forms';\n"
     );
     const esm = await import(pathToFileURL(loader).href);
     const require = createRequire(join(consumerDirectory, 'package.json'));
@@ -86,6 +111,7 @@ export async function checkBorrowedLinkedChildConsumer({ consumerDirectory }) {
         assert.equal(result.value, receipt);
         assert.equal(allocations, 1);
         await checkObservedReentry(api, format, failures);
+        checkBorrowedRequiredOpenConsumer(api, format);
     }
     if (failures.length)
         throw new AggregateError(failures, 'Installed child ownership failed');
@@ -93,6 +119,47 @@ export async function checkBorrowedLinkedChildConsumer({ consumerDirectory }) {
         'Installed borrowed linked-child ESM/CommonJS and strict declarations: native revisions, publication ABA, observed reentry/disposal/refusal, explicit Save and unchanged allocated settlement passed.'
     );
     return 2;
+}
+
+function checkBorrowedRequiredOpenConsumer(api, format) {
+    const parentOwner = {};
+    const presented = {
+        kind: 'edit',
+        parentOwner,
+        fieldId: 'projects',
+        recordId: 'A',
+        envelope: { type: 'error' },
+    };
+    const fields = [
+        {
+            fieldId: 'projects',
+            selectedRecordIds: ['A', 'B'],
+            reviewedRecordIds: [],
+        },
+    ];
+    const pending = { parentOwner, fields, currentPresentation: null };
+    assert.equal(
+        api.resolveBorrowedFormRequiredOpenCredit(pending, presented),
+        null
+    );
+    const frame = { ...pending, currentPresentation: presented };
+    assert.equal(
+        api.resolveBorrowedFormRequiredOpenCredit(frame, { ...presented }),
+        null
+    );
+    const credit = api.resolveBorrowedFormRequiredOpenCredit(frame, presented);
+    assert.deepEqual(credit, { fieldId: 'projects', recordId: 'A' });
+    assert.deepEqual(api.projectBorrowedFormRequiredOpenDebt(fields), {
+        projects: ['A', 'B'],
+    });
+    // The native host supplies the updated history.
+    const reviewed = [{ ...fields[0], reviewedRecordIds: [credit.recordId] }];
+    assert.deepEqual(api.projectBorrowedFormRequiredOpenDebt(reviewed), {
+        projects: ['B'],
+    });
+    console.log(
+        `Installed borrowed required-open ${format}: native history, pending refusal and exact mounted receipt passed`
+    );
 }
 
 async function checkObservedReentry(api, format, failures) {

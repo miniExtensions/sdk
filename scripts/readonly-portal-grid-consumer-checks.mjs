@@ -444,7 +444,7 @@ export async function checkReadonlyPortalGridReactMatrix({
             assert.match(phoneCss('esm'), /mx-sdk-complete-phone-link/);
             writeFileSync(
                 join(root, 'styles.css'),
-                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n@import '@miniextensions/sdk/react/text.css';\n@import '@miniextensions/sdk/react/complete-phone.css';\n"
+                "@import '@miniextensions/sdk/react/readonly-portal-grid.css';\n@import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-empty-cell.css';\n@import '@miniextensions/sdk/react/portal-grid-cell.css';\n@import '@miniextensions/sdk/react/rating.css';\n@import '@miniextensions/sdk/react/complete-checkbox.css';\n@import '@miniextensions/sdk/react/text.css';\n@import '@miniextensions/sdk/react/complete-phone.css';\n@import '@miniextensions/sdk/react/button.css';\n"
             );
             const styles = await build({
                 absWorkingDir: root,
@@ -489,7 +489,8 @@ export async function checkReadonlyPortalGridReactMatrix({
             assert(
                 Object.keys(styles.metafile.inputs).some((name) =>
                     name.endsWith('/react/button.css')
-                )
+                ),
+                'The installed Grid Button stylesheet must enter the CSS bundle'
             );
             assert.equal(
                 createHash('sha256')

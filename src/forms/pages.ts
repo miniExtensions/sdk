@@ -1,5 +1,8 @@
 import type { FormFieldBindings, FormFieldSnapshot } from './bindings.js';
-import type { FormControllerSaveOptions } from './controller.js';
+import {
+    captureFormControllerDraftRevision,
+    type FormControllerSaveOptions,
+} from './controller.js';
 import type { FormDraftSnapshot } from './drafts.js';
 import type { AirtableValue, FormLoadedResult } from '../runtime/index.js';
 import { validatePageField, type FormPageProblem } from './pageValidation.js';
@@ -7,8 +10,15 @@ import { validatePageDateRange } from './pageDateRange.js';
 import {
     withFormSaveAdmission,
     requireFormSaveAdmission,
+    requireFinalFormSaveAdmission,
 } from './saveAdmission.js';
 import { normalizeFormLeaseLoaded } from '../ui/formLease.js';
+import {
+    isCurrentLinkedRecordOpenHistory,
+    verifyLinkedRecordOpenAuthority,
+    readLinkedRecordOpenHistory,
+    type LinkedRecordOpenHistory,
+} from './linkedRecordOpenHistory.js';
 export type FormPageDescriptor = {
     title: string | null;
     description: string | null;
@@ -116,6 +126,7 @@ export function createFormPageOwner(
         syncing = false,
         notificationPending = false;
     let validatedDraftRevision: number | null = null;
+    let validatedOpenHistory: LinkedRecordOpenHistory | null = null;
     let inputRevision = 0,
         navigationRevision = 0;
     let validatedInputRevision: number | null = null;
@@ -131,6 +142,7 @@ export function createFormPageOwner(
         abort: AbortController;
         reviewing: boolean;
         draftRevision: number;
+        openHistory: LinkedRecordOpenHistory | null;
         inputRevision: number;
         navigationRevision: number;
         pageIndex: number;
@@ -183,6 +195,7 @@ export function createFormPageOwner(
         if (syncing) return;
         syncing = true;
         validatedDraftRevision = null;
+        validatedOpenHistory = null;
         validatedInputRevision = null;
         validatedNavigationRevision = null;
         let needsRetry = false;
@@ -190,7 +203,12 @@ export function createFormPageOwner(
             const problems: FormPageProblem[] = [];
             const snapshots = new Map<string, FormFieldSnapshot>();
             const live = current();
+            const openHistory = readLinkedRecordOpenHistory(fields);
             const control = fields.controller.getState();
+            const draftCurrent = captureFormControllerDraftRevision(
+                fields.controller,
+                control.draftRevision
+            );
             const inputTicket = inputRevision;
             const config = loaded.payload.publicFields.state;
             const validConfig =
@@ -338,7 +356,8 @@ export function createFormPageOwner(
                     {
                         data: control.draft?.data ?? {},
                         fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,
-                    }
+                    },
+                    openHistory?.get(id)
                 );
                 if (issue && (active === last || currentIds.includes(id)))
                     problems.push(issue);
@@ -352,11 +371,15 @@ export function createFormPageOwner(
                     problems.push({ fieldId: id, code: 'invalid-input' });
             }
             if (!current()) retired = true;
+            const lastDraftRevision =
+                fields.controller.getState().draftRevision;
+            const lastOpenHistory = readLinkedRecordOpenHistory(fields);
             validationStable =
-                fields.controller.getState().draftRevision ===
-                    control.draftRevision &&
+                lastDraftRevision === control.draftRevision &&
+                (openHistory === null || draftCurrent?.() === true) &&
                 inputRevision === inputTicket &&
-                navigationRevision === navigationTicket;
+                navigationRevision === navigationTicket &&
+                lastOpenHistory === openHistory;
             // Invalid raw input need not change the last valid native value.
             // Retry once, then refuse if callbacks keep changing any validated
             // draft, input or navigation revision.
@@ -366,6 +389,8 @@ export function createFormPageOwner(
             }
             validatedDraftRevision =
                 validationStable && !retired ? control.draftRevision : null;
+            validatedOpenHistory =
+                validationStable && !retired ? openHistory : null;
             validatedInputRevision =
                 validationStable && !retired ? inputTicket : null;
             validatedNavigationRevision =
@@ -475,6 +500,10 @@ export function createFormPageOwner(
                 held?.reviewing &&
                 (held.draftRevision !==
                     fields.controller.getState().draftRevision ||
+                    !isCurrentLinkedRecordOpenHistory(
+                        fields,
+                        held.openHistory
+                    ) ||
                     held.inputRevision !== inputRevision ||
                     held.navigationRevision !== navigationRevision ||
                     held.pageIndex !== active ||
@@ -648,11 +677,14 @@ export function createFormPageOwner(
                 throw new FormPageError(
                     state.problems.length ? 'validation' : 'no-page'
                 );
+            const openHistory = readLinkedRecordOpenHistory(fields);
             const control = fields.controller.getState();
             const draftRevision = control.draftRevision;
             if (
                 validatedDraftRevision === null ||
                 draftRevision !== validatedDraftRevision ||
+                validatedOpenHistory !== openHistory ||
+                !isCurrentLinkedRecordOpenHistory(fields, openHistory) ||
                 validatedInputRevision !== inputRevision ||
                 validatedNavigationRevision !== navigationRevision ||
                 control.draft === null
@@ -665,6 +697,7 @@ export function createFormPageOwner(
                 abort: new AbortController(),
                 reviewing: reviewRequired,
                 draftRevision: draftRevision!,
+                openHistory,
                 inputRevision: inputTicket,
                 navigationRevision: navigationTicket,
                 pageIndex,
@@ -686,7 +719,9 @@ export function createFormPageOwner(
                     active === pageIndex &&
                     inputRevision === inputTicket &&
                     navigationRevision === navigationTicket &&
-                    fields.controller.getState().draftRevision === draftRevision
+                    fields.controller.getState().draftRevision ===
+                        draftRevision &&
+                    isCurrentLinkedRecordOpenHistory(fields, openHistory)
                 );
             };
             const rangeFields = dateRangeFields;
@@ -696,6 +731,10 @@ export function createFormPageOwner(
                 // field policy without another application callback. This gate
                 // runs before the journal and again after all dispatch hooks.
                 const control = fields.controller.getState();
+                const draftCurrent = captureFormControllerDraftRevision(
+                    fields.controller,
+                    draftRevision
+                );
                 // Scope/session getters above may change external configuration.
                 // Observe it last, then inspect only captured state and local tickets.
                 // Once observed, a mismatch cannot revive this owner on restoration.
@@ -710,6 +749,9 @@ export function createFormPageOwner(
                 } catch {
                     retired = true;
                 }
+                // Observe the binding's epoch after the separate page callback.
+                // The draft fence below then checks for any reentrant write.
+                const observedOpenHistory = readLinkedRecordOpenHistory(fields);
                 if (
                     retired ||
                     disposed ||
@@ -717,6 +759,10 @@ export function createFormPageOwner(
                     inputRevision !== inputTicket ||
                     navigationRevision !== navigationTicket ||
                     validatedDraftRevision !== draftRevision ||
+                    validatedOpenHistory !== openHistory ||
+                    observedOpenHistory !== openHistory ||
+                    !isCurrentLinkedRecordOpenHistory(fields, openHistory) ||
+                    !draftCurrent?.() ||
                     control.draftRevision !== draftRevision ||
                     control.epoch !== initial.epoch ||
                     control.contextRevision !== initial.contextRevision ||
@@ -816,6 +862,7 @@ export function createFormPageOwner(
                     if (
                         !fresh() ||
                         validatedDraftRevision !== draftRevision ||
+                        validatedOpenHistory !== openHistory ||
                         validatedInputRevision !== inputTicket ||
                         validatedNavigationRevision !== navigationTicket
                     )
@@ -859,6 +906,38 @@ export function createFormPageOwner(
                         () => {
                             requireFormSaveAdmission(saveOptions?.lifecycle);
                             admission();
+                        },
+                        (requireScope) => {
+                            const authorityChecked =
+                                requireFinalFormSaveAdmission(
+                                    saveOptions?.lifecycle,
+                                    requireScope
+                                );
+                            if (openHistory === null) return authorityChecked;
+                            if (
+                                readLinkedRecordOpenHistory(fields) !==
+                                openHistory
+                            )
+                                throw new FormPageError('stale-revision');
+                            requireScope();
+                            // Legacy config and scope callbacks can change each
+                            // other. End with one coherent authority read, then
+                            // only inspect captured SDK state before transport.
+                            if (
+                                !verifyLinkedRecordOpenAuthority(
+                                    fields,
+                                    openHistory
+                                ) ||
+                                retired ||
+                                disposed ||
+                                operation.abort.signal.aborted ||
+                                intent !== operation ||
+                                active !== pageIndex ||
+                                inputRevision !== inputTicket ||
+                                navigationRevision !== navigationTicket
+                            )
+                                throw new FormPageError('stale-revision');
+                            return true;
                         }
                     ),
                     isCurrent: fresh,

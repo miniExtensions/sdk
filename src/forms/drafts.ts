@@ -25,6 +25,19 @@ type Draft<Value> = {
     revision: number;
 };
 
+const ownedRevisions = new WeakMap<
+    FormDraftHandle,
+    (store: object) => number | null
+>();
+
+/** Read SDK-owned state without subclass methods or host-owned handle getters. */
+export function readOwnedFormDraftRevision(
+    store: object,
+    handle: FormDraftHandle
+): number | null {
+    return ownedRevisions.get(handle)?.(store) ?? null;
+}
+
 /** Native values stay in memory across rerenders, never in shared storage. */
 export class FormDraftStore<Value> {
     private readonly drafts = new Map<string, Draft<Value>>();
@@ -44,13 +57,18 @@ export class FormDraftStore<Value> {
         const existing = this.drafts.get(key);
         if (existing != null) return existing.handle;
         const handle = { scope: key };
-        this.drafts.set(key, {
+        const drafts = this.drafts;
+        const draft: Draft<Value> = {
             handle,
             data: structuredClone(initialValues),
             dirty: new Set(initialDirtyFieldIds),
             choices: new Map(),
             revision: 0,
-        });
+        };
+        drafts.set(key, draft);
+        ownedRevisions.set(handle, (store) =>
+            store === this && drafts.get(key) === draft ? draft.revision : null
+        );
         return handle;
     }
 

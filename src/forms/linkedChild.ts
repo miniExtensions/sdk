@@ -7,6 +7,7 @@ import type {
 import type { FormFieldBindings } from './bindings.js';
 import { FormDraftStore, type FormDraftHandle } from './drafts.js';
 import type { FormOwnerScope, FormSaveLifecycle } from './controller.js';
+import { captureFormControllerDraftRevision } from './controller.js';
 import type { NormalizedFormSaveResult, FormSaveOptions } from './helpers.js';
 import {
     createFormPageOwner,
@@ -74,6 +75,12 @@ export type FormLinkedChildOwner = {
         renderedRevision: number,
         options?: { signal?: AbortSignal; clientTimeZone?: string }
     ): Promise<boolean>;
+    /** Call only after the admitted Edit child content is presented. Abort when its presenter retires. */
+    acknowledgeEditPresentation(
+        renderedRevision: number,
+        child: FormFieldBindings,
+        signal: AbortSignal
+    ): boolean;
     /** Captured rendered revision; existing page validation and Form Save remain authoritative. */
     save(
         renderedRevision: number,
@@ -121,6 +128,11 @@ type InternalOptions = FormLinkedChildRecovery & {
     prepareEdited(
         result: Extract<NormalizedFormSaveResult, { type: 'saved' }>
     ): (() => void) | null;
+    creditEditPresentation(
+        recordId: string,
+        configuration: string | number,
+        presentationCurrent: () => boolean
+    ): boolean;
     changed(): void;
 };
 const parentIds = new WeakMap<FormDraftHandle, number>();
@@ -807,6 +819,48 @@ export function createFormLinkedChildOwner(
             )
                 return false;
             return open(plan, recordId, request);
+        },
+        acknowledgeEditPresentation(renderedRevision, child, signal) {
+            const candidate = intent;
+            if (
+                !candidate ||
+                candidate.recordId === null ||
+                candidate.fields !== child ||
+                !candidate.pages
+            )
+                return false;
+            const livePresentation = () =>
+                !signal.aborted &&
+                !disposed &&
+                !parentRetired &&
+                phase === 'ready' &&
+                revision === renderedRevision &&
+                ownsIntent(candidate);
+            if (!livePresentation()) return false;
+            try {
+                const controller = options.form.controller;
+                const draftCurrent = captureFormControllerDraftRevision(
+                    controller,
+                    controller.getState().draftRevision
+                );
+                if (
+                    !draftCurrent ||
+                    !options.canObserve() ||
+                    editPolicy(candidate.recordId)?.type !== 'available' ||
+                    !parentCurrent() ||
+                    options.configurationRevision() !== config ||
+                    !livePresentation() ||
+                    !draftCurrent()
+                )
+                    return false;
+                return options.creditEditPresentation(
+                    candidate.recordId,
+                    config,
+                    () => livePresentation() && draftCurrent()
+                );
+            } catch {
+                return false;
+            }
         },
         async save(renderedRevision, request = {}) {
             const candidate = intent;

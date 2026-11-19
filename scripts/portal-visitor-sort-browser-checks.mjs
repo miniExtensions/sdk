@@ -205,6 +205,7 @@ globalThis.viewButtonsFixture = {
 
 const filterFixture = `
 import { PortalVisitorFilter } from '@miniextensions/sdk/react';
+import { flushSync } from 'react-dom';
 const filterForm = document.createElement('form');
 const filterHost = document.createElement('section');
 filterForm.append(filterHost);
@@ -290,8 +291,10 @@ globalThis.filterFixture = {
             criteria: {...criteria, conditions: [{id:'held-seed', type:'singleCondition', setting:{fieldType:'multipleSelects', type:'hasAnyOf', idOrName:{type:'id',id:'labels'}, value:['red']}}, ...criteria.conditions]} });
     },
     cycleViews() {
-        for (const viewId of ['view-b', 'view-a'])
-            publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
+        flushSync(() => {
+            for (const viewId of ['view-b', 'view-a'])
+                publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
+        });
     },
     unmount: () => filterRoot.unmount(),
 };
@@ -333,6 +336,12 @@ async function checkHeldQuickFilter(page) {
         await page.keyboard.down('ArrowDown');
         assert.match(await page.getByRole('status').textContent(), /changed/);
         assert.equal((await summary()).commands.length, offset + 2);
+        assert.equal(
+            await retained.evaluate(
+                (element) => element === document.activeElement
+            ),
+            true
+        );
     } finally {
         await page.keyboard.up('ArrowDown');
         await retained.dispose();

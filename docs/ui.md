@@ -6639,3 +6639,26 @@ preserves duplicate labels and supplies the original string to `onSelect`,
 including whitespace or an empty string. Selection closes the chooser and
 returns focus to its button. The host owns the draft value and any subsequent
 Login submission. Override display text with `labels`.
+
+### Navigate a linked record in a Portal side panel
+
+`PortalSidePanelNavigation` from `@miniextensions/sdk/react` renders the host's
+localized Previous and Next buttons. Set `frame` to `null` for a direct URL.
+With no neighbors it renders nothing. With only one neighbor it disables the
+other direction. The buttons have `type="button"` and work inside a Form.
+
+Provide the accepted record and session in `frame`, along with the exact
+neighbor IDs. Give each accepted frame a fresh `ownerToken` even when
+restoring the same record, session and neighbors. The request contains that
+token, the source record, direction, offered neighbor and an abort signal.
+
+Supply `isCurrent` from the host's live frame lease and use the existing
+dirty-draft flow for `confirmDismissal`. An accepted dismissal only proceeds
+if the same frame still owns the request. Do not defer the host's frame
+replacement until React renders. Update the live lease when that frame retires.
+
+In `openAdjacent`, pass the request to `findAdjacentChildSession(contexts, request)`
+for an exact current sibling lookup. The host guards the actual open against
+current authority and the request signal, including any await in the open
+path. The signal aborts on frame replacement, unmount or completion. The
+navigation controls never submit the parent Form or write record data.

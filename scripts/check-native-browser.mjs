@@ -81,6 +81,7 @@ import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.m
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
 import { checkReadonlyPortalListBrowser } from './readonly-portal-list-browser-checks.mjs';
 import { checkPortalVisitorSortBrowser } from './portal-visitor-sort-browser-checks.mjs';
+import { checkPortalSidePanelNavigationBrowser } from './child-navigation-browser-checks.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
@@ -1571,6 +1572,7 @@ try {
             'scripts/attachment-presentation-browser-checks.mjs',
             'scripts/attachment-upload-progress-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
+            'scripts/child-navigation-browser-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
             'scripts/browser-complete-rich-text-checks.mjs',
@@ -2513,6 +2515,16 @@ try {
         assert.equal(report.readonlyPortalList.contextClosed, true);
         assert.equal(report.readonlyPortalList.serverClosed, true);
         assert.equal(report.readonlyPortalList.scratchRemoved, true);
+        report.portalSidePanelNavigation = {};
+        await checkPortalSidePanelNavigationBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalSidePanelNavigation,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.portalSidePanelNavigation.passed, true);
+        assert.equal(report.portalSidePanelNavigation.contextClosed, true);
+        assert.equal(report.portalSidePanelNavigation.serverClosed, true);
         report.portalVisitorSort = {};
         await checkPortalVisitorSortBrowser({
             browser,

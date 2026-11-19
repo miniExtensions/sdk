@@ -87,6 +87,8 @@ import {
 import {
     checkChildNavigationConsumer,
     childNavigationTypedConsumer,
+    checkPortalSidePanelNavigationConsumer,
+    portalSidePanelNavigationTypedConsumer,
 } from './child-navigation-consumer-checks.mjs';
 import {
     checkFormulaCompatibilityConsumer,
@@ -2206,6 +2208,12 @@ new Parser([]).parse({maxDepth:'48'});
         '@types/react@19.2.2',
         '@types/react-dom@19.2.2',
     ]);
+    assert.equal(
+        await checkPortalSidePanelNavigationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     for (const extension of ['mts', 'cts']) {
         const filename = `text-input-consumer.${extension}`;
         const reactEditFilename = `linked-child-react-edit-consumer.${extension}`;
@@ -2227,7 +2235,8 @@ new Parser([]).parse({maxDepth:'48'});
                 dateInputCompatibilityTypedConsumer +
                 recoverableImageTypedConsumer +
                 fileSelectionTypedConsumer +
-                borrowedFormRenderReactTypedConsumer
+                borrowedFormRenderReactTypedConsumer +
+                portalSidePanelNavigationTypedConsumer
         );
         writeFileSync(
             join(temporaryDirectory, reactEditFilename),
@@ -2280,7 +2289,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             calendlyBookingJsxConsumer +
             personBadgeJsxConsumer +
             recoverableImageJsxConsumer +
-            borrowedFormRenderReactTypedConsumer
+            borrowedFormRenderReactTypedConsumer +
+            portalSidePanelNavigationTypedConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(

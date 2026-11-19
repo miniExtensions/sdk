@@ -232,6 +232,23 @@ export async function checkStarterConfirmationRecovery({
                 saves: [],
             };
             const parent = fixtures.parentForm('edit');
+            const selectedTableFields = editDialog
+                ? fixtures.childSaved('edit').context
+                      .newTableIdsToLinkedTableStates.tbl_child.airtableFields
+                : [parent.payload.fieldIdsToSchemas.fld_title.airtableField];
+            if (editDialog)
+                parent.payload.linkedRecordFieldIdToDetailFields.fld_children_a =
+                    [
+                        {
+                            fieldId: 'fld_title',
+                            fieldName: 'Title',
+                            titleOverride: null,
+                            miniExtConfig: {},
+                            isHidden: false,
+                            fieldIsInEditingChildForm: false,
+                            childFormField: null,
+                        },
+                    ];
             parent.payload.fieldIdsInForm = ['fld_title', 'fld_children_a'];
             parent.payload.fieldIdsToSchemas.fld_children_a.miniExtConfig.recordFinderMode =
                 'hide-finder';
@@ -319,12 +336,8 @@ export async function checkStarterConfirmationRecovery({
                                     result: {
                                         data: {
                                             tbl_child: {
-                                                airtableFields: [
-                                                    parent.payload
-                                                        .fieldIdsToSchemas
-                                                        .fld_title
-                                                        .airtableField,
-                                                ],
+                                                airtableFields:
+                                                    selectedTableFields,
                                                 recordIdsToAirtableRecords:
                                                     Object.fromEntries(
                                                         [
@@ -421,6 +434,7 @@ export async function checkStarterConfirmationRecovery({
                     parentLinks: JSON.parse(await parentLinks.inputValue()),
                     reads: 0,
                 };
+                let editOpener;
                 if (mode === 'edit') {
                     await page
                         .getByRole('button', {
@@ -428,12 +442,15 @@ export async function checkStarterConfirmationRecovery({
                             exact: true,
                         })
                         .click();
+                    if (editDialog) await idle();
                     const edit = page.getByRole('button', {
                         name: 'Edit linked record rec_existing',
                         exact: true,
                     });
                     if (editDialog) {
-                        await edit.focus();
+                        editOpener = await edit.elementHandle();
+                        assert(editOpener);
+                        await editOpener.focus();
                         await page.keyboard.press('Enter');
                     } else await edit.click();
                 } else
@@ -525,6 +542,11 @@ export async function checkStarterConfirmationRecovery({
                         exact: true,
                     });
                     assert.equal(await focus(reopen), true);
+                    if (editDialog)
+                        assert(
+                            await focus(editOpener),
+                            'Confirmed Close must restore the original Edit opener'
+                        );
                     const confirmed = capture();
                     assert.deepEqual(confirmed, [1, 1, 0]);
                     if (editDialog) await page.keyboard.press('Enter');
@@ -572,6 +594,11 @@ export async function checkStarterConfirmationRecovery({
                         ]);
                         assert(response.ok());
                         await idle();
+                        await editor.waitFor({ state: 'hidden' });
+                        assert(
+                            await focus(editOpener),
+                            'Confirmed Save must restore the original Edit opener'
+                        );
                         assert.deepEqual(capture(), [1, 1, 1]);
                         assertChildSaveRouting(calls.saves[0], 'edit');
                         assert.equal(
@@ -682,7 +709,12 @@ export async function checkStarterConfirmationRecovery({
                         const enabled = await review().isEnabled();
                         reviewEnabled.push(enabled);
                         assert.equal(enabled, available);
-                        assert.equal(await page.locator('dialog').count(), 0);
+                        assert.equal(
+                            await page
+                                .locator('dialog[data-form-review]')
+                                .count(),
+                            0
+                        );
                         assert.equal(calls.saves.length, 0);
                     };
                     await checkPage(false);
@@ -722,7 +754,9 @@ export async function checkStarterConfirmationRecovery({
                         reviewEnabled,
                         saves: calls.saves.length,
                         reads: calls.reads,
-                        dialogs: await page.locator('dialog').count(),
+                        dialogs: await page
+                            .locator('dialog[data-form-review]')
+                            .count(),
                         banner: await page
                             .locator('#status')
                             .evaluate((node) => ({
@@ -779,8 +813,9 @@ export async function checkStarterConfirmationRecovery({
                             (message) => ({
                                 attempts:
                                     window.confirmationFailureProbe.attempts,
-                                dialogs:
-                                    document.querySelectorAll('dialog').length,
+                                dialogs: document.querySelectorAll(
+                                    'dialog[data-form-review]'
+                                ).length,
                                 banner: {
                                     text: document.querySelector('#status')
                                         .textContent,

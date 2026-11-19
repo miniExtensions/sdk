@@ -121,6 +121,11 @@ button:disabled {
 .confirmation::backdrop {
     background: #17243780;
 }
+.linked-child-edit {
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+}
 .actions,
 .toolbar,
 .session-bar {

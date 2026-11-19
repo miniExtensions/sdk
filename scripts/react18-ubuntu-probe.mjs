@@ -7,6 +7,7 @@ import {
 } from 'node:fs';
 import { arch, cpus, platform, tmpdir, totalmem } from 'node:os';
 import { join, relative, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const cutoff = '2026-11-17T05:52:12.756Z';
@@ -102,6 +103,24 @@ export function validateCapture(directory, receipt, archivePath, consumerPath) {
     return { files, normalized };
 }
 
+export function createInstallTimer(now = () => performance.now()) {
+    const report = {
+        clock: 'monotonic performance.now()',
+        unit: 'milliseconds',
+        boundary: 'Synchronous installAgeQualifiedConsumer call from entry to return. Includes policy checks, fresh pnpm install, installed-archive verification, receipt writing and internal archive-proof cleanup. Excludes driver setup, evidence capture and comparison, and consumer/cache teardown.',
+        arms: [],
+    };
+    return {
+        report,
+        measure(name, install) {
+            const start = now();
+            const receipt = install();
+            report.arms.push({ name, durationMs: now() - start });
+            return receipt;
+        },
+    };
+}
+
 async function measure(inputs, destination) {
     assert.equal(platform(), 'linux', 'Use an isolated Ubuntu executor');
     assert.equal(arch(), 'x64');
@@ -144,6 +163,7 @@ async function measure(inputs, destination) {
             COREPACK_ENABLE_NETWORK: '0',
         });
         const captures = [];
+        const installTimer = createInstallTimer();
         for (const [index, arm] of arms.entries()) {
             for (const directory of [consumer, cache]) {
                 assert(!existsSync(directory));
@@ -170,7 +190,9 @@ async function measure(inputs, destination) {
                     '@types/react-dom': '18.3.1',
                 },
             }));
-            const receipt = installAgeQualifiedConsumer({ directory: consumer, args: ['install'] });
+            const receipt = installTimer.measure(arm.name, () =>
+                installAgeQualifiedConsumer({ directory: consumer, args: ['install'] })
+            );
             const evidence = join(output, arm.name);
             mkdirSync(evidence, { mode: 0o700 });
             for (const name of captureNames) {
@@ -195,6 +217,7 @@ async function measure(inputs, destination) {
             cpus: cpus().length, memoryBytes: totalmem(),
             rawEqual: true, normalizedEqual: true,
             normalizedLockSha256: sha256(captures[0].normalized[1]),
+            installTiming: installTimer.report,
         };
     } finally {
         for (const [key, value] of previous) {

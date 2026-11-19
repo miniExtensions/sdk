@@ -56,7 +56,7 @@ jobs:
                   PROBE_DIR: ${{ steps.scratch.outputs.directory }}
               run: |
                   sha256sum --check - <<'EOF'
-                  0c9a7974a3218d8efee884b272b58f3f134e68a9fe3ca78c76d3da862d0c99d6  scripts/react18-ubuntu-probe.mjs
+                  3d6d48fe3306018b3d00d14f92dd4863f8c413e0f03bcf265aaa7d29287e43bb  scripts/react18-ubuntu-probe.mjs
                   EOF
                   node --check scripts/react18-ubuntu-probe.mjs
                   node scripts/react18-ubuntu-probe.mjs --verify .sdk-react18-lock-input "$PROBE_DIR/kit"

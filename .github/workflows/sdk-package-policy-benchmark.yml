@@ -1,0 +1,264 @@
+name: Disposable SDK package policy benchmark
+
+on:
+    push:
+        branches:
+            - codex/seven-sdk-policy-bench-baseline-20261119
+            - codex/seven-sdk-policy-bench-candidate-20261119
+
+concurrency:
+    group: sdk-policy-benchmark-20261119
+    cancel-in-progress: false
+
+env:
+    npm_config_before: '2026-11-17T05:52:12.756Z'
+
+permissions:
+    contents: read
+
+jobs:
+    source:
+        name: source (24)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '24.22.2'
+            - name: Record runner and require a clean dependency store
+              run: |
+                  dependency_root="$RUNNER_TEMP/sdk-policy-dependencies"
+                  test ! -e "$dependency_root"
+                  printf 'npm_config_store_dir=%s\n' "$dependency_root/store" >> "$GITHUB_ENV"
+                  printf 'npm_config_cache=%s\n' "$dependency_root/npm-cache" >> "$GITHUB_ENV"
+                  printf 'XDG_CACHE_HOME=%s\n' "$dependency_root/xdg-cache" >> "$GITHUB_ENV"
+                  printf 'Runner image %s %s\n' "$ImageOS" "$ImageVersion"
+                  uname -sm
+                  nproc
+                  awk '/^MemTotal:/ {print}' /proc/meminfo
+                  node --version
+            - name: Enforce 48-hour npm release cutoff
+              run: node scripts/npm-release-age.mjs --github-env "$GITHUB_ENV"
+            - run: npm install --global pnpm@10.28.2
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm format:check && pnpm typecheck && pnpm test && node --test scripts/wait-for-source-ci.test.mjs scripts/check-native-browser-pair.test.mjs
+            - name: Retain unit, component, and combined source coverage
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-source-coverage-node-24-attempt-${{ github.run_attempt }}
+                  path: |
+                      coverage/source-metrics.json
+                      coverage/*/coverage-summary.json
+                      coverage/*/coverage-final.json
+                      coverage/*/lcov.info
+                      coverage/*/lcov-report/
+                  if-no-files-found: error
+                  retention-days: 7
+            - name: Remove the benchmark dependency store
+              if: always()
+              run: |
+                  rm -rf -- "$RUNNER_TEMP/sdk-policy-dependencies"
+                  test ! -e "$RUNNER_TEMP/sdk-policy-dependencies"
+    package:
+        name: package (24)
+        permissions:
+            contents: read
+            actions: read
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '24.22.2'
+            - name: Record runner and require a clean dependency store
+              run: |
+                  dependency_root="$RUNNER_TEMP/sdk-policy-dependencies"
+                  test ! -e "$dependency_root"
+                  printf 'npm_config_store_dir=%s\n' "$dependency_root/store" >> "$GITHUB_ENV"
+                  printf 'npm_config_cache=%s\n' "$dependency_root/npm-cache" >> "$GITHUB_ENV"
+                  printf 'XDG_CACHE_HOME=%s\n' "$dependency_root/xdg-cache" >> "$GITHUB_ENV"
+                  printf 'Runner image %s %s\n' "$ImageOS" "$ImageVersion"
+                  uname -sm
+                  nproc
+                  awk '/^MemTotal:/ {print}' /proc/meminfo
+                  node --version
+            - name: Enforce 48-hour npm release cutoff
+              run: node scripts/npm-release-age.mjs --github-env "$GITHUB_ENV"
+            - run: npm install --global pnpm@10.28.2
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm check:package
+              env:
+                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            # Do not publish a customer artifact or begin browser proofs until
+            # the effective source result for this run attempt and revision succeeds.
+            # GitHub may carry a prior success forward on a partial rerun.
+            - name: Wait for source checks
+              timeout-minutes: 16
+              run: node scripts/wait-for-source-ci.mjs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            - name: Require the original tested archive
+              run: |
+                  sha256sum --check - <<EOF
+                  516ff8327a2aaf07e4323b9fb7e2d749492ab2a25b764943f4bb885bc415a15a  $RUNNER_TEMP/sdk-tested-customer-kit/miniextensions-sdk-0.1.0-alpha.0.tgz
+                  EOF
+            - name: Verify runner-provided Chrome
+              run: google-chrome --version
+            - name: Execute packed Formula Chromium proof with React 19
+              timeout-minutes: 5
+              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-formula-browser-results/react19"
+              env:
+                  SDK_FORMULA_REACT_VERSION: 19.2.0
+                  SDK_FORMULA_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute packed Formula Chromium proof with React 18
+              timeout-minutes: 5
+              run: node scripts/check-formula-browser.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz "${{ runner.temp }}/sdk-formula-browser-results/react18"
+              env:
+                  SDK_FORMULA_REACT_VERSION: 18.3.1
+                  SDK_FORMULA_CHROMIUM: /usr/bin/google-chrome
+            - name: Qualify packed Form validation summary
+              run: node scripts/form-validation-summary-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
+              env:
+                  SDK_FORM_VALIDATION_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute packed native Chromium proofs with React 19 and 18
+              timeout-minutes: 10
+              run: node scripts/check-native-browser-pair.mjs
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+            - name: Qualify packed Portal parent summary cards
+              run: node scripts/portal-summary-cards-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
+              env:
+                  SDK_PORTAL_SUMMARY_CHROMIUM: /usr/bin/google-chrome
+                  SDK_PORTAL_SUMMARY_PROOF_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-summary-cards
+            - name: Execute Count Chromium proof
+              timeout-minutes: 3
+              run: node scripts/check-count-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/count"
+              env:
+                  SDK_COUNT_CHROMIUM: /usr/bin/google-chrome
+            - name: Retain Count Chromium receipt and screenshots
+              if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-count-browser-results-attempt-${{ github.run_attempt }}
+                  path: |
+                      ${{ runner.temp }}/sdk-native-browser-results/count/result.json
+                      ${{ runner.temp }}/sdk-native-browser-results/count/count-controlled.png
+                      ${{ runner.temp }}/sdk-native-browser-results/count/count-idle.png
+                      ${{ runner.temp }}/sdk-native-browser-results/count/count-neighbor-focus.png
+                      ${{ runner.temp }}/sdk-native-browser-results/count/count-forced-colors.png
+                      ${{ runner.temp }}/sdk-native-browser-results/count/count-mobile.png
+                  if-no-files-found: warn
+                  retention-days: 7
+                  compression-level: 0
+                  archive: true
+                  overwrite: false
+                  include-hidden-files: false
+            - name: Execute packed Linked Records Chromium proof
+              timeout-minutes: 3
+              run: node scripts/check-linked-records-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-records"
+              env:
+                  SDK_LINKED_RECORDS_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed linked-child Review Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-linked-child-review-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-child-review"
+              env:
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed attachment preview Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-attachment-preview-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/attachment-preview"
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed saved-progress Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-saved-progress-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/saved-progress"
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed Portal shell Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-portal-shell-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/portal-shell"
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+            - name: Retain native Chromium receipt and failure evidence
+              if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-native-browser-results-attempt-${{ github.run_attempt }}
+                  path: |
+                      ${{ runner.temp }}/sdk-native-browser-results/
+                      ${{ runner.temp }}/sdk-formula-browser-results/
+                  if-no-files-found: warn
+                  retention-days: 7
+                  compression-level: 0
+                  archive: true
+                  overwrite: false
+                  include-hidden-files: false
+            - name: Retain tested customer package
+              if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-tested-customer-kit-node-24-attempt-${{ github.run_attempt }}
+                  path: |
+                      ${{ runner.temp }}/sdk-tested-customer-kit/*.tgz
+                      ${{ runner.temp }}/sdk-tested-customer-kit/SHA256SUMS
+                      ${{ runner.temp }}/sdk-tested-customer-kit/artifact-receipt.json
+                      ${{ runner.temp }}/sdk-tested-customer-kit/miniExtensions-SDK-INSTALL.md
+                  if-no-files-found: error
+                  retention-days: 7
+                  compression-level: 0
+                  archive: true
+                  overwrite: false
+                  include-hidden-files: false
+            - name: Retain synthetic manual browser fixture
+              if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-synthetic-browser-proof-node-24-attempt-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/sdk-synthetic-browser-proof/
+                  if-no-files-found: error
+                  retention-days: 7
+                  compression-level: 0
+                  archive: true
+                  overwrite: false
+                  include-hidden-files: false
+            - name: Remove local customer delivery files
+              if: always()
+              env:
+                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+                  SDK_FORMULA_RESULT_DIR: ${{ runner.temp }}/sdk-formula-browser-results
+              run: |
+                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR', 'SDK_NATIVE_SCRATCH_DIR', 'SDK_FORMULA_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
+            - name: Remove the benchmark dependency store
+              if: always()
+              run: |
+                  rm -rf -- "$RUNNER_TEMP/sdk-policy-dependencies"
+                  test ! -e "$RUNNER_TEMP/sdk-policy-dependencies"
+    check:
+        name: check (24)
+        needs: [source, package]
+        if: always()
+        runs-on: ubuntu-latest
+        steps:
+            - name: Require both jobs to succeed
+              env:
+                  SOURCE_RESULT: ${{ needs.source.result }}
+                  PACKAGE_RESULT: ${{ needs.package.result }}
+              run: |
+                  test "$SOURCE_RESULT" = success && test "$PACKAGE_RESULT" = success

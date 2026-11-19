@@ -133,6 +133,108 @@ export async function checkPortalEditorConsumer({
         q.model.prepareReplacement();
         assert.equal(q.model.clear(), true);
         checks++;
+
+        const grouped = fixture();
+        grouped.options.criteria.filtersByEndUser = {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'keep_title',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'contains',
+                        fieldType: 'singleLineText',
+                        idOrName: { type: 'id', id: 'fld_title' },
+                        value: 'Alpha',
+                    },
+                },
+                {
+                    id: 'keep_group',
+                    type: 'groupCondition',
+                    logicalOperator: 'or',
+                    conditions: [
+                        {
+                            id: 'keep_choice',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'hasAnyOf',
+                                fieldType: 'multipleSelects',
+                                idOrName: { type: 'id', id: 'fld_choice' },
+                                value: ['b', 'a'],
+                            },
+                        },
+                        {
+                            id: 'keep_missing',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'contains',
+                                fieldType: 'singleLineText',
+                                idOrName: {
+                                    type: 'name',
+                                    name: 'Removed field',
+                                },
+                                value: 'Beta',
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+        const originalCriteria = structuredClone(grouped.options.criteria);
+        const groupedFilter = entry.createPortalFilterEditor(grouped.options);
+        assert.equal(groupedFilter.type, 'ready');
+        try {
+            const model = groupedFilter.model;
+            const initial = model.getSnapshot();
+            assert.equal(initial.unresolved, true);
+            assert.equal(initial.replacementPrepared, false);
+            assert.deepEqual(initial.originalCriteria, originalCriteria);
+            initial.originalCriteria.filtersByEndUser.conditions[1].conditions.pop();
+
+            assert.equal(model.setField('fld_title'), true);
+            assert.equal(model.setOperator('contains'), true);
+            assert.equal(
+                model.setOperand('Only after explicit replacement'),
+                true
+            );
+            assert.equal(model.apply(), false);
+            assert.equal(model.clear(), false);
+            assert.deepEqual(grouped.applied, []);
+            assert.deepEqual(
+                model.getSnapshot().originalCriteria,
+                originalCriteria
+            );
+            assert.deepEqual(grouped.options.criteria, originalCriteria);
+
+            assert.equal(model.prepareReplacement(), true);
+            assert.deepEqual(grouped.applied, []);
+            assert.equal(model.apply(), true);
+            assert.deepEqual(grouped.applied, [
+                {
+                    ...originalCriteria,
+                    filtersByEndUser: {
+                        logicalOperator: 'and',
+                        conditions: [
+                            {
+                                id: 'portal_scalar_filter',
+                                type: 'singleCondition',
+                                setting: {
+                                    type: 'contains',
+                                    fieldType: 'singleLineText',
+                                    idOrName: { type: 'id', id: 'fld_title' },
+                                    value: 'Only after explicit replacement',
+                                },
+                            },
+                        ],
+                    },
+                },
+            ]);
+            assert.deepEqual(grouped.options.criteria, originalCriteria);
+        } finally {
+            groupedFilter.model.destroy();
+        }
+        checks++;
+
         const old = fixture(),
             m = entry.createPortalFilterEditor(old.options);
         assert.equal(m.type, 'ready');
@@ -520,7 +622,7 @@ export async function checkPortalEditorConsumer({
         });
         await window.happyDOM.close();
     }
-    assert.equal(checks, 23);
+    assert.equal(checks, 25);
     console.log(
         `Installed Portal editors: ${checks} checkpoints; renderer/criteria preparation only, no network.`
     );

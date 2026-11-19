@@ -158,6 +158,174 @@ globalThis.searchFixture = {
 };
 `;
 
+const viewButtonsFixture = `
+import { PortalVisitorViewButtons } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/portal-visitor-view-buttons.css';
+const viewHost = document.createElement('section');
+const otherViewHost = document.createElement('section');
+document.querySelector('form').append(viewHost, otherViewHost);
+viewHost.style.width = '9rem';
+const viewRoot = createRoot(viewHost);
+const otherViewRoot = createRoot(otherViewHost);
+const choices = [
+    { id: 'list', label: 'Long List View' },
+    { id: 'grid', label: null, showBadge: true },
+    { id: 'gallery', label: 'Gallery' }
+];
+let selection = 'list';
+let ownerToken = 1;
+const intents = [];
+const otherIntents = [];
+let visible = choices;
+function renderViews() {
+    viewRoot.render(h(StrictMode, null, h(PortalVisitorViewButtons, {
+        views: visible, selectedViewId: selection, ownerToken,
+        testId: 'view-owner-' + ownerToken,
+        unnamedViewLabel: 'Vue sans nom', groupLabel: 'Primary views',
+        onSelect(id) {
+            intents.push(id);
+            selection = id;
+            renderViews();
+        },
+    })));
+}
+otherViewRoot.render(h(StrictMode, null, h(PortalVisitorViewButtons, {
+    views: choices, selectedViewId: 'list', ownerToken: 'other',
+    unnamedViewLabel: 'Vue sans nom', groupLabel: 'Other views',
+    onSelect(id) { otherIntents.push(id); },
+})));
+renderViews();
+globalThis.viewButtonsFixture = {
+    summary: () => ({ intents, otherIntents, submits }),
+    narrow(n) { visible = choices.slice(0, n); renderViews(); },
+    replaceOwner(token) { ownerToken = token; renderViews(); },
+    unmount() { viewRoot.unmount(); otherViewRoot.unmount(); },
+};
+`;
+
+async function checkViewButtons(page) {
+    const root = page.getByRole('group', { name: 'Primary views' });
+    const other = page.getByRole('group', { name: 'Other views' });
+    await root.waitFor();
+    await other.waitFor();
+    const buttons = root.getByRole('button');
+    const summary = () =>
+        page.evaluate(() => globalThis.viewButtonsFixture.summary());
+    assert.deepEqual(await buttons.allTextContents(), [
+        'Long List View',
+        'Vue sans nom',
+        'Gallery',
+    ]);
+    const first = buttons.first();
+    const second = buttons.nth(1);
+    const third = buttons.nth(2);
+    assert.equal(await first.getAttribute('aria-pressed'), 'true');
+    assert.equal(await second.getAttribute('aria-pressed'), 'false');
+    assert.equal(await second.locator('[aria-hidden=true]').count(), 1);
+    assert.equal((await summary()).intents.length, 0);
+    const computed = await root.evaluate((element) => ({
+        wrapping: getComputedStyle(element).flexWrap,
+        rows: [...element.querySelectorAll('button')].map(
+            (button) => button.offsetTop
+        ),
+    }));
+    assert.equal(computed.wrapping, 'wrap');
+    assert.ok(new Set(computed.rows).size > 1);
+    const selectedBackground = await first.evaluate(
+        (button) => getComputedStyle(button).backgroundColor
+    );
+    assert.notEqual(selectedBackground, 'rgba(0, 0, 0, 0)');
+    const replaceOwner = async (token) => {
+        await page.evaluate(
+            (value) => globalThis.viewButtonsFixture.replaceOwner(value),
+            token
+        );
+        await page.getByTestId('view-owner-' + token).waitFor();
+    };
+    const bounds = await second.boundingBox();
+    assert.ok(bounds);
+    await page.mouse.move(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2
+    );
+    await page.mouse.down();
+    try {
+        await replaceOwner(2);
+    } finally {
+        await page.mouse.up();
+    }
+    assert.deepEqual((await summary()).intents, []);
+    await second.focus();
+    await page.keyboard.down('Space');
+    try {
+        await replaceOwner(3);
+        await replaceOwner(2);
+    } finally {
+        await page.keyboard.up('Space');
+    }
+    assert.deepEqual((await summary()).intents, []);
+    assert.equal(
+        await second.evaluate((button) => button === document.activeElement),
+        true
+    );
+    await first.click();
+    assert.deepEqual((await summary()).intents, []);
+    await page.keyboard.press('Tab');
+    assert.equal(
+        await second.evaluate((button) => button === document.activeElement),
+        true
+    );
+    assert.equal(
+        await second.evaluate(
+            (button) => getComputedStyle(button).outlineStyle
+        ),
+        'solid'
+    );
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+        () => document.activeElement?.getAttribute('aria-pressed') === 'true'
+    );
+    assert.equal(
+        await second.evaluate((button) => button === document.activeElement),
+        true
+    );
+    await page.keyboard.press('Space');
+    assert.deepEqual((await summary()).intents, ['grid']);
+    await page.keyboard.press('Tab');
+    assert.equal(
+        await third.evaluate((button) => button === document.activeElement),
+        true
+    );
+    await page.keyboard.press('Space');
+    await page.waitForFunction(
+        () => globalThis.viewButtonsFixture.summary().intents.length === 2
+    );
+    await first.click();
+    await page.waitForFunction(
+        () => globalThis.viewButtonsFixture.summary().intents.length === 3
+    );
+    assert.deepEqual((await summary()).intents, ['grid', 'gallery', 'list']);
+    assert.equal(
+        await other
+            .getByRole('button', { name: 'Long List View' })
+            .getAttribute('aria-pressed'),
+        'true'
+    );
+    assert.deepEqual((await summary()).otherIntents, []);
+    assert.equal((await summary()).submits, 0);
+    const retired = await third.elementHandle();
+    await page.evaluate(() => globalThis.viewButtonsFixture.narrow(1));
+    await root.waitFor({ state: 'detached' });
+    await retired.evaluate((button) => button.click());
+    await retired.dispose();
+    await page.evaluate(() => globalThis.viewButtonsFixture.narrow(0));
+    assert.equal(await root.count(), 0);
+    assert.deepEqual((await summary()).intents, ['grid', 'gallery', 'list']);
+    await page.evaluate(() => globalThis.viewButtonsFixture.unmount());
+    await other.waitFor({ state: 'detached' });
+    return { intents: 3, tabFocus: true, formSubmits: 0, cleanup: 'completed' };
+}
+
 async function checkSearch(page) {
     const entry = page.getByRole('textbox', { name: 'Find records' });
     const scanner = page.getByRole('button', { name: 'Open scanner' });
@@ -275,6 +443,7 @@ export async function checkPortalVisitorSortBrowser({
     evidence,
     expectedReactVersion,
     includeSearch = false,
+    includeViewButtons = false,
 }) {
     const scratch = mkdtempSync(join(consumer, 'visitor-sort-browser-'));
     let context;
@@ -292,7 +461,12 @@ export async function checkPortalVisitorSortBrowser({
     });
     try {
         const entry = join(scratch, 'fixture.mjs');
-        writeFileSync(entry, includeSearch ? fixture + searchFixture : fixture);
+        writeFileSync(
+            entry,
+            fixture +
+                (includeSearch ? searchFixture : '') +
+                (includeViewButtons ? viewButtonsFixture : '')
+        );
         const bundle = await build({
             absWorkingDir: consumer,
             entryPoints: [entry],
@@ -305,12 +479,20 @@ export async function checkPortalVisitorSortBrowser({
             define: { 'process.env.NODE_ENV': '"production"' },
         });
         await assertBrowserInputs(bundle.metafile, consumer);
-        const app = bundle.outputFiles[0].contents;
+        const app = bundle.outputFiles.find((file) =>
+            file.path.endsWith('/app.js')
+        ).contents;
+        const css = bundle.outputFiles.find((file) =>
+            file.path.endsWith('/app.css')
+        )?.contents;
+        if (includeViewButtons) assert.ok(css);
         server = createServer((request, response) => {
             if (request.url === '/') {
                 response.setHeader('content-type', 'text/html; charset=utf-8');
                 response.end(
-                    '<!doctype html><html><head><title>Portal visitor sort fixture</title><link rel="icon" href="data:,"><script defer src="/app.js"></script></head><body><form><main id="root"></main></form></body></html>'
+                    '<!doctype html><html><head><title>Portal visitor query fixture</title><link rel="icon" href="data:,">' +
+                        (css ? '<link rel="stylesheet" href="/app.css">' : '') +
+                        '<script defer src="/app.js"></script></head><body><form><main id="root"></main></form></body></html>'
                 );
             } else if (request.url === '/app.js') {
                 response.setHeader(
@@ -318,6 +500,9 @@ export async function checkPortalVisitorSortBrowser({
                     'text/javascript; charset=utf-8'
                 );
                 response.end(app);
+            } else if (request.url === '/app.css' && css) {
+                response.setHeader('content-type', 'text/css; charset=utf-8');
+                response.end(css);
             } else {
                 response.writeHead(404).end();
             }
@@ -334,7 +519,9 @@ export async function checkPortalVisitorSortBrowser({
             const url = new URL(route.request().url());
             if (
                 url.origin === origin &&
-                ['/', '/app.js'].includes(url.pathname)
+                ['/', '/app.js', ...(css ? ['/app.css'] : [])].includes(
+                    url.pathname
+                )
             )
                 return route.continue();
             external.push(url.href);
@@ -351,6 +538,8 @@ export async function checkPortalVisitorSortBrowser({
                 errors.push(message.text());
         });
         await page.goto(origin);
+        if (includeViewButtons)
+            evidence.viewButtons = await checkViewButtons(page);
         const summary = () =>
             page.evaluate(() => globalThis.sortFixture.summary());
         const trigger = page.getByRole('button', { name: 'Sort', exact: true });

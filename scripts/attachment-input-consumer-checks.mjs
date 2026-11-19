@@ -35,6 +35,18 @@ const uploadProgress:AttachmentUploadProgressProps={percentage:50,labels:{upload
 AttachmentUploadProgress(uploadProgress);
 // @ts-expect-error progress remains a numeric percentage
 AttachmentUploadProgress({...uploadProgress,percentage:'50%'});
+import {AttachmentDeviceInput,type AttachmentDeviceInputProps} from '@miniextensions/sdk/react';
+const deviceInputProps:AttachmentDeviceInputProps={
+    id:'attachment-device',
+    form:'host-form',
+    describedBy:'attachment-description',
+    labels:{chooseFiles:'Choose files',dragAndDrop:'or drag and drop'},
+    onFiles(files){const original:File|undefined=files[0];void original;}
+};
+const deviceInputComponent:typeof AttachmentDeviceInput=AttachmentDeviceInput;
+// @ts-expect-error file types use the native accept attribute syntax
+const badDeviceInput:AttachmentDeviceInputProps={...deviceInputProps,accept:['text/plain']};
+void deviceInputComponent;void badDeviceInput;
 void attachmentPercent;void attachmentName;void attachmentUrlCompatible;void emptyFileWeight;
 `;
 

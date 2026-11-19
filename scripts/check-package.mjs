@@ -904,12 +904,20 @@ try {
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
         ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/AttachmentDeviceInput.js`,
+            `dist/${format}/react/AttachmentDeviceInput.d.ts`,
+            `dist/${format}/react/attachment-device-input.css`,
             `dist/${format}/react/AttachmentUrlInput.js`,
             `dist/${format}/react/AttachmentUrlInput.d.ts`,
             `dist/${format}/react/attachment-url-input.css`,
             `dist/${format}/react/AttachmentUploadProgress.js`,
             `dist/${format}/react/AttachmentUploadProgress.d.ts`,
             `dist/${format}/react/attachment-upload-progress.css`,
+        ]),
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/PortalVisitorViewButtons.js`,
+            `dist/${format}/react/PortalVisitorViewButtons.d.ts`,
+            `dist/${format}/react/portal-visitor-view-buttons.css`,
         ]),
         'dist/esm/react/portal-shell.css',
         'dist/cjs/react/portal-shell.css',
@@ -4924,9 +4932,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(visitorQueryProof.tests, 152);
+    assert.equal(visitorQueryProof.tests, 168);
     console.log(
-        'Installed Portal visitor Sort and Search qualification passed.',
+        'Installed Portal visitor Sort, Search and view button qualification passed.',
         visitorQueryProof
     );
     const galleryProof = await checkPortalGalleryReactMatrix({

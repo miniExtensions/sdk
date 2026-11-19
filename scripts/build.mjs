@@ -263,6 +263,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-calendly',
         'complete-record-comments',
         'complete-verification',
+        'login-existing-values-picker',
         'complete-image-annotation',
         'complete-barcode-scanner',
         'barcode',

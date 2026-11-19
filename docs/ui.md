@@ -6599,3 +6599,43 @@ admission remains a separate policy. Word uses `docx-preview@0.3.0` and
 only to detached targets; a fulfilled vendor render does not promise that
 every image/font decoded successfully. PDF is the supplied URL followed by
 `#toolbar=0`, with the nonblank filename or localized Attachments title.
+
+## Login existing values picker
+
+`LoginExistingValuesPicker` supplies an existing-values chooser for one
+explicitly configured Login field. Pass the effective session, extension, field,
+and view mode as the owner. The picker exposes a button only when
+`allowSearchFromExistingValuesInLogin` is true and
+`maskPasswordOnLoginScreen` is false or unset. Set `disabled` when lookup is
+temporarily unavailable. Import
+`@miniextensions/sdk/react/login-existing-values-picker.css` for stock styling.
+
+```tsx
+import { createElement } from 'react';
+import {
+    LoginExistingValuesPicker,
+    type LoginExistingValuesPickerProps,
+} from '@miniextensions/sdk/react';
+
+export function renderPicker(
+    owner: LoginExistingValuesPickerProps['owner'],
+    lookup: LoginExistingValuesPickerProps['loadOptions'],
+    changeDraftValue: (value: string) => void
+) {
+    return createElement(LoginExistingValuesPicker, {
+        owner,
+        allowSearchFromExistingValuesInLogin: true,
+        loadOptions: lookup,
+        onSelect: changeDraftValue,
+    });
+}
+```
+
+The loader receives raw `searchTerm`, `offset`, `signal`, and the owner.
+It returns raw `labels` in page order and the next `offset`, or `null` for the
+last page. Typing waits 500 ms before a replacement read. Closing, changing
+owner, disabling lookup, or unmounting aborts the retired work. The chooser
+preserves duplicate labels and supplies the original string to `onSelect`,
+including whitespace or an empty string. Selection closes the chooser and
+returns focus to its button. The host owns the draft value and any subsequent
+Login submission. Override display text with `labels`.

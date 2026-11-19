@@ -7,6 +7,7 @@ import {
     useState,
     type KeyboardEvent,
     type ReactElement,
+    type ReactNode,
 } from 'react';
 import { createSelectionModel } from '../ui/model.js';
 import type {
@@ -54,6 +55,8 @@ export type LoginExistingValuesPickerProps = {
     /** Receives the original data label, including whitespace or an empty string. */
     onSelect(label: string): void;
     labels?: Partial<LoginExistingValuesLabels>;
+    /** Host action rendered beside the dialog title. */
+    titleAction?: ReactNode;
     className?: string;
 };
 
@@ -214,6 +217,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
                   'div',
                   { className: 'mx-sdk-login-values-header' },
                   h('div', { id: `${id}-title` }, labels.title),
+                  props.titleAction,
                   h(
                       'button',
                       { type: 'button', onClick: () => close(view.lookup) },

@@ -17,6 +17,7 @@ const second = { labels: ['', duplicate, 'Last option'], offset: null };
 const calls = [];
 const selections = [];
 const trusted = [];
+const settingsActivations = [];
 let submits = 0;
 let update;
 let release;
@@ -44,7 +45,11 @@ function App() {
         allowSearchFromExistingValuesInLogin: state.allowed,
         disabled: state.disabled,
         maskPasswordOnLoginScreen: state.masked,
-        labels: { error: 'Values unavailable' },
+        labels: { title: 'Valeurs existantes', error: 'Values unavailable' },
+        titleAction: h('button', {
+            type: 'button',
+            onClick(event) { settingsActivations.push(event.isTrusted); },
+        }, 'Réglages'),
         async loadOptions({ searchTerm, offset, extensionSessionId, signal }) {
             const call = { query: searchTerm, offset, owner: extensionSessionId, aborted: false };
             calls.push(call);
@@ -76,7 +81,7 @@ createRoot(document.querySelector('main')).render(h(StrictMode, null, h(App)));
 window.pickerProof = {
     update: (patch) => update(patch),
     release: () => release({ labels: ['Retired owner result'], offset: 'old-page' }),
-    snapshot: () => ({ react: React.version, selections, calls, submits, trusted }),
+    snapshot: () => ({ react: React.version, selections, calls, submits, trusted, settingsActivations }),
 };
 `;
 
@@ -151,7 +156,10 @@ export async function checkLoginExistingValuesBrowser({
         const button = (name) =>
             page.getByRole('button', { name, exact: true });
         const trigger = button('Find an existing value');
-        const dialog = page.getByRole('dialog', { name: 'Existing values' });
+        const dialog = page.getByRole('dialog', {
+            name: 'Valeurs existantes',
+            exact: true,
+        });
         const search = dialog.getByRole('searchbox');
         const choices = dialog.locator('li button');
         const read = () => page.evaluate(() => window.pickerProof.snapshot());
@@ -190,6 +198,21 @@ export async function checkLoginExistingValuesBrowser({
             duplicate,
             'Last option',
         ]);
+        const settings = dialog.getByRole('button', {
+            name: 'Réglages',
+            exact: true,
+        });
+        const beforeSettings = await read();
+        await settings.click();
+        await focus(settings);
+        assert.deepEqual((await read()).settingsActivations, [true]);
+        await page.keyboard.press('Enter');
+        const afterSettings = await read();
+        assert.deepEqual(afterSettings.settingsActivations, [true, true]);
+        assert.deepEqual(afterSettings.selections, []);
+        assert.deepEqual(afterSettings.calls, beforeSettings.calls);
+        assert.equal(afterSettings.submits, 0);
+        assert.equal(await dialog.isVisible(), true);
         const blank = choices.nth(3);
         assert.equal(await blank.getAttribute('aria-label'), 'Blank value');
         await blank.click();
@@ -256,6 +279,7 @@ export async function checkLoginExistingValuesBrowser({
         assert.equal(proof.calls.length, beforeDenied);
         assert.deepEqual(proof.selections, ['', duplicate]);
         assert.deepEqual(proof.trusted, [true, true]);
+        assert.deepEqual(proof.settingsActivations, [true, true]);
         assert.equal(proof.submits, 0);
         assert.equal(proof.react, expectedReactVersion);
         assert.deepEqual(pageErrors, []);

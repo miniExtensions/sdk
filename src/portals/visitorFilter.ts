@@ -3,6 +3,10 @@ import type {
     RuntimeConditionSetting,
     RuntimeConditionsDefinition,
 } from '../runtime/types.js';
+import {
+    matchDropdownFieldId,
+    reconcileDropdownFilterChange,
+} from '../ui/dropdownFilterCompatibility.js';
 import type {
     PortalVisitorSortOutcome,
     PortalVisitorSortStamp,
@@ -33,8 +37,18 @@ export type PortalVisitorFilterFrame = Readonly<{
     stamp: PortalVisitorSortStamp;
     fields: readonly PortalVisitorFilterField[];
     criteria: RuntimeConditionsDefinition | null;
-    /** Host-projected settings for existing nodes that normalize only on deletion. */
+    /** Host-projected settings for displaying and matching existing predicates. */
     effectiveSettings?: Readonly<Record<string, RuntimeConditionSetting>>;
+    /** Eligible quick Filter fields in the original configuration order. */
+    dropdownFieldIds?: readonly string[];
+}>;
+
+export type PortalVisitorFilterDropdown = Readonly<{
+    fieldId: string;
+    label: string;
+    multiple: boolean;
+    choices: readonly Readonly<{ value: string; label: string }>[];
+    selected: readonly string[];
 }>;
 
 export type PortalVisitorFilterCommand = Readonly<{
@@ -64,6 +78,8 @@ export type PortalVisitorFilterDraft = {
         fields: readonly PortalVisitorFilterField[];
     };
     settingForEditor(id: string): RuntimeConditionSetting | undefined;
+    dropdowns(): readonly PortalVisitorFilterDropdown[];
+    setDropdown(fieldId: string, values: readonly string[]): boolean;
     addCondition(id: string | null): string | null;
     addGroup(id: string | null): string | null;
     setLogicalOperator(id: string | null, operator: LogicalOperator): boolean;
@@ -148,6 +164,55 @@ function validOperand(operand: PortalVisitorFilterOperand, value: unknown) {
 const getValue = (setting: RuntimeConditionSetting): unknown =>
     'value' in setting ? setting.value : undefined;
 
+function dropdownChoices(field: PortalVisitorFilterField) {
+    for (const { setting, operand } of field.operators) {
+        if (
+            setting.fieldType === 'singleSelect' &&
+            setting.type === 'is' &&
+            operand.kind === 'choice'
+        )
+            return { multiple: false, choices: operand.choices };
+        if (
+            setting.fieldType === 'multipleSelects' &&
+            setting.type === 'hasAnyOf' &&
+            operand.kind === 'choices'
+        )
+            return { multiple: true, choices: operand.choices };
+    }
+    return null;
+}
+
+function validDropdownField(field: PortalVisitorFilterField | undefined) {
+    const options = field && dropdownChoices(field)?.choices;
+    return (
+        Array.isArray(options) &&
+        new Set(options.map((option) => option.value)).size ===
+            options.length &&
+        Array.from(options).every(
+            (option) =>
+                typeof option.value === 'string' &&
+                !!option.value &&
+                typeof option.label === 'string'
+        )
+    );
+}
+
+function dropdownValue(setting: RuntimeConditionSetting, multiple: boolean) {
+    if (
+        !multiple &&
+        setting.fieldType === 'singleSelect' &&
+        setting.type === 'is'
+    )
+        return typeof setting.value === 'string' ? [setting.value] : [];
+    if (
+        multiple &&
+        setting.fieldType === 'multipleSelects' &&
+        (setting.type === 'hasAnyOf' || setting.type === 'isExactly')
+    )
+        return Array.isArray(setting.value) ? setting.value : [];
+    return undefined;
+}
+
 function validSetting(setting: RuntimeConditionSetting) {
     if (
         typeof setting?.fieldType !== 'string' ||
@@ -188,7 +253,8 @@ function readFrame(
     try {
         const frame = port.read();
         if (!frame) return null;
-        const { stamp, fields, criteria, effectiveSettings } = frame;
+        const { stamp, fields, criteria, effectiveSettings, dropdownFieldIds } =
+            frame;
         const ids = new Set<string>();
         if (
             typeof stamp.sessionId !== 'string' ||
@@ -229,6 +295,16 @@ function readFrame(
                             )
                     )
             ) ||
+            (dropdownFieldIds !== undefined &&
+                (!Array.isArray(dropdownFieldIds) ||
+                    new Set(dropdownFieldIds).size !==
+                        dropdownFieldIds.length ||
+                    Array.from(dropdownFieldIds).some((id) => {
+                        const field = fields.find(
+                            (candidate) => candidate.id === id
+                        );
+                        return !validDropdownField(field);
+                    }))) ||
             (criteria !== null && !validTree(criteria, ids)) ||
             (effectiveSettings !== undefined &&
                 (!isRecord(effectiveSettings) ||
@@ -252,7 +328,8 @@ function sameScope(a: PortalVisitorFilterFrame, b: PortalVisitorFilterFrame) {
         a.stamp.viewId === b.stamp.viewId &&
         a.stamp.configurationRevision === b.stamp.configurationRevision &&
         a.stamp.metadataRevision === b.stamp.metadataRevision &&
-        isEqual(a.fields, b.fields)
+        isEqual(a.fields, b.fields) &&
+        isEqual(a.dropdownFieldIds, b.dropdownFieldIds)
     );
 }
 
@@ -411,6 +488,37 @@ export function createPortalVisitorFilterDraft(
             ? effective
             : leaf.setting;
     };
+    const dropdowns = (): PortalVisitorFilterDropdown[] =>
+        (captured.dropdownFieldIds ?? []).flatMap((fieldId) => {
+            const field = captured.fields.find(
+                (candidate) => candidate.id === fieldId
+            );
+            if (!field) return [];
+            const metadata = dropdownChoices(field);
+            if (!metadata) return [];
+            let selected: readonly string[] = [];
+            for (const node of criteria?.conditions ?? []) {
+                if (node.type !== 'singleCondition') continue;
+                const setting = projectedSetting(node);
+                if (
+                    matchDropdownFieldId(
+                        captured.fields,
+                        setting.idOrName,
+                        true
+                    ) === fieldId
+                )
+                    selected =
+                        dropdownValue(setting, metadata.multiple) ?? selected;
+            }
+            return [
+                {
+                    fieldId,
+                    label: field.label ?? field.name,
+                    selected,
+                    ...metadata,
+                },
+            ];
+        });
     const editSetting = (leaf: Condition, next: RuntimeConditionSetting) => {
         const effective = effectiveSetting(leaf.id);
         const original = originalSetting(leaf.id);
@@ -481,6 +589,64 @@ export function createPortalVisitorFilterDraft(
         settingForEditor(id: string) {
             const leaf = condition(id);
             return leaf ? structuredClone(projectedSetting(leaf)) : undefined;
+        },
+        dropdowns() {
+            return structuredClone(dropdowns());
+        },
+        setDropdown(fieldId: string, values: readonly string[]) {
+            if (!current() || !Array.isArray(values)) return false;
+            const dropdown = dropdowns().find(
+                (entry) => entry.fieldId === fieldId
+            );
+            if (
+                !dropdown ||
+                (!dropdown.multiple && values.length > 1) ||
+                new Set(values).size !== values.length ||
+                Array.from(values).some(
+                    (value) =>
+                        !dropdown.choices.some(
+                            (choice) => choice.value === value
+                        )
+                ) ||
+                isEqual(dropdown.selected, values)
+            )
+                return false;
+            const idOrName = { type: 'id' as const, id: fieldId };
+            const setting: RuntimeConditionSetting = dropdown.multiple
+                ? {
+                      fieldType: 'multipleSelects',
+                      type: 'hasAnyOf',
+                      idOrName,
+                      value: [...values],
+                  }
+                : {
+                      fieldType: 'singleSelect',
+                      type: 'is',
+                      idOrName,
+                      value: values[0] ?? null,
+                  };
+            const next = reconcileDropdownFilterChange(
+                {
+                    airtableFields: captured.fields,
+                    conditionsDefinition: criteria,
+                    dropdownCondition:
+                        values.length > 0
+                            ? { id: newId(), type: 'singleCondition', setting }
+                            : null,
+                    fieldId,
+                },
+                {
+                    maximumGroupLevel,
+                    settingForMatch: (id, raw) =>
+                        projectedSetting({
+                            id,
+                            type: 'singleCondition',
+                            setting: raw,
+                        }),
+                }
+            );
+            criteria = next.conditions.length ? next : null;
+            return true;
         },
         addCondition(id: string | null) {
             return insert(id, false);

@@ -77,6 +77,7 @@ const option: PortalVisitorViewButton = { id: 'grid', label: null };
 const props: PortalVisitorViewButtonsProps = {
     views: [option],
     selectedViewId: null,
+    ownerToken: 'admitted view owner',
     unnamedViewLabel: 'Localized unnamed view',
     onSelect(id) { void id.toUpperCase(); },
 };
@@ -90,7 +91,7 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeSearch) {
     const cases = includeSearch
         ? [...sortCases, ...searchCases, viewButtonsCase]
         : sortCases;
-    const expectedTests = includeSearch ? 38 : 12;
+    const expectedTests = includeSearch ? 39 : 12;
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(

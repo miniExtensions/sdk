@@ -173,12 +173,14 @@ const choices = [
     { id: 'gallery', label: 'Gallery' }
 ];
 let selection = 'list';
+let ownerToken = 1;
 const intents = [];
 const otherIntents = [];
 let visible = choices;
 function renderViews() {
     viewRoot.render(h(StrictMode, null, h(PortalVisitorViewButtons, {
-        views: visible, selectedViewId: selection,
+        views: visible, selectedViewId: selection, ownerToken,
+        testId: 'view-owner-' + ownerToken,
         unnamedViewLabel: 'Vue sans nom', groupLabel: 'Primary views',
         onSelect(id) {
             intents.push(id);
@@ -188,7 +190,7 @@ function renderViews() {
     })));
 }
 otherViewRoot.render(h(StrictMode, null, h(PortalVisitorViewButtons, {
-    views: choices, selectedViewId: 'list',
+    views: choices, selectedViewId: 'list', ownerToken: 'other',
     unnamedViewLabel: 'Vue sans nom', groupLabel: 'Other views',
     onSelect(id) { otherIntents.push(id); },
 })));
@@ -196,6 +198,7 @@ renderViews();
 globalThis.viewButtonsFixture = {
     summary: () => ({ intents, otherIntents, submits }),
     narrow(n) { visible = choices.slice(0, n); renderViews(); },
+    replaceOwner(token) { ownerToken = token; renderViews(); },
     unmount() { viewRoot.unmount(); otherViewRoot.unmount(); },
 };
 `;
@@ -232,6 +235,39 @@ async function checkViewButtons(page) {
         (button) => getComputedStyle(button).backgroundColor
     );
     assert.notEqual(selectedBackground, 'rgba(0, 0, 0, 0)');
+    const replaceOwner = async (token) => {
+        await page.evaluate(
+            (value) => globalThis.viewButtonsFixture.replaceOwner(value),
+            token
+        );
+        await page.getByTestId('view-owner-' + token).waitFor();
+    };
+    const bounds = await second.boundingBox();
+    assert.ok(bounds);
+    await page.mouse.move(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2
+    );
+    await page.mouse.down();
+    try {
+        await replaceOwner(2);
+    } finally {
+        await page.mouse.up();
+    }
+    assert.deepEqual((await summary()).intents, []);
+    await second.focus();
+    await page.keyboard.down('Space');
+    try {
+        await replaceOwner(3);
+        await replaceOwner(2);
+    } finally {
+        await page.keyboard.up('Space');
+    }
+    assert.deepEqual((await summary()).intents, []);
+    assert.equal(
+        await second.evaluate((button) => button === document.activeElement),
+        true
+    );
     await first.click();
     assert.deepEqual((await summary()).intents, []);
     await page.keyboard.press('Tab');

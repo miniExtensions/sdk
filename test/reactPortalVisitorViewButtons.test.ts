@@ -19,6 +19,7 @@ const defaultProps: PortalVisitorViewButtonsProps = {
     views,
     unnamedViewLabel: 'Vue sans nom',
     selectedViewId: 'grid',
+    ownerToken: 'test-owner',
     groupLabel: 'Vues',
     onSelect: () => assert.fail('unexpected view selection'),
 };
@@ -98,6 +99,75 @@ it('waits for the host to publish selection and sends one intent from its own ro
     });
     assert.deepEqual(commands, ['list', 'list']);
     assert.equal(grid.getAttribute('aria-pressed'), 'true');
+});
+
+it('retires pointer and Space presses across an owner change without replacing the focused button', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const commands: string[] = [];
+    const render = (ownerToken: string, callback: string) =>
+        fixture.render(
+            h(PortalVisitorViewButtons, {
+                ...defaultProps,
+                ownerToken,
+                onSelect: (id) => commands.push(callback + ':' + id),
+            })
+        );
+    await render('owner-a', 'a');
+    const button = fixture.container.querySelectorAll('button')[1];
+    assert.ok(button);
+    await act(async () => button.focus());
+    const pointerDown = () =>
+        button.dispatchEvent(
+            new fixture.window.PointerEvent('pointerdown', {
+                bubbles: true,
+                button: 0,
+                isPrimary: true,
+                pointerId: 1,
+            })
+        );
+    const click = (detail: number) =>
+        button.dispatchEvent(
+            new fixture.window.MouseEvent('click', {
+                bubbles: true,
+                button: 0,
+                detail,
+            })
+        );
+
+    await act(async () => {
+        pointerDown();
+    });
+    await render('owner-b', 'b');
+    await act(async () => {
+        click(1);
+    });
+    assert.deepEqual(commands, []);
+    assert.ok(fixture.window.document.activeElement === button);
+
+    await act(async () => {
+        button.dispatchEvent(
+            new fixture.window.KeyboardEvent('keydown', {
+                key: ' ',
+                bubbles: true,
+            })
+        );
+    });
+    await render('owner-a', 'a-again');
+    await render('owner-b', 'b-again');
+    await act(async () => {
+        click(0);
+    });
+    assert.deepEqual(commands, []);
+    assert.ok(fixture.window.document.activeElement === button);
+
+    await act(async () => {
+        pointerDown();
+    });
+    await render('owner-b', 'same-owner-new-callback');
+    await act(async () => {
+        click(1);
+    });
+    assert.deepEqual(commands, ['same-owner-new-callback:list']);
 });
 
 it('hydrates in StrictMode without a selection and preserves the focused DOM button', async () => {

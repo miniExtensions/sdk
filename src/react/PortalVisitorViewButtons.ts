@@ -4,6 +4,7 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    type MouseEvent,
     type ReactElement,
 } from 'react';
 
@@ -17,6 +18,8 @@ export type PortalVisitorViewButtonsProps = {
     /** The host's eligible views, in presentation order. */
     views: readonly PortalVisitorViewButton[];
     selectedViewId: string | null;
+    /** Replace this token whenever the host retires the current view authority. */
+    ownerToken: unknown;
     unnamedViewLabel: string;
     groupLabel?: string;
     testId?: string;
@@ -24,18 +27,23 @@ export type PortalVisitorViewButtonsProps = {
     onSelect(viewId: string): void;
 };
 
+type Press = { placement: object; viewId: string };
+
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
 export function PortalVisitorViewButtons({
     views,
     selectedViewId,
+    ownerToken,
     unnamedViewLabel,
     groupLabel,
     testId,
     onSelect,
 }: PortalVisitorViewButtonsProps): ReactElement | null {
-    // A retired click cannot become current when the same view returns.
+    const placement = useMemo(() => ({}), [ownerToken]);
+    const pointerPress = useRef<Press | null>(null);
+    const keyboardPress = useRef<Press | null>(null);
     const selection = useMemo(
         () => ({ views, selectedViewId, onSelect }),
         [views, selectedViewId, onSelect]
@@ -65,7 +73,33 @@ export function PortalVisitorViewButtons({
                     type: 'button',
                     className: 'me-portal-visitor-view-button',
                     'aria-pressed': selectedViewId === id,
-                    onClick: () => {
+                    onPointerDown: (event) => {
+                        if (event.isPrimary && event.button === 0)
+                            pointerPress.current = { placement, viewId: id };
+                    },
+                    onPointerCancel: (event) => {
+                        if (event.isPrimary) pointerPress.current = null;
+                    },
+                    onKeyDown: (event) => {
+                        if (event.key !== ' ' && event.key !== 'Enter') return;
+                        if (event.repeat) event.preventDefault();
+                        else keyboardPress.current = { placement, viewId: id };
+                    },
+                    onBlur: () => {
+                        if (keyboardPress.current?.viewId === id)
+                            keyboardPress.current = null;
+                    },
+                    onClick: (event: MouseEvent<HTMLButtonElement>) => {
+                        const press =
+                            event.detail === 0 ? keyboardPress : pointerPress;
+                        const origin = press.current;
+                        press.current = null;
+                        if (
+                            origin &&
+                            (origin.placement !== placement ||
+                                origin.viewId !== id)
+                        )
+                            return;
                         if (
                             currentSelection.current === selection &&
                             selection.selectedViewId !== id

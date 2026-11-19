@@ -152,6 +152,11 @@ export {
     type LoginExistingValuesLabels,
     type LoginExistingValuesPickerProps,
 } from './LoginExistingValuesPicker.js';
+export {
+    LoginSignupConfirmationDialog,
+    type LoginSignupConfirmationCopy,
+    type LoginSignupConfirmationDialogProps,
+} from './LoginSignupConfirmationDialog.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';
 export {

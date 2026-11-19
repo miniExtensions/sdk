@@ -3,7 +3,7 @@
 export const portalPagingControlsFixture = String.raw`
 import {createListFixture} from './list-fixture.mjs';
 
-export function createPagingFixture({React,api,ui,layout='list'}) {
+export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPage=false}) {
  const h=React.createElement;
  const records=createListFixture(ui);
  let presenterSubscriptions=0;
@@ -18,11 +18,12 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
  const [first,second]=records.initial.records.map((record,index)=>({
   ...record,fields:{...record.fields,fld_title:index?'Second':'First'},
  }));
- records.replace({...records.initial,records:[first]});
+ const acceptedFirstPage=emptyAcceptedPage?[]:[first];
+ records.replace({...records.initial,records:acceptedFirstPage});
 
  const requests=[];
  const activations=[];
- let cursor='page_2';
+ let cursor=emptyAcceptedPage?'after_empty_page':'page_2';
  let redraw=()=>{};
  let state={type:'ready',hasNextPage:true};
  let offer;
@@ -84,7 +85,7 @@ export function createPagingFixture({React,api,ui,layout='list'}) {
    const firstPage=currentRequest.offset===null;
    currentRequest=undefined;
    cursor=null;
-   records.replace({...records.initial,records:firstPage?[first]:[first,second]});
+   records.replace({...records.initial,records:firstPage?[first]:[...acceptedFirstPage,second]});
    publish({type:'ready',hasNextPage:false});
   },
   firstFailure() {

@@ -17,7 +17,11 @@ import { checkPortalVisitorSortBrowser } from './portal-visitor-sort-browser-che
 const [archive, executablePath, expectedSha256, queryFlag, ...unexpected] =
     process.argv.slice(2);
 assert.ok(archive && executablePath && expectedSha256);
-assert.ok(queryFlag === undefined || queryFlag === '--include-search');
+assert.ok(
+    queryFlag === undefined ||
+        queryFlag === '--include-search' ||
+        queryFlag === '--include-view-buttons'
+);
 assert.deepEqual(unexpected, []);
 assert.equal(realpathSync(archive), archive);
 assert.equal(realpathSync(executablePath), executablePath);
@@ -62,6 +66,7 @@ try {
                 evidence,
                 expectedReactVersion: react,
                 includeSearch: queryFlag === '--include-search',
+                includeViewButtons: queryFlag === '--include-view-buttons',
             });
             assert.equal(archiveDigest(), expectedSha256);
         } finally {

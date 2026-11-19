@@ -221,6 +221,7 @@ for (const format of ['esm', 'cjs']) {
 for (const format of ['esm', 'cjs']) {
     for (const name of [
         'portal-shell',
+        'portal-visitor-view-buttons',
         'signature',
         'theme',
         'button',

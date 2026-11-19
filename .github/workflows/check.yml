@@ -23,7 +23,7 @@ jobs:
               run: node scripts/npm-release-age.mjs --github-env "$GITHUB_ENV"
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
-            - run: pnpm format:check && pnpm typecheck && pnpm test && node --test scripts/wait-for-source-ci.test.mjs
+            - run: pnpm format:check && pnpm typecheck && pnpm test && node --test scripts/wait-for-source-ci.test.mjs scripts/check-native-browser-pair.test.mjs
             - name: Retain unit, component, and combined source coverage
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -87,21 +87,13 @@ jobs:
               run: node scripts/form-validation-summary-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
               env:
                   SDK_FORM_VALIDATION_CHROMIUM: /usr/bin/google-chrome
-            - name: Execute packed native Chromium proof
+            - name: Execute packed native Chromium proofs with React 19 and 18
               timeout-minutes: 10
-              run: pnpm check:browser
+              run: node scripts/check-native-browser-pair.mjs
               env:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
-            - name: Execute packed native Chromium proof with React 18
-              timeout-minutes: 10
-              run: pnpm check:browser
-              env:
-                  SDK_NATIVE_REACT_VERSION: 18.3.1
-                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
-                  SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
-                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/react18
             - name: Qualify packed Portal parent summary cards
               run: node scripts/portal-summary-cards-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
               env:

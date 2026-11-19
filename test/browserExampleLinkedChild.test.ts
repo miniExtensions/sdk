@@ -594,6 +594,172 @@ describe('browser starter standalone linked-child integration', () => {
         assert.deepEqual(f.calls.errors, []);
     });
 
+    it('keeps a dirty child on refusal and resumes the same selected draft after confirmed Close', async (test) => {
+        const f = await fixture(test);
+        const parent = structuredClone(f.native());
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const original = f.owner.getSnapshot().child!;
+        const draftTitle = 'Unsaved child draft to resume';
+        edit(f.window, f.panel.node, 'fld_title', draftTitle);
+        const oldSave = button(f.panel.node, 'Save child');
+        const close = button(f.panel.node, 'Close child');
+        close.focus();
+        close.click();
+        const dialog = f.window.document.querySelector('dialog')!;
+        assert.equal(dialog.getAttribute('role'), 'alertdialog');
+        assert.equal(
+            dialog.getAttribute('aria-labelledby'),
+            'confirmation-title'
+        );
+        assert.equal(
+            dialog.querySelector('h2')?.textContent,
+            'Close linked record?'
+        );
+        const keep = button(dialog, 'Keep editing');
+        assert.equal(f.window.document.activeElement, keep);
+        keep.click();
+        await settle();
+        assert.equal(f.window.document.activeElement, close);
+        assert.equal(f.owner.getSnapshot().child, original);
+        assert.equal(
+            original.field('fld_title').getSnapshot().value,
+            draftTitle
+        );
+        assert.equal(f.calls.saves.length, 0);
+
+        close.click();
+        button(
+            f.window.document.querySelector('dialog')!,
+            'Confirm close'
+        ).click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'closed');
+        assert.equal(f.owner.getSnapshot().child, null);
+        const reopen = button(f.panel.node, 'Edit linked record rec_existing');
+        assert.equal(f.window.document.activeElement, reopen);
+        reopen.click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const resumed = f.owner.getSnapshot().child!;
+        assert.notEqual(resumed, original);
+        assert.equal(
+            resumed.field('fld_title').getSnapshot().value,
+            draftTitle
+        );
+        assert.deepEqual(resumed.controller.getState().draft?.dirtyFieldIds, [
+            'fld_title',
+        ]);
+        fire(f.window, oldSave);
+        await settle();
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 1, 0]
+        );
+        assert.deepEqual(f.native(), parent);
+    });
+
+    it('closes a clean selected child immediately and loads fresh on its next Edit', async (test) => {
+        const f = await fixture(test, {
+            load: async (input) => {
+                const child = loadedChild(input);
+                child.payload.formFieldIdsWithUnsavedChanges = [];
+                return child;
+            },
+        });
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        assert.deepEqual(
+            f.owner.getSnapshot().child?.controller.getState().draft
+                ?.dirtyFieldIds,
+            []
+        );
+        button(f.panel.node, 'Close child').click();
+        assert.equal(f.owner.getSnapshot().phase, 'closed');
+        assert.equal(f.window.document.querySelector('dialog'), null);
+        const reopen = button(f.panel.node, 'Edit linked record rec_existing');
+        assert.equal(f.window.document.activeElement, reopen);
+        reopen.click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 2, 0]
+        );
+    });
+
+    it('cannot accept a captured dirty Close after the parent configuration retires', async (test) => {
+        const f = await fixture(test);
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        edit(f.window, f.panel.node, 'fld_title', 'Retired child draft');
+        button(f.panel.node, 'Close child').click();
+        const confirm = button(
+            f.window.document.querySelector('dialog')!,
+            'Confirm close'
+        );
+        f.expireConfiguration();
+        f.panel.refresh();
+        fire(f.window, confirm);
+        await settle();
+        assert.equal(f.owner.getSnapshot().phase, 'retired');
+        assert.equal(f.window.document.querySelector('dialog'), null);
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 1, 0]
+        );
+    });
+
+    it('does not resume a retained draft after removing and reselecting its record', async (test) => {
+        const f = await fixture(test);
+        const initialSelection = structuredClone(f.native());
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const loaded = f.owner
+            .getSnapshot()
+            .child!.field('fld_title')
+            .getSnapshot().value;
+        edit(
+            f.window,
+            f.panel.node,
+            'fld_title',
+            'Draft for previous selection'
+        );
+        assert.equal(f.owner.closeEdit(f.owner.getSnapshot().revision), true);
+        assert.equal(f.fields.controller.write(fieldId, ['rec_sibling']), true);
+        assert.equal(
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing'),
+            false
+        );
+        assert.notEqual(initialSelection, undefined);
+        assert.equal(
+            f.fields.controller.write(fieldId, initialSelection!),
+            true
+        );
+        await f.fields.linkedRecords(fieldId).readSelected();
+        const { revision } = f.owner.getSnapshot();
+        assert.equal(await f.owner.openEdit('rec_existing', revision), true);
+        assert.equal(
+            f.owner.getSnapshot().child!.field('fld_title').getSnapshot().value,
+            loaded
+        );
+        assert.equal(f.calls.loads.length, 2);
+        assert.equal(f.calls.saves.length, 0);
+    });
+
     it('uses child manual pages and displays validation without a second automatic Save', async (test) => {
         let rejectSave = true;
         const f = await fixture(test, {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { cpSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { build } from 'esbuild';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -66,6 +66,7 @@ export async function prepareStarterConfirmationProof({
     consumer,
     output,
     root,
+    reactHost = false,
 }) {
     const installed = realpathSync(
         join(consumer, 'node_modules/@miniextensions/sdk')
@@ -83,7 +84,26 @@ export async function prepareStarterConfirmationProof({
     }
     const bundled = await build({
         absWorkingDir: app,
-        entryPoints: ['src/main.ts'],
+        ...(reactHost
+            ? {
+                  stdin: {
+                      resolveDir: app,
+                      contents: `
+import { createElement, version } from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
+const main = document.querySelector('main');
+const mount = document.createElement('div');
+main.before(mount);
+flushSync(() => createRoot(mount).render(createElement('div', {
+    'data-sdk-react-host': version,
+    ref: (host) => { if (host) host.append(main); },
+})));
+await import('./src/main.ts');
+`,
+                  },
+              }
+            : { entryPoints: ['src/main.ts'] }),
         bundle: true,
         platform: 'browser',
         format: 'esm',
@@ -98,7 +118,13 @@ export async function prepareStarterConfirmationProof({
     assert(sdkInputs.length > 0);
     for (const input of sdkInputs) {
         assert(input.includes('/dist/esm/'));
-        assert(realpathSync(resolve(app, input)).startsWith(installed + '/'));
+        const member = relative(installed, realpathSync(resolve(app, input)));
+        assert(
+            member &&
+                !isAbsolute(member) &&
+                member !== '..' &&
+                !member.startsWith(`..${sep}`)
+        );
     }
     for (const name of Object.keys(sourceHashes))
         assert(
@@ -135,11 +161,14 @@ export async function checkStarterConfirmationRecovery({
     output,
     fixtures,
     root,
+    onlyClose = false,
+    reactVersion,
 }) {
     const prepared = await prepareStarterConfirmationProof({
         consumer,
         output,
         root,
+        reactHost: reactVersion != null,
     });
     const report = {
         scope: 'Copied installed starter; synthetic responses only, not hosted acceptance',
@@ -166,19 +195,26 @@ export async function checkStarterConfirmationRecovery({
     });
     const origin = `http://127.0.0.1:${server.address().port}`;
     try {
-        for (const { mode, multiPage, mouseBlur } of [
-            { mode: 'create', multiPage: false },
-            { mode: 'edit', multiPage: false },
-            { mode: 'create', multiPage: true },
-            { mode: 'create', multiPage: false, mouseBlur: true },
-        ]) {
-            const label = mouseBlur
-                ? 'mouse-blur confirmation recovery'
-                : multiPage
-                  ? 'multi-page Review'
-                  : 'confirmation recovery';
+        const closeCase = { mode: 'edit', close: true };
+        const scenarios = onlyClose
+            ? [closeCase]
+            : [
+                  { mode: 'create', multiPage: false },
+                  { mode: 'edit', multiPage: false },
+                  { mode: 'create', multiPage: true },
+                  { mode: 'create', multiPage: false, mouseBlur: true },
+                  closeCase,
+              ];
+        for (const { mode, multiPage, mouseBlur, close } of scenarios) {
+            const label = close
+                ? 'dirty Close and explicit resume'
+                : mouseBlur
+                  ? 'mouse-blur confirmation recovery'
+                  : multiPage
+                    ? 'multi-page Review'
+                    : 'confirmation recovery';
             console.log(`Installed starter ${mode} ${label}: starting`);
-            const calls = { reads: 0, saves: [] };
+            const calls = { reads: 0, childLoads: 0, saves: [] };
             const parent = fixtures.parentForm('edit');
             parent.payload.fieldIdsInForm = ['fld_title', 'fld_children_a'];
             parent.payload.fieldIdsToSchemas.fld_children_a.miniExtConfig.recordFinderMode =
@@ -214,7 +250,11 @@ export async function checkStarterConfirmationRecovery({
                                         : fixtures.childForm('edit')
                                     : structuredClone(parent);
                             if ('childExtensionInfo' in input) {
+                                calls.childLoads++;
                                 loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
+                                if (close)
+                                    loaded.payload.formFieldIdsWithUnsavedChanges =
+                                        [];
                                 if (mouseBlur)
                                     loaded.payload.fieldIdsToSchemas.fld_title.miniExtConfig.required = true;
                                 if (mode === 'edit')
@@ -292,6 +332,13 @@ export async function checkStarterConfirmationRecovery({
                     return route.abort();
                 });
                 await page.goto(origin);
+                if (reactVersion != null)
+                    assert.equal(
+                        await page
+                            .locator('[data-sdk-react-host]')
+                            .getAttribute('data-sdk-react-host'),
+                        reactVersion
+                    );
                 await page
                     .locator('#api-origin')
                     .fill('https://synthetic-sdk.invalid');
@@ -350,6 +397,97 @@ export async function checkStarterConfirmationRecovery({
                 );
                 expected.reads = calls.reads;
                 await childTitle.fill(expected.childTitle);
+                if (close) {
+                    const closeButton = page.getByRole('button', {
+                        name: 'Close child',
+                        exact: true,
+                    });
+                    const dialog = page.getByRole('alertdialog', {
+                        name: 'Close linked record?',
+                    });
+                    const capture = () => [
+                        calls.reads,
+                        calls.childLoads,
+                        calls.saves.length,
+                    ];
+                    const focus = (locator) =>
+                        locator.evaluate(
+                            (node) => document.activeElement === node
+                        );
+                    await closeButton.click();
+                    await dialog.waitFor();
+                    const keep = dialog.getByRole('button', {
+                        name: 'Keep editing',
+                    });
+                    assert.equal(await focus(keep), true);
+                    await keep.click();
+                    await dialog.waitFor({ state: 'detached' });
+                    assert.equal(await focus(closeButton), true);
+                    assert.equal(
+                        await childTitle.inputValue(),
+                        expected.childTitle
+                    );
+                    const kept = capture();
+                    assert.deepEqual(kept, [1, 1, 0]);
+
+                    await closeButton.press('Enter');
+                    await dialog
+                        .getByRole('button', { name: 'Confirm close' })
+                        .click();
+                    await childTitle.waitFor({ state: 'detached' });
+                    const reopen = page.getByRole('button', {
+                        name: 'Edit linked record rec_existing',
+                        exact: true,
+                    });
+                    assert.equal(await focus(reopen), true);
+                    const confirmed = capture();
+                    assert.deepEqual(confirmed, [1, 1, 0]);
+                    await reopen.press('Enter');
+                    await idle();
+                    assert.equal(
+                        await childTitle.inputValue(),
+                        expected.childTitle
+                    );
+                    const resumed = capture();
+                    assert.deepEqual(resumed, [1, 1, 0]);
+
+                    await closeButton.click();
+                    await dialog
+                        .getByRole('button', { name: 'Confirm close' })
+                        .click();
+                    const sibling = page.getByRole('button', {
+                        name: 'Edit linked record rec_sibling',
+                        exact: true,
+                    });
+                    await sibling.click();
+                    await idle();
+                    await childTitle.waitFor();
+                    await closeButton.press('Enter');
+                    await childTitle.waitFor({ state: 'detached' });
+                    assert.equal(await dialog.count(), 0);
+                    assert.equal(await focus(sibling), true);
+                    const clean = capture();
+                    assert.deepEqual(clean, [1, 2, 0]);
+                    assert.equal(
+                        await parentTitle.inputValue(),
+                        expected.parentTitle
+                    );
+                    assert.deepEqual(
+                        JSON.parse(await parentLinks.inputValue()),
+                        expected.parentLinks
+                    );
+                    assert.deepEqual(errors, []);
+                    assert.deepEqual(unexpectedRequests, []);
+                    report.cases.push({
+                        mode,
+                        close,
+                        kept,
+                        confirmed,
+                        resumed,
+                        clean,
+                    });
+                    continue;
+                }
                 let mouseCommitted;
                 if (mouseBlur) {
                     const focusedBefore = await childTitle.evaluate((node) => {

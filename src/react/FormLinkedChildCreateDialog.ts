@@ -146,11 +146,22 @@ export function LinkedChildDialogPresentation({
     editRecordId,
 }: LinkedChildDialogProps): ReactElement | null {
     const state = useLinkedChildPresentation(owner);
-    const [dismissedOpening, setDismissedOpening] =
-        useState<FormLinkedChildCreateOpening | null>(null);
+    const [dismissedEdit, setDismissedEdit] = useState<{
+        owner: FormLinkedChildOwner;
+        child: FormFieldBindings;
+        pages: FormPageOwner;
+        recordId: string;
+    } | null>(null);
     const { child, pages } = state;
+    // A fresh admission creates fresh bindings and pages, even for the same record.
+    const dismissed =
+        state.phase === 'unknown' &&
+        dismissedEdit?.owner === owner &&
+        dismissedEdit.child === child &&
+        dismissedEdit.pages === pages &&
+        dismissedEdit.recordId === editRecordId;
     if (
-        opening === dismissedOpening ||
+        dismissed ||
         !opening.isCurrent() ||
         !matchesIntent(state, editRecordId) ||
         child !== opening.child ||
@@ -175,7 +186,8 @@ export function LinkedChildDialogPresentation({
                 renderFields,
                 labels,
                 editRecordId,
-                dismissUnknownEdit: () => setDismissedOpening(opening),
+                dismissUnknownEdit: (recordId: string) =>
+                    setDismissedEdit({ owner, child, pages, recordId }),
             })
         )
     );
@@ -195,7 +207,7 @@ function LinkedChildDialog({
     state: FormLinkedChildSnapshot;
     child: FormFieldBindings;
     pages: FormPageOwner;
-    dismissUnknownEdit(): void;
+    dismissUnknownEdit(recordId: string): void;
 }): ReactElement {
     const labels = { ...defaultLabels, ...suppliedLabels };
     const titleId = useId();
@@ -302,7 +314,7 @@ function LinkedChildDialog({
         if (editRecordId !== undefined && state.phase === 'unknown') {
             // Leave the owner's draft and unresolved Save in place.
             session.dismissedUnknownRevision = state.revision;
-            dismissUnknownEdit();
+            dismissUnknownEdit(editRecordId);
             return;
         }
         if (child.controller.getState().draft?.dirtyFieldIds.length) {

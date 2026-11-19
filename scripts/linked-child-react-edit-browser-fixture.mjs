@@ -140,6 +140,11 @@ function EditAction({ parent }) {
     window.retireReactEditOpening = () => {
         accepted.current = null;
     };
+    window.refreshReactEditOpening = () => {
+        const entry = accepted.current;
+        if (!entry) throw Error('No accepted Edit to refresh');
+        setOpening({ ...entry, isCurrent: () => entry.isCurrent() });
+    };
     const open = async (event) => {
         if (busy.current || current !== parent) return;
         const opener = event.currentTarget;
@@ -175,7 +180,10 @@ function EditAction({ parent }) {
     };
     return h(
         'div',
-        null,
+        {
+            'data-refreshed-edit-opening':
+                opening !== null && opening !== accepted.current,
+        },
         h('button', { type: 'button', onClick: open }, 'Edit selected record'),
         opening &&
             h(FormLinkedChildEditDialog, {
@@ -206,6 +214,15 @@ function Parent() {
         h(EditAction, { key: revision, parent: current })
     );
 }
+
+window.closeReactEditForNewIntent = () => {
+    const { journal, owner } = current;
+    const [attempt] = journal.observed;
+    if (!attempt || owner.getSnapshot().phase !== 'unknown')
+        throw Error('No unresolved Edit Save to inspect');
+    journal.acknowledgeNewIntent(attempt);
+    owner.close();
+};
 
 window.readReactEditProof = () => {
     const { fields, owner, journal } = current;

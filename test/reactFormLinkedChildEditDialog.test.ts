@@ -155,8 +155,16 @@ async function fixture(
     let host = createParent();
     let opening: FormLinkedChildEditOpening | null = null;
     let submits = 0;
-    const render = () =>
-        dom.render(
+    const render = (refreshOpening = false) => {
+        const activeOpening = opening;
+        const presentation =
+            refreshOpening && activeOpening
+                ? {
+                      ...activeOpening,
+                      isCurrent: () => activeOpening.isCurrent(),
+                  }
+                : activeOpening;
+        return dom.render(
             h(
                 'div',
                 { onSubmit: () => submits++ },
@@ -165,15 +173,16 @@ async function fixture(
                     { id: 'owned-edit-opener', type: 'button' },
                     'Edit selected'
                 ),
-                opening &&
+                presentation &&
                     h(FormLinkedChildEditDialog, {
                         owner: host.owner,
-                        opening,
+                        opening: presentation,
                         renderFields: () =>
                             h('input', { 'aria-label': 'Child title' }),
                     })
             )
         );
+    };
     await render();
     await host.hydrate();
     const opener = () => {
@@ -367,13 +376,66 @@ for (const exit of ['Close', 'Escape'] as const) {
         assert(f.doc.activeElement === opener);
         await f.render();
         assert(f.dialog() === null);
+        await f.render(true);
+        assert(f.dialog() === null, 'An equivalent opening revived the dialog');
+        assert(f.doc.activeElement === opener);
         assert.deepEqual(owner.getSnapshot(), pending);
         assert.deepEqual(child.controller.getState().draft, draft);
         assert.deepEqual(journal.observed, attempts);
         assert.equal(await owner.openEdit(selectedId, pending.revision), false);
         assert.deepEqual(f.loads, [selectedId]);
+        assert.equal(f.reads(), 1);
         assert.equal(f.saves.length, 1);
         assert.equal(f.submits(), 0);
+
+        await act(async () => {
+            assert(
+                f
+                    .host()
+                    .fields.field('fld_title')
+                    .setValue('Parent draft update').accepted
+            );
+        });
+        const afterParentEdit = owner.getSnapshot();
+        assert(afterParentEdit.revision > pending.revision);
+        assert(
+            afterParentEdit.child === child &&
+                afterParentEdit.phase === 'unknown'
+        );
+        await f.render(true);
+        assert(f.dialog() === null);
+        assert(f.doc.activeElement === opener);
+        assert.deepEqual(journal.observed, attempts);
+
+        // The host explicitly starts a new intent after checking the old attempt.
+        await act(async () => {
+            journal.acknowledgeNewIntent(journal.observed[0]);
+            owner.close();
+        });
+        const successor = await f.open();
+        assert(f.opener() === opener);
+        assert(f.host().owner === owner);
+        assert(successor !== child);
+        assert(owner.getSnapshot().pages !== pending.pages);
+        assert.deepEqual(owner.getSnapshot().intent, {
+            type: 'edit',
+            recordId: selectedId,
+        });
+        assert(f.dialog()?.open);
+        assert(f.doc.activeElement === f.button('Close'));
+        await f.edit('Newly admitted same-record draft');
+        assert.equal(
+            successor.field('fld_title').getSnapshot().value,
+            'Newly admitted same-record draft'
+        );
+        assert(f.doc.activeElement === f.button('Close'));
+        assert.deepEqual(f.loads, [selectedId, selectedId]);
+        assert.equal(f.reads(), 1);
+        assert.equal(f.saves.length, 1);
+        assert.equal(f.submits(), 0);
+        assert.deepEqual(journal.observed, [
+            { ...attempts[0], acknowledgment: 'new-intent' },
+        ]);
     });
 }
 

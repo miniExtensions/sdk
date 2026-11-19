@@ -2755,7 +2755,9 @@ and Save using that owner, and restores focus to the current opener.
 
 If a Save response is lost, Close and Escape dismiss this presentation. The
 owner keeps the child draft and unresolved Save, which must be inspected before
-another submission. A Save still in flight keeps the dialog open.
+another submission. Parent rerenders preserve that dismissal. An explicitly
+admitted new Edit can open its own dialog. A Save still in flight keeps the
+dialog open.
 
 Required-open credit belongs to the host's presentation lifecycle. Rendering
 this dialog leaves the parent's open history unchanged. To record credit, the

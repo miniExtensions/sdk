@@ -221,10 +221,40 @@ export async function checkInstalledReactLinkedChildEdit({
             else await page.keyboard.press('Escape');
             await dialog.waitFor({ state: 'hidden' });
             assert.equal(await focus(currentOpener), true);
+            await page.evaluate(() => window.refreshReactEditOpening());
+            await page
+                .locator('[data-refreshed-edit-opening="true"]')
+                .waitFor();
+            assert.equal(await dialog.count(), 0);
+            assert.equal(await focus(currentOpener), true);
             assert.deepEqual(await read(), lost);
             await currentOpener.press('Enter');
             assert.deepEqual(await read(), lost);
             assert.equal(await dialog.count(), 0);
+
+            // Explicit host recovery is separate from dismissing the dialog.
+            await page.evaluate(() => window.closeReactEditForNewIntent());
+            const freshOpener = await open();
+            assert.equal(
+                await currentOpener.evaluate(
+                    (oldNode, newNode) => oldNode === newNode,
+                    freshOpener
+                ),
+                true
+            );
+            assert.equal(await focus(button('Close')), true);
+            await title.fill('Fresh admitted same-record Edit');
+            const fresh = await read();
+            unchangedParent(fresh);
+            assert.equal(fresh.phase, 'ready');
+            assert.equal(fresh.childTitle, 'Fresh admitted same-record Edit');
+            assert.equal(fresh.calls.reads.length, 1);
+            assert.equal(fresh.calls.loads.length, 2);
+            assert.equal(fresh.calls.saves.length, 1);
+            assert.equal(fresh.accepted, 0);
+            assert.deepEqual(fresh.attempts, [
+                { ...lost.attempts[0], acknowledgment: 'new-intent' },
+            ]);
         }
 
         await page.goto(origin);
@@ -298,6 +328,8 @@ export async function checkInstalledReactLinkedChildEdit({
             parentSubmits: 0,
             successorPreserved: true,
             unresolvedSaveDismissals: 2,
+            equivalentOpeningRerenders: 2,
+            explicitSameRecordReopen: true,
             staleDismissalRejected: true,
         };
     } finally {

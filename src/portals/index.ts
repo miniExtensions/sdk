@@ -73,6 +73,7 @@ export { createPortalSortEditor, createPortalFilterEditor } from './editors.js';
 export { createPortalVisitorFilterDraft } from './visitorFilter.js';
 export type {
     PortalVisitorFilterCommand,
+    PortalVisitorFilterDraft,
     PortalVisitorFilterField,
     PortalVisitorFilterFrame,
     PortalVisitorFilterOperand,

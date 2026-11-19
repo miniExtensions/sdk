@@ -203,6 +203,165 @@ globalThis.viewButtonsFixture = {
 };
 `;
 
+const filterFixture = `
+import { PortalVisitorFilter } from '@miniextensions/sdk/react';
+const filterHost = document.createElement('section');
+document.querySelector('form').append(filterHost);
+const filterRoot = createRoot(filterHost);
+const filterListeners = new Set();
+const filterCommands = [];
+const filterOutcomes = [];
+const currentTitle = {
+    fieldType: 'singleLineText', type: 'contains',
+    idOrName: {type: 'id', id: 'title'}, value: 'Keep',
+};
+let filterFrame = {
+    stamp: {...frame.stamp, fieldId: 'filter-portal'},
+    fields: [{
+        id: 'title', name: 'Title',
+        operators: [{label: 'Contains', setting: currentTitle, operand: {kind: 'text'}}],
+    }],
+    criteria: {
+        logicalOperator: 'or',
+        conditions: [{
+            id: 'saved', type: 'singleCondition',
+            setting: {...currentTitle, idOrName: {type: 'name', name: 'Former title'}},
+        }],
+    },
+    effectiveSettings: {saved: currentTitle},
+};
+function publishFilter(next) {
+    filterFrame = next;
+    for (const listener of filterListeners) listener();
+}
+const filterPort = {
+    read: () => filterFrame,
+    subscribe(listener) {
+        filterListeners.add(listener);
+        return () => filterListeners.delete(listener);
+    },
+    apply(command) {
+        if (command.stamp.generation !== filterFrame.stamp.generation)
+            return {type: 'stale'};
+        filterCommands.push(command);
+        const generation = filterFrame.stamp.generation + 1;
+        publishFilter({
+            ...filterFrame, stamp: {...filterFrame.stamp, generation},
+            criteria: command.criteria, effectiveSettings: {},
+        });
+        return {type: 'allocated', requestId: 'filter-' + filterCommands.length, generation};
+    },
+};
+filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
+    port: filterPort, onOutcome: (outcome) => filterOutcomes.push(outcome),
+})));
+globalThis.filterFixture = {
+    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size}),
+    cycleViews() {
+        for (const viewId of ['view-b', 'view-a'])
+            publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
+    },
+    unmount: () => filterRoot.unmount(),
+};
+`;
+
+async function checkFilter(page) {
+    const trigger = page.getByRole('button', { name: 'Filter', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Filter records' });
+    const firstValue = dialog.getByRole('textbox', { name: 'Value' }).first();
+    const done = dialog.getByRole('button', { name: 'Done', exact: true });
+    const summary = () =>
+        page.evaluate(() => globalThis.filterFixture.summary());
+    const open = async () => {
+        await trigger.press('Enter');
+        await dialog.waitFor({ state: 'visible' });
+        assert.equal(
+            await page.evaluate(() => document.activeElement.textContent),
+            'Filter records'
+        );
+    };
+    const closed = async (outcomes) => {
+        await dialog.waitFor({ state: 'hidden' });
+        await page.waitForFunction(
+            (count) =>
+                globalThis.filterFixture.summary().outcomes.length === count,
+            outcomes
+        );
+        assert.equal(
+            await trigger.evaluate(
+                (button) => button === document.activeElement
+            ),
+            true
+        );
+    };
+    await open();
+    assert.equal(await firstValue.inputValue(), 'Keep');
+    await firstValue.fill('Transient change');
+    await firstValue.fill('Keep');
+    await done.press('Enter');
+    await closed(1);
+    assert.deepEqual((await summary()).commands, []);
+    assert.deepEqual((await summary()).outcomes, [{ type: 'unchanged' }]);
+
+    await open();
+    await firstValue.fill('Changed');
+    const add = dialog.getByRole('button', { name: 'Add group', exact: true });
+    await add.click();
+    const topLevel = dialog.locator('fieldset').first();
+    await topLevel
+        .getByRole('button', { name: 'Add group', exact: true })
+        .click();
+    const secondLevel = topLevel.locator('fieldset');
+    assert.equal(
+        await secondLevel
+            .getByRole('button', { name: 'Add group', exact: true })
+            .isDisabled(),
+        true
+    );
+    await secondLevel
+        .getByRole('button', { name: 'Add condition', exact: true })
+        .click();
+    await secondLevel
+        .getByRole('textbox', { name: 'Value' })
+        .fill('Nested condition');
+    assert.deepEqual((await summary()).commands, []);
+    await page.keyboard.press('Escape');
+    await closed(2);
+    const accepted = await summary();
+    assert.equal(accepted.commands.length, 1);
+    const [first, group] = accepted.commands[0].criteria.conditions;
+    assert.deepEqual(first.setting.idOrName, { type: 'id', id: 'title' });
+    assert.equal(first.setting.value, 'Changed');
+    assert.equal(
+        group.conditions[0].conditions[0].setting.value,
+        'Nested condition'
+    );
+    assert.deepEqual(accepted.outcomes[1], {
+        type: 'allocated',
+        requestId: 'filter-1',
+        generation: accepted.commands[0].stamp.generation + 1,
+    });
+
+    await open();
+    await firstValue.fill('Stale change');
+    await page.evaluate(() => globalThis.filterFixture.cycleViews());
+    await dialog.getByRole('status').waitFor({ state: 'visible' });
+    await done.press('Enter');
+    await closed(3);
+    assert.equal((await summary()).commands.length, 1);
+    assert.equal((await summary()).outcomes.at(-1).type, 'stale');
+    await page.evaluate(() => globalThis.filterFixture.unmount());
+    assert.equal((await summary()).listeners, 0);
+    return {
+        allocation: 'filter-1',
+        editAndRevert: 'unchanged',
+        activeGroupDepth: 2,
+        staleDraft: 'refused',
+        focusRestored: true,
+        cleanup: 'completed',
+    };
+}
+
 async function checkViewButtons(page) {
     const root = page.getByRole('group', { name: 'Primary views' });
     const other = page.getByRole('group', { name: 'Other views' });
@@ -444,6 +603,7 @@ export async function checkPortalVisitorSortBrowser({
     expectedReactVersion,
     includeSearch = false,
     includeViewButtons = false,
+    includeFilter = false,
 }) {
     const scratch = mkdtempSync(join(consumer, 'visitor-sort-browser-'));
     let context;
@@ -465,7 +625,8 @@ export async function checkPortalVisitorSortBrowser({
             entry,
             fixture +
                 (includeSearch ? searchFixture : '') +
-                (includeViewButtons ? viewButtonsFixture : '')
+                (includeViewButtons ? viewButtonsFixture : '') +
+                (includeFilter ? filterFixture : '')
         );
         const bundle = await build({
             absWorkingDir: consumer,
@@ -641,6 +802,7 @@ export async function checkPortalVisitorSortBrowser({
                 throw error;
             }
         }
+        if (includeFilter) evidence.filter = await checkFilter(page);
         const end = await summary();
         assert.equal(end.version, expectedReactVersion);
         assert.deepEqual(

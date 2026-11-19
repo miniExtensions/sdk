@@ -54,6 +54,29 @@ export type PortalVisitorFilterPort = {
 };
 
 type LogicalOperator = RuntimeConditionsDefinition['logicalOperator'];
+
+export type PortalVisitorFilterDraft = {
+    current(): boolean;
+    canAddGroup(id: string | null): boolean;
+    canEditGroup(id: string | null): boolean;
+    snapshot(): {
+        criteria: RuntimeConditionsDefinition | null;
+        fields: readonly PortalVisitorFilterField[];
+    };
+    settingForEditor(id: string): RuntimeConditionSetting | undefined;
+    addCondition(id: string | null): string | null;
+    addGroup(id: string | null): string | null;
+    setLogicalOperator(id: string | null, operator: LogicalOperator): boolean;
+    setField(id: string, fieldId: string): boolean;
+    setOperator(id: string, type: RuntimeConditionSetting['type']): boolean;
+    setOperand(id: string, value: unknown): boolean;
+    remove(id: string): boolean;
+    clear(): boolean;
+    retire(): void;
+    canReport(outcome: PortalVisitorFilterOutcome): boolean;
+    commit(): Promise<PortalVisitorFilterOutcome>;
+};
+
 type Condition = Extract<RuntimeConditionItem, { type: 'singleCondition' }>;
 type Parent = Pick<
     RuntimeConditionsDefinition,
@@ -301,7 +324,9 @@ export function resolvePortalVisitorFilterOperator(
 }
 
 /** A tree draft tied to one admitted host frame and one Apply attempt. */
-export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
+export function createPortalVisitorFilterDraft(
+    port: PortalVisitorFilterPort
+): PortalVisitorFilterDraft | null {
     const captured = readFrame(port);
     if (!captured) return null;
     let criteria = structuredClone(captured.criteria);

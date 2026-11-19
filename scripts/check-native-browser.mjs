@@ -31,6 +31,7 @@ import { checkSignatureBrowser } from './signature-browser-checks.mjs';
 import { checkCompleteDateBrowser } from './complete-date-browser-checks.mjs';
 import { checkCalendarBrowser } from './calendar-browser-checks.mjs';
 import { checkCreatedTimeControlledBrowser } from './created-time-controlled-browser-checks.mjs';
+import { checkPortalPagingControlsBrowser } from './portal-paging-controls-browser-checks.mjs';
 import { checkDocumentThumbnailBrowser } from './document-thumbnail-browser-checks.mjs';
 import { checkRecordCommentsBrowser } from './complete-record-comments-browser-checks.mjs';
 import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
@@ -1609,6 +1610,8 @@ try {
             'scripts/created-time-controlled-browser-checks.mjs',
             'scripts/external-sync-source-controlled-browser-checks.mjs',
             'scripts/complete-record-comments-browser-checks.mjs',
+            'scripts/portal-paging-controls-browser-checks.mjs',
+            'scripts/portal-paging-controls-fixture.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -2581,6 +2584,17 @@ try {
             focusRestored: true,
             cleanup: 'completed',
         });
+        report.portalPagingControls = {};
+        await checkPortalPagingControlsBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.portalPagingControls,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.portalPagingControls.passed, true);
+        assert.equal(report.portalPagingControls.contextClosed, true);
+        assert.equal(report.portalPagingControls.serverClosed, true);
+        assert.equal(report.portalPagingControls.scratchRemoved, true);
         report.imageAnnotation = {};
         await checkImageAnnotationBrowser({
             browser,

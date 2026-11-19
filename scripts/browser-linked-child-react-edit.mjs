@@ -190,6 +190,67 @@ export async function checkInstalledReactLinkedChildEdit({
         );
         assert.equal(await focus(opener), true);
 
+        const loseSave = async () => {
+            await title.fill('Edit with a lost Save response');
+            await page.evaluate(() => window.loseNextReactEditSaveResponse());
+            await button('Save').click();
+            await page.waitForFunction(
+                () => window.readReactEditProof().phase === 'unknown'
+            );
+            const lost = await read();
+            unchangedParent(lost);
+            assert.equal(lost.calls.saves.length, 1);
+            assert.equal(lost.calls.saves[0].formRecord.recordId, recordId);
+            assert.equal(lost.accepted, 0);
+            assert.equal(lost.attempts.length, 1);
+            assert.deepEqual(lost.attempts[0], {
+                id: lost.attempts[0].id,
+                recordId,
+                outcome: 'unknown',
+                flight: false,
+                acknowledgment: 'none',
+            });
+            assert.equal(await button('Save').isDisabled(), true);
+            return lost;
+        };
+        for (const exit of ['Close', 'Escape']) {
+            await page.goto(origin);
+            const currentOpener = await open();
+            const lost = await loseSave();
+            if (exit === 'Close') await button('Close').click();
+            else await page.keyboard.press('Escape');
+            await dialog.waitFor({ state: 'hidden' });
+            assert.equal(await focus(currentOpener), true);
+            assert.deepEqual(await read(), lost);
+            await currentOpener.press('Enter');
+            assert.deepEqual(await read(), lost);
+            assert.equal(await dialog.count(), 0);
+        }
+
+        await page.goto(origin);
+        const uncertainOpener = await open();
+        const stale = await loseSave();
+        await page.evaluate(() => window.retireReactEditOpening());
+        await page.keyboard.press('Escape');
+        assert.equal(await dialog.isVisible(), true);
+        assert.equal(await focus(uncertainOpener), false);
+        assert.deepEqual(await read(), stale);
+        await page.evaluate(() => window.replaceReactEditParent());
+        await dialog.waitFor({ state: 'hidden' });
+        const newOpener = await open();
+        assert.equal(
+            await uncertainOpener.evaluate((node) => node.isConnected),
+            false
+        );
+        assert.equal(await focus(button('Close')), true);
+        assert.equal(await focus(newOpener), false);
+        const currentReplacement = await read();
+        unchangedParent(currentReplacement, 'Replacement parent title');
+        assert.equal(currentReplacement.phase, 'ready');
+        assert.equal(currentReplacement.calls.saves.length, 1);
+        assert.equal(currentReplacement.accepted, 0);
+        assert.deepEqual(currentReplacement.previousAttempts, stale.attempts);
+
         await page.goto(origin);
         const retired = await open();
         await title.fill('Old held edit');
@@ -198,6 +259,9 @@ export async function checkInstalledReactLinkedChildEdit({
         await page.waitForFunction(
             () => typeof window.releaseReactEditSave === 'function'
         );
+        assert.equal(await button('Close').isDisabled(), true);
+        await page.keyboard.press('Escape');
+        assert.equal(await dialog.isVisible(), true);
         await page.evaluate(() => window.replaceReactEditParent());
         await dialog.waitFor({ state: 'hidden' });
         const successor = await open();
@@ -233,6 +297,8 @@ export async function checkInstalledReactLinkedChildEdit({
             confirmedChildSaves: 1,
             parentSubmits: 0,
             successorPreserved: true,
+            unresolvedSaveDismissals: 2,
+            staleDismissalRejected: true,
         };
     } finally {
         try {

@@ -146,8 +146,11 @@ export function LinkedChildDialogPresentation({
     editRecordId,
 }: LinkedChildDialogProps): ReactElement | null {
     const state = useLinkedChildPresentation(owner);
+    const [dismissedOpening, setDismissedOpening] =
+        useState<FormLinkedChildCreateOpening | null>(null);
     const { child, pages } = state;
     if (
+        opening === dismissedOpening ||
         !opening.isCurrent() ||
         !matchesIntent(state, editRecordId) ||
         child !== opening.child ||
@@ -172,6 +175,7 @@ export function LinkedChildDialogPresentation({
                 renderFields,
                 labels,
                 editRecordId,
+                dismissUnknownEdit: () => setDismissedOpening(opening),
             })
         )
     );
@@ -186,10 +190,12 @@ function LinkedChildDialog({
     renderFields,
     labels: suppliedLabels,
     editRecordId,
+    dismissUnknownEdit,
 }: LinkedChildDialogProps & {
     state: FormLinkedChildSnapshot;
     child: FormFieldBindings;
     pages: FormPageOwner;
+    dismissUnknownEdit(): void;
 }): ReactElement {
     const labels = { ...defaultLabels, ...suppliedLabels };
     const titleId = useId();
@@ -207,6 +213,7 @@ function LinkedChildDialog({
             saving: false,
             savedByDialog: false,
             live: false,
+            dismissedUnknownRevision: null as number | null,
         }),
         [owner, opening, child, pages, editRecordId]
     );
@@ -227,9 +234,7 @@ function LinkedChildDialog({
             next.revision === rendered.revision &&
             (next.phase === 'ready' ||
                 next.phase === 'error' ||
-                (action === 'close' &&
-                    editRecordId === undefined &&
-                    next.phase === 'unknown'))
+                (action === 'close' && next.phase === 'unknown'))
         );
     };
 
@@ -251,6 +256,12 @@ function LinkedChildDialog({
                 active === document.body || node.contains(active);
             const next = owner.getSnapshot();
             const admittedClose = session.closed && next.phase === 'closed';
+            const admittedUnknownDismissal =
+                next.phase === 'unknown' &&
+                next.revision === session.dismissedUnknownRevision &&
+                matchesIntent(next, editRecordId) &&
+                next.child === child &&
+                next.pages === pages;
             const admittedSave =
                 (session.saving || session.savedByDialog) &&
                 next.phase === 'saved' &&
@@ -262,7 +273,7 @@ function LinkedChildDialog({
             node.close();
             if (
                 fromDialog &&
-                (admittedClose || admittedSave) &&
+                (admittedClose || admittedSave || admittedUnknownDismissal) &&
                 opening.isCurrent() &&
                 opener.isConnected &&
                 !opener.matches(':disabled') &&
@@ -288,6 +299,12 @@ function LinkedChildDialog({
     };
     const dismiss = () => {
         if (!current(state, 'close') || session.saving) return;
+        if (editRecordId !== undefined && state.phase === 'unknown') {
+            // Leave the owner's draft and unresolved Save in place.
+            session.dismissedUnknownRevision = state.revision;
+            dismissUnknownEdit();
+            return;
+        }
         if (child.controller.getState().draft?.dirtyFieldIds.length) {
             if (!current(state, 'close')) return;
             pendingDecision.current = state;
@@ -360,10 +377,7 @@ function LinkedChildDialog({
                 {
                     type: 'button',
                     ref: closeButton,
-                    disabled:
-                        state.phase === 'saving' ||
-                        (editRecordId !== undefined &&
-                            state.phase === 'unknown'),
+                    disabled: state.phase === 'saving',
                     onClick: dismiss,
                 },
                 labels.close

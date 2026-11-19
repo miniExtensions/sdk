@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { act, createElement as h } from 'react';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
-import { RecoveryJournal } from '../src/forms/recovery.js';
+import { createFormPageOwner, FormPageError } from '../src/forms/pages.js';
+import {
+    RecoveryJournal,
+    type RecoveryAttempt,
+} from '../src/forms/recovery.js';
 import {
     FormLinkedChildEditDialog,
     type FormLinkedChildEditOpening,
@@ -20,6 +24,15 @@ import { formSaveOptions } from './formsFixtures.js';
 const linkedField = 'fld_children_a';
 const selectedId = 'rec_existing';
 
+class ObservedJournal extends RecoveryJournal {
+    readonly observed: RecoveryAttempt[] = [];
+    override prepare(...args: Parameters<RecoveryJournal['prepare']>) {
+        const attempt = super.prepare(...args);
+        this.observed.push(attempt);
+        return attempt;
+    }
+}
+
 function savedEdit() {
     const result = childSaved('edit');
     result.record.id = selectedId;
@@ -27,7 +40,13 @@ function savedEdit() {
     return result;
 }
 
-async function fixture(t: TestContext, save?: () => Promise<SaveFormResult>) {
+async function fixture(
+    t: TestContext,
+    options: {
+        save?: () => Promise<SaveFormResult>;
+        requireOpen?: boolean;
+    } = {}
+) {
     const dom = await htmlPresentationFixture(t);
     const doc = dom.window.document;
     const prototype = dom.window.HTMLElement.prototype;
@@ -57,6 +76,15 @@ async function fixture(t: TestContext, save?: () => Promise<SaveFormResult>) {
     const loads: string[] = [];
     const saves: SaveFormInput[] = [];
     const parent = parentForm('edit');
+    if (options.requireOpen) {
+        const links = parent.payload.fieldIdsToSchemas[linkedField];
+        assert(links?.fieldType === 'multipleRecordLinks');
+        links.miniExtConfig = {
+            ...links.miniExtConfig,
+            requireOpenLinkedRecords: true,
+        };
+        parent.payload.formRecord.data[linkedField] = [selectedId];
+    }
     client.linkedRecords.loadSelectedRecords = async () => {
         reads++;
         return {
@@ -95,7 +123,7 @@ async function fixture(t: TestContext, save?: () => Promise<SaveFormResult>) {
     };
     client.forms.save = async (input) => {
         saves.push(structuredClone(input));
-        return save ? save() : savedEdit();
+        return options.save ? options.save() : savedEdit();
     };
     let sequence = 0;
     const createParent = () => {
@@ -105,17 +133,22 @@ async function fixture(t: TestContext, save?: () => Promise<SaveFormResult>) {
             client,
             saveOptions: formSaveOptions(),
             getScope: () => ({ ownerId, revision: 0 }),
+            ...(options.requireOpen
+                ? { linkedRecordOpenAuthorityRevision: () => 0 }
+                : {}),
         });
         t.after(async () => {
             await act(async () => fields.destroy());
         });
+        const journal = new ObservedJournal();
         const owner = fields.linkedChild(linkedField, {
-            journal: new RecoveryJournal(),
+            journal,
             loadVersion: 1,
         });
         return {
             fields,
             owner,
+            journal,
             hydrate: () => fields.linkedRecords(linkedField).readSelected(),
         };
     };
@@ -193,6 +226,13 @@ async function fixture(t: TestContext, save?: () => Promise<SaveFormResult>) {
         await host.hydrate();
         return open();
     };
+    const cancel = async () => {
+        const node = dialog();
+        assert(node);
+        const event = new dom.window.Event('cancel', { cancelable: true });
+        await act(async () => node.dispatchEvent(event));
+        assert(event.defaultPrevented);
+    };
     return {
         ...dom,
         doc,
@@ -202,6 +242,11 @@ async function fixture(t: TestContext, save?: () => Promise<SaveFormResult>) {
         opener,
         edit,
         replace,
+        cancel,
+        render,
+        retireOpening: () => {
+            opening = null;
+        },
         loads,
         saves,
         reads: () => reads,
@@ -289,17 +334,90 @@ it('resumes a confirmed dirty Close and saves only the selected child once', asy
     assert.ok(f.doc.activeElement === originalOpener);
 });
 
+for (const exit of ['Close', 'Escape'] as const) {
+    it(`exits an unknown Save through ${exit} without clearing or replaying it`, async (t) => {
+        const f = await fixture(t, {
+            save: async () => {
+                throw Error('Synthetic lost Save response');
+            },
+        });
+        const { owner, journal } = f.host();
+        const opener = f.opener();
+        const child = await f.open();
+        await f.edit('Draft after an attempted Save');
+        await f.click(f.button('Save'));
+        const pending = owner.getSnapshot();
+        const draft = child.controller.getState().draft;
+        assert.equal(pending.phase, 'unknown');
+        assert.equal(f.saves.length, 1);
+        assert(f.button('Save').disabled);
+        const attempts = structuredClone(journal.observed);
+        assert.equal(attempts.length, 1);
+        assert.equal(attempts[0].recordId, selectedId);
+        assert.equal(attempts[0].outcome, 'unknown');
+        assert.equal(attempts[0].flight, false);
+        assert.equal(attempts[0].acknowledgment, 'none');
+
+        if (exit === 'Close') {
+            assert.equal(f.button('Close').disabled, false);
+            await f.click(f.button('Close'));
+        } else await f.cancel();
+
+        assert(f.dialog() === null);
+        assert(f.doc.activeElement === opener);
+        await f.render();
+        assert(f.dialog() === null);
+        assert.deepEqual(owner.getSnapshot(), pending);
+        assert.deepEqual(child.controller.getState().draft, draft);
+        assert.deepEqual(journal.observed, attempts);
+        assert.equal(await owner.openEdit(selectedId, pending.revision), false);
+        assert.deepEqual(f.loads, [selectedId]);
+        assert.equal(f.saves.length, 1);
+        assert.equal(f.submits(), 0);
+    });
+}
+
+it('does not admit an unknown Save dismissal from a retired opening', async (t) => {
+    const f = await fixture(t, {
+        save: async () => {
+            throw Error('Synthetic lost Save response');
+        },
+    });
+    await f.open();
+    await f.edit('Attempted predecessor edit');
+    await f.click(f.button('Save'));
+    assert.equal(f.host().owner.getSnapshot().phase, 'unknown');
+    f.retireOpening();
+    await f.cancel();
+    assert(f.dialog()?.open);
+    assert(f.doc.activeElement !== f.opener());
+
+    const successor = await f.replace();
+    await f.edit('Fresh current draft');
+    assert.equal(
+        successor.field('fld_title').getSnapshot().value,
+        'Fresh current draft'
+    );
+    assert(f.dialog()?.open);
+    assert(f.doc.activeElement === f.button('Close'));
+    assert.equal(f.saves.length, 1);
+    assert.equal(f.submits(), 0);
+});
+
 it('keeps the same-record successor draft and focus when a retired Save settles', async (t) => {
     let release!: (result: SaveFormResult) => void;
     const held = new Promise<SaveFormResult>((resolve) => {
         release = resolve;
     });
-    const f = await fixture(t, () => held);
+    const f = await fixture(t, { save: () => held });
     await f.open();
     await f.edit('Old accepted Save');
     await f.click(f.button('Save'));
     assert.equal(f.host().owner.getSnapshot().phase, 'saving');
     assert.equal(f.saves.length, 1);
+    assert(f.button('Close').disabled);
+    await f.cancel();
+    assert(f.dialog()?.open);
     const successor = await f.replace();
     await f.edit('New same-record draft');
     const successorDraft = successor.controller.getState().draft;
@@ -326,4 +444,45 @@ it('refuses an opening for another record without allocating another read or Sav
     assert.deepEqual(f.loads, [selectedId]);
     assert.equal(f.reads(), 1);
     assert.deepEqual(f.saves, []);
+});
+
+it('requires explicit host acknowledgment for required-open credit', async (t) => {
+    const f = await fixture(t, { requireOpen: true });
+    const { fields, owner } = f.host();
+    const pages = createFormPageOwner({
+        fields,
+        isCurrent: () => true,
+        configurationRevision: () => 0,
+    });
+    t.after(() => pages.dispose());
+    await f.open();
+    assert(f.dialog()?.open);
+    await f.click(f.button('Close'));
+    assert.equal(owner.getSnapshot().phase, 'closed');
+    assert.equal(pages.getSnapshot().canSubmit, false);
+    await act(async () => {
+        await assert.rejects(
+            pages.submit(pages.getSnapshot().revision),
+            FormPageError
+        );
+    });
+    assert.equal(f.saves.length, 0);
+
+    await f.open();
+    const { child, revision } = owner.getSnapshot();
+    assert(child);
+    const presentation = new AbortController();
+    t.after(() => presentation.abort());
+    await act(async () => {
+        assert(
+            owner.acknowledgeEditPresentation(
+                revision,
+                child,
+                presentation.signal
+            )
+        );
+    });
+    await f.click(f.button('Close'));
+    assert.equal(pages.getSnapshot().canSubmit, true);
+    assert.equal(f.saves.length, 0);
 });

@@ -12,8 +12,12 @@ const fieldId = 'fld_children_a';
 const calls = { reads: [], loads: [], saves: [], parentSubmits: 0 };
 let previous;
 let holdSave = false;
+let loseSave = false;
 window.holdNextReactEditSave = () => {
     holdSave = true;
+};
+window.loseNextReactEditSaveResponse = () => {
+    loseSave = true;
 };
 
 const client = {
@@ -47,6 +51,10 @@ const client = {
                     window.releaseReactEditSave = resolve;
                 });
             }
+            if (loseSave) {
+                loseSave = false;
+                throw Error('Synthetic lost Save response');
+            }
             const response = structuredClone(fixture.saved);
             response.record.fields = {
                 ...response.record.fields,
@@ -63,9 +71,24 @@ const client = {
 
 class ObservedJournal extends RecoveryJournal {
     acceptedCount = 0;
+    observed = [];
+    prepare(...args) {
+        const attempt = super.prepare(...args);
+        this.observed.push(attempt);
+        return attempt;
+    }
     accepted(...args) {
         super.accepted(...args);
         this.acceptedCount++;
+    }
+    proof() {
+        return this.observed.map((attempt) => ({
+            id: attempt.id,
+            recordId: attempt.recordId,
+            outcome: attempt.outcome,
+            flight: attempt.flight,
+            acknowledgment: attempt.acknowledgment,
+        }));
     }
 }
 
@@ -114,6 +137,9 @@ function EditAction({ parent }) {
     const accepted = useRef(null);
     const hydrated = useRef(false);
     const busy = useRef(false);
+    window.retireReactEditOpening = () => {
+        accepted.current = null;
+    };
     const open = async (event) => {
         if (busy.current || current !== parent) return;
         const opener = event.currentTarget;
@@ -187,7 +213,9 @@ window.readReactEditProof = () => {
     return {
         calls: structuredClone(calls),
         phase,
+        attempts: journal.proof(),
         accepted: journal.acceptedCount,
+        previousAttempts: previous?.journal.proof() ?? [],
         previousAccepted: previous?.journal.acceptedCount ?? 0,
         previousCompletion: previous?.owner.getSnapshot().completion,
         childTitle: child?.field('fld_title').getSnapshot().value,

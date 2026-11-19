@@ -16,11 +16,22 @@ const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const fixture = String.raw`
 import React from 'react';import{createRoot}from'react-dom/client';import{flushSync}from'react-dom';
 import * as api from '@miniextensions/sdk/react';import * as ui from '@miniextensions/sdk/ui';
-import '@miniextensions/sdk/react/readonly-portal-list.css';import{createListFixture}from'./fixture.mjs';
+import '@miniextensions/sdk/react/readonly-portal-list.css';import'@miniextensions/sdk/react/readonly-portal-grid.css';import{createListFixture}from'./fixture.mjs';
 const h=React.createElement,f=createListFixture(ui),root=createRoot(document.querySelector('#root'));
-const proof={opens:[],submits:0,held:0,retiredRefusals:0};window.proof=proof;
+const proof={opens:[],submits:0,held:0,retiredRefusals:0,presenterStarts:0,presenterActive:0,preferences:[],nestedActivations:0};window.proof=proof;
+const scope={getSnapshot:()=>f.scope.getSnapshot(),subscribe(listener){proof.presenterStarts++;proof.presenterActive++;const stop=f.scope.subscribe(listener);return()=>{proof.presenterActive--;stop();};}};
 let layout='list',preview=false,noChild=false,hold=false,pending,child=null,commands;
-const renderers={renderSingleLineTextField(field){if(field.capability.type!=='readonly')throw new Error('Editable List cell');return h('span',null,String(field.value??''));}};
+let hiddenColumns={},columnWidths={fld_title:211,fld_detail:235};
+const renderers = {
+    renderSingleLineTextField(field) {
+        if (field.capability.type !== 'readonly') throw new Error('Editable Portal cell');
+        const value = String(field.value ?? '');
+        return h('span', null, value, value === 'B detail' && h('button', {
+            type: 'button', 'aria-label': 'Inspect detail',
+            onClick(event) { event.stopPropagation(); proof.nestedActivations++; },
+        }));
+    },
+};
 function publishCommands(){const snapshot=f.scope.getSnapshot();commands=new Map(snapshot.rows.map(row=>[row.recordId,{revision:snapshot.revision,activate(isCurrent,restore){const invoke=()=>{if(!isCurrent()){proof.retiredRefusals++;return;}void snapshot.actions.openChild(row.recordId);proof.opens.push(row.recordId);child={recordId:row.recordId,isCurrent,restore};render();};if(hold){pending=invoke;proof.held++;}else invoke();}}]));}
 function change(update){update();publishCommands();render();}
 function navigate(delta){if(!child?.isCurrent())return;const snapshot=f.scope.getSnapshot(),index=snapshot.rows.findIndex(row=>row.recordId===child.recordId),next=snapshot.rows[index+delta];if(!next)return;void snapshot.actions.openChild(next.recordId);proof.opens.push(next.recordId);child={...child,recordId:next.recordId};render();}
@@ -28,9 +39,26 @@ function close(){const previous=child;child=null;render();previous?.restore();}
 function button(label,action){return h('button',{type:'button',onClick:action},label);}
 function render(){flushSync(()=>root.render(h(React.StrictMode,null,h('form',{onSubmit(event){event.preventDefault();proof.submits++;}},
  h('nav',{'aria-label':'Synthetic host controls'},button('List',()=>{layout='list';render();}),button('Grid',()=>{layout='grid';render();}),button('Reverse',()=>change(()=>f.replace({...f.initial,records:[...f.initial.records].reverse()}))),button('Empty',()=>change(()=>f.replace({...f.initial,records:[]}))),button('Reset',()=>change(()=>{preview=false;noChild=false;hold=false;child=null;f.replace();})),button('Preview',()=>{preview=!preview;render();}),button('No child',()=>{noChild=!noChild;render();}),button('Hold Open',()=>{hold=true;}),button('Release Open',()=>{hold=false;const invoke=pending;pending=undefined;invoke?.();}),button('Retire',()=>change(()=>f.replace(null)))),
- layout==='list'?h(api.ReadonlyPortalList,{scope:f.scope,renderers,label:'Accepted records',openActions:preview||noChild?undefined:commands}):h(api.AirtableGrid,{scope:f.scope,renderers,children(state){return h('table',{'aria-label':'Accepted grid'},h('tbody',null,state.rows.map(row=>h('tr',{key:row.recordId},row.cells.map(cell=>h('td',{key:cell.fieldId},cell.node))))));}}),
+ h(api.ReadonlyPortalRecords, {
+    scope, layout, renderers, label: 'Accepted records',
+    openActions: preview || noChild ? undefined : { scope, byRecordId: commands },
+    grid: {
+        ready: true, preferenceScopeKey: 'portal/field/view', primaryFieldId: 'fld_title',
+        hiddenColumns, columnWidths, allowHideColumns: true, labels: { caption: 'Accepted grid' },
+        onFieldHiddenChange(change) {
+            proof.preferences.push(change);
+            hiddenColumns = { ...hiddenColumns, [change.fieldId]: change.isHidden };
+            queueMicrotask(render);
+        },
+        onColumnWidthCommit(change) {
+            proof.preferences.push(change);
+            columnWidths = { ...columnWidths, [change.fieldId]: change.width };
+            queueMicrotask(render);
+        },
+    },
+ }),
  child?h('section',{role:'dialog','aria-label':'Synthetic native child'},h('h2',null,'Child '+child.recordId),button('Previous',()=>navigate(-1)),button('Next',()=>navigate(1)),button('Close',close)):null))));}
-window.listProofSnapshot=()=>({react:React.version,opens:[...proof.opens],submits:proof.submits,held:proof.held,retiredRefusals:proof.retiredRefusals,subscriptions:f.subscriptions,scopeCalls:f.calls.map(call=>({...call})),layout});
+window.listProofSnapshot=()=>({react:React.version,opens:[...proof.opens],submits:proof.submits,held:proof.held,retiredRefusals:proof.retiredRefusals,subscriptions:f.subscriptions,presenterStarts:proof.presenterStarts,presenterActive:proof.presenterActive,preferences:[...proof.preferences],nestedActivations:proof.nestedActivations,scopeCalls:f.calls.map(call=>({...call})),layout});
 publishCommands();render();
 `;
 
@@ -194,13 +222,139 @@ export async function checkReadonlyPortalListBrowser({
             await page
                 .getByRole('button', { name: 'Grid', exact: true })
                 .click();
-            await page.getByRole('table', { name: 'Accepted grid' }).waitFor();
+            const grid = page.getByRole('table', { name: 'Accepted grid' });
+            await grid.waitFor();
+            await grid
+                .getByRole('button', { name: 'Inspect detail' })
+                .press('Enter');
+            assert.equal(
+                await page.evaluate(
+                    () => window.listProofSnapshot().nestedActivations
+                ),
+                1
+            );
+            assert.equal(await dialog.count(), 0);
+            assert.deepEqual(
+                await grid
+                    .locator('tbody tr')
+                    .evaluateAll((rows) =>
+                        rows.map((row) => row.dataset.recordId)
+                    ),
+                ['rec_B', 'rec_A']
+            );
+            const column = grid.locator('th[data-field-id="fld_title"]');
+            const resize = column.getByRole('separator', {
+                name: 'Resize Name label',
+            });
+            const initialWidth = await column.evaluate(
+                (cell) => cell.clientWidth
+            );
+            await resize.press('Shift+ArrowRight');
+            await page.waitForFunction(
+                () => window.listProofSnapshot().preferences.length === 1
+            );
+            const keyboardWidth = await column.evaluate(
+                (cell) => cell.clientWidth
+            );
+            assert(keyboardWidth > initialWidth);
+            assert.deepEqual(
+                await page.evaluate(
+                    () => window.listProofSnapshot().preferences[0]
+                ),
+                {
+                    fieldId: 'fld_title',
+                    width: keyboardWidth,
+                }
+            );
+            const handle = await resize.boundingBox();
+            assert(handle);
+            await page.mouse.move(
+                handle.x + handle.width / 2,
+                handle.y + handle.height / 2
+            );
+            await page.mouse.down();
+            await page.mouse.move(
+                handle.x + handle.width / 2 + 24,
+                handle.y + handle.height / 2,
+                { steps: 4 }
+            );
+            await page.mouse.up();
+            await page.waitForFunction(
+                () => window.listProofSnapshot().preferences.length === 2
+            );
+            const settledWidth = await column.evaluate(
+                (cell) => cell.clientWidth
+            );
+            assert(settledWidth > keyboardWidth);
+            assert.deepEqual(
+                await page.evaluate(
+                    () => window.listProofSnapshot().preferences[1]
+                ),
+                {
+                    fieldId: 'fld_title',
+                    width: settledWidth,
+                }
+            );
+            const hide = page.getByRole('button', {
+                name: 'Hide columns',
+                exact: true,
+            });
+            const detailsHeader = grid.locator(
+                'th[data-field-id="fld_detail"]'
+            );
+            const details = page.getByRole('switch', { name: 'Detail label' });
+            const closeHide = page
+                .getByRole('dialog', { name: 'Hide columns' })
+                .getByRole('button', { name: 'Close', exact: true });
+            await hide.click();
+            await details.click();
+            await detailsHeader.waitFor({ state: 'detached' });
+            await closeHide.click();
+            assert(
+                await hide.evaluate((node) => node === document.activeElement)
+            );
             await page
                 .getByRole('button', { name: 'List', exact: true })
                 .click();
             assert.deepEqual(await rows.allTextContents(), [
                 'BetaB detailOpen record',
                 'AlphaA detailOpen record',
+            ]);
+            await page
+                .getByRole('button', { name: 'Grid', exact: true })
+                .click();
+            assert.equal(
+                await column.evaluate((cell) => cell.clientWidth),
+                settledWidth
+            );
+            assert.equal(await detailsHeader.count(), 0);
+            await hide.click();
+            await details.click();
+            await detailsHeader.waitFor();
+            await closeHide.click();
+            await page.setViewportSize({ width: 360, height: 760 });
+            const viewport = page.locator('.mx-sdk-readonly-grid__viewport');
+            assert(
+                await viewport.evaluate(
+                    (element) => element.scrollWidth > element.clientWidth
+                )
+            );
+            await page
+                .getByRole('button', { name: 'List', exact: true })
+                .click();
+            await rows.first().waitFor({ state: 'visible' });
+            await page.setViewportSize({ width: 1180, height: 900 });
+            const afterSwitch = await page.evaluate(() =>
+                window.listProofSnapshot()
+            );
+            assert.equal(
+                afterSwitch.presenterStarts,
+                beforeSwitch.presenterStarts
+            );
+            assert.equal(afterSwitch.presenterActive, 1);
+            assert.deepEqual(afterSwitch.preferences.slice(2), [
+                { fieldId: 'fld_detail', isHidden: true },
+                { fieldId: 'fld_detail', isHidden: false },
             ]);
             assert.deepEqual(
                 await page.evaluate(() => window.listProofSnapshot().opens),

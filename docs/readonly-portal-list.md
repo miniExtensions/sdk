@@ -34,3 +34,27 @@ unchanged. Neither is repurposed as a second native collection owner.
 The public props and types are `ReadonlyPortalListProps`,
 `ReadonlyPortalListSnapshot` and `ReadonlyPortalListOpenAction`.
 Cold SSR does not require browser globals or execute an Open command.
+
+## Switching between Grid and List
+
+Use `ReadonlyPortalRecords` from `@miniextensions/sdk/react` when the host
+chooses either layout. Pass the same `scope` as the host changes `layout`
+between `grid` and `list`. The component keeps one presentation subscription
+and composes the two complete views from the accepted snapshot. Import both
+`@miniextensions/sdk/react/readonly-portal-list.css` and
+`@miniextensions/sdk/react/readonly-portal-grid.css`.
+
+Supply the renderer slots and the existing Grid preferences through `grid`.
+Grid emits hide and measured-width changes to the host. List still displays
+all admitted cells. An optional `status` displays a host-supplied loading,
+unavailable or error message. When records are ready, omit `status` and leave
+empty results in the accepted snapshot so either layout can keep its headers.
+
+Pass Open registrations as `{ scope, byRecordId }`. List shows each current
+registration and Grid waits for all accepted rows to be registered. A layout
+switch retires the previous controls, including pending focus restoration.
+Hosts can mount their existing per-record registrar through
+`renderChildRegistration`, and existing per-column preference bindings through
+`grid.renderPreferenceBindings`, which returns binding nodes and a readiness
+flag for the admitted columns. The host keeps final admission and owns all
+collection access, preference persistence, and unsupported-cohort fallback.

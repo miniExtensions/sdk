@@ -10,7 +10,7 @@ import { assertBrowserInputs } from './package-checks.mjs';
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell}from'@miniextensions/sdk/react';
+import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell,PortalGridButtonCell}from'@miniextensions/sdk/react';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -20,6 +20,7 @@ import'@miniextensions/sdk/react/rating.css';
 import'@miniextensions/sdk/react/complete-checkbox.css';
 import'@miniextensions/sdk/react/text.css';
 import'@miniextensions/sdk/react/complete-phone.css';
+import'@miniextensions/sdk/react/button.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -378,6 +379,63 @@ function CheckboxCellProbe() {
         }, 'Open from checkbox Grid'))
     ))), h('button', { type: 'submit' }, 'Submit synthetic checkbox'));
 }
+function ButtonCellProbe() {
+    const [busy, setBusy] = useState(false);
+    const [row, setRow] = useState('A');
+    const pending = useRef(false);
+    const current = useRef(true);
+    const log = useRef({ actions: 0, selects: 0, submits: 0 });
+    const pointerPhases = useRef([]);
+    const actionRows = useRef([]);
+    useEffect(() => {
+        window.__buttonCellProbe = {
+            snapshot: () => ({ ...log.current, busy }),
+            finish: () => { pending.current = false; setBusy(false); },
+            retire: () => { current.current = false; },
+            currentRow: () => row,
+            replace: () => setRow('B'),
+            gestures: () => ({ pointerPhases: pointerPhases.current, actionRows: actionRows.current }),
+        };
+        return () => { delete window.__buttonCellProbe; };
+    }, [busy, row]);
+    const owner = { isCurrent: () => current.current };
+    const frame = { displayText: '', selected: false, rowHeight: 'medium',
+        onSelect() { log.current.selects++; } };
+    return h('form', {
+        id: 'button-probe-form',
+        onSubmit(event) { event.preventDefault(); log.current.submits++; },
+    }, h('table', {
+        'aria-label': 'Grid Button fixture',
+        style: { width: '440px', tableLayout: 'fixed' },
+        onPointerDownCapture(event) {
+            pointerPhases.current.push({ phase: 'down', row, trusted: event.isTrusted, button: Boolean(event.target.closest('button')) });
+        },
+        onPointerUpCapture(event) {
+            pointerPhases.current.push({ phase: 'up', row, trusted: event.isTrusted, button: Boolean(event.target.closest('button')) });
+        },
+    }, h('tbody', null, h('tr', null,
+        h(PortalGridButtonCell, {
+            ...frame, cellIdentity: row + '-webhook', button: {
+                mode: 'controlled', form: 'button-probe-form', owner, busy,
+                value: { label: 'Run Grid action', url: '/synthetic-action' },
+                config: { openLinkType: 'triggerWebhookPOST' },
+                onTriggerWebhook() {
+                    if (pending.current) return;
+                    pending.current = true;
+                    log.current.actions++;
+                    actionRows.current.push(row);
+                    setBusy(true);
+                },
+            },
+        }),
+        h(PortalGridButtonCell, {
+            ...frame, cellIdentity: 'row-A-link', button: {
+                mode: 'controlled', owner, config: { openLinkType: '_self' },
+                value: { label: 'Open Grid link', url: location.pathname + '#grid-button-link' },
+            },
+        })
+    ))));
+}
 const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
@@ -385,7 +443,8 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
     startPhoneCell: () => root.render(h(StrictMode, null, h(PhoneCellProbe))),
     startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
     startRatingCell: () => root.render(h(StrictMode, null, h(RatingCellProbe))),
-    startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key })))
+    startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key }))),
+    startButtonCell: () => root.render(h(StrictMode, null, h(ButtonCellProbe))),
 };
 root.render(h(StrictMode,null,h(App)));
 `;
@@ -440,6 +499,9 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/CompleteCheckboxField.js',
         '/react/CheckboxField.js',
         '/react/complete-checkbox.css',
+        '/react/PortalGridButtonCell.js',
+        '/react/ButtonField.js',
+        '/react/button.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -1190,6 +1252,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     const emptyCell = await checkEmptyCellBrowser(page);
     const ratingCell = await checkRatingCellBrowser(page);
     const checkboxCell = await checkCheckboxCellBrowser(page);
+    const buttonCell = await checkButtonCellBrowser(page);
     end = await snapshot();
     assert.deepEqual(end.errors, []);
     Object.assign(evidence, {
@@ -1210,11 +1273,131 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
         emptyCell,
         ratingCell,
         checkboxCell,
+        buttonCell,
         errors: end.errors,
         limits: [
             'Installed SDK presentation only; actual native borrowed-route, child admission and persistent preference qualification remain separate.',
         ],
     });
+}
+
+export async function checkButtonCellBrowser(page) {
+    await page.evaluate(() => window.__nativeProbe.startButtonCell());
+    const table = page.getByRole('table', { name: 'Grid Button fixture' });
+    const button = table.getByRole('button', { name: 'Run Grid action' });
+    const link = table.getByRole('link', { name: 'Open Grid link' });
+    const snapshot = () =>
+        page.evaluate(() => window.__buttonCellProbe.snapshot());
+    const gestures = () =>
+        page.evaluate(() => window.__buttonCellProbe.gestures());
+    const waitForBusy = () =>
+        page.waitForFunction(() => window.__buttonCellProbe.snapshot().busy);
+    const finish = async () => {
+        await page.evaluate(() => window.__buttonCellProbe.finish());
+        await page.waitForFunction(
+            () => !window.__buttonCellProbe.snapshot().busy
+        );
+    };
+    await button.waitFor({ state: 'visible' });
+    assert.equal(await button.getAttribute('type'), 'button');
+    await button.scrollIntoViewIfNeeded();
+    const point = await button.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        for (const fraction of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+            const x = box.x + box.width * fraction;
+            const y = box.y + box.height / 2;
+            if (node.contains(node.ownerDocument.elementFromPoint(x, y)))
+                return { x, y };
+        }
+        return null;
+    });
+    assert.ok(point, 'The pointer must start on the Button control');
+    const { x, y } = point;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    try {
+        await page.evaluate(() => window.__buttonCellProbe.replace());
+        await page.waitForFunction(
+            () => window.__buttonCellProbe.currentRow() === 'B'
+        );
+        assert.equal(
+            await button.evaluate(
+                (node, { x, y }) =>
+                    node.contains(node.ownerDocument.elementFromPoint(x, y)),
+                point
+            ),
+            true,
+            'The replacement Button must be under the original press'
+        );
+    } finally {
+        await page.mouse.up();
+    }
+    const released = await gestures();
+    assert.deepEqual(released, {
+        pointerPhases: [
+            { phase: 'down', row: 'A', trusted: true, button: true },
+            { phase: 'up', row: 'B', trusted: true, button: true },
+        ],
+        actionRows: [],
+    });
+    assert.deepEqual(await snapshot(), {
+        actions: 0,
+        selects: 0,
+        submits: 0,
+        busy: false,
+    });
+    await button.click();
+    await waitForBusy();
+    assert.deepEqual((await gestures()).actionRows, ['B']);
+    const busyContent = button.locator('.mx-sdk-button-content');
+    const bounds = await busyContent.boundingBox();
+    assert.ok(bounds);
+    await page.mouse.click(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2
+    );
+    assert.deepEqual(await snapshot(), {
+        actions: 1,
+        selects: 0,
+        submits: 0,
+        busy: true,
+    });
+    await finish();
+    for (const [key, actions] of [
+        ['Enter', 2],
+        ['Space', 3],
+    ]) {
+        await button.press(key);
+        await waitForBusy();
+        assert.deepEqual(await snapshot(), {
+            actions,
+            selects: 0,
+            submits: 0,
+            busy: true,
+        });
+        await finish();
+    }
+    await link.press('Enter');
+    await page.waitForFunction(() => location.hash === '#grid-button-link');
+    await page.evaluate(() => window.__buttonCellProbe.retire());
+    await button.press('Enter');
+    await link.press('Enter');
+    assert.equal(await table.locator('a').getAttribute('href'), null);
+    assert.deepEqual(await snapshot(), {
+        actions: 3,
+        selects: 0,
+        submits: 0,
+        busy: false,
+    });
+    assert.deepEqual((await gestures()).actionRows, ['B', 'B', 'B']);
+    return {
+        ...(await snapshot()),
+        splitPointer: released,
+        actionRows: (await gestures()).actionRows,
+        busyClickIgnored: true,
+        linkActivated: true,
+        retiredLinkRefused: true,
+    };
 }
 
 async function checkPlainTextCellBrowser(page) {

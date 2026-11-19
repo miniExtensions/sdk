@@ -20,12 +20,18 @@ const reads = [];
 const selections = [];
 const errors = [];
 let submits = 0;
+let settingsActions = 0;
 const h = React.createElement;
 const app = h(React.StrictMode, null, h('form', {
     onSubmit(event) { event.preventDefault(); submits++; },
 }, h(LoginExistingValuesPicker, {
     owner,
     allowSearchFromExistingValuesInLogin: true,
+    labels: { title: 'Valeurs existantes' },
+    titleAction: h('button', {
+        type: 'button',
+        onClick() { settingsActions++; },
+    }, 'Réglages'),
     async loadOptions({ signal, offset, searchTerm, ...actual }) {
         assert.deepEqual(actual, owner);
         assert.equal(signal.aborted, false);
@@ -37,6 +43,7 @@ const app = h(React.StrictMode, null, h('form', {
 const markup = renderToString(app);
 assert.match(markup, /Find an existing value/);
 assert.doesNotMatch(markup, /role="dialog"/);
+assert.doesNotMatch(markup, /Réglages/);
 assert.deepEqual(reads, []);
 const window = new Window({ url: 'https://login.example.invalid/' });
 let root;
@@ -60,6 +67,17 @@ try {
     await click(trigger);
     assert.equal(window.document.activeElement.type, 'search');
     assert.deepEqual(options().map(node => node.textContent), pages[0].labels);
+    const dialog = container.querySelector('[role=dialog]');
+    const heading = window.document.getElementById(dialog.getAttribute('aria-labelledby'));
+    assert.equal(heading.textContent, 'Valeurs existantes');
+    const settings = heading.nextElementSibling;
+    assert.equal(settings.textContent, 'Réglages');
+    await click(settings);
+    assert.equal(settingsActions, 1);
+    assert.deepEqual(selections, []);
+    assert.equal(submits, 0);
+    assert.deepEqual(reads, [['', null]]);
+    assert.equal(container.querySelector('[role=dialog]'), dialog);
     await click([...container.querySelectorAll('button')].find(node => node.textContent === 'Load more'));
     assert.deepEqual(options().map(node => node.textContent), [...pages[0].labels, ...pages[1].labels]);
     assert.equal(options()[3].getAttribute('aria-label'), 'Blank value');
@@ -74,7 +92,7 @@ try {
     assert.deepEqual(errors, []);
     assert.equal(submits, 0);
     assert.equal(window.document.activeElement, trigger);
-    console.log(JSON.stringify({ react: React.version, selections, reads, submits }));
+    console.log(JSON.stringify({ react: React.version, selections, reads, submits, settingsActions }));
 } finally {
     if (root) await React.act(async () => root.unmount());
     await window.happyDOM.close();
@@ -167,12 +185,13 @@ ${runtimeProof}`;
                 '  duplicate@example.com  ',
             ]);
             assert.equal(result.submits, 0);
+            assert.equal(result.settingsActions, 1);
         } finally {
             rmSync(typeFile, { force: true });
             rmSync(runtimeFile, { force: true });
         }
     }
     console.log(
-        `Installed Login picker React ${react}: ESM/CJS declarations, CSS, SSR, hydration, raw choice, and focus passed.`
+        `Installed Login picker React ${react}: ESM/CJS declarations, CSS, SSR, hydration, title action, raw choice, and focus passed.`
     );
 }

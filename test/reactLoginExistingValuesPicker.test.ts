@@ -197,6 +197,41 @@ it('is closed and inert while rendering on the server', () => {
     assert.equal(reads, 0);
 });
 
+it('runs the title action without changing the dialog name, selection, or form', async (t) => {
+    const title = 'Valeurs existantes';
+    const actionLabel = 'Réglages';
+    let activations = 0;
+    const ui = await fixture(t, {
+        labels: { title },
+        titleAction: h(
+            'button',
+            { type: 'button', onClick: () => activations++ },
+            actionLabel
+        ),
+    });
+    assert.equal(ui.container.textContent?.includes(actionLabel), false);
+    await ui.click(openLabel);
+    const dialog = ui.dialog();
+    assert(dialog);
+    const heading = ui.window.document.getElementById(
+        dialog.getAttribute('aria-labelledby') ?? ''
+    );
+    assert(heading);
+    assert.equal(heading.textContent, title);
+    assert.equal(heading.nextElementSibling, ui.button(actionLabel));
+    const requests = ui.requests.length;
+    await ui.click(actionLabel);
+    assert.equal(activations, 1);
+    assert.deepEqual(ui.choices, []);
+    assert.equal(ui.submits(), 0);
+    assert.equal(ui.requests.length, requests);
+    assert.equal(ui.dialog(), dialog);
+    await act(async () => ui.options()[1].click());
+    assert.deepEqual(ui.choices, ['']);
+    assert.equal(ui.dialog(), null);
+    assert.equal(ui.window.document.activeElement, ui.button(openLabel));
+});
+
 for (const [index, value] of [
     [3, ''],
     [4, duplicate],
@@ -206,6 +241,10 @@ for (const [index, value] of [
         assert.equal(ui.requests.length, 0);
         await ui.click(openLabel);
         assert.equal(ui.window.document.activeElement, ui.search());
+        const heading = ui
+            .dialog()
+            ?.querySelector('.mx-sdk-login-values-header');
+        assert.equal(heading?.children.length, 2);
         await ui.click('Load more');
         assert.deepEqual(ui.text(), [...pages[0].labels, ...pages[1].labels]);
         assert.deepEqual(

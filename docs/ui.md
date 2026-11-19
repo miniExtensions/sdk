@@ -6620,13 +6620,19 @@ import {
 export function renderPicker(
     owner: LoginExistingValuesPickerProps['owner'],
     lookup: LoginExistingValuesPickerProps['loadOptions'],
-    changeDraftValue: (value: string) => void
+    changeDraftValue: (value: string) => void,
+    openSettings: () => void
 ) {
     return createElement(LoginExistingValuesPicker, {
         owner,
         allowSearchFromExistingValuesInLogin: true,
         loadOptions: lookup,
         onSelect: changeDraftValue,
+        titleAction: createElement(
+            'button',
+            { type: 'button', onClick: openSettings },
+            'Settings'
+        ),
     });
 }
 ```
@@ -6639,3 +6645,6 @@ preserves duplicate labels and supplies the original string to `onSelect`,
 including whitespace or an empty string. Selection closes the chooser and
 returns focus to its button. The host owns the draft value and any subsequent
 Login submission. Override display text with `labels`.
+An optional `titleAction` renders beside the localized heading, which remains
+the dialog's accessible name. Use `type="button"` for a host button inside a
+Login form.

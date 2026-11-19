@@ -18,6 +18,7 @@ export async function checkLinkedChildCreateBrowser({
     install,
     output,
     root,
+    checkInstalledEdit,
 }) {
     const results = [];
     const child = fixtures.childForm('edit');
@@ -479,6 +480,7 @@ export async function checkLinkedChildCreateBrowser({
                 await context?.close();
                 await new Promise((resolve) => server.close(resolve));
             }
+            await checkInstalledEdit?.({ consumer: lane, reactVersion: react });
         } finally {
             rmSync(lane, { recursive: true });
         }

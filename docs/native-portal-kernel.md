@@ -83,9 +83,8 @@ It does not establish installed native integration, deployment or hosted
 acceptance.
 
 The actual-native differential corpus is maintained separately in
-[the native differential notes](native-portal-differential.md). Its execution and
-the native adapter/publication/IDs-only writer cutover remain subject to the
-existing centralized native dependency hold. Do not resolve native dependencies,
-substitute a detached model, introduce another gate or treat SDK qualification
-as native execution. The existing whole implementation task stays open until
-the real consumer and its normal exact-head checks complete.
+[the native differential notes](native-portal-differential.md). The native owner
+qualifies the adapter, publication and IDs-only writer cutover on the actual
+consumer using its normal dependency and test procedures. Apply any active
+dependency hold to its specified operation. Record the tested revision and
+native results before closing the implementation task.

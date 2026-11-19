@@ -1,15 +1,19 @@
 import { createElement as h, type ReactElement } from 'react';
+import type { FormFieldBindings } from '../forms/bindings.js';
 import {
     LinkedChildDialogPresentation,
     type FormLinkedChildCreateDialogProps,
-    type FormLinkedChildCreateOpening,
 } from './FormLinkedChildCreateDialog.js';
 
-export type FormLinkedChildEditOpening = FormLinkedChildCreateOpening &
-    Readonly<{
-        /** The selected record from the accepted Edit snapshot. */
-        recordId: string;
-    }>;
+export type FormLinkedChildEditOpening = Readonly<{
+    /** The exact button that opened this Edit. */
+    opener: HTMLButtonElement;
+    /** The child returned by the owner's accepted Edit snapshot. */
+    child: FormFieldBindings;
+    recordId: string;
+    /** Retire the opening when the parent owner or opener changes. */
+    isCurrent(): boolean;
+}>;
 
 export type FormLinkedChildEditDialogProps = Omit<
     FormLinkedChildCreateDialogProps,

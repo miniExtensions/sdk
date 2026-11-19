@@ -23,14 +23,25 @@ function Host(){
     const [rows,setRows]=useState([first,second]);
     const [selectedIndex,setSelectedIndex]=useState(0);
     const [acceptsIntent,setAcceptsIntent]=useState(false);
+    const [collectionOwner,setCollectionOwner]=useState('initial');
+    const [publication,setPublication]=useState('initial');
+    function replace(owner){
+        setRows([first,second]);
+        setSelectedIndex(0);
+        setCollectionOwner(owner);
+        setPublication(owner);
+    }
     window.sliderProbe={calls,setSelectedIndex,setAcceptsIntent,
-        duplicates(){setRows([first,{...second,filename:first.filename}]);},
+        replace,
+        reset(owner){calls.selection.length=0;replace(owner);},
+        remap(marker){setRows((items)=>items.map((item)=>({...item})));setPublication(marker);},
+        duplicates(){setRows([first,{...second,filename:first.filename}]);setPublication('duplicates');},
         shrink(){setRows([first]);},
-        retire(){setRows([]);}};
+        retire(){setRows([]);setCollectionOwner(null);setPublication('retired');}};
     const selected=rows[selectedIndex];
-    return h('form',{onSubmit(event){event.preventDefault();calls.save++;}},
+    return h('form',{'data-publication':publication,onSubmit(event){event.preventDefault();calls.save++;}},
         h(AttachmentSliderNavigation,{
-            rows,selectedIndex,labels:{navigation:'Pièces jointes',previous:'Précédent',next:'Suivant'},
+            rows,selectedIndex,collectionOwner,labels:{navigation:'Pièces jointes',previous:'Précédent',next:'Suivant'},
             onSelect(index){calls.selection.push(index);if(acceptsIntent)setSelectedIndex(index);},
         },selected&&h(AttachmentPreview,{attachment:selected}),h('input',{'aria-label':'Détail'})),
         h('button',{type:'submit'},'Enregistrer'),
@@ -49,6 +60,7 @@ export async function checkAttachmentSliderNavigationBrowser({
     evidence,
 }) {
     evidence.formats = {};
+    const staleGestures = [];
     for (const format of ['esm', 'cjs']) {
         const entry = `attachment-slider-navigation-proof.${format === 'esm' ? 'mjs' : 'cjs'}`;
         writeFileSync(join(consumer, entry), hostSource(format));
@@ -120,6 +132,8 @@ export async function checkAttachmentSliderNavigationBrowser({
             const filename = navigation.locator('[aria-live]');
             const preview = navigation.locator('img');
             const probe = () => page.evaluate(() => window.sliderProbe.calls);
+            const committed = (marker) =>
+                page.locator(`form[data-publication="${marker}"]`).waitFor();
             await next.waitFor();
             assert.equal(await filename.innerText(), 'Vue avant');
             assert.equal(await previous.getAttribute('aria-disabled'), 'true');
@@ -142,6 +156,7 @@ export async function checkAttachmentSliderNavigationBrowser({
             await detail.press('ArrowRight');
             assert.deepEqual((await probe()).selection, [1, 0]);
             await page.evaluate(() => window.sliderProbe.duplicates());
+            await committed('duplicates');
             await next.press('Enter');
             await navigation.locator('img[src="/rear.svg"]').waitFor();
             assert.equal(await filename.innerText(), 'Vue avant');
@@ -158,11 +173,86 @@ export async function checkAttachmentSliderNavigationBrowser({
                 delete: 0,
                 fetch: 0,
             });
+
+            async function heldGesture(input, replaceOwner) {
+                const initial = `${input}-initial`;
+                const successor = `${input}-successor`;
+                await page.evaluate(
+                    (owner) => window.sliderProbe.reset(owner),
+                    initial
+                );
+                await committed(initial);
+                await next.waitFor();
+                if (input === 'pointer') {
+                    const position = await next.boundingBox();
+                    assert.ok(position);
+                    await page.mouse.move(
+                        position.x + position.width / 2,
+                        position.y + position.height / 2
+                    );
+                    await page.mouse.down();
+                } else {
+                    await next.focus();
+                    await page.keyboard.down('Space');
+                }
+                const originalButton = await next.elementHandle();
+                assert.ok(originalButton);
+                await page.evaluate(
+                    ({ marker, replace }) => {
+                        if (replace) window.sliderProbe.replace(marker);
+                        else window.sliderProbe.remap(marker);
+                    },
+                    { marker: successor, replace: replaceOwner }
+                );
+                await committed(successor);
+                const sameControl = await next.evaluate(
+                    (button, original) => button === original,
+                    originalButton
+                );
+                await originalButton.dispose();
+                if (input === 'pointer') await page.mouse.up();
+                else await page.keyboard.up('Space');
+                const held = (await probe()).selection;
+                if (!replaceOwner) {
+                    assert.deepEqual(held, [1]);
+                    return { held, sameControl };
+                }
+                if (held.length)
+                    staleGestures.push(
+                        `${format}/${input}: ${JSON.stringify(held)}`
+                    );
+                await page.evaluate(() =>
+                    window.sliderProbe.setSelectedIndex(0)
+                );
+                await navigation
+                    .getByText('Vue avant', { exact: true })
+                    .waitFor();
+                if (input === 'pointer') await next.click();
+                else await next.press('Space');
+                const fresh = (await probe()).selection.slice(held.length);
+                assert.deepEqual(fresh, [1]);
+                return { held, fresh, sameControl };
+            }
+
+            const gestures = {
+                replacedPointer: await heldGesture('pointer', true),
+                replacedSpace: await heldGesture('space', true),
+                remappedPointer: await heldGesture('pointer', false),
+                remappedSpace: await heldGesture('space', false),
+            };
+            const { selection: _selection, ...otherCalls } = await probe();
+            assert.deepEqual(otherCalls, {
+                save: 0,
+                upload: 0,
+                delete: 0,
+                fetch: 0,
+            });
             assert.deepEqual(unexpectedRequests, []);
             assert.deepEqual(pageErrors, []);
             evidence.formats[format] = {
                 selection: calls.selection,
                 ownerCalls: calls,
+                gestures,
                 unexpectedRequests,
                 pageErrors,
             };
@@ -180,4 +270,9 @@ export async function checkAttachmentSliderNavigationBrowser({
             }
         }
     }
+    assert.deepEqual(
+        staleGestures,
+        [],
+        'A retired owner’s held gesture selected in its successor'
+    );
 }

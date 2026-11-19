@@ -9,6 +9,8 @@ import { ActionButton } from './ActionButton.js';
 export type AttachmentSliderNavigationProps = {
     /** Ordered, host-granted occurrences. Equal filenames remain distinct. */
     rows: readonly { filename?: string | null }[];
+    /** Nonempty host identity, stable across row and selection changes. Null retires it. */
+    collectionOwner: string | null;
     selectedIndex: number;
     labels: {
         navigation: string;
@@ -23,11 +25,14 @@ export type AttachmentSliderNavigationProps = {
 
 export function AttachmentSliderNavigation({
     rows,
+    collectionOwner,
     selectedIndex,
     labels,
     onSelect,
     children,
 }: AttachmentSliderNavigationProps): ReactElement | null {
+    if (typeof collectionOwner !== 'string' || collectionOwner.length === 0)
+        return null;
     const current =
         Number.isInteger(selectedIndex) &&
         selectedIndex >= 0 &&
@@ -73,6 +78,8 @@ export function AttachmentSliderNavigation({
             h(
                 ActionButton,
                 {
+                    // Native pointer and Space activation belong to the mounted button.
+                    key: `previous:${collectionOwner}`,
                     'aria-label': labels.previous,
                     'aria-disabled': !canSelect(selectedIndex - 1),
                     onClick: () => move(-1),
@@ -84,6 +91,7 @@ export function AttachmentSliderNavigation({
             h(
                 ActionButton,
                 {
+                    key: `next:${collectionOwner}`,
                     'aria-label': labels.next,
                     'aria-disabled': !canSelect(selectedIndex + 1),
                     onClick: () => move(1),

@@ -76,6 +76,7 @@ import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
+import { checkLoginExistingValuesBrowser } from './login-existing-values-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
 import { checkReadonlyPortalListBrowser } from './readonly-portal-list-browser-checks.mjs';
@@ -2489,6 +2490,17 @@ try {
             evidence: report.completeVerification,
             output,
         });
+        report.loginExistingValues = {};
+        await checkLoginExistingValuesBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.loginExistingValues,
+            output,
+            expectedReactVersion: nativeReactVersion,
+        });
+        assert.equal(report.loginExistingValues.passed, true);
+        assert.equal(report.loginExistingValues.contextClosed, true);
+        assert.equal(report.loginExistingValues.scratchRemoved, true);
         report.readonlyPortalList = {};
         await checkReadonlyPortalListBrowser({
             browser,

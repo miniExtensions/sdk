@@ -4,7 +4,9 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    type KeyboardEvent,
     type MouseEvent,
+    type PointerEvent,
     type ReactElement,
 } from 'react';
 
@@ -73,14 +75,16 @@ export function PortalVisitorViewButtons({
                     type: 'button',
                     className: 'me-portal-visitor-view-button',
                     'aria-pressed': selectedViewId === id,
-                    onPointerDown: (event) => {
+                    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
                         if (event.isPrimary && event.button === 0)
                             pointerPress.current = { placement, viewId: id };
                     },
-                    onPointerCancel: (event) => {
+                    onPointerCancel: (
+                        event: PointerEvent<HTMLButtonElement>
+                    ) => {
                         if (event.isPrimary) pointerPress.current = null;
                     },
-                    onKeyDown: (event) => {
+                    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
                         if (event.key !== ' ' && event.key !== 'Enter') return;
                         if (event.repeat) event.preventDefault();
                         else keyboardPress.current = { placement, viewId: id };

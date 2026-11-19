@@ -4923,7 +4923,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.tests, 84);
     assert.equal(gridProof.textCellTests, 24);
     assert.equal(gridProof.ratingCellTests, 32);
-    assert.equal(gridProof.checkboxCellTests, 60);
+    assert.equal(gridProof.checkboxCellTests, 64);
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

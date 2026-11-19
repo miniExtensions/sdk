@@ -203,6 +203,8 @@ function CheckboxCellProbe() {
     }));
     const currentFrame = useRef(cell.frame);
     const log = useRef({ writes: [], selections: 0, opens: 0, submits: 0, rejections: [], activations: [], pointerPhases: [] });
+    const isControl = (target) => target instanceof HTMLElement &&
+        target.matches('input[type="checkbox"], button.mx-sdk-complete-checkbox__button');
     useEffect(() => {
         window.__checkboxCellProbe = {
             snapshot: () => ({ record: cell.record, value: cell.value, selected: cell.selected, enabled: cell.enabled, revision: cell.revision, checkboxStyle: cell.checkboxStyle, ...log.current }),
@@ -225,15 +227,15 @@ function CheckboxCellProbe() {
         id: 'checkbox-probe-form',
         onSubmit(event) { event.preventDefault(); log.current.submits++; },
         onClickCapture(event) {
-            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+            if (isControl(event.target))
                 log.current.activations.push({ trusted: event.isTrusted, detail: event.detail });
         },
         onPointerDownCapture(event) {
-            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+            if (isControl(event.target))
                 log.current.pointerPhases.push({ phase: 'down', record: cell.record, pointerType: event.pointerType, button: event.button, primary: event.isPrimary, trusted: event.isTrusted });
         },
         onPointerUpCapture(event) {
-            if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')
+            if (isControl(event.target))
                 log.current.pointerPhases.push({ phase: 'up', record: cell.record, pointerType: event.pointerType, button: event.button, primary: event.isPrimary, trusted: event.isTrusted });
         },
     }, h('p', { id: 'checkbox-help' }, 'Approval policy.'), h('table', {
@@ -246,6 +248,8 @@ function CheckboxCellProbe() {
         h(PortalGridCheckboxCell, {
             value: cell.value,
             checkboxStyle: cell.checkboxStyle,
+            checkedStateLabel: '  Approved  ',
+            uncheckedStateLabel: '  Approve  ',
             displayText: cell.value == null ? '' : String(cell.value),
             title: 'Approved',
             cellIdentity: cell.record,
@@ -1843,6 +1847,7 @@ async function checkCheckboxCellBrowser(page) {
     await originalCell.dispose();
     const splitPointer = await checkCheckboxSplitPointerBrowser(page);
     const toggleStyle = await checkCheckboxToggleStyleBrowser(page);
+    const buttonStyle = await checkCheckboxButtonStyleBrowser(page);
     return {
         status: 'passed',
         geometry,
@@ -1857,6 +1862,7 @@ async function checkCheckboxCellBrowser(page) {
         ...result,
         splitPointer,
         toggleStyle,
+        buttonStyle,
     };
 }
 
@@ -2068,6 +2074,95 @@ async function checkCheckboxToggleStyleBrowser(page) {
     assert.deepEqual(fresh.writes, [
         { record: 'checkbox-A', value: true },
         { record: 'checkbox-A', value: false },
+    ]);
+    assert.equal(fresh.opens, 0);
+    assert.equal(fresh.submits, 0);
+    return { status: 'passed', released, fresh };
+}
+
+async function checkCheckboxButtonStyleBrowser(page) {
+    await page.evaluate(() =>
+        window.__nativeProbe.startCheckboxCell('button-style')
+    );
+    await page.waitForFunction(() => {
+        const current = window.__checkboxCellProbe?.snapshot();
+        return current?.record === 'checkbox-A' && current.writes.length === 0;
+    });
+    await page.evaluate(() =>
+        window.__checkboxCellProbe.patch({ checkboxStyle: 'button' })
+    );
+    const table = page.getByRole('table', { name: 'Checkbox Grid fixture' });
+    const approve = table.getByRole('button', { name: 'Approve', exact: true });
+    await approve.waitFor({ state: 'visible' });
+    assert.equal(await approve.getAttribute('type'), 'button');
+    assert.equal(await approve.getAttribute('aria-pressed'), 'false');
+    assert.equal(
+        await approve.evaluate((node) => node.form?.id),
+        'checkbox-probe-form'
+    );
+    const previous = await approve.elementHandle();
+    assert(previous);
+    const bounds = await previous.boundingBox();
+    assert(bounds);
+    const x = bounds.x + bounds.width / 2;
+    const y = bounds.y + bounds.height / 2;
+    try {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        try {
+            await page.evaluate(() => window.__checkboxCellProbe.replace());
+            await page.waitForFunction(
+                () =>
+                    window.__checkboxCellProbe.snapshot().record ===
+                    'checkbox-B'
+            );
+            assert.equal(
+                await previous.evaluate((node) => node.isConnected),
+                false
+            );
+            const replacement = await approve.boundingBox();
+            assert(replacement);
+            assert(x > replacement.x && x < replacement.x + replacement.width);
+            assert(y > replacement.y && y < replacement.y + replacement.height);
+        } finally {
+            await page.mouse.up();
+        }
+    } finally {
+        await previous.dispose();
+    }
+    const snapshot = () =>
+        page.evaluate(() => window.__checkboxCellProbe.snapshot());
+    const released = await snapshot();
+    assert.deepEqual(released.writes, []);
+    assert.deepEqual(
+        released.pointerPhases.map(({ phase, record, trusted }) => ({
+            phase,
+            record,
+            trusted,
+        })),
+        [
+            { phase: 'down', record: 'checkbox-A', trusted: true },
+            { phase: 'up', record: 'checkbox-B', trusted: true },
+        ]
+    );
+    await approve.click();
+    const approved = table.getByRole('button', {
+        name: 'Approved',
+        exact: true,
+    });
+    assert.equal(await approved.getAttribute('aria-pressed'), 'true');
+    assert.equal(
+        await approved.evaluate(
+            (node) => node === node.ownerDocument.activeElement
+        ),
+        true
+    );
+    await approved.press('Space');
+    assert.equal(await approve.getAttribute('aria-pressed'), 'false');
+    const fresh = await snapshot();
+    assert.deepEqual(fresh.writes, [
+        { record: 'checkbox-B', value: true },
+        { record: 'checkbox-B', value: false },
     ]);
     assert.equal(fresh.opens, 0);
     assert.equal(fresh.submits, 0);

@@ -44,6 +44,8 @@ type RemovePress = {
     button: HTMLButtonElement;
     token: object;
 };
+type RemovePointer = Pick<PointerEvent, 'pointerId' | 'pointerType'>;
+type RemovePointerPress = RemovePress & Pick<RemovePointer, 'pointerId'>;
 
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 const unavailable: View = { type: 'unavailable' };
@@ -204,7 +206,8 @@ export function MultipleAttachmentsField({
     const upload = useRef<HTMLButtonElement>(null);
     const cancel = useRef<HTMLButtonElement>(null);
     const focus = useRef<HTMLButtonElement | null>(null);
-    const removePointer = useRef<RemovePress | null>(null);
+    const removePointers = useRef(new Map<string, RemovePointerPress>());
+    const releasedPointer = useRef<RemovePointer | null>(null);
     const removeSpace = useRef<RemovePress | null>(null);
     useEffect(() => {
         mounted.current = true;
@@ -305,6 +308,12 @@ export function MultipleAttachmentsField({
         press: RemovePress | null,
         button: HTMLButtonElement
     ) => press?.button === button && press.token === token;
+    const takePointerPress = ({ pointerId, pointerType }: RemovePointer) => {
+        const press = removePointers.current.get(pointerType);
+        if (press?.pointerId !== pointerId) return null;
+        removePointers.current.delete(pointerType);
+        return press;
+    };
     const chooseDisabled =
         !view.available || view.pending || (uncertain && !view.busy);
     const uploadDisabled =
@@ -442,13 +451,31 @@ export function MultipleAttachmentsField({
                                   onPointerDown(
                                       event: PointerEvent<HTMLButtonElement>
                                   ) {
-                                      removePointer.current =
-                                          event.isPrimary && event.button === 0
-                                              ? removePress(event.currentTarget)
-                                              : null;
+                                      releasedPointer.current = null;
+                                      if (event.isPrimary && event.button === 0)
+                                          removePointers.current.set(
+                                              event.pointerType,
+                                              {
+                                                  ...removePress(
+                                                      event.currentTarget
+                                                  ),
+                                                  pointerId: event.pointerId,
+                                              }
+                                          );
                                   },
-                                  onPointerCancel() {
-                                      removePointer.current = null;
+                                  onPointerUp(
+                                      event: PointerEvent<HTMLButtonElement>
+                                  ) {
+                                      // Older browsers dispatch click as a MouseEvent.
+                                      releasedPointer.current = {
+                                          pointerId: event.pointerId,
+                                          pointerType: event.pointerType,
+                                      };
+                                  },
+                                  onPointerCancel(
+                                      event: PointerEvent<HTMLButtonElement>
+                                  ) {
+                                      takePointerPress(event);
                                   },
                                   onKeyDown(
                                       event: KeyboardEvent<HTMLButtonElement>
@@ -479,22 +506,38 @@ export function MultipleAttachmentsField({
                                   onClick(
                                       event: MouseEvent<HTMLButtonElement>
                                   ) {
-                                      const press = removePointer.current;
-                                      removePointer.current = null;
+                                      const released = releasedPointer.current;
+                                      releasedPointer.current = null;
+                                      const click = event.nativeEvent;
                                       // Click-only activation covers Enter and assistive technology.
                                       const pointerClick =
                                           event.detail > 0 ||
-                                          ('pointerType' in event.nativeEvent &&
-                                              event.nativeEvent.pointerType !==
-                                                  '');
-                                      if (
-                                          pointerClick &&
-                                          !matchesRemovePress(
-                                              press,
-                                              event.currentTarget
+                                          ('pointerType' in click &&
+                                              click.pointerType !== '');
+                                      if (pointerClick) {
+                                          const pointer =
+                                              'pointerId' in click &&
+                                              typeof click.pointerId ===
+                                                  'number' &&
+                                              'pointerType' in click &&
+                                              typeof click.pointerType ===
+                                                  'string'
+                                                  ? {
+                                                        pointerId:
+                                                            click.pointerId,
+                                                        pointerType:
+                                                            click.pointerType,
+                                                    }
+                                                  : released;
+                                          if (
+                                              !pointer ||
+                                              !matchesRemovePress(
+                                                  takePointerPress(pointer),
+                                                  event.currentTarget
+                                              )
                                           )
-                                      )
-                                          return;
+                                              return;
+                                      }
                                       if (!removeDisabled && row.removeAllowed)
                                           invoke(() =>
                                               view.actions.remove(

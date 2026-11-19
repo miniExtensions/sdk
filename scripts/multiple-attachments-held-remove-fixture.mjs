@@ -7,6 +7,13 @@ export const heldRemoveCases = [
     { gesture: 'Space', newHost: true, sameLabel: false },
 ];
 
+export const heldRemoveInterleavedPointerCase = {
+    gesture: 'pointer',
+    newHost: true,
+    sameLabel: true,
+    interleavedPointer: true,
+};
+
 export function heldRemoveValues({ sameLabel }) {
     const original = { filename: 'Source.txt', url: 'https://files.invalid/a' };
     const replacement = {
@@ -191,20 +198,21 @@ export async function checkSyntheticHeldRemove({
         node.dispatchEvent(
             new Event(type, { bubbles: true, cancelable: true, ...init })
         );
-    const pointer = {
+    const mouse = {
         button: 0,
         isPrimary: true,
         pointerId: 1,
         pointerType: 'mouse',
     };
+    const touch = { ...mouse, pointerId: 2, pointerType: 'touch' };
     const space = { key: ' ', code: 'Space' };
-    const press = (node) => {
+    const press = (node, pointer = mouse) => {
         node.focus();
         if (options.gesture === 'Space')
             dispatch(node, 'keydown', window.KeyboardEvent, space);
         else dispatch(node, 'pointerdown', window.PointerEvent, pointer);
     };
-    const release = (pressed, target) => {
+    const release = (pressed, target, pointer = mouse) => {
         if (options.gesture === 'Space') {
             if (
                 dispatch(target, 'keyup', window.KeyboardEvent, space) &&
@@ -214,10 +222,14 @@ export async function checkSyntheticHeldRemove({
         } else {
             dispatch(target, 'pointerup', window.PointerEvent, pointer);
             if (pressed === target)
-                dispatch(target, 'click', window.PointerEvent, {
-                    ...pointer,
-                    detail: 1,
-                });
+                dispatch(
+                    target,
+                    'click',
+                    options.legacyClick
+                        ? window.MouseEvent
+                        : window.PointerEvent,
+                    { ...pointer, detail: 1 }
+                );
         }
     };
     let probe;
@@ -246,15 +258,24 @@ export async function checkSyntheticHeldRemove({
             values.replacement.filename
         );
         assert.equal(window.document.activeElement, button());
-        await act(async () => release(original, button()));
+        const replacement = button();
+        if (options.interleavedPointer)
+            await act(async () => press(replacement, touch));
+        await act(async () => release(original, replacement));
         assert.deepEqual(
             probe.snapshot(),
             heldRemoveExpected(options, values, 'replacement'),
             'Held release acted on a replaced resource'
         );
-        const replacement = button();
-        await act(async () => press(replacement));
-        await act(async () => release(replacement, replacement));
+        if (!options.interleavedPointer)
+            await act(async () => press(replacement));
+        await act(async () =>
+            release(
+                replacement,
+                replacement,
+                options.interleavedPointer ? touch : mouse
+            )
+        );
         assert.deepEqual(
             probe.snapshot(),
             heldRemoveExpected(options, values, 'fresh')

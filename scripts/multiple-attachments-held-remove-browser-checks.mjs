@@ -36,7 +36,7 @@ const events = [];
 for (const type of ['pointerdown', 'pointerup', 'keydown', 'keyup']) {
     document.addEventListener(type, event => {
         if (event.target.matches('button[data-attachment-row]')) {
-            events.push([type, event.isTrusted]);
+            events.push([type, event.isTrusted, event.key ?? event.pointerType]);
         }
     }, true);
 }
@@ -103,7 +103,10 @@ window.heldRemove = {
             external.push(url.origin);
             return route.abort();
         });
-        for (const options of heldRemoveCases) {
+        for (const options of [
+            ...heldRemoveCases,
+            { gesture: 'Enter', newHost: true, sameLabel: true },
+        ]) {
             const values = heldRemoveValues(options);
             const test = { ...options, status: 'running' };
             evidence.cases.push(test);
@@ -139,22 +142,26 @@ window.heldRemove = {
                         ? page.keyboard.up('Space')
                         : page.mouse.up();
                 await check('original');
-                await press();
+                const enter = options.gesture === 'Enter';
+                if (!enter) await press();
                 await page.evaluate(() => window.heldRemove.replace());
                 await check('replacement');
                 assert.equal(
                     await button.locator('..').locator('span').textContent(),
                     values.replacement.filename
                 );
-                assert(
-                    await button.evaluate(
-                        (node) => document.activeElement === node
-                    )
-                );
-                await release();
-                await check('replacement');
-                await press();
-                await release();
+                if (enter) await button.press('Enter');
+                else {
+                    assert(
+                        await button.evaluate(
+                            (node) => document.activeElement === node
+                        )
+                    );
+                    await release();
+                    await check('replacement');
+                    await press();
+                    await release();
+                }
                 await check('fresh');
                 assert(
                     await button.evaluate(
@@ -164,16 +171,19 @@ window.heldRemove = {
                 const events = await page.evaluate(
                     () => window.heldRemove.events
                 );
-                const [down, up] =
-                    options.gesture === 'Space'
-                        ? ['keydown', 'keyup']
-                        : ['pointerdown', 'pointerup'];
-                assert.deepEqual(events, [
-                    [down, true],
-                    [up, true],
-                    [down, true],
-                    [up, true],
-                ]);
+                const pointer = options.gesture === 'pointer';
+                const [down, up] = pointer
+                    ? ['pointerdown', 'pointerup']
+                    : ['keydown', 'keyup'];
+                const input = pointer ? 'mouse' : enter ? 'Enter' : ' ';
+                const activation = [
+                    [down, true, input],
+                    [up, true, input],
+                ];
+                assert.deepEqual(
+                    events,
+                    enter ? activation : [...activation, ...activation]
+                );
                 test.status = 'passed';
             } catch (error) {
                 test.status = 'failed';

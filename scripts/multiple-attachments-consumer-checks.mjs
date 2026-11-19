@@ -6,12 +6,13 @@ import { pathToFileURL } from 'node:url';
 import {
     checkSyntheticHeldRemove,
     heldRemoveCases,
+    heldRemoveInterleavedPointerCase,
 } from './multiple-attachments-held-remove-fixture.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 const unavailable = 'Attachment presentation unavailable';
 const mask = '••••••••';
-export const multipleAttachmentsConsumerCheckCount = 142;
+export const multipleAttachmentsConsumerCheckCount = 146;
 
 export const multipleAttachmentsSaveOptions = {
     captchaVal: null,
@@ -270,33 +271,43 @@ export const importPackage = name => import(name);
                         });
                 }
             });
-            for (const options of heldRemoveCases) {
-                const { gesture, newHost, sameLabel } = options;
-                await check(
-                    `held ${gesture} across ${newHost ? 'a host change' : 'a draft change'}${sameLabel ? ' with the same label' : ''}`,
-                    () =>
-                        checkSyntheticHeldRemove({
-                            window,
-                            act,
-                            createRoot,
-                            options,
-                            fixture: {
-                                h,
-                                loaded: multipleAttachmentsLoadedFixture()
-                                    .loaded,
-                                saveOptions: multipleAttachmentsSaveOptions,
-                                createMiniExtensionsClient:
-                                    core.createMiniExtensionsClient,
-                                createFormFieldBindings:
-                                    forms.createFormFieldBindings,
-                                RecoveryJournal: forms.RecoveryJournal,
-                                createFormFieldRendererHost:
-                                    ui.createFormFieldRendererHost,
-                                FieldRenderer: react.FieldRenderer,
-                                renderMultipleAttachmentsField:
-                                    renderer.renderMultipleAttachmentsField,
-                            },
-                        })
+            for (const options of [
+                ...heldRemoveCases,
+                heldRemoveInterleavedPointerCase,
+                { ...heldRemoveInterleavedPointerCase, legacyClick: true },
+            ]) {
+                const {
+                    gesture,
+                    newHost,
+                    sameLabel,
+                    interleavedPointer,
+                    legacyClick,
+                } = options;
+                const name = interleavedPointer
+                    ? `held mouse across a new touch press${legacyClick ? ' with legacy click events' : ''}`
+                    : `held ${gesture} across ${newHost ? 'a host change' : 'a draft change'}${sameLabel ? ' with the same label' : ''}`;
+                await check(name, () =>
+                    checkSyntheticHeldRemove({
+                        window,
+                        act,
+                        createRoot,
+                        options,
+                        fixture: {
+                            h,
+                            loaded: multipleAttachmentsLoadedFixture().loaded,
+                            saveOptions: multipleAttachmentsSaveOptions,
+                            createMiniExtensionsClient:
+                                core.createMiniExtensionsClient,
+                            createFormFieldBindings:
+                                forms.createFormFieldBindings,
+                            RecoveryJournal: forms.RecoveryJournal,
+                            createFormFieldRendererHost:
+                                ui.createFormFieldRendererHost,
+                            FieldRenderer: react.FieldRenderer,
+                            renderMultipleAttachmentsField:
+                                renderer.renderMultipleAttachmentsField,
+                        },
+                    })
                 );
             }
             const container = window.document.createElement('div');

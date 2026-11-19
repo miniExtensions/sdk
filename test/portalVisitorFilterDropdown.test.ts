@@ -123,7 +123,8 @@ test('the same multiple choice membership preserves the stored isExactly predica
     assert.equal(host.calls.length, 0);
 
     const replacement = createPortalVisitorFilterDraft(host.port);
-    assert.ok(replacement?.setDropdown('labels', ['red']));
+    assert.ok(replacement);
+    assert.equal(replacement.setDropdown('labels', ['red']), true);
     assert.equal((await replacement.commit()).type, 'allocated');
     assert.equal(host.calls.length, 1);
     const newCondition = host.calls[0].criteria?.conditions[0];

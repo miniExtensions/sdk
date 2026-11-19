@@ -1,5 +1,7 @@
 import {
     createElement as h,
+    lazy,
+    Suspense,
     useEffect,
     useId,
     useLayoutEffect,
@@ -13,7 +15,6 @@ import {
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
-import { createPortal } from 'react-dom';
 import type { FormFieldBindings } from '../forms/bindings.js';
 import type {
     FormLinkedChildOwner,
@@ -49,6 +50,20 @@ const defaultLabels = {
 
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
+
+// The general React entry remains importable before the host boots a DOM.
+const CreateDialogPortal = lazy(async () => {
+    const { createPortal } = await import('react-dom');
+    return {
+        default: ({
+            children,
+            container,
+        }: {
+            children?: ReactNode;
+            container: HTMLElement;
+        }) => createPortal(children, container),
+    };
+});
 
 function isVisible(element: HTMLElement): boolean {
     return (
@@ -118,17 +133,22 @@ export function FormLinkedChildCreateDialog({
     )
         return null;
 
-    return createPortal(
-        h(CreateDialog, {
-            owner,
-            opening,
-            state,
-            child,
-            pages,
-            renderFields,
-            labels,
-        }),
-        opening.opener.ownerDocument.body
+    return h(
+        Suspense,
+        { fallback: null },
+        h(
+            CreateDialogPortal,
+            { container: opening.opener.ownerDocument.body },
+            h(CreateDialog, {
+                owner,
+                opening,
+                state,
+                child,
+                pages,
+                renderFields,
+                labels,
+            })
+        )
     );
 }
 

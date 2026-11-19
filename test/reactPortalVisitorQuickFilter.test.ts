@@ -8,6 +8,7 @@ import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 import {
     displayed,
     group,
+    leaf,
     quickFilterOwner,
     statusChoice,
     title,
@@ -47,11 +48,17 @@ async function mounted(t: TestContext, host = quickFilterOwner(saved)) {
         assert.ok(found, name);
         return found;
     };
-    const key = async (input: typeof status, pressed: string) => {
+    const key = async (
+        input: typeof status,
+        pressed: string,
+        repeat = false,
+        event = 'keydown'
+    ) => {
         await act(async () =>
             input.dispatchEvent(
-                new f.window.KeyboardEvent('keydown', {
+                new f.window.KeyboardEvent(event, {
                     key: pressed,
+                    repeat,
                     bubbles: true,
                 })
             )
@@ -155,6 +162,8 @@ test('mounted quick and advanced Filter share one active operation and never ret
     await f.key(f.status, 'ArrowDown');
     await f.change(f.status, ['blue']);
     assert.ok(settle);
+    await f.key(f.status, 'ArrowDown', true);
+    await f.change(f.status, ['']);
     await f.click(f.button('Filter'));
     assert.equal(f.container.querySelector('dialog'), null);
     assert.equal(f.host.calls.length, 1);
@@ -164,6 +173,8 @@ test('mounted quick and advanced Filter share one active operation and never ret
         f.container.querySelector('[role="status"]')?.textContent ?? '',
         /could not be confirmed/
     );
+    await f.key(f.status, 'ArrowDown', true);
+    await f.change(f.status, ['']);
     await f.click(f.button('Filter'));
     assert.ok(f.container.querySelector('dialog[open]'));
     assert.equal(f.host.calls.length, 1);
@@ -189,4 +200,76 @@ test('mounted multi-value quick Filter sends only selected choice IDs and clears
     assert.equal(f.host.calls[1].criteria, null);
     assert.equal(clear.disabled, true);
     assert.equal(f.window.document.activeElement, f.labels);
+});
+
+test('mounted quick Filter leaves a renamed isExactly rule intact when the select returns the same members in DOM order', async (t) => {
+    const effective = {
+        fieldType: 'multipleSelects' as const,
+        type: 'isExactly' as const,
+        idOrName: { type: 'id' as const, id: 'labels' },
+        value: ['blue', 'red'],
+    };
+    const criteria = {
+        logicalOperator: 'or' as const,
+        conditions: [
+            group('keep', title),
+            leaf('saved-labels', {
+                ...effective,
+                idOrName: { type: 'name', name: 'Former labels' },
+            }),
+        ],
+    };
+    const host = quickFilterOwner(criteria);
+    host.update({ effectiveSettings: { 'saved-labels': effective } });
+    const f = await mounted(t, host);
+    assert.deepEqual(
+        Array.from(f.labels.selectedOptions, (option) => option.value),
+        ['red', 'blue']
+    );
+    await f.key(f.labels, 'ArrowDown');
+    await f.change(f.labels, ['red', 'blue']);
+    assert.equal(host.calls.length, 0);
+    assert.deepEqual(host.port.read()?.criteria, criteria);
+    await f.key(f.labels, 'ArrowDown');
+    await f.change(f.labels, ['red']);
+    assert.equal(host.calls.length, 1);
+    assert.deepEqual(host.calls[0].criteria?.conditions.slice(1), [
+        group('keep', title),
+    ]);
+    const replacement = host.calls[0].criteria?.conditions[0];
+    assert.equal(replacement?.type, 'singleCondition');
+    assert.deepEqual(replacement.setting, {
+        ...effective,
+        type: 'hasAnyOf',
+        value: ['red'],
+    });
+});
+
+test('a held quick-Filter key continues on its own acknowledged successor and stops after A→B→A', async (t) => {
+    const f = await mounted(t, quickFilterOwner(null));
+    await f.key(f.status, 'ArrowDown');
+    await f.change(f.status, ['red']);
+    assert.equal(f.host.calls.length, 1);
+    await f.key(f.status, 'ArrowDown', true);
+    await f.change(f.status, ['blue']);
+    assert.equal(f.host.calls.length, 2);
+    assert.equal(f.host.calls[1].stamp.generation, 2);
+
+    const previous = f.host.port.read();
+    assert.ok(previous);
+    await act(async () => {
+        f.host.update({
+            stamp: { ...previous.stamp, generation: 4, viewId: 'view-b' },
+        });
+        f.host.update({ stamp: { ...previous.stamp, generation: 5 } });
+    });
+    assert.equal(f.toolbar.querySelectorAll('select')[1], f.status);
+    await f.key(f.status, 'ArrowDown', true);
+    await f.change(f.status, ['red']);
+    assert.equal(f.host.calls.length, 2);
+    await f.key(f.status, 'ArrowDown', false, 'keyup');
+    await f.key(f.status, 'ArrowDown');
+    await f.change(f.status, ['red']);
+    assert.equal(f.host.calls.length, 3);
+    assert.equal(f.host.calls[2].stamp.generation, 5);
 });

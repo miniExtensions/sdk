@@ -103,6 +103,42 @@ test('quick Filter rejects unknown choices and submits admitted multiple choice 
     assert.equal(host.calls.length, 1);
 });
 
+test('the same multiple choice membership preserves the stored isExactly predicate and its order', async () => {
+    const exact = leaf('saved-exact', {
+        fieldType: 'multipleSelects',
+        type: 'isExactly',
+        idOrName: { type: 'name', name: 'Labels' },
+        value: ['blue', 'red'],
+    });
+    const criteria = {
+        logicalOperator: 'or' as const,
+        conditions: [group('keep', title), exact],
+    };
+    const host = owner(criteria);
+    const saved = createPortalVisitorFilterDraft(host.port);
+    assert.ok(saved);
+    assert.equal(saved.setDropdown('labels', ['red', 'blue']), false);
+    assert.deepEqual(saved.snapshot().criteria, criteria);
+    assert.deepEqual(await saved.commit(), { type: 'unchanged' });
+    assert.equal(host.calls.length, 0);
+
+    const replacement = createPortalVisitorFilterDraft(host.port);
+    assert.ok(replacement?.setDropdown('labels', ['red']));
+    assert.equal((await replacement.commit()).type, 'allocated');
+    assert.equal(host.calls.length, 1);
+    const newCondition = host.calls[0].criteria?.conditions[0];
+    assert.equal(newCondition?.type, 'singleCondition');
+    assert.deepEqual(newCondition.setting, {
+        fieldType: 'multipleSelects',
+        type: 'hasAnyOf',
+        idOrName: { type: 'id', id: 'labels' },
+        value: ['red'],
+    });
+    assert.deepEqual(host.calls[0].criteria?.conditions.slice(1), [
+        group('keep', title),
+    ]);
+});
+
 test('quick Filter refuses invalid configuration and retires the retained draft after a view return', async () => {
     assert.equal(
         createPortalVisitorFilterDraft(owner(null, ['missing']).port),

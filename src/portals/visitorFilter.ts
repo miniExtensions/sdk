@@ -93,6 +93,10 @@ export type PortalVisitorFilterDraft = {
     commit(): Promise<PortalVisitorFilterOutcome>;
 };
 
+type ResumableFilterDraft = PortalVisitorFilterDraft & {
+    resumeAfterAllocation(): ResumableFilterDraft | null;
+};
+
 type Condition = Extract<RuntimeConditionItem, { type: 'singleCondition' }>;
 type Parent = Pick<
     RuntimeConditionsDefinition,
@@ -420,13 +424,23 @@ export function resolvePortalVisitorFilterOperator(
 /** A tree draft tied to one admitted host frame and one Apply attempt. */
 export function createPortalVisitorFilterDraft(
     port: PortalVisitorFilterPort
-): PortalVisitorFilterDraft | null {
+): ResumableFilterDraft | null {
     const captured = readFrame(port);
-    if (!captured) return null;
+    return captured ? createDraftForFrame(port, captured) : null;
+}
+
+function createDraftForFrame(
+    port: PortalVisitorFilterPort,
+    captured: PortalVisitorFilterFrame
+): ResumableFilterDraft {
     let criteria = structuredClone(captured.criteria);
     let retired = false;
     let normalizedOnDeletion = false;
     let submitted: RuntimeConditionsDefinition | null | undefined;
+    let allocation:
+        | Extract<PortalVisitorFilterOutcome, { type: 'allocated' }>
+        | null
+        | undefined;
     let nextId = 0;
     const used = new Set<string>();
     if (criteria) validTree(criteria, used);
@@ -607,8 +621,14 @@ export function createPortalVisitorFilterDraft(
                         !dropdown.choices.some(
                             (choice) => choice.value === value
                         )
-                ) ||
-                isEqual(dropdown.selected, values)
+                )
+            )
+                return false;
+            // A multiple select reports its options in DOM order, regardless of the saved order.
+            const selected = new Set(dropdown.selected);
+            if (
+                selected.size === values.length &&
+                values.every((value) => selected.has(value))
             )
                 return false;
             const idOrName = { type: 'id' as const, id: fieldId };
@@ -727,6 +747,7 @@ export function createPortalVisitorFilterDraft(
         },
         retire() {
             retired = true;
+            allocation = null;
         },
         canReport(outcome: PortalVisitorFilterOutcome) {
             if (submitted === undefined) return true;
@@ -750,6 +771,22 @@ export function createPortalVisitorFilterDraft(
                     isEqual(live.criteria, submitted))
             );
         },
+        resumeAfterAllocation() {
+            if (!allocation || submitted === undefined) return null;
+            const accepted = allocation;
+            allocation = null;
+            const live = readFrame(port);
+            // The held gesture can follow only the publication of its own command.
+            if (
+                !live ||
+                !sameScope(captured, live) ||
+                live.stamp.generation <= captured.stamp.generation ||
+                live.stamp.generation !== accepted.generation ||
+                !isEqual(live.criteria, submitted)
+            )
+                return null;
+            return createDraftForFrame(port, live);
+        },
         async commit(): Promise<PortalVisitorFilterOutcome> {
             if (!current()) return { type: 'stale' };
             retired = true;
@@ -757,11 +794,14 @@ export function createPortalVisitorFilterDraft(
                 return { type: 'unchanged' };
             submitted = criteria;
             try {
-                return receipt(
+                const outcome = receipt(
                     await port.apply(
                         structuredClone({ stamp: captured.stamp, criteria })
                     )
                 );
+                if (outcome.type === 'allocated' && allocation !== null)
+                    allocation = outcome;
+                return outcome;
             } catch {
                 return { type: 'uncertain' };
             }

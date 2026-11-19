@@ -213,16 +213,21 @@ const filterRoot = createRoot(filterHost);
 const filterListeners = new Set();
 const filterCommands = [];
 const filterOutcomes = [];
+const heldSelectKeys = [];
 let filterFormSubmits = 0;
 filterForm.addEventListener('submit', (event) => {
     filterFormSubmits++;
     event.preventDefault();
 });
+filterForm.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' && event.target instanceof HTMLSelectElement && event.target.multiple)
+        heldSelectKeys.push({repeat: event.repeat, trusted: event.isTrusted});
+});
 const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
 };
-const quickChoices = [{value: 'red', label: 'Red'}, {value: 'blue', label: 'Blue'}];
+const quickChoices = [{value: 'red', label: 'Red'}, {value: 'blue', label: 'Blue'}, {value: 'green', label: 'Green'}, {value: 'yellow', label: 'Yellow'}];
 let filterFrame = {
     stamp: {...frame.stamp, fieldId: 'filter-portal'},
     fields: [{
@@ -273,7 +278,12 @@ filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
     port: filterPort, showDropdowns: true, onOutcome: (outcome) => filterOutcomes.push(outcome),
 })));
 globalThis.filterFixture = {
-    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits}),
+    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits, heldSelectKeys}),
+    seedHeldChoice() {
+        const criteria = filterFrame.criteria ?? {logicalOperator: 'and', conditions: []};
+        publishFilter({ ...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1},
+            criteria: {...criteria, conditions: [{id:'held-seed', type:'singleCondition', setting:{fieldType:'multipleSelects', type:'hasAnyOf', idOrName:{type:'id',id:'labels'}, value:['red']}}, ...criteria.conditions]} });
+    },
     cycleViews() {
         for (const viewId of ['view-b', 'view-a'])
             publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
@@ -281,6 +291,67 @@ globalThis.filterFixture = {
     unmount: () => filterRoot.unmount(),
 };
 `;
+
+async function checkHeldQuickFilter(page) {
+    const labels = page
+        .getByRole('group', { name: 'Quick filters' })
+        .getByRole('listbox', { name: 'Labels' });
+    const summary = () =>
+        page.evaluate(() => globalThis.filterFixture.summary());
+    const waitForCount = (count) =>
+        page.waitForFunction(
+            (expected) =>
+                globalThis.filterFixture.summary().commands.length === expected,
+            count
+        );
+    const initial = await summary();
+    const offset = initial.commands.length;
+    await page.evaluate(() => globalThis.filterFixture.seedHeldChoice());
+    await page.waitForFunction(
+        () => document.querySelector('select[multiple]')?.value === 'red'
+    );
+    await labels.focus();
+    const retained = await labels.elementHandle();
+    assert.ok(retained);
+    try {
+        await page.keyboard.down('ArrowDown');
+        await waitForCount(offset + 1);
+        await page.keyboard.down('ArrowDown');
+        await waitForCount(offset + 2);
+        assert.equal(
+            await retained.evaluate(
+                (element) => element === document.activeElement
+            ),
+            true
+        );
+        await page.evaluate(() => globalThis.filterFixture.cycleViews());
+        await page.keyboard.down('ArrowDown');
+        await page.getByRole('status').waitFor({ state: 'visible' });
+        assert.equal((await summary()).commands.length, offset + 2);
+    } finally {
+        await page.keyboard.up('ArrowDown');
+        await retained.dispose();
+    }
+    await page.keyboard.press('ArrowDown');
+    await waitForCount(offset + 3);
+    const end = await summary();
+    assert.deepEqual(
+        end.commands
+            .slice(offset)
+            .map((command) => command.criteria.conditions[0].setting.value),
+        [['blue'], ['green'], ['yellow']]
+    );
+    assert.deepEqual(
+        end.heldSelectKeys.slice(initial.heldSelectKeys.length),
+        [false, true, true, false].map((repeat) => ({ repeat, trusted: true }))
+    );
+    assert.equal(end.submits, 0);
+    return {
+        freshAndRepeatedCommands: 3,
+        retiredRepeatRefused: true,
+        trustedKeys: true,
+    };
+}
 
 async function checkQuickFilter(page, startingCriteria) {
     const root = page.getByRole('group', { name: 'Quick filters' });
@@ -483,6 +554,7 @@ async function checkFilter(page) {
     assert.equal(dismissed.outcomes.at(-1).requestId, 'filter-2');
     assert.equal(dismissed.submits, 0);
     const quick = await checkQuickFilter(page, dismissed.commands[1].criteria);
+    const heldQuick = await checkHeldQuickFilter(page);
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -494,6 +566,7 @@ async function checkFilter(page) {
         operandEnterSubmits: 0,
         backdropAllocation: 'filter-2',
         quick,
+        heldQuick,
         focusRestored: true,
         cleanup: 'completed',
     };

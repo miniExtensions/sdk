@@ -69,7 +69,8 @@ export type PortalVisitorFilterProps = {
 };
 type Draft = NonNullable<ReturnType<typeof createPortalVisitorFilterDraft>>;
 type Open = { port: PortalVisitorFilterPort; draft: Draft };
-type QuickGesture = { fieldId: string; shown: Open };
+type HeldQuickKey = { fieldId: string; key: string; shown: Open };
+type QuickGesture = { fieldId: string; shown: Open; held?: HeldQuickKey };
 type Status = {
     type: PortalVisitorFilterOutcome['type'] | 'pending';
     owner?: Open;
@@ -536,6 +537,7 @@ export function PortalVisitorFilter(
     const occupied = useRef<Open | null>(null);
     const inFlight = useRef<Open | null>(null);
     const quickGesture = useRef<QuickGesture | null>(null);
+    const heldQuickKey = useRef<HeldQuickKey | null>(null);
     const trigger = useRef<HTMLButtonElement>(null);
     const quickId = useId();
     const owner = useRef(props.port);
@@ -552,12 +554,14 @@ export function PortalVisitorFilter(
             inFlight.current = null;
             old?.draft.retire();
             quickGesture.current = null;
+            heldQuickKey.current = null;
         };
     }, [props.port]);
     useCommitEffect(() => {
         if (!props.showDropdowns) {
             setQuick(null);
             quickGesture.current = null;
+            heldQuickKey.current = null;
             return;
         }
         const refresh = () => setQuick(readFilterDraft(props.port));
@@ -569,6 +573,11 @@ export function PortalVisitorFilter(
         if (active && active.port !== props.port) setActive(null);
         if (active && props.disabled) active.draft.retire();
     }, [active, props.disabled, props.port]);
+    useCommitEffect(() => {
+        if (!props.disabled) return;
+        quickGesture.current = null;
+        heldQuickKey.current = null;
+    }, [props.disabled]);
     useCommitEffect(() => {
         if (
             !status?.owner ||
@@ -596,7 +605,7 @@ export function PortalVisitorFilter(
         setStatus(null);
         setActive(shown);
     };
-    const submit = (shown: Open) => {
+    const submit = (shown: Open, held?: HeldQuickKey) => {
         inFlight.current = shown;
         setStatus({ type: 'pending' });
         void shown.draft.commit().then((outcome) => {
@@ -604,7 +613,16 @@ export function PortalVisitorFilter(
                 return;
             inFlight.current = null;
             if (props.showDropdowns) setQuick(readFilterDraft(shown.port));
-            if (!shown.draft.canReport(outcome)) {
+            const current = shown.draft.canReport(outcome);
+            if (held && heldQuickKey.current === held) {
+                const resumed = current
+                    ? shown.draft.resumeAfterAllocation()
+                    : null;
+                heldQuickKey.current = resumed
+                    ? { ...held, shown: { port: shown.port, draft: resumed } }
+                    : null;
+            }
+            if (!current) {
                 setStatus({ type: 'stale' });
                 return;
             }
@@ -637,11 +655,13 @@ export function PortalVisitorFilter(
             return false;
         const { shown } = gesture;
         if (!shown.draft.current()) {
+            if (gesture.held && heldQuickKey.current === gesture.held)
+                heldQuickKey.current = null;
             setStatus({ type: 'stale' });
             return false;
         }
         if (!shown.draft.setDropdown(fieldId, values)) return false;
-        submit(shown);
+        submit(shown, gesture.held);
         return true;
     };
     const renderDropdowns = (shown: Open) => {
@@ -662,7 +682,9 @@ export function PortalVisitorFilter(
                 const gestureEvents = {
                     onFocus: remember,
                     onPointerDown: (event: PointerEvent) => {
-                        if (event.button === 0) remember();
+                        if (event.button !== 0) return;
+                        heldQuickKey.current = null;
+                        remember();
                     },
                 };
                 return h(
@@ -681,15 +703,60 @@ export function PortalVisitorFilter(
                                 onKeyDown: (
                                     event: KeyboardEvent<HTMLSelectElement>
                                 ) => {
+                                    if (event.repeat) {
+                                        const held = heldQuickKey.current;
+                                        if (
+                                            held?.fieldId === fieldId &&
+                                            held.key === event.key
+                                        )
+                                            quickGesture.current = {
+                                                fieldId,
+                                                shown: held.shown,
+                                                held,
+                                            };
+                                        return;
+                                    }
                                     if (
-                                        !event.repeat &&
-                                        (selectKeys.has(event.key) ||
-                                            (event.key.length === 1 &&
-                                                !event.ctrlKey &&
-                                                !event.metaKey &&
-                                                !event.altKey))
+                                        selectKeys.has(event.key) ||
+                                        (event.key.length === 1 &&
+                                            !event.ctrlKey &&
+                                            !event.metaKey &&
+                                            !event.altKey)
+                                    ) {
+                                        const held = {
+                                            fieldId,
+                                            key: event.key,
+                                            shown,
+                                        };
+                                        heldQuickKey.current = held;
+                                        quickGesture.current = {
+                                            fieldId,
+                                            shown,
+                                            held,
+                                        };
+                                    }
+                                },
+                                onKeyUp: (
+                                    event: KeyboardEvent<HTMLSelectElement>
+                                ) => {
+                                    const held = heldQuickKey.current;
+                                    if (
+                                        held?.fieldId === fieldId &&
+                                        held.key === event.key
                                     )
-                                        remember();
+                                        heldQuickKey.current = null;
+                                },
+                                onBlur: () => {
+                                    if (
+                                        heldQuickKey.current?.fieldId ===
+                                        fieldId
+                                    )
+                                        heldQuickKey.current = null;
+                                    if (
+                                        quickGesture.current?.fieldId ===
+                                        fieldId
+                                    )
+                                        quickGesture.current = null;
                                 },
                                 multiple,
                                 value: multiple

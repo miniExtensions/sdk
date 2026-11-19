@@ -2553,6 +2553,11 @@ try {
                 clearFocus: true,
                 formSubmits: 0,
             },
+            heldQuick: {
+                freshAndRepeatedCommands: 3,
+                retiredRepeatRefused: true,
+                trustedKeys: true,
+            },
             focusRestored: true,
             cleanup: 'completed',
         });

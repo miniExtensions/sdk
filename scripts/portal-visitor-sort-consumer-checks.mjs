@@ -120,7 +120,7 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
     const cases = includeQuery
         ? [...sortCases, ...searchCases, viewButtonsCase, ...filterCases]
         : sortCases;
-    const expectedTests = includeQuery ? 78 : 15;
+    const expectedTests = includeQuery ? 81 : 15;
     const fixtures = includeQuery ? [fixture, quickFilterFixture] : [fixture];
     const output = [];
     for (const [react, types, domTypes] of profiles) {

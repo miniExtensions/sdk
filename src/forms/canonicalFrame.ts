@@ -14,7 +14,7 @@ export type CanonicalFormErrors = Readonly<Record<string, string | undefined>>;
 
 /** Fixed at an accepted installation, never inferred from current dirty state. */
 export type CanonicalFormOwner = Readonly<{
-    cohort: 'public-direct-root-non-compute';
+    cohort: 'public-direct-root-non-compute' | 'public-child-or-portal';
     installation: string;
 }>;
 
@@ -56,7 +56,7 @@ export type CanonicalFormReadonlyOrigin = Readonly<{
 /**
  * One application-owned immutable canonical state. The host stores and publishes
  * this frame atomically; compatibility views must not become a second draft.
- * Compute, config-preview, child Forms and Portal remain separate native owners.
+ * Child and Portal Form state is opt-in. Compute and config preview remain native.
  */
 export type CanonicalFormFrame = Readonly<{
     owner: CanonicalFormOwner;
@@ -370,10 +370,14 @@ export function transitionCanonicalFormFrame<Authority, Allocation, Failure>(
     event: CanonicalFormEvent<Authority, Allocation, Failure>,
     ports: CanonicalFormTransitionPorts<Authority, Allocation, Failure>
 ): CanonicalFormTransitionResult<Failure> {
+    const cohort = (event.type === 'install' ? event.frame : frame)?.owner
+        .cohort;
     if (
-        (event.type === 'install' ? event.frame : frame)?.owner.cohort !==
-            'public-direct-root-non-compute' &&
-        (event.type === 'install' || frame != null)
+        (event.type === 'install' || frame != null) &&
+        cohort !== 'public-direct-root-non-compute' &&
+        (cohort !== 'public-child-or-portal' ||
+            event.type === 'settleSave' ||
+            event.type === 'saveFailed')
     )
         return { disposition: 'unsupportedCohort', frame };
     if (!ports.admit(frame, event)) return { disposition: 'stale', frame };
@@ -389,7 +393,8 @@ export function transitionCanonicalFormFrame<Authority, Allocation, Failure>(
         // A genuine public-root load starts fresh URL-intent history. Save and
         // missing-provenance repair do not reset that separate load history.
         const loaded = { ...createCanonicalFormFrame(event.frame) };
-        delete loaded.manualReadonlyRetiredUrlFieldIds;
+        if (cohort === 'public-direct-root-non-compute')
+            delete loaded.manualReadonlyRetiredUrlFieldIds;
         const installed = initializeProvenance(loaded, ports);
         return finish(installed, 'installed');
     }

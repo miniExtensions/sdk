@@ -1,0 +1,67 @@
+.me-portal-visitor-view-buttons {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.me-portal-visitor-view-button {
+    --me-visitor-view-accent: rgb(var(--theme-600, 37 99 235));
+    --me-visitor-view-light: rgb(var(--theme-100, 219 234 254));
+    --me-visitor-view-dark: rgb(var(--theme-800, 30 64 175));
+    position: relative;
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.25rem 0.5rem;
+    border: 2px solid var(--me-visitor-view-accent);
+    border-radius: 9999px;
+    background-color: transparent;
+    color: var(--me-visitor-view-accent);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    cursor: pointer;
+}
+
+.me-portal-visitor-view-button:hover,
+.me-portal-visitor-view-button:focus-visible {
+    background-color: var(--me-visitor-view-light);
+}
+
+.me-portal-visitor-view-button:focus-visible {
+    outline: 2px solid var(--me-visitor-view-accent);
+    outline-offset: 2px;
+}
+
+.me-portal-visitor-view-button[aria-pressed='true'] {
+    background-color: var(--me-visitor-view-accent);
+    color: #fff;
+}
+
+.me-portal-visitor-view-button[aria-pressed='true']:focus-visible {
+    background-color: var(--me-visitor-view-dark);
+}
+
+.me-portal-visitor-view-button__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.me-portal-visitor-view-button__badge {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background-color: #ef4444;
+}
+
+@media (forced-colors: active) {
+    .me-portal-visitor-view-button[aria-pressed='true'] {
+        border-color: Highlight;
+    }
+}

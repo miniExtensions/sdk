@@ -1296,7 +1296,7 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
             assert.equal(f.requests.length, 1);
         });
 
-        it('renews explicit document loading through StrictMode effect replay', async (t) => {
+        it('opens one current document read through StrictMode effect replay', async (t) => {
             const f = await fixture(
                 t,
                 async () => new Response('strict current'),
@@ -1316,10 +1316,9 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
                 () =>
                     f.container.textContent?.includes('strict current') === true
             );
-            assert.ok(f.requests.length >= 1);
-            assert.ok(
-                f.requests.some((request) => !request.init?.signal?.aborted)
-            );
+            assert.equal(f.requests.length, 1);
+            assert.equal(f.requests[0].init?.credentials, 'omit');
+            assert.equal(f.requests[0].init?.signal?.aborted, false);
         });
 
         it('retires document loads on live owner token and payload revision changes without parent render', async (t) => {

@@ -15,39 +15,13 @@ findAdjacentChildSession({origin:navigationOrigin},{...navigationInput,type:'lat
 findAdjacentChildSession({origin:navigationOrigin},{type:'next',recordId:'next'});
 // @ts-expect-error context record identity remains text or null
 findAdjacentChildSession({origin:{...navigationOrigin,recordId:17}},navigationInput);
-import { createElement as createPortalNavigationElement } from 'react';
-import {
-    PortalSidePanelNavigation,
-    type PortalSidePanelNavigationProps,
-    type PortalSidePanelNavigationRequest,
-} from '@miniextensions/sdk/react';
-const portalNavigationProps: PortalSidePanelNavigationProps = {
-    frame: {
-        ownerToken: {},
-        sourceExtensionSessionId: 'origin',
-        sourceRecordId: 'current',
-        previousRecordId: null,
-        nextRecordId: 'next',
-    },
-    labels: { previous: 'Précédent', next: 'Suivant' },
-    isCurrent: request => !request.signal.aborted && request.sourceRecordId === 'current',
-    confirmDismissal: async () => true,
-    openAdjacent: (request: PortalSidePanelNavigationRequest) => { void findAdjacentChildSession({origin:navigationOrigin}, request); },
-};
-createPortalNavigationElement(PortalSidePanelNavigation, portalNavigationProps);
-// @ts-expect-error native ownership supplies the current-frame admission
-const missingPortalNavigationAdmission: PortalSidePanelNavigationProps = { frame: null, labels: portalNavigationProps.labels, confirmDismissal: () => true, openAdjacent() {} };
 void navigationResult;
-void missingPortalNavigationAdmission;
 `;
 export async function checkChildNavigationConsumer({ consumerDirectory }) {
     const loader = join(consumerDirectory, 'child-navigation-public.mjs');
     writeFileSync(
         loader,
-        [
-            "export {findAdjacentChildSession} from '@miniextensions/sdk/ui';",
-            "export {PortalSidePanelNavigation} from '@miniextensions/sdk/react';",
-        ].join('\n')
+        "export {findAdjacentChildSession} from '@miniextensions/sdk/ui';\n"
     );
     const esm = await import(pathToFileURL(loader).href);
     const require = createRequire(join(consumerDirectory, 'package.json'));
@@ -147,6 +121,52 @@ export async function checkChildNavigationConsumer({ consumerDirectory }) {
                 assert.equal(target.recordId, direction);
             }
     }
+    console.log(
+        'Installed adjacent-child compatibility: public ESM/CommonJS owner collisions, declared order, ambiguity, immutable native contexts and strict NodeNext/Bundler declarations passed; no client, request or writer.'
+    );
+    return 2;
+}
+
+export const portalSidePanelNavigationTypedConsumer = `
+import { findAdjacentChildSession as resolvePanelSibling } from '@miniextensions/sdk/ui';
+import { createElement as createPortalNavigationElement } from 'react';
+import {
+    PortalSidePanelNavigation,
+    type PortalSidePanelNavigationProps,
+    type PortalSidePanelNavigationRequest,
+} from '@miniextensions/sdk/react';
+const portalNavigationProps: PortalSidePanelNavigationProps = {
+    frame: {
+        ownerToken: {},
+        sourceExtensionSessionId: 'origin',
+        sourceRecordId: 'current',
+        previousRecordId: null,
+        nextRecordId: 'next',
+    },
+    labels: { previous: 'Précédent', next: 'Suivant' },
+    isCurrent: request => !request.signal.aborted && request.sourceRecordId === 'current',
+    confirmDismissal: async () => true,
+    openAdjacent: (request: PortalSidePanelNavigationRequest) => { void resolvePanelSibling({}, request); },
+};
+createPortalNavigationElement(PortalSidePanelNavigation, portalNavigationProps);
+// @ts-expect-error native ownership supplies the current-frame admission
+const missingPortalNavigationAdmission: PortalSidePanelNavigationProps = { frame: null, labels: portalNavigationProps.labels, confirmDismissal: () => true, openAdjacent() {} };
+void missingPortalNavigationAdmission;
+`;
+
+export async function checkPortalSidePanelNavigationConsumer({
+    consumerDirectory,
+}) {
+    const loader = join(
+        consumerDirectory,
+        'portal-side-panel-navigation-public.mjs'
+    );
+    writeFileSync(
+        loader,
+        "export {PortalSidePanelNavigation} from '@miniextensions/sdk/react';\n"
+    );
+    const esm = await import(pathToFileURL(loader).href);
+    const require = createRequire(join(consumerDirectory, 'package.json'));
     const { createElement } = require('react');
     const { renderToStaticMarkup } = require('react-dom/server');
     for (const Navigation of [
@@ -180,8 +200,5 @@ export async function checkChildNavigationConsumer({ consumerDirectory }) {
             ''
         );
     }
-    console.log(
-        'Installed adjacent-child compatibility: public ESM/CommonJS owner collisions, declared order, ambiguity, immutable native contexts localized React controls, and strict NodeNext/Bundler declarations passed; no client, request or writer.'
-    );
     return 2;
 }

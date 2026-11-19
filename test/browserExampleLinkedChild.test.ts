@@ -760,6 +760,97 @@ describe('browser starter standalone linked-child integration', () => {
         assert.equal(f.calls.saves.length, 0);
     });
 
+    it('preserves a retained draft when opening a different child fails', async (test) => {
+        const f = await fixture(test, {
+            load: async (input) => {
+                assert.ok('childExtensionInfo' in input);
+                const access = input.childExtensionInfo.accessType;
+                if (
+                    access.type === 'edit' &&
+                    access.childExtensionRecordId === 'rec_sibling'
+                )
+                    throw Error('Synthetic sibling load failed.');
+                return loadedChild(input);
+            },
+        });
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        const title = 'Keep the retained draft after a failed load';
+        edit(f.window, f.panel.node, 'fld_title', title);
+        assert.equal(f.owner.closeEdit(f.owner.getSnapshot().revision), true);
+        assert.equal(
+            await f.owner.openEdit(
+                'rec_sibling',
+                f.owner.getSnapshot().revision
+            ),
+            false
+        );
+        assert.equal(
+            await f.owner.openEdit(
+                'rec_existing',
+                f.owner.getSnapshot().revision
+            ),
+            true
+        );
+        assert.equal(
+            f.owner.getSnapshot().child!.field('fld_title').getSnapshot().value,
+            title
+        );
+        assert.deepEqual(
+            [f.calls.reads.length, f.calls.loads.length, f.calls.saves.length],
+            [1, 2, 0]
+        );
+    });
+
+    it('refuses a Close whose final parent observation starts a Save for that child', async (test) => {
+        const response = deferred<SaveFormResult>();
+        const f = await fixture(test, { save: async () => response.promise });
+        button(f.panel.node, 'Load selected records').click();
+        await waitFor(() =>
+            f.owner.getSnapshot().editableRecordIds.includes('rec_existing')
+        );
+        button(f.panel.node, 'Edit linked record rec_existing').click();
+        await waitFor(() => f.owner.getSnapshot().phase === 'ready');
+        edit(f.window, f.panel.node, 'fld_title', 'Explicit reentrant Save');
+        const { child, revision } = f.owner.getSnapshot();
+        assert.ok(child);
+        const getChild = child.controller.getState;
+        const getParent = f.fields.controller.getState;
+        let observations = 0;
+        let afterDraft = false;
+        let save: ReturnType<typeof f.owner.save> | undefined;
+        child.controller.getState = () => {
+            const result = getChild();
+            afterDraft = true;
+            return result;
+        };
+        f.fields.controller.getState = () => {
+            const result = getParent();
+            // The first parent read checks selection after reading the draft.
+            // The next one belongs to the final parent lease check.
+            if (afterDraft && ++observations === 2) {
+                save = f.owner.save(revision);
+                void save.catch(() => {});
+            }
+            return result;
+        };
+        try {
+            assert.equal(f.owner.closeEdit(revision), false);
+        } finally {
+            child.controller.getState = getChild;
+            f.fields.controller.getState = getParent;
+            response.resolve(childSaved('edit'));
+        }
+        assert.ok(save);
+        assert.equal((await save).type, 'saved');
+        assert.equal(f.calls.saves.length, 1);
+        assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+    });
+
     it('uses child manual pages and displays validation without a second automatic Save', async (test) => {
         let rejectSave = true;
         const f = await fixture(test, {

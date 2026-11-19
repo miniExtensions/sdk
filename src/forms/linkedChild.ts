@@ -478,17 +478,15 @@ export function createFormLinkedChildOwner(
         recordId: string | null,
         request: { signal?: AbortSignal; clientTimeZone?: string }
     ): Promise<boolean> => {
+        const retainedAtOpen = retainedEdit;
         const resume =
-            retainedEdit &&
-            recordId === retainedEdit.recordId &&
-            retainedEdit.loaded.extensionId === plan.childExtensionId &&
-            retainedEdit.loaded.payload.publicFields.state.tableId ===
-                plan.linkedTableId &&
-            !request.signal?.aborted
-                ? retainedEdit
+            retainedAtOpen &&
+            recordId === retainedAtOpen.recordId &&
+            retainedAtOpen.loaded.extensionId === plan.childExtensionId &&
+            retainedAtOpen.loaded.payload.publicFields.state.tableId ===
+                plan.linkedTableId
+                ? retainedAtOpen
                 : null;
-        if (request.signal?.aborted) return false;
-        retainedEdit = null;
         const ticket = ++generation;
         lastRecordId = recordId;
         const abort = new AbortController();
@@ -506,16 +504,29 @@ export function createFormLinkedChildOwner(
         scope.tableId = plan.linkedTableId;
         scope.childExtensionId = plan.childExtensionId;
         emit();
+        const resumeCurrent = () => {
+            if (!resume) return true;
+            if (retainedEdit !== resume || !isSelected(resume.recordId))
+                return false;
+            const fresh = editPolicy(resume.recordId);
+            return (
+                fresh?.type === 'available' &&
+                fresh.childExtensionId === plan.childExtensionId &&
+                fresh.linkedTableId === plan.linkedTableId &&
+                retainedEdit === resume
+            );
+        };
         const ownsLoad = () =>
             activeLoad === abort &&
             generation === ticket &&
             !abort.signal.aborted &&
             parentCurrent() &&
-            (!resume ||
-                (isSelected(resume.recordId) &&
-                    editPolicy(resume.recordId)?.type === 'available')) &&
+            resumeCurrent() &&
             activeLoad === abort &&
-            generation === ticket;
+            generation === ticket &&
+            !abort.signal.aborted &&
+            !parentRetired &&
+            !disposed;
         try {
             if (!ownsLoad()) return false;
             const input: LoadExtensionInput = {
@@ -686,6 +697,7 @@ export function createFormLinkedChildOwner(
                     return false;
                 }
                 candidate.stops.push(stop);
+                if (retainedEdit === retainedAtOpen) retainedEdit = null;
                 phase = 'ready';
                 emit();
                 return (
@@ -1063,9 +1075,13 @@ export function createFormLinkedChildOwner(
             const keep =
                 draft?.dirtyFieldIds.length && isSelected(candidate.recordId);
             if (
-                revision !== renderedRevision ||
                 !parentCurrent() ||
-                !childCurrent(candidate)
+                !childCurrent(candidate) ||
+                blocking(candidate.recordId) ||
+                revision !== renderedRevision ||
+                saving ||
+                !ownsIntent(candidate) ||
+                !['ready', 'error'].includes(phase)
             )
                 return false;
             retainedEdit = keep

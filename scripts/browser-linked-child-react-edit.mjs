@@ -144,6 +144,16 @@ export async function checkInstalledReactLinkedChildEdit({
             );
             return opening;
         };
+        const openAfterParentReplacement = async (previousOpener) => {
+            await page.evaluate(() => window.replaceReactEditParent());
+            await dialog.waitFor({ state: 'hidden' });
+            // Retiring the owner can hide its dialog before React replaces the opener.
+            await page.waitForFunction(
+                (node) => !node.isConnected,
+                previousOpener
+            );
+            return open();
+        };
         const unchangedParent = (receipt, title = 'Parent native title') => {
             assert.equal(receipt.calls.parentSubmits, 0);
             assert.equal(receipt.parentTitle, title);
@@ -265,9 +275,7 @@ export async function checkInstalledReactLinkedChildEdit({
         assert.equal(await dialog.isVisible(), true);
         assert.equal(await focus(uncertainOpener), false);
         assert.deepEqual(await read(), stale);
-        await page.evaluate(() => window.replaceReactEditParent());
-        await dialog.waitFor({ state: 'hidden' });
-        const newOpener = await open();
+        const newOpener = await openAfterParentReplacement(uncertainOpener);
         assert.equal(
             await uncertainOpener.evaluate((node) => node.isConnected),
             false
@@ -292,9 +300,7 @@ export async function checkInstalledReactLinkedChildEdit({
         assert.equal(await button('Close').isDisabled(), true);
         await page.keyboard.press('Escape');
         assert.equal(await dialog.isVisible(), true);
-        await page.evaluate(() => window.replaceReactEditParent());
-        await dialog.waitFor({ state: 'hidden' });
-        const successor = await open();
+        const successor = await openAfterParentReplacement(retired);
         assert.equal(await retired.evaluate((node) => node.isConnected), false);
         assert.equal(
             await successor.evaluate((node) => node.isConnected),

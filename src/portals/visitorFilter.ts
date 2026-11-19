@@ -265,21 +265,38 @@ function locate(
     parentLevel = 0
 ):
     | {
-          parent: Parent;
-          index: number;
           node: RuntimeConditionItem;
           level: number;
       }
     | undefined {
-    for (const [index, node] of parent.conditions.entries()) {
+    for (const node of parent.conditions) {
         const level =
             node.type === 'groupCondition' ? parentLevel + 1 : parentLevel;
-        if (node.id === id) return { parent, index, node, level };
+        if (node.id === id) return { node, level };
         if (node.type !== 'groupCondition') continue;
         const nested = locate(node, id, level);
         if (nested) return nested;
     }
     return undefined;
+}
+
+function removeCondition(parent: Parent, id: string, level = 0): boolean {
+    for (const [index, node] of parent.conditions.entries()) {
+        if (node.id === id) {
+            parent.conditions.splice(index, 1);
+            return true;
+        }
+        if (
+            node.type === 'groupCondition' &&
+            level < maximumGroupLevel &&
+            removeCondition(node, id, level + 1)
+        ) {
+            if (node.conditions.length === 0)
+                parent.conditions.splice(index, 1);
+            return true;
+        }
+    }
+    return false;
 }
 
 function receipt(
@@ -530,10 +547,8 @@ export function createPortalVisitorFilterDraft(
             return true;
         },
         remove(id: string) {
-            if (!current() || !criteria) return false;
-            const found = node(id);
-            if (!found) return false;
-            found.parent.conditions.splice(found.index, 1);
+            if (!current() || !criteria || !removeCondition(criteria, id))
+                return false;
             normalizedOnDeletion = true;
             if (criteria.conditions.length === 0) criteria = null;
             else normalizeAfterRemoval(criteria);

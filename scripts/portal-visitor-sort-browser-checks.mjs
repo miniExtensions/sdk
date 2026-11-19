@@ -205,12 +205,19 @@ globalThis.viewButtonsFixture = {
 
 const filterFixture = `
 import { PortalVisitorFilter } from '@miniextensions/sdk/react';
+const filterForm = document.createElement('form');
 const filterHost = document.createElement('section');
-document.querySelector('form').append(filterHost);
+filterForm.append(filterHost);
+document.body.append(filterForm);
 const filterRoot = createRoot(filterHost);
 const filterListeners = new Set();
 const filterCommands = [];
 const filterOutcomes = [];
+let filterFormSubmits = 0;
+filterForm.addEventListener('submit', (event) => {
+    filterFormSubmits++;
+    event.preventDefault();
+});
 const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
@@ -256,7 +263,7 @@ filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
     port: filterPort, onOutcome: (outcome) => filterOutcomes.push(outcome),
 })));
 globalThis.filterFixture = {
-    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size}),
+    summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits}),
     cycleViews() {
         for (const viewId of ['view-b', 'view-a'])
             publishFilter({...filterFrame, stamp: {...filterFrame.stamp, viewId, generation: filterFrame.stamp.generation + 1}});
@@ -296,7 +303,26 @@ async function checkFilter(page) {
     };
     await open();
     assert.equal(await firstValue.inputValue(), 'Keep');
+    await firstValue.press('Enter');
+    const afterOperandEnter = await summary();
     await firstValue.fill('Transient change');
+    const bounds = await dialog.boundingBox();
+    assert.ok(bounds);
+    await page.mouse.click(bounds.x + 4, bounds.y + 4);
+    assert.deepEqual(
+        {
+            operandEnterSubmits: afterOperandEnter.submits,
+            operandEnterCommands: afterOperandEnter.commands.length,
+            paddingKeptOpen: await dialog.isVisible(),
+            commandsAfterPadding: (await summary()).commands.length,
+        },
+        {
+            operandEnterSubmits: 0,
+            operandEnterCommands: 0,
+            paddingKeptOpen: true,
+            commandsAfterPadding: 0,
+        }
+    );
     await firstValue.fill('Keep');
     await done.press('Enter');
     await closed(1);
@@ -350,6 +376,21 @@ async function checkFilter(page) {
     await closed(3);
     assert.equal((await summary()).commands.length, 1);
     assert.equal((await summary()).outcomes.at(-1).type, 'stale');
+
+    await open();
+    await firstValue.fill('Backdrop change');
+    const backdrop = await dialog.boundingBox();
+    assert.ok(backdrop && backdrop.x > 4);
+    await page.mouse.click(backdrop.x - 4, backdrop.y + 4);
+    await closed(4);
+    const dismissed = await summary();
+    assert.equal(dismissed.commands.length, 2);
+    assert.equal(
+        dismissed.commands[1].criteria.conditions[0].setting.value,
+        'Backdrop change'
+    );
+    assert.equal(dismissed.outcomes.at(-1).requestId, 'filter-2');
+    assert.equal(dismissed.submits, 0);
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -357,6 +398,9 @@ async function checkFilter(page) {
         editAndRevert: 'unchanged',
         activeGroupDepth: 2,
         staleDraft: 'refused',
+        paddingIsInert: true,
+        operandEnterSubmits: 0,
+        backdropAllocation: 'filter-2',
         focusRestored: true,
         cleanup: 'completed',
     };

@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { Element as MountedElement } from 'happy-dom';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import { PortalVisitorFilter } from '../src/react/PortalVisitorFilter.js';
 import type {
     PortalVisitorFilterCommand,
     PortalVisitorFilterFrame,
+    PortalVisitorFilterOutcome,
     PortalVisitorFilterPort,
 } from '../src/portals/visitorFilter.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
-function owner() {
+function owner(addedFields: PortalVisitorFilterFrame['fields'] = []) {
     let frame: PortalVisitorFilterFrame = {
         stamp: {
             sessionId: 'owner',
@@ -37,11 +39,17 @@ function owner() {
                     },
                 ],
             },
+            ...addedFields,
         ],
         criteria: null,
     };
     const listeners = new Set<() => void>();
     const commands: PortalVisitorFilterCommand[] = [];
+    let respond: PortalVisitorFilterPort['apply'] = () => ({
+        type: 'allocated',
+        requestId: 'request',
+        generation: 2,
+    });
     let reads = 0;
     const port: PortalVisitorFilterPort = {
         read() {
@@ -56,12 +64,15 @@ function owner() {
         },
         apply(command) {
             commands.push(command);
-            return { type: 'allocated', requestId: 'request', generation: 2 };
+            return respond(command);
         },
     };
     return {
         port,
         commands,
+        respondWith(next: PortalVisitorFilterPort['apply']) {
+            respond = next;
+        },
         reads: () => reads,
         listeners,
         seed(
@@ -334,4 +345,307 @@ test('the mounted dialog preserves the original deeper subtree during an unrelat
         logicalOperator: 'or',
         conditions: [retained],
     });
+});
+
+test('the mounted editor submits ordered choice IDs, a Boolean and the selected group operator', async (t) => {
+    const choices = [
+        { value: 'red-id', label: 'Red' },
+        { value: 'blue-id', label: 'Blue' },
+    ];
+    const singleChoice = {
+        fieldType: 'singleSelect',
+        idOrName: { type: 'id', id: 'status' },
+        value: 'red-id',
+    } as const;
+    const multiChoice = {
+        fieldType: 'multipleSelects',
+        idOrName: { type: 'id', id: 'labels' },
+        type: 'hasAnyOf',
+        value: ['red-id'],
+    } as const;
+    const toggle = {
+        fieldType: 'checkbox',
+        idOrName: { type: 'id', id: 'confirmed' },
+        type: 'is',
+        value: false,
+    } as const;
+    const host = owner([
+        {
+            id: 'status',
+            name: 'Status',
+            operators: [
+                {
+                    label: 'Is',
+                    setting: { ...singleChoice, type: 'is' },
+                    operand: { kind: 'choice', choices },
+                },
+                {
+                    label: 'Is not',
+                    setting: { ...singleChoice, type: 'isNot' },
+                    operand: { kind: 'choice', choices },
+                },
+            ],
+        },
+        {
+            id: 'labels',
+            name: 'Labels',
+            operators: [
+                {
+                    label: 'Has any',
+                    setting: { ...multiChoice, value: [...multiChoice.value] },
+                    operand: { kind: 'choices', choices },
+                },
+            ],
+        },
+        {
+            id: 'confirmed',
+            name: 'Confirmed',
+            operators: [
+                { label: 'Is', setting: toggle, operand: { kind: 'boolean' } },
+            ],
+        },
+    ]);
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    await f.click(button(f, 'Filter'));
+    const select = async (
+        container: MountedElement,
+        selector: string,
+        values: readonly string[]
+    ) => {
+        const input = container.querySelector(selector);
+        assert.ok(input instanceof f.window.HTMLSelectElement, selector);
+        await act(async () => {
+            for (const option of input.options)
+                option.selected = values.includes(option.value);
+            input.dispatchEvent(
+                new f.window.Event('change', { bubbles: true })
+            );
+        });
+    };
+    const add = async (id: string) => {
+        await f.click(button(f, 'Add condition'));
+        const row = Array.from(f.container.querySelectorAll('dialog li')).at(
+            -1
+        );
+        assert.ok(row);
+        await select(row, 'select[id$="-field"]', [id]);
+        return row;
+    };
+    const status = await add('status');
+    await select(status, 'label:nth-child(2) select', ['isNot']);
+    await select(status, 'select[aria-label="Value"]', ['blue-id']);
+    const labels = await add('labels');
+    await select(labels, 'select[aria-label="Value"][multiple]', [
+        'blue-id',
+        'red-id',
+    ]);
+    const confirmed = await add('confirmed');
+    await select(confirmed, 'select[aria-label="Value"]', ['yes']);
+    await select(f.container, 'select[id$="-root-operator"]', ['or']);
+    assert.equal(host.commands.length, 0);
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+    const tree = host.commands[0].criteria;
+    assert.equal(tree?.logicalOperator, 'or');
+    assert.deepEqual(
+        tree.conditions.map(
+            (condition) =>
+                condition.type === 'singleCondition' && condition.setting
+        ),
+        [
+            { ...singleChoice, type: 'isNot', value: 'blue-id' },
+            { ...multiChoice, value: ['red-id', 'blue-id'] },
+            { ...toggle, value: true },
+        ]
+    );
+});
+
+test('a current refused Filter shows feedback until its committed generation is replaced', async (t) => {
+    const host = owner();
+    const outcomes: PortalVisitorFilterOutcome[] = [];
+    host.respondWith(({ criteria }) => {
+        host.seed({ criteria });
+        host.update('a', 2);
+        return { type: 'refused', committedGeneration: 2 };
+    });
+    const f = await htmlPresentationFixture(t);
+    await f.render(
+        h(PortalVisitorFilter, {
+            port: host.port,
+            onOutcome: (outcome) => outcomes.push(outcome),
+        })
+    );
+    await f.click(button(f, 'Filter'));
+    await f.click(button(f, 'Add condition'));
+    await f.click(button(f, 'Done'));
+    const status = () =>
+        f.container.querySelector('[role="status"]')?.textContent;
+    assert.match(status() ?? '', /could not apply/);
+    assert.deepEqual(outcomes, [{ type: 'refused', committedGeneration: 2 }]);
+    assert.equal(host.listeners.size, 1);
+    await act(async () => host.update('b', 3));
+    assert.equal(status(), undefined);
+    assert.equal(host.listeners.size, 0);
+    assert.equal(host.commands.length, 1);
+});
+
+test('an uncertain Filter receipt cannot cross a newer generation or cause a second command', async (t) => {
+    const host = owner();
+    const outcomes: PortalVisitorFilterOutcome[] = [];
+    let settle: ((result: PortalVisitorFilterOutcome) => void) | undefined;
+    host.respondWith(
+        () =>
+            new Promise((resolve) => {
+                settle = resolve;
+            })
+    );
+    const f = await htmlPresentationFixture(t);
+    await f.render(
+        h(PortalVisitorFilter, {
+            port: host.port,
+            onOutcome: (outcome) => outcomes.push(outcome),
+        })
+    );
+    await f.click(button(f, 'Filter'));
+    await f.click(button(f, 'Add condition'));
+    await f.click(button(f, 'Done'));
+    await f.click(button(f, 'Filter'));
+    assert.equal(f.container.querySelector('dialog'), null);
+    assert.equal(host.commands.length, 1);
+    assert.ok(settle);
+    await act(async () => {
+        host.update('b', 2);
+        host.update('a', 3);
+        settle?.({ type: 'uncertain' });
+    });
+    assert.deepEqual(outcomes, []);
+    assert.match(
+        f.container.querySelector('[role="status"]')?.textContent ?? '',
+        /changed/
+    );
+    assert.equal(host.commands.length, 1);
+    await f.click(button(f, 'Filter'));
+    assert.ok(f.container.querySelector('dialog[open]'));
+    assert.equal(host.commands.length, 1);
+});
+
+test('clearing a saved Filter applies once on a true backdrop gesture', async (t) => {
+    const host = owner();
+    const setting = host.port.read()?.fields[0].operators[0].setting;
+    assert.ok(setting);
+    host.seed({
+        criteria: {
+            logicalOperator: 'and',
+            conditions: [{ id: 'saved', type: 'singleCondition', setting }],
+        },
+    });
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    await f.click(button(f, 'Filter'));
+    const input = f.container.querySelector('input[aria-label="Value"]');
+    assert.ok(input instanceof f.window.HTMLInputElement);
+    await act(async () => {
+        for (const [key, isComposing, preventsSubmit] of [
+            ['Enter', false, true],
+            ['Enter', true, false],
+            ['Tab', false, false],
+        ] as const) {
+            const event = new f.window.KeyboardEvent('keydown', {
+                key,
+                isComposing,
+                bubbles: true,
+                cancelable: true,
+            });
+            input.dispatchEvent(event);
+            assert.equal(event.defaultPrevented, preventsSubmit);
+        }
+    });
+    await f.click(button(f, 'Clear filters'));
+    const dialog = f.container.querySelector('dialog[open]');
+    const heading = dialog?.querySelector('h2');
+    assert.ok(dialog instanceof f.window.HTMLDialogElement && heading);
+    dialog.getBoundingClientRect = () => new f.window.DOMRect(20, 20, 200, 100);
+    const press = async (
+        from: MountedElement,
+        clientX: number,
+        clientY: number,
+        cancelled = false
+    ) => {
+        await act(async () => {
+            from.dispatchEvent(
+                new f.window.MouseEvent('pointerdown', {
+                    bubbles: true,
+                    clientX,
+                    clientY,
+                })
+            );
+            if (cancelled)
+                dialog.dispatchEvent(
+                    new f.window.Event('pointercancel', { bubbles: true })
+                );
+            dialog.dispatchEvent(
+                new f.window.MouseEvent('click', {
+                    bubbles: true,
+                    clientX,
+                    clientY,
+                })
+            );
+        });
+    };
+    await press(heading, 40, 40);
+    assert.equal(host.commands.length, 0);
+    assert.equal(dialog.open, true);
+    await press(dialog, 24, 24);
+    assert.equal(host.commands.length, 0);
+    assert.equal(dialog.open, true);
+    await press(dialog, 8, 25, true);
+    assert.equal(host.commands.length, 0);
+    assert.equal(dialog.open, true);
+    await press(dialog, 8, 25);
+    assert.equal(host.commands.length, 1);
+    assert.equal(host.commands[0].criteria, null);
+    assert.equal(f.container.querySelector('dialog'), null);
+});
+
+test('deleting the sole nested condition removes its empty groups before Done', async (t) => {
+    const host = owner();
+    const setting = host.port.read()?.fields[0].operators[0].setting;
+    assert.ok(setting);
+    host.seed({
+        criteria: {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'outer',
+                    type: 'groupCondition',
+                    logicalOperator: 'or',
+                    conditions: [
+                        {
+                            id: 'inner',
+                            type: 'groupCondition',
+                            logicalOperator: 'and',
+                            conditions: [
+                                {
+                                    id: 'saved',
+                                    type: 'singleCondition',
+                                    setting,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    });
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    await f.click(button(f, 'Filter'));
+    assert.equal(f.container.querySelectorAll('fieldset').length, 2);
+    await f.click(button(f, 'Delete condition'));
+    assert.equal(f.container.querySelectorAll('fieldset').length, 0);
+    assert.equal(host.commands.length, 0);
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+    assert.equal(host.commands[0].criteria, null);
 });

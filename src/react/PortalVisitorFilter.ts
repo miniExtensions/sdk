@@ -7,6 +7,7 @@ import {
     useState,
     type ChangeEvent,
     type CSSProperties,
+    type MouseEvent,
     type ReactElement,
     type SyntheticEvent,
 } from 'react';
@@ -75,6 +76,19 @@ const buttons: CSSProperties = {
     alignItems: 'center',
     gap: '0.5rem',
 };
+
+function hitsBackdrop(event: MouseEvent<HTMLDialogElement>) {
+    if (event.target !== event.currentTarget) return false;
+    // Native dialogs retarget both the backdrop and their own padding to the dialog.
+    const { left, right, top, bottom } =
+        event.currentTarget.getBoundingClientRect();
+    return (
+        event.clientX < left ||
+        event.clientX >= right ||
+        event.clientY < top ||
+        event.clientY >= bottom
+    );
+}
 
 function FilterDialog({
     shown,
@@ -233,6 +247,10 @@ function FilterDialog({
                 typeof value === 'number' || typeof value === 'string'
                     ? value
                     : '',
+            onKeyDown: (event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing)
+                    event.preventDefault();
+            },
             onChange: (event: ChangeEvent<HTMLInputElement>) =>
                 update(
                     draft.setOperand(
@@ -450,11 +468,13 @@ function FilterDialog({
                 close();
             },
             onPointerDown: (event) => {
-                backdrop.current = event.target === event.currentTarget;
+                backdrop.current = event.button === 0 && hitsBackdrop(event);
+            },
+            onPointerCancel: () => {
+                backdrop.current = false;
             },
             onClick: (event) => {
-                const dismiss =
-                    backdrop.current && event.target === event.currentTarget;
+                const dismiss = backdrop.current && hitsBackdrop(event);
                 backdrop.current = false;
                 if (dismiss) close();
             },

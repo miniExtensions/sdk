@@ -115,7 +115,7 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
     const cases = includeQuery
         ? [...sortCases, ...searchCases, viewButtonsCase, ...filterCases]
         : sortCases;
-    const expectedTests = includeQuery ? 62 : 15;
+    const expectedTests = includeQuery ? 69 : 15;
     const output = [];
     for (const [react, types, domTypes] of profiles) {
         const directory = mkdtempSync(

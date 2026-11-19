@@ -2531,6 +2531,9 @@ try {
             editAndRevert: 'unchanged',
             activeGroupDepth: 2,
             staleDraft: 'refused',
+            paddingIsInert: true,
+            operandEnterSubmits: 0,
+            backdropAllocation: 'filter-2',
             focusRestored: true,
             cleanup: 'completed',
         });

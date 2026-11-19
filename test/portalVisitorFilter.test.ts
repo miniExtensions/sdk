@@ -310,3 +310,45 @@ test('a retained deeper subtree survives an unrelated deletion exactly', async (
         conditions: [retained],
     });
 });
+
+for (const keepSiblings of [false, true]) {
+    test(`removing a last nested predicate prunes only newly emptied ancestors ${keepSiblings ? 'with sibling predicates' : 'through to null'}`, async () => {
+        const owner = host();
+        const group = (
+            id: string,
+            ...conditions: RuntimeConditionsDefinition['conditions']
+        ) => ({
+            id,
+            type: 'groupCondition' as const,
+            logicalOperator: 'or' as const,
+            conditions,
+        });
+        const before = leaf('before', title('Before'));
+        const after = leaf('after', title('After'));
+        const opaque = group(
+            'retained',
+            group('retained-2', group('unsupported'))
+        );
+        const nested = group('outer', group('inner', known));
+        owner.update({
+            ...owner.read(),
+            criteria: {
+                logicalOperator: 'and',
+                conditions: keepSiblings
+                    ? [before, nested, opaque, after]
+                    : [nested],
+            },
+            effectiveSettings: undefined,
+        });
+        const draft = createPortalVisitorFilterDraft(owner.port)!;
+        assert.equal(draft.remove('known'), true);
+        const expected = keepSiblings
+            ? { logicalOperator: 'and', conditions: [before, opaque, after] }
+            : null;
+        assert.deepEqual(draft.snapshot().criteria, expected);
+        assert.equal(owner.calls.length, 0);
+        await draft.commit();
+        assert.equal(owner.calls.length, 1);
+        assert.deepEqual(owner.calls[0].criteria, expected);
+    });
+}

@@ -40,6 +40,8 @@ const defaultLabels = {
     value: 'Value',
     yes: 'Yes',
     no: 'No',
+    unavailableGroup:
+        'This saved filter group exceeds the supported depth. You can keep it or delete it.',
     unavailable:
         'This filter condition is unavailable. You can keep it or delete it.',
     refused: 'The current view could not apply these filters.',
@@ -148,10 +150,20 @@ function FilterDialog({
         if (focus) focusNext.current = focus;
         refresh((value) => value + 1);
     };
-    const action = (label: string, run: () => void, key?: string) =>
+    const action = (
+        label: string,
+        run: () => void,
+        key?: string,
+        disabled = false
+    ) =>
         h(
             'button',
-            { type: 'button', disabled: inactive, onClick: run, id: key },
+            {
+                type: 'button',
+                disabled: inactive || disabled,
+                onClick: run,
+                id: key,
+            },
             label
         );
     const editOperand = (
@@ -294,7 +306,9 @@ function FilterDialog({
                                 'fieldset',
                                 null,
                                 h('legend', null, labels.group),
-                                editor(node, node.id),
+                                draft.canEditGroup(node.id)
+                                    ? editor(node, node.id)
+                                    : h('p', null, labels.unavailableGroup),
                                 action(labels.removeGroup, () =>
                                     update(
                                         draft.remove(node.id),
@@ -411,7 +425,12 @@ function FilterDialog({
                           () => add(false),
                           `${controlsId}-add`
                       ),
-                      action(labels.addGroup, () => add(true))
+                      action(
+                          labels.addGroup,
+                          () => add(true),
+                          undefined,
+                          !draft.canAddGroup(groupId)
+                      )
                   )
                 : null
         );

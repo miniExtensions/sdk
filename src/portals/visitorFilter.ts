@@ -233,14 +233,27 @@ function sameScope(a: PortalVisitorFilterFrame, b: PortalVisitorFilterFrame) {
     );
 }
 
+// Root criteria are level 0; the native normalizer accepts groups at levels 1 and 2.
+const maximumGroupLevel = 2;
+
 function locate(
     parent: Parent,
-    id: string
-): { parent: Parent; index: number; node: RuntimeConditionItem } | undefined {
+    id: string,
+    parentLevel = 0
+):
+    | {
+          parent: Parent;
+          index: number;
+          node: RuntimeConditionItem;
+          level: number;
+      }
+    | undefined {
     for (const [index, node] of parent.conditions.entries()) {
-        if (node.id === id) return { parent, index, node };
+        const level =
+            node.type === 'groupCondition' ? parentLevel + 1 : parentLevel;
+        if (node.id === id) return { parent, index, node, level };
         if (node.type !== 'groupCondition') continue;
-        const nested = locate(node, id);
+        const nested = locate(node, id, level);
         if (nested) return nested;
     }
     return undefined;
@@ -293,6 +306,7 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
     if (!captured) return null;
     let criteria = structuredClone(captured.criteria);
     let retired = false;
+    let normalizedOnDeletion = false;
     let submitted: RuntimeConditionsDefinition | null | undefined;
     let nextId = 0;
     const used = new Set<string>();
@@ -321,26 +335,68 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
     };
     const node = (id: string) => (criteria ? locate(criteria, id) : undefined);
     const condition = (id: string) => {
-        const found = node(id)?.node;
-        return found?.type === 'singleCondition' ? found : undefined;
+        const found = node(id);
+        return found?.node.type === 'singleCondition' &&
+            found.level <= maximumGroupLevel
+            ? found.node
+            : undefined;
+    };
+    const groupLevel = (id: string | null) => {
+        if (id === null) return 0;
+        const found = node(id);
+        return found?.node.type === 'groupCondition' ? found.level : undefined;
+    };
+    const canEditGroup = (id: string | null) => {
+        const level = groupLevel(id);
+        return level !== undefined && level <= maximumGroupLevel;
+    };
+    const originalSetting = (id: string) => {
+        const original =
+            captured.criteria && locate(captured.criteria, id)?.node;
+        return original?.type === 'singleCondition'
+            ? original.setting
+            : undefined;
+    };
+    const effectiveSetting = (id: string) => {
+        const settings = captured.effectiveSettings;
+        return settings && Object.hasOwn(settings, id)
+            ? settings[id]
+            : undefined;
     };
     const projectedSetting = (leaf: Condition) => {
-        const settings = captured.effectiveSettings;
-        if (
-            !settings ||
-            !Object.hasOwn(settings, leaf.id) ||
-            !captured.criteria
-        )
-            return leaf.setting;
-        const original = locate(captured.criteria, leaf.id)?.node;
-        return original?.type === 'singleCondition' &&
-            isEqual(original.setting, leaf.setting)
-            ? settings[leaf.id]
+        const effective = effectiveSetting(leaf.id);
+        return effective && isEqual(originalSetting(leaf.id), leaf.setting)
+            ? effective
             : leaf.setting;
     };
+    const editSetting = (leaf: Condition, next: RuntimeConditionSetting) => {
+        const effective = effectiveSetting(leaf.id);
+        const original = originalSetting(leaf.id);
+        // Returning to what the editor initially showed must preserve the saved wire
+        // setting. An explicit deletion still reserializes the surviving tree.
+        leaf.setting = structuredClone(
+            !normalizedOnDeletion &&
+                original &&
+                effective &&
+                isEqual(next, effective)
+                ? original
+                : next
+        );
+    };
     const first = captured.fields[0]?.operators[0];
+    const canAddGroup = (id: string | null) => {
+        const level = groupLevel(id);
+        return (
+            Boolean(first) && level !== undefined && level < maximumGroupLevel
+        );
+    };
     const insert = (id: string | null, group: boolean) => {
-        if (!current() || !first) return null;
+        if (
+            !current() ||
+            !first ||
+            (group ? !canAddGroup(id) : !canEditGroup(id))
+        )
+            return null;
         const parent =
             id === null
                 ? (criteria ??= { logicalOperator: 'and', conditions: [] })
@@ -361,10 +417,11 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
         parent.conditions.push(value);
         return value.id;
     };
-    const normalizeAfterRemoval = (parent: Parent) => {
+    const normalizeAfterRemoval = (parent: Parent, level = 0) => {
         for (const current of parent.conditions) {
             if (current.type === 'groupCondition') {
-                normalizeAfterRemoval(current);
+                if (level < maximumGroupLevel)
+                    normalizeAfterRemoval(current, level + 1);
                 continue;
             }
             const effective = projectedSetting(current);
@@ -374,6 +431,8 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
     };
     return {
         current,
+        canAddGroup,
+        canEditGroup,
         snapshot() {
             return structuredClone({ criteria, fields: captured.fields });
         },
@@ -388,7 +447,8 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
             return insert(id, true);
         },
         setLogicalOperator(id: string | null, operator: LogicalOperator) {
-            if (!current() || !logical(operator)) return false;
+            if (!current() || !logical(operator) || !canEditGroup(id))
+                return false;
             const parent = id === null ? criteria : node(id)?.node;
             if (!parent || !('conditions' in parent)) return false;
             parent.logicalOperator = operator;
@@ -406,7 +466,7 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
                 projectedSetting(leaf)
             );
             if (!selected || selected.field.id === fieldId) return false;
-            leaf.setting = structuredClone(field.operators[0].setting);
+            editSetting(leaf, field.operators[0].setting);
             return true;
         },
         setOperator(id: string, type: RuntimeConditionSetting['type']) {
@@ -423,7 +483,7 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
                 (option) => option.setting.type === type
             );
             if (!operator) return false;
-            leaf.setting = structuredClone(operator.setting);
+            editSetting(leaf, operator.setting);
             return true;
         },
         setOperand(id: string, value: unknown) {
@@ -441,10 +501,7 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
                 !validOperand(resolution.operator.operand, value)
             )
                 return false;
-            leaf.setting = {
-                ...setting,
-                value: structuredClone(value),
-            } as RuntimeConditionSetting;
+            editSetting(leaf, { ...setting, value } as RuntimeConditionSetting);
             return true;
         },
         remove(id: string) {
@@ -452,6 +509,7 @@ export function createPortalVisitorFilterDraft(port: PortalVisitorFilterPort) {
             const found = node(id);
             if (!found) return false;
             found.parent.conditions.splice(found.index, 1);
+            normalizedOnDeletion = true;
             if (criteria.conditions.length === 0) criteria = null;
             else normalizeAfterRemoval(criteria);
             return true;

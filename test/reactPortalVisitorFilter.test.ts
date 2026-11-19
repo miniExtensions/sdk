@@ -64,6 +64,14 @@ function owner() {
         commands,
         reads: () => reads,
         listeners,
+        seed(
+            next: Pick<
+                PortalVisitorFilterFrame,
+                'criteria' | 'effectiveSettings'
+            >
+        ) {
+            frame = { ...frame, ...next };
+        },
         update(viewId: string, generation: number) {
             frame = { ...frame, stamp: { ...frame.stamp, viewId, generation } };
             for (const f of listeners) f();
@@ -144,4 +152,186 @@ test('mounted advanced Filter closes a retired A→B→A draft with zero command
         /changed/
     );
     assert.equal(host.listeners.size, 0);
+});
+
+for (const flow of ['revert', 'net edit', 'delete while edited'] as const) {
+    test(`mounted projected Filter preserves raw versus effective settings through ${flow}`, async (t) => {
+        const host = owner();
+        const effective = {
+            fieldType: 'singleLineText',
+            type: 'contains',
+            idOrName: { type: 'id', id: 'title' },
+            value: 'Keep',
+        } as const;
+        const raw = {
+            ...effective,
+            idOrName: { type: 'name', name: 'Former title' } as const,
+        };
+        host.seed({
+            criteria: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'group',
+                        type: 'groupCondition',
+                        logicalOperator: 'or',
+                        conditions: [
+                            {
+                                id: 'former',
+                                type: 'singleCondition',
+                                setting: raw,
+                            },
+                            {
+                                id: 'sibling',
+                                type: 'singleCondition',
+                                setting: {
+                                    ...effective,
+                                    idOrName: { type: 'name', name: 'Removed' },
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+            effectiveSettings: { former: effective },
+        });
+        const f = await htmlPresentationFixture(t);
+        await f.render(h(PortalVisitorFilter, { port: host.port }));
+        await f.click(button(f, 'Filter'));
+        const input = f.container.querySelector('input');
+        assert.ok(input);
+        assert.equal(input.value, 'Keep');
+        const write = Object.getOwnPropertyDescriptor(
+            f.window.HTMLInputElement.prototype,
+            'value'
+        )?.set;
+        assert.ok(write);
+        const edit = async (value: string) => {
+            await act(async () => {
+                write.call(input, value);
+                input.dispatchEvent(
+                    new f.window.Event('input', { bubbles: true })
+                );
+            });
+            assert.equal(input.value, value);
+        };
+        await edit('Changed');
+        if (flow === 'delete while edited') {
+            const remove = Array.from(f.container.querySelectorAll('button'))
+                .filter((node) => node.textContent === 'Delete condition')
+                .at(-1);
+            assert.ok(remove);
+            await f.click(remove);
+        }
+        if (flow !== 'net edit') await edit('Keep');
+        assert.equal(host.commands.length, 0);
+        await f.click(button(f, 'Done'));
+        if (flow === 'revert') {
+            assert.equal(host.commands.length, 0);
+            return;
+        }
+        assert.equal(host.commands.length, 1);
+        const group = host.commands[0].criteria?.conditions[0];
+        assert.equal(group?.type, 'groupCondition');
+        assert.equal(group.conditions.length, flow === 'net edit' ? 2 : 1);
+        assert.deepEqual(group.conditions[0], {
+            id: 'former',
+            type: 'singleCondition',
+            setting: {
+                ...effective,
+                value: flow === 'net edit' ? 'Changed' : 'Keep',
+            },
+        });
+    });
+}
+
+test('the mounted dialog allows two group levels and disables the third', async (t) => {
+    const host = owner();
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    await f.click(button(f, 'Filter'));
+    await f.click(button(f, 'Add group'));
+    const outer = f.container.querySelector('fieldset');
+    assert.ok(outer);
+    const nest = Array.from(outer.querySelectorAll('button')).find(
+        (node) => node.textContent === 'Add group'
+    );
+    assert.ok(nest);
+    assert.equal(nest.disabled, false);
+    await f.click(nest);
+    const inner = outer.querySelector('fieldset');
+    assert.ok(inner);
+    const third = Array.from(inner.querySelectorAll('button')).find(
+        (node) => node.textContent === 'Add group'
+    );
+    assert.ok(third);
+    assert.equal(third.disabled, true);
+    await f.click(third);
+    assert.equal(f.container.querySelectorAll('fieldset').length, 2);
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+});
+
+test('the mounted dialog preserves the original deeper subtree during an unrelated delete', async (t) => {
+    const host = owner();
+    const effective = {
+        fieldType: 'singleLineText',
+        type: 'contains',
+        idOrName: { type: 'id', id: 'title' },
+        value: 'Keep',
+    } as const;
+    const raw = {
+        ...effective,
+        idOrName: { type: 'name', name: 'Old title' } as const,
+    };
+    const retained = {
+        id: 'outer',
+        type: 'groupCondition' as const,
+        logicalOperator: 'and' as const,
+        conditions: [
+            {
+                id: 'middle',
+                type: 'groupCondition' as const,
+                logicalOperator: 'or' as const,
+                conditions: [
+                    {
+                        id: 'unsupported',
+                        type: 'groupCondition' as const,
+                        logicalOperator: 'and' as const,
+                        conditions: [
+                            {
+                                id: 'former',
+                                type: 'singleCondition' as const,
+                                setting: raw,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+    host.seed({
+        criteria: {
+            logicalOperator: 'or',
+            conditions: [
+                {
+                    id: 'unrelated',
+                    type: 'singleCondition',
+                    setting: effective,
+                },
+                retained,
+            ],
+        },
+        effectiveSettings: { former: effective },
+    });
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    await f.click(button(f, 'Filter'));
+    await f.click(button(f, 'Delete condition'));
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+    assert.deepEqual(host.commands[0].criteria, {
+        logicalOperator: 'or',
+        conditions: [retained],
+    });
 });

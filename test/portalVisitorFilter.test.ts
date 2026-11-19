@@ -229,3 +229,84 @@ test('adding a group starts an empty nested group; clearing emits one null tree'
     assert.equal(owner.calls.length, 1);
     assert.equal(owner.calls[0].criteria, null);
 });
+
+test('editing a projected leaf and restoring its original display keeps the raw tree', async () => {
+    const owner = host();
+    const draft = createPortalVisitorFilterDraft(owner.port)!;
+    assert.equal(draft.setOperand('former', 'Changed'), true);
+    assert.equal(draft.setOperand('former', 'Keep'), true);
+    assert.deepEqual(await draft.commit(), { type: 'unchanged' });
+    assert.equal(owner.calls.length, 0);
+    assert.deepEqual(draft.snapshot().criteria, criteria);
+});
+
+for (const deleteWhileEdited of [false, true]) {
+    test(`deletion keeps effective normalization when a leaf is reverted ${deleteWhileEdited ? 'after' : 'before'} the deletion`, async () => {
+        const owner = host();
+        const draft = createPortalVisitorFilterDraft(owner.port)!;
+        assert.equal(draft.setOperand('former', 'Changed'), true);
+        if (deleteWhileEdited) assert.equal(draft.remove('missing'), true);
+        assert.equal(draft.setOperand('former', 'Keep'), true);
+        if (!deleteWhileEdited) assert.equal(draft.remove('missing'), true);
+        await draft.commit();
+        assert.equal(owner.calls.length, 1);
+        assert.deepEqual(owner.calls[0].criteria, {
+            logicalOperator: 'and',
+            conditions: [
+                known,
+                {
+                    type: 'groupCondition',
+                    id: 'group',
+                    logicalOperator: 'or',
+                    conditions: [leaf('former', title('Keep'))],
+                },
+            ],
+        });
+    });
+}
+
+test('only the first two group levels can be created', () => {
+    const owner = host();
+    const draft = createPortalVisitorFilterDraft(owner.port)!;
+    const first = draft.addGroup(null);
+    assert.ok(first);
+    const second = draft.addGroup(first);
+    assert.ok(second);
+    assert.equal(draft.addGroup(second), null);
+    assert.ok(draft.addCondition(second));
+});
+
+test('a retained deeper subtree survives an unrelated deletion exactly', async () => {
+    const owner = host();
+    const retained = {
+        id: 'outer',
+        type: 'groupCondition' as const,
+        logicalOperator: 'and' as const,
+        conditions: [
+            {
+                id: 'middle',
+                type: 'groupCondition' as const,
+                logicalOperator: 'or' as const,
+                conditions: [
+                    {
+                        id: 'unsupported',
+                        type: 'groupCondition' as const,
+                        logicalOperator: 'and' as const,
+                        conditions: [former],
+                    },
+                ],
+            },
+        ],
+    };
+    owner.update({
+        ...owner.read(),
+        criteria: { logicalOperator: 'or', conditions: [known, retained] },
+    });
+    const draft = createPortalVisitorFilterDraft(owner.port)!;
+    assert.equal(draft.remove('known'), true);
+    await draft.commit();
+    assert.deepEqual(owner.calls[0].criteria, {
+        logicalOperator: 'or',
+        conditions: [retained],
+    });
+});

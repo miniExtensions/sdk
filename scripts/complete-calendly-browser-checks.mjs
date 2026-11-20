@@ -846,13 +846,24 @@ window.completeCalendlyProof={
                 .waitFor({ state: 'visible' });
             await waitForFixtureHandlers(second);
             await focusInside(second, 'second-widget-open');
-            await second
+            const secondSchedule = second
                 .frameLocator('iframe')
                 .getByRole('button', {
                     name: 'Schedule synthetic booking',
                     exact: true,
-                })
-                .click();
+                });
+            await secondSchedule.click({ trial: true });
+            const secondScheduleBounds = await secondSchedule.boundingBox();
+            assert(
+                secondScheduleBounds,
+                'The second Schedule button is visible'
+            );
+            // Booking closes the iframe during the click. Dispatch through the
+            // page so completion does not depend on the retired frame.
+            await page.mouse.click(
+                secondScheduleBounds.x + secondScheduleBounds.width / 2,
+                secondScheduleBounds.y + secondScheduleBounds.height / 2
+            );
             await page.waitForFunction(() =>
                 window.completeCalendlyProof
                     .snapshot()

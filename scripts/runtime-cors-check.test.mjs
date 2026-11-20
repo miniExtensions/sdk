@@ -203,7 +203,7 @@ test('unsupported generated tRPC methods fail clearly', () => {
     );
 });
 
-function canonicalFixture(t, source) {
+function canonicalFixture(t, source, { autocrlf = false } = {}) {
     const checkout = mkdtempSync(
         path.join(tmpdir(), 'sdk-cors-canonical-fixture-')
     );
@@ -219,7 +219,17 @@ function canonicalFixture(t, source) {
             stdio: ['ignore', 'pipe', 'pipe'],
         });
     git('init', '--quiet');
-    git('add', canonicalCorsPolicyPath);
+    // The generator compares the synthetic checkout and commit byte for byte.
+    writeFileSync(
+        path.join(checkout, '.gitattributes'),
+        `/${canonicalCorsPolicyPath} -text\n`
+    );
+    git(
+        ...(autocrlf ? ['-c', 'core.autocrlf=true'] : []),
+        'add',
+        '.gitattributes',
+        canonicalCorsPolicyPath
+    );
     git(
         '-c',
         'user.name=SDK fixture',
@@ -234,6 +244,17 @@ function canonicalFixture(t, source) {
     );
     return { checkout, revision: git('rev-parse', 'HEAD').trim() };
 }
+
+test('the synthetic canonical fixture commits exact CRLF bytes', (t) => {
+    const crlf = after.replace(/\r?\n/g, '\r\n');
+    assert(crlf.includes('\r\n'));
+    const { checkout, revision } = canonicalFixture(t, crlf, {
+        autocrlf: true,
+    });
+    const args = ['show', `${revision}:${canonicalCorsPolicyPath}`];
+    const committed = execFileSync('git', args, { cwd: checkout });
+    assert.deepEqual(committed, Buffer.from(crlf));
+});
 
 function invokeGenerator({ checkout, revision }) {
     return spawnSync(

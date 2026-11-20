@@ -251,12 +251,9 @@ test('the synthetic canonical fixture commits exact CRLF bytes', (t) => {
     const { checkout, revision } = canonicalFixture(t, crlf, {
         autocrlf: true,
     });
-    assert.deepEqual(
-        execFileSync('git', ['show', `${revision}:${canonicalCorsPolicyPath}`], {
-            cwd: checkout,
-        }),
-        Buffer.from(crlf)
-    );
+    const args = ['show', `${revision}:${canonicalCorsPolicyPath}`];
+    const committed = execFileSync('git', args, { cwd: checkout });
+    assert.deepEqual(committed, Buffer.from(crlf));
 });
 
 function invokeGenerator({ checkout, revision }) {

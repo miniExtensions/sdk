@@ -80,12 +80,13 @@ export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPag
   replaceOffer(){publish({type:'ready',hasNextPage:true},'next-page');},
   fail,
   failNextPageImmediately(){failNextPageImmediately=true;},
-  succeed() {
+  succeed({empty=false}={}) {
    if(!currentRequest) throw new Error('No read to complete');
    const firstPage=currentRequest.offset===null;
    currentRequest=undefined;
    cursor=null;
-   records.replace({...records.initial,records:firstPage?[first]:[...acceptedFirstPage,second]});
+   const page=empty?[]:[firstPage?first:second];
+   records.replace({...records.initial,records:firstPage?page:[...acceptedFirstPage,...page]});
    publish({type:'ready',hasNextPage:false});
   },
   firstFailure() {
@@ -104,7 +105,10 @@ export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPag
   element(options={}) {
    const rowProps={
     scope,layout,label:'Records',
-    grid:{ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{}},
+    grid:{
+     ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{},
+     showEmptyStatus:state.type==='ready'&&!state.hasNextPage,
+    },
     renderers:{renderSingleLineTextField(field){return h('span',null,String(field.value??''));}},
    };
    return h(React.StrictMode,null,

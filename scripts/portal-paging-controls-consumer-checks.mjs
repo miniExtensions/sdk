@@ -14,6 +14,7 @@ import {
  type PortalPagingControlsProps,
  type PortalPagingIntent,
  type PortalPagingOffer,
+ type ReadonlyPortalRecordsGridOptions,
 } from '@miniextensions/sdk/react';
 const intents:PortalPagingIntent[]=[];
 const offer:PortalPagingOffer={activate(intent,isCurrent){if(isCurrent())intents.push(intent);}};
@@ -25,7 +26,10 @@ createElement(PortalPagingControls,{state:{type:'configuration-error',message:'I
 const cursor:PortalPagingControlsProps={state:{type:'ready',hasNextPage:true,cursor:'page_2'}};
 // @ts-expect-error the control receives an intent handler, not a transport
 const transport:PortalPagingControlsProps={...props,fetchRecords(){}};
-void [cursor,transport];
+const grid:ReadonlyPortalRecordsGridOptions={
+ ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{},showEmptyStatus:false,
+};
+void [cursor,transport,grid];
 `;
 
 const installedProgram = String.raw`
@@ -130,37 +134,56 @@ try {
  const postedReads=fixture.requests;
  await unmount(fixture);
 
- fixture=createPagingFixture({React,api,ui,layout,emptyAcceptedPage:true});
- container.innerHTML=renderToString(fixture.element());
- assert.doesNotMatch(text(),/First|Second/);
- assert.equal(button().textContent,fixture.labels.loadMore);
- await hydrate(fixture);
- assert.equal(errors.length,0);
- assert.doesNotMatch(text(),/First|Second/);
- assert.equal(button().disabled,false);
- assert.deepEqual(fixture.activations,[]);
- assert.deepEqual(fixture.requests,[]);
- await React.act(async()=>click(button()));
- assert.deepEqual(fixture.activations,['next-page']);
- assert.deepEqual(fixture.requests,[{intent:'next-page',offset:'after_empty_page'}]);
- const pendingButton=button();
- assert.ok(pendingButton);
- assert.equal(pendingButton.hidden,false);
- assert.notEqual(window.getComputedStyle(pendingButton).display,'none');
- assert.equal(pendingButton.textContent,fixture.labels.loadMore);
- assert.equal(pendingButton.disabled,true);
- assert.equal(pendingButton.getAttribute('aria-busy'),'true');
- assert.doesNotMatch(text(),/First|Second/);
- await React.act(async()=>fixture.succeed());
- assert.deepEqual(text().match(/Second/g),['Second']);
- assert.doesNotMatch(text(),/First/);
- assert.equal(button(),null);
- assert.equal(fixture.requests.length,1);
+ const statusTexts=()=>Array.from(container.querySelectorAll('[role=status]'),node=>node.textContent);
+ const checkEmptyPage=async(emptyLayout,emptyResult)=>{
+  fixture=createPagingFixture({React,api,ui,layout:emptyLayout,emptyAcceptedPage:true});
+  container.innerHTML=renderToString(fixture.element());
+  assert.doesNotMatch(text(),/First|Second/);
+  assert.deepEqual(statusTexts(),[],emptyLayout+' SSR must not announce an empty result with continuation');
+  assert.equal(button().textContent,fixture.labels.loadMore);
+  await hydrate(fixture);
+  assert.equal(errors.length,0);
+  assert.doesNotMatch(text(),/First|Second/);
+  assert.deepEqual(statusTexts(),[],emptyLayout+' must not announce an empty result with continuation');
+  assert.equal(button().disabled,false);
+  assert.deepEqual(fixture.activations,[]);
+  assert.deepEqual(fixture.requests,[]);
+  await React.act(async()=>click(button()));
+  assert.deepEqual(fixture.activations,['next-page']);
+  assert.deepEqual(fixture.requests,[{intent:'next-page',offset:'after_empty_page'}]);
+  const pendingButton=button();
+  assert.ok(pendingButton);
+  assert.equal(pendingButton.hidden,false);
+  assert.notEqual(window.getComputedStyle(pendingButton).display,'none');
+  assert.equal(pendingButton.textContent,fixture.labels.loadMore);
+  assert.equal(pendingButton.disabled,true);
+  assert.equal(pendingButton.getAttribute('aria-busy'),'true');
+  assert.doesNotMatch(text(),/First|Second/);
+  assert.deepEqual(statusTexts(),[],emptyLayout+' must not announce an empty result during paging');
+  await React.act(async()=>fixture.succeed({empty:emptyResult}));
+  assert.deepEqual(text().match(/Second/g),emptyResult?null:['Second']);
+  assert.doesNotMatch(text(),/First/);
+  assert.equal(button(),null);
+  assert.equal(fixture.requests.length,1);
+  const settledStatus=statusTexts();
+  assert.deepEqual(settledStatus,emptyResult?['No records']:[]);
+  const requests=fixture.requests;
+  await unmount(fixture);
+  return {requests,settledStatus};
+ };
+ const gridPage=await checkEmptyPage('grid',false);
+ const listPage=await checkEmptyPage('list',false);
+ const finalEmpty=await checkEmptyPage('grid',true);
+ container.innerHTML=renderToString(React.createElement(api.ReadonlyPortalGrid,{
+  columns:[{fieldId:'fld_title',title:'Title'}],rows:[],primaryFieldId:null,
+  revision:1,preferenceScopeKey:'view',ready:true,isCurrent:()=>true,
+  hiddenColumns:{},columnWidths:{},
+ }));
+ assert.deepEqual(statusTexts(),['No records']);
  assert.equal(browserRequests,0);
  assert.equal(formSubmits,0);
- const emptyContinuationReads=fixture.requests;
- await unmount(fixture);
- console.log(JSON.stringify({format,react:React.version,cases:9,postedReads,emptyContinuationReads,hydrationErrors:errors.length,formSubmits,browserRequests}));
+ const emptyContinuationReads=(layout==='grid'?gridPage:listPage).requests;
+ console.log(JSON.stringify({format,react:React.version,cases:12,postedReads,emptyContinuationReads,emptyPageLayouts:{grid:gridPage,list:listPage},finalEmptyStatus:finalEmpty.settledStatus,hydrationErrors:errors.length,formSubmits,browserRequests}));
 } finally {
  if(root) await React.act(async()=>root.unmount());
  fixture.records.scope.destroy();

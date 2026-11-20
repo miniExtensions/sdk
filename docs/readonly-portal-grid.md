@@ -35,6 +35,12 @@ Columns and cells remain readonly, including when no child Open intent exists.
 Header metadata is supplied independently of rows, so empty results retain the
 accepted labels and optional icons.
 
+With host-owned paging, pass `showEmptyStatus: false` while an accepted empty
+page has a continuation or a next-page request is pending. The Grid retains its
+column headers, and the host can keep its paging controls visible. Omit the
+option for a standalone Grid or a confirmed empty result to show the normal
+empty label.
+
 The host supplies scoped hidden/width values and persists the emitted intents
 through its existing preference contract. Hidden values apply only when they
 are exactly `true`. Width hydration accepts finite numbers and numeric strings,

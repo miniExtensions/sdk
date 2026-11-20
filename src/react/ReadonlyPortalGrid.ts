@@ -71,6 +71,8 @@ export type ReadonlyPortalGridProps = {
     /** An opaque presentation identity, never a client or authorization receipt. */
     readonly preferenceScopeKey: string | null;
     readonly ready: boolean;
+    /** Set to false while the host-owned result can continue or is loading its next page. */
+    readonly showEmptyStatus?: boolean;
     readonly isCurrent: () => boolean;
     readonly hiddenColumns: Readonly<Record<string, unknown>>;
     readonly columnWidths: Readonly<Record<string, unknown>>;
@@ -684,6 +686,7 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
             )
         ),
         props.rows.length === 0 &&
+            props.showEmptyStatus !== false &&
             h(
                 'p',
                 {

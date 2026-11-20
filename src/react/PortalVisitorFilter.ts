@@ -303,9 +303,18 @@ function FilterDialog({
                 h('option', { value: 'no' }, labels.no)
             );
         }
+        const isTextLength = descriptor.kind === 'text-length';
+        const numeric = descriptor.kind === 'number' || isTextLength;
+        const edit = (event: SyntheticEvent<HTMLInputElement>) => {
+            const input = event.currentTarget;
+            const clearedLength =
+                isTextLength && input.value === '' && !input.validity.badInput;
+            const operand = numeric ? input.valueAsNumber : input.value;
+            update(draft.setOperand(nodeId, clearedLength ? 0 : operand));
+        };
         return h('input', {
             ...label,
-            type: descriptor.kind,
+            type: numeric ? 'number' : 'text',
             value:
                 typeof value === 'number' || typeof value === 'string'
                     ? value
@@ -314,15 +323,7 @@ function FilterDialog({
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing)
                     event.preventDefault();
             },
-            onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                update(
-                    draft.setOperand(
-                        nodeId,
-                        descriptor.kind === 'number'
-                            ? event.currentTarget.valueAsNumber
-                            : event.currentTarget.value
-                    )
-                ),
+            ...(isTextLength ? { onInput: edit } : { onChange: edit }),
         });
     };
     function editor(

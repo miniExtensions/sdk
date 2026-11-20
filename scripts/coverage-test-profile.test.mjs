@@ -110,13 +110,24 @@ test('type-only imports and re-exports do not imply runtime DOM dependencies', a
 });
 
 test('entry escape and canonical helper escape fail before outside source is read', async (t) => {
-    const f = await fixture(t, { 'inside.test.ts': "import './escape.js';" });
+    const windows = process.platform === 'win32';
+    const f = await fixture(t, {
+        'inside.test.ts': windows
+            ? "import './escape/outside.js';"
+            : "import './escape.js';",
+    });
     const outside = path.join(f.directory, 'outside.ts');
-    await writeFile(
-        outside,
-        "import { Window } from 'happy-dom'; throw Error('Must not be read as a test helper');"
-    );
-    await symlink(outside, path.join(f.root, 'escape.ts'));
+    const sentinel =
+        "import { Window } from 'happy-dom'; throw Error('Must not be read as a test helper');";
+    await writeFile(outside, sentinel);
+    if (windows) {
+        const external = path.join(f.directory, 'external');
+        await mkdir(external);
+        await writeFile(path.join(external, 'outside.ts'), sentinel);
+        await symlink(external, path.join(f.root, 'escape'), 'junction');
+    } else {
+        await symlink(outside, path.join(f.root, 'escape.ts'));
+    }
     await assert.rejects(
         f.classify('../outside.ts'),
         /entry escapes test root/

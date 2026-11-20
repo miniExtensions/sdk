@@ -6,3 +6,33 @@
 # Vendored sources, generated bundles, and binary assets are upstream bytes.
 # Preserve their Git blobs on checkout, including intentional CRLF and mixed EOLs.
 vendor/** -text
+
+# Fixture checks pin these generator and case-module files by SHA-256.
+/scripts/generate-canonical-form-fixtures.mjs -text
+/scripts/generate-conditional-page-validation-fixtures.mjs -text
+/scripts/generate-cross-page-choice-fixtures.mjs -text
+/scripts/generate-date-range-fixtures.mjs -text
+/scripts/generate-duration-fixtures.mjs -text
+/scripts/generate-form-page-fixtures.mjs -text
+/scripts/generate-linked-child-edit-fixture.mjs -text
+/scripts/generate-linked-child-fixture.mjs -text
+/scripts/generate-linked-projection-fixtures.mjs -text
+/scripts/generate-multi-select-form-driver-fixtures.mjs -text
+/scripts/generate-portal-filter-fixtures.mjs -text
+/scripts/generate-portal-sort-fixtures.mjs -text
+/scripts/generate-review-date-fixtures.mjs -text
+/scripts/generate-review-select-fixtures.mjs -text
+/scripts/generate-section-projection-fixtures.mjs -text
+/scripts/generate-select-condition-fixtures.mjs -text
+/scripts/generate-selected-record-policy-fixtures.mjs -text
+/scripts/generate-session-restoration-fixtures.mjs -text
+/scripts/generate-single-select-form-driver-fixtures.mjs -text
+/test/fixtures/canonicalFormCases.mjs -text
+/test/fixtures/conditionalPageValidationCases.mjs -text
+/test/fixtures/crossPageChoicesCases.mjs -text
+/test/fixtures/dateRangeCases.mjs -text
+/test/fixtures/formPageCases.mjs -text
+/test/fixtures/linkedProjectionCases.mjs -text
+/test/fixtures/multipleSelectFormDriverCases.mjs -text
+/test/fixtures/sectionProjectionCases.mjs -text
+/test/fixtures/singleSelectFormDriverCases.mjs -text

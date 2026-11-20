@@ -14,6 +14,8 @@ import type {
 
 export type PortalVisitorFilterOperand =
     | Readonly<{ kind: 'none' | 'text' | 'number' | 'boolean' }>
+    /** The isOfLength editor starts unset (null). Entered values are finite numbers; clearing enters zero. */
+    | Readonly<{ kind: 'text-length' }>
     /** Date-only comparison, persisted as YYYY-MM-DD or null. */
     | Readonly<{ kind: 'date'; dateFormat?: string }>
     | Readonly<{
@@ -152,6 +154,7 @@ function validOperand(operand: PortalVisitorFilterOperand, value: unknown) {
         case 'text':
             return typeof value === 'string';
         case 'number':
+        case 'text-length':
             return typeof value === 'number' && Number.isFinite(value);
         case 'boolean':
             return typeof value === 'boolean';
@@ -179,6 +182,19 @@ function validOperand(operand: PortalVisitorFilterOperand, value: unknown) {
 
 const getValue = (setting: RuntimeConditionSetting): unknown =>
     'value' in setting ? setting.value : undefined;
+
+function validSettingOperand(
+    operand: PortalVisitorFilterOperand,
+    setting: RuntimeConditionSetting
+) {
+    const value = getValue(setting);
+    if (operand.kind === 'text-length')
+        return (
+            setting.type === 'isOfLength' &&
+            (value === null || validOperand(operand, value))
+        );
+    return validOperand(operand, value);
+}
 
 function dropdownChoices(field: PortalVisitorFilterField) {
     for (const { setting, operand } of field.operators) {
@@ -305,9 +321,9 @@ function readFrame(
                             typeof operator.label !== 'string' ||
                             !validSetting(operator.setting) ||
                             !belongsTo(field, operator.setting) ||
-                            !validOperand(
+                            !validSettingOperand(
                                 operator.operand,
-                                getValue(operator.setting)
+                                operator.setting
                             )
                     )
             ) ||
@@ -428,7 +444,7 @@ export function resolvePortalVisitorFilterOperator(
         (entry) =>
             entry.setting.type === setting.type &&
             entry.setting.fieldType === setting.fieldType &&
-            validOperand(entry.operand, getValue(setting))
+            validSettingOperand(entry.operand, setting)
     );
     return operator ? { field, operator } : null;
 }

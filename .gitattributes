@@ -1,3 +1,8 @@
+# Preserve raw Git-blob witnesses used by native and installed consumers.
+/docs/image-annotation-markerjs2-license.txt -text
+/test/fixtures/nativeFormProgressEligibility.ts.txt -text
+/test/fixtures/nativeFormProgressStorage.ts.txt -text
+
 # Vendored sources, generated bundles, and binary assets are upstream bytes.
 # Preserve their Git blobs on checkout, including intentional CRLF and mixed EOLs.
 vendor/** -text

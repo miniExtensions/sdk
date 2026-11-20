@@ -318,6 +318,94 @@ it('keeps keyboard dismissal and outside focus local to the current disclosure',
     assert.deepEqual(host.comments, []);
 });
 
+it('tracks a top-layer panel only while its disclosure is open', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const prototype = f.window.HTMLDivElement.prototype;
+    const original = Object.getOwnPropertyDescriptors(prototype);
+    const openPanels = new WeakSet<object>();
+    const matches = prototype.matches;
+    const restore = ['showPopover', 'hidePopover', 'matches'];
+    Object.defineProperties(prototype, {
+        showPopover: {
+            configurable: true,
+            value(this: HTMLDivElement) {
+                assert.equal(this.getAttribute('popover'), 'manual');
+                this.getBoundingClientRect = () =>
+                    new f.window.DOMRect(0, 0, 120, 80);
+                openPanels.add(this);
+            },
+        },
+        hidePopover: {
+            configurable: true,
+            value(this: HTMLDivElement) {
+                openPanels.delete(this);
+            },
+        },
+        matches: {
+            configurable: true,
+            value(this: typeof prototype, selector: string) {
+                if (selector === ':popover-open') return openPanels.has(this);
+                return matches.call(this, selector);
+            },
+        },
+    });
+    Object.defineProperties(f.window.document.documentElement, {
+        clientWidth: { configurable: true, value: 640 },
+        clientHeight: { configurable: true, value: 480 },
+    });
+    const pendingFrames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    t.mock.method(
+        f.window,
+        'requestAnimationFrame',
+        (position: FrameRequestCallback) => {
+            pendingFrames.set(++frameId, position);
+            return frameId;
+        }
+    );
+    t.mock.method(f.window, 'cancelAnimationFrame', (id: number) => {
+        pendingFrames.delete(id);
+    });
+
+    const host = makeHost(editable({}));
+    try {
+        await f.render(
+            h(FormRecordActionsMenu, { controller: host.controller, labels })
+        );
+        const opener = button(f, labels.openMenu);
+        let anchor = new f.window.DOMRect(590, 440, 40, 30);
+        opener.getBoundingClientRect = () => anchor;
+        await f.click(opener);
+        const panel = opener.ownerDocument.getElementById(
+            opener.getAttribute('aria-controls') ?? ''
+        );
+        assert.ok(panel instanceof f.window.HTMLDivElement);
+        assert.equal(panel.style.left, '516px');
+        assert.equal(panel.style.top, '356px');
+        assert.equal(pendingFrames.size, 1);
+
+        anchor = new f.window.DOMRect(30, 100, 40, 30);
+        const [[id, position]] = pendingFrames;
+        pendingFrames.delete(id);
+        position(0);
+        assert.equal(panel.style.left, '30px');
+        assert.equal(panel.style.top, '134px');
+        assert.equal(pendingFrames.size, 1);
+
+        await f.click(opener);
+        assert.equal(pendingFrames.size, 0);
+        assert.equal(panel.hasAttribute('popover'), false);
+        assert.deepEqual(host.allocations, []);
+    } finally {
+        await f.render(h('div'));
+        for (const name of restore) {
+            const descriptor = original[name];
+            if (descriptor) Object.defineProperty(prototype, name, descriptor);
+            else Reflect.deleteProperty(prototype, name);
+        }
+    }
+});
+
 it('resolves the live delete frame once and keeps its original settlement', async (t) => {
     const f = await htmlPresentationFixture(t);
     const current = {};

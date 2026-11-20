@@ -300,6 +300,123 @@ test('mounted Name text length applies on Done and dismissal without changing Ta
     assert.equal(host.listeners.size, 0);
 });
 
+test('mounted opted-in length publishes the canonical criteria without stale feedback', async (t) => {
+    const contains = {
+        fieldType: 'singleLineText',
+        type: 'contains',
+        idOrName: { type: 'id', id: 'name' },
+        value: 'Original',
+    } as const;
+    const length = { ...contains, type: 'isOfLength', value: null } as const;
+    const tagsRule = {
+        id: 'tags-rule',
+        type: 'singleCondition',
+        setting: {
+            fieldType: 'multipleSelects',
+            type: 'isExactly',
+            idOrName: { type: 'name', name: 'Tags' },
+            value: ['blue'],
+        },
+    } as const;
+    const initial: NonNullable<PortalVisitorFilterFrame['criteria']> = {
+        logicalOperator: 'and',
+        conditions: [
+            {
+                type: 'groupCondition',
+                id: 'group',
+                logicalOperator: 'or',
+                conditions: [
+                    {
+                        type: 'singleCondition',
+                        id: 'name-rule',
+                        setting: contains,
+                    },
+                    {
+                        ...tagsRule,
+                        setting: { ...tagsRule.setting, value: ['blue'] },
+                    },
+                ],
+            },
+        ],
+    };
+    const group = initial.conditions[0];
+    assert.equal(group.type, 'groupCondition');
+    const canonical = {
+        ...initial,
+        conditions: [{ ...group, conditions: [group.conditions[1]] }],
+    };
+    const host = owner([
+        {
+            id: 'name',
+            name: 'Name',
+            operators: [
+                {
+                    label: 'Contains',
+                    setting: contains,
+                    operand: { kind: 'text' },
+                },
+                {
+                    label: 'Is of length',
+                    setting: length,
+                    operand: { kind: 'text-length', omitIfUnset: true },
+                },
+            ],
+        },
+        {
+            id: 'tags',
+            name: 'Tags',
+            operators: [
+                {
+                    label: 'Is exactly',
+                    setting: { ...tagsRule.setting, value: ['blue'] },
+                    operand: {
+                        kind: 'choices',
+                        choices: [{ value: 'blue', label: 'Blue' }],
+                    },
+                },
+            ],
+        },
+    ]);
+    host.seed({ criteria: initial });
+    host.respondWith((command) => {
+        if (!assertCanonical(command.criteria)) return { type: 'refused' };
+        host.seed({ criteria: canonical });
+        host.update('a', 2);
+        return { type: 'allocated', generation: 2, requestId: 'first' };
+    });
+    function assertCanonical(criteria: PortalVisitorFilterCommand['criteria']) {
+        const candidate = criteria?.conditions[0];
+        return (
+            candidate?.type === 'groupCondition' &&
+            candidate.conditions.length === 1 &&
+            candidate.conditions[0].id === tagsRule.id
+        );
+    }
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    await f.click(button(f, 'Filter'));
+    const operator = f.container.querySelector(
+        'li select option[value="isOfLength"]'
+    )?.parentElement;
+    assert.ok(operator instanceof f.window.HTMLSelectElement);
+    await act(async () => {
+        operator.value = 'isOfLength';
+        operator.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+    });
+    const input = f.container.querySelector('input[type="number"]');
+    assert.ok(input instanceof f.window.HTMLInputElement);
+    assert.equal(input.value, '');
+    assert.equal(host.commands.length, 0);
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+    assert.deepEqual(host.commands[0].criteria, canonical);
+    assert.equal(f.container.querySelector('[role="status"]'), null);
+    await f.click(button(f, 'Filter'));
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+    assert.equal(host.listeners.size, 0);
+});
+
 for (const type of ['isBefore', 'isAfter'] as const) {
     test(`mounted advanced Filter uses a date picker for ${type}`, async (t) => {
         const dateSetting = {

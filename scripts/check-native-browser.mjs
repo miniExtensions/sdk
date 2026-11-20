@@ -3,6 +3,7 @@ import {
     checkKanbanBrowser,
 } from './kanban-consumer-checks.mjs';
 import { checkFormSubmitBrowser } from './form-submit-browser-checks.mjs';
+import { checkFormRecordActionsBrowser } from './form-record-actions-browser-checks.mjs';
 import {
     preparePortalGalleryBrowserFixtures,
     checkPortalGalleryBrowser,
@@ -2494,6 +2495,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.formSubmit,
+            output,
+        });
+        report.formRecordActions = {};
+        await checkFormRecordActionsBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formRecordActions,
             output,
         });
         report.formTracking = {};

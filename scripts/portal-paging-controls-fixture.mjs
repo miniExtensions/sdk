@@ -3,7 +3,7 @@
 export const portalPagingControlsFixture = String.raw`
 import {createListFixture} from './list-fixture.mjs';
 
-export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPage=false}) {
+export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPage=false,Composition}) {
  const h=React.createElement;
  const records=createListFixture(ui);
  let presenterSubscriptions=0;
@@ -80,12 +80,13 @@ export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPag
   replaceOffer(){publish({type:'ready',hasNextPage:true},'next-page');},
   fail,
   failNextPageImmediately(){failNextPageImmediately=true;},
-  succeed() {
+  succeed({empty=false}={}) {
    if(!currentRequest) throw new Error('No read to complete');
    const firstPage=currentRequest.offset===null;
    currentRequest=undefined;
    cursor=null;
-   records.replace({...records.initial,records:firstPage?[first]:[...acceptedFirstPage,second]});
+   const page=empty?[]:[firstPage?first:second];
+   records.replace({...records.initial,records:firstPage?page:[...acceptedFirstPage,...page]});
    publish({type:'ready',hasNextPage:false});
   },
   firstFailure() {
@@ -107,9 +108,13 @@ export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPag
     grid:{ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{}},
     renderers:{renderSingleLineTextField(field){return h('span',null,String(field.value??''));}},
    };
+   const paging={state,offer,labels:this.labels,...options};
+   if(Composition) return h(React.StrictMode,null,h(Composition,{records:rowProps,paging}));
    return h(React.StrictMode,null,
-    h(api.ReadonlyPortalRecords,rowProps),
-    h(api.PortalPagingControls,{state,offer,labels:this.labels,...options}),
+    h(api.ReadonlyPortalRecords,{
+     ...rowProps,grid:{...rowProps.grid,showEmptyStatus:state.type==='ready'&&!state.hasNextPage},
+    }),
+    h(api.PortalPagingControls,paging),
    );
   },
  };

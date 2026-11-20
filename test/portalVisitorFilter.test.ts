@@ -98,6 +98,73 @@ function host() {
     };
 }
 
+test('text length starts unset without weakening numeric or malformed operands', async () => {
+    const owner = host();
+    const setting = {
+        fieldType: 'singleLineText',
+        type: 'isOfLength',
+        idOrName: { type: 'id', id: 'name' },
+        value: null,
+    } as const;
+    const initial: PortalVisitorFilterFrame = {
+        ...owner.read(),
+        fields: [
+            {
+                id: 'name',
+                name: 'Name',
+                operators: [
+                    {
+                        label: 'Is of length',
+                        setting,
+                        operand: { kind: 'text-length' },
+                    },
+                ],
+            },
+        ],
+        criteria: null,
+        effectiveSettings: {},
+    };
+    for (const operator of [
+        { label: 'Is of length', setting, operand: { kind: 'number' } },
+        {
+            label: 'Contains',
+            setting: { ...setting, type: 'contains', value: '' },
+            operand: { kind: 'text-length' },
+        },
+        {
+            label: 'Is of length',
+            setting: { ...setting, value: Number.NaN },
+            operand: { kind: 'text-length' },
+        },
+    ] as const) {
+        owner.update({
+            ...initial,
+            fields: [{ ...initial.fields[0], operators: [operator] }],
+        });
+        assert.equal(createPortalVisitorFilterDraft(owner.port), null);
+    }
+    owner.update(initial);
+    const draft = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(draft);
+    const id = draft.addCondition(null);
+    assert.ok(id);
+    assert.deepEqual(draft.settingForEditor(id), setting);
+    assert.equal(draft.setOperand(id, 3), true);
+    for (const malformed of [null, undefined, '', '3', false, NaN, Infinity]) {
+        assert.equal(draft.setOperand(id, malformed), false);
+        assert.deepEqual(draft.settingForEditor(id), { ...setting, value: 3 });
+    }
+    assert.equal(draft.setOperand(id, -2.5), true);
+    assert.equal(draft.setOperand(id, 0), true);
+    assert.deepEqual(draft.settingForEditor(id), { ...setting, value: 0 });
+    assert.equal(owner.calls.length, 0);
+    assert.equal((await draft.commit()).type, 'allocated');
+    assert.deepEqual(owner.calls[0].criteria, {
+        logicalOperator: 'and',
+        conditions: [leaf(id, { ...setting, value: 0 })],
+    });
+});
+
 test('date-only operands reject invalid days and accept leap days and clearing', async () => {
     const owner = host();
     const setting = {

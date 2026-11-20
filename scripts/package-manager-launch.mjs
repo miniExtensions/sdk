@@ -32,6 +32,56 @@ function findWindowsLauncher(command, environment, exists) {
     }
 }
 
+function workspaceEntry(command, directory, shim, exists) {
+    if (
+        win32.basename(directory).toLowerCase() !== '.bin' ||
+        win32.basename(win32.dirname(directory)).toLowerCase() !==
+            'node_modules'
+    )
+        return undefined;
+
+    // pnpm links executables from a workspace's node_modules/.bin to
+    // adjacent packages (or to its own versioned virtual store).
+    const known = {
+        npm: ['bin', 'npm-cli.js'],
+        pnpm: ['bin', 'pnpm.cjs'],
+        corepack: ['dist', 'corepack.js'],
+    }[command];
+    const found = new Map();
+    for (const line of shim.split(/\r?\n/)) {
+        const match = line.match(
+            /^\s*@?(?:node(?:\.exe)?|"%~dp0\\node\.exe")\s+(?:(--preserve-symlinks)\s+)?"%~dp0\\([^"%]+)"\s+%\*\s*$/i
+        );
+        if (!match) continue;
+        const relative = match[2].split('\\');
+        const direct =
+            relative.length === 4 &&
+            relative[0] === '..' &&
+            relative[1] === command;
+        const store =
+            relative.length === 7 &&
+            relative[0] === '..' &&
+            relative[1] === '.pnpm' &&
+            new RegExp(
+                `^${command}@[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-z0-9.-]+)?$`
+            ).test(relative[2]) &&
+            relative[3] === 'node_modules' &&
+            relative[4] === command;
+        if (
+            !(direct || store) ||
+            relative.at(-2) !== known[0] ||
+            relative.at(-1) !== known[1]
+        )
+            continue;
+        const entry = win32.join(directory, ...relative);
+        if (exists(entry)) {
+            const argv = match[1] ? [match[1], entry] : [entry];
+            found.set(JSON.stringify(argv), argv);
+        }
+    }
+    if (found.size === 1) return found.values().next().value;
+}
+
 export function resolvePackageManagerLaunch(
     command,
     args,
@@ -58,6 +108,8 @@ export function resolvePackageManagerLaunch(
         const localNode = win32.join(dir, 'node.exe');
         const nodePath = exists(localNode) ? localNode : node;
         const shim = readShim(found.launcher).toLowerCase();
+        const workspace = workspaceEntry(command, dir, shim, exists);
+        if (workspace) return [nodePath, [...workspace, ...args]];
         const installedEntry = (suffix) =>
             ['%~dp0', '%dp0%'].some((variable) =>
                 shim.includes(`${variable}\\${suffix}`)

@@ -132,3 +132,66 @@ test('Unix and non-package-manager commands retain normal argv and lookup', () =
         ['tar', args]
     );
 });
+
+test('pnpm workspace .bin shims resolve all three exact Node CLIs with literal argv', () => {
+    const bin = 'C:\\SDK space\\workspace\\node_modules\\.bin';
+    const environment = {
+        ...options,
+        env: { ...options.env, Path: `"${bin}";${directory}` },
+    };
+    for (const [command, entry] of [
+        ['npm', String.raw`..\npm\bin\npm-cli.js`],
+        ['pnpm', String.raw`..\pnpm\bin\pnpm.cjs`],
+        [
+            'corepack',
+            String.raw`..\.pnpm\corepack@0.34.5\node_modules\corepack\dist\corepack.js`,
+        ],
+    ]) {
+        const target = win32.join(bin, entry);
+        const shim = [
+            '@SETLOCAL',
+            String.raw`@IF EXIST "%~dp0\node.exe" (`,
+            '  "%~dp0\\node.exe"  "%~dp0\\' + entry + '" %*',
+            ') ELSE (',
+            '@SET PATHEXT=%PATHEXT:;.JS;=;%',
+            '  node  "%~dp0\\' + entry + '" %*',
+            ')',
+        ].join('\r\n');
+        assert.deepEqual(
+            resolvePackageManagerLaunch(
+                command,
+                args,
+                environment,
+                windows({
+                    [win32.join(bin, command + '.cmd')]: shim,
+                    [target]: '',
+                })
+            ),
+            [node, [target, ...args]]
+        );
+    }
+});
+
+test('workspace shims cannot select another package or escape the node_modules layout', () => {
+    const bin = 'C:\\SDK space\\workspace\\node_modules\\.bin';
+    const environment = { ...options, env: { ...options.env, Path: bin } };
+    for (const entry of [
+        String.raw`..\evil\bin\npm-cli.js`,
+        String.raw`..\..\npm\bin\npm-cli.js`,
+    ]) {
+        const shim = '  node "%~dp0\\' + entry + '" %*';
+        assert.throws(
+            () =>
+                resolvePackageManagerLaunch(
+                    'npm',
+                    args,
+                    environment,
+                    windows({
+                        [win32.join(bin, 'npm.cmd')]: shim,
+                        [win32.join(bin, entry)]: '',
+                    })
+                ),
+            /Cannot locate the installed Windows npm/
+        );
+    }
+});

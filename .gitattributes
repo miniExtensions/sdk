@@ -1,0 +1,3 @@
+# Vendored sources, generated bundles, and binary assets are upstream bytes.
+# Preserve their Git blobs on checkout, including intentional CRLF and mixed EOLs.
+vendor/** -text

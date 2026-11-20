@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { realpathSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const formats = ['esm', 'cjs'];
 const within = (root, path) => {
@@ -336,7 +336,9 @@ export async function prepareCompleteCollaboratorFixtures({
             'Actual packed lazy collaborator picker runtime missing'
         );
         assert(
-            inputs.some((item) => item.path.endsWith('/react.development.js'))
+            inputs.some((item) =>
+                item.path.endsWith(`${sep}react.development.js`)
+            )
         );
         assert(
             inputs.some((item) =>

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const formats = ['esm', 'cjs'];
 const within = (root, path) => {
@@ -317,7 +317,7 @@ export function recordPortalChartInputs({
         'Expected conditional Chart.js input missing'
     );
     assert(
-        inputs.some((item) => item.path.endsWith('/react.development.js')),
+        inputs.some((item) => item.path.endsWith(`${sep}react.development.js`)),
         'Actual React development build required'
     );
     assert(

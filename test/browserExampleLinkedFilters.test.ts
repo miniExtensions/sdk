@@ -36,6 +36,24 @@ const compiler = createOwnedCompiler();
 let directory: string;
 let revision = 0;
 const acceptedPages = new WeakMap<Window, () => FormLoadedResult>();
+const linkedFinderEntryPath = /[\\/]examples[\\/]browser[\\/]src[\\/]main\.ts$/;
+
+it('matches only the linked-finder starter entry with native path separators', () => {
+    assert(linkedFinderEntryPath.test('/sdk/examples/browser/src/main.ts'));
+    assert(
+        linkedFinderEntryPath.test(
+            String.raw`C:\sdk\examples\browser\src\main.ts`
+        )
+    );
+    assert(
+        !linkedFinderEntryPath.test(
+            String.raw`C:\sdk\examples\other\src\main.ts`
+        )
+    );
+    assert(
+        !linkedFinderEntryPath.test('/sdk/examples/browser/src/main.ts.bak')
+    );
+});
 
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-browser-linked-filters-'));
@@ -59,7 +77,7 @@ before(async () => {
                 name: 'linked-finder-accepted-page-observer',
                 setup(bundle) {
                     bundle.onLoad(
-                        { filter: /\/examples\/browser\/src\/main\.ts$/ },
+                        { filter: linkedFinderEntryPath },
                         async (args) => ({
                             loader: 'ts',
                             // Observation only: all client, owner and loader behavior stays real.

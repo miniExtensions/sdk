@@ -43,6 +43,29 @@ const criteria = (): PortalCollectionCriteria => ({
 });
 let directory: string;
 let sequence = 0;
+function readFailureRecipe(guide: string) {
+    const recipes = [...guide.matchAll(/```ts\r?\n([\s\S]*?)\r?\n```/g)].filter(
+        ([, source]) =>
+            source.includes('export function PortalReadFailureList(')
+    );
+    assert.equal(
+        recipes.length,
+        1,
+        'Missing actual shipped read-failure recipe'
+    );
+    return recipes[0]![1]!;
+}
+
+it('extracts the same documented read-failure recipe from LF and CRLF', async () => {
+    const guide = await readFile(join(root, 'docs/portals.md'), 'utf8');
+    const lf = guide.replace(/\r\n/g, '\n');
+    const crlf = lf.replace(/\n/g, '\r\n');
+    assert.equal(
+        readFailureRecipe(crlf),
+        readFailureRecipe(lf).replace(/\n/g, '\r\n')
+    );
+});
+
 before(async () => {
     // Keep the source-only bundle below this checkout so its external React
     // import resolves to the same peer instance as this mounted test.
@@ -55,18 +78,10 @@ before(async () => {
     );
     alias['@miniextensions/sdk'] = join(root, 'src/runtime/index.ts');
     const guide = await readFile(join(root, 'docs/portals.md'), 'utf8');
-    const recipes = [...guide.matchAll(/```ts\n([\s\S]*?)\n```/g)].filter(
-        ([, source]) =>
-            source.includes('export function PortalReadFailureList(')
-    );
-    assert.equal(
-        recipes.length,
-        1,
-        'Missing actual shipped read-failure recipe'
-    );
+    const recipe = readFailureRecipe(guide);
     await compiler.build({
         stdin: {
-            contents: recipes[0]![1]!,
+            contents: recipe,
             loader: 'ts',
             resolveDir: root,
             sourcefile: 'portal-read-failure-recipe.ts',

@@ -429,9 +429,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## Lucide React (0.417.0)
 
-The fixed disclosure chevrons, Portal authoring Settings outline and their SVG defaults are copied from
-lucide-react 0.417.0. The source notice and the complete installed ISC license
-are retained below; no general icon API is included.
+The fixed disclosure chevrons, Portal authoring Settings outline, Grid guidance Info outline,
+and their SVG defaults are copied from lucide-react 0.417.0. The source notice and the complete
+installed ISC license are retained below; no general icon API is included.
 
 ```text
 ISC License

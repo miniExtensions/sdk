@@ -5,6 +5,11 @@ import { join } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+const dateFilterContext = {
+    timezoneId: 'Pacific/Apia',
+    locale: 'en-GB',
+};
+
 const fixture = `
 import { createElement as h, StrictMode, version } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -478,6 +483,14 @@ async function checkQuickFilter(page, startingCriteria) {
 }
 
 async function checkDateFilter(page, { open, closed, dialog, done, summary }) {
+    assert.deepEqual(
+        await page.evaluate(() => ({
+            timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            locale: navigator.language,
+            offsetMinutes: new Date(2024, 0, 31, 12).getTimezoneOffset(),
+        })),
+        { ...dateFilterContext, offsetMinutes: -780 }
+    );
     const criteria = await page.evaluate(() =>
         globalThis.filterFixture.seedDates()
     );
@@ -998,7 +1011,10 @@ export async function checkPortalVisitorSortBrowser({
         });
         const origin = 'http://127.0.0.1:' + server.address().port;
         evidence.origin = origin;
-        context = await browser.newContext({ serviceWorkers: 'block' });
+        context = await browser.newContext({
+            serviceWorkers: 'block',
+            ...(includeFilter ? dateFilterContext : {}),
+        });
         context.setDefaultTimeout(5000);
         await context.route('**/*', (route) => {
             const url = new URL(route.request().url());

@@ -446,11 +446,10 @@ async function proofInventoryFixture(t) {
     return { root, menu, readme };
 }
 
-function assertRuntimeConfigurationPrerequisites(readme) {
-    const configuration = readme
-        .replace(/\r\n/g, '\n')
-        .split(/^## Obtain the actual runtime configuration$/m)[1]
-        ?.split(/^## /m)[0];
+function assertRuntimePrerequisites(readme) {
+    const normalized = readme.replace(/\r\n/g, '\n');
+    const heading = /^## Obtain the actual runtime configuration$/m;
+    const configuration = normalized.split(heading)[1]?.split(/^## /m)[0];
     assert.ok(
         configuration?.trim(),
         'Runtime configuration prerequisites must be present'
@@ -476,7 +475,7 @@ test('onboarding documents stored Share ID discovery without invented setup UI',
         );
     }
     const readme = await readFile(new URL('README.md', root), 'utf8');
-    assertRuntimeConfigurationPrerequisites(readme);
+    assertRuntimePrerequisites(readme);
     const starter = await readFile(
         new URL('examples/browser/README.md', root),
         'utf8'
@@ -485,9 +484,8 @@ test('onboarding documents stored Share ID discovery without invented setup UI',
 });
 
 test('runtime configuration prerequisites accept LF and CRLF without borrowing content from other sections', async () => {
-    const readme = (
-        await readFile(new URL('../README.md', import.meta.url), 'utf8')
-    ).replace(/\r\n/g, '\n');
+    const raw = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+    const readme = raw.replace(/\r\n/g, '\n');
     const heading = '## Obtain the actual runtime configuration';
     const withoutHeading = readme.replace(heading, '## Renamed');
     const outsideSection = readme.replace(
@@ -496,7 +494,7 @@ test('runtime configuration prerequisites accept LF and CRLF without borrowing c
     );
     for (const newline of ['\n', '\r\n']) {
         const check = (text) =>
-            assertRuntimeConfigurationPrerequisites(text.replace(/\n/g, newline));
+            assertRuntimePrerequisites(text.replace(/\n/g, newline));
         check(readme);
         assert.throws(
             () => check(withoutHeading),

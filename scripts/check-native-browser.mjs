@@ -115,6 +115,10 @@ import {
     checkFormGroupBrowser,
 } from './form-group-consumer-checks.mjs';
 import {
+    prepareFormHeaderBrowserFixture,
+    checkFormHeaderBrowser,
+} from './form-header-browser-checks.mjs';
+import {
     checkHTMLDescriptionBrowser,
     checkHTMLDescriptionEditorStyleCoexistence,
 } from './html-description-consumer-checks.mjs';
@@ -1596,6 +1600,7 @@ try {
             'scripts/readonly-portal-list-browser-checks.mjs',
             'scripts/readonly-portal-list-fixture.mjs',
             'scripts/form-group-consumer-checks.mjs',
+            'scripts/form-header-browser-checks.mjs',
             'scripts/controlled-lookup-consumer-checks.mjs',
             'scripts/controlled-lookup-browser-checks.mjs',
             'scripts/form-captcha-consumer-checks.mjs',
@@ -2110,6 +2115,16 @@ try {
             installed,
             allowed,
             report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
+        report.formHeader = await prepareFormHeaderBrowserFixture({
+            temporary,
+            readArchiveMember,
+            installed,
+            allowed,
             build,
             assertBrowserInputs,
             regular,
@@ -3267,6 +3282,14 @@ try {
             await page.goto(origin + '/form-group.html');
             await checkFormGroupBrowser({ page, evidence: report.formGroup });
         });
+        await run('form-header-title-hover', async (page, origin) => {
+            await checkFormHeaderBrowser({
+                page,
+                origin,
+                output,
+                evidence: report.formHeader,
+            });
+        });
         for (const format of portalChartFixtures.formats) {
             await run(
                 'complete-portal-chart-' + format,
@@ -4243,8 +4266,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, printable layout, CSV, Kanban, Gallery and section groups.
-            31 +
+            // Include complete fields, layouts, CSV, section groups and the Form header.
+            32 +
                 portalChartFixtures.formats.length +
                 collaboratorFixtures.formats.length +
                 storageEventCases.length +

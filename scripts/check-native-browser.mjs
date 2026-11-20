@@ -3242,6 +3242,7 @@ try {
             await checkReadonlyPortalGridBrowser({
                 page,
                 evidence: report.readonlyPortalGrid,
+                output,
             });
         });
         await run('portal-gallery-layout', async (page, origin) => {

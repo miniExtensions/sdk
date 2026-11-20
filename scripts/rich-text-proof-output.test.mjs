@@ -27,6 +27,29 @@ const builder = fileURLToPath(
 );
 const repository = dirname(dirname(builder));
 
+const linkDirectory = (target, alias) =>
+    symlinkSync(
+        target,
+        alias,
+        process.platform === 'win32' ? 'junction' : 'dir'
+    );
+
+function linkFile(t, target, alias) {
+    try {
+        symlinkSync(target, alias, 'file');
+        return true;
+    } catch (error) {
+        if (process.platform !== 'win32' || error.code !== 'EPERM') throw error;
+        t.skip('This Windows account cannot create a file symlink (EPERM).');
+        return false;
+    }
+}
+
+const moduleArgument = (index) =>
+    `import { pathToFileURL } from 'node:url'; await import(pathToFileURL(process.argv[${index}]).href); console.log('import-only');`;
+const commonJsArgument =
+    "void import(require('node:url').pathToFileURL(process.argv[1]).href).then(() => console.log('import-only'));";
+
 function runNode(arguments_, input) {
     const result = spawnSync(process.execPath, arguments_, {
         cwd: repository,
@@ -83,7 +106,7 @@ test('relative proof builder invocation executes argument validation', () => {
 
 test('proof builder invocation through a parent alias executes argument validation', (t) => {
     const alias = join(entryFixture(t), 'checkout');
-    symlinkSync(repository, alias, 'dir');
+    linkDirectory(repository, alias);
     assertMainExecuted(
         join(alias, 'scripts/build-rich-text-browser-proof.mjs')
     );
@@ -91,19 +114,23 @@ test('proof builder invocation through a parent alias executes argument validati
 
 test('proof builder invocation through a script symlink executes argument validation', (t) => {
     const alias = join(entryFixture(t), 'builder.mjs');
-    symlinkSync(builder, alias, 'file');
+    if (!linkFile(t, builder, alias)) return;
     assertMainExecuted(alias);
 });
 
 test('importing the proof builder from another entry does not execute main', (t) => {
+    const wrapper = join(entryFixture(t), 'import-only.mjs');
+    writeFileSync(wrapper, importSource(builder));
+    assertImportOnly([wrapper]);
+});
+
+test('importing the proof builder through a file symlink does not execute main', (t) => {
     const directory = entryFixture(t);
     const alias = join(directory, 'builder.mjs');
     const wrapper = join(directory, 'import-only.mjs');
-    symlinkSync(builder, alias, 'file');
-    for (const entry of [builder, alias]) {
-        writeFileSync(wrapper, importSource(entry));
-        assertImportOnly([wrapper]);
-    }
+    if (!linkFile(t, builder, alias)) return;
+    writeFileSync(wrapper, importSource(alias));
+    assertImportOnly([wrapper]);
 });
 
 test('importing the proof builder from eval does not execute main', () => {
@@ -118,54 +145,48 @@ test('eval import with the builder path argument does not execute main', () => {
     assertImportOnly([
         '--input-type=module',
         '--eval',
-        "await import(process.argv[1]); console.log('import-only');",
+        moduleArgument(1),
         builder,
     ]);
 });
 
 test('eval spellings and surrounding Node options preserve import-only execution', () => {
-    const source =
-        "await import(process.argv[1]);\nconsole.log('import-only');";
+    const source = moduleArgument(1);
     for (const arguments_ of [
         ['--input-type=module', '-e', source, builder],
         ['--input-type=module', `--eval=${source}`, builder],
         ['--no-warnings', '--input-type=module', '--eval', source, builder],
         ['--input-type=module', '--eval', source, '--no-warnings', builder],
-        [
-            '--input-type=commonjs',
-            '--eval',
-            "void import(process.argv[1]).then(() => console.log('import-only'));",
-            builder,
-        ],
+        ['--input-type=commonjs', '--eval', commonJsArgument, builder],
     ]) {
         assertImportOnly(arguments_);
     }
 });
 
-test('eval import arguments may use canonical relative and symlink builder paths', (t) => {
-    const directory = entryFixture(t);
-    const alias = join(directory, 'builder.mjs');
-    const parentAlias = join(directory, 'checkout');
-    symlinkSync(builder, alias, 'file');
-    symlinkSync(repository, parentAlias, 'dir');
+function assertEvalImportArgument(entry) {
+    assertImportOnly(['--input-type=module', '-e', moduleArgument(1), entry]);
+}
+
+test('eval import arguments may use canonical, relative and parent alias paths', (t) => {
+    const parentAlias = join(entryFixture(t), 'checkout');
+    linkDirectory(repository, parentAlias);
     for (const entry of [
         realpathSync(builder),
         './scripts/build-rich-text-browser-proof.mjs',
-        alias,
         join(parentAlias, 'scripts/build-rich-text-browser-proof.mjs'),
     ]) {
-        assertImportOnly([
-            '--input-type=module',
-            '-e',
-            "await import(process.argv[1]); console.log('import-only');",
-            entry,
-        ]);
+        assertEvalImportArgument(entry);
     }
 });
 
+test('eval import arguments may use a file symlink path', (t) => {
+    const alias = join(entryFixture(t), 'builder.mjs');
+    if (!linkFile(t, builder, alias)) return;
+    assertEvalImportArgument(alias);
+});
+
 test('print and negative print inline imports do not execute the builder main', () => {
-    const source =
-        "void import(process.argv[1]).then(() => console.log('import-only'));";
+    const source = commonJsArgument;
     for (const flag of ['-p', '-pe', '--print', '--print=false']) {
         assertImportOnly(
             ['--input-type=commonjs', flag, source, builder],
@@ -211,7 +232,7 @@ test('Node option values resembling eval flags preserve direct builder execution
 
 test('wrapper and stdin imports remain inert with a builder path argument', (t) => {
     const wrapper = join(entryFixture(t), 'import-argument.mjs');
-    const source = "await import(process.argv[2]); console.log('import-only');";
+    const source = moduleArgument(2);
     writeFileSync(wrapper, source);
     assertImportOnly([wrapper, builder]);
     assertImportOnly(['--input-type=module', '-', builder], source);
@@ -246,7 +267,7 @@ test('a fresh nested sibling output is created, written and safely cleaned', (t)
 test('a symlink to an external parent resolves to its canonical output', (t) => {
     const { directory, checkout, outside } = fixture(t);
     const alias = join(directory, 'safe-parent');
-    symlinkSync(outside, alias, 'dir');
+    linkDirectory(outside, alias);
     const plan = prepareProofOutput(checkout, join(alias, 'nested', 'proof'));
     assert.equal(plan.output, join(outside, 'nested', 'proof'));
     const state = createProofOutput(plan);
@@ -267,7 +288,7 @@ test('direct output inside the checkout is rejected before creation', (t) => {
 test('a missing output below a symlink into the checkout is rejected', (t) => {
     const { directory, checkout } = fixture(t);
     const alias = join(directory, 'checkout-link');
-    symlinkSync(checkout, alias, 'dir');
+    linkDirectory(checkout, alias);
     assert.throws(
         () => prepareProofOutput(checkout, join(alias, 'missing', 'proof')),
         /outside the checkout/
@@ -278,7 +299,7 @@ test('a missing output below a symlink into the checkout is rejected', (t) => {
 test('checkout aliases are canonicalized before containment checks', (t) => {
     const { directory, checkout } = fixture(t);
     const alias = join(directory, 'checkout-alias');
-    symlinkSync(checkout, alias, 'dir');
+    linkDirectory(checkout, alias);
     assert.throws(
         () => prepareProofOutput(alias, join(checkout, 'proof')),
         /outside the checkout/
@@ -289,7 +310,7 @@ test('dangling symlink ancestors are rejected without creating their target', (t
     const { directory, checkout } = fixture(t);
     const target = join(directory, 'missing-target');
     const alias = join(directory, 'dangling');
-    symlinkSync(target, alias, 'dir');
+    linkDirectory(target, alias);
     assert.throws(
         () => prepareProofOutput(checkout, join(alias, 'nested', 'proof')),
         { code: 'ENOENT' }
@@ -303,7 +324,7 @@ test('existing output directories and dangling output links are never reused', (
     mkdirSync(output);
     assert.throws(() => prepareProofOutput(checkout, output), /already exists/);
     const dangling = join(outside, 'dangling');
-    symlinkSync(join(outside, 'missing'), dangling, 'dir');
+    linkDirectory(join(outside, 'missing'), dangling);
     assert.throws(
         () => prepareProofOutput(checkout, dangling),
         /already exists/
@@ -314,9 +335,14 @@ test('a regular file cannot be an output parent', (t) => {
     const { checkout, outside } = fixture(t);
     const parent = join(outside, 'file');
     writeFileSync(parent, 'keep');
-    assert.throws(() => prepareProofOutput(checkout, join(parent, 'proof')), {
-        code: 'ENOTDIR',
-    });
+    const requested = join(parent, 'proof');
+    assert.throws(
+        () => prepareProofOutput(checkout, requested),
+        (error) =>
+            error.code === 'ENOTDIR' ||
+            error.message === 'Output ancestor must be a directory.'
+    );
+    assert.equal(existsSync(requested), false);
     assert.equal(readFileSync(parent, 'utf8'), 'keep');
 });
 
@@ -345,7 +371,7 @@ test('a newly inserted symlink parent is rejected before creating nested directo
         checkout,
         join(outside, 'new', 'nested', 'proof')
     );
-    symlinkSync(checkout, join(outside, 'new'), 'dir');
+    linkDirectory(checkout, join(outside, 'new'));
     assert.throws(() => createProofOutput(plan), /outside the checkout/);
     assert.equal(existsSync(join(checkout, 'nested')), false);
 });
@@ -356,7 +382,7 @@ test('a changed ancestor prevents writes and uncertain cleanup', (t) => {
         prepareProofOutput(checkout, join(outside, 'proof'))
     );
     renameSync(outside, `${outside}-old`);
-    symlinkSync(checkout, outside, 'dir');
+    linkDirectory(checkout, outside);
     assert.throws(
         () => writeProofAsset(state, 'index.html', 'blocked'),
         /ancestor.*changed/
@@ -388,7 +414,7 @@ test('an output replaced by a checkout symlink is not written or removed', (t) =
         prepareProofOutput(checkout, join(outside, 'proof'))
     );
     renameSync(state.output, `${state.output}-old`);
-    symlinkSync(checkout, state.output, 'dir');
+    linkDirectory(checkout, state.output);
     assert.throws(
         () => writeProofAsset(state, 'index.html', 'blocked'),
         /remain the created directory/
@@ -397,7 +423,7 @@ test('an output replaced by a checkout symlink is not written or removed', (t) =
     assert.equal(existsSync(join(checkout, 'index.html')), false);
 });
 
-test('exclusive asset writes reject existing files and symlinks', (t) => {
+test('exclusive asset writes reject existing files', (t) => {
     const { checkout, outside } = fixture(t);
     const state = createProofOutput(
         prepareProofOutput(checkout, join(outside, 'proof'))
@@ -406,17 +432,24 @@ test('exclusive asset writes reject existing files and symlinks', (t) => {
     assert.throws(() => writeProofAsset(state, 'receipt.json', 'replacement'), {
         code: 'EEXIST',
     });
-    const protectedFile = join(checkout, 'protected');
-    writeFileSync(protectedFile, 'keep');
-    symlinkSync(protectedFile, join(state.output, 'index.html'));
-    assert.throws(() => writeProofAsset(state, 'index.html', 'blocked'), {
-        code: 'EEXIST',
-    });
-    assert.equal(readFileSync(protectedFile, 'utf8'), 'keep');
     assert.equal(
         readFileSync(join(state.output, 'receipt.json'), 'utf8'),
         'original'
     );
+});
+
+test('exclusive asset writes reject file symlinks without touching their target', (t) => {
+    const { checkout, outside } = fixture(t);
+    const state = createProofOutput(
+        prepareProofOutput(checkout, join(outside, 'proof'))
+    );
+    const protectedFile = join(checkout, 'protected');
+    writeFileSync(protectedFile, 'keep');
+    if (!linkFile(t, protectedFile, join(state.output, 'index.html'))) return;
+    assert.throws(() => writeProofAsset(state, 'index.html', 'blocked'), {
+        code: 'EEXIST',
+    });
+    assert.equal(readFileSync(protectedFile, 'utf8'), 'keep');
 });
 
 test('asset names cannot escape the fresh output', (t) => {

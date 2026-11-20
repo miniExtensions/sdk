@@ -100,7 +100,25 @@ export function PortalGridCellGuidance(props: {
                     }
                 },
             },
-            h('span', { 'aria-hidden': true }, 'ⓘ')
+            // Match the native Cell's Lucide React 0.417 Info outline.
+            h(
+                'svg',
+                {
+                    'aria-hidden': true,
+                    focusable: 'false',
+                    width: 24,
+                    height: 24,
+                    viewBox: '0 0 24 24',
+                    fill: 'none',
+                    stroke: 'currentColor',
+                    strokeWidth: 2,
+                    strokeLinecap: 'round',
+                    strokeLinejoin: 'round',
+                },
+                h('circle', { cx: 12, cy: 12, r: 10 }),
+                h('path', { d: 'M12 16v-4' }),
+                h('path', { d: 'M12 8h.01' })
+            )
         ),
         open
             ? h(

@@ -10,6 +10,7 @@ import {
 import {
     prepareReadonlyPortalGridBrowserFixtures,
     checkReadonlyPortalGridBrowser,
+    checkReadonlyPortalGridDateBrowser,
 } from './readonly-portal-grid-browser-checks.mjs';
 import {
     preparePrintableFormBrowserFixtures,
@@ -3244,6 +3245,12 @@ try {
                 evidence: report.readonlyPortalGrid,
                 output,
             });
+        });
+
+        await checkReadonlyPortalGridDateBrowser({
+            browser,
+            origin,
+            evidence: report.readonlyPortalGrid,
         });
         await run('portal-gallery-layout', async (page, origin) => {
             await page.goto(origin + '/portal-gallery-layout.html');

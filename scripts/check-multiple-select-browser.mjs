@@ -1,7 +1,7 @@
 // Local Chromium against a real installed archive. No live QA or backend writes.
 // Run after build: node scripts/check-multiple-select-browser.mjs [evidence-directory]
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
@@ -23,7 +23,7 @@ const output = resolve(process.argv[2] ?? 'dist/multiple-select-browser');
 mkdirSync(output, { recursive: true });
 const consumer = mkdtempSync(join(tmpdir(), 'sdk-multiple-select-browser-'));
 const run = (args, cwd = consumer) =>
-    execFileSync('npm', args, {
+    execPackageFileSync('npm', args, {
         cwd,
         encoding: 'utf8',
         env: { ...process.env, npm_config_cache: join(consumer, 'npm-cache') },

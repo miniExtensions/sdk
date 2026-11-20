@@ -1,6 +1,6 @@
 // Build installed synthetic pages; exercise them with the supported browser tool.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
@@ -511,7 +511,7 @@ export async function buildThemeBrowserProof(archivePath, outputPath) {
         );
         mkdirSync(output, { recursive: true });
         for (const version of ['18.3.1', '19.2.0']) {
-            execFileSync(
+            execPackageFileSync(
                 'npm',
                 [
                     'install',

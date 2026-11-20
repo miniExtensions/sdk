@@ -2,6 +2,7 @@
 // Run after build: node scripts/check-checkbox-browser.mjs [evidence-directory]
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
@@ -23,7 +24,7 @@ const output = resolve(process.argv[2] ?? 'dist/checkbox-browser');
 mkdirSync(output, { recursive: true });
 const consumer = mkdtempSync(join(tmpdir(), 'sdk-checkbox-browser-'));
 const run = (args, cwd = consumer) =>
-    execFileSync('npm', args, {
+    execPackageFileSync('npm', args, {
         cwd,
         encoding: 'utf8',
         env: { ...process.env, npm_config_cache: join(consumer, 'npm-cache') },

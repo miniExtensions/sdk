@@ -580,6 +580,10 @@ function createDraftForFrame(
                 operand.kind === 'text-length' && operand.omitIfUnset === true
         )
     );
+    const criteriaForSubmission = (tree: RuntimeConditionsDefinition | null) =>
+        tree && omitUnsetTextLength
+            ? omitUnsetTextLengths(tree, shouldOmitUnsetTextLength)
+            : tree;
     const dropdowns = (): PortalVisitorFilterDropdown[] =>
         (captured.dropdownFieldIds ?? []).flatMap((fieldId) => {
             const field = captured.fields.find(
@@ -868,13 +872,8 @@ function createDraftForFrame(
         async commit(): Promise<PortalVisitorFilterOutcome> {
             if (!current()) return { type: 'stale' };
             retired = true;
-            if (isEqual(criteria, captured.criteria))
-                return { type: 'unchanged' };
-            const next =
-                criteria && omitUnsetTextLength
-                    ? omitUnsetTextLengths(criteria, shouldOmitUnsetTextLength)
-                    : criteria;
-            if (next !== criteria && isEqual(next, captured.criteria))
+            const next = criteriaForSubmission(criteria);
+            if (isEqual(next, criteriaForSubmission(captured.criteria)))
                 return { type: 'unchanged' };
             submitted = next;
             try {

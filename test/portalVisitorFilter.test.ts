@@ -334,6 +334,31 @@ test('opted-in unset text length is omitted before comparing and sending criteri
             'effective-number': { ...unset, value: 3 },
         },
     });
+    const savedWithBlank = owner.read();
+    const equivalent = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(equivalent);
+    const anotherBlank = equivalent.addCondition('outer');
+    assert.ok(anotherBlank);
+    assert.equal(equivalent.setOperator(anotherBlank, 'isOfLength'), true);
+    assert.deepEqual(await equivalent.commit(), { type: 'unchanged' });
+    assert.equal(owner.calls.length, 2);
+    assert.deepEqual(owner.read(), savedWithBlank);
+
+    const stale = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(stale);
+    owner.update({
+        ...savedWithBlank,
+        criteria: {
+            ...saved,
+            conditions: [
+                { ...outer, conditions: [sibling, unsupported, protectedRaw] },
+            ],
+        },
+    });
+    assert.deepEqual(await stale.commit(), { type: 'stale' });
+    assert.equal(owner.calls.length, 2);
+    owner.update(savedWithBlank);
+
     const mixed = createPortalVisitorFilterDraft(owner.port);
     assert.ok(mixed);
     assert.equal(mixed.setOperand('tags', ['green']), true);

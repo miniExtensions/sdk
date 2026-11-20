@@ -27,6 +27,7 @@ import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatin
 import {PortalGridCheckboxCell,type PortalGridCheckboxCellProps,type PortalGridCheckboxCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridButtonCell,type PortalGridButtonCellProps} from '@miniextensions/sdk/react';
 import {PortalGridSingleSelectCell,type PortalGridSingleSelectCellProps,type PortalGridSingleSelectCellEditor} from '@miniextensions/sdk/react';
+import {PortalGridMultipleSelectCell,type PortalGridMultipleSelectCellProps,type PortalGridMultipleSelectCellEditor} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 import '@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import '@miniextensions/sdk/react/portal-grid-empty-cell.css';
@@ -88,6 +89,12 @@ const multipleValues:PortalGridSingleSelectCellProps={...singleSelectCell,value:
 // @ts-expect-error Grid Select cannot publish or create metadata
 const metadataSelect:PortalGridSingleSelectCellEditor={...singleSelectEditor,publishMetadata(){}};
 void unownedSelect;void multipleValues;void metadataSelect;
+const multipleSelectEditor:PortalGridMultipleSelectCellEditor={owner:{token:Symbol(),isCurrent:()=>true},availableChoices:singleSelectEditor.availableChoices,formId:'form',onValueChange(value){const native:string[]=value;void native;}};
+const multipleSelectCell:PortalGridMultipleSelectCellProps={...singleSelectCell,value:['airtable-value'],editor:multipleSelectEditor};
+createElement(PortalGridMultipleSelectCell,multipleSelectCell);
+// @ts-expect-error Multiple Select uses an ordered canonical string array
+const scalarMultipleSelect:PortalGridMultipleSelectCellProps={...multipleSelectCell,value:'airtable-value'};
+void scalarMultipleSelect;
 const placeholder:PortalGridEmptyCellProps={rowHeight:'extra-tall',stickyLeft:0,lastRow:true};
 createElement(PortalGridEmptyCell,placeholder);
 // @ts-expect-error a blank column slot has no selection port
@@ -209,9 +216,17 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const multipleSelectCellSource = readFileSync(
+        new URL(
+            '../test/reactPortalGridMultipleSelectCell.test.ts',
+            import.meta.url
+        ),
+        'utf8'
+    );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
     const componentCases = 21;
+    const multipleSelectCellCases = 2;
     const textCellCases = 6;
     const emailCellCases = 6;
     const phoneCellCases = 2;
@@ -333,10 +348,15 @@ export async function checkReadonlyPortalGridReactMatrix({
                         singleSelectCellSource,
                         singleSelectCellCases,
                     ],
+                    [
+                        'grid-multiple-select-cell',
+                        multipleSelectCellSource,
+                        multipleSelectCellCases,
+                    ],
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell|PortalGridMultipleSelectCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(

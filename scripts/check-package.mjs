@@ -967,6 +967,8 @@ try {
             `dist/${format}/react/PortalGridButtonCell.d.ts`,
             `dist/${format}/react/PortalGridSingleSelectCell.js`,
             `dist/${format}/react/PortalGridSingleSelectCell.d.ts`,
+            `dist/${format}/react/PortalGridMultipleSelectCell.js`,
+            `dist/${format}/react/PortalGridMultipleSelectCell.d.ts`,
             `dist/${format}/react/PortalGridCellShell.js`,
         ]),
         ...summaryCardsStarterFiles,

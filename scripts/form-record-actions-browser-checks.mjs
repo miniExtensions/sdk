@@ -41,9 +41,9 @@ function makeRow(id) {
             return () => listeners.delete(listener);
         },
         requestCurrentDelete() {
+            counts.requests.push(frame?.scope.id ?? null);
             const record = frame.scope.id;
             const operationId = {};
-            counts.requests.push(record);
             counts.writes.push(record);
             counts.allocations.push(record);
             const settled = new Promise((resolve) => {
@@ -59,9 +59,9 @@ function makeRow(id) {
     return {
         controller,
         changeRecord(record) { frame = record && makeFrame(record); },
-        setComments(disabled, visible) {
+        setComments(disabled, visible, publish = true) {
             frame = { ...frame, comments: { disabled, visible } };
-            for (const changed of listeners) changed();
+            if (publish) for (const changed of listeners) changed();
         },
         settle() { settle(); },
     };
@@ -74,7 +74,7 @@ const render = () => root.render(h(React.StrictMode, null, row('decoy', decoy), 
 window.recordActionsProof = {
     counts,
     changeRecord: (record) => target.changeRecord(record),
-    setComments: (disabled, visible) => target.setComments(disabled, visible),
+    setComments: (disabled, visible, publish) => target.setComments(disabled, visible, publish),
     settle: () => target.settle(),
     replace() {
         target = makeRow('replacement');
@@ -191,29 +191,38 @@ export async function checkFormRecordActionsBrowser({
         const opener = page
             .locator('#target')
             .getByRole('button', { name: 'Options', exact: true });
+        const originalOpener = await opener.elementHandle();
         await opener.press('Enter');
         await page
             .locator('.mx-sdk-form-record-actions__panel:popover-open')
             .waitFor({ state: 'visible' });
-        const points = await opener.evaluate((button) => {
-            const doc = button.ownerDocument;
-            const popupId = button.getAttribute('aria-controls');
-            const popup = doc.getElementById(popupId);
-            const action = [...popup.querySelectorAll('button')].find(
-                (item) => item.textContent === 'Supprimer'
-            );
-            const area = action.getBoundingClientRect();
-            const panel = doc.getElementById('panel').getBoundingClientRect();
-            const x = area.left + area.width / 2;
-            const y = area.top + area.height / 2;
-            return {
-                popupId,
-                x,
-                y,
-                panelBottom: panel.bottom,
-                hit: doc.elementFromPoint(x, y)?.closest('button') === action,
-            };
-        });
+        const readPoint = () =>
+            opener.evaluate((button) => {
+                const doc = button.ownerDocument;
+                const popupId = button.getAttribute('aria-controls');
+                const popup = doc.getElementById(popupId);
+                const action = [...popup.querySelectorAll('button')].find(
+                    (item) => item.textContent === 'Supprimer'
+                );
+                const area = action.getBoundingClientRect();
+                const panel = doc
+                    .getElementById('panel')
+                    .getBoundingClientRect();
+                const x = area.left + area.width / 2;
+                const y = area.top + area.height / 2;
+                return {
+                    popupId,
+                    x,
+                    y,
+                    panelBottom: panel.bottom,
+                    openerBounds: button.getBoundingClientRect().toJSON(),
+                    actionBounds: area.toJSON(),
+                    hit:
+                        doc.elementFromPoint(x, y)?.closest('button') ===
+                        action,
+                };
+            });
+        const points = await readPoint();
         assert(
             points.y > points.panelBottom,
             'Fixture must put Supprimer outside the panel edge'
@@ -228,18 +237,11 @@ export async function checkFormRecordActionsBrowser({
         await page.locator('#panel').evaluate((node) => {
             node.style.overflow = 'visible';
         });
-        const control = await opener.evaluate((button, point) => {
-            const doc = button.ownerDocument;
-            const popup = doc.getElementById(point.popupId);
-            const hit = doc
-                .elementFromPoint(point.x, point.y)
-                ?.closest('button');
-            return hit?.textContent === 'Supprimer' && popup.contains(hit);
-        }, points);
-        assert.equal(
+        const control = await readPoint();
+        assert.deepEqual(
             control,
-            true,
-            'Same coordinates must hit target Supprimer when unclipped'
+            points,
+            'Changing only overflow must preserve geometry and the exact hit target'
         );
         const unclipped = 'record-actions-unclipped.png';
         await page.screenshot({ path: join(output, unclipped) });
@@ -253,6 +255,10 @@ export async function checkFormRecordActionsBrowser({
         });
         const focusText = () =>
             page.evaluate(() => document.activeElement.textContent);
+        const focused = (locator) =>
+            locator.evaluate(
+                (button) => button.ownerDocument.activeElement === button
+            );
         const counts = () =>
             page.evaluate(() => window.recordActionsProof.counts);
         const noop = {
@@ -270,11 +276,7 @@ export async function checkFormRecordActionsBrowser({
         assert.equal(await focusText(), 'Annuler');
         await page.keyboard.press('Enter');
         await confirm.waitFor({ state: 'hidden' });
-        const hasOpenerFocus = () =>
-            opener.evaluate(
-                (button) => button.ownerDocument.activeElement === button
-            );
-        assert.equal(await hasOpenerFocus(), true);
+        assert.equal(await focused(originalOpener), true);
         assert.deepEqual(await counts(), noop);
 
         await opener.press('Enter');
@@ -283,18 +285,34 @@ export async function checkFormRecordActionsBrowser({
         await confirm.waitFor();
         await confirm.getByRole('button', { name: 'Annuler' }).click();
         await confirm.waitFor({ state: 'hidden' });
-        assert.equal(await hasOpenerFocus(), true);
+        assert.equal(await focused(originalOpener), true);
 
         await opener.press('Enter');
         await popup.waitFor();
         await page.keyboard.press('Tab');
         await page.keyboard.press('Escape');
         await popup.waitFor({ state: 'hidden' });
-        assert.equal(await hasOpenerFocus(), true);
+        assert.equal(await focused(originalOpener), true);
         await opener.press('Enter');
         await page.locator('#after').click();
         await popup.waitFor({ state: 'hidden' });
         assert.equal(await focusText(), 'Après');
+        assert.deepEqual(await counts(), noop);
+
+        await opener.press('Enter');
+        await popup.waitFor();
+        await page.keyboard.press('Tab');
+        const commentsAction = popup.getByRole('button', {
+            name: 'Commentaires',
+        });
+        assert.equal(await focused(commentsAction), true);
+        await page.evaluate(() =>
+            window.recordActionsProof.setComments(true, true, false)
+        );
+        assert.equal(await commentsAction.isEnabled(), true);
+        await page.keyboard.press('Enter');
+        await popup.waitFor({ state: 'hidden' });
+        assert.equal(await focused(originalOpener), true);
         assert.deepEqual(await counts(), noop);
 
         await page.evaluate(() =>
@@ -308,11 +326,15 @@ export async function checkFormRecordActionsBrowser({
             true
         );
         await page.keyboard.press('Tab');
-        assert.equal(await focusText(), 'Supprimer');
+        const deleteAction = popup.getByRole('button', { name: 'Supprimer' });
+        assert.equal(await focused(deleteAction), true);
         await page.keyboard.press('Enter');
         await confirm.waitFor();
         await page.keyboard.press('Tab');
-        assert.equal(await focusText(), 'Supprimer');
+        const confirmAction = confirm.getByRole('button', {
+            name: 'Supprimer',
+        });
+        assert.equal(await focused(confirmAction), true);
         await page.evaluate(() =>
             window.recordActionsProof.changeRecord('fresh')
         );
@@ -326,7 +348,6 @@ export async function checkFormRecordActionsBrowser({
         };
         assert.deepEqual(await counts(), fresh);
         await opener.press('Enter');
-        const deleteAction = popup.getByRole('button', { name: 'Supprimer' });
         assert.equal(await deleteAction.isDisabled(), true);
         await page.evaluate(() => window.recordActionsProof.settle());
         await page.waitForFunction(
@@ -344,16 +365,38 @@ export async function checkFormRecordActionsBrowser({
         assert.equal(await focusText(), 'Supprimer');
         await page.keyboard.press('Enter');
         await confirm.waitFor();
+        await page.keyboard.press('Tab');
+        assert.equal(await focused(confirmAction), true);
+        await page.evaluate(() => window.recordActionsProof.changeRecord(null));
+        assert.equal(await focused(confirmAction), true);
+        await page.keyboard.press('Enter');
+        await confirm.waitFor({ state: 'hidden' });
+        const settled = { ...fresh, settlements: ['fresh'] };
+        assert.deepEqual(await counts(), settled);
+
+        await page.evaluate(() => {
+            window.recordActionsProof.changeRecord('fresh');
+            window.recordActionsProof.setComments(false, false);
+        });
+        await opener.press('Enter');
+        await popup.waitFor();
+        await page.keyboard.press('Tab');
+        assert.equal(await focused(deleteAction), true);
+        await page.keyboard.press('Enter');
+        await confirm.waitFor();
         const oldOpener = await opener.elementHandle();
+        assert.equal(
+            await oldOpener.evaluate((button) => button.isConnected),
+            true
+        );
         await page.evaluate(() => window.recordActionsProof.replace());
         await confirm.waitFor({ state: 'hidden' });
         assert.equal(
             await oldOpener.evaluate((button) => button.isConnected),
             false
         );
-        assert.equal(await hasOpenerFocus(), false);
+        assert.equal(await focused(opener), false);
         await page.keyboard.press('Enter');
-        const settled = { ...fresh, settlements: ['fresh'] };
         assert.deepEqual(await counts(), settled);
 
         await page.evaluate(() =>
@@ -442,19 +485,54 @@ export async function checkFormRecordActionsBrowser({
         await confirm.waitFor();
         await page.keyboard.press('Enter');
         await confirm.waitFor({ state: 'hidden' });
-        assert.equal(await hasOpenerFocus(), true);
+        assert.equal(await focused(opener), true);
         assert.deepEqual(await counts(), { ...settled, comments: ['current'] });
+        const finalActions = await counts();
+
+        // The normal inline consumer remains operative when top layer support
+        // is absent. Model the missing API before the package mounts.
+        await page.addInitScript(() => {
+            Object.defineProperty(HTMLElement.prototype, 'showPopover', {
+                configurable: true,
+                value: undefined,
+            });
+        });
+        await page.reload();
+        await page.locator('#panel').evaluate((node) => {
+            node.style.overflow = 'visible';
+        });
+        const fallbackOpener = await opener.elementHandle();
+        await opener.press('Enter');
+        await popup.waitFor();
+        const fallback = await popup.evaluate((node) => ({
+            inline: !node.hasAttribute('popover'),
+            positioned: getComputedStyle(node).position === 'absolute',
+        }));
+        assert.deepEqual(fallback, { inline: true, positioned: true });
+        assert.equal((await readPoint()).hit, true);
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Tab');
+        assert.equal(await focused(deleteAction), true);
+        await page.keyboard.press('Enter');
+        await confirm.waitFor();
+        await page.keyboard.press('Enter');
+        await confirm.waitFor({ state: 'hidden' });
+        assert.equal(await focused(fallbackOpener), true);
+        assert.deepEqual(await counts(), noop);
 
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(unexpectedRequests, []);
         Object.assign(evidence, {
             status: 'passed',
             clipped: points,
-            unclippedHit: control,
+            unclipped: control,
             cancelRestoredFocus: true,
             pointerCancelCounts: noop,
-            finalActions: await counts(),
+            finalActions,
             staleReplacementFocus: false,
+            staleConfirmationRequests: 0,
+            staleCommentsHandoffs: 0,
+            fallback: { ...fallback, cancelRestoredFocus: true, actions: noop },
             hostModalCollision: { ...collision, trackedMovedOpener: true },
             screenshots: [
                 {

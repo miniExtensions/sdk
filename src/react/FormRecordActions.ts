@@ -214,7 +214,12 @@ export function FormRecordActionsMenu(
 function showActionsPanel(panel: HTMLDivElement, button: HTMLButtonElement) {
     const doc = button.ownerDocument;
     const view = doc.defaultView;
-    if (!view || typeof panel.showPopover !== 'function') return;
+    if (
+        !view ||
+        typeof panel.showPopover !== 'function' ||
+        typeof panel.hidePopover !== 'function'
+    )
+        return;
     // Keep the panel in the disclosure's DOM and tab order, including in a
     // host dialog, while allowing it to paint beyond the clipping ancestor.
     panel.setAttribute('popover', 'manual');

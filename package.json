@@ -336,7 +336,7 @@
         "check:lookup:browser": "node scripts/check-controlled-lookup-browser.mjs",
         "check:package": "node scripts/build.mjs && node --test scripts/source-package-checks.test.mjs scripts/portal-sidebar-vendor-checks.test.mjs scripts/calendar-vendor-checks.test.mjs scripts/portal-map-vendor-checks.test.mjs scripts/external-sync-source-controlled-browser-checks.test.mjs scripts/address-combobox-bundle.test.mjs scripts/date-popover-vendor.test.mjs scripts/document-preview-assets.test.mjs scripts/document-pdf-bundle.test.mjs scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs scripts/phone-vendor-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
-        "format:check": "prettier --check . --end-of-line auto",
+        "format:check": "node scripts/format-check.mjs",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",
         "prepack": "pnpm build",
         "test:unit": "node scripts/coverage.mjs unit",

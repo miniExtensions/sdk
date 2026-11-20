@@ -2,6 +2,7 @@ import ts from 'typescript';
 // Installed SDK, local real Chrome, synthetic storage/locks. Never native acceptance.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
@@ -23,7 +24,7 @@ const output = resolve(process.argv[2] ?? 'dist/saved-progress-browser');
 mkdirSync(output, { recursive: true });
 const temporary = mkdtempSync(join(tmpdir(), 'sdk-progress-browser-'));
 const run = (args, cwd = temporary) =>
-    execFileSync('npm', args, {
+    execPackageFileSync('npm', args, {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],

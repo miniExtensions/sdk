@@ -2,6 +2,7 @@
 // Usage: SDK_SINGLE_COLLABORATOR_NPM_CACHE=/path/to/seeded/cache node scripts/build-single-collaborator-browser-proof.mjs tested.tgz output-directory
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
@@ -728,7 +729,7 @@ async function main() {
             join(consumer, 'package.json'),
             JSON.stringify({ private: true, type: 'module' })
         );
-        execFileSync(
+        execPackageFileSync(
             'npm',
             [
                 'install',

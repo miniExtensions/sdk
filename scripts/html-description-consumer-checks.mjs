@@ -1,7 +1,11 @@
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import {
+    execPackageFileSync,
+    spawnPackageFileSync,
+} from './package-manager-launch.mjs';
 import { createRequire } from 'node:module';
 import {
     existsSync,
@@ -285,7 +289,10 @@ export function checkHTMLDescriptionReactMatrix({
     const directory = mkdtempSync(join(tmpdir(), 'sdk-html-description-'));
     const profiles = [];
     const run = (command, args) =>
-        execFileSync(command, args, { cwd: directory, stdio: 'inherit' });
+        execPackageFileSync(command, args, {
+            cwd: directory,
+            stdio: 'inherit',
+        });
     try {
         writeFileSync(
             join(directory, 'package.json'),
@@ -409,7 +416,7 @@ export function prepareHTMLDescriptionEditorReference({
         'true',
         'The separately owned immutable editor reference is CI-only'
     );
-    const version = execFileSync(pnpmCommand, ['--version'], {
+    const version = execPackageFileSync(pnpmCommand, ['--version'], {
         encoding: 'utf8',
     }).trim();
     assert.equal(version, '10.28.2');
@@ -430,7 +437,7 @@ export function prepareHTMLDescriptionEditorReference({
         join(directory, 'package.json'),
         JSON.stringify(manifest, null, 2)
     );
-    const installed = spawnSync(
+    const installed = spawnPackageFileSync(
         pnpmCommand,
         ['install', '--strict-peer-dependencies', '--no-frozen-lockfile'],
         { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }

@@ -1,6 +1,7 @@
 // Packed consumer/type/CSS proof. This matrix never acquires a provider or creates DOM.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
@@ -621,7 +622,7 @@ function installCustomer(directory, archivePath, dependencies) {
     );
     writeFileSync(join(directory, 'pnpm-workspace.yaml'), policyText);
     const pnpm = (args) =>
-        execFileSync('pnpm', args, {
+        execPackageFileSync('pnpm', args, {
             cwd: directory,
             encoding: 'utf8',
             timeout: 120000,

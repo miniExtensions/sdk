@@ -26,6 +26,7 @@ void nativeRenderer;
 
 const runtime = String.raw`
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import React from 'react';
 const require=createRequire(import.meta.url),format=process.argv[2];
@@ -51,7 +52,16 @@ const domWindow=new Window({url:'https://consumer.invalid/form',settings:{fetch:
 const keys=['window','document','navigator','HTMLElement','IS_REACT_ACT_ENVIRONMENT'];
 const originals=keys.map(key=>Object.getOwnPropertyDescriptor(globalThis,key));
 for(const key of keys)Object.defineProperty(globalThis,key,{configurable:true,value:key==='IS_REACT_ACT_ENVIRONMENT'?true:domWindow[key]});
-const container=domWindow.document.createElement('main');domWindow.document.body.append(container);container.innerHTML=html;
+const form = domWindow.document.createElement('form');
+let submits = 0;
+form.addEventListener('submit', event => {
+    submits++;
+    event.preventDefault();
+});
+const container = domWindow.document.createElement('main');
+domWindow.document.body.append(form);
+form.append(container);
+container.innerHTML = html;
 const original=container.firstChild,errors=[];const {hydrateRoot}=await import('react-dom/client');const {flushSync}=await import('react-dom');let root;
 try {
  await React.act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>errors.push(error.message)});});
@@ -77,8 +87,35 @@ try {
  const currentFooterButton=Array.from(container.querySelectorAll('button')).find(button=>button.textContent.includes('Footer from Airtable'));
  assert(currentFooterButton,'Missing current footer placeholder after A–B–A');await React.act(async()=>currentFooterButton.click());
  assert.equal(retirementChecks,2);assert.deepEqual(calls,['footer'],'The new current presentation dispatches exactly once');
- preview=undefined;identity={...identity,configuration:'public'};await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('button').length,0);assert.deepEqual(calls,['footer']);
+ const titleSelector = '.mx-sdk-form-placeholder--title';
+ const sourceSelector = '.mx-sdk-form-placeholder--source';
+ const manualTitle = titleSelector + ':not(' + sourceSelector + ')';
+ assert(container.querySelector(titleSelector + sourceSelector), 'Missing Airtable title placeholder');
+ source = {type:'none'};
+ await React.act(async () => root.render(element()));
+ const titleButton = container.querySelector(manualTitle);
+ assert.equal(titleButton?.textContent, 'Form title');
+ assert.equal(titleButton.type, 'button');
+ titleButton.focus();
+ assert.equal(domWindow.document.activeElement, titleButton);
+ await React.act(async () => titleButton.click());
+ assert.deepEqual(calls, ['footer','title']);
+ assert.equal(submits, 0);
+ preview = undefined;
+ identity = {...identity,configuration:'public'};
+ await React.act(async () => root.render(element()));
+ assert.equal(container.querySelectorAll('button').length, 0);
+ assert.equal(container.querySelector('h1'), null);
+ assert.deepEqual(calls, ['footer','title']);
  source={type:'field',field:{status:'missing'}};await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1').textContent,'Fallback name');
+ const sheet = new domWindow.CSSStyleSheet();
+ sheet.replaceSync(readFileSync(require.resolve('@miniextensions/sdk/react/form-header.css'), 'utf8'));
+ const style = selector => Array.from(sheet.cssRules).find(rule => rule.selectorText === selector)?.style;
+ assert.equal(style('.mx-sdk-form-placeholder')?.background, 'transparent');
+ assert.equal(style(manualTitle)?.color, '#9ca3af');
+ assert.equal(style(manualTitle + ':hover')?.color, '#6b7280');
+ assert.equal(style(manualTitle + ':hover')?.background, 'transparent');
+ assert.equal(style(sourceSelector + ':hover')?.background, '#e0f2fe');
  await React.act(async()=>root.unmount());root=undefined;
  assert.equal(domWindow.location.href,'https://consumer.invalid/form');assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);
  console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks}));
@@ -175,7 +212,7 @@ export function checkFormHeaderReactMatrix({
                 assert.equal(result.react, version.react);
                 assert.equal(result.hydrationErrors, 0);
                 assert.equal(result.networkRequests, 0);
-                assert.deepEqual(result.effects, ['footer']);
+                assert.deepEqual(result.effects, ['footer', 'title']);
                 formats.push(result);
             }
             const css = readFileSync(

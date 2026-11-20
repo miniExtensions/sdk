@@ -807,7 +807,10 @@ pnpm pack
 ```
 
 `pnpm check` runs formatting, types, synthetic behavior tests and packed
-ESM/CommonJS/TypeScript/browser consumers. It copies the packaged starter into
+ESM/CommonJS/TypeScript/browser consumers. The formatting check accepts
+consistent LF or CRLF in the working tree without rewriting files or changing
+Git settings. It still checks Prettier formatting and rejects mixed line
+endings. The package check copies the packaged starter into
 an independent customer project and verifies its installation, types/build and
 synthetic integration contracts. The optional source UI example also receives
 packed-consumer checks. These checks make no live miniExtensions API calls;

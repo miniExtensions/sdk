@@ -103,6 +103,44 @@ function TextCellProbe() {
             onClick: () => { openCount.current++; },
         }, 'Open from writable Grid'))))));
 }
+function GuidanceLayoutProbe() {
+    const label = 'Conditional editing needs the form';
+    const tableStyle = {
+        width: 319.5, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0,
+    };
+    const table = (name, cell) => h('table', {
+        'aria-label': name, style: tableStyle,
+    }, h('tbody', null, h('tr', null, cell)));
+    // Source-derived visual reference from the native Cell and Lucide 0.417.
+    const reference = h('td', { style: {
+        position: 'relative', padding: '8px 12px', borderLeft: '1px solid #e5e7eb',
+        borderBottom: '1px solid #e5e7eb', verticalAlign: 'top',
+        color: '#374151', fontSize: 14, lineHeight: '20px',
+    } },
+        h('div', { className: 'read-only-text', style: {
+            height: 24, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        } }, label),
+        h('span', { style: {
+            position: 'absolute', inset: 0, border: '2px solid #3b82f6',
+            borderRadius: 4, pointerEvents: 'none', zIndex: 9,
+        } }),
+        h('svg', {
+            'aria-hidden': true, viewBox: '0 0 24 24', fill: 'none',
+            stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round',
+            style: { position: 'absolute', width: 16, height: 16, right: 4, top: 4, color: '#9ca3af', zIndex: 10 },
+        }, h('circle', { cx: 12, cy: 12, r: 10 }),
+        h('path', { d: 'M12 16v-4' }), h('path', { d: 'M12 8h.01' }))
+    );
+    const candidate = h(PortalGridSingleLineTextCell, {
+        value: label, displayText: label, title: 'Plain note', language: 'en',
+        cellIdentity: 'guidance-layout', selected: true, onSelect() {},
+        readOnlyGuidance: { label: 'Edit form required', text: 'Use the edit form for conditional fields.' },
+        rowHeight: 'short',
+    });
+    return h('section', { id: 'grid-guidance-layout', style: {
+        fontFamily: 'Arial, sans-serif', colorScheme: 'light', background: '#fff',
+    } }, table('Native guidance reference', reference), table('Installed Grid guidance', candidate));
+}
 function EmptyCellProbe() {
     const actions = useRef({ writes: 0, selects: 0, opens: 0, submits: 0 });
     useEffect(() => {
@@ -439,6 +477,7 @@ function ButtonCellProbe() {
 const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
+    startGuidanceLayout: () => root.render(h(StrictMode, null, h(GuidanceLayoutProbe))),
     startEmailCell: () => root.render(h(StrictMode, null, h(EmailCellProbe))),
     startPhoneCell: () => root.render(h(StrictMode, null, h(PhoneCellProbe))),
     startEmptyCell: () => root.render(h(StrictMode, null, h(EmptyCellProbe))),
@@ -558,7 +597,11 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     };
 }
 
-export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
+export async function checkReadonlyPortalGridBrowser({
+    page,
+    evidence,
+    output,
+}) {
     page.setDefaultTimeout(5000);
     const snapshot = () => page.evaluate(() => window.__nativeProbe.snapshot());
     const patch = async (value) => {
@@ -1255,6 +1298,7 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
     const buttonCell = await checkButtonCellBrowser(page);
     end = await snapshot();
     assert.deepEqual(end.errors, []);
+    await checkGuidanceLayoutBrowser({ page, evidence, output });
     Object.assign(evidence, {
         status: 'passed',
         results,
@@ -1279,6 +1323,120 @@ export async function checkReadonlyPortalGridBrowser({ page, evidence }) {
             'Installed SDK presentation only; actual native borrowed-route, child admission and persistent preference qualification remain separate.',
         ],
     });
+}
+
+async function checkGuidanceLayoutBrowser({ page, evidence, output }) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => window.__nativeProbe.startGuidanceLayout());
+    const reference = page
+        .getByRole('table', { name: 'Native guidance reference' })
+        .getByRole('cell');
+    const candidate = page
+        .getByRole('table', { name: 'Installed Grid guidance' })
+        .getByRole('cell');
+    await reference.waitFor({ state: 'visible' });
+    await page.evaluate(() => document.fonts.ready);
+    await reference.evaluate((cell) => {
+        const text = cell.querySelector('.read-only-text');
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const spacing =
+            (288 - range.getBoundingClientRect().width) /
+            text.textContent.length;
+        cell.closest('section').style.letterSpacing = spacing + 'px';
+    });
+    const measure = (locator) =>
+        locator.evaluate((cell) => {
+            const outer = cell.getBoundingClientRect();
+            const text = cell.querySelector('.read-only-text');
+            const range = document.createRange();
+            range.selectNodeContents(text);
+            const svg = cell.querySelector('svg');
+            const icon = svg?.getBoundingClientRect();
+            const attrs = [
+                'viewBox',
+                'fill',
+                'stroke',
+                'stroke-width',
+                'stroke-linecap',
+                'stroke-linejoin',
+            ];
+            return {
+                cellWidth: outer.width,
+                contentWidth: text.getBoundingClientRect().width,
+                labelWidth: range.getBoundingClientRect().width,
+                icon: icon
+                    ? {
+                          width: icon.width,
+                          height: icon.height,
+                          top: icon.top - outer.top,
+                          right: outer.right - icon.right,
+                          color: getComputedStyle(svg).color,
+                          attributes: Object.fromEntries(
+                              attrs.map((name) => [
+                                  name,
+                                  svg.getAttribute(name),
+                              ])
+                          ),
+                          paths: Array.from(
+                              svg.querySelectorAll('path'),
+                              (path) => path.getAttribute('d')
+                          ),
+                          circle: ['cx', 'cy', 'r'].map((name) =>
+                              svg.querySelector('circle')?.getAttribute(name)
+                          ),
+                      }
+                    : null,
+            };
+        });
+    const native = await measure(reference);
+    const installed = await measure(candidate);
+    const viewport = await page.evaluate(() => ({
+        width: innerWidth,
+        height: innerHeight,
+        scale: visualViewport.scale,
+        devicePixelRatio,
+        theme: matchMedia('(prefers-color-scheme: light)').matches
+            ? 'light'
+            : 'dark',
+    }));
+    evidence.guidanceLayout = {
+        reference: 'source-derived-native-cell',
+        viewport,
+        native,
+        installed,
+    };
+    await reference.screenshot({
+        path: join(output, 'grid-guidance-reference.png'),
+    });
+    await candidate.screenshot({
+        path: join(output, 'grid-guidance-installed.png'),
+    });
+    assert.deepEqual(viewport, {
+        width: 1280,
+        height: 720,
+        scale: 1,
+        devicePixelRatio: 1,
+        theme: 'light',
+    });
+    assert.equal(native.cellWidth, 319.5);
+    assert.ok(Math.abs(native.labelWidth - 288) < 0.125);
+    assert.ok(native.labelWidth <= native.contentWidth);
+    assert.equal(installed.cellWidth, native.cellWidth);
+    assert.ok(Math.abs(installed.labelWidth - native.labelWidth) < 0.125);
+    assert.equal(
+        installed.contentWidth,
+        native.contentWidth,
+        'Guidance cannot reserve text width'
+    );
+    assert.deepEqual(
+        installed.icon,
+        native.icon,
+        'Match the native Info SVG and inset'
+    );
+    evidence.guidanceLayout.status = 'passed';
 }
 
 export async function checkButtonCellBrowser(page) {
@@ -2738,7 +2896,7 @@ export async function checkReadonlyPortalGridProfile({
         const page = await context.newPage();
         await page.goto(origin + '/readonly-portal-grid.html');
         try {
-            await checkReadonlyPortalGridBrowser({ page, evidence });
+            await checkReadonlyPortalGridBrowser({ page, evidence, output });
         } finally {
             await page.screenshot({
                 path: join(output, 'grid.png'),

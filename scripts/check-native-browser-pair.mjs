@@ -22,8 +22,8 @@ const lanes = [
     { name: 'react18', version: '18.3.1' },
 ];
 
-// Baseline native Chromium receipts from SDK main run 44438421662.
-// The browser runner can add cases. Each baseline case must still pass.
+// Keep the baseline receipts from SDK main run 44438421662 and newly
+// required cases in both paired lanes.
 const commonCases = [
     'native-file-selection',
     'recoverable-native-image',
@@ -42,6 +42,7 @@ const commonCases = [
     'printable-form-layout',
     'csv-export',
     'form-group',
+    'form-header-title-hover',
     'complete-portal-chart-esm',
     'complete-portal-chart-cjs',
     'complete-collaborators-esm',

@@ -60,6 +60,10 @@
     font-weight: 700;
     color: #9ca3af;
 }
+.mx-sdk-form-placeholder--title:not(.mx-sdk-form-placeholder--source):hover {
+    background: transparent;
+    color: #6b7280;
+}
 .mx-sdk-form-placeholder--description {
     margin-top: 1.25rem;
 }

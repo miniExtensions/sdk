@@ -3481,6 +3481,12 @@ export {
 } from './CompleteFormCompletion.js';
 
 export {
+    CompleteFormReadonlyFooterActions,
+    type CompleteFormReadonlyFooterActionsProps,
+    type FormReadonlyFooterAction,
+} from './CompleteFormReadonlyFooterActions.js';
+
+export {
     CompleteBarcodeScanner,
     defaultBarcodeScannerLabels,
 } from './CompleteBarcodeScanner.js';

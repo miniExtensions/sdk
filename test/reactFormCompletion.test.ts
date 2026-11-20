@@ -6,15 +6,27 @@ import { renderToString } from 'react-dom/server';
 import {
     CompleteFormCompletion,
     CompleteFormCompletionMessage,
+    CompleteFormReadonlyFooterActions,
     useFormCompletionCountdown,
     type CompleteFormCompletionProps,
+    type CompleteFormReadonlyFooterActionsProps,
 } from '../src/react/index.js';
 import {
     projectFormCompletion,
+    projectFormCompletionNavigation,
     type FormCompletionConfiguration,
+    type ProjectFormCompletionInput,
 } from '../src/forms/index.js';
 
-const project = (configuration: FormCompletionConfiguration) =>
+const project = (
+    configuration: FormCompletionConfiguration,
+    options?: Partial<
+        Pick<
+            ProjectFormCompletionInput,
+            'hasParentExtension' | 'hasLogout' | 'language'
+        >
+    >
+) =>
     projectFormCompletion({
         configuration,
         language: 'en',
@@ -22,7 +34,26 @@ const project = (configuration: FormCompletionConfiguration) =>
         unfilteredValues: {},
         fields: {},
         linkedTableStates: {},
+        ...options,
     });
+
+const childActionConfiguration = {
+    afterFormSubmission: 'stay',
+    successAction: true,
+    successMessageCanCreateNewRecord: true,
+    allowCopySubmittedToNewForm: true,
+    enableLockingFormAfterSubmission: false,
+} satisfies FormCompletionConfiguration;
+
+const readonlyFooter = {
+    configuration: childActionConfiguration,
+    language: 'en',
+    context: 'direct-url',
+    mode: 'readonly',
+    hasParentExtension: false,
+    hasExistingRecord: true,
+} satisfies Omit<CompleteFormReadonlyFooterActionsProps, 'onCommand'>;
+
 function props(
     configuration: FormCompletionConfiguration,
     onCommand: CompleteFormCompletionProps['onCommand']
@@ -88,6 +119,365 @@ async function fixture(t: TestContext) {
         },
     };
 }
+it('read-only footer offers only Copy in a child side panel', async (t) => {
+    const f = await fixture(t);
+    const calls: string[] = [];
+    let submits = 0;
+    let writes = 0;
+    await f.render(
+        h(
+            StrictMode,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit(event: import('react').FormEvent) {
+                        event.preventDefault();
+                        submits++;
+                        writes++;
+                    },
+                },
+                h(CompleteFormReadonlyFooterActions, {
+                    ...readonlyFooter,
+                    context: 'side-panel',
+                    hasParentExtension: true,
+                    onCommand(command) {
+                        calls.push(command);
+                    },
+                })
+            )
+        )
+    );
+    assert.deepEqual(calls, []);
+    const buttons = [...f.container.querySelectorAll('button')];
+    assert.deepEqual(
+        buttons.map((button) => button.textContent),
+        ['Copy submission']
+    );
+    assert.equal(buttons[0]!.type, 'button');
+    await act(async () => buttons[0]!.click());
+    assert.deepEqual(calls, ['copy_form']);
+    assert.equal(submits, 0);
+    assert.equal(writes, 0);
+});
+
+it('post-save child suppresses both manual actions', async (t) => {
+    const f = await fixture(t);
+    const calls: string[] = [];
+    const c = childActionConfiguration;
+    await f.render(
+        h(
+            StrictMode,
+            null,
+            h(CompleteFormCompletion, {
+                ...props(c, (command) => {
+                    calls.push(command);
+                }),
+                projection: project(c, { hasParentExtension: true }),
+            })
+        )
+    );
+    assert(f.container.querySelector('[role="alert"]'));
+    assert.equal(f.container.querySelectorAll('button').length, 0);
+    await f.tick(1000);
+    assert.deepEqual(calls, []);
+});
+
+it('read-only root footer buttons each emit one distinct intent for host navigation', async (t) => {
+    const f = await fixture(t);
+    const intents: string[] = [];
+    const navigations: URL[] = [];
+    let submits = 0;
+    let writes = 0;
+    const currentURL =
+        'https://host.invalid/form/recCurrent?screen=success&recordIdToCopyFrom=recOld&campaign=summer&prefill_Name=Current';
+    await f.render(
+        h(
+            'form',
+            {
+                onSubmit(event: import('react').FormEvent) {
+                    event.preventDefault();
+                    submits++;
+                    writes++;
+                },
+            },
+            h(CompleteFormReadonlyFooterActions, {
+                ...readonlyFooter,
+                onCommand(command) {
+                    intents.push(command);
+                    const [result] = projectFormCompletionNavigation({
+                        currentURL,
+                        recordId: 'recCurrent',
+                        inIframe: false,
+                        command,
+                    });
+                    assert.equal(result?.type, 'navigate');
+                    navigations.push(new URL(result.url));
+                },
+            })
+        )
+    );
+    const [submitAnother, copy] = f.container.querySelectorAll('button');
+    assert.equal(submitAnother?.textContent, 'Submit another form');
+    assert.equal(copy?.textContent, 'Copy submission');
+    assert.deepEqual(intents, []);
+    await act(async () => submitAnother.click());
+    assert.deepEqual(intents, ['submit_another_form']);
+    await act(async () => copy.click());
+    assert.deepEqual(intents, ['submit_another_form', 'copy_form']);
+    assert.equal(navigations[0]!.searchParams.has('recordIdToCopyFrom'), false);
+    assert.equal(
+        navigations[1]!.searchParams.get('recordIdToCopyFrom'),
+        'recCurrent'
+    );
+    for (const destination of navigations) {
+        assert.equal(destination.pathname, '/form');
+        assert.equal(destination.searchParams.has('screen'), false);
+        assert.equal(destination.searchParams.get('campaign'), 'summer');
+        assert.equal(destination.searchParams.get('prefill_Name'), 'Current');
+    }
+    assert.deepEqual({ submits, writes }, { submits: 0, writes: 0 });
+});
+
+it('read-only footer applies each surface, flag, lock and record gate independently', async (t) => {
+    const f = await fixture(t);
+    const copy = 'Copy submission';
+    const submitAnother = 'Submit another form';
+    const completionDisabled = {
+        ...childActionConfiguration,
+        afterFormSubmission: 'redirect',
+        successAction: false,
+    } satisfies FormCompletionConfiguration;
+    type Props = CompleteFormReadonlyFooterActionsProps;
+    const cases: [string, Partial<Props>, string[]][] = [
+        [
+            'locked child',
+            {
+                context: 'side-panel',
+                hasParentExtension: true,
+                configuration: {
+                    ...childActionConfiguration,
+                    enableLockingFormAfterSubmission: true,
+                },
+            },
+            [],
+        ],
+        ['child modal', { context: 'modal', hasParentExtension: true }, []],
+        [
+            'locked root',
+            {
+                configuration: {
+                    ...childActionConfiguration,
+                    enableLockingFormAfterSubmission: true,
+                },
+            },
+            [submitAnother],
+        ],
+        [
+            'login root',
+            {
+                configuration: {
+                    ...childActionConfiguration,
+                    accessingRecordsMethod: 'loginPage',
+                },
+            },
+            [copy],
+        ],
+        [
+            'locked login root',
+            {
+                configuration: {
+                    ...childActionConfiguration,
+                    accessingRecordsMethod: 'loginPage',
+                    enableLockingFormAfterSubmission: true,
+                },
+            },
+            [],
+        ],
+        ['editable', { mode: 'editable' }, []],
+        ['config preview', { mode: 'config-preview' }, []],
+        [
+            'only submit flag',
+            { configuration: { successMessageCanCreateNewRecord: true } },
+            [submitAnother],
+        ],
+        [
+            'only copy flag',
+            { configuration: { allowCopySubmittedToNewForm: true } },
+            [copy],
+        ],
+        ['neither flag', { configuration: {} }, []],
+        ['no source record', { hasExistingRecord: false }, [submitAnother]],
+        ['form layout', { context: 'form-layout' }, [submitAnother, copy]],
+        [
+            'independent completion settings',
+            { configuration: completionDisabled },
+            [submitAnother, copy],
+        ],
+    ];
+    const onCommand = () => assert.fail('Mount emitted a footer intent');
+    for (const [name, input, labels] of cases) {
+        await f.render(
+            h(CompleteFormReadonlyFooterActions, {
+                ...readonlyFooter,
+                onCommand,
+                ...input,
+            })
+        );
+        assert.deepEqual(
+            [...f.container.querySelectorAll('button')].map(
+                (button) => button.textContent
+            ),
+            labels,
+            name
+        );
+    }
+});
+
+it('read-only footer preserves custom and intentional blank labels with localized defaults', async (t) => {
+    const f = await fixture(t);
+    const onCommand = () =>
+        assert.fail('Disabled button emitted a footer intent');
+    const cases = [
+        {
+            submit: ' Nouveau ',
+            copy: ' Dupliquer ',
+            labels: [' Nouveau ', ' Dupliquer '],
+            accessibleCopy: null,
+        },
+        {
+            submit: null,
+            copy: null,
+            labels: ['Soumettre un autre formulaire', 'Copier la soumission'],
+            accessibleCopy: null,
+        },
+        {
+            submit: '  ',
+            copy: '',
+            labels: ['Soumettre un autre formulaire', ''],
+            accessibleCopy: 'Copier la soumission',
+        },
+        {
+            submit: '',
+            copy: '  ',
+            labels: ['Soumettre un autre formulaire', '  '],
+            accessibleCopy: 'Copier la soumission',
+        },
+    ];
+    for (const { submit, copy, labels, accessibleCopy } of cases) {
+        await f.render(
+            h(CompleteFormReadonlyFooterActions, {
+                ...readonlyFooter,
+                configuration: {
+                    ...childActionConfiguration,
+                    successMessageNewRecordText: submit,
+                    allowCopySubmittedToNewFormButtonText: copy,
+                },
+                language: 'fr',
+                disabled: true,
+                buttonClassName: 'host-footer-button',
+                onCommand,
+            })
+        );
+        const buttons = [...f.container.querySelectorAll('button')];
+        assert.deepEqual(
+            buttons.map((button) => button.textContent),
+            labels
+        );
+        assert.equal(buttons[1]?.getAttribute('aria-label'), accessibleCopy);
+        for (const button of buttons) {
+            assert(button.disabled);
+            assert(button.classList.contains('host-footer-button'));
+            await act(async () => button.click());
+        }
+    }
+});
+
+it('post-save root actions preserve stay, session, lock, label and disabled rules', async (t) => {
+    const f = await fixture(t);
+    const both = ['Soumettre un autre formulaire', 'Copier la soumission'];
+    type Options = Parameters<typeof project>[1];
+    const cases: [
+        string,
+        FormCompletionConfiguration,
+        Options,
+        boolean,
+        string[],
+    ][] = [
+        ['default labels', {}, {}, true, both],
+        [
+            'configured labels',
+            {
+                successMessageNewRecordText: ' Nouveau ',
+                allowCopySubmittedToNewFormButtonText: ' Dupliquer ',
+            },
+            {},
+            true,
+            [' Nouveau ', ' Dupliquer '],
+        ],
+        [
+            'blank labels',
+            {
+                successMessageNewRecordText: '  ',
+                allowCopySubmittedToNewFormButtonText: '',
+            },
+            {},
+            true,
+            [both[0]!],
+        ],
+        [
+            'locked',
+            { enableLockingFormAfterSubmission: true },
+            {},
+            true,
+            [both[0]!],
+        ],
+        ['login', { accessingRecordsMethod: 'loginPage' }, {}, true, []],
+        ['logout', {}, { hasLogout: true }, true, []],
+        ['completion actions off', { successAction: false }, {}, true, []],
+        ['disabled', {}, {}, false, both],
+        ...(['readonly', 'redirect', 'newForm', 'close'] as const).map(
+            (mode) =>
+                [mode, { afterFormSubmission: mode }, {}, true, []] as [
+                    string,
+                    FormCompletionConfiguration,
+                    Options,
+                    boolean,
+                    string[],
+                ]
+        ),
+    ];
+    const calls: string[] = [];
+    for (const [name, input, options, canSubmit, labels] of cases) {
+        const configuration = { ...childActionConfiguration, ...input };
+        await f.render(
+            h(CompleteFormCompletion, {
+                ...props(configuration, (command) => {
+                    calls.push(command);
+                }),
+                key: name,
+                projection: project(configuration, {
+                    ...options,
+                    language: 'fr',
+                }),
+                canSubmit,
+            })
+        );
+        const buttons = [...f.container.querySelectorAll('button')];
+        assert.deepEqual(
+            buttons.map((button) => button.textContent),
+            labels,
+            name
+        );
+        if (!canSubmit)
+            for (const button of buttons) {
+                assert(button.disabled);
+                await act(async () => button.click());
+            }
+        assert.deepEqual(calls, [], name);
+    }
+});
+
 it('SSR renders complete sanitized default UI and localized stock actions without effects or browser access', () => {
     let calls = 0;
     const c = {
@@ -273,17 +663,21 @@ it('manual new and copy remain explicit actions without creating an automatic co
     } satisfies FormCompletionConfiguration;
     await f.render(
         h(
-            CompleteFormCompletion,
-            props(c, (command) => {
-                calls.push(command);
-            })
+            'form',
+            { onSubmit: () => assert.fail('Manual action submitted the Form') },
+            h(
+                CompleteFormCompletion,
+                props(c, (command) => {
+                    calls.push(command);
+                })
+            )
         )
     );
     const buttons = f.container.querySelectorAll('button');
-    await act(async () => {
-        buttons[0]!.click();
-        buttons[1]!.click();
-    });
+    assert.deepEqual(calls, []);
+    await act(async () => buttons[0]!.click());
+    assert.deepEqual(calls, ['submit_another_form']);
+    await act(async () => buttons[1]!.click());
     await f.tick(100000);
     assert.deepEqual(calls.slice(), ['submit_another_form', 'copy_form']);
 });

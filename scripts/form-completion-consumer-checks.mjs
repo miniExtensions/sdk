@@ -8,12 +8,22 @@ import { join } from 'node:path';
 const typed = String.raw`
 import { createElement } from 'react';
 import { projectFormCompletion, projectFormCompletionNavigation, createFormCompletionCountdown, dispatchFormCompletionCommands, type FormCompletionConfiguration, type FormCompletionCommand } from '@miniextensions/sdk/forms';
-import { CompleteFormCompletion, CompleteFormCompletionMessage, useFormCompletionCountdown, type CompleteFormCompletionProps, type FormCompletionAction } from '@miniextensions/sdk/react';
+import { CompleteFormCompletion, CompleteFormCompletionMessage, CompleteFormReadonlyFooterActions, useFormCompletionCountdown, type CompleteFormCompletionProps, type CompleteFormReadonlyFooterActionsProps, type FormCompletionAction, type FormReadonlyFooterAction } from '@miniextensions/sdk/react';
 const configuration: FormCompletionConfiguration = { afterFormSubmission:'stay',successAction:true,successMessageCanCreateNewRecord:true,allowCopySubmittedToNewForm:true };
 const projection = projectFormCompletion({ configuration,language:'en',filteredValues:{},unfilteredValues:{},fields:{},linkedTableStates:{} });
 const props: CompleteFormCompletionProps = { configuration,projection,canSubmit:true,onCommand(action: FormCompletionAction){ void action; },isCurrent:()=>true };
 createElement(CompleteFormCompletion,props);
 createElement(CompleteFormCompletionMessage,{message:projection.message,delay:0});
+const footer: CompleteFormReadonlyFooterActionsProps = {
+    configuration, language:'en', mode:'readonly', context:'side-panel',
+    hasParentExtension:true, hasExistingRecord:true,
+    onCommand(intent: FormReadonlyFooterAction){ void intent; }
+};
+createElement(CompleteFormReadonlyFooterActions,footer);
+// @ts-expect-error a read-only footer cannot issue a Save
+footer.onCommand('save');
+// @ts-expect-error a read-only footer cannot issue automatic navigation
+footer.onCommand('automatic_new_form');
 function HookConsumer(){ const countdown=useFormCompletionCountdown({start:0,onComplete(){}}); countdown.start(); countdown.stop(); countdown.reset(3); return null; }
 createElement(HookConsumer);
 const plan: FormCompletionCommand[] = projectFormCompletionNavigation({currentURL:'https://consumer.invalid/form/rec123?screen=2#answer',inIframe:false,recordId:'rec123',command:'copy_form'});
@@ -64,9 +74,123 @@ try {
  await React.act(async()=>root.render(element()));
  await React.act(async()=>{await new Promise(resolve=>setTimeout(resolve,15));});
  assert.equal(calls.length,3);
+
+ const h = React.createElement;
+ const footerSettings = {
+     afterFormSubmission: 'stay',
+     successAction: true,
+     successMessageCanCreateNewRecord: true,
+     allowCopySubmittedToNewForm: true,
+     enableLockingFormAfterSubmission: false,
+ };
+ const footerIntents = [], destinations = [];
+ let submits = 0, writes = 0, footerCases = 0, successCases = 0;
+ const footer = {
+     configuration: footerSettings, language: 'en', context: 'direct-url',
+     mode: 'readonly', hasParentExtension: false, hasExistingRecord: true,
+     onCommand(command) {
+         footerIntents.push(command);
+         const [destination] = forms.projectFormCompletionNavigation({
+             command, recordId: 'rec123', inIframe: false,
+             currentURL: 'https://consumer.invalid/form/rec123?screen=success&recordIdToCopyFrom=recOld&prefill_Name=Current&campaign=summer',
+         });
+         assert.equal(destination.type, 'navigate');
+         destinations.push(new URL(destination.url));
+     },
+ };
+ const renderFooter = changes => h(React.StrictMode, null, h('form', {
+     onSubmit(event) { event.preventDefault(); submits++; writes++; },
+ }, h(ui.CompleteFormReadonlyFooterActions, { ...footer, ...changes })));
+ const child = { context: 'side-panel', hasParentExtension: true };
+ const childHTML = renderToString(renderFooter(child));
+ assert.match(childHTML, /type="button"/);
+ assert.match(childHTML, /Copy submission/);
+ assert.doesNotMatch(childHTML, /Submit another form/);
+ assert.deepEqual(footerIntents, []);
+ const mountFooter = async (changes, labels) => {
+     const before = footerIntents.length;
+     await React.act(async () => root.render(renderFooter(changes)));
+     const buttons = [...container.querySelectorAll('button')];
+     assert.deepEqual(buttons.map(button => button.textContent), labels);
+     for (const button of buttons) assert.equal(button.type, 'button');
+     assert.equal(footerIntents.length, before);
+     footerCases++;
+     return buttons;
+ };
+ const submit = 'Submit another form', copy = 'Copy submission';
+ const [childCopy] = await mountFooter(child, [copy]);
+ await React.act(async () => childCopy.click());
+ assert.deepEqual(footerIntents, ['copy_form']);
+ assert.equal(destinations[0].searchParams.get('recordIdToCopyFrom'), 'rec123');
+ const [rootSubmit, rootCopy] = await mountFooter({}, [submit, copy]);
+ await React.act(async () => rootSubmit.click());
+ assert.deepEqual(footerIntents, ['copy_form', 'submit_another_form']);
+ await React.act(async () => rootCopy.click());
+ assert.deepEqual(footerIntents, ['copy_form', 'submit_another_form', 'copy_form']);
+ assert.equal(destinations[1].searchParams.has('recordIdToCopyFrom'), false);
+ assert.equal(destinations[2].searchParams.get('recordIdToCopyFrom'), 'rec123');
+ for (const destination of destinations) {
+     assert.equal(destination.pathname, '/form');
+     assert.equal(destination.searchParams.has('screen'), false);
+     assert.equal(destination.searchParams.get('prefill_Name'), 'Current');
+     assert.equal(destination.searchParams.get('campaign'), 'summer');
+ }
+ const locked = { ...footerSettings, enableLockingFormAfterSubmission: true };
+ for (const [change, labels] of [
+     [{ ...child, configuration: locked }, []],
+     [{ ...child, context: 'modal' }, []],
+     [{ configuration: locked }, [submit]],
+     [{ configuration: { ...footerSettings, accessingRecordsMethod: 'loginPage' } }, [copy]],
+     [{ mode: 'editable' }, []],
+     [{ mode: 'config-preview' }, []],
+     [{ configuration: { successMessageCanCreateNewRecord: true } }, [submit]],
+     [{ configuration: { allowCopySubmittedToNewForm: true } }, [copy]],
+     [{ configuration: {} }, []],
+     [{ hasExistingRecord: false }, [submit]],
+     [{ context: 'form-layout' }, [submit, copy]],
+ ]) await mountFooter(change, labels);
+ await mountFooter({ configuration: { ...footerSettings, successMessageNewRecordText: ' Continue ', allowCopySubmittedToNewFormButtonText: ' Duplicate ' } }, [' Continue ', ' Duplicate ']);
+ const emptyCopy = { ...footerSettings, successMessageNewRecordText: '  ', allowCopySubmittedToNewFormButtonText: '' };
+ const frenchSubmit = 'Soumettre un autre formulaire', frenchCopy = 'Copier la soumission';
+ await mountFooter({ language: 'fr' }, [frenchSubmit, frenchCopy]);
+ const disabled = await mountFooter({ language: 'fr', configuration: emptyCopy, disabled: true }, [frenchSubmit, '']);
+ assert.equal(disabled[1].getAttribute('aria-label'), frenchCopy);
+ for (const button of disabled) await React.act(async () => button.click());
+ assert.deepEqual(footerIntents, ['copy_form', 'submit_another_form', 'copy_form']);
+
+ const postSaveIntents = [];
+ for (const [configuration, options, canSubmit, labels] of [
+     [footerSettings, { hasParentExtension: true }, true, []],
+     [footerSettings, {}, true, [frenchSubmit, frenchCopy]],
+     [locked, {}, true, [frenchSubmit]],
+     [emptyCopy, {}, true, [frenchSubmit]],
+     [{ ...footerSettings, accessingRecordsMethod: 'loginPage' }, {}, true, []],
+     [footerSettings, { hasLogout: true }, true, []],
+     [{ ...footerSettings, successAction: false }, {}, true, []],
+     ...['readonly', 'redirect', 'newForm', 'close'].map(mode =>
+         [{ ...footerSettings, afterFormSubmission: mode }, {}, true, []]),
+     [footerSettings, {}, false, [frenchSubmit, frenchCopy]],
+ ]) {
+     const projection = forms.projectFormCompletion({ configuration, language: 'fr',
+         filteredValues: {}, unfilteredValues: {}, fields: {}, linkedTableStates: {}, ...options });
+     await React.act(async () => root.render(h(ui.CompleteFormCompletion, {
+         key: ++successCases, configuration, projection, canSubmit,
+         onCommand: command => postSaveIntents.push(command),
+     })));
+     const buttons = [...container.querySelectorAll('button')];
+     assert.deepEqual(buttons.map(button => button.textContent), labels);
+     if (!canSubmit) {
+         for (const button of buttons) {
+             assert(button.disabled);
+             await React.act(async () => button.click());
+         }
+     }
+     assert.deepEqual(postSaveIntents, []);
+ }
+ assert.deepEqual({ submits, writes }, { submits: 0, writes: 0 });
  await React.act(async()=>root.unmount());root=undefined;
  assert.equal(domWindow.location.href,'https://consumer.invalid/form/rec123');assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);
- console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks}));
+ console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks,footerCases,successCases}));
 } finally {
  if(root)await React.act(async()=>root.unmount());
  keys.forEach((key,index)=>{if(originals[index])Object.defineProperty(globalThis,key,originals[index]);else Reflect.deleteProperty(globalThis,key);});
@@ -120,13 +244,21 @@ export function checkFormCompletionReactMatrix({
                     'node_modules/@miniextensions/sdk/docs/form-completion.md'
                 ),
                 'utf8'
-            ).match(/```tsx\n([\s\S]*?)\n```/)?.[1];
-            assert(guide, 'Missing packed completion recipe');
+            ).matchAll(/```tsx\n([\s\S]*?)\n```/g);
+            const [completionGuide, footerGuide] = [...guide].map(
+                ([, source]) => source
+            );
+            assert(
+                completionGuide && footerGuide,
+                'Missing packed Form recipe'
+            );
             for (const extension of ['mts', 'cts']) {
                 const file = `completion.${extension}`,
-                    guideFile = `completion-guide.${extension}`;
+                    guideFile = `completion-guide.${extension}`,
+                    footerGuideFile = `readonly-footer-guide.${extension}`;
                 writeFileSync(join(directory, file), typed);
-                writeFileSync(join(directory, guideFile), guide);
+                writeFileSync(join(directory, guideFile), completionGuide);
+                writeFileSync(join(directory, footerGuideFile), footerGuide);
                 run(process.execPath, [
                     typescriptBin,
                     '--noEmit',
@@ -141,6 +273,7 @@ export function checkFormCompletionReactMatrix({
                     'NodeNext',
                     file,
                     guideFile,
+                    footerGuideFile,
                     join(
                         directory,
                         'node_modules/@miniextensions/sdk/examples/react-form-completion/main.ts'
@@ -162,6 +295,8 @@ export function checkFormCompletionReactMatrix({
                 assert.equal(result.react, version.react);
                 assert.equal(result.hydrationErrors, 0);
                 assert.equal(result.networkRequests, 0);
+                assert.equal(result.footerCases, 16);
+                assert.equal(result.successCases, 12);
                 assert.deepEqual(result.effects, [
                     'submit_another_form',
                     'copy_form',
@@ -178,6 +313,7 @@ export function checkFormCompletionReactMatrix({
             );
             assert(css.includes('.mx-sdk-form-completion'));
             assert(css.includes('.mx-sdk-form-completion-spinner'));
+            assert(css.includes('.mx-sdk-form-readonly-footer-action'));
             run(process.execPath, [
                 '--input-type=module',
                 '-e',
@@ -185,7 +321,7 @@ export function checkFormCompletionReactMatrix({
             ]);
             versions.push({ react: version.react, formats });
             console.log(
-                `Installed Form completion React${version.react}: ESM/CJS/types/CSS/SSR/hydration/full stock UI and zero countdown passed; no network.`
+                `Installed Form completion and read-only footer React${version.react}: ESM/CJS/types/CSS/SSR and mounted actions passed; no network.`
             );
         }
         return { versions, cleanup: 'completed' };

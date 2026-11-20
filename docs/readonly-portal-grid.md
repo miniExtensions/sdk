@@ -41,6 +41,46 @@ column headers, and the host can keep its paging controls visible. Omit the
 option for a standalone Grid or a confirmed empty result to show the normal
 empty label.
 
+<!-- installed-grid-paging-example -->
+
+```ts
+import { createElement, Fragment } from 'react';
+import {
+    PortalPagingControls,
+    ReadonlyPortalRecords,
+    type PortalPagingControlsProps,
+    type ReadonlyPortalRecordsProps,
+} from '@miniextensions/sdk/react';
+
+export function PagedPortalRecords({
+    records,
+    paging,
+}: {
+    records: ReadonlyPortalRecordsProps;
+    paging: PortalPagingControlsProps;
+}) {
+    const { state } = paging;
+    const resultExhausted = state.type === 'ready' && !state.hasNextPage;
+
+    return createElement(
+        Fragment,
+        null,
+        createElement(ReadonlyPortalRecords, {
+            ...records,
+            grid: { ...records.grid, showEmptyStatus: resultExhausted },
+        }),
+        createElement(PortalPagingControls, paging)
+    );
+}
+```
+
+Pass the records frame and paging state from the same host publication.
+The accepted `ready` state with `hasNextPage: true` and the `next-loading` state
+both suppress the empty status. Once the host publishes `ready` with
+`hasNextPage: false`, an empty Grid announces its normal label. The host retains
+the opaque cursor and transport. Supply a paging `offer` only when the host can
+admit that intent, and have its activation recheck the live query and cursor.
+
 The host supplies scoped hidden/width values and persists the emitted intents
 through its existing preference contract. Hidden values apply only when they
 are exactly `true`. Width hydration accepts finite numbers and numeric strings,

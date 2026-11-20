@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
@@ -43,6 +43,9 @@ const React=format==='esm'?await import('react'):require('react');
 const api=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
 const ui=format==='esm'?await import('@miniextensions/sdk/ui'):require('@miniextensions/sdk/ui');
 const {renderToString}=format==='esm'?await import('react-dom/server'):require('react-dom/server');
+const {PagedPortalRecords}=format==='esm'
+ ? await import('./grid-paging-example.mjs')
+ : require('./grid-paging-example.cjs');
 assert.equal(typeof api.PortalPagingControls,'function','Missing public Portal paging controls');
 const layout=format==='esm'?'list':'grid';
 let fixture=createPagingFixture({React,api,ui,layout});
@@ -136,7 +139,7 @@ try {
 
  const statusTexts=()=>Array.from(container.querySelectorAll('[role=status]'),node=>node.textContent);
  const checkEmptyPage=async(emptyLayout,emptyResult)=>{
-  fixture=createPagingFixture({React,api,ui,layout:emptyLayout,emptyAcceptedPage:true});
+  fixture=createPagingFixture({React,api,ui,layout:emptyLayout,emptyAcceptedPage:true,Composition:PagedPortalRecords});
   container.innerHTML=renderToString(fixture.element());
   assert.doesNotMatch(text(),/First|Second/);
   assert.deepEqual(statusTexts(),[],emptyLayout+' SSR must not announce an empty result with continuation');
@@ -183,7 +186,7 @@ try {
  assert.equal(browserRequests,0);
  assert.equal(formSubmits,0);
  const emptyContinuationReads=(layout==='grid'?gridPage:listPage).requests;
- console.log(JSON.stringify({format,react:React.version,cases:12,postedReads,emptyContinuationReads,emptyPageLayouts:{grid:gridPage,list:listPage},finalEmptyStatus:finalEmpty.settledStatus,hydrationErrors:errors.length,formSubmits,browserRequests}));
+ console.log(JSON.stringify({format,react:React.version,cases:12,postedReads,emptyContinuationReads,emptyPageLayouts:{grid:gridPage,list:listPage},finalEmptyStatus:finalEmpty.settledStatus,guideExample:'compiled and mounted',hydrationErrors:errors.length,formSubmits,browserRequests}));
 } finally {
  if(root) await React.act(async()=>root.unmount());
  fixture.records.scope.destroy();
@@ -245,13 +248,29 @@ export function checkPortalPagingControlsReactMatrix({
                 `@types/react@${types}`,
                 `@types/react-dom@${domTypes}`,
             ]);
+            const guide = readFileSync(
+                join(
+                    directory,
+                    'node_modules/@miniextensions/sdk/docs/readonly-portal-grid.md'
+                ),
+                'utf8'
+            );
+            const example =
+                /<!-- installed-grid-paging-example -->\s*```ts\r?\n([\s\S]*?)\r?\n```/u.exec(
+                    guide
+                )?.[1];
+            assert.ok(
+                example,
+                'Missing the installed Grid paging guide example'
+            );
             for (const format of ['esm', 'cjs']) {
-                const entry =
-                    format === 'esm' ? 'consumer.mts' : 'consumer.cts';
+                const extension = format === 'esm' ? 'mts' : 'cts';
+                const entry = `consumer.${extension}`;
+                const exampleEntry = `grid-paging-example.${extension}`;
                 writeFileSync(join(directory, entry), typed);
+                writeFileSync(join(directory, exampleEntry), example);
                 run(process.execPath, [
                     typescriptBin,
-                    '--noEmit',
                     '--strict',
                     '--exactOptionalPropertyTypes',
                     '--skipLibCheck',
@@ -263,6 +282,7 @@ export function checkPortalPagingControlsReactMatrix({
                     '--moduleResolution',
                     'NodeNext',
                     entry,
+                    exampleEntry,
                 ]);
                 const result = JSON.parse(
                     run(process.execPath, [

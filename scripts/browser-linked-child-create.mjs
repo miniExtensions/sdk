@@ -11,6 +11,115 @@ import { createServer } from 'node:http';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { build } from 'esbuild';
 
+async function checkBorrowedCreate(page, origin) {
+    await page.goto(origin + '/?borrowed');
+    const opener = page.getByRole('button', { name: 'Open native child' });
+    const dialog = page.getByRole('dialog', { name: 'Create linked record' });
+    const input = dialog.getByRole('textbox', { name: 'Native child title' });
+    const save = dialog.getByRole('button', { name: 'Save', exact: true });
+    const discard = dialog.getByRole('button', {
+        name: 'Close without saving',
+    });
+    const keep = dialog.getByRole('button', { name: 'Keep editing' });
+    const read = () => page.evaluate(() => window.readBorrowedCreate());
+    const focus = (locator) =>
+        locator.evaluate((node) => node === document.activeElement);
+
+    await opener.press('Enter');
+    await input.fill('Dirty native draft');
+    await page.keyboard.press('Escape');
+    await keep.waitFor();
+    assert.equal(await dialog.getByRole('alert').count(), 1);
+    assert(await focus(keep));
+    await keep.press('Enter');
+    assert.equal(await input.inputValue(), 'Dirty native draft');
+    assert.deepEqual((await read()).saves, []);
+    assert.equal((await read()).dismisses, 0);
+    await page.keyboard.press('Escape');
+    await discard.waitFor();
+    assert.equal(await dialog.getByRole('alert').count(), 1);
+    await discard.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    assert(await focus(opener));
+    assert.equal((await read()).dismisses, 1);
+    assert.deepEqual((await read()).saves, []);
+
+    await opener.press('Enter');
+    await input.fill('Retired confirmation');
+    await page.keyboard.press('Escape');
+    await discard.waitFor();
+    const focusBeforeReplacement = (await read()).openerFocuses;
+    await discard.evaluate((button) => window.replaceBorrowedParent(button));
+    await input.waitFor();
+    assert.equal(await input.inputValue(), '');
+    assert.equal((await read()).dismisses, 1);
+    assert.equal(await discard.count(), 0);
+    assert.equal((await read()).openerFocuses, focusBeforeReplacement);
+
+    await input.fill('Held original child');
+    await page.evaluate(() => {
+        window.holdBorrowedSave = true;
+    });
+    await save.evaluate((button) => {
+        button.click();
+        button.click();
+    });
+    await page.waitForFunction(() => window.releaseBorrowedSave);
+    assert(await save.isDisabled());
+    assert.deepEqual((await read()).saves, ['Held original child']);
+    await page.evaluate(() => window.replaceBorrowedParent());
+    await input.fill('Fresh successor child');
+    await page.evaluate(() => window.releaseBorrowedSave());
+    await page.waitForFunction(
+        () => window.borrowedSaveOutcome?.link === 'superseded'
+    );
+    assert.equal(await input.inputValue(), 'Fresh successor child');
+    assert(await focus(input));
+    assert.deepEqual((await read()).links, ['rec_successor']);
+    await save.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    assert(await focus(opener));
+    const result = await read();
+    assert.deepEqual(result.saves, [
+        'Held original child',
+        'Fresh successor child',
+    ]);
+    assert.deepEqual(result.links, ['rec_successor', 'rec_created_2']);
+    assert.equal(result.parentSubmits, 0);
+
+    await opener.press('Enter');
+    await input.fill('Unresolved native child');
+    await page.evaluate(() => {
+        window.nextBorrowedSaveUnknown = true;
+    });
+    await save.press('Enter');
+    await page.waitForFunction(
+        () => window.readBorrowedCreate().phase === 'unknown'
+    );
+    assert(await save.isDisabled());
+    const unresolved = (await read()).outcome;
+    assert.equal(unresolved.type, 'unknown');
+    assert.equal(typeof unresolved.attemptId, 'string');
+    await page.keyboard.press('Escape');
+    await discard.press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    assert(await focus(opener));
+    assert.equal((await read()).saves.length, 3);
+    assert.deepEqual((await read()).links, result.links);
+    assert.equal((await read()).dismisses, 2);
+    assert.deepEqual((await read()).outcome, unresolved);
+    assert.equal((await read()).parentSubmits, 0);
+    return {
+        unresolvedSaveRetainedOnDismiss: true,
+        keyboardOpen: true,
+        keepAndDiscard: true,
+        staleDismissalRefused: true,
+        duplicateSaveRefused: true,
+        supersededSaveUnlinked: true,
+        freshSaveLinkedOnce: true,
+        parentSubmits: 0,
+    };
+}
 export async function checkLinkedChildCreateBrowser({
     archive,
     browser,
@@ -110,7 +219,10 @@ export async function checkLinkedChildCreateBrowser({
                 if (request.url === '/proof.js') {
                     response.setHeader('Content-Type', 'text/javascript');
                     response.end(bundle.outputFiles[0].contents);
-                } else if (request.url === '/') {
+                } else if (
+                    request.url === '/' ||
+                    request.url === '/?borrowed'
+                ) {
                     response.setHeader('Content-Type', 'text/html');
                     response.end(html);
                 } else {
@@ -457,6 +569,7 @@ export async function checkLinkedChildCreateBrowser({
                 );
                 assert.equal(replacement.calls.parentSubmits, 0);
                 assert(await focused(outside));
+                const borrowedCreate = await checkBorrowedCreate(page, origin);
                 assert.deepEqual(errors, []);
                 assert.deepEqual(external, []);
                 results.push({
@@ -472,6 +585,7 @@ export async function checkLinkedChildCreateBrowser({
                     sameMountedParentRetirement: true,
                     freshCreateAfterRetiredLoad: true,
                     staleSavePreservedReplacementLinks: true,
+                    borrowedCreate,
                 });
                 console.log(
                     `Installed linked-child Create Chromium React ${react} passed`

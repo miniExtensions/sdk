@@ -306,6 +306,13 @@ local evidence; it does not certify OS-dialog cancellation, a screen reader or
 live upload/Save persistence. A saved environment may select its supported Chrome
 executable with `SDK_NATIVE_CHROMIUM`; Chromium's sandbox stays enabled.
 
+The installed Multiple Attachments consumer also exercises held Remove across
+draft and host replacement, including distinct resources with the same label.
+Its synthetic handler trace interleaves a held mouse press with a fresh touch
+press on the replacement. The packed Chromium matrix exercises held pointer
+and Space input and fresh Enter on the actual Remove button under React 18 and 19. A stale release preserves the draft, a fresh gesture removes exactly one
+occurrence, and neither submits the surrounding Form or starts an upload.
+
 ## Measurement and denominator
 
 The runner performs a clean isolated TypeScript compile with source maps and

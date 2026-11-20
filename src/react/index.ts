@@ -3687,6 +3687,14 @@ export {
     FormLinkedChildCreateDialog,
     type FormLinkedChildCreateDialogProps,
     type FormLinkedChildCreateOpening,
+    BorrowedFormLinkedChildCreateDialog,
+    type BorrowedFormLinkedChildCreateDialogProps,
+    type BorrowedFormLinkedChildCreateOpening,
+    type BorrowedFormLinkedChildCreateRef,
+    type BorrowedFormLinkedChildCreateSnapshot,
+    type BorrowedFormLinkedChildCreateOwner,
+    type BorrowedFormLinkedChildCreateSaveOutcome,
+    type BorrowedFormLinkedChildCreateDismissOutcome,
 } from './FormLinkedChildCreateDialog.js';
 export {
     FormLinkedChildEditDialog,

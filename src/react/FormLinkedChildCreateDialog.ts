@@ -13,6 +13,7 @@ import {
     type KeyboardEvent,
     type ReactElement,
     type ReactNode,
+    type Ref,
     type SyntheticEvent,
 } from 'react';
 import type { FormFieldBindings } from '../forms/bindings.js';
@@ -210,7 +211,6 @@ function LinkedChildDialog({
     dismissUnknownEdit(recordId: string): void;
 }): ReactElement {
     const labels = { ...defaultLabels, ...suppliedLabels };
-    const titleId = useId();
     const dialogRef = useRef<HTMLDialogElement>(null);
     const closeButton = useRef<HTMLButtonElement>(null);
     const keepEditing = useRef<HTMLButtonElement>(null);
@@ -347,6 +347,63 @@ function LinkedChildDialog({
         }
     };
 
+    return h(LinkedChildDialogChrome, {
+        labels,
+        dialogRef,
+        closeButton,
+        keepEditing,
+        fields: renderFields(child, pages),
+        error:
+            state.error || invalidRevision === state.revision
+                ? (state.error ?? labels.incomplete)
+                : null,
+        confirm,
+        closeDisabled: state.phase === 'saving',
+        saveDisabled: state.phase === 'saving' || state.phase === 'unknown',
+        dismiss,
+        keep,
+        discard: () => {
+            if (!question || pendingDecision.current !== question) return;
+            pendingDecision.current = null;
+            setQuestion(null);
+            close(question);
+        },
+        save,
+    });
+}
+
+type DialogChromeProps = {
+    labels: typeof defaultLabels;
+    dialogRef: Ref<HTMLDialogElement>;
+    closeButton: Ref<HTMLButtonElement>;
+    keepEditing: Ref<HTMLButtonElement>;
+    fields: ReactNode;
+    error: string | null;
+    confirm: boolean;
+    closeDisabled: boolean;
+    saveDisabled: boolean;
+    dismiss(): void;
+    keep(): void;
+    discard(): void;
+    save(): void;
+};
+
+function LinkedChildDialogChrome({
+    labels,
+    dialogRef,
+    closeButton,
+    keepEditing,
+    fields,
+    error,
+    confirm,
+    closeDisabled,
+    saveDisabled,
+    dismiss,
+    keep,
+    discard,
+    save,
+}: DialogChromeProps): ReactElement {
+    const titleId = useId();
     return h(
         'dialog',
         {
@@ -389,20 +446,18 @@ function LinkedChildDialog({
                 {
                     type: 'button',
                     ref: closeButton,
-                    disabled: state.phase === 'saving',
+                    disabled: closeDisabled,
                     onClick: dismiss,
                 },
                 labels.close
             ),
-            renderFields(child, pages),
-            (state.error || invalidRevision === state.revision) &&
-                h('p', { role: 'alert' }, state.error ?? labels.incomplete),
+            fields,
+            error != null && h('p', { role: 'alert' }, error),
             h(
                 'button',
                 {
                     type: 'button',
-                    disabled:
-                        state.phase === 'saving' || state.phase === 'unknown',
+                    disabled: saveDisabled,
                     onClick: save,
                 },
                 labels.save
@@ -422,15 +477,340 @@ function LinkedChildDialog({
                     'button',
                     {
                         type: 'button',
-                        onClick: () => {
-                            if (pendingDecision.current !== question) return;
-                            pendingDecision.current = null;
-                            setQuestion(null);
-                            close(question);
-                        },
+                        onClick: discard,
                     },
                     labels.confirmClose
                 )
             )
     );
+}
+
+/** A fresh native acceptance must supply a new opening identity, including after reopening. */
+export type BorrowedFormLinkedChildCreateRef = Readonly<{
+    opening: object;
+    revision: number;
+}>;
+
+export type BorrowedFormLinkedChildCreateSaveOutcome =
+    | { type: 'not-dispatched'; reason: 'superseded' | 'busy' | 'invalid' }
+    | { type: 'rejected' }
+    | { type: 'unknown'; attemptId: string }
+    | {
+          type: 'saved';
+          recordId: string;
+          /** A current but unlinked Save is terminal and awaits explicit Close. */
+          link: 'linked' | 'unlinked' | 'superseded';
+      };
+
+export type BorrowedFormLinkedChildCreateDismissOutcome =
+    | 'closed'
+    | 'superseded'
+    | 'blocked';
+
+export type BorrowedFormLinkedChildCreateSnapshot<View> = Readonly<{
+    ref: BorrowedFormLinkedChildCreateRef;
+    phase: 'ready' | 'saving' | 'unknown' | 'saved' | 'closed' | 'retired';
+    /** Accepted, one-page native fields. Null when there is no accepted view. */
+    fields: View | null;
+    dirty: boolean;
+    error: string | null;
+    /** Native settlement, retained through dialog cleanup for this opening. */
+    outcome: BorrowedFormLinkedChildCreateSaveOutcome | null;
+}>;
+
+export type BorrowedFormLinkedChildCreateOwner<View> = Readonly<{
+    /** Return the same snapshot object until published state changes. */
+    getSnapshot(): BorrowedFormLinkedChildCreateSnapshot<View> | null;
+    subscribe(notify: () => void): () => void;
+    /** Atomically claim the exact opening and revision before sending. Publish its resulting phase. */
+    save(
+        expected: BorrowedFormLinkedChildCreateRef
+    ): Promise<BorrowedFormLinkedChildCreateSaveOutcome>;
+    /** Commit explicit Close without a second prompt. Retain unresolved and saved-unlinked outcomes. */
+    dismiss(
+        expected: BorrowedFormLinkedChildCreateRef
+    ): BorrowedFormLinkedChildCreateDismissOutcome;
+}>;
+
+export type BorrowedFormLinkedChildCreateOpening = Readonly<{
+    identity: object;
+    opener: HTMLButtonElement;
+    /** Must still recognize the original opener after an admitted terminal close. */
+    isCurrent(): boolean;
+}>;
+
+type BorrowedCreateLabels = Partial<typeof defaultLabels> & {
+    savedWithoutLink?: string;
+};
+
+export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
+    owner: BorrowedFormLinkedChildCreateOwner<View>;
+    opening: BorrowedFormLinkedChildCreateOpening;
+    /** Render fields without a separate modal, form element, or submit footer. */
+    renderFields(fields: View): ReactNode;
+    labels?: BorrowedCreateLabels;
+}>;
+
+function isSavedUnlinked(
+    state: BorrowedFormLinkedChildCreateSnapshot<unknown>
+): boolean {
+    return (
+        state.phase === 'saved' &&
+        state.outcome?.type === 'saved' &&
+        state.outcome.link === 'unlinked'
+    );
+}
+
+/** Presents an accepted native Create using the same dialog chrome and host-owned draft. */
+export function BorrowedFormLinkedChildCreateDialog<View>(
+    props: BorrowedFormLinkedChildCreateDialogProps<View>
+): ReactElement | null {
+    const { owner, opening } = props;
+    const activationOwner = useMemo(
+        () => ({}),
+        [owner, opening.identity, opening.opener]
+    );
+    const [controls, setControls] = useState({
+        owner: activationOwner,
+        generation: 0,
+    });
+    let controlGeneration = controls.generation;
+    if (controls.owner !== activationOwner) {
+        controlGeneration++;
+        setControls({ owner: activationOwner, generation: controlGeneration });
+    }
+    const store = useMemo(
+        () => ({
+            subscribe: (notify: () => void) => owner.subscribe(notify),
+            read: () => owner.getSnapshot(),
+        }),
+        [owner]
+    );
+    const state = useSyncExternalStore(store.subscribe, store.read, store.read);
+    if (
+        !state ||
+        state.ref.opening !== opening.identity ||
+        !opening.isCurrent()
+    )
+        return null;
+    const unlinked = isSavedUnlinked(state);
+    if (
+        !unlinked &&
+        (state.fields == null ||
+            (state.phase !== 'ready' &&
+                state.phase !== 'saving' &&
+                state.phase !== 'unknown'))
+    )
+        return null;
+
+    return h(
+        Suspense,
+        { fallback: null },
+        h(
+            LinkedChildDialogPortal,
+            { container: opening.opener.ownerDocument.body },
+            // A press started on the previous native opening must never release
+            // on a reused Save button now bound to the successor.
+            h(BorrowedCreatePresentation, {
+                key: controlGeneration,
+                owner,
+                opening,
+                state,
+                content:
+                    unlinked || state.fields == null
+                        ? null
+                        : props.renderFields(state.fields),
+                labels: props.labels,
+            })
+        )
+    );
+}
+
+function BorrowedCreatePresentation<View>({
+    owner,
+    opening,
+    state,
+    content,
+    labels: suppliedLabels,
+}: {
+    owner: BorrowedFormLinkedChildCreateOwner<View>;
+    opening: BorrowedFormLinkedChildCreateOpening;
+    state: BorrowedFormLinkedChildCreateSnapshot<View>;
+    content: ReactNode;
+    labels?: BorrowedCreateLabels;
+}): ReactElement {
+    const labels = { ...defaultLabels, ...suppliedLabels };
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
+    const keepEditing = useRef<HTMLButtonElement>(null);
+    const pendingDecision = useRef<BorrowedFormLinkedChildCreateRef | null>(
+        null
+    );
+    const [question, setQuestion] =
+        useState<BorrowedFormLinkedChildCreateRef | null>(null);
+    const session = useMemo(
+        () => ({
+            live: false,
+            saving: false,
+            closing: false,
+            closed: false,
+            saved: null as null | 'linked' | 'unlinked' | 'superseded',
+            unresolved: false,
+        }),
+        [owner, opening.identity, opening.opener]
+    );
+    const [actionStatus, setActionStatus] = useState<{
+        session: typeof session;
+        phase: 'saving' | 'unknown' | 'saved';
+    } | null>(null);
+    const committedOpening = useRef(opening);
+    useCommitEffect(() => {
+        committedOpening.current = opening;
+    }, [opening]);
+    const { identity, opener } = opening;
+    const unlinked = isSavedUnlinked(state);
+    const confirm =
+        !unlinked &&
+        question?.opening === state.ref.opening &&
+        question.revision === state.ref.revision;
+    const current = (
+        expected: BorrowedFormLinkedChildCreateRef,
+        action: 'save' | 'dismiss'
+    ) => {
+        if (!session.live || !dialogRef.current?.open || !opening.isCurrent())
+            return false;
+        const actual = owner.getSnapshot();
+        if (
+            actual?.ref.opening !== expected.opening ||
+            actual.ref.revision !== expected.revision ||
+            session.saving ||
+            session.closing ||
+            session.closed
+        )
+            return false;
+        if (action === 'dismiss' && isSavedUnlinked(actual)) return true;
+        return (
+            !session.saved &&
+            (actual.phase === 'ready' ||
+                (action === 'dismiss' && actual.phase === 'unknown')) &&
+            (action === 'dismiss' || !session.unresolved)
+        );
+    };
+    useCommitEffect(() => {
+        const node = dialogRef.current;
+        if (!node || !committedOpening.current.isCurrent()) return;
+        const document = node.ownerDocument;
+        if (document.activeElement === opener) opener.blur();
+        node.showModal();
+        session.live = true;
+        closeButton.current?.focus({ preventScroll: true });
+        return () => {
+            session.live = false;
+            pendingDecision.current = null;
+            const active = document.activeElement;
+            const next = owner.getSnapshot();
+            const terminal =
+                next?.ref.opening === identity &&
+                (((session.closing || session.closed) &&
+                    next.phase === 'closed') ||
+                    ((session.saving || session.saved === 'linked') &&
+                        next.phase === 'saved' &&
+                        next.outcome?.type === 'saved' &&
+                        next.outcome.link === 'linked'));
+            node.close();
+            if (
+                (active === document.body || node.contains(active)) &&
+                terminal &&
+                committedOpening.current.identity === identity &&
+                committedOpening.current.isCurrent() &&
+                opener.isConnected &&
+                !opener.matches(':disabled') &&
+                !opener.closest('[hidden],[inert]') &&
+                isVisible(opener)
+            )
+                opener.focus({ preventScroll: true });
+        };
+    }, [owner, identity, opener, session]);
+
+    useCommitEffect(() => {
+        if (confirm) keepEditing.current?.focus({ preventScroll: true });
+    }, [confirm]);
+
+    const close = (expected: BorrowedFormLinkedChildCreateRef) => {
+        if (!current(expected, 'dismiss')) return;
+        session.closing = true;
+        try {
+            session.closed = owner.dismiss(expected) === 'closed';
+        } finally {
+            session.closing = false;
+        }
+    };
+    const dismiss = () => {
+        if (!current(state.ref, 'dismiss')) return;
+        if (state.dirty && !unlinked) {
+            pendingDecision.current = state.ref;
+            setQuestion(state.ref);
+        } else close(state.ref);
+    };
+    const keep = () => {
+        pendingDecision.current = null;
+        setQuestion(null);
+        queueMicrotask(() => {
+            if (current(state.ref, 'dismiss'))
+                closeButton.current?.focus({ preventScroll: true });
+        });
+    };
+    const save = async () => {
+        if (!current(state.ref, 'save')) return;
+        session.saving = true;
+        setActionStatus({ session, phase: 'saving' });
+        try {
+            const outcome = await owner.save(state.ref);
+            session.saved = outcome.type === 'saved' ? outcome.link : null;
+            session.unresolved = outcome.type === 'unknown';
+        } catch {
+            // An unclassified host failure cannot confer authority to retry.
+            session.unresolved = true;
+        } finally {
+            if (session.live) {
+                session.saving = false;
+                setActionStatus(
+                    session.unresolved
+                        ? { session, phase: 'unknown' }
+                        : session.saved
+                          ? { session, phase: 'saved' }
+                          : null
+                );
+            }
+        }
+    };
+
+    const localPhase =
+        actionStatus?.session === session ? actionStatus.phase : null;
+    return h(LinkedChildDialogChrome, {
+        labels,
+        dialogRef,
+        closeButton,
+        keepEditing,
+        fields: content,
+        error: unlinked
+            ? (suppliedLabels?.savedWithoutLink ??
+              'The record was saved but could not be linked to this Form.')
+            : state.error,
+        confirm,
+        closeDisabled:
+            state.phase === 'saving' ||
+            localPhase === 'saving' ||
+            (localPhase === 'saved' && !unlinked),
+        saveDisabled: state.phase !== 'ready' || localPhase != null,
+        dismiss,
+        keep,
+        discard: () => {
+            if (!question || pendingDecision.current !== question) return;
+            pendingDecision.current = null;
+            setQuestion(null);
+            close(question);
+        },
+        save,
+    });
 }

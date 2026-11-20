@@ -15,7 +15,11 @@ import type {
 export type PortalVisitorFilterOperand =
     | Readonly<{ kind: 'none' | 'text' | 'number' | 'boolean' }>
     /** The isOfLength editor starts unset (null). Entered values are finite numbers; clearing enters zero. */
-    | Readonly<{ kind: 'text-length' }>
+    | Readonly<{
+          kind: 'text-length';
+          /** Omit an admitted null length when submitting changed criteria. */
+          omitIfUnset?: true;
+      }>
     /** Date-only comparison, persisted as YYYY-MM-DD or null. */
     | Readonly<{ kind: 'date'; dateFormat?: string }>
     | Readonly<{
@@ -408,6 +412,28 @@ function removeCondition(parent: Parent, id: string, level = 0): boolean {
     return false;
 }
 
+function omitUnsetTextLengths<T extends Parent>(
+    parent: T,
+    shouldOmit: (leaf: Condition) => boolean,
+    level = 0
+): T | null {
+    const conditions = parent.conditions.flatMap(
+        (node): RuntimeConditionItem[] => {
+            if (node.type === 'singleCondition')
+                return shouldOmit(node) ? [] : [node];
+            if (level >= maximumGroupLevel) return [node];
+            const group = omitUnsetTextLengths(node, shouldOmit, level + 1);
+            return group === null ? [] : [group];
+        }
+    );
+    if (
+        conditions.length === parent.conditions.length &&
+        conditions.every((node, index) => node === parent.conditions[index])
+    )
+        return parent;
+    return conditions.length === 0 ? null : { ...parent, conditions };
+}
+
 function receipt(
     value: PortalVisitorFilterOutcome
 ): PortalVisitorFilterOutcome {
@@ -529,6 +555,37 @@ function createDraftForFrame(
         return effective && isEqual(originalSetting(leaf.id), leaf.setting)
             ? effective
             : leaf.setting;
+    };
+    const shouldOmitUnsetTextLength = (leaf: Condition) => {
+        if (
+            leaf.setting.type !== 'isOfLength' ||
+            getValue(leaf.setting) !== null
+        )
+            return false;
+        const setting = projectedSetting(leaf);
+        if (
+            setting.fieldType !== leaf.setting.fieldType ||
+            getValue(setting) !== null
+        )
+            return false;
+        const operand = resolvePortalVisitorFilterOperator(
+            captured.fields,
+            setting
+        )?.operator.operand;
+        return operand?.kind === 'text-length' && operand.omitIfUnset === true;
+    };
+    const omitUnsetTextLength = captured.fields.some(({ operators }) =>
+        operators.some(
+            ({ operand }) =>
+                operand.kind === 'text-length' && operand.omitIfUnset === true
+        )
+    );
+    const criteriaForSubmission = (
+        tree: RuntimeConditionsDefinition | null
+    ) => {
+        if (!tree || !omitUnsetTextLength) return tree;
+        if (tree.conditions.length === 0) return null;
+        return omitUnsetTextLengths(tree, shouldOmitUnsetTextLength);
     };
     const dropdowns = (): PortalVisitorFilterDropdown[] =>
         (captured.dropdownFieldIds ?? []).flatMap((fieldId) => {
@@ -818,13 +875,17 @@ function createDraftForFrame(
         async commit(): Promise<PortalVisitorFilterOutcome> {
             if (!current()) return { type: 'stale' };
             retired = true;
-            if (isEqual(criteria, captured.criteria))
+            const next = criteriaForSubmission(criteria);
+            if (isEqual(next, criteriaForSubmission(captured.criteria)))
                 return { type: 'unchanged' };
-            submitted = criteria;
+            submitted = next;
             try {
                 const outcome = receipt(
                     await port.apply(
-                        structuredClone({ stamp: captured.stamp, criteria })
+                        structuredClone({
+                            stamp: captured.stamp,
+                            criteria: next,
+                        })
                     )
                 );
                 if (outcome.type === 'allocated' && allocation !== null)

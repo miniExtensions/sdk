@@ -110,6 +110,10 @@ it('shows guidance only for the selected readonly cell and preserves its literal
     const trigger = fixture.container.querySelector(marker);
     assert.ok(trigger instanceof fixture.window.HTMLElement);
     assert.equal(trigger.getAttribute('type'), 'button');
+    const icon = trigger.querySelector('svg');
+    assert.equal(icon?.getAttribute('viewBox'), '0 0 24 24');
+    assert.equal(icon?.getAttribute('aria-hidden'), 'true');
+    assert.equal(icon?.getAttribute('focusable'), 'false');
     assert.equal(fixture.container.querySelector('input'), null);
     assert.equal(
         fixture.container.querySelector('.read-only-text')?.textContent,

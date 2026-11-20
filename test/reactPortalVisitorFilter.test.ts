@@ -146,6 +146,160 @@ for (const finish of ['Done', 'Close', 'Escape'] as const) {
     });
 }
 
+test('mounted Name text length applies on Done and dismissal without changing Tags', async (t) => {
+    const contains = {
+        fieldType: 'singleLineText',
+        type: 'contains',
+        idOrName: { type: 'id', id: 'name' },
+        value: 'Original',
+    } as const;
+    const length = { ...contains, type: 'isOfLength', value: null } as const;
+    const tags = {
+        fieldType: 'multipleSelects',
+        type: 'isExactly',
+        idOrName: { type: 'name', name: 'Tags' },
+        value: ['blue'],
+    } as const;
+    const host = owner([
+        {
+            id: 'name',
+            name: 'Name',
+            operators: [
+                {
+                    label: 'Contains',
+                    setting: contains,
+                    operand: { kind: 'text' },
+                },
+                {
+                    label: 'Is of length',
+                    setting: length,
+                    operand: { kind: 'text-length' },
+                },
+            ],
+        },
+        {
+            id: 'tags',
+            name: 'Tags',
+            operators: [
+                {
+                    label: 'Is exactly',
+                    setting: { ...tags, value: ['blue'] },
+                    operand: {
+                        kind: 'choices',
+                        choices: [{ value: 'blue', label: 'Blue' }],
+                    },
+                },
+            ],
+        },
+    ]);
+    const initial: NonNullable<PortalVisitorFilterFrame['criteria']> = {
+        logicalOperator: 'and',
+        conditions: [
+            {
+                id: 'group',
+                type: 'groupCondition',
+                logicalOperator: 'or',
+                conditions: [
+                    {
+                        id: 'name-rule',
+                        type: 'singleCondition',
+                        setting: contains,
+                    },
+                    {
+                        id: 'tags-rule',
+                        type: 'singleCondition',
+                        setting: { ...tags, value: ['blue'] },
+                    },
+                ],
+            },
+        ],
+    };
+    const initialGroup = initial.conditions[0];
+    assert.equal(initialGroup.type, 'groupCondition');
+    const criteriaFor = (value: number) => ({
+        ...initial,
+        conditions: [
+            {
+                ...initialGroup,
+                conditions: [
+                    {
+                        ...initialGroup.conditions[0],
+                        setting: { ...length, value },
+                    },
+                    initialGroup.conditions[1],
+                ],
+            },
+        ],
+    });
+    host.seed({ criteria: initial });
+    const f = await htmlPresentationFixture(t);
+    await f.render(h(PortalVisitorFilter, { port: host.port }));
+    const open = () => f.click(button(f, 'Filter'));
+    await open();
+    const operator = f.container.querySelector(
+        'li select option[value="isOfLength"]'
+    )?.parentElement;
+    assert.ok(operator instanceof f.window.HTMLSelectElement);
+    await act(async () => {
+        operator.value = 'isOfLength';
+        operator.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+    });
+    const input = () => {
+        const element = f.container.querySelector(
+            'input[type="number"][aria-label="Value"]'
+        );
+        assert.ok(element instanceof f.window.HTMLInputElement);
+        return element;
+    };
+    assert.equal(input().value, '');
+    const write = Object.getOwnPropertyDescriptor(
+        f.window.HTMLInputElement.prototype,
+        'value'
+    )?.set;
+    assert.ok(write);
+    const edit = async (value: string) => {
+        const element = input();
+        await act(async () => {
+            write.call(element, value);
+            element.dispatchEvent(
+                new f.window.Event('input', { bubbles: true })
+            );
+        });
+    };
+    await edit('3');
+    assert.equal(input().value, '3');
+    assert.equal(host.commands.length, 0);
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+    assert.deepEqual(host.commands[0].criteria, criteriaFor(3));
+
+    host.seed({ criteria: host.commands[0].criteria });
+    await open();
+    assert.equal(input().value, '3');
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 1);
+
+    await open();
+    await edit('');
+    assert.equal(input().value, '0');
+    assert.equal(host.commands.length, 1);
+    const dialog = f.container.querySelector('dialog');
+    assert.ok(dialog);
+    await act(async () => {
+        dialog.dispatchEvent(
+            new f.window.Event('cancel', { bubbles: true, cancelable: true })
+        );
+    });
+    assert.equal(host.commands.length, 2);
+    assert.deepEqual(host.commands[1].criteria, criteriaFor(0));
+    host.seed({ criteria: host.commands[1].criteria });
+    await open();
+    assert.equal(input().value, '0');
+    await f.click(button(f, 'Done'));
+    assert.equal(host.commands.length, 2);
+    assert.equal(host.listeners.size, 0);
+});
+
 for (const type of ['isBefore', 'isAfter'] as const) {
     test(`mounted advanced Filter uses a date picker for ${type}`, async (t) => {
         const dateSetting = {

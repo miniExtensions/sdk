@@ -18,31 +18,70 @@ import { createRoot } from 'react-dom/client';
 import { createFormRecordActionsController } from '@miniextensions/sdk/forms';
 import { FormRecordActionsMenu } from '@miniextensions/sdk/react';
 
-const counts = { requests: [], writes: [], allocations: [], comments: [] };
-window.recordActionsProof = counts;
+const counts = { requests: [], writes: [], allocations: [], comments: [], settlements: [] };
 const labels = {
     deleteRecord: 'Supprimer', comments: 'Commentaires', openMenu: 'Options',
     confirmationTitle: 'Supprimer cet élément ?',
     irreversibleWarning: 'Cette action est irréversible.',
     confirmDelete: 'Supprimer', cancel: 'Annuler',
 };
-function row(id) {
-    const scope = Object.freeze({ id });
-    const controller = createFormRecordActionsController({
-        read: () => ({ scope, delete: { visible: true, disabled: false, pending: false }, comments: { visible: true, disabled: false } }),
-        subscribe: () => () => {},
-        requestCurrentDelete() {
-            const operationId = {};
-            counts.requests.push(id);
-            counts.writes.push(id);
-            counts.allocations.push(id);
-            return { status: 'allocated', operation: { id: operationId, settled: Promise.resolve({ status: 'acknowledged', operationId, localSettlement: 'applied' }) } };
-        },
-        openCurrentComments() { counts.comments.push(id); return 'handed-off'; },
+function makeRow(id) {
+    const makeFrame = (record) => ({
+        scope: Object.freeze({ id: record }),
+        delete: { visible: true, disabled: false, pending: false },
+        comments: { visible: true, disabled: false },
     });
-    return h('div', { id }, id, h(FormRecordActionsMenu, { controller, labels }));
+    let frame = makeFrame(id);
+    let settle;
+    const listeners = new Set();
+    const controller = createFormRecordActionsController({
+        read: () => frame && { ...frame },
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        requestCurrentDelete() {
+            const record = frame.scope.id;
+            const operationId = {};
+            counts.requests.push(record);
+            counts.writes.push(record);
+            counts.allocations.push(record);
+            const settled = new Promise((resolve) => {
+                settle = () => {
+                    counts.settlements.push(record);
+                    resolve({ status: 'acknowledged', operationId, localSettlement: 'applied' });
+                };
+            });
+            return { status: 'allocated', operation: { id: operationId, settled } };
+        },
+        openCurrentComments() { counts.comments.push(frame.scope.id); return 'handed-off'; },
+    });
+    return {
+        controller,
+        changeRecord(record) { frame = record && makeFrame(record); },
+        setComments(disabled, visible) {
+            frame = { ...frame, comments: { disabled, visible } };
+            for (const changed of listeners) changed();
+        },
+        settle() { settle(); },
+    };
 }
-createRoot(document.getElementById('panel')).render(h(React.StrictMode, null, row('decoy'), row('target')));
+const root = createRoot(document.getElementById('panel'));
+const decoy = makeRow('decoy');
+let target = makeRow('target');
+const row = (id, host) => h('div', { id }, id, h(FormRecordActionsMenu, { controller: host.controller, labels }));
+const render = () => root.render(h(React.StrictMode, null, row('decoy', decoy), row('target', target)));
+window.recordActionsProof = {
+    counts,
+    changeRecord: (record) => target.changeRecord(record),
+    setComments: (disabled, visible) => target.setComments(disabled, visible),
+    settle: () => target.settle(),
+    replace() {
+        target = makeRow('replacement');
+        render();
+    },
+};
+render();
 `;
 
 const html = `<!doctype html><html lang="fr"><meta charset="utf-8">
@@ -51,9 +90,10 @@ body {font:16px system-ui;margin:0}
 #panel {position:absolute;top:30px;left:30px;width:284px;height:120px;border:2px solid #64748b;overflow:hidden;background:#f8fafc}
 #decoy,#target {display:flex;align-items:center;gap:12px;position:absolute;left:12px}
 #decoy {top:8px} #target {bottom:4px}
-</style><main id="panel" aria-label="Panneau latéral"></main><script type="module" src="/proof.js"></script></html>`;
+</style><main id="panel" aria-label="Panneau latéral"></main>
+<button id="after" type="button">Après</button><script type="module" src="/proof.js"></script></html>`;
 
-/** Baseline for the clipped disclosure, driven only by a synthetic host port. */
+/** Prove the packed disclosure inside the clipped panel with synthetic actions. */
 export async function checkFormRecordActionsBrowser({
     browser,
     consumer,
@@ -153,8 +193,8 @@ export async function checkFormRecordActionsBrowser({
             .getByRole('button', { name: 'Options', exact: true });
         await opener.press('Enter');
         await page
-            .getByRole('group', { name: 'Options', exact: true })
-            .waitFor({ state: 'attached' });
+            .locator('.mx-sdk-form-record-actions__panel:popover-open')
+            .waitFor({ state: 'visible' });
         const points = await opener.evaluate((button) => {
             const doc = button.ownerDocument;
             const popupId = button.getAttribute('aria-controls');
@@ -180,10 +220,10 @@ export async function checkFormRecordActionsBrowser({
         );
         assert.equal(
             points.hit,
-            false,
-            'The main baseline clips the intended delete action'
+            true,
+            'Hit testing must reach the intended action beyond the panel edge'
         );
-        const clipped = 'record-actions-clipped-baseline.png';
+        const clipped = 'record-actions-clipped.png';
         await page.screenshot({ path: join(output, clipped) });
         await page.locator('#panel').evaluate((node) => {
             node.style.overflow = 'visible';
@@ -201,50 +241,234 @@ export async function checkFormRecordActionsBrowser({
             true,
             'Same coordinates must hit target Supprimer when unclipped'
         );
-        const unclipped = 'record-actions-unclipped-baseline.png';
+        const unclipped = 'record-actions-unclipped.png';
         await page.screenshot({ path: join(output, unclipped) });
-        await page.keyboard.press('Tab');
-        await page.keyboard.press('Tab');
-        assert.equal(
-            await page.evaluate(() => document.activeElement.textContent),
-            'Supprimer'
-        );
-        await page.keyboard.press('Enter');
+        await page.locator('#panel').evaluate((node) => {
+            node.style.overflow = 'hidden';
+        });
+
+        const popup = page.getByRole('group', { name: 'Options', exact: true });
         const confirm = page.getByRole('alertdialog', {
             name: 'Supprimer cet élément ?',
         });
-        await confirm.waitFor();
-        assert.equal(
-            await page.evaluate(() => document.activeElement.textContent),
-            'Annuler'
-        );
-        await page.keyboard.press('Enter');
-        await confirm.waitFor({ state: 'hidden' });
-        assert.equal(
-            await opener.evaluate(
-                (button) => button.ownerDocument.activeElement === button
-            ),
-            true
-        );
-        assert.deepEqual(await page.evaluate(() => window.recordActionsProof), {
+        const focusText = () =>
+            page.evaluate(() => document.activeElement.textContent);
+        const counts = () =>
+            page.evaluate(() => window.recordActionsProof.counts);
+        const noop = {
             requests: [],
             writes: [],
             allocations: [],
             comments: [],
+            settlements: [],
+        };
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Tab');
+        assert.equal(await focusText(), 'Supprimer');
+        await page.keyboard.press('Enter');
+        await confirm.waitFor();
+        assert.equal(await focusText(), 'Annuler');
+        await page.keyboard.press('Enter');
+        await confirm.waitFor({ state: 'hidden' });
+        const hasOpenerFocus = () =>
+            opener.evaluate(
+                (button) => button.ownerDocument.activeElement === button
+            );
+        assert.equal(await hasOpenerFocus(), true);
+        assert.deepEqual(await counts(), noop);
+
+        await opener.press('Enter');
+        await popup.waitFor();
+        await page.mouse.click(points.x, points.y);
+        await confirm.waitFor();
+        await confirm.getByRole('button', { name: 'Annuler' }).click();
+        await confirm.waitFor({ state: 'hidden' });
+        assert.equal(await hasOpenerFocus(), true);
+
+        await opener.press('Enter');
+        await popup.waitFor();
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Escape');
+        await popup.waitFor({ state: 'hidden' });
+        assert.equal(await hasOpenerFocus(), true);
+        await opener.press('Enter');
+        await page.locator('#after').click();
+        await popup.waitFor({ state: 'hidden' });
+        assert.equal(await focusText(), 'Après');
+        assert.deepEqual(await counts(), noop);
+
+        await page.evaluate(() =>
+            window.recordActionsProof.setComments(true, true)
+        );
+        await opener.press('Enter');
+        assert.equal(
+            await popup
+                .getByRole('button', { name: 'Commentaires' })
+                .isDisabled(),
+            true
+        );
+        await page.keyboard.press('Tab');
+        assert.equal(await focusText(), 'Supprimer');
+        await page.keyboard.press('Enter');
+        await confirm.waitFor();
+        await page.keyboard.press('Tab');
+        assert.equal(await focusText(), 'Supprimer');
+        await page.evaluate(() =>
+            window.recordActionsProof.changeRecord('fresh')
+        );
+        await page.keyboard.press('Enter');
+        await confirm.waitFor({ state: 'hidden' });
+        const fresh = {
+            ...noop,
+            requests: ['fresh'],
+            writes: ['fresh'],
+            allocations: ['fresh'],
+        };
+        assert.deepEqual(await counts(), fresh);
+        await opener.press('Enter');
+        const deleteAction = popup.getByRole('button', { name: 'Supprimer' });
+        assert.equal(await deleteAction.isDisabled(), true);
+        await page.evaluate(() => window.recordActionsProof.settle());
+        await page.waitForFunction(
+            () => window.recordActionsProof.counts.settlements.length === 1
+        );
+        await deleteAction.and(page.locator('button:enabled')).waitFor();
+
+        await page.evaluate(() =>
+            window.recordActionsProof.setComments(false, false)
+        );
+        await popup
+            .getByRole('button', { name: 'Commentaires' })
+            .waitFor({ state: 'detached' });
+        await page.keyboard.press('Tab');
+        assert.equal(await focusText(), 'Supprimer');
+        await page.keyboard.press('Enter');
+        await confirm.waitFor();
+        const oldOpener = await opener.elementHandle();
+        await page.evaluate(() => window.recordActionsProof.replace());
+        await confirm.waitFor({ state: 'hidden' });
+        assert.equal(
+            await oldOpener.evaluate((button) => button.isConnected),
+            false
+        );
+        assert.equal(await hasOpenerFocus(), false);
+        await page.keyboard.press('Enter');
+        const settled = { ...fresh, settlements: ['fresh'] };
+        assert.deepEqual(await counts(), settled);
+
+        await page.evaluate(() =>
+            window.recordActionsProof.setComments(false, true)
+        );
+        await opener.press('Enter');
+        await popup.waitFor();
+        await page.keyboard.press('Tab');
+        assert.equal(await focusText(), 'Commentaires');
+        await page.evaluate(() =>
+            window.recordActionsProof.changeRecord('current')
+        );
+        await page.keyboard.press('Enter');
+        await popup.waitFor({ state: 'hidden' });
+        assert.deepEqual(await counts(), { ...settled, comments: ['current'] });
+
+        // A host modal makes nodes outside it inert. Keep the action inside
+        // its original document subtree and force both collision corrections.
+        await page.locator('#panel').evaluate((panel) => {
+            const hostDialog = panel.ownerDocument.createElement('dialog');
+            hostDialog.style.cssText =
+                'position:fixed;inset:0;margin:0;border:0;padding:0;max-width:none;max-height:none;width:100%;height:100%';
+            panel.ownerDocument.body.append(hostDialog);
+            hostDialog.append(panel);
+            Object.assign(panel.style, {
+                left: 'auto',
+                top: 'auto',
+                right: '4px',
+                bottom: '4px',
+            });
+            const target = panel.querySelector('#target');
+            target.style.left = 'auto';
+            target.style.right = '4px';
+            hostDialog.showModal();
         });
+        await opener.press('Enter');
+        await popup.waitFor();
+        const collision = await opener.evaluate((button) => {
+            const doc = button.ownerDocument;
+            const panel = doc.getElementById(
+                button.getAttribute('aria-controls')
+            );
+            const anchor = button.getBoundingClientRect();
+            const area = panel.getBoundingClientRect();
+            const action = [...panel.querySelectorAll('button')].find(
+                (item) => item.textContent === 'Supprimer'
+            );
+            const bounds = action.getBoundingClientRect();
+            return {
+                flipped: area.bottom <= anchor.top - 3.5,
+                shifted:
+                    area.left < anchor.left &&
+                    area.right <= doc.documentElement.clientWidth - 3.5,
+                hittable:
+                    doc
+                        .elementFromPoint(
+                            bounds.left + bounds.width / 2,
+                            bounds.top + bounds.height / 2
+                        )
+                        ?.closest('button') === action,
+            };
+        });
+        assert.deepEqual(collision, {
+            flipped: true,
+            shifted: true,
+            hittable: true,
+        });
+        // Move the opener without a resize, scroll, or button size change.
+        await page.locator('#target').evaluate((row) => {
+            row.style.transform = 'translateX(-120px)';
+        });
+        await page.waitForFunction(() => {
+            const target = document.querySelector('#target');
+            const button = target.querySelector('button');
+            const panel = document.getElementById(
+                button.getAttribute('aria-controls')
+            );
+            return (
+                Math.abs(
+                    panel.getBoundingClientRect().left -
+                        button.getBoundingClientRect().left
+                ) < 1
+            );
+        });
+        await popup.getByRole('button', { name: 'Supprimer' }).click();
+        await confirm.waitFor();
+        await page.keyboard.press('Enter');
+        await confirm.waitFor({ state: 'hidden' });
+        assert.equal(await hasOpenerFocus(), true);
+        assert.deepEqual(await counts(), { ...settled, comments: ['current'] });
+
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(unexpectedRequests, []);
         Object.assign(evidence, {
             status: 'passed',
-            baselineClipped: points,
+            clipped: points,
             unclippedHit: control,
             cancelRestoredFocus: true,
-            writes: 0,
-            allocations: 0,
-            screenshots: [clipped, unclipped],
+            pointerCancelCounts: noop,
+            finalActions: await counts(),
+            staleReplacementFocus: false,
+            hostModalCollision: { ...collision, trackedMovedOpener: true },
+            screenshots: [
+                {
+                    file: clipped,
+                    sha256: hash(readFileSync(join(output, clipped))),
+                },
+                {
+                    file: unclipped,
+                    sha256: hash(readFileSync(join(output, unclipped))),
+                },
+            ],
         });
         console.log(
-            'Installed Form record actions baseline reproduced clipping; unclipped control and keyboard Cancel passed.'
+            'Installed Form record actions passed clipped pointer and keyboard, current and retired owners, and one settled allocation.'
         );
     } catch (error) {
         Object.assign(evidence, { status: 'failed', error: String(error) });

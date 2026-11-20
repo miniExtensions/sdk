@@ -201,10 +201,78 @@ export function FormRecordActionsFooter(
 export function FormRecordActionsMenu(
     props: FormRecordActionsProps
 ): React.ReactElement | null {
+    const [owner, setOwner] = useState(() => ({
+        controller: props.controller,
+        key: 0,
+    }));
+    if (owner.controller !== props.controller)
+        setOwner({ controller: props.controller, key: owner.key + 1 });
+    // A reused row must not inherit the old disclosure or its focus target.
+    return h(RecordActionsMenu, { ...props, key: owner.key });
+}
+
+function showActionsPanel(panel: HTMLDivElement, button: HTMLButtonElement) {
+    const doc = button.ownerDocument;
+    const view = doc.defaultView;
+    if (!view || typeof panel.showPopover !== 'function') return;
+    // Keep the panel in the disclosure's DOM and tab order, including in a
+    // host dialog, while allowing it to paint beyond the clipping ancestor.
+    panel.setAttribute('popover', 'manual');
+    panel.showPopover();
+    if (!panel.matches(':popover-open')) {
+        panel.removeAttribute('popover');
+        return;
+    }
+
+    const gap = 4;
+    let frame = 0;
+    // Host layout and side-panel animation can move the button without a
+    // resize or scroll event. Track it only while the disclosure is open.
+    const position = () => {
+        if (!panel.isConnected || !button.isConnected) return;
+        const anchor = button.getBoundingClientRect();
+        const { clientWidth, clientHeight } = doc.documentElement;
+        const { width, height } = panel.getBoundingClientRect();
+        const start =
+            view.getComputedStyle(button).direction === 'rtl'
+                ? anchor.right - width
+                : anchor.left;
+        const below = anchor.bottom + gap;
+        const above = anchor.top - gap - height;
+        const preferredTop =
+            below + height + gap > clientHeight &&
+            anchor.top > clientHeight - anchor.bottom
+                ? above
+                : below;
+        const left = Math.max(gap, Math.min(start, clientWidth - width - gap));
+        const top = Math.max(
+            gap,
+            Math.min(preferredTop, clientHeight - height - gap)
+        );
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+        frame = view.requestAnimationFrame(position);
+    };
+
+    position();
+    return () => {
+        view.cancelAnimationFrame(frame);
+        if (panel.isConnected && panel.matches(':popover-open'))
+            panel.hidePopover();
+        panel.removeAttribute('popover');
+        panel.style.removeProperty('left');
+        panel.style.removeProperty('top');
+    };
+}
+
+function RecordActionsMenu(
+    props: FormRecordActionsProps
+): React.ReactElement | null {
     const { controller, labels, className } = props;
     const snapshot = useActions(controller);
     const root = useRef<HTMLDivElement>(null);
     const opener = useRef<HTMLButtonElement>(null);
+    const panel = useRef<HTMLDivElement>(null);
     const panelId = useId();
     const [expanded, setExpanded] = useState(false);
     const hasActions = snapshot.showComments || snapshot.showDelete;
@@ -214,17 +282,23 @@ export function FormRecordActionsMenu(
     }, [hasActions]);
     useEffect(() => {
         const node = root.current;
-        if (!expanded || !node) return;
+        if (!expanded || !hasActions || !node) return;
+        const closePanel =
+            opener.current && panel.current
+                ? showActionsPanel(panel.current, opener.current)
+                : undefined;
         const dismissOutside = (event: PointerEvent) => {
             if (!node.contains(event.target as Node)) setExpanded(false);
         };
         node.ownerDocument.addEventListener('pointerdown', dismissOutside);
-        return () =>
+        return () => {
+            closePanel?.();
             node.ownerDocument.removeEventListener(
                 'pointerdown',
                 dismissOutside
             );
-    }, [expanded]);
+        };
+    }, [expanded, hasActions]);
 
     const dismissMenu = () => {
         setExpanded(false);
@@ -272,6 +346,7 @@ export function FormRecordActionsMenu(
                 'div',
                 {
                     id: panelId,
+                    ref: panel,
                     role: 'group',
                     'aria-label': labels.openMenu,
                     className: 'mx-sdk-form-record-actions__panel',

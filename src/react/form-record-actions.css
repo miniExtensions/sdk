@@ -29,6 +29,16 @@
     box-shadow: 0 4px 12px #0002;
 }
 
+.mx-sdk-form-record-actions__panel:popover-open {
+    box-sizing: border-box;
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    max-height: calc(100dvh - 8px);
+    overflow: auto;
+    color: inherit;
+}
+
 .mx-sdk-form-record-actions button,
 .mx-sdk-form-record-actions__dialog button {
     box-sizing: border-box;

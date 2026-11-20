@@ -265,6 +265,128 @@ it('the menu hands off only current comments and uses the same confirmation path
     f.unchangedEffects();
 });
 
+it('keeps keyboard dismissal and outside focus local to the current disclosure', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const host = makeHost({
+        ...editable({}),
+        comments: { visible: true, disabled: true },
+    });
+    await f.render(
+        h(
+            'div',
+            null,
+            h(FormRecordActionsMenu, { controller: host.controller, labels }),
+            h('button', { type: 'button' }, 'Après')
+        )
+    );
+    const toggle = button(f, labels.openMenu);
+    toggle.focus();
+    await f.click(toggle);
+    const panel = toggle.ownerDocument.getElementById(
+        toggle.getAttribute('aria-controls') ?? ''
+    );
+    const action = button(f, labels.deleteRecord);
+    assert.ok(panel);
+    assert.ok(panel.contains(action));
+    assert.equal(panel.getAttribute('role'), 'group');
+    assert.equal(button(f, labels.comments).disabled, true);
+    action.focus();
+    await act(async () => {
+        action.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                bubbles: true,
+                cancelable: true,
+                key: 'Escape',
+            })
+        );
+    });
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(toggle.ownerDocument.activeElement, toggle);
+    assert.equal(panel.isConnected, false);
+
+    await f.click(toggle);
+    const outside = button(f, 'Après');
+    await act(async () => {
+        outside.dispatchEvent(
+            new f.window.PointerEvent('pointerdown', { bubbles: true })
+        );
+        outside.focus();
+    });
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(toggle.ownerDocument.activeElement, outside);
+    assert.deepEqual(host.allocations, []);
+    assert.deepEqual(host.comments, []);
+});
+
+it('resolves the live delete frame once and keeps its original settlement', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const current = {};
+    const host = makeHost(editable({}));
+    await f.render(
+        h(FormRecordActionsMenu, { controller: host.controller, labels })
+    );
+    await f.click(button(f, labels.openMenu));
+    await f.click(button(f, labels.deleteRecord));
+    assert.equal(host.allocations.length, 0);
+    host.setFrame(editable(current), false);
+    await f.click(button(f, labels.confirmDelete));
+    assert.deepEqual(
+        host.allocations.map((operation) => operation.scope),
+        [current]
+    );
+    const operation = host.allocations[0];
+    await f.click(button(f, labels.openMenu));
+    await act(async () => host.setFrame(editable(current)));
+    const pendingAction = button(f, labels.deleteRecord);
+    assert.equal(pendingAction.disabled, true);
+    await f.click(pendingAction);
+    assert.equal(host.allocations.length, 1);
+    await act(async () =>
+        operation.resolve({
+            status: 'acknowledged',
+            operationId: operation.id,
+            localSettlement: 'applied',
+        })
+    );
+    assert.equal(pendingAction.disabled, false);
+    assert.equal(host.allocations.length, 1);
+});
+
+it('retires a reused menu row and its focus target when the controller changes', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const retired = makeHost(editable({}));
+    const replacement = makeHost(editable({}));
+    const render = (host: ReturnType<typeof makeHost>) =>
+        f.render(
+            h(FormRecordActionsMenu, { controller: host.controller, labels })
+        );
+
+    await render(retired);
+    const oldToggle = button(f, labels.openMenu);
+    oldToggle.focus();
+    await f.click(oldToggle);
+    await render(replacement);
+    const replacementToggle = button(f, labels.openMenu);
+    assert.equal(oldToggle.isConnected, false);
+    assert.equal(replacementToggle.getAttribute('aria-expanded'), 'false');
+    assert.notEqual(f.window.document.activeElement, replacementToggle);
+
+    await render(retired);
+    await f.click(button(f, labels.openMenu));
+    await f.click(button(f, labels.deleteRecord));
+    const opening = retired.controller.getSnapshot().confirmation;
+    assert.ok(opening);
+    assert.equal(f.window.document.activeElement, button(f, labels.cancel));
+    await render(replacement);
+    const newToggle = button(f, labels.openMenu);
+    assert.equal(f.container.querySelector('dialog'), null);
+    assert.notEqual(f.window.document.activeElement, newToggle);
+    assert.equal(retired.subscriptionCount(), 0);
+    retired.controller.confirmDelete(opening);
+    assert.deepEqual(retired.allocations, []);
+    assert.deepEqual(replacement.allocations, []);
+});
+
 it('leaves an allocated original operation with the host when the presentation unmounts', async (t) => {
     const f = await htmlPresentationFixture(t);
     const first = {};

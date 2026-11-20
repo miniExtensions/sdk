@@ -163,6 +163,206 @@ test('text length starts unset without weakening numeric or malformed operands',
         logicalOperator: 'and',
         conditions: [leaf(id, { ...setting, value: 0 })],
     });
+
+    const defaultBlank = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(defaultBlank);
+    const blankId = defaultBlank.addCondition(null);
+    assert.ok(blankId);
+    assert.equal((await defaultBlank.commit()).type, 'allocated');
+    assert.deepEqual(owner.calls[1].criteria, {
+        logicalOperator: 'and',
+        conditions: [leaf(blankId, setting)],
+    });
+});
+
+test('opted-in unset text length is omitted before comparing and sending criteria', async () => {
+    const owner = host();
+    const contains = {
+        fieldType: 'singleLineText',
+        type: 'contains',
+        idOrName: { type: 'id', id: 'name' },
+        value: 'Original',
+    } as const;
+    const unset = { ...contains, type: 'isOfLength', value: null } as const;
+    const sibling = leaf('tags', {
+        fieldType: 'multipleSelects',
+        type: 'isExactly',
+        idOrName: { type: 'name', name: 'Former Tags' },
+        value: ['blue'],
+    });
+    const oldName = leaf('name-rule', contains);
+    const unsupported = leaf('unknown', {
+        ...unset,
+        idOrName: { type: 'id', id: 'unknown' },
+    });
+    const saved: RuntimeConditionsDefinition = {
+        logicalOperator: 'and',
+        conditions: [
+            {
+                type: 'groupCondition',
+                id: 'outer',
+                logicalOperator: 'or',
+                conditions: [
+                    {
+                        type: 'groupCondition',
+                        id: 'inner',
+                        logicalOperator: 'and',
+                        conditions: [oldName],
+                    },
+                    sibling,
+                    unsupported,
+                ],
+            },
+        ],
+    };
+    const outer = saved.conditions[0];
+    assert.equal(outer.type, 'groupCondition');
+    const retained = {
+        ...saved,
+        conditions: [{ ...outer, conditions: [sibling, unsupported] }],
+    };
+    const tags = {
+        fieldType: 'multipleSelects',
+        type: 'isExactly',
+        idOrName: { type: 'id', id: 'tags' },
+        value: ['blue'],
+    } as const;
+    const frame: PortalVisitorFilterFrame = {
+        ...owner.read(),
+        fields: [
+            {
+                id: 'name',
+                name: 'Name',
+                operators: [
+                    {
+                        label: 'Contains',
+                        setting: contains,
+                        operand: { kind: 'text' },
+                    },
+                    {
+                        label: 'Is of length',
+                        setting: unset,
+                        operand: { kind: 'text-length', omitIfUnset: true },
+                    },
+                ],
+            },
+            {
+                id: 'tags',
+                name: 'Tags',
+                operators: [
+                    {
+                        label: 'Is exactly',
+                        setting: { ...tags, value: ['blue'] },
+                        operand: {
+                            kind: 'choices',
+                            choices: [
+                                { value: 'blue', label: 'Blue' },
+                                { value: 'green', label: 'Green' },
+                            ],
+                        },
+                    },
+                ],
+            },
+        ],
+        criteria: saved,
+        effectiveSettings: { tags: { ...tags, value: ['blue'] } },
+    };
+    owner.update(frame);
+    const changed = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(changed);
+    assert.equal(changed.setOperator('name-rule', 'isOfLength'), true);
+    assert.deepEqual(changed.settingForEditor('name-rule'), unset);
+    assert.equal(owner.calls.length, 0);
+    owner.apply((command) => {
+        const generation = command.stamp.generation + 1;
+        owner.update({
+            ...owner.read(),
+            stamp: { ...frame.stamp, generation },
+            criteria: command.criteria,
+        });
+        return {
+            type: 'allocated',
+            generation,
+            requestId: 'first-' + generation,
+        };
+    });
+    const allocated = await changed.commit();
+    assert.equal(allocated.type, 'allocated');
+    assert.deepEqual(owner.calls[0]?.criteria, retained);
+    assert.equal(changed.canReport(allocated), true);
+
+    const added = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(added);
+    const id = added.addCondition('outer');
+    assert.ok(id);
+    assert.equal(added.setOperator(id, 'isOfLength'), true);
+    assert.deepEqual(await added.commit(), { type: 'unchanged' });
+    assert.equal(owner.calls.length, 1);
+
+    const zero = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(zero);
+    const zeroId = zero.addCondition('outer');
+    assert.ok(zeroId);
+    assert.equal(zero.setOperator(zeroId, 'isOfLength'), true);
+    assert.equal(zero.setOperand(zeroId, 0), true);
+    assert.equal((await zero.commit()).type, 'allocated');
+    assert.deepEqual(zero.settingForEditor(zeroId), { ...unset, value: 0 });
+    const sent = owner.calls[1]?.criteria?.conditions[0];
+    assert.equal(sent?.type, 'groupCondition');
+    assert.deepEqual(sent.conditions, [
+        sibling,
+        unsupported,
+        leaf(zeroId, { ...unset, value: 0 }),
+    ]);
+
+    const blank = leaf('blank', unset);
+    const protectedRaw = leaf('effective-number', unset);
+    const live = owner.read();
+    owner.update({
+        ...live,
+        criteria: {
+            ...saved,
+            conditions: [
+                {
+                    ...outer,
+                    conditions: [sibling, unsupported, blank, protectedRaw],
+                },
+            ],
+        },
+        effectiveSettings: {
+            ...live.effectiveSettings,
+            'effective-number': { ...unset, value: 3 },
+        },
+    });
+    const mixed = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(mixed);
+    assert.equal(mixed.setOperand('tags', ['green']), true);
+    assert.equal(owner.calls.length, 2);
+    const mixedOutcome = await mixed.commit();
+    assert.equal(mixedOutcome.type, 'allocated');
+    assert.equal(mixed.canReport(mixedOutcome), true);
+    assert.deepEqual(owner.calls[2]?.criteria, {
+        ...saved,
+        conditions: [
+            {
+                ...outer,
+                conditions: [
+                    leaf('tags', { ...tags, value: ['green'] }),
+                    unsupported,
+                    protectedRaw,
+                ],
+            },
+        ],
+    });
+
+    owner.update({ ...frame, criteria: null, effectiveSettings: {} });
+    const empty = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(empty);
+    const emptyId = empty.addCondition(null);
+    assert.ok(emptyId);
+    assert.equal(empty.setOperator(emptyId, 'isOfLength'), true);
+    assert.deepEqual(await empty.commit(), { type: 'unchanged' });
+    assert.equal(owner.calls.length, 3);
 });
 
 test('date-only operands reject invalid days and accept leap days and clearing', async () => {

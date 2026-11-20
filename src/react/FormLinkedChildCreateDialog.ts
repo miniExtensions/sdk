@@ -547,6 +547,19 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
     props: BorrowedFormLinkedChildCreateDialogProps<View>
 ): ReactElement | null {
     const { owner, opening } = props;
+    const activationOwner = useMemo(
+        () => ({}),
+        [owner, opening.identity, opening.opener]
+    );
+    const [controls, setControls] = useState({
+        owner: activationOwner,
+        generation: 0,
+    });
+    let controlGeneration = controls.generation;
+    if (controls.owner !== activationOwner) {
+        controlGeneration++;
+        setControls({ owner: activationOwner, generation: controlGeneration });
+    }
     const store = useMemo(
         () => ({
             subscribe: (notify: () => void) => owner.subscribe(notify),
@@ -572,7 +585,10 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
         h(
             LinkedChildDialogPortal,
             { container: opening.opener.ownerDocument.body },
+            // A press started on the previous native opening must never release
+            // on a reused Save button now bound to the successor.
             h(BorrowedCreatePresentation, {
+                key: controlGeneration,
                 owner,
                 opening,
                 state,

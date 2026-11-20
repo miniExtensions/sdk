@@ -158,9 +158,11 @@ window.readCreateProof = () => {
 
 let nativeSnapshot = null;
 let nativeOpening = null;
+let nextOpening = 0;
 let nativeParent = { links: ['rec_initial'] };
 const nativeCalls = {
     saves: [],
+    saveRefs: [],
     dismisses: 0,
     parentSubmits: 0,
     openerFocuses: 0,
@@ -171,7 +173,7 @@ function publishNative(snapshot) {
     for (const notify of subscriptions) notify();
 }
 function openNative(opener) {
-    const identity = {};
+    const identity = { number: ++nextOpening };
     const parent = nativeParent;
     const opening = {
         identity,
@@ -217,6 +219,10 @@ const nativeOwner = {
         if (!replaceNative(expected, { phase: 'saving' }))
             return { type: 'not-dispatched', reason: 'superseded' };
         nativeCalls.saves.push(title);
+        nativeCalls.saveRefs.push({
+            opening: expected.opening.number,
+            revision: expected.revision,
+        });
         const id = 'rec_created_' + nativeCalls.saves.length;
         if (window.holdBorrowedSave) {
             window.holdBorrowedSave = false;
@@ -262,6 +268,8 @@ window.readBorrowedCreate = () => ({
     links: [...nativeParent.links],
     title: nativeSnapshot?.fields.title,
     phase: nativeSnapshot?.phase,
+    opening: nativeSnapshot?.ref.opening.number,
+    revision: nativeSnapshot?.ref.revision,
     outcome: nativeSnapshot?.outcome,
 });
 function NativeParent() {
@@ -270,6 +278,7 @@ function NativeParent() {
     return h(
         'form',
         {
+            'data-native-opening': nativeSnapshot?.ref.opening.number,
             onSubmit: (event) => {
                 event.preventDefault();
                 nativeCalls.parentSubmits++;

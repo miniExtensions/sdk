@@ -120,6 +120,68 @@ async function checkBorrowedCreate(page, origin) {
         parentSubmits: 0,
     };
 }
+
+async function checkBorrowedActivationAcrossOpening(page, origin, activation) {
+    await page.goto(origin + '/?borrowed');
+    const opener = page.getByRole('button', { name: 'Open native child' });
+    const dialog = page.getByRole('dialog', { name: 'Create linked record' });
+    const save = dialog.getByRole('button', { name: 'Save', exact: true });
+    const read = () => page.evaluate(() => window.readBorrowedCreate());
+    const moveToSave = async () => {
+        const box = await save.boundingBox();
+        assert(box, 'Save must have a reachable pointer target');
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    };
+
+    await opener.press('Enter');
+    await save.waitFor();
+    const first = await read();
+    if (activation === 'pointer') {
+        await moveToSave();
+        await page.mouse.down();
+    } else {
+        await save.focus();
+        await page.keyboard.down('Space');
+    }
+
+    await page.evaluate(() => window.replaceBorrowedParent());
+    await page
+        .locator(`form[data-native-opening="${first.opening + 1}"]`)
+        .waitFor({ state: 'attached' });
+    const successor = await read();
+    assert.notEqual(successor.opening, first.opening);
+    assert.equal(successor.phase, 'ready');
+    if (activation === 'pointer') {
+        await moveToSave();
+        await page.mouse.up();
+    } else {
+        await save.focus();
+        await page.keyboard.up('Space');
+    }
+    assert.deepEqual(
+        (await read()).saveRefs,
+        [],
+        `Releasing A's held ${activation} must not Save B`
+    );
+    assert.deepEqual((await read()).links, ['rec_successor']);
+    await save.waitFor();
+
+    await dialog
+        .getByRole('textbox', { name: 'Native child title' })
+        .fill('Fresh successor activation');
+    const expected = await read();
+    if (activation === 'pointer') await save.click();
+    else await save.press('Space');
+    await dialog.waitFor({ state: 'hidden' });
+    const result = await read();
+    assert.deepEqual(result.saveRefs, [
+        { opening: expected.opening, revision: expected.revision },
+    ]);
+    assert.deepEqual(result.saves, ['Fresh successor activation']);
+    assert.deepEqual(result.links, ['rec_successor', 'rec_created_1']);
+    assert.equal(result.parentSubmits, 0);
+}
+
 export async function checkLinkedChildCreateBrowser({
     archive,
     browser,
@@ -570,6 +632,15 @@ export async function checkLinkedChildCreateBrowser({
                 assert.equal(replacement.calls.parentSubmits, 0);
                 assert(await focused(outside));
                 const borrowedCreate = await checkBorrowedCreate(page, origin);
+                for (const activation of ['pointer', 'keyboard']) {
+                    await checkBorrowedActivationAcrossOpening(
+                        page,
+                        origin,
+                        activation
+                    );
+                }
+                borrowedCreate.heldPointerOwnership = true;
+                borrowedCreate.heldSpaceOwnership = true;
                 assert.deepEqual(errors, []);
                 assert.deepEqual(external, []);
                 results.push({

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createRequire } from 'node:module';
 import {
     mkdtempSync,
@@ -37,7 +37,7 @@ export async function checkCompleteBarcodeBrowser({
         const nativeParent = installedReact.startsWith('18.');
         if (nativeParent) {
             nativeParentRoot = root;
-            execFileSync(
+            execPackageFileSync(
                 'npm',
                 [
                     'install',
@@ -541,7 +541,7 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
                 'nativeParentPackage',
                 nativeParentRoot,
                 () =>
-                    execFileSync(
+                    execPackageFileSync(
                         'npm',
                         [
                             'uninstall',

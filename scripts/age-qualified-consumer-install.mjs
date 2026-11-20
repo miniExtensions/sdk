@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
@@ -101,7 +102,7 @@ export function installAgeQualifiedConsumer({
     directory = process.cwd(),
     args,
     execute = (command, argv, cwd) =>
-        execFileSync(command, argv, {
+        execPackageFileSync(command, argv, {
             cwd,
             encoding: 'utf8',
             timeout: 120000,
@@ -114,12 +115,8 @@ export function installAgeQualifiedConsumer({
 }) {
     assert.equal(args[0], 'install');
     const root = realpathSync(directory);
-    const fromTemp = relative(realpathSync(tmpdir()), root);
     assert(
-        fromTemp &&
-            !isAbsolute(fromTemp) &&
-            fromTemp !== '..' &&
-            !fromTemp.startsWith('../'),
+        isInside(realpathSync(tmpdir()), root),
         'Consumer must be an owned temporary directory'
     );
     const manifest = JSON.parse(
@@ -133,12 +130,9 @@ export function installAgeQualifiedConsumer({
             // Legacy npm scratch-cache selection has no pnpm equivalent here.
             // Consume only an owned child path; pnpm uses its normal store.
             assert(typeof args[index + 1] === 'string');
-            const cache = relative(root, resolve(root, args[++index]));
             assert(
-                cache &&
-                    !isAbsolute(cache) &&
-                    cache !== '..' &&
-                    !cache.startsWith('../')
+                isInside(root, resolve(root, args[++index])),
+                'Consumer scratch cache must be a child of the owned directory'
             );
             continue;
         }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import {
@@ -134,7 +135,7 @@ try {
                 .join('\n') + '\n';
         writeFileSync(join(consumer, 'pnpm-workspace.yaml'), policyText);
         const pnpm = (args) =>
-            execFileSync('corepack', ['pnpm', ...args], {
+            execPackageFileSync('corepack', ['pnpm', ...args], {
                 cwd: consumer,
                 encoding: 'utf8',
                 stdio: ['ignore', 'pipe', 'inherit'],

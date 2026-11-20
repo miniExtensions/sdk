@@ -1,6 +1,6 @@
 // The same installed public preview in an independent app, with local media.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
@@ -23,7 +23,7 @@ const temporary = mkdtempSync(
     join(tmpdir(), 'sdk-attachment-preview-browser-')
 );
 const run = (args, cwd = temporary) =>
-    execFileSync('npm', args, {
+    execPackageFileSync('npm', args, {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],

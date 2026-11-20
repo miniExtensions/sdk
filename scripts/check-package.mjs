@@ -446,7 +446,7 @@ import { checkBrowserChildQueryExample } from './browser-child-query-example-che
 import assert from 'node:assert/strict';
 import { checkCompletePortalChartReactMatrix } from './complete-portal-chart-consumer-checks.mjs';
 import { checkCompleteCollaboratorReactMatrix } from './complete-collaborator-consumer-checks.mjs';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import {
     cpSync,
     existsSync,
@@ -619,7 +619,7 @@ const linkedChildCreateExampleFiles = ['README.md', 'main.ts'].map(
 );
 
 function run(command, args, cwd = temporaryDirectory) {
-    return execFileSync(command, args, {
+    return execPackageFileSync(command, args, {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createRequire } from 'node:module';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,7 @@ try {
     execFileSync(process.execPath, ['scripts/build.mjs'], { stdio: 'inherit' });
     // Match the maintained package checker: build first, then archive those bytes.
     const packed = JSON.parse(
-        execFileSync(
+        execPackageFileSync(
             'npm',
             [
                 'pack',

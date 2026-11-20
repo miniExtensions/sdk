@@ -3846,6 +3846,11 @@ export {
     type PortalGridSingleSelectCellEditor,
     type PortalGridSingleSelectCellProps,
 } from './PortalGridSingleSelectCell.js';
+export {
+    PortalGridMultipleSelectCell,
+    type PortalGridMultipleSelectCellEditor,
+    type PortalGridMultipleSelectCellProps,
+} from './PortalGridMultipleSelectCell.js';
 
 export { PortalSidePanelNavigation } from './PortalSidePanelNavigation.js';
 export type {

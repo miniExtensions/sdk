@@ -1129,6 +1129,19 @@ Retire the editor owner when the accepted session, view, record, field or edit
 policy changes. Use `readOnlyGuidance` to explain why a selected cell stayed
 read-only when the host withheld its editor.
 
+## Multiple Select cells in a host Grid
+
+Render `PortalGridMultipleSelectCell` from `@miniextensions/sdk/react` directly
+inside the table row with the same Grid and controlled Select CSS. Pass ordered
+canonical Airtable names in `value` and use `displayName` on projected choices
+for visible labels. Cell selection only calls the host's `onSelect`.
+
+While selected, a current host editor receives the full ordered `string[]`
+after each add or remove, including `[]` on Clear. Keep the writer bound to the
+existing row and physical field. The editor honors `availableChoices`,
+`maxSelections`, and optional `formId` for control association. It has no Form
+submit or option creation action.
+
 ## Empty cells in a host Grid
 
 Use `PortalGridEmptyCell` from `@miniextensions/sdk/react` with

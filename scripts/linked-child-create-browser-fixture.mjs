@@ -2,7 +2,14 @@ import {
     createFormFieldBindings,
     RecoveryJournal,
 } from '@miniextensions/sdk/forms';
-import { createElement as h, StrictMode, useState } from 'react';
+import {
+    createElement as h,
+    StrictMode,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
+import { BorrowedFormLinkedChildCreateDialog } from '@miniextensions/sdk/react';
 import { createRoot } from 'react-dom/client';
 import { LinkedChildCreateAction } from './installed-create-example.ts';
 
@@ -66,10 +73,13 @@ function createParent(loaded, scope) {
     });
     return { fields, owner };
 }
-let current = createParent(fixture.parent, {
-    ownerId: 'synthetic-parent',
-    revision: 0,
-});
+const borrowNative = new URLSearchParams(location.search).has('borrowed');
+let current = borrowNative
+    ? null
+    : createParent(fixture.parent, {
+          ownerId: 'synthetic-parent',
+          revision: 0,
+      });
 let parentEpoch = 0;
 
 function ChildTitle({ child }) {
@@ -145,5 +155,180 @@ window.readCreateProof = () => {
         sibling: fields.field('fld_children_b').getSnapshot().value,
     };
 };
+
+let nativeSnapshot = null;
+let nativeOpening = null;
+let nextOpening = 0;
+let nativeParent = { links: ['rec_initial'] };
+const nativeCalls = {
+    saves: [],
+    saveRefs: [],
+    dismisses: 0,
+    parentSubmits: 0,
+    openerFocuses: 0,
+};
+const subscriptions = new Set();
+function publishNative(snapshot) {
+    nativeSnapshot = snapshot;
+    for (const notify of subscriptions) notify();
+}
+function openNative(opener) {
+    const identity = { number: ++nextOpening };
+    const parent = nativeParent;
+    const opening = {
+        identity,
+        opener,
+        isCurrent: () => nativeOpening === opening && nativeParent === parent,
+    };
+    nativeOpening = opening;
+    publishNative({
+        ref: { opening: identity, revision: 0 },
+        phase: 'ready',
+        fields: { title: '' },
+        dirty: false,
+        error: null,
+        outcome: null,
+    });
+}
+function replaceNative(expected, change, allowTerminalDismissal = false) {
+    const canDismissTerminal =
+        allowTerminalDismissal &&
+        (nativeSnapshot.phase === 'unknown' ||
+            (nativeSnapshot.phase === 'saved' &&
+                nativeSnapshot.outcome?.link === 'unlinked'));
+    if (
+        !nativeOpening?.isCurrent() ||
+        nativeSnapshot.ref.opening !== expected.opening ||
+        nativeSnapshot.ref.revision !== expected.revision ||
+        (nativeSnapshot.phase !== 'ready' && !canDismissTerminal)
+    )
+        return false;
+    publishNative({
+        ...nativeSnapshot,
+        ...change,
+        ref: { ...nativeSnapshot.ref, revision: expected.revision + 1 },
+    });
+    return true;
+}
+const nativeOwner = {
+    getSnapshot: () => nativeSnapshot,
+    subscribe(notify) {
+        subscriptions.add(notify);
+        return () => subscriptions.delete(notify);
+    },
+    async save(expected) {
+        const parent = nativeParent;
+        const opening = nativeOpening;
+        const title = nativeSnapshot.fields.title;
+        if (!replaceNative(expected, { phase: 'saving' }))
+            return { type: 'not-dispatched', reason: 'superseded' };
+        nativeCalls.saves.push(title);
+        nativeCalls.saveRefs.push({
+            opening: expected.opening.number,
+            revision: expected.revision,
+        });
+        const id = 'rec_created_' + nativeCalls.saves.length;
+        if (window.holdBorrowedSave) {
+            window.holdBorrowedSave = false;
+            await new Promise((resolve) => {
+                window.releaseBorrowedSave = resolve;
+            });
+        }
+        if (window.nextBorrowedSaveUnknown) {
+            window.nextBorrowedSaveUnknown = false;
+            const outcome = { type: 'unknown', attemptId: id };
+            if (opening.isCurrent())
+                publishNative({ ...nativeSnapshot, phase: 'unknown', outcome });
+            return outcome;
+        }
+        const unlinked = window.nextBorrowedSaveUnlinked === true;
+        window.nextBorrowedSaveUnlinked = false;
+        const current = opening.isCurrent();
+        const outcome = {
+            type: 'saved',
+            recordId: id,
+            link: current ? (unlinked ? 'unlinked' : 'linked') : 'superseded',
+        };
+        if (current) {
+            if (!unlinked) parent.links.push(id);
+            publishNative({
+                ...nativeSnapshot,
+                phase: 'saved',
+                fields: unlinked ? null : nativeSnapshot.fields,
+                outcome,
+            });
+        }
+        window.borrowedSaveOutcome = outcome;
+        return outcome;
+    },
+    dismiss(expected) {
+        if (!replaceNative(expected, { phase: 'closed' }, true))
+            return 'superseded';
+        nativeCalls.dismisses++;
+        return 'closed';
+    },
+};
+window.replaceBorrowedParent = (staleConfirm) => {
+    nativeParent = { links: ['rec_successor'] };
+    // Deliver an already-captured click before committing the new render.
+    staleConfirm?.click();
+    openNative(nativeOpening.opener);
+};
+window.readBorrowedCreate = () => ({
+    ...structuredClone(nativeCalls),
+    links: [...nativeParent.links],
+    title: nativeSnapshot?.fields?.title,
+    phase: nativeSnapshot?.phase,
+    opening: nativeSnapshot?.ref.opening.number,
+    revision: nativeSnapshot?.ref.revision,
+    outcome: nativeSnapshot?.outcome,
+});
+function NativeParent() {
+    useSyncExternalStore(nativeOwner.subscribe, nativeOwner.getSnapshot);
+    const opener = useRef(null);
+    return h(
+        'form',
+        {
+            'data-native-opening': nativeSnapshot?.ref.opening.number,
+            onSubmit: (event) => {
+                event.preventDefault();
+                nativeCalls.parentSubmits++;
+            },
+        },
+        h(
+            'button',
+            {
+                type: 'button',
+                ref: opener,
+                onFocus: () => nativeCalls.openerFocuses++,
+                onClick: () => openNative(opener.current),
+            },
+            'Open native child'
+        ),
+        nativeOpening &&
+            h(BorrowedFormLinkedChildCreateDialog, {
+                owner: nativeOwner,
+                // Cosmetic renders intentionally create a new descriptor for the same identity.
+                opening: { ...nativeOpening },
+                renderFields: (fields) =>
+                    h(
+                        'label',
+                        null,
+                        'Native child title',
+                        h('input', {
+                            'aria-label': 'Native child title',
+                            value: fields.title,
+                            onChange: (event) =>
+                                replaceNative(nativeSnapshot.ref, {
+                                    fields: {
+                                        title: event.currentTarget.value,
+                                    },
+                                    dirty: true,
+                                }),
+                        })
+                    ),
+            })
+    );
+}
 const root = createRoot(document.querySelector('#app'));
-root.render(h(StrictMode, null, h(Parent)));
+root.render(h(StrictMode, null, h(borrowNative ? NativeParent : Parent)));

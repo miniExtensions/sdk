@@ -8,6 +8,7 @@ import {
     rmSync,
     writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -67,4 +68,40 @@ test('the contributor format check accepts checkout line endings but rejects for
         assert.equal(readFileSync(sample, 'utf8'), content);
     }
     assert.equal(readFileSync(ignored, 'utf8'), ignoredContent);
+});
+
+test('the contributor format check preserves explicitly configured line endings', (t) => {
+    const directory = mkdtempSync(join(tmpdir(), 'sdk-format-override-'));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const source = join(directory, 'nested');
+    mkdirSync(source);
+    const config = join(source, '.prettierrc.json');
+    const file = join(source, 'example.mjs');
+    const require = createRequire(import.meta.url);
+    const prettier = require.resolve('prettier/bin/prettier.cjs');
+    const wrapper = fileURLToPath(
+        new URL('./format-check.mjs', import.meta.url)
+    );
+    for (const [endOfLine, content, expected] of [
+        ['cr', 'export const value = 1;\r', 0],
+        ['lf', 'export const value = 1;\r\n', 1],
+    ]) {
+        writeFileSync(
+            config,
+            `{ "endOfLine": "${endOfLine}" }${endOfLine === 'cr' ? '\r' : '\n'}`
+        );
+        writeFileSync(file, content);
+        for (const args of [[prettier, '--check', '.'], [wrapper]]) {
+            const result = spawnSync(process.execPath, args, {
+                cwd: directory,
+                encoding: 'utf8',
+            });
+            assert.equal(
+                result.status,
+                expected,
+                result.stderr || result.stdout
+            );
+            assert.equal(readFileSync(file, 'utf8'), content);
+        }
+    }
 });

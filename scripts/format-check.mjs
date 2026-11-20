@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { resolveConfig } from 'prettier';
 
 const require = createRequire(import.meta.url);
 const prettier = require.resolve('prettier/bin/prettier.cjs');
@@ -25,13 +26,19 @@ if (strict.status === 0) {
     process.exitCode = strict.status ?? 2;
 } else {
     const changed = strict.stdout.split(/\r?\n/).filter(Boolean);
-    // Prettier auto also accepts bare CR. Keep that outside the exception.
-    const bareCr = changed.filter((path) =>
-        /\r(?!\n)/.test(readFileSync(path, 'utf8'))
-    );
-    if (bareCr.length > 0) {
-        console.error('Unsupported bare carriage returns:');
-        for (const path of bareCr) console.error(path);
+    // Only accommodate a checkout newline difference when the path does not
+    // explicitly configure line endings. Prettier auto also accepts bare CR.
+    const failures = [];
+    for (const path of changed) {
+        const config = await resolveConfig(path, { editorconfig: true });
+        if (config?.endOfLine !== undefined) {
+            failures.push(`${path}: configured endOfLine ${config.endOfLine}`);
+        } else if (/\r(?!\n)/.test(readFileSync(path, 'utf8'))) {
+            failures.push(`${path}: unsupported bare carriage returns`);
+        }
+    }
+    if (failures.length > 0) {
+        console.error(failures.join('\n'));
         process.exitCode = 1;
     } else {
         const check = run(['--check', '.', '--end-of-line', 'auto']);

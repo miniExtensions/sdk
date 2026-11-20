@@ -807,10 +807,11 @@ pnpm pack
 ```
 
 `pnpm check` runs formatting, types, synthetic behavior tests and packed
-ESM/CommonJS/TypeScript/browser consumers. The formatting check accepts
-consistent LF or CRLF in the working tree without rewriting files or changing
-Git settings. It still checks Prettier formatting and rejects mixed line
-endings and bare carriage returns. The package check copies the packaged starter into
+ESM/CommonJS/TypeScript/browser consumers. For paths without an explicit
+end-of-line rule, the formatting check accepts consistent LF or CRLF but still
+rejects mixed line endings and bare carriage returns. Explicit path settings
+continue to use Prettier’s ordinary rules. The check does not rewrite files or
+change Git settings. The package check copies the packaged starter into
 an independent customer project and verifies its installation, types/build and
 synthetic integration contracts. The optional source UI example also receives
 packed-consumer checks. These checks make no live miniExtensions API calls;

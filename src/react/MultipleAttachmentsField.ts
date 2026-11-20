@@ -44,7 +44,7 @@ type RemovePress = {
     button: HTMLButtonElement;
     token: object;
 };
-type RemovePointer = Pick<PointerEvent, 'pointerId' | 'pointerType'>;
+type RemovePointer = { pointerId: number; pointerType: string };
 type RemovePointerPress = RemovePress & Pick<RemovePointer, 'pointerId'>;
 
 const stop = (event: SyntheticEvent) => event.stopPropagation();

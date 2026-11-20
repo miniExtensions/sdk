@@ -339,6 +339,23 @@ test('legacy scratch cache flag is consumed without changing registry dependenci
     installAgeQualifiedConsumer(f);
     assert.equal(f.installs, 1);
 });
+test('consumer refuses an outside scratch cache before touching the installation', (t) => {
+    const f = fixture(t);
+    const sibling = join(f.directory, '..', 'foreign', 'npm-cache');
+    for (const path of [sibling, f.directory]) {
+        assert.throws(
+            () =>
+                installAgeQualifiedConsumer({
+                    ...f,
+                    args: [...f.args, '--cache', path],
+                }),
+            /scratch cache must be a child/
+        );
+    }
+    assert.equal(f.calls.length, 0);
+    assert(existsSync(f.installed));
+});
+
 test('consumer refuses a direct exotic dependency before install', (t) => {
     const f = fixture(t);
     f.args.push('other@github:someone/repo');

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -167,7 +168,7 @@ export function checkImageAnnotationReactMatrix({
             );
             writeFileSync(join(directory, 'pnpm-workspace.yaml'), policyText);
             const pnpm = (args) =>
-                execFileSync('pnpm', args, {
+                execPackageFileSync('pnpm', args, {
                     cwd: directory,
                     encoding: 'utf8',
                     timeout: 120000,

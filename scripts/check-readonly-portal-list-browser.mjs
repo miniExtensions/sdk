@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
@@ -26,7 +26,7 @@ assert(
 let temporary;
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const run = (command, args, options = {}) =>
-    execFileSync(command, args, {
+    execPackageFileSync(command, args, {
         cwd: temporary,
         stdio: 'inherit',
         timeout: 120000,

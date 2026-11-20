@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -49,7 +49,7 @@ export async function checkSignatureBrowser({
     let server;
     try {
         if (reference)
-            execFileSync(
+            execPackageFileSync(
                 'npm',
                 [
                     'install',
@@ -68,7 +68,7 @@ export async function checkSignatureBrowser({
             );
         if (reference)
             evidence.referenceDependencies = JSON.parse(
-                execFileSync('npm', ['ls', 'signature_pad', '--json'], {
+                execPackageFileSync('npm', ['ls', 'signature_pad', '--json'], {
                     cwd: consumer,
                     encoding: 'utf8',
                 })

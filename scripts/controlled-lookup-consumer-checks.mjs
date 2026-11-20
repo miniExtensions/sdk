@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -150,7 +151,7 @@ export function checkControlledLookupReactMatrix({
     for (const version of ['18.3.1', '19.2.0']) {
         const directory = mkdtempSync(join(tmpdir(), 'sdk-controlled-lookup-'));
         const run = (command, args, options = {}) =>
-            execFileSync(command, args, {
+            execPackageFileSync(command, args, {
                 cwd: directory,
                 encoding: 'utf8',
                 stdio: ['ignore', 'pipe', 'inherit'],

@@ -164,6 +164,10 @@ test('text length starts unset without weakening numeric or malformed operands',
         conditions: [leaf(id, { ...setting, value: 0 })],
     });
 
+    owner.update({
+        ...initial,
+        criteria: { logicalOperator: 'and', conditions: [] },
+    });
     const defaultBlank = createPortalVisitorFilterDraft(owner.port);
     assert.ok(defaultBlank);
     const blankId = defaultBlank.addCondition(null);
@@ -380,13 +384,34 @@ test('opted-in unset text length is omitted before comparing and sending criteri
         ],
     });
 
-    owner.update({ ...frame, criteria: null, effectiveSettings: {} });
-    const empty = createPortalVisitorFilterDraft(owner.port);
-    assert.ok(empty);
-    const emptyId = empty.addCondition(null);
-    assert.ok(emptyId);
-    assert.equal(empty.setOperator(emptyId, 'isOfLength'), true);
-    assert.deepEqual(await empty.commit(), { type: 'unchanged' });
+    const legacyEmpty: RuntimeConditionsDefinition = {
+        logicalOperator: 'and',
+        conditions: [],
+    };
+    for (const criteria of [null, legacyEmpty]) {
+        const emptyFrame = { ...frame, criteria, effectiveSettings: {} };
+        owner.update(emptyFrame);
+        const empty = createPortalVisitorFilterDraft(owner.port);
+        assert.ok(empty);
+        const emptyId = empty.addCondition(null);
+        assert.ok(emptyId);
+        assert.equal(empty.setOperator(emptyId, 'isOfLength'), true);
+        assert.deepEqual(await empty.commit(), { type: 'unchanged' });
+        assert.equal(owner.calls.length, 3);
+        assert.deepEqual(owner.read(), emptyFrame);
+    }
+
+    const retiredEmpty = createPortalVisitorFilterDraft(owner.port);
+    assert.ok(retiredEmpty);
+    const retiredId = retiredEmpty.addCondition(null);
+    assert.ok(retiredId);
+    assert.equal(retiredEmpty.setOperator(retiredId, 'isOfLength'), true);
+    const emptyFrame = owner.read();
+    owner.update({
+        ...emptyFrame,
+        stamp: { ...emptyFrame.stamp, sessionId: 'new-owner' },
+    });
+    assert.deepEqual(await retiredEmpty.commit(), { type: 'stale' });
     assert.equal(owner.calls.length, 3);
 });
 

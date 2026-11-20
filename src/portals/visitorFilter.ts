@@ -580,10 +580,13 @@ function createDraftForFrame(
                 operand.kind === 'text-length' && operand.omitIfUnset === true
         )
     );
-    const criteriaForSubmission = (tree: RuntimeConditionsDefinition | null) =>
-        tree && omitUnsetTextLength
-            ? omitUnsetTextLengths(tree, shouldOmitUnsetTextLength)
-            : tree;
+    const criteriaForSubmission = (
+        tree: RuntimeConditionsDefinition | null
+    ) => {
+        if (!tree || !omitUnsetTextLength) return tree;
+        if (tree.conditions.length === 0) return null;
+        return omitUnsetTextLengths(tree, shouldOmitUnsetTextLength);
+    };
     const dropdowns = (): PortalVisitorFilterDropdown[] =>
         (captured.dropdownFieldIds ?? []).flatMap((fieldId) => {
             const field = captured.fields.find(

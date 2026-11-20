@@ -60,6 +60,10 @@ async function fixture(
                 publish({
                     ...state,
                     outcome,
+                    fields:
+                        outcome.type === 'saved' && outcome.link === 'unlinked'
+                            ? null
+                            : state.fields,
                     phase:
                         outcome.type === 'saved'
                             ? 'saved'
@@ -231,5 +235,32 @@ it('shows native rejection and retains the unresolved attempt through Close', as
     await f.click(f.button('Close without saving'));
     assert.equal(f.closes.length, 1);
     assert.deepEqual(f.read().outcome, unknown);
+    assert.equal(f.doc.activeElement, f.opener);
+});
+
+it('keeps a saved but unlinked record terminal until an explicit Close', async (t) => {
+    const unlinked = { ...saved, link: 'unlinked' } as const;
+    const f = await fixture(t, async () => unlinked);
+    f.opener.focus();
+    await f.render();
+    await f.edit('Saved native child');
+    await f.click(f.button('Save'));
+    assert(f.dialog()?.open);
+    assert.equal(f.dialog()?.querySelector('input'), null);
+    assert.match(
+        f.dialog()?.textContent ?? '',
+        /record was saved but could not be linked/
+    );
+    assert.deepEqual(f.read().outcome, unlinked);
+    assert.notEqual(f.doc.activeElement, f.opener);
+    assert.equal(f.button('Save').disabled, true);
+    await f.click(f.button('Save'));
+    assert.equal(f.saves.length, 1);
+    assert.deepEqual(f.closes, []);
+    await f.click(f.button('Close'));
+    assert.equal(f.dialog(), null);
+    assert.equal(f.closes.length, 1);
+    assert.equal(f.saves.length, 1);
+    assert.deepEqual(f.read().outcome, unlinked);
     assert.equal(f.doc.activeElement, f.opener);
 });

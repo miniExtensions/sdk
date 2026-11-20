@@ -190,13 +190,17 @@ function openNative(opener) {
         outcome: null,
     });
 }
-function replaceNative(expected, change, allowUnknown = false) {
+function replaceNative(expected, change, allowTerminalDismissal = false) {
+    const canDismissTerminal =
+        allowTerminalDismissal &&
+        (nativeSnapshot.phase === 'unknown' ||
+            (nativeSnapshot.phase === 'saved' &&
+                nativeSnapshot.outcome?.link === 'unlinked'));
     if (
         !nativeOpening?.isCurrent() ||
         nativeSnapshot.ref.opening !== expected.opening ||
         nativeSnapshot.ref.revision !== expected.revision ||
-        (nativeSnapshot.phase !== 'ready' &&
-            !(allowUnknown && nativeSnapshot.phase === 'unknown'))
+        (nativeSnapshot.phase !== 'ready' && !canDismissTerminal)
     )
         return false;
     publishNative({
@@ -237,15 +241,22 @@ const nativeOwner = {
                 publishNative({ ...nativeSnapshot, phase: 'unknown', outcome });
             return outcome;
         }
-        const linked = opening.isCurrent();
+        const unlinked = window.nextBorrowedSaveUnlinked === true;
+        window.nextBorrowedSaveUnlinked = false;
+        const current = opening.isCurrent();
         const outcome = {
             type: 'saved',
             recordId: id,
-            link: linked ? 'linked' : 'superseded',
+            link: current ? (unlinked ? 'unlinked' : 'linked') : 'superseded',
         };
-        if (linked) {
-            parent.links.push(id);
-            publishNative({ ...nativeSnapshot, phase: 'saved', outcome });
+        if (current) {
+            if (!unlinked) parent.links.push(id);
+            publishNative({
+                ...nativeSnapshot,
+                phase: 'saved',
+                fields: unlinked ? null : nativeSnapshot.fields,
+                outcome,
+            });
         }
         window.borrowedSaveOutcome = outcome;
         return outcome;
@@ -266,7 +277,7 @@ window.replaceBorrowedParent = (staleConfirm) => {
 window.readBorrowedCreate = () => ({
     ...structuredClone(nativeCalls),
     links: [...nativeParent.links],
-    title: nativeSnapshot?.fields.title,
+    title: nativeSnapshot?.fields?.title,
     phase: nativeSnapshot?.phase,
     opening: nativeSnapshot?.ref.opening.number,
     revision: nativeSnapshot?.ref.revision,

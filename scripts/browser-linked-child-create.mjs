@@ -109,7 +109,46 @@ async function checkBorrowedCreate(page, origin) {
     assert.equal((await read()).dismisses, 2);
     assert.deepEqual((await read()).outcome, unresolved);
     assert.equal((await read()).parentSubmits, 0);
+
+    await opener.press('Enter');
+    await input.fill('Saved without the parent link');
+    const beforeUnlinked = await read();
+    await page.evaluate(() => {
+        window.nextBorrowedSaveUnlinked = true;
+    });
+    await save.press('Enter');
+    await dialog
+        .getByRole('alert')
+        .filter({
+            hasText:
+                'The record was saved but could not be linked to this Form.',
+        })
+        .waitFor();
+    assert.equal(await input.count(), 0);
+    assert(await save.isDisabled());
+    await save.evaluate((button) => button.click());
+    const unlinked = await read();
+    assert.deepEqual(unlinked.outcome, {
+        type: 'saved',
+        recordId: 'rec_created_4',
+        link: 'unlinked',
+    });
+    assert.equal(unlinked.saves.length, beforeUnlinked.saves.length + 1);
+    assert.deepEqual(unlinked.links, beforeUnlinked.links);
+    assert.equal(unlinked.dismisses, beforeUnlinked.dismisses);
+    assert.equal(unlinked.openerFocuses, beforeUnlinked.openerFocuses);
+    assert.equal(await discard.count(), 0);
+    await dialog
+        .getByRole('button', { name: 'Close', exact: true })
+        .press('Enter');
+    await dialog.waitFor({ state: 'hidden' });
+    assert(await focus(opener));
+    assert.deepEqual((await read()).outcome, unlinked.outcome);
+    assert.deepEqual((await read()).saves, unlinked.saves);
+    assert.equal((await read()).dismisses, beforeUnlinked.dismisses + 1);
+    assert.equal((await read()).parentSubmits, 0);
     return {
+        savedUnlinkedExitsOnlyOnExplicitClose: true,
         unresolvedSaveRetainedOnDismiss: true,
         keyboardOpen: true,
         keepAndDiscard: true,

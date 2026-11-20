@@ -495,7 +495,12 @@ export type BorrowedFormLinkedChildCreateSaveOutcome =
     | { type: 'not-dispatched'; reason: 'superseded' | 'busy' | 'invalid' }
     | { type: 'rejected' }
     | { type: 'unknown'; attemptId: string }
-    | { type: 'saved'; recordId: string; link: 'linked' | 'superseded' };
+    | {
+          type: 'saved';
+          recordId: string;
+          /** A current but unlinked Save is terminal and awaits explicit Close. */
+          link: 'linked' | 'unlinked' | 'superseded';
+      };
 
 export type BorrowedFormLinkedChildCreateDismissOutcome =
     | 'closed'
@@ -521,7 +526,7 @@ export type BorrowedFormLinkedChildCreateOwner<View> = Readonly<{
     save(
         expected: BorrowedFormLinkedChildCreateRef
     ): Promise<BorrowedFormLinkedChildCreateSaveOutcome>;
-    /** Commit the already-confirmed close without a second prompt. Retain any unresolved Save. */
+    /** Commit explicit Close without a second prompt. Retain unresolved and saved-unlinked outcomes. */
     dismiss(
         expected: BorrowedFormLinkedChildCreateRef
     ): BorrowedFormLinkedChildCreateDismissOutcome;
@@ -534,13 +539,27 @@ export type BorrowedFormLinkedChildCreateOpening = Readonly<{
     isCurrent(): boolean;
 }>;
 
+type BorrowedCreateLabels = Partial<typeof defaultLabels> & {
+    savedWithoutLink?: string;
+};
+
 export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     owner: BorrowedFormLinkedChildCreateOwner<View>;
     opening: BorrowedFormLinkedChildCreateOpening;
     /** Render fields without a separate modal, form element, or submit footer. */
     renderFields(fields: View): ReactNode;
-    labels?: Partial<typeof defaultLabels>;
+    labels?: BorrowedCreateLabels;
 }>;
+
+function isSavedUnlinked(
+    state: BorrowedFormLinkedChildCreateSnapshot<unknown>
+): boolean {
+    return (
+        state.phase === 'saved' &&
+        state.outcome?.type === 'saved' &&
+        state.outcome.link === 'unlinked'
+    );
+}
 
 /** Presents an accepted native Create using the same dialog chrome and host-owned draft. */
 export function BorrowedFormLinkedChildCreateDialog<View>(
@@ -571,11 +590,16 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
     if (
         !state ||
         state.ref.opening !== opening.identity ||
-        state.fields == null ||
-        !opening.isCurrent() ||
-        (state.phase !== 'ready' &&
-            state.phase !== 'saving' &&
-            state.phase !== 'unknown')
+        !opening.isCurrent()
+    )
+        return null;
+    const unlinked = isSavedUnlinked(state);
+    if (
+        !unlinked &&
+        (state.fields == null ||
+            (state.phase !== 'ready' &&
+                state.phase !== 'saving' &&
+                state.phase !== 'unknown'))
     )
         return null;
 
@@ -592,7 +616,10 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
                 owner,
                 opening,
                 state,
-                content: props.renderFields(state.fields),
+                content:
+                    unlinked || state.fields == null
+                        ? null
+                        : props.renderFields(state.fields),
                 labels: props.labels,
             })
         )
@@ -610,7 +637,7 @@ function BorrowedCreatePresentation<View>({
     opening: BorrowedFormLinkedChildCreateOpening;
     state: BorrowedFormLinkedChildCreateSnapshot<View>;
     content: ReactNode;
-    labels?: Partial<typeof defaultLabels>;
+    labels?: BorrowedCreateLabels;
 }): ReactElement {
     const labels = { ...defaultLabels, ...suppliedLabels };
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -627,7 +654,7 @@ function BorrowedCreatePresentation<View>({
             saving: false,
             closing: false,
             closed: false,
-            saved: null as null | 'linked' | 'superseded',
+            saved: null as null | 'linked' | 'unlinked' | 'superseded',
             unresolved: false,
         }),
         [owner, opening.identity, opening.opener]
@@ -641,7 +668,9 @@ function BorrowedCreatePresentation<View>({
         committedOpening.current = opening;
     }, [opening]);
     const { identity, opener } = opening;
+    const unlinked = isSavedUnlinked(state);
     const confirm =
+        !unlinked &&
         question?.opening === state.ref.opening &&
         question.revision === state.ref.revision;
     const current = (
@@ -651,15 +680,19 @@ function BorrowedCreatePresentation<View>({
         if (!session.live || !dialogRef.current?.open || !opening.isCurrent())
             return false;
         const actual = owner.getSnapshot();
+        if (
+            actual?.ref.opening !== expected.opening ||
+            actual.ref.revision !== expected.revision ||
+            session.saving ||
+            session.closing ||
+            session.closed
+        )
+            return false;
+        if (action === 'dismiss' && isSavedUnlinked(actual)) return true;
         return (
-            actual?.ref.opening === expected.opening &&
-            actual.ref.revision === expected.revision &&
+            !session.saved &&
             (actual.phase === 'ready' ||
                 (action === 'dismiss' && actual.phase === 'unknown')) &&
-            !session.saving &&
-            !session.closing &&
-            !session.closed &&
-            !session.saved &&
             (action === 'dismiss' || !session.unresolved)
         );
     };
@@ -714,7 +747,7 @@ function BorrowedCreatePresentation<View>({
     };
     const dismiss = () => {
         if (!current(state.ref, 'dismiss')) return;
-        if (state.dirty) {
+        if (state.dirty && !unlinked) {
             pendingDecision.current = state.ref;
             setQuestion(state.ref);
         } else close(state.ref);
@@ -760,12 +793,15 @@ function BorrowedCreatePresentation<View>({
         closeButton,
         keepEditing,
         fields: content,
-        error: state.error,
+        error: unlinked
+            ? (suppliedLabels?.savedWithoutLink ??
+              'The record was saved but could not be linked to this Form.')
+            : state.error,
         confirm,
         closeDisabled:
             state.phase === 'saving' ||
             localPhase === 'saving' ||
-            localPhase === 'saved',
+            (localPhase === 'saved' && !unlinked),
         saveDisabled: state.phase !== 'ready' || localPhase != null,
         dismiss,
         keep,

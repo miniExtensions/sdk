@@ -39,6 +39,7 @@ import { checkSingleLineTextBrowser } from './single-line-text-browser-checks.mj
 import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -1646,7 +1647,7 @@ try {
                 },
             })
         );
-        execFileSync(
+        execPackageFileSync(
             'npm',
             [
                 'install',

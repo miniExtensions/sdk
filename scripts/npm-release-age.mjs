@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,7 @@ const minimumAgeMs = 2880 * 60 * 1000;
 export function enforceNpmReleaseAge({
     environment = process.env,
     now = Date.now(),
-    execute = execFileSync,
+    execute = execPackageFileSync,
 } = {}) {
     assert(Number.isFinite(now));
     let cutoff = now - minimumAgeMs;

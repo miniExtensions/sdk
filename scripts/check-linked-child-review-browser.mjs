@@ -1,7 +1,7 @@
 // Dedicated installed-package real-Chromium proof; no hosted settings or live Saves.
 // Usage: node scripts/check-linked-child-review-browser.mjs [fresh-output-directory]
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
@@ -26,7 +26,7 @@ const output = process.argv[2]
     : mkdtempSync(join(tmpdir(), 'sdk-child-review-browser-'));
 if (process.argv[2]) mkdirSync(output);
 const run = (cmd, args, cwd = root) =>
-    execFileSync(cmd, args, {
+    execPackageFileSync(cmd, args, {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],

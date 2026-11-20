@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     mkdtemp,
@@ -37,6 +38,7 @@ import './portal-chart-inputs.test.mjs';
 import './collaborator-inputs.test.mjs';
 import './source-package-checks.test.mjs';
 import './npm-release-age.test.mjs';
+import './package-manager-launch.test.mjs';
 import './age-qualified-consumer-install.test.mjs';
 import {
     assertPrivacyProofInventory,
@@ -344,18 +346,26 @@ test('documented source starter install refreshes a same-version archive lock', 
         new URL('../examples/browser/README.md', import.meta.url),
         'utf8'
     );
-    const section = readme
-        .split('## Run from a source checkout\n')[1]
-        ?.split('\n## ')[0];
-    const commands = section?.match(/```sh\n([\s\S]*?)```/)?.[1];
-    const install = commands
-        ?.split('\n')
-        .filter((line) => line.startsWith('npm install'));
-    assert.equal(
-        install?.length,
-        1,
-        'Expected one source-startup install command'
-    );
+    const installCommand = (source) => {
+        const section = source
+            .replace(/\r\n/g, '\n')
+            .split('## Run from a source checkout\n')[1]
+            ?.split('\n## ')[0];
+        const body = section?.match(/```sh\n([\s\S]*?)```/)?.[1];
+        const install = body
+            ?.split('\n')
+            .filter((line) => line.startsWith('npm install'));
+        assert.equal(
+            install?.length,
+            1,
+            'Expected one source-startup install command'
+        );
+        return install[0].split(/\s+/).slice(1);
+    };
+    const lf = readme.replace(/\r\n/g, '\n');
+    const args = installCommand(readme);
+    assert.deepEqual(installCommand(lf), args);
+    assert.deepEqual(installCommand(lf.replace(/\n/g, '\r\n')), args);
     const options = {
         cwd: consumer,
         encoding: 'utf8',
@@ -369,7 +379,7 @@ test('documented source starter install refreshes a same-version archive lock', 
             npm_config_ignore_scripts: 'true',
         },
     };
-    execFileSync('npm', install[0].split(/\s+/).slice(1), options);
+    execPackageFileSync('npm', args, options);
     const lock = JSON.parse(
         await readFile(join(consumer, 'package-lock.json'), 'utf8')
     );
@@ -386,7 +396,7 @@ test('documented source starter install refreshes a same-version archive lock', 
     );
     // The refreshed lock must also support a clean reinstall of that archive.
     await rm(join(consumer, 'node_modules'), { recursive: true, force: true });
-    execFileSync(
+    execPackageFileSync(
         'npm',
         ['ci', '--ignore-scripts', '--no-audit', '--no-fund'],
         options

@@ -1,7 +1,7 @@
 // Local packed-package proof with synthetic data; no backend or publication.
 // node scripts/check-formula-browser.mjs /path/to/sdk.tgz [evidence-directory]
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import {
     mkdtempSync,
@@ -34,7 +34,7 @@ try {
         join(temporary, 'package.json'),
         '{"private":true,"type":"module"}'
     );
-    execFileSync(
+    execPackageFileSync(
         'npm',
         [
             'install',

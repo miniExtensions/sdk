@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { execPackageFileSync } from './package-manager-launch.mjs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import {
@@ -121,7 +122,7 @@ export async function checkAutomaticPrefillReactMatrix({
             writeFileSync(join(root, 'package.json'), JSON.stringify(manifest));
             writeFileSync(join(root, 'pnpm-workspace.yaml'), policyText);
             const pnpm = (args) =>
-                execFileSync('pnpm', args, {
+                execPackageFileSync('pnpm', args, {
                     cwd: root,
                     encoding: 'utf8',
                     timeout: 120000,

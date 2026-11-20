@@ -484,7 +484,10 @@ test('onboarding documents stored Share ID discovery without invented setup UI',
 });
 
 test('runtime configuration prerequisites accept LF and CRLF without borrowing content from other sections', async () => {
-    const raw = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+    const raw = await readFile(
+        new URL('../README.md', import.meta.url),
+        'utf8'
+    );
     const readme = raw.replace(/\r\n/g, '\n');
     const heading = '## Obtain the actual runtime configuration';
     const withoutHeading = readme.replace(heading, '## Renamed');

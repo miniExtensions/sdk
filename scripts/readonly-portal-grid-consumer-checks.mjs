@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { build, transformSync } from 'esbuild';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { checkReadonlyPortalGridDateTimeConsumer } from './readonly-portal-grid-datetime-checks.mjs';
 
 export const readonlyPortalGridTypedConsumer = String.raw`
 import {createElement} from 'react';
@@ -285,7 +286,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 '@miniextensions/sdk/react/complete-checkbox.css'
             );
             assert.equal(cellCssPath, textCellCssPath);
-            const run = (command, args) =>
+            const run = (command, args, env = {}) =>
                 execFileSync(command, args, {
                     cwd: root,
                     encoding: 'utf8',
@@ -293,6 +294,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     env: {
                         ...process.env,
                         SDK_READONLY_PORTAL_GRID_CSS: cssPath,
+                        ...env,
                     },
                 });
             for (const [extension, module, resolution] of [
@@ -394,9 +396,17 @@ export async function checkReadonlyPortalGridReactMatrix({
                             new RegExp(`# ${counter} ${count}\\b`)
                         );
                 }
+                const dateTime = checkReadonlyPortalGridDateTimeConsumer({
+                    root,
+                    format,
+                    extension,
+                    react,
+                    run,
+                });
                 profiles.push({
                     react,
                     format,
+                    dateTime,
                     tests: componentCases,
                     textCellTests: textCellCases,
                     emailCellTests: emailCellCases,
@@ -576,6 +586,10 @@ export async function checkReadonlyPortalGridReactMatrix({
     }
     return {
         profiles,
+        dateTimeCases: profiles.reduce(
+            (total, profile) => total + profile.dateTime.length,
+            0
+        ),
         tests: profiles.reduce((total, profile) => total + profile.tests, 0),
         textCellTests: profiles.reduce(
             (total, profile) => total + profile.textCellTests,

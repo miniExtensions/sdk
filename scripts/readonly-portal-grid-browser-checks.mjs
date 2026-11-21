@@ -10,6 +10,10 @@ import {
     checkReadonlyPortalGridNumberBrowser,
     readonlyPortalGridNumberEntry,
 } from './readonly-portal-grid-number-browser-checks.mjs';
+import {
+    checkReadonlyPortalGridDateTimeBrowser,
+    readonlyPortalGridDateTimeEntry,
+} from './readonly-portal-grid-datetime-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
@@ -17,6 +21,7 @@ import{createRoot}from'react-dom/client';
 import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell,PortalGridButtonCell}from'@miniextensions/sdk/react';
 import{DateField}from'@miniextensions/sdk/react/date';
 import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
+import{mountDateTimeGrid}from'./readonly-portal-grid-datetime.mjs';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -543,6 +548,7 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
 };
 const fixture = new URLSearchParams(location.search).get('fixture');
 if (fixture === 'number-only') mountNumberGrid(root);
+else if (fixture === 'date-time') mountDateTimeGrid(root);
 else root.render(h(StrictMode, null, h(fixture === 'date-only' ? DateOnlyProbe : App)));
 `;
 
@@ -561,6 +567,10 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     writeFileSync(
         join(temporary, 'readonly-portal-grid-number.mjs'),
         readonlyPortalGridNumberEntry
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-datetime.mjs'),
+        readonlyPortalGridDateTimeEntry
     );
     const bundle = await args.build({
         absWorkingDir: temporary,
@@ -653,6 +663,16 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     report.readonlyPortalGrid = {
         sourceSha256: hash(readonlyPortalGridBrowserEntry),
         checkerSha256: hash(regular(fileURLToPath(import.meta.url))),
+        dateTimeCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-datetime-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
         numberCheckerSha256: hash(
             regular(
                 fileURLToPath(
@@ -1483,6 +1503,7 @@ export async function checkReadonlyPortalGridBrowser({
     assert.deepEqual(end.errors, []);
     await checkGuidanceLayoutBrowser({ page, evidence, output });
     await checkReadonlyPortalGridNumberBrowser({ page, evidence });
+    await checkReadonlyPortalGridDateTimeBrowser({ page, evidence });
     Object.assign(evidence, {
         status: 'passed',
         results,

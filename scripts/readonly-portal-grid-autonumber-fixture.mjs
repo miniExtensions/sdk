@@ -131,22 +131,21 @@ const renderers = {
         equal(field.field.config, fields[1].config, 'AutoNumber schema');
         equal(field.capability, { type: 'readonly' }, 'Read-only capability');
         delivered.add(field.value);
-        // Native Grid blanks nullish cells before the controlled text leaf.
+        // Native Grid blanks nullish or empty formatted values before the leaf.
         if (field.value == null) return null;
-        return h(AutoNumberField, {
-            mode: 'controlled',
-            language: 'fr',
-            value: getReadableStringFromAirtableValue({
-                value: field.value,
-                airtableFieldConfig: field.field.config,
-                fieldName: field.field.name,
-                source: {
-                    type: 'airtableMock',
-                    linkedTableStates: {},
-                    dateParsing: 'local',
-                },
-            }),
+        const value = getReadableStringFromAirtableValue({
+            value: field.value,
+            airtableFieldConfig: field.field.config,
+            fieldName: field.field.name,
+            source: {
+                type: 'airtableMock',
+                linkedTableStates: {},
+                dateParsing: 'local',
+            },
         });
+        return value === ''
+            ? null
+            : h(AutoNumberField, { mode: 'controlled', language: 'fr', value });
     },
 };
 const originalNodes = new Map();
@@ -200,6 +199,12 @@ function capture(expected, republished) {
             text ? leaf?.checkVisibility() : !leaf,
             `AutoNumber leaf for ${id}`
         );
+        if (text === '')
+            equal(
+                entries[1].firstElementChild.childElementCount,
+                0,
+                `Blank cell decoration for ${id}`
+            );
         for (const node of [row, ...entries]) {
             const key = `${id}/${node.dataset.fieldId ?? ''}`;
             if (republished) {

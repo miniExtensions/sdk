@@ -162,6 +162,7 @@ function headerIcon(icon: ReadonlyPortalGridHeaderIcon | null | undefined) {
 
 type HeaderProps = {
     column: ReadonlyPortalGridColumn;
+    primary: boolean;
     width: unknown;
     isCurrent: () => boolean;
     onCommit: ReadonlyPortalGridProps['onColumnWidthCommit'];
@@ -171,6 +172,7 @@ type HeaderProps = {
 
 function GridHeader({
     column,
+    primary,
     width,
     isCurrent,
     onCommit,
@@ -351,6 +353,7 @@ function GridHeader({
             className: 'mx-sdk-readonly-grid__header',
             style: { width: (localWidth ?? 200) + cssWidthAdjustment },
             'data-field-id': column.fieldId,
+            'data-primary': primary,
         },
         h(
             'div',
@@ -627,6 +630,8 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                             h(GridHeader, {
                                 key: `${identity}:${column.fieldId}`,
                                 column,
+                                primary:
+                                    column.fieldId === props.primaryFieldId,
                                 width: props.columnWidths[column.fieldId],
                                 isCurrent,
                                 onCommit: props.onColumnWidthCommit,

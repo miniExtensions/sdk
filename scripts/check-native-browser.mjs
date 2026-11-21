@@ -3279,6 +3279,7 @@ try {
             await checkPortalGalleryBrowser({
                 page,
                 evidence: report.portalGallery,
+                output,
             });
         });
         await run('printable-form-layout', async (page, origin) => {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkGalleryUnlinkPresentation } from './portal-gallery-unlink-browser-checks.mjs';
 
 export const portalGalleryBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useLayoutEffect,useState} from 'react';
@@ -15,11 +16,16 @@ const image=id=>({id,url:new URL('/gallery-'+id+'.svg',location.href).href,filen
 const baseImages=Array.from({length:7},(_,i)=>image(String(i+1)));
 const triggers=new Map();const registrations=Array.from({length:12},(_,id)=>element=>{const lease={element};triggers.set(id,lease);return()=>{if(triggers.get(id)===lease)triggers.delete(id);};});
 function App(){
- const [state,change]=useState({columns:undefined,width:'full',height:112,fit:'cover',phase:'initial',titles:true,fields:1,status:'rows',empty:false,reload:false,pending:null,detail:'broken',filename:'Broken document.pdf'});set=patch=>change(old=>({...old,...patch}));
+ const [state,change]=useState({columns:undefined,width:'full',height:112,fit:'cover',phase:'initial',titles:true,fields:1,status:'rows',empty:false,reload:false,pending:null,detail:'broken',filename:'Broken document.pdf',unlinkParity:false});set=patch=>change(old=>({...old,...patch}));
  useLayoutEffect(()=>{committed++;});
  const images=state.phase==='shrink'?[baseImages[1]]:state.phase==='reorder'?[baseImages[1],baseImages[0]]:state.phase==='all-broken'?baseImages.map((item,index)=>index<6?{...item,url:new URL('/gallery-broken.svg#'+index,location.href).href}:item):baseImages;
  const rows=state.empty?[]:Array.from({length:12},(_,i)=>({key:'row-'+i,recordId:'row-'+i,accessibleLabel:'Record '+i,testId:'synthetic-gallery-row',projection:{status:'present',layout:'gallery',primary:i===1?'Unnamed':'Project '+i,primaryIsEmpty:i===1,fields:[{key:'detail',title:state.titles?'Detail':null,leaf:{kind:'literal',text:i===2?'Long detail '.repeat(100):'Short detail'}},{key:'files',title:state.titles?'Files':null,leaf:{kind:'attachmentImages',images:[],entries:[{id:'missing',thumbnailUrl:null,filename:'Missing document.pdf'},{id:'broken',thumbnailUrl:state.detail==='missing'?null:new URL(state.detail==='valid'?'/gallery-3.svg':'/gallery-broken.svg',location.href).href,filename:state.filename}],empty:'none',emptyLabel:'No files'}}],language:'en',images:i===0?images:[],shouldRenderThumbnail:true,imageHeight:state.height,imageFit:state.fit,thumbnailLocation:'left',fieldsPerCardRow:state.fields,labels:{previousImage:'Previous image',nextImage:'Next image',viewImage:'View image {index}',noImage:'No image'}},open:{label:'Open '+i,registerTrigger:registrations[i],activate:()=>{opens++;document.getElementById('before').focus();}},requestUnlink:i===0?{label:'Unlink first',description:'Unlink membership',activate:()=>{unlinks++;}}:null,needsReviewLabel:null}));
- return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Gallery'),h(PortalGallery,{label:'Synthetic Gallery',content:state.status==='rows'?{status:'rows',rows,emptyLabel:state.empty?'No records':null}:{status:state.status,label:state.status==='loading'?'Loading records':'Unavailable records'},columns:state.columns,width:state.width,unlinkingRecordId:state.pending,reloading:state.reload?{label:'Refreshing'}:null,paging:{canRequestMore:true,showSpinner:false,requestLabel:'Load more',loadingLabel:'Loading more',requestMore:()=>{pages++;}}}));
+ const displayedRows = state.unlinkParity ? rows.slice(0, 2).map(row => ({
+    ...row,
+    projection: { ...row.projection, language: 'es', images: [], shouldRenderThumbnail: false, fields: [] },
+    requestUnlink: row.requestUnlink && { ...row.requestUnlink, label: 'Eliminar registro vinculado', description: 'Desvincular registro' },
+ })) : rows;
+ return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Gallery'),h(PortalGallery,{label:'Synthetic Gallery',content:state.status==='rows'?{status:'rows',rows:displayedRows,emptyLabel:state.empty?'No records':null}:{status:state.status,label:state.status==='loading'?'Loading records':'Unavailable records'},columns:state.columns,width:state.width,unlinkingRecordId:state.pending,reloading:state.reload?{label:'Refreshing'}:null,paging:{canRequestMore:true,showSpinner:false,requestLabel:'Load more',loadingLabel:'Loading more',requestMore:()=>{pages++;}}}));
 }
 window.__nativeProbe={change:patch=>set(patch),returnFocus:()=>triggers.get(0)?.element.focus(),snapshot:()=>({react:React.version,registered:triggers.size,committed,opens,unlinks,pages,submits,errors})};
 createRoot(document.querySelector('#root')).render(h(StrictMode,null,h(App)));
@@ -120,7 +126,7 @@ export async function preparePortalGalleryBrowserFixtures({
     };
 }
 
-export async function checkPortalGalleryBrowser({ page, evidence }) {
+export async function checkPortalGalleryBrowser({ page, evidence, output }) {
     const patch = async (value) => {
         const previous = await page.evaluate(
             () => window.__nativeProbe.snapshot().committed
@@ -419,6 +425,13 @@ export async function checkPortalGalleryBrowser({ page, evidence }) {
     assert.equal(end.opens, 1);
     assert.equal(end.unlinks, 1);
     assert.equal(end.pages, 1);
+    const unlinkPresentation = await checkGalleryUnlinkPresentation({
+        page,
+        patch,
+        snapshot,
+        output,
+        react: end.react,
+    });
     Object.assign(evidence, {
         groups,
         keyboardOrder,
@@ -430,6 +443,7 @@ export async function checkPortalGalleryBrowser({ page, evidence }) {
             submits: end.submits,
         },
         errors: end.errors,
+        unlinkPresentation,
         limits: [
             'Portable installed SDK only; native ownership, child modal and transport acceptance are separately required.',
         ],

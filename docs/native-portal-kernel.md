@@ -75,6 +75,17 @@ pending read. Current cleanup applies the permitted criteria subset before
 notice scheduling and a fresh forced First. Stale cleanup, success and failure
 produce no compatibility publication, notice or follow-up request.
 
+After a confirmed Delete, the authorized host can call
+`kernel.removeAcknowledgedRecord(current, { scope, frame, recordId })` with
+the exact issued frame from its current same-scope snapshot. The kernel
+subtracts that ID from the accepted frame and raw paging, preserves the
+survivors and cursor, renews the frame identity and retires pending read and
+cleanup capabilities. It returns the original snapshot for an absent ID or
+an inapplicable frame. The host compares the exact current snapshot and
+publishes the returned frame and paging together. The previous accepted
+response remains the provenance of the surviving cells. This transition
+allocates no read and consumes no response or cached rows.
+
 ## Qualification and remaining native work
 
 The packed consumer check exercises the public ESM and CommonJS exports,

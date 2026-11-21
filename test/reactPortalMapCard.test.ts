@@ -123,6 +123,78 @@ test('real admitted opener is a non-submit keyboard button and no unlink surface
     assert.equal(f.container.textContent?.includes('Forbidden unlink'), false);
 });
 
+test('Map retires held pointer and keyboard Open when the same button receives a successor', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const opens: string[] = [];
+    const render = (recordId: string) =>
+        f.render(
+            h(PortalMapCard, {
+                card: card({
+                    recordId,
+                    open: {
+                        label: 'Open ' + recordId,
+                        activate: () => opens.push(recordId),
+                    },
+                }),
+            })
+        );
+    await render('first');
+    const button = f.container.querySelector('button');
+    assert.ok(button);
+    await act(async () => button.focus());
+
+    const pointerDown = () =>
+        button.dispatchEvent(
+            new f.window.PointerEvent('pointerdown', {
+                bubbles: true,
+                button: 0,
+                isPrimary: true,
+            })
+        );
+    const keyDown = (repeat = false) =>
+        button.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                bubbles: true,
+                cancelable: true,
+                key: ' ',
+                repeat,
+            })
+        );
+    const click = (detail: number) =>
+        button.dispatchEvent(
+            new f.window.MouseEvent('click', { bubbles: true, detail })
+        );
+
+    await act(async () => {
+        pointerDown();
+    });
+    await render('second');
+    assert.equal(f.container.querySelector('button'), button);
+    await act(async () => {
+        click(1);
+        keyDown();
+    });
+    assert.deepEqual(opens, []);
+
+    await render('third');
+    assert.equal(f.container.querySelector('button'), button);
+    assert.equal(f.window.document.activeElement, button);
+    await act(async () => {
+        assert.equal(keyDown(true), false, 'Repeating Space is prevented');
+        click(0);
+    });
+    assert.deepEqual(opens, []);
+
+    await act(async () => {
+        keyDown();
+        click(0);
+        pointerDown();
+        click(1);
+    });
+    assert.deepEqual(opens, ['third', 'third']);
+    f.unchangedEffects();
+});
+
 test('Map presentation A/B/A and owner retirement fence retained actual click callbacks', async (t) => {
     const f = await htmlPresentationFixture(t);
     const a = {},

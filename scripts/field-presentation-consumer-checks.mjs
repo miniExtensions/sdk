@@ -80,7 +80,7 @@ const makeModels=()=>({
     'button':{kind:'checkbox',value:false,title:'Action field',style:'button'},
     'calendly':{kind:'checkbox',value:false,title:'Scheduling field',calendly:true},
     'number-a':{kind:'number',value:1234.5,title:'Invoice amount',required:true,formId:'number-form-a'},
-    'number-b':{kind:'number',value:28.5,title:'',required:false,formId:'number-form-b',placement:'tooltip',error:null},
+    'number-b':{kind:'number',value:28.5,title:'Review amount',required:false,formId:'number-form-b',placement:'tooltip',error:null},
 });
 const formIds=['external-form','number-form-a','number-form-b'];
 const formOwner=model=>model.formId??'external-form';
@@ -235,7 +235,7 @@ try {
     const label=key=>row(key).querySelector('label');
     assert.equal(row('number-a').dataset.fieldId,row('number-b').dataset.fieldId);
     assert.equal(label('number-a').textContent,'Invoice amount*');
-    assert.equal(label('number-b').textContent,'Amount');
+    assert.equal(label('number-b').textContent,'Review amount');
     assert.equal(amount.getAttribute('aria-labelledby'),label('number-a').id);
     assert.equal(neighbor.getAttribute('aria-labelledby'),label('number-b').id);
     assert.equal(amount.getAttribute('aria-invalid'),'true');assert.equal(neighbor.getAttribute('aria-invalid'),'false');
@@ -244,9 +244,28 @@ try {
     assert.equal(window.document.getElementById(numberError).textContent,'Error number-a');
     assert.equal(window.document.getElementById(numberHelp).textContent,'Help number-a');
     assert.notEqual(numberHelp,neighborHelp);
+    models['number-b'].showTitle=false;models['number-b'].error='Check review amount';
+    await render();assertAssociations();
+    assert.equal(control('number-b'),neighbor);
+    assert.equal(label('number-b').control,neighbor);
+    assert(label('number-b').classList.contains('mx-sdk-field-sr-only'));
+    assert.equal(label('number-b').textContent,'Review amount');
+    assert.equal(neighbor.getAttribute('aria-labelledby'),label('number-b').id);
+    assert.equal(neighbor.getAttribute('aria-invalid'),'true');
+    const [neighborError,hiddenNeighborHelp]=neighbor.getAttribute('aria-describedby').split(/\s+/);
+    assert.equal(window.document.getElementById(neighborError).textContent,'Check review amount');
+    assert.equal(hiddenNeighborHelp,neighborHelp);
     await React.act(async()=>amount.focus());
     await React.act(async()=>row('number-b').querySelector('.mx-sdk-field-tooltip-trigger').focus());
     assert(window.document.querySelector('[role="tooltip"]'));
+    models['number-b'].error=null;
+    await render();assertAssociations();
+    assert.equal(neighbor.getAttribute('aria-describedby'),neighborHelp);
+    assert.equal(window.document.getElementById(neighborError),null);
+    models['number-b'].title='';models['number-b'].showTitle=true;
+    await render();assertAssociations();
+    assert.equal(label('number-b').textContent,'Amount');
+    assert.equal(neighbor.getAttribute('aria-describedby'),neighborHelp);
     models['number-a'].showTitle=false;models['number-a'].placement='bottom';models['number-a'].error=null;
     models['number-b'].description='<p>&nbsp;<br></p>';
     await render();assertAssociations();
@@ -486,6 +505,7 @@ function snapshot() {
    return[key,{value:model.value,id:control?.id??null,form:control?.form?.id??null,expectedForm:formOwner(model),
     checked:control&&'checked'in control?control.checked:null,disabled:control?.disabled??null,
     labelId:title?.id??null,labelTag:title?.tagName??null,
+    labelPointerTrusted:title?.dataset.trustedClick==='true',
     labelIsLocal:title?.tagName==='LABEL'?!!title.control&&section.contains(title.control):null,
     descriptionIds:describedBy?.split(/\s+/)??[],
     descriptionsLocal:!describedBy||describedBy.split(/\s+/).every(id=>{const target=document.getElementById(id);return target&&section.contains(target);}),
@@ -770,7 +790,9 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     const neighborRow = row('number-b');
     const numberName = /^Invoice amount\s*\*$/;
     const amount = amountRow.getByRole('textbox', { name: numberName });
-    const neighbor = neighborRow.getByRole('textbox', { name: 'Amount' });
+    const visibleNeighbor = neighborRow.getByRole('textbox', {
+        name: 'Review amount',
+    });
     assert.equal(
         await amountRow.getAttribute('data-field-id'),
         await neighborRow.getAttribute('data-field-id')
@@ -785,7 +807,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     assert.equal(value.rows['number-b'].descriptionIds.length, 1);
     assert.notEqual(amountHelp, neighborHelp);
     assert.equal(await amount.getAttribute('aria-invalid'), 'true');
-    assert.equal(await neighbor.getAttribute('aria-invalid'), 'false');
+    assert.equal(await visibleNeighbor.getAttribute('aria-invalid'), 'false');
     const feedback = (fieldRow, id) => fieldRow.locator('[id="' + id + '"]');
     assert.equal(
         await feedback(amountRow, amountError).textContent(),
@@ -804,12 +826,85 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     assert(
         await amount.evaluate((element) => element === document.activeElement)
     );
-    await neighborRow.locator('label').click();
+    const neighborLabel = neighborRow.locator('label');
     assert(
-        await neighbor.evaluate((element) => element === document.activeElement)
+        await neighborLabel.evaluate((label) => {
+            const { width, height } = label.getBoundingClientRect();
+            return (
+                width > 1 &&
+                height > 1 &&
+                label.control?.form?.id === 'number-form-b'
+            );
+        }),
+        'The second Number has a visible, labelable target before the pointer action'
     );
+    await neighborLabel.evaluate((label) =>
+        label.addEventListener(
+            'click',
+            (event) => {
+                label.dataset.trustedClick = String(event.isTrusted);
+            },
+            { once: true }
+        )
+    );
+    await neighborLabel.click();
+    assert(
+        await visibleNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    value = await verify('Number visible label click reaches the second Form');
+    assert(value.rows['number-b'].labelPointerTrusted);
+    assert.equal(value.rows['number-b'].id, neighborId);
+    assert.deepEqual(value.writes, []);
+
+    await update('number-b', {
+        showTitle: false,
+        error: 'Check review amount',
+    });
+    const hiddenNeighbor = neighborRow.getByRole('textbox', {
+        name: 'Review amount',
+    });
+    assert.equal(await hiddenNeighbor.getAttribute('id'), neighborId);
+    assert(
+        await hiddenNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    assert(
+        await neighborLabel.evaluate(
+            (label, id) =>
+                label.classList.contains('mx-sdk-field-sr-only') &&
+                label.control?.id === id,
+            neighborId
+        )
+    );
+    assert.equal(
+        await hiddenNeighbor.getAttribute('aria-labelledby'),
+        await neighborLabel.getAttribute('id')
+    );
+    value = await verify(
+        'Number hidden title keeps its accessible name and local feedback'
+    );
+    const [neighborError, hiddenNeighborHelp] =
+        value.rows['number-b'].descriptionIds;
+    assert.deepEqual(value.rows['number-b'].descriptionIds, [
+        neighborError,
+        neighborHelp,
+    ]);
+    assert.equal(hiddenNeighborHelp, neighborHelp);
+    assert.equal(await hiddenNeighbor.getAttribute('aria-invalid'), 'true');
+    assert.equal(
+        await feedback(neighborRow, neighborError).textContent(),
+        'Check review amount'
+    );
+    assert.deepEqual(value.rows['number-a'].descriptionIds, [
+        amountError,
+        amountHelp,
+    ]);
+    assert.deepEqual(value.writes, []);
     const numberTooltip = neighborRow.getByRole('button', {
-        name: 'Field description for Amount',
+        name: 'Field description for Review amount',
     });
     const numberPopup = page
         .getByRole('tooltip')
@@ -827,6 +922,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     await numberPopup.waitFor();
     await page.keyboard.press('Escape');
     await numberPopup.waitFor({ state: 'detached' });
+    assert.equal(await numberTooltip.getAttribute('aria-expanded'), 'false');
     assert(
         await numberTooltip.evaluate(
             (element) => element === document.activeElement
@@ -834,8 +930,36 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     );
     await page.keyboard.press('Tab');
     assert(
-        await neighbor.evaluate((element) => element === document.activeElement)
+        await hiddenNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
     );
+    await update('number-b', { error: null });
+    value = await verify(
+        'Number hidden title tooltip keyboard navigation and local error clearance'
+    );
+    assert.deepEqual(value.rows['number-b'].descriptionIds, [neighborHelp]);
+    assert.equal(await hiddenNeighbor.getAttribute('aria-invalid'), 'false');
+    assert.equal(await feedback(neighborRow, neighborError).count(), 0);
+    assert.deepEqual(value.writes, []);
+
+    await update('number-b', { title: '', showTitle: true });
+    const fallbackNeighbor = neighborRow.getByRole('textbox', {
+        name: 'Amount',
+    });
+    assert.equal(await fallbackNeighbor.getAttribute('id'), neighborId);
+    assert.equal(
+        await fallbackNeighbor.getAttribute('aria-describedby'),
+        neighborHelp
+    );
+    assert.equal(
+        await neighborRow
+            .getByRole('button', { name: 'Field description for Amount' })
+            .count(),
+        1
+    );
+    value = await verify('Number empty title falls back to the field name');
+    assert.deepEqual(value.writes, []);
 
     await update('number-a', {
         showTitle: false,
@@ -853,7 +977,11 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     assert.deepEqual(value.rows['number-b'].descriptionIds, []);
     assert.equal(await amount.getAttribute('aria-invalid'), 'false');
     assert.equal(await feedback(amountRow, amountError).count(), 0);
-    assert.equal(await numberTooltip.count(), 0);
+    assert.equal(
+        await neighborRow.locator('.mx-sdk-field-tooltip-trigger').count(),
+        0
+    );
+    assert.equal(await feedback(neighborRow, neighborHelp).count(), 0);
     assert(
         await amountRow
             .locator('label')

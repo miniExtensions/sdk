@@ -372,8 +372,9 @@ republish.addEventListener('click', () =>
             )
         );
         stamp = {};
-        for (const listener of listeners) listener();
-        render();
+        flushSync(() => {
+            for (const listener of listeners) listener();
+        });
         receipt.republished = capture(
             [cases[0], adjusted, ...cases.slice(2)],
             true

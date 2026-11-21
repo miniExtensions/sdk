@@ -203,6 +203,24 @@ function writeReport() {
         JSON.stringify(report, null, 2) + '\n'
     );
 }
+async function verifyIdleGrid(page, after) {
+    const controls = page.locator(
+        '#grid :is(input, button, textarea, select, a[href], [role="button"], [role="link"], [contenteditable="true"], [aria-selected="true"]), dialog[open], [role="dialog"], [role="menu"], [aria-modal="true"]'
+    );
+    assert.equal(
+        await controls.count(),
+        0,
+        `Interactive controls after ${after}`
+    );
+    const focus = await page.evaluate(() => {
+        if (document.activeElement === document.body) return 'page';
+        if (document.activeElement?.matches('td[data-field-id="fldProgress"]'))
+            return 'percent cell';
+        return 'unexpected';
+    });
+    assert.notEqual(focus, 'unexpected', `Focus moved after ${after}`);
+    return { after, controls: 0, focus };
+}
 async function verifyBrowser(origin) {
     const browser = await chromium.launch({
         executablePath: realpathSync(browserArg),
@@ -266,9 +284,19 @@ async function verifyBrowser(origin) {
                     exact: true,
                 });
                 assert.equal(await knownCells.count(), 2);
+                const interactionCheckpoints = [];
                 await knownCells.first().click();
+                interactionCheckpoints.push(
+                    await verifyIdleGrid(page, 'click')
+                );
                 await page.keyboard.press('Enter');
+                interactionCheckpoints.push(
+                    await verifyIdleGrid(page, 'Enter')
+                );
                 await page.keyboard.press('Escape');
+                interactionCheckpoints.push(
+                    await verifyIdleGrid(page, 'Escape')
+                );
                 await page
                     .getByRole('button', {
                         name: 'Republish Grid',
@@ -292,6 +320,7 @@ async function verifyBrowser(origin) {
                 );
                 assert.deepEqual(unexpected, []);
                 assert.deepEqual(errors, []);
+                profile.browser.interactionCheckpoints = interactionCheckpoints;
                 profile.status = 'passed';
             } finally {
                 await context.close();

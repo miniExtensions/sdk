@@ -26,7 +26,7 @@ async function fixture(t) {
     symlinkSync(
         join(process.cwd(), 'node_modules'),
         join(root, 'node_modules'),
-        'dir'
+        process.platform === 'win32' ? 'junction' : 'dir'
     );
     for (const format of ['esm', 'cjs']) {
         const directory = join(root, 'dist', format, 'react/document-preview');

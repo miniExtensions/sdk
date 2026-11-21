@@ -1,18 +1,21 @@
-// Standalone loopback consumer. Open the reported profile URLs in Chromium.
+// Open the reported URLs in managed Chrome, or pass --chromium /path/to/chrome.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+    accessSync,
+    constants,
     mkdirSync,
     mkdtempSync,
     readFileSync,
     realpathSync,
     rmSync,
+    statSync,
     writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { build, stop, transformSync } from 'esbuild';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
 import {
@@ -20,19 +23,43 @@ import {
     createArchiveMemberReader,
 } from './package-checks.mjs';
 
-const [archiveArg, expectedSha256, outputArg, ...requested] =
+const [archiveArg, expectedSha256, outputArg, ...options] =
     process.argv.slice(2);
 assert(
     archiveArg && outputArg && /^[0-9a-f]{64}$/.test(expectedSha256 ?? ''),
-    'Usage: node scripts/check-readonly-portal-grid-barcode.mjs archive.tgz sha256 output [profile ...]'
+    'Usage: node scripts/check-readonly-portal-grid-barcode.mjs archive.tgz sha256 output [profile ... | --chromium /path/to/chrome]'
 );
 const supported = ['18.3.1-esm', '18.3.1-cjs', '19.2.0-esm', '19.2.0-cjs'];
+const runnerChrome = options[0] === '--chromium';
+const requested = runnerChrome ? [] : options;
 const selected = requested.length ? requested : supported;
 assert.equal(new Set(selected).size, selected.length);
 assert(
     selected.every((id) => supported.includes(id)),
     'Unknown profile'
 );
+let executablePath;
+let scratchRoot = realpathSync(tmpdir());
+if (runnerChrome) {
+    assert(
+        options.length === 2 && isAbsolute(options[1]),
+        '--chromium requires an absolute executable and runs all four profiles'
+    );
+    executablePath = realpathSync(options[1]);
+    assert(
+        statSync(executablePath).isFile(),
+        'Chromium executable must be a file'
+    );
+    accessSync(executablePath, constants.X_OK);
+    scratchRoot = process.env.SDK_PORTAL_BARCODE_SCRATCH_ROOT;
+    assert(
+        scratchRoot && isAbsolute(scratchRoot),
+        'Absolute SDK_PORTAL_BARCODE_SCRATCH_ROOT required for runner Chrome'
+    );
+    assert.equal(realpathSync(dirname(scratchRoot)), dirname(scratchRoot));
+    mkdirSync(scratchRoot, { recursive: true });
+    assert.equal(realpathSync(scratchRoot), scratchRoot);
+}
 const archive = realpathSync(archiveArg);
 const sha = (data) => createHash('sha256').update(data).digest('hex');
 assert.equal(sha(readFileSync(archive)), expectedSha256);
@@ -41,10 +68,6 @@ const member = createArchiveMemberReader({
     expectedSha256,
 });
 const output = resolve(outputArg);
-mkdirSync(output);
-const temporary = mkdtempSync(
-    join(realpathSync(tmpdir()), 'sdk-barcode-grid-')
-);
 const fixture = readFileSync(
     new URL('./readonly-portal-grid-barcode-fixture.mjs', import.meta.url),
     'utf8'
@@ -59,6 +82,7 @@ const [commit, tree] = execFileSync(
 const report = {
     source: { commit, tree, fixtureSha256: sha(fixture) },
     archiveSha256: expectedSha256,
+    mode: runnerChrome ? 'runner-chrome' : 'managed-browser-fixture',
     profiles: [],
     cleanup: null,
     requests: [],
@@ -99,12 +123,14 @@ const server = createServer((req, res) => {
     res.end(asset.bytes);
 });
 const consumers = new Map();
+const shutdown = new AbortController();
+const requestStop = () =>
+    shutdown.abort(new Error('Barcode witness interrupted'));
 const end = new Promise((done) => {
-    process.once('SIGTERM', done);
-    process.once('SIGINT', done);
+    shutdown.signal.addEventListener('abort', done, { once: true });
 });
 
-async function addProfile(id, origin) {
+async function addProfile(id, origin, temporary) {
     const [react, format] = id.split('-');
     let consumer = consumers.get(react);
     if (!consumer) {
@@ -212,7 +238,182 @@ async function addProfile(id, origin) {
     );
 }
 
+async function verifyChromeProfile(browser, profile, origin) {
+    const prefix = `/${profile.id}/`;
+    const url = origin + prefix;
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    const evidence = {
+        status: 'started',
+        checkpoints: [],
+        requests: [],
+        denied: [],
+        pageErrors: [],
+        popups: 0,
+    };
+    profile.browser = evidence;
+    const routes = new Map([
+        [prefix, 'document'],
+        [prefix + 'probe.js', 'script'],
+        ...cssFiles.map((file) => [prefix + file, 'stylesheet']),
+    ]);
+    try {
+        await context.route('**/*', (route) => {
+            const request = route.request();
+            const target = new URL(request.url());
+            const path = target.pathname + target.search;
+            const type = request.resourceType();
+            if (
+                request.url() === origin + path &&
+                request.method() === 'GET' &&
+                routes.get(path) === type
+            ) {
+                evidence.requests.push(path);
+                return route.continue();
+            }
+            evidence.denied.push({ method: request.method(), path, type });
+            return route.abort();
+        });
+        const page = await context.newPage();
+        page.on('pageerror', (error) =>
+            evidence.pageErrors.push(error.message)
+        );
+        page.on('popup', () => evidence.popups++);
+        const readReceipt = async () =>
+            JSON.parse(await page.locator('#receipt').textContent());
+        const grid = page.getByRole('table', { name: 'Records', exact: true });
+        const destination = 'https://example.invalid/scan/00042';
+        const link = grid.getByRole('link', { name: destination, exact: true });
+        const verifyIdle = async (after) => {
+            const controls = await page
+                .locator(
+                    '#grid :is(input,button,select,textarea,[contenteditable="true"],[role="button"],[aria-selected="true"]), dialog, [role="dialog"], video'
+                )
+                .count();
+            const focus = await page.evaluate(
+                () => document.activeElement?.tagName
+            );
+            assert.equal(controls, 0, `Unexpected control after ${after}`);
+            assert.equal(focus, 'BODY', `Unexpected focus after ${after}`);
+            assert.equal(
+                page.url(),
+                url,
+                `Unexpected navigation after ${after}`
+            );
+            assert.equal(await grid.getByRole('link').count(), 1);
+            evidence.checkpoints.push({ after, controls, focus });
+        };
+        const response = await page.goto(url);
+        assert(response?.ok(), `Barcode fixture did not load at ${url}`);
+        const leading = grid.getByRole('cell', {
+            name: '0000042189',
+            exact: true,
+        });
+        await leading.waitFor({ state: 'visible' });
+        evidence.receipt = await readReceipt();
+        assert.equal(evidence.receipt.error, null);
+        assert(evidence.receipt.initial.cameraGuard);
+        assert.equal(await link.getAttribute('href'), destination);
+        assert.equal(await link.getAttribute('target'), '_blank');
+        evidence.link = {
+            name: destination,
+            href: destination,
+            target: '_blank',
+        };
+        for (const name of ['Empty Keep 4', 'Null Keep 5', 'Omitted Keep 6']) {
+            const row = grid.getByRole('row', { name, exact: true });
+            assert.equal(
+                await row.getByRole('cell', { name: '', exact: true }).count(),
+                1
+            );
+        }
+        await verifyIdle('initial');
+        await leading.click();
+        await verifyIdle('click');
+        await page.keyboard.press('Enter');
+        await verifyIdle('Enter');
+        await page.keyboard.press('Escape');
+        await verifyIdle('Escape');
+        await page
+            .getByRole('button', { name: 'Republish Grid', exact: true })
+            .click();
+        await page
+            .getByRole('button', { name: 'Dispose Grid', exact: true })
+            .click();
+        evidence.receipt = await readReceipt();
+        const { react, error, republished, disposed } = evidence.receipt;
+        assert.equal(react, profile.react);
+        assert.equal(error, null);
+        assert.equal(republished.stableNodes, 24);
+        assert.deepEqual(republished.trusted, {
+            click: 1,
+            Enter: 1,
+            Escape: 1,
+        });
+        assert.equal(disposed.gridSubscriptions, 0);
+        assert.equal(disposed.hostSubscriptions, 0);
+        assert.equal(disposed.renderedChildren, 0);
+        assert(Object.values(disposed.effects).every((value) => value === 0));
+        assert.equal(await grid.count(), 0);
+        assert.equal(page.url(), url);
+        assert.equal(context.pages().length, 1);
+        assert.equal(evidence.popups, 0);
+        assert.deepEqual(evidence.pageErrors, []);
+        assert.deepEqual(evidence.denied, []);
+        assert.deepEqual(
+            [...new Set(evidence.requests)].sort(),
+            [...routes.keys()].sort()
+        );
+        evidence.status = 'passed';
+    } finally {
+        await context.close();
+        save();
+    }
+}
+
+async function verifyRunnerChrome(origin) {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({
+        executablePath,
+        headless: true,
+        chromiumSandbox: true,
+        timeout: 15000,
+    });
+    const closeOnStop = () => void browser.close().catch(() => {});
+    shutdown.signal.addEventListener('abort', closeOnStop, { once: true });
+    try {
+        report.chromiumVersion = browser.version();
+        for (const profile of report.profiles) {
+            shutdown.signal.throwIfAborted();
+            await verifyChromeProfile(browser, profile, origin);
+        }
+        assert.deepEqual(
+            report.requests.filter(({ status }) => status !== 200),
+            []
+        );
+    } finally {
+        shutdown.signal.removeEventListener('abort', closeOnStop);
+        await browser.close();
+    }
+}
+
+mkdirSync(output);
+// The short owned child keeps Chrome's singleton socket within its path limit.
+const temporary = realpathSync(
+    mkdtempSync(join(scratchRoot, runnerChrome ? 'b-' : 'sdk-barcode-grid-'))
+);
+process.once('SIGTERM', requestStop);
+process.once('SIGINT', requestStop);
 try {
+    if (runnerChrome) {
+        Object.assign(process.env, {
+            TMPDIR: temporary,
+            TMP: temporary,
+            TEMP: temporary,
+            XDG_CACHE_HOME: join(temporary, 'cache'),
+            XDG_CONFIG_HOME: join(temporary, 'config'),
+            npm_config_cache: join(temporary, 'npm-cache'),
+        });
+    }
     await new Promise((done, fail) => {
         server.once('error', fail);
         server.listen(0, '127.0.0.1', done);
@@ -220,9 +421,22 @@ try {
     const origin = 'http://127.0.0.1:' + server.address().port;
     writeFileSync(join(output, 'origin.txt'), origin + '\n');
     console.log(origin, 'PID', process.pid);
-    for (const id of selected) await addProfile(id, origin);
-    await end;
+    for (const id of selected) {
+        if (shutdown.signal.aborted) break;
+        await addProfile(id, origin, temporary);
+    }
+    if (runnerChrome) {
+        shutdown.signal.throwIfAborted();
+        await verifyRunnerChrome(origin);
+    } else {
+        await end;
+    }
+} catch (error) {
+    report.failure = error.message;
+    throw error;
 } finally {
+    process.off('SIGTERM', requestStop);
+    process.off('SIGINT', requestStop);
     await new Promise((done) => {
         server.close(done);
         server.closeAllConnections();

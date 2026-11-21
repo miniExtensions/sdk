@@ -94,11 +94,19 @@ const report = {
     profiles: [],
     cleanup: {},
 };
-const cssMembers = ['readonly-portal-grid.css', 'localized-numeric.css'].map(
-    (name) => `dist/esm/react/${name}`
-);
+// Serve the shipped Grid stylesheet and its relative imports without opening
+// the fixture to arbitrary files or application requests.
+const cssNames = [
+    'readonly-portal-grid.css',
+    'localized-numeric.css',
+    'field-presentation.css',
+    'html-description.css',
+    'complete-readonly-text.css',
+    'complete-checkbox.css',
+];
+const cssMembers = cssNames.map((name) => `dist/esm/react/${name}`);
 const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Installed readonly Percent Grid</title>
-    <link rel="stylesheet" href="proof.css"><h1>Installed readonly Percent Grid</h1>
+    <link rel="stylesheet" href="readonly-portal-grid.css"><link rel="stylesheet" href="localized-numeric.css"><h1>Installed readonly Percent Grid</h1>
     <div id="grid"></div><button id="republish">Republish Grid</button>
     <button id="dispose">Dispose Grid</button><pre id="receipt"></pre><script defer src="proof.js"></script></html>`;
 const server = createServer((req, res) => {
@@ -186,21 +194,19 @@ async function buildProfile(id) {
         ),
         'Mixed SDK export conditions'
     );
-    const styles = Buffer.concat(
-        cssMembers.map((member) => {
-            const bytes = readFileSync(join(installedSdk, member));
-            assert.deepEqual(bytes, readArchive(`package/${member}`));
-            return bytes;
-        })
-    );
-    const content = bundle.outputFiles[0].contents;
     const pathPrefix = `/${id}/`;
+    const styles = cssMembers.map((member, index) => {
+        const bytes = readFileSync(join(installedSdk, member));
+        assert.deepEqual(bytes, readArchive(`package/${member}`));
+        assets.set(pathPrefix + cssNames[index], { type: 'text/css', bytes });
+        return bytes;
+    });
+    const content = bundle.outputFiles[0].contents;
     assets.set(pathPrefix, { type: 'text/html; charset=utf-8', bytes: html });
     assets.set(pathPrefix + 'proof.js', {
         type: 'text/javascript',
         bytes: content,
     });
-    assets.set(pathPrefix + 'proof.css', { type: 'text/css', bytes: styles });
     const profile = {
         id,
         react,
@@ -208,7 +214,7 @@ async function buildProfile(id) {
         installation,
         entries,
         cssMembers,
-        cssSha256: digest(styles),
+        cssSha256: digest(Buffer.concat(styles)),
         bundleSha256: digest(content),
     };
     profiles.set(id, profile);

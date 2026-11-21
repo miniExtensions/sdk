@@ -68,6 +68,7 @@ function fixture({ copyInputs = false, addFuse = false } = {}) {
     cpSync(join(root, 'vendor/calendar'), join(directory, 'vendor/calendar'), {
         recursive: true,
     });
+    const directoryLinkType = process.platform === 'win32' ? 'junction' : 'dir';
     for (const [name, alias] of Object.entries(aliases)) {
         const target = join(directory, 'node_modules', alias);
         mkdirSync(dirname(target), { recursive: true });
@@ -83,13 +84,13 @@ function fixture({ copyInputs = false, addFuse = false } = {}) {
                 mkdirSync(dirname(join(target, file)), { recursive: true });
                 cpSync(join(source, file), join(target, file));
             }
-        } else symlinkSync(source, target, 'dir');
+        } else symlinkSync(source, target, directoryLinkType);
     }
     if (addFuse)
         symlinkSync(
             packageRoot('fuse.js'),
             join(directory, 'node_modules/fuse.js'),
-            'dir'
+            directoryLinkType
         );
     return {
         directory,

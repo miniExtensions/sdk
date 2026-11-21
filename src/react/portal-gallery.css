@@ -135,18 +135,22 @@
     background: #ffffff80;
 }
 .mx-sdk-portal-gallery-load-more {
+    display: flex;
+    align-self: stretch;
+    align-items: center;
     border: 0;
     background: transparent;
-    color: rgb(var(--theme-500, 99 102 241));
+    color: rgb(var(--theme-600, 37 99 235));
     padding: 0;
     font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
     cursor: pointer;
 }
 .mx-sdk-portal-gallery-load-more:hover {
-    text-decoration: underline;
-}
-.mx-sdk-portal-gallery-load-more:focus-visible {
-    outline-offset: 3px;
+    opacity: 0.7;
 }
 .mx-sdk-portal-gallery-spinner {
     display: inline-block;

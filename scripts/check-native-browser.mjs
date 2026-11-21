@@ -8,6 +8,7 @@ import {
     preparePortalGalleryBrowserFixtures,
     checkPortalGalleryBrowser,
 } from './portal-gallery-browser-checks.mjs';
+import { checkPortalGalleryPagingAppearance } from './portal-gallery-paging-appearance-checks.mjs';
 import {
     prepareReadonlyPortalGridBrowserFixtures,
     checkReadonlyPortalGridBrowser,
@@ -3279,6 +3280,12 @@ try {
             await checkPortalGalleryBrowser({
                 page,
                 evidence: report.portalGallery,
+            });
+            await checkPortalGalleryPagingAppearance({
+                browser,
+                origin,
+                evidence: report.portalGallery,
+                output,
             });
         });
         await run('printable-form-layout', async (page, origin) => {

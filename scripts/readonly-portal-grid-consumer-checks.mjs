@@ -227,7 +227,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
-    const componentCases = 21;
+    const componentCases = 22;
     const multipleSelectCellCases = 2;
     const textCellCases = 6;
     const emailCellCases = 6;
@@ -385,6 +385,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                         '--test-reporter=tap',
                         testName,
                     ]);
+                    if (name === 'readonly-grid')
+                        assert.match(
+                            output,
+                            /^ok \d+ - marks only the configured visible primary header and cells without reordering or marking Open$/m
+                        );
                     for (const [counter, count] of [
                         ['tests', cases],
                         ['pass', cases],

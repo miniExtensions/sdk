@@ -61,6 +61,27 @@
     border-inline-end-width: 1px;
 }
 
+@media (min-width: 640px) {
+    :is(
+        .mx-sdk-readonly-grid__header,
+        .mx-sdk-readonly-grid__cell
+    )[data-primary='true'] {
+        position: sticky;
+        inset-inline-start: 0;
+        z-index: 1;
+        /* Keep scrolling cells hidden even with a translucent Portal surface. */
+        background-color: Canvas;
+        background-image: linear-gradient(
+            var(--mx-portal-background, transparent),
+            var(--mx-portal-background, transparent)
+        );
+    }
+
+    .mx-sdk-readonly-grid__header[data-primary='true'] {
+        z-index: 2;
+    }
+}
+
 .mx-sdk-readonly-grid__cell-content {
     width: 0;
     min-width: 100%;

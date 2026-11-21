@@ -162,6 +162,7 @@ function headerIcon(icon: ReadonlyPortalGridHeaderIcon | null | undefined) {
 
 type HeaderProps = {
     column: ReadonlyPortalGridColumn;
+    primary: boolean;
     width: unknown;
     isCurrent: () => boolean;
     onCommit: ReadonlyPortalGridProps['onColumnWidthCommit'];
@@ -171,6 +172,7 @@ type HeaderProps = {
 
 function GridHeader({
     column,
+    primary,
     width,
     isCurrent,
     onCommit,
@@ -181,6 +183,7 @@ function GridHeader({
     const stopDrag = useRef<(() => void) | null>(null);
     const pointerSettlement = useRef<(() => void) | null>(null);
     const keyboardMove = useRef(false);
+    const keyboardKeys = useRef(new Set<string>());
     const commitPort = useRef(onCommit);
     // Host widths and commits use clientWidth (padding included, borders excluded).
     // Translate only at the CSS boundary so settlement/host echoes cannot shrink
@@ -199,6 +202,7 @@ function GridHeader({
             stopDrag.current = null;
             pointerSettlement.current = null;
             keyboardMove.current = false;
+            keyboardKeys.current.clear();
         },
         []
     );
@@ -217,6 +221,7 @@ function GridHeader({
         stopDrag.current = null;
         pointerSettlement.current = null;
         keyboardMove.current = false;
+        keyboardKeys.current.clear();
         setLocalWidth(admittedWidth(width));
     };
     const commitEffect =
@@ -301,6 +306,14 @@ function GridHeader({
         document.addEventListener('pointerup', end);
         document.addEventListener('pointercancel', cancelled);
     };
+    const releaseShortcutKey = (key: string) => {
+        const keys = keyboardKeys.current;
+        if (keys.delete(key) && keys.size === 0 && keyboardMove.current) {
+            keyboardMove.current = false;
+            if (!stopDrag.current && !pointerSettlement.current)
+                setLocalWidth(admittedWidth(width));
+        }
+    };
     const keyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
         if (event.key === 'Escape') {
             event.preventDefault();
@@ -308,9 +321,18 @@ function GridHeader({
             return;
         }
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        const key = event.code || event.key;
+        if (event.altKey || event.metaKey) {
+            releaseShortcutKey(key);
+            return;
+        }
+        const keys = keyboardKeys.current;
+        // Releasing the modifier does not turn a held shortcut into a resize.
+        if (event.repeat && !keys.has(key)) return;
         if (!onCommit || !header.current || !current(isCurrent)) return;
         event.preventDefault();
         event.stopPropagation();
+        keys.add(key);
         keyboardMove.current = true;
         const measured = header.current.clientWidth;
         const delta =
@@ -331,6 +353,7 @@ function GridHeader({
             className: 'mx-sdk-readonly-grid__header',
             style: { width: (localWidth ?? 200) + cssWidthAdjustment },
             'data-field-id': column.fieldId,
+            'data-primary': primary,
         },
         h(
             'div',
@@ -379,10 +402,14 @@ function GridHeader({
                 onPointerDown: start,
                 onKeyDown: keyDown,
                 onKeyUp: (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+                    const key = event.code || event.key;
+                    if (event.altKey || event.metaKey) {
+                        releaseShortcutKey(key);
+                        return;
+                    }
                     if (
-                        !keyboardMove.current ||
-                        (event.key !== 'ArrowLeft' &&
-                            event.key !== 'ArrowRight')
+                        !keyboardKeys.current.delete(key) ||
+                        !keyboardMove.current
                     )
                         return;
                     event.preventDefault();
@@ -393,6 +420,7 @@ function GridHeader({
                 },
                 onBlur: () => {
                     if (keyboardMove.current) cancel();
+                    else keyboardKeys.current.clear();
                 },
             })
     );
@@ -602,6 +630,8 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                             h(GridHeader, {
                                 key: `${identity}:${column.fieldId}`,
                                 column,
+                                primary:
+                                    column.fieldId === props.primaryFieldId,
                                 width: props.columnWidths[column.fieldId],
                                 isCurrent,
                                 onCommit: props.onColumnWidthCommit,

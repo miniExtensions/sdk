@@ -95,11 +95,58 @@ jobs:
                   SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
                   SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+            - name: Qualify packed readonly Portal Grid Percent in Chromium
+              timeout-minutes: 5
+              shell: bash
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_PORTAL_PERCENT_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-grid-percent
+                  SDK_PORTAL_PERCENT_SCRATCH_ROOT: ${{ runner.temp }}/sdk-native-browser-scratch
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  set -euo pipefail
+                  shopt -s nullglob
+                  archives=("$SDK_NATIVE_PACKAGE_DIR"/*.tgz)
+                  receipt="$SDK_NATIVE_PACKAGE_DIR/artifact-receipt.json"
+                  if [[ ${#archives[@]} != 1 || ! -f "$receipt" || -L "$receipt" ]]; then
+                      echo 'Expected one tested SDK archive and its receipt' >&2
+                      exit 1
+                  fi
+                  archive="${archives[0]}"
+                  [[ -f "$archive" && ! -L "$archive" ]]
+                  [[ $(git rev-parse HEAD) == "$GITHUB_SHA" ]]
+                  sha256=$(jq -ser \
+                      --arg commit "$GITHUB_SHA" --arg tree "$(git rev-parse 'HEAD^{tree}')" \
+                      --arg repo "$GITHUB_REPOSITORY" --arg event "$GITHUB_EVENT_NAME" \
+                      --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+                      --arg pr_head "$SDK_PR_HEAD_SHA" --arg filename "${archive##*/}" \
+                      --argjson bytes "$(stat -c %s "$archive")" '
+                          if length == 1 then .[0] else error("Expected one tested SDK receipt") end
+                          | select(.schemaVersion == 1 and .verification.outcome == "passed"
+                              and .source.commit == $commit and .source.tree == $tree
+                              and .ci.workflowSha == $commit and .ci.repository == $repo
+                              and .ci.event == $event and .ci.runId == $run and .ci.runAttempt == $attempt
+                              and (.ci.pullRequestHeadSha // "") == $pr_head
+                              and .package.name == "@miniextensions/sdk"
+                              and .package.filename == $filename and .package.bytes == $bytes)
+                          | .package.sha256 | select(type == "string" and test("\\A[0-9a-f]{64}\\z"))
+                      ' "$receipt") || { echo 'Tested SDK receipt does not match this run and archive' >&2; exit 1; }
+                  node scripts/check-readonly-portal-grid-percent.mjs "$archive" "$sha256" \
+                      "$SDK_PORTAL_PERCENT_RESULT_DIR" /usr/bin/google-chrome
             - name: Qualify packed Portal parent summary cards
               run: node scripts/portal-summary-cards-consumer-checks.mjs "${{ runner.temp }}"/sdk-tested-customer-kit/*.tgz
               env:
                   SDK_PORTAL_SUMMARY_CHROMIUM: /usr/bin/google-chrome
                   SDK_PORTAL_SUMMARY_PROOF_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-summary-cards
+            - name: Qualify packed Portal view-loss recovery
+              timeout-minutes: 6
+              run: node scripts/check-portal-view-loss-ci.mjs
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-view-loss
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Execute Count Chromium proof
               timeout-minutes: 3
               run: node scripts/check-count-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/count"
@@ -123,6 +170,14 @@ jobs:
                   archive: true
                   overwrite: false
                   include-hidden-files: false
+            - name: Qualify packed read-only Portal Grid AutoNumber in Chromium
+              timeout-minutes: 5
+              run: node scripts/check-readonly-portal-grid-autonumber.mjs --ci
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-grid-autonumber
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Execute packed Linked Records Chromium proof
               timeout-minutes: 3
               run: node scripts/check-linked-records-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-records"

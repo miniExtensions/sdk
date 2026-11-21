@@ -6,12 +6,29 @@ import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
+import {
+    checkReadonlyPortalGridNumberBrowser,
+    readonlyPortalGridNumberEntry,
+} from './readonly-portal-grid-number-browser-checks.mjs';
+import {
+    checkReadonlyPortalGridDateTimeBrowser,
+    readonlyPortalGridDateTimeEntry,
+} from './readonly-portal-grid-datetime-checks.mjs';
+import {
+    checkReadonlyPortalGridDurationBrowser,
+    readonlyPortalGridDurationEntry,
+} from './readonly-portal-grid-duration-checks.mjs';
+import { checkReadonlyPortalGridShortcutBrowser } from './readonly-portal-grid-shortcut-browser-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
 import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell,PortalGridButtonCell}from'@miniextensions/sdk/react';
 import{DateField}from'@miniextensions/sdk/react/date';
+import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
+import{mountDateTimeGrid}from'./readonly-portal-grid-datetime.mjs';
+import{mountDurationGrid}from'./readonly-portal-grid-duration.mjs';
+import{mountTimestampGrid}from'./readonly-portal-grid-timestamp-fixture.mjs';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -536,9 +553,12 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
     startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key }))),
     startButtonCell: () => root.render(h(StrictMode, null, h(ButtonCellProbe))),
 };
-root.render(h(StrictMode, null, h(
-    new URLSearchParams(location.search).get('fixture') === 'date-only' ? DateOnlyProbe : App
-)));
+const fixture = new URLSearchParams(location.search).get('fixture');
+if (fixture === 'number-only') mountNumberGrid(root);
+else if (fixture === 'date-time') mountDateTimeGrid(root);
+else if (fixture === 'duration-only') mountDurationGrid(root);
+else if (fixture === 'timestamps') mountTimestampGrid(root, document.querySelector('#root'));
+else root.render(h(StrictMode, null, h(fixture === 'date-only' ? DateOnlyProbe : App)));
 `;
 
 export async function prepareReadonlyPortalGridBrowserFixtures(args) {
@@ -553,6 +573,30 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     } = args;
     const entry = join(temporary, 'readonly-portal-grid.mjs');
     writeFileSync(entry, readonlyPortalGridBrowserEntry);
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-number.mjs'),
+        readonlyPortalGridNumberEntry
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-datetime.mjs'),
+        readonlyPortalGridDateTimeEntry
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-duration.mjs'),
+        readonlyPortalGridDurationEntry
+    );
+    const timestampFixture = regular(
+        fileURLToPath(
+            new URL(
+                './readonly-portal-grid-timestamp-fixture.mjs',
+                import.meta.url
+            )
+        )
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-timestamp-fixture.mjs'),
+        timestampFixture
+    );
     const bundle = await args.build({
         absWorkingDir: temporary,
         entryPoints: [entry],
@@ -572,6 +616,11 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/ReadonlyPortalGrid.js',
         '/react/date/DateField.js',
         '/react/CompleteReadOnlyTextField.js',
+        '/react/ReadOnlyDurationField.js',
+        '/react/CreatedTimeField.js',
+        '/react/LastModifiedTimeField.js',
+        '/react/CompleteLocalizedNumericField.js',
+        '/react/localized-numeric.css',
         '/react/CompleteFormFieldPresentation.js',
         '/react/readonly-portal-grid.css',
         '/react/complete-readonly-text.css',
@@ -642,6 +691,37 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     report.readonlyPortalGrid = {
         sourceSha256: hash(readonlyPortalGridBrowserEntry),
         checkerSha256: hash(regular(fileURLToPath(import.meta.url))),
+        timestampFixtureSha256: hash(timestampFixture),
+        dateTimeCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-datetime-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
+        durationCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-duration-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
+        numberCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-number-browser-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
         react: JSON.parse(
             regular(join(temporary, 'node_modules/react/package.json'))
         ).version,
@@ -757,6 +837,120 @@ export async function checkReadonlyPortalGridDateBrowser({
     }
     const failed = cases.filter((item) => item.error);
     assert.deepEqual(failed, [], 'Packed read-only Date-only Grid');
+}
+
+async function checkReadonlyPortalGridTimestamps({ page, evidence }) {
+    const browser = page.context().browser();
+    assert(browser);
+    const origin = new URL(page.url()).origin;
+    const fixture = '/readonly-portal-grid.html?fixture=timestamps';
+    const allowed = new Set([
+        fixture,
+        '/readonly-portal-grid.js',
+        '/readonly-portal-grid.css',
+        '/favicon.ico',
+    ]);
+    const proof = {
+        nativeReference: {
+            monorepo: '26359379935d844cda84fe702dadc05cf889b9c2',
+            sdk: 'e93ac6d052d394ee7cf0c38c9a57aa7615b98bc6',
+        },
+        providerRequests: [],
+        pageErrors: [],
+    };
+    evidence.timestamps = proof;
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+        await context.route('**/*', (route) => {
+            const request = route.request();
+            const url = new URL(request.url());
+            if (
+                url.origin === origin &&
+                request.method() === 'GET' &&
+                !['fetch', 'xhr'].includes(request.resourceType()) &&
+                allowed.has(url.pathname + url.search)
+            )
+                return route.continue();
+            proof.providerRequests.push({
+                method: request.method(),
+                path: url.pathname,
+            });
+            return route.abort();
+        });
+        const timestamps = await context.newPage();
+        timestamps.on('pageerror', (error) =>
+            proof.pageErrors.push(error.message)
+        );
+        await timestamps.goto(origin + fixture, { waitUntil: 'networkidle' });
+        const grid = timestamps.getByRole('table');
+        await grid.waitFor({ state: 'visible' });
+        for (const name of ['Name', 'Created at', 'Modified at', 'Note'])
+            assert(
+                await grid
+                    .getByRole('columnheader', { name, exact: true })
+                    .isVisible(),
+                `Accessible timestamp header ${name}`
+            );
+        const stored = grid.locator('tr[data-record-id="recStored"]');
+        const readCell = async (fieldId, expected, previous = expected) => {
+            const cell = stored
+                .getByRole('cell')
+                .and(stored.locator(`td[data-field-id="${fieldId}"]`));
+            assert.equal(await cell.count(), 1, `Unique ${fieldId} cell`);
+            assert(await cell.isVisible(), `Visible ${fieldId} cell`);
+            assert.equal((await cell.innerText()).trim(), expected, fieldId);
+            const accessible = await cell.ariaSnapshot();
+            // ComputedTimeDisplay exposes its text inside a group. The cell
+            // role keeps its identity even when its content is not its name.
+            assert.equal(
+                accessible.includes(previous),
+                expected !== '',
+                `Accessible ${fieldId} content: ${accessible}`
+            );
+            return accessible;
+        };
+        const createdText = 'November 11, 2026 16:30';
+        const modifiedText = 'November 12, 2026 08:05';
+        const accessibleCells = async (valid) => ({
+            created: await readCell('fldCreated', createdText),
+            modified: await readCell(
+                'fldModified',
+                valid ? modifiedText : '',
+                modifiedText
+            ),
+        });
+        proof.initial = await timestamps.evaluate(() =>
+            window.__timestampGrid.initial()
+        );
+        proof.initial.accessibleCells = await accessibleCells(true);
+        proof.republished = await timestamps.evaluate(() =>
+            window.__timestampGrid.republish(true)
+        );
+        proof.republished.accessibleCells = await accessibleCells(true);
+        proof.invalidMetadata = await timestamps.evaluate(() =>
+            window.__timestampGrid.republish(false)
+        );
+        proof.invalidMetadata.accessibleCells = await accessibleCells(false);
+        for (const observation of [
+            proof.initial,
+            proof.republished,
+            proof.invalidMetadata,
+        ])
+            assert.equal(observation.react, evidence.react);
+        assert(proof.republished.revision > proof.initial.revision);
+        assert(proof.invalidMetadata.revision > proof.republished.revision);
+        proof.cleanup = await timestamps.evaluate(() =>
+            window.__timestampGrid.close()
+        );
+        assert.equal(await grid.count(), 0);
+        await timestamps.waitForLoadState('networkidle');
+        assert.deepEqual(proof.providerRequests, []);
+        assert.deepEqual(proof.pageErrors, []);
+        proof.status = 'passed';
+    } finally {
+        await context.close();
+        proof.contextClosed = true;
+    }
 }
 
 export async function checkReadonlyPortalGridBrowser({
@@ -1461,6 +1655,11 @@ export async function checkReadonlyPortalGridBrowser({
     end = await snapshot();
     assert.deepEqual(end.errors, []);
     await checkGuidanceLayoutBrowser({ page, evidence, output });
+    await checkReadonlyPortalGridNumberBrowser({ page, evidence });
+    await checkReadonlyPortalGridDateTimeBrowser({ page, evidence });
+    await checkReadonlyPortalGridDurationBrowser({ page, evidence });
+    await checkReadonlyPortalGridTimestamps({ page, evidence });
+    await checkReadonlyPortalGridShortcutBrowser({ page, evidence });
     Object.assign(evidence, {
         status: 'passed',
         results,

@@ -891,29 +891,46 @@ async function checkReadonlyPortalGridTimestamps({ page, evidence }) {
                     .isVisible(),
                 `Accessible timestamp header ${name}`
             );
-        const created = grid.getByRole('cell', {
-            name: 'November 11, 2026 16:30',
-            exact: true,
+        const stored = grid.locator('tr[data-record-id="recStored"]');
+        const readCell = async (fieldId, expected, previous = expected) => {
+            const cell = stored
+                .getByRole('cell')
+                .and(stored.locator(`td[data-field-id="${fieldId}"]`));
+            assert.equal(await cell.count(), 1, `Unique ${fieldId} cell`);
+            assert(await cell.isVisible(), `Visible ${fieldId} cell`);
+            assert.equal((await cell.innerText()).trim(), expected, fieldId);
+            const accessible = await cell.ariaSnapshot();
+            // ComputedTimeDisplay exposes its text inside a group. The cell
+            // role keeps its identity even when its content is not its name.
+            assert.equal(
+                accessible.includes(previous),
+                expected !== '',
+                `Accessible ${fieldId} content: ${accessible}`
+            );
+            return accessible;
+        };
+        const createdText = 'November 11, 2026 16:30';
+        const modifiedText = 'November 12, 2026 08:05';
+        const accessibleCells = async (valid) => ({
+            created: await readCell('fldCreated', createdText),
+            modified: await readCell(
+                'fldModified',
+                valid ? modifiedText : '',
+                modifiedText
+            ),
         });
-        const modified = grid.getByRole('cell', {
-            name: 'November 12, 2026 08:05',
-            exact: true,
-        });
-        assert(await created.isVisible());
-        assert(await modified.isVisible());
         proof.initial = await timestamps.evaluate(() =>
             window.__timestampGrid.initial()
         );
+        proof.initial.accessibleCells = await accessibleCells(true);
         proof.republished = await timestamps.evaluate(() =>
             window.__timestampGrid.republish(true)
         );
-        assert(await created.isVisible());
-        assert(await modified.isVisible());
+        proof.republished.accessibleCells = await accessibleCells(true);
         proof.invalidMetadata = await timestamps.evaluate(() =>
             window.__timestampGrid.republish(false)
         );
-        assert(await created.isVisible());
-        assert.equal(await modified.count(), 0);
+        proof.invalidMetadata.accessibleCells = await accessibleCells(false);
         for (const observation of [
             proof.initial,
             proof.republished,

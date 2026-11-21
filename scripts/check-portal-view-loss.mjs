@@ -22,6 +22,12 @@ import { checkPortalViewLoss } from './portal-view-loss-scenario.mjs';
 const [mode, archive, expectedSha256, receipt] = process.argv.slice(2);
 assert.equal(process.argv.length, 6);
 assert(['mounted', 'browser'].includes(mode));
+const managedEndpoint = process.env.SDK_PORTAL_VIEW_LOSS_BROWSER_WS;
+if (managedEndpoint) {
+    assert.equal(process.env.GITHUB_ACTIONS, 'true');
+    assert.equal(mode, 'browser');
+    assert.match(managedEndpoint, /^ws:\/\/127\.0\.0\.1:[1-9]\d*\/[a-f0-9-]+$/);
+}
 assert.match(expectedSha256, /^[0-9a-f]{64}$/);
 const archivePath = realpathSync(archive);
 const archiveBytes = readFileSync(archivePath);
@@ -181,17 +187,19 @@ async function browserProfile(root) {
         });
         const origin = 'http://127.0.0.1:' + server.address().port;
         report.stage = 'chromium';
-        browser ??= await chromium.launch({
-            ...(process.env.SDK_NATIVE_CHROMIUM
-                ? {
-                      executablePath: realpathSync(
-                          process.env.SDK_NATIVE_CHROMIUM
-                      ),
-                  }
-                : { channel: 'chrome' }),
-            headless: true,
-            chromiumSandbox: true,
-        });
+        browser ??= managedEndpoint
+            ? await chromium.connect(managedEndpoint, { timeout: 5000 })
+            : await chromium.launch({
+                  ...(process.env.SDK_NATIVE_CHROMIUM
+                      ? {
+                            executablePath: realpathSync(
+                                process.env.SDK_NATIVE_CHROMIUM
+                            ),
+                        }
+                      : { channel: 'chrome' }),
+                  headless: true,
+                  chromiumSandbox: true,
+              });
         report.chromium = browser.version();
         report.stage = 'browser-scenario';
         context = await browser.newContext({
@@ -331,7 +339,14 @@ try {
         if (!report.error) report.stage = 'cleanup';
         process.exitCode = 1;
     } finally {
-        stop();
+        try {
+            await stop();
+            report.cleanup.esbuildStopped = true;
+        } catch (error) {
+            report.cleanup.esbuildError = error.stack;
+            if (!report.error) report.stage = 'cleanup';
+            process.exitCode = 1;
+        }
         report.cleanup.consumersRemoved = consumers.size === 0;
         writeFileSync(output, JSON.stringify(report, null, 2) + '\n', {
             flag: 'wx',

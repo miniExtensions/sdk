@@ -178,6 +178,14 @@ jobs:
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-grid-autonumber
                   SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
                   SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            - name: Qualify packed read-only Portal Grid Created By in Chromium
+              timeout-minutes: 5
+              run: node scripts/check-readonly-portal-grid-created-by.mjs --ci
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-grid-created-by
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Execute packed Linked Records Chromium proof
               timeout-minutes: 3
               run: node scripts/check-linked-records-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-records"

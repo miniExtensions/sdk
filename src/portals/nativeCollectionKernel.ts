@@ -126,19 +126,6 @@ export interface NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
             readonly paging?: NativePortalCollectionPaging;
         }
     ): NativePortalCollectionState<Row, Schema, Detail>;
-    /**
-     * After a host-authorized Delete acknowledgment, remove one record from
-     * the issued frame and raw paging. Commit against the exact current host
-     * snapshot, with the returned frame and paging in the same publication.
-     */
-    removeAcknowledgedRecord(
-        state: NativePortalCollectionState<Row, Schema, Detail>,
-        input: {
-            readonly scope: NativePortalCollectionScope;
-            readonly frame: NativePortalCollectionFrame<Row, Schema, Detail>;
-            readonly recordId: string;
-        }
-    ): NativePortalCollectionState<Row, Schema, Detail>;
     begin(
         state: NativePortalCollectionState<Row, Schema, Detail>,
         input: NativePortalCollectionBegin
@@ -193,6 +180,28 @@ export interface NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
     } | null;
     retire(
         state: NativePortalCollectionState<Row, Schema, Detail>
+    ): NativePortalCollectionState<Row, Schema, Detail>;
+}
+
+/** The factory's deletion-capable kernel; Read also accepts read-only implementations. */
+export interface NativePortalCollectionRemovalKernel<
+    Row,
+    Schema,
+    Detail,
+    Projection,
+> extends NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
+    /**
+     * After a host-authorized Delete acknowledgment, remove one record from
+     * the issued frame and raw paging. Commit against the exact current host
+     * snapshot, with the returned frame and paging in the same publication.
+     */
+    removeAcknowledgedRecord(
+        state: NativePortalCollectionState<Row, Schema, Detail>,
+        input: {
+            readonly scope: NativePortalCollectionScope;
+            readonly frame: NativePortalCollectionFrame<Row, Schema, Detail>;
+            readonly recordId: string;
+        }
     ): NativePortalCollectionState<Row, Schema, Detail>;
 }
 
@@ -260,7 +269,7 @@ export function createNativePortalCollectionKernel<
     Schema,
     Detail,
     Projection = unknown,
->(): NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
+>(): NativePortalCollectionRemovalKernel<Row, Schema, Detail, Projection> {
     type State = NativePortalCollectionState<Row, Schema, Detail>;
     type Frame = NativePortalCollectionFrame<Row, Schema, Detail>;
     const acceptedFrames = new WeakMap<
@@ -317,7 +326,7 @@ export function createNativePortalCollectionKernel<
             throw new RangeError('Portal collection generation exhausted');
         return generation + 1;
     };
-    const kernel: NativePortalCollectionKernel<
+    const kernel: NativePortalCollectionRemovalKernel<
         Row,
         Schema,
         Detail,

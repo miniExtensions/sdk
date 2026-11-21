@@ -62,13 +62,9 @@
 }
 
 @media (min-width: 640px) {
-    :is(
-        .mx-sdk-readonly-grid__header,
-        .mx-sdk-readonly-grid__cell
-    )[data-primary='true'] {
+    .mx-sdk-readonly-grid__table > thead > tr > th,
+    .mx-sdk-readonly-grid__cell[data-primary='true'] {
         position: sticky;
-        inset-inline-start: 0;
-        z-index: 1;
         /* Keep scrolling cells hidden even with a translucent Portal surface. */
         background-color: Canvas;
         background-image: linear-gradient(
@@ -77,8 +73,19 @@
         );
     }
 
-    .mx-sdk-readonly-grid__header[data-primary='true'] {
+    .mx-sdk-readonly-grid__cell[data-primary='true'] {
+        inset-inline-start: 0;
+        z-index: 1;
+    }
+
+    .mx-sdk-readonly-grid__table > thead > tr > th {
+        inset-block-start: 0;
         z-index: 2;
+    }
+
+    .mx-sdk-readonly-grid__header[data-primary='true'] {
+        inset-inline-start: 0;
+        z-index: 3;
     }
 }
 

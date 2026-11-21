@@ -192,6 +192,45 @@ it('protects primary visibility and treats only true as a hidden preference', as
     f.unchangedEffects();
 });
 
+it('marks only the configured visible primary header and cells without reordering or marking Open', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const props = model();
+    const columns = [...props.columns].reverse();
+    const ordered = model({
+        columns,
+        hiddenColumns: { primary: true },
+        onOpenRecord: () =>
+            assert.fail('Opening is not part of marking the primary'),
+    });
+    await f.render(h(ReadonlyPortalGrid, ordered));
+    assert.deepEqual(
+        [...f.container.querySelectorAll('thead th')].map((cell) => [
+            cell.textContent,
+            cell.getAttribute('data-primary'),
+        ]),
+        [
+            ['Value', 'false'],
+            ['Name', 'true'],
+            ['Record', null],
+        ]
+    );
+    assert.deepEqual(
+        [...f.container.querySelectorAll('tbody td[data-primary="true"]')].map(
+            (cell) => cell.getAttribute('data-field-id')
+        ),
+        ['primary', 'primary']
+    );
+    await f.render(
+        h(ReadonlyPortalGrid, {
+            ...ordered,
+            hiddenColumns: {},
+            primaryFieldId: null,
+        })
+    );
+    assert.equal(f.container.querySelector('[data-primary="true"]'), null);
+    f.unchangedEffects();
+});
+
 it('suppresses unavailable/stale scopes without invoking action or preference ports', async (t) => {
     const f = await htmlPresentationFixture(t);
     const effects: unknown[] = [];

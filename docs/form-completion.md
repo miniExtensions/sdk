@@ -117,11 +117,13 @@ own flag, an existing record, and locking off. With both actions eligible,
 Submit another comes first. Editable and configuration-preview surfaces render
 no footer buttons. Mounting emits no commands, and a button activates only its
 own manual intent. `disabled` keeps visible buttons inert, and
-`buttonClassName` applies the host's class to each button.
+`buttonClassName` applies the host's class to each button. If that class
+supplies the complete button appearance, set `unstyled` to use it with
+the footer's icon sizing and spacing.
 
 Submit another uses the localized default for blank configured text. Copy uses
 the localized default for null or missing text and preserves configured empty
-text. A visually blank Copy button still has a localized accessible name.
+text. Copy with visually blank text still has a localized accessible name.
 
 The post-save presenter applies its own success-action eligibility. A root
 Form in stay mode can expose both actions when enabled. Children, login-page

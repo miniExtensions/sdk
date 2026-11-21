@@ -39,8 +39,19 @@
     flex-wrap: wrap;
     gap: 0.5rem;
 }
-.mx-sdk-form-completion-actions button,
 .mx-sdk-form-readonly-footer-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.mx-sdk-form-readonly-footer-icon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-inline-end: 0.5rem;
+}
+.mx-sdk-form-completion-actions button,
+.mx-sdk-form-readonly-footer-action--styled {
     color: inherit;
     font: inherit;
     cursor: pointer;
@@ -50,12 +61,12 @@
     background: transparent;
 }
 .mx-sdk-form-completion-actions button:disabled,
-.mx-sdk-form-readonly-footer-action:disabled {
+.mx-sdk-form-readonly-footer-action--styled:disabled {
     cursor: default;
     opacity: 0.5;
 }
 .mx-sdk-form-completion-actions button:focus-visible,
-.mx-sdk-form-readonly-footer-action:focus-visible {
+.mx-sdk-form-readonly-footer-action--styled:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }

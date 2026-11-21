@@ -165,6 +165,7 @@ import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
 import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
+import { checkInstalledCompleteExtensionPassword } from './complete-extension-password-consumer-checks.mjs';
 import { checkInstalledLoginExistingValuesPicker } from './login-existing-values-consumer-checks.mjs';
 import { checkImageAnnotationReactMatrix } from './image-annotation-consumer-checks.mjs';
 import { checkPortalMapReactMatrix } from './portal-map-consumer-checks.mjs';
@@ -1005,6 +1006,12 @@ try {
         'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
+        'dist/esm/react/complete-extension-password.css',
+        'dist/cjs/react/complete-extension-password.css',
+        'dist/esm/react/CompleteExtensionPasswordScreen.js',
+        'dist/esm/react/CompleteExtensionPasswordScreen.d.ts',
+        'dist/cjs/react/CompleteExtensionPasswordScreen.js',
+        'dist/cjs/react/CompleteExtensionPasswordScreen.d.ts',
         'dist/esm/react/login-existing-values-picker.css',
         'dist/cjs/react/login-existing-values-picker.css',
         'dist/esm/react/LoginExistingValuesPicker.js',
@@ -4127,7 +4134,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
-        checkInstalledConsumer: checkInstalledLoginExistingValuesPicker,
+        checkInstalledConsumer(consumer) {
+            checkInstalledLoginExistingValuesPicker(consumer);
+            const password = checkInstalledCompleteExtensionPassword(consumer);
+            assert.deepEqual(password.formats, ['esm', 'cjs']);
+            assert.equal(password.cleanup, 'completed');
+        },
     });
     await stop();
     assert.equal(verificationMatrix.versions.length, 2);

@@ -246,7 +246,10 @@ async function verifyChromeProfile(browser, profile, origin) {
         status: 'started',
         checkpoints: [],
         requests: [],
+        responses: [],
+        navigations: [],
         denied: [],
+        requestFailures: [],
         pageErrors: [],
         popups: 0,
     };
@@ -274,6 +277,19 @@ async function verifyChromeProfile(browser, profile, origin) {
             return route.abort();
         });
         const page = await context.newPage();
+        page.on('framenavigated', (frame) => {
+            if (frame === page.mainFrame())
+                evidence.navigations.push(frame.url());
+        });
+        page.on('response', (response) => {
+            evidence.responses.push({
+                url: response.url(),
+                status: response.status(),
+            });
+        });
+        page.on('requestfailed', (request) =>
+            evidence.requestFailures.push(request.url())
+        );
         page.on('pageerror', (error) =>
             evidence.pageErrors.push(error.message)
         );
@@ -357,11 +373,18 @@ async function verifyChromeProfile(browser, profile, origin) {
         assert.equal(page.url(), url);
         assert.equal(context.pages().length, 1);
         assert.equal(evidence.popups, 0);
+        assert.deepEqual(evidence.navigations, [url]);
+        assert.deepEqual(evidence.requestFailures, []);
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.denied, []);
         assert.deepEqual(
             [...new Set(evidence.requests)].sort(),
             [...routes.keys()].sort()
+        );
+        assert(evidence.responses.every(({ status }) => status === 200));
+        assert.deepEqual(
+            [...new Set(evidence.responses.map(({ url }) => url))].sort(),
+            [...routes.keys()].map((path) => origin + path).sort()
         );
         evidence.status = 'passed';
     } finally {
@@ -372,6 +395,7 @@ async function verifyChromeProfile(browser, profile, origin) {
 
 async function verifyRunnerChrome(origin) {
     const { chromium } = await import('playwright');
+    shutdown.signal.throwIfAborted();
     const browser = await chromium.launch({
         executablePath,
         headless: true,
@@ -386,6 +410,7 @@ async function verifyRunnerChrome(origin) {
             shutdown.signal.throwIfAborted();
             await verifyChromeProfile(browser, profile, origin);
         }
+        shutdown.signal.throwIfAborted();
         assert.deepEqual(
             report.requests.filter(({ status }) => status !== 200),
             []

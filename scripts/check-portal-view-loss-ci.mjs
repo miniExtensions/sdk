@@ -38,7 +38,7 @@ function absolute(env, key) {
     return resolve(env[key]);
 }
 
-function checkedKit(env, root) {
+export function checkedKit(env, root) {
     const kit = JSON.parse(regular(join(root, 'artifact-receipt.json')));
     const [commit, tree] = execFileSync(
         'git',

@@ -234,6 +234,44 @@ function verifyInert() {
         'Unexpected row selection'
     );
 }
+function verifyMixedPaint(fill, track) {
+    const visibility = { checkOpacity: true, checkVisibilityCSS: true };
+    assert(
+        fill.parentElement === track &&
+            fill.checkVisibility(visibility) &&
+            track.checkVisibility(visibility) &&
+            fill.getBoundingClientRect().height > 0,
+        'Mixed Percent fill and track must be visible'
+    );
+    // Sample the computed CSS colors, including color alpha and the element's
+    // own opacity. Composite both samples through the shared ancestor opacity.
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 1;
+    const context = canvas.getContext('2d');
+    const fillStyle = getComputedStyle(fill);
+    context.fillStyle = getComputedStyle(track).backgroundColor;
+    context.fillRect(0, 0, 2, 1);
+    context.fillStyle = fillStyle.backgroundColor;
+    context.globalAlpha = Number(fillStyle.opacity);
+    context.fillRect(1, 0, 1, 1);
+    const pixels = context.getImageData(0, 0, 2, 1).data;
+    let ancestorOpacity = 1;
+    for (let element = track; element; element = element.parentElement)
+        ancestorOpacity *= Number(getComputedStyle(element).opacity);
+    const visibleColor = (offset) => {
+        const alpha = (pixels[offset + 3] / 255) * ancestorOpacity;
+        return Array.from(pixels.slice(offset, offset + 3), (channel) =>
+            Math.round(channel * alpha + 255 * (1 - alpha))
+        );
+    };
+    const colors = { track: visibleColor(0), fill: visibleColor(4) };
+    assert(
+        colors.track.some((channel, i) => channel !== colors.fill[i]),
+        'Mixed Percent fill must paint a color distinct from its track'
+    );
+    return colors;
+}
 function capture(expected, checkIdentity) {
     const headers = [...rootNode.querySelectorAll('thead th[data-field-id]')];
     equals(
@@ -287,8 +325,10 @@ function capture(expected, checkIdentity) {
             '.mx-sdk-localized-numeric-track'
         );
         assert(
-            !entries[2].querySelector('.mx-sdk-localized-numeric-fill'),
-            `Plain Percent fill for ${id}`
+            !entries[2].querySelector(
+                '.mx-sdk-localized-numeric-track, .mx-sdk-localized-numeric-fill'
+            ),
+            `Plain Percent track or fill for ${id}`
         );
         const width = progress ? Number.parseFloat(progress.style.width) : null;
         if (fill === null) {
@@ -311,6 +351,9 @@ function capture(expected, checkIdentity) {
             progress: label,
             plain: label,
             fill: width,
+            ...(id === 'Mixed'
+                ? { paint: verifyMixedPaint(progress, track) }
+                : {}),
             neighbor: entries[3].innerText.trim(),
         };
     });

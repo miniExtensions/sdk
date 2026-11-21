@@ -101,6 +101,7 @@ jobs:
               env:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_PORTAL_PERCENT_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-grid-percent
+                  SDK_PORTAL_PERCENT_SCRATCH_ROOT: ${{ runner.temp }}/sdk-native-browser-scratch
                   SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
               run: |
                   set -euo pipefail

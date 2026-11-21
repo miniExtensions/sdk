@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { build, stop, transformSync } from 'esbuild';
 import { chromium } from 'playwright';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
@@ -57,15 +57,38 @@ const [commit, tree] = execFileSync(
     .trim()
     .split('\n');
 mkdirSync(output);
+const managedScratch = process.env.SDK_PORTAL_PERCENT_SCRATCH_ROOT;
+if (managedScratch) {
+    assert(
+        isAbsolute(managedScratch),
+        'Absolute Percent scratch root required'
+    );
+    assert.equal(
+        realpathSync(dirname(managedScratch)),
+        dirname(managedScratch)
+    );
+    mkdirSync(managedScratch, { recursive: true });
+    assert.equal(realpathSync(managedScratch), managedScratch);
+}
 const temporary = realpathSync(
-    mkdtempSync(join(tmpdir(), 'sdk-portal-grid-percent-'))
+    mkdtempSync(join(managedScratch ?? tmpdir(), 'sdk-portal-grid-percent-'))
 );
+if (managedScratch)
+    Object.assign(process.env, {
+        TMPDIR: temporary,
+        TMP: temporary,
+        TEMP: temporary,
+        XDG_CACHE_HOME: join(temporary, 'cache'),
+        XDG_CONFIG_HOME: join(temporary, 'config'),
+        npm_config_cache: join(temporary, 'npm-cache'),
+    });
 const profiles = new Map();
 const consumers = new Map();
 const assets = new Map();
 const report = {
     source: { checkout: commit, tree, fixtureSha256: digest(fixture) },
     archive: { sha256: archiveSha, bytes: archiveBytes.length },
+    scratch: managedScratch ? 'managed' : 'system temporary directory',
     profiles: [],
     cleanup: {},
 };

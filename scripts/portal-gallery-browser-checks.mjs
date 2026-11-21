@@ -1,8 +1,8 @@
+import { portalGalleryPagingAppearanceEntry } from './portal-gallery-paging-appearance-checks.mjs';
 import assert from 'node:assert/strict';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { portalGalleryPagingAppearanceEntry } from './portal-gallery-paging-appearance-checks.mjs';
 
 export const portalGalleryBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useLayoutEffect,useState} from 'react';

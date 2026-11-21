@@ -11,6 +11,7 @@ export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
 import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell,PortalGridButtonCell}from'@miniextensions/sdk/react';
+import{DateField}from'@miniextensions/sdk/react/date';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -474,6 +475,56 @@ function ButtonCellProbe() {
         })
     ))));
 }
+function DateOnlyProbe() {
+    const rows = Object.freeze([
+        Object.freeze({ recordId: 'recDate', title: 'Calendar day', date: '2026-03-08' }),
+        Object.freeze({ recordId: 'recNull', title: 'Null date', date: null }),
+        Object.freeze({ recordId: 'recMissing', title: 'Absent date' }),
+    ]);
+    const columns = [
+        { fieldId: 'fldTitle', title: 'Title', icon: 'text' },
+        { fieldId: 'fldDate', title: 'Appointment', icon: 'date' },
+    ];
+    const actions = { selects: 0, submits: 0, writes: 0 };
+    window.__dateOnlyGrid = () => ({ rows, actions, react: React.version });
+    const write = () => { actions.writes++; };
+    return h('form', {
+        id: 'date-only-grid',
+        onChange: write,
+        onSelect() { actions.selects++; },
+        onSubmit(event) { event.preventDefault(); actions.submits++; },
+    }, h(ReadonlyPortalGrid, {
+        columns,
+        rows: rows.map(({ recordId, title, date }) => ({
+            recordId, label: title,
+            cells: [
+                { fieldId: 'fldTitle', node: leaf(title) },
+                // Ordinary Grid leaves missing and null dates blank before mounting the leaf.
+                { fieldId: 'fldDate', node: date == null ? null : h(DateField, {
+                    id: 'date-only-grid-value',
+                    sessionId: 'date-only-grid',
+                    airtableDateConfig: {
+                        type: 'date',
+                        options: { dateFormat: { name: 'us', format: 'M/D/YYYY' } },
+                    },
+                    value: date,
+                    language: 'en',
+                    mode: 'readOnly',
+                }) },
+            ],
+        })),
+        primaryFieldId: 'fldTitle',
+        revision: 1,
+        preferenceScopeKey: 'date-only-grid',
+        ready: true,
+        isCurrent: () => true,
+        hiddenColumns: {},
+        columnWidths: { fldTitle: 180, fldDate: 180 },
+        onOpenRecord() { actions.selects++; },
+        onFieldHiddenChange: write,
+        onColumnWidthCommit: write,
+    }));
+}
 const root = createRoot(document.querySelector('#root'));
 window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()=>({react:React.version,platform:navigator.platform,committed,state:stateRead,externalRetired:retired,hides,widths,opens,submits,errors,pointers,headerEvents,canonicalUnchanged:JSON.stringify(records)===original}),
     startTextCell: () => root.render(h(StrictMode, null, h(TextCellProbe))),
@@ -485,7 +536,9 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
     startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key }))),
     startButtonCell: () => root.render(h(StrictMode, null, h(ButtonCellProbe))),
 };
-root.render(h(StrictMode,null,h(App)));
+root.render(h(StrictMode, null, h(
+    new URLSearchParams(location.search).get('fixture') === 'date-only' ? DateOnlyProbe : App
+)));
 `;
 
 export async function prepareReadonlyPortalGridBrowserFixtures(args) {
@@ -517,6 +570,7 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     const inputs = Object.keys(bundle.metafile.inputs);
     for (const suffix of [
         '/react/ReadonlyPortalGrid.js',
+        '/react/date/DateField.js',
         '/react/CompleteReadOnlyTextField.js',
         '/react/CompleteFormFieldPresentation.js',
         '/react/readonly-portal-grid.css',
@@ -595,6 +649,114 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         scriptSha256: hash(allowed.get('/readonly-portal-grid.js')),
         cssSha256: hash(allowed.get('/readonly-portal-grid.css')),
     };
+}
+
+// Ordinary native Grid at 2c7a42d4 formats the physical US Date as M/D/YYYY.
+export async function checkReadonlyPortalGridDateBrowser({
+    browser,
+    origin,
+    evidence,
+}) {
+    const fixture = '/readonly-portal-grid.html?fixture=date-only';
+    const paths = new Set([
+        fixture,
+        '/readonly-portal-grid.js',
+        '/readonly-portal-grid.css',
+        '/favicon.ico',
+    ]);
+    const records = [
+        { recordId: 'recDate', title: 'Calendar day', date: '2026-03-08' },
+        { recordId: 'recNull', title: 'Null date', date: null },
+        { recordId: 'recMissing', title: 'Absent date' },
+    ];
+    const cases = [];
+    evidence.dateOnly = cases;
+    for (const timezoneId of ['UTC', 'America/Los_Angeles']) {
+        const context = await browser.newContext({
+            timezoneId,
+            serviceWorkers: 'block',
+        });
+        const item = { timezoneId, refusedRequests: [], pageErrors: [] };
+        cases.push(item);
+        try {
+            await context.route('**/*', (route) => {
+                const request = route.request();
+                const url = new URL(request.url());
+                if (
+                    url.origin === origin &&
+                    request.method() === 'GET' &&
+                    paths.has(url.pathname + url.search)
+                ) {
+                    return route.continue();
+                }
+                item.refusedRequests.push({
+                    method: request.method(),
+                    url: request.url(),
+                });
+                return route.abort();
+            });
+            const page = await context.newPage();
+            page.on('pageerror', (error) =>
+                item.pageErrors.push(error.message)
+            );
+            await page.goto(origin + fixture, { waitUntil: 'networkidle' });
+            const grid = page.locator('#date-only-grid');
+            await grid.getByRole('table').waitFor({ state: 'visible' });
+            item.observed = await grid.evaluate((form) => ({
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                ...window.__dateOnlyGrid(),
+                cells: Array.from(
+                    form.querySelectorAll('tr[data-record-id]')
+                ).map((row) => ({
+                    recordId: row.dataset.recordId,
+                    fields: Array.from(
+                        row.querySelectorAll('td[data-field-id]')
+                    ).map((cell) => ({
+                        fieldId: cell.dataset.fieldId,
+                        primary: cell.dataset.primary,
+                        text: cell.innerText.trim(),
+                        visible: cell.checkVisibility(),
+                        controls: cell.querySelectorAll(
+                            'input, textarea, select, button, [role="dialog"], [aria-haspopup], [placeholder]'
+                        ).length,
+                    })),
+                })),
+            }));
+            assert.deepEqual(item.observed, {
+                timezone: timezoneId,
+                react: evidence.react,
+                rows: records,
+                actions: { selects: 0, submits: 0, writes: 0 },
+                cells: records.map(({ recordId, title, date }) => ({
+                    recordId,
+                    fields: [
+                        {
+                            fieldId: 'fldTitle',
+                            primary: 'true',
+                            text: title,
+                            visible: true,
+                            controls: 0,
+                        },
+                        {
+                            fieldId: 'fldDate',
+                            primary: 'false',
+                            text: date ? '3/8/2026' : '',
+                            visible: true,
+                            controls: 0,
+                        },
+                    ],
+                })),
+            });
+            assert.deepEqual(item.refusedRequests, []);
+            assert.deepEqual(item.pageErrors, []);
+        } catch (error) {
+            item.error = error.message;
+        } finally {
+            await context.close();
+        }
+    }
+    const failed = cases.filter((item) => item.error);
+    assert.deepEqual(failed, [], 'Packed read-only Date-only Grid');
 }
 
 export async function checkReadonlyPortalGridBrowser({
@@ -2907,6 +3069,7 @@ export async function checkReadonlyPortalGridProfile({
                 await page.locator('body').ariaSnapshot()
             );
         }
+        await checkReadonlyPortalGridDateBrowser({ browser, origin, evidence });
         assert.deepEqual(unexpected, []);
         evidence.requests = requests;
     } catch (error) {

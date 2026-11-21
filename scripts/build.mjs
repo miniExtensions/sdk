@@ -1,3 +1,4 @@
+import { assertPostgresCopyPlanningReceiptProvenance } from './postgres-copy-planning-receipts.mjs';
 import { bundleKanban } from './kanban-bundle.mjs';
 import { bundlePortalMap } from './portal-map-vendor-checks.mjs';
 import { build as bundle } from 'esbuild';
@@ -20,6 +21,7 @@ import {
     cpSync,
     mkdirSync,
     readFileSync,
+    readdirSync,
     rmSync,
     writeFileSync,
 } from 'node:fs';
@@ -27,7 +29,19 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { compilerMetadata, fingerprint } from './build-metadata.mjs';
 import { withCommonJsSource } from './commonjs-source.mjs';
-import { publicContractDependencies } from './distribution-checks.mjs';
+import {
+    publicContractDependencies,
+    publicPostgresRuntimeArtifacts,
+} from './distribution-checks.mjs';
+import {
+    assertPostgresContractDeclarationInventory,
+    assertPostgresRuntimeArtifactSet,
+    assertPostgresRuntimeEmitter,
+    assertPostgresRuntimeContractInventory,
+    assertPostgresRuntimeRegistryProvenance,
+} from './postgres-runtime-artifact-registry.mjs';
+import { assertPostgresConfigReceiptProvenance } from './postgres-config-receipts.mjs';
+import { assertPostgresFormAccessReceiptProvenance } from './postgres-form-access-receipts.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -165,17 +179,6 @@ await bundleDatePopover();
 mkdirSync('dist/cjs', { recursive: true });
 writeFileSync('dist/cjs/package.json', '{"type":"commonjs"}\n');
 
-// The detailed source manifest remains the generator's internal --check input.
-const internal = JSON.parse(
-    readFileSync('src/runtime/contracts/generated.provenance.json', 'utf8')
-);
-const declarations = readFileSync('dist/esm/runtime/contracts/generated.d.ts');
-assert(
-    declarations.equals(
-        readFileSync('dist/cjs/runtime/contracts/generated.d.ts')
-    ),
-    'Module formats must distribute identical contract declarations'
-);
 const publicOperationFields = [
     'operation',
     'input',
@@ -184,38 +187,169 @@ const publicOperationFields = [
     'kind',
     'transport',
 ];
-const publicProvenance = {
-    schemaVersion: 1,
-    compilerVersion: internal.compilerVersion,
-    generatorSha256: internal.generatorSha256,
-    transport: internal.transport,
-    declarationCount: internal.declarationCount,
-    generatedSha256: internal.generatedSha256,
-    contractDeclarationsSha256: createHash('sha256')
-        .update(declarations)
-        .digest('hex'),
-    operations: internal.operations.map((operation) =>
-        Object.fromEntries(
-            publicOperationFields.map((field) => [field, operation[field]])
-        )
-    ),
-    dependencies: publicContractDependencies(internal.dependencies),
-};
-for (const format of ['esm', 'cjs']) {
-    const modulePath = `dist/${format}/runtime/contracts/generated.js`;
-    const module = readFileSync(modulePath, 'utf8');
-    const privateComment = `// Canonical monorepo revision: ${internal.sourceRevision}\n`;
-    assert.equal(
-        module.split(privateComment).length,
-        2,
-        'Expected one generated revision comment'
+for (const name of ['generated', 'postgres.generated']) {
+    // The detailed source manifest remains the generator's internal --check input.
+    const internal = JSON.parse(
+        readFileSync(`src/runtime/contracts/${name}.provenance.json`, 'utf8')
     );
-    // Remove only this comment; emitted code and other comments stay intact.
-    writeFileSync(modulePath, module.replace(privateComment, ''));
-    writeFileSync(
-        `dist/${format}/runtime/contracts/generated.provenance.json`,
-        JSON.stringify(publicProvenance, null, 4) + '\n'
+    const declarations = readFileSync(
+        `dist/esm/runtime/contracts/${name}.d.ts`
     );
+    assert(
+        declarations.equals(
+            readFileSync(`dist/cjs/runtime/contracts/${name}.d.ts`)
+        ),
+        'Module formats must distribute identical contract declarations'
+    );
+    let runtimeArtifacts;
+    if (name === 'postgres.generated') {
+        assertPostgresCopyPlanningReceiptProvenance(
+            internal,
+            createHash('sha256')
+                .update(
+                    readFileSync(
+                        new URL(
+                            './postgres-copy-planning-receipts.mjs',
+                            import.meta.url
+                        )
+                    )
+                )
+                .digest('hex'),
+            declarations
+        );
+        assertPostgresFormAccessReceiptProvenance(
+            internal,
+            createHash('sha256')
+                .update(
+                    readFileSync(
+                        new URL(
+                            './postgres-form-access-receipts.mjs',
+                            import.meta.url
+                        )
+                    )
+                )
+                .digest('hex'),
+            declarations
+        );
+        assertPostgresRuntimeRegistryProvenance(internal);
+        assertPostgresConfigReceiptProvenance(
+            internal,
+            createHash('sha256')
+                .update(
+                    readFileSync(
+                        new URL(
+                            './postgres-config-receipts.mjs',
+                            import.meta.url
+                        )
+                    )
+                )
+                .digest('hex'),
+            declarations
+        );
+        assertPostgresContractDeclarationInventory(internal, declarations);
+        runtimeArtifacts = publicPostgresRuntimeArtifacts(
+            internal.runtimeArtifacts,
+            internal.configurationValidation
+        );
+        const specifications = assertPostgresRuntimeArtifactSet(
+            internal.runtimeArtifacts,
+            internal.configurationValidation
+        );
+        for (const format of ['esm', 'cjs'])
+            assertPostgresRuntimeContractInventory(
+                readdirSync(`dist/${format}/runtime/contracts`, {
+                    recursive: true,
+                }),
+                internal.configurationValidation
+            );
+        for (const [index, artifact] of runtimeArtifacts.entries()) {
+            const recorded = internal.runtimeArtifacts[index];
+            const specification = assertPostgresRuntimeEmitter(
+                recorded,
+                internal.configurationValidation
+            );
+            assert.equal(specification.module, specifications[index].module);
+            const source = readFileSync(
+                `src/runtime/contracts/${artifact.module}.ts`,
+                'utf8'
+            );
+            const expected = specification.outputHashes(source);
+            assert.deepEqual(
+                {
+                    generatedSha256: artifact.generatedSha256,
+                    moduleSha256: artifact.moduleSha256,
+                    declarationsSha256: artifact.declarationsSha256,
+                },
+                expected,
+                'Generated PostgreSQL display runtime is stale'
+            );
+            assert(
+                internal.sources.some(
+                    ({ path, sha256 }) =>
+                        path === recorded.sourcePath &&
+                        sha256 === recorded.sourceSha256
+                ),
+                'PostgreSQL runtime source is not bound to canonical provenance'
+            );
+            for (const format of ['esm', 'cjs']) {
+                const prefix = `dist/${format}/runtime/contracts/${artifact.module}`;
+                assert.equal(
+                    createHash('sha256')
+                        .update(readFileSync(prefix + '.js'))
+                        .digest('hex'),
+                    artifact.moduleSha256[format],
+                    'Compiled PostgreSQL display runtime differs from generated output'
+                );
+                assert.equal(
+                    createHash('sha256')
+                        .update(readFileSync(prefix + '.d.ts'))
+                        .digest('hex'),
+                    artifact.declarationsSha256,
+                    'Compiled PostgreSQL display runtime declarations differ from generated output'
+                );
+            }
+        }
+    }
+    const publicProvenance = {
+        schemaVersion: 1,
+        ...(name === 'postgres.generated'
+            ? {
+                  contractFamily: internal.contractFamily,
+                  aliases: internal.aliases,
+                  runtimeArtifacts,
+              }
+            : {}),
+        compilerVersion: internal.compilerVersion,
+        generatorSha256: internal.generatorSha256,
+        transport: internal.transport,
+        declarationCount: internal.declarationCount,
+        generatedSha256: internal.generatedSha256,
+        contractDeclarationsSha256: createHash('sha256')
+            .update(declarations)
+            .digest('hex'),
+        operations: (internal.operations ?? []).map((operation) =>
+            Object.fromEntries(
+                publicOperationFields.map((field) => [field, operation[field]])
+            )
+        ),
+        dependencies: publicContractDependencies(internal.dependencies),
+    };
+    for (const format of ['esm', 'cjs']) {
+        const modulePath = `dist/${format}/runtime/contracts/${name}.js`;
+        const module = readFileSync(modulePath, 'utf8');
+        const privateComment = `// Canonical monorepo revision: ${internal.sourceRevision}\n`;
+        assert.equal(
+            module.split(privateComment).length,
+            2,
+            'Expected one generated revision comment'
+        );
+        // Remove only this comment; emitted code and other comments stay intact.
+        writeFileSync(modulePath, module.replace(privateComment, ''));
+        writeFileSync(
+            `dist/${format}/runtime/contracts/${name}.provenance.json`,
+            JSON.stringify(publicProvenance, null, 4) + '\n'
+        );
+    }
 }
 
 for (const format of ['esm', 'cjs']) {

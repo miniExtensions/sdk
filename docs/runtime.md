@@ -6,6 +6,126 @@ client: your app renders the interface while the existing handlers enforce
 the Form/Portal's visitor, record, field, and action permissions. Public tRPC
 requests use the official `@trpc/client` HTTP link and its plain JSON protocol.
 
+The package also exports native PostgreSQL connection, database, schema, table,
+field, relationship and record metadata types. It also exports `PostgresSource`,
+`PostgresFilter`, `PostgresSort`, `PostgresSelectQuery` and `PostgresSelectResult`
+for structured native reads with explicit source identity, nested filters,
+sorting and offset pagination. Read rows remain native fieldsets without a
+record identity or display label. `PostgresValue` preserves the
+server's text representation as `string | null`, including large numbers,
+timestamps, JSON and arrays; SQL NULL remains distinct from an empty string.
+These native metadata contracts do not yet enable PostgreSQL Form/Portal
+operations or change the existing Airtable runtime contracts.
+
+`PostgresFormRecordAccess` describes saved private Form access intent using the
+existing inverse creation/editing flags. With editing disabled, an identifier
+may be retained without supplying editing authority. With editing enabled, the
+type requires an explicit native identifier binding. The containing Form may
+omit access entirely to retain creation/read preview with editing off. Current
+workspace membership, saved revision, native metadata and database grants still
+authorize each operation. This type-only export adds no schema validator,
+resolver, public-session operation or lasting row-mutation capability.
+
+`PostgresUuidColumnConfig` adds UUID common settings as the sixth native family
+under configuration receipt v6 and its 23-source closure. UUIDs and domains over
+UUID remain native string-or-NULL values; this type adds no text normalization,
+version restriction or UUID generation option. Historical receipt versions 1–5
+retain their existing families and source closures.
+
+`PostgresTimestampColumnConfig` and `PostgresTimestamptzColumnConfig` add distinct
+native temporal configuration families under receipt v7 and its 24-source
+closure. They describe common field settings for local timestamps and instants;
+they add no timezone conversion, epoch values, precision setting or native value
+input. Values remain PostgreSQL text or SQL NULL. Historical receipt versions
+1–6 retain their existing families and source closures. Configuration/read
+preview and value-input admission remain separate in the private application.
+
+`PostgresTimeColumnConfig` and `PostgresTimetzColumnConfig` add common field
+settings for native TIME and TIMETZ columns under receipt v8 and its 25-source
+closure. Configured columns use the distinct `time` and `timetz` kinds. Values
+remain PostgreSQL text or SQL NULL; these types add no timezone conversion,
+precision setting, JavaScript date conversion or portable value parser.
+Historical versions 1–7 retain their families and source closures. The two
+portable display runtimes are unchanged; these type exports add no public
+PostgreSQL Form/Portal transport operation.
+
+`PostgresIntervalColumnConfig` adds the native `interval` common-settings family
+under receipt v9 and its 26-source closure. Values retain native month/day/time
+components as text or SQL NULL. This adds no duration-number conversion, unit
+selection, precision override, IntervalStyle setting or portable value parser.
+Versions 1–8 retain their exact families and source closures. Public Form/Portal
+transport admission remains separate from these type exports.
+
+`PostgresJsonColumnConfig` and `PostgresJsonbColumnConfig` add separate `json`
+and `jsonb` common-settings families under receipt v10 and its 27-source
+closure. Native document values remain `PostgresValue` strings or SQL NULL;
+JSON text `'null'` is distinct from SQL `null`. No JavaScript object parsing,
+pretty printing, numeric coercion or JSON-schema setting is added. PostgreSQL
+owns the returned representation. The existing `JsonValue` utility is separate
+from native database column values. Versions 1–9 retain their exact families
+and source closures; portable runtime and public transport admission are unchanged.
+
+The independent native snapshot also exports `PostgresConfiguredColumn`,
+`PostgresReadableRelationConfiguration`, `PostgresFormDraftState`,
+`PostgresFormDraft`, `PostgresPortalTab`, `PostgresPortalDraftState`,
+`PostgresPortalDraft` and `PostgresNativeDraft`. These come from the existing
+private workspace-member authoring schemas. The draft union correlates the
+existing `form` or `portal` type with its native state and PostgreSQL source;
+configured columns correlate their native kind with valid field settings.
+Every relation requires a display-column name. Connection equality, duplicate
+columns, bounds, saved revisions and current native metadata still require
+server validation; TypeScript cannot establish those rules for arbitrary
+strings or arrays. These type-only exports add no public load/save operation,
+validator or permission capability and do not widen the released Airtable
+operation contracts.
+
+`PostgresRelationshipBinding` describes a saved outgoing foreign-key group,
+including native constraint/index identities, ordered key columns, equality
+operators and collations. Enabled selection requires an explicit target display
+column; labels may be duplicate, SQL NULL or empty. A clear-only binding disables
+selection and needs no target display column. `PostgresRelationshipSelection`
+retains lossless native key values, and `PostgresRelationshipChange` pairs a
+selection with loaded component baselines.
+
+`PostgresRelationshipPresentation` is optional read-only display data, bound to
+an ordered loaded local tuple. A resolved label preserves SQL NULL and empty
+text; empty relationships and unavailable labels have distinct states. Row
+observations and select results may carry these presentations separately from
+fields. They cannot be used as selections or write authority. Reopening or
+submitting an unchanged relationship does not assign it again.
+
+`PostgresRelationshipConfig.clearColumnNames` records the builder's explicit
+choice of local columns Clear may empty. `PostgresRelationshipClear` carries
+only relationship intent and optional baselines; it cannot choose write columns.
+Server validation still enforces the native MATCH rule, nullable/writable
+columns, saved settings, configured identifier protection, current grants,
+overlapping relationships and stale baselines. For example, a configured Clear
+may empty `contact_id` while preserving `tenant_id`. No Clear action is available
+until the saved column selection is valid. These contracts appear optionally on
+private Form/Portal authoring configurations and add no public mutation route.
+
+`PostgresField.collationOid` is required database-local collation metadata.
+Its explicit `null` means a noncollatable column; missing metadata is not NULL.
+Identifier column bindings retain an optional collation only so older saved
+authoring state can load for explicit refresh and rebind. Such a legacy binding
+does not admit a preview or mutation until current metadata is known and matches;
+loading it never silently fills the missing collation or grants write authority.
+
+`postgresTextColumnPresentationDefinition` and
+`resolvePostgresTextColumnPresentation` come from the same generated native text
+policy used by the application. Missing `displayAs` selects ordinary text;
+`attachments-public-urls` selects read-only links to existing public files.
+Unknown or null modes throw `PostgresTextColumnPresentationError` with reason
+`INVALID_PRESENTATION`. Both modes keep the stored value as text and exclude
+attachment mutation and generated attachment output. Text input applicability
+does not grant database permissions or admit a public Form/Portal operation.
+
+Record settings contracts require an explicit display column, including when a
+table has a native primary key. A customer-configured identifier also requires
+explicit stability confirmation. `PostgresRecordEditingValidation` describes
+only the current visible snapshot; it grants no ongoing mutation capability or
+promise of future uniqueness.
+
 For a complete browser application, start with the shipped
 [browser lifecycle guide](browser-lifecycle.md). It explains how to copy the
 packaged Form and Portal starter into your own project, install the exact
@@ -372,7 +492,7 @@ snapshot against the detailed internal manifest:
 node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --check
 ```
 
-The generator checks the selected source revision and input file hashes.
+Operation-snapshot generation checks the selected source revision and input file hashes.
 Before compiling contracts or writing outputs, it executes that checkout's
 unchanged canonical public-runtime CORS transport helper.
 Every generated public tRPC query/mutation must receive both preflight and
@@ -395,6 +515,78 @@ historical revision and is not an automatic selection of current backend code.
 Regenerate the snapshot and update the packaged declaration digest when
 adopting API contract changes. Installed consumers need no internal source,
 generator or credentials.
+
+Native PostgreSQL metadata, query/create/update contracts and record settings
+have an independent generated snapshot, so adding these types does not replace
+the existing operation contracts. Create results describe committed native
+`RETURNING` values; these adapter contracts do not add a loaded PostgreSQL Form
+or a new public save operation. `PostgresRowObservation` carries the native key,
+metadata and field baselines from an authorized read. `PostgresUpdateQuery`
+distinguishes omitted assignments, empty text and SQL NULL, with an expected
+baseline for each submitted field. `PostgresUpdateResult` describes acknowledged
+COMMIT and its actual returned observation, including a changed primary key.
+These types add no public Portal transport or lasting mutation authority.
+Maintainers verify it with:
+
+```sh
+node scripts/generate-runtime-contracts.mjs --postgres-only --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --verify --check
+```
+
+Omit `--verify --check` to generate it. This mode reads the canonical native
+models and private authoring schemas using compiler, source-hash and bidirectional contract checks;
+it generates no API operations and does not run transport CORS checks. It also
+relocates the authored attachment-display parser into a portable runtime module
+using an AST import rewrite. The private manifest binds canonical source bytes,
+generated TypeScript, the emitter and expected ESM/CommonJS/declaration outputs;
+build and installed-package checks verify those outputs independently. Both
+module formats ship `runtime/contracts/postgres.generated.d.ts` with public
+declaration provenance. Private source revisions and source paths remain in the
+repository's internal manifest.
+
+`PostgresTextColumnConfig`, `PostgresBooleanColumnConfig`,
+`PostgresNumericColumnConfig`, `PostgresDateColumnConfig` and
+`PostgresEnumColumnConfig` are portable inferred
+types of the application's generated scalar column storage schemas, which come
+from its authored settings. Optional settings stay absent unless supplied;
+explicit false, zero, empty strings and undefined retain their canonical types.
+Boolean, numeric, SQL DATE and enum settings expose the common controls and omit
+text-only display, attachment, placeholder, character and whitespace controls.
+They add no numeric formatting, date format, time zone or checkbox-style setting.
+Native numeric and SQL DATE values remain text/NULL. No Zod import, schema
+validator or value parser/decoder ships with these configuration types.
+Runtime constraints such as finite, nonnegative integer
+limits still belong to the application's schema; these exports do not enable
+public Form loading, saving or submission, or define Required submission rules.
+
+Native maintainer generation verifies the canonical configuration receipt,
+generated schema and complete versioned source-hash closure. Historical v1
+receipts contribute the text family; v2 requires exactly the text and Boolean
+families; v3 requires exactly text, Boolean, numeric and SQL DATE. V4 keeps those
+four storage families and also binds the authored text-presentation policy and
+its generated sidecar. The SDK relocates that sidecar into a separate portable
+runtime module with no imports or copied policy implementation. Its descriptor,
+resolver and error class are verified against the canonical module; the
+attachment parser stays separate. The private
+native manifest binds the receipt validator's bytes, and
+build checks verify that binding without opening the canonical checkout.
+Ordinary SDK CI still uses committed portable declarations and SDK dependencies.
+Version 5 adds the enum storage family and its exact 22-source authoring closure.
+Versions 1–4 keep their existing family/source sets. Versions 4 and 5 use the
+same two portable display artifacts. Enum labels remain ordered database
+metadata; configuration does not copy choices, trim values or admit enum writes.
+This checkpoint covers enum settings/read preview; native enum entry and its
+Required edge cases remain separate implementation work.
+
+`parsePostgresAttachmentDisplay` projects stored text into read-only URL strings.
+Literal commas separate absolute HTTP(S) URLs; use `%2C` for a comma inside one
+URL. Spaces around entries are ignored. Quoted entries, backslash escaping,
+empty entries, malformed URLs and URL credentials fail with a
+`PostgresAttachmentDisplayError` carrying a zero-based `index` and canonical
+`reason`, without echoing the URL. SQL NULL and blank text project to an empty
+list. `POSTGRES_ATTACHMENT_DISPLAY_SYNTAX` exposes the same authored grammar.
+The parser preserves URL bytes and stored text, performs no network access and
+does not verify reachability or public access. It grants no upload, mutation,
+file-hosting or generated attachment capability.
 
 ## Portal tables, search, and pagination
 
@@ -1023,3 +1215,19 @@ and view mode are detached once. Every transport gets a fresh detached request;
 host-only transport context may resolve afresh. Host progress revision/writer
 provenance stays with the existing publication owner and must never be sent,
 reread or written by the loader.
+
+Native BYTEA column configurations share the existing common Form/Portal settings
+and preserve raw PostgreSQL hex and escape strings, including spaces. Optional
+omission uses the database default; SQL NULL and explicit empty input remain
+distinct. Required needs a submitted nonempty answer; `\x` deliberately submits
+zero bytes. Returned bytes use canonical `\x` hex independently of the role's
+`bytea_output` setting. BYTEA does not inherit text normalization, public-URL
+attachment display, upload controls or array-input admission.
+
+Native Copy Field Value authoring uses its existing extension type and a generated
+ordered source/destination mapping. Its private read plan carries exact stored
+values and current destination metadata with `executionAdmission: 'pending'`.
+`valuePolicy: 'exact-native-values'` preserves SQL NULL, empty text, whitespace
+and false as explicit source values that replace the destination. Omitted
+assignments remain distinct; PostgreSQL owns assignment casts and constraints.
+These types do not admit scheduling or expose a new public runtime operation.

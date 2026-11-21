@@ -1,3 +1,9 @@
+import {
+    postgresCopyPlanningSource,
+    postgresCopyPlanningProvenance,
+    postgresCopyPlanningDraftSource,
+    readPostgresCopyPlanningReceipt,
+} from './postgres-copy-planning-receipts.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -6,9 +12,19 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import prettier from 'prettier';
 import {
-    assertRuntimeCorsPolicy,
-    canonicalCorsPolicyPath,
-} from './runtime-cors-check.mjs';
+    postgresFieldConfigSource,
+    postgresFieldConfigProvenance,
+    readPostgresConfigReceipt,
+} from './postgres-config-receipts.mjs';
+import {
+    postgresFormAccessSource,
+    postgresFormAccessProvenance,
+    readPostgresFormAccessReceipt,
+} from './postgres-form-access-receipts.mjs';
+import {
+    postgresRuntimeArtifactSpecifications,
+    postgresRuntimeRegistrySha256,
+} from './postgres-runtime-artifact-registry.mjs';
 
 // This is a transport map, not a second definition of any API payload.
 const v1 = [
@@ -133,28 +149,40 @@ const revision = argumentsList.includes('--revision')
     : 'fc1f8b05eff9658741cb797428d50ffe384b89e0';
 if (!/^[a-f0-9]{40}$/.test(revision))
     throw new Error('Use a full canonical source revision.');
+const postgresOnly = argumentsList.includes('--postgres-only');
 const check = argumentsList.includes('--check');
 const verify = argumentsList.includes('--verify');
 const diagnose = argumentsList.includes('--diagnose');
 if (diagnose && !verify) throw new Error('--diagnose requires --verify.');
 const outputDirectory = path.join(sdkRoot, 'src/runtime/contracts');
-const generatedFile = path.join(outputDirectory, 'generated.ts');
-const provenanceFile = path.join(outputDirectory, 'generated.provenance.json');
+const outputName = postgresOnly ? 'postgres.generated' : 'generated';
+const generatedFile = path.join(outputDirectory, `${outputName}.ts`);
+const provenanceFile = path.join(
+    outputDirectory,
+    `${outputName}.provenance.json`
+);
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 const entryName = path.join(
     monorepo,
     '__sdk_canonical_contract_generation__.ts'
 );
-const entryLines = [
-    "import type { inferRouterInputs, inferRouterOutputs, inferProcedureOutput } from '@trpc/server';",
-    "import type { AppTRPCRouter } from './backend-src/trpc/routers';",
-    "import type { v1APIRoute } from './types/api/routes';",
-    'type RouterInputs = inferRouterInputs<AppTRPCRouter>;',
-    'type RouterOutputs = inferRouterOutputs<AppTRPCRouter>;',
-];
+const entryLines = postgresOnly
+    ? []
+    : [
+          "import type { inferRouterInputs, inferRouterOutputs, inferProcedureOutput } from '@trpc/server';",
+          "import type { AppTRPCRouter } from './backend-src/trpc/routers';",
+          "import type { v1APIRoute } from './types/api/routes';",
+          'type RouterInputs = inferRouterInputs<AppTRPCRouter>;',
+          'type RouterOutputs = inferRouterOutputs<AppTRPCRouter>;',
+      ];
 const operationAliases = [];
-for (const [index, [operation, module, type, routeOverride]] of v1.entries()) {
+const selectedV1 = postgresOnly ? [] : v1;
+const selectedTrpc = postgresOnly ? [] : trpc;
+for (const [
+    index,
+    [operation, module, type, routeOverride],
+] of selectedV1.entries()) {
     const route = routeOverride ?? type[0].toLowerCase() + type.slice(1);
     entryLines.push(
         `import type { ${type}Input, ${type}Output } from './types/api/types/${module}';`
@@ -173,7 +201,10 @@ for (const [index, [operation, module, type, routeOverride]] of v1.entries()) {
         routeType: `V1Route${index}`,
     });
 }
-for (const [index, [operation, group, procedure, kind]] of trpc.entries()) {
+for (const [
+    index,
+    [operation, group, procedure, kind],
+] of selectedTrpc.entries()) {
     entryLines.push(
         `export type TrpcInput${index} = RouterInputs['${group}']['${procedure}'];`
     );
@@ -199,81 +230,319 @@ for (const [index, [operation, group, procedure, kind]] of trpc.entries()) {
         kindType: `TrpcKind${index}`,
     });
 }
-// This explicit maintainer-only path is never called by customer/package CI.
-// Pin policy bytes before compiling contracts or writing either output.
-const corsPolicy = readFileSync(path.join(monorepo, canonicalCorsPolicyPath));
-const recordedCorsPolicy = execFileSync(
-    'git',
-    ['show', `${revision}:${canonicalCorsPolicyPath}`],
+const postgresModelAliases = [
+    'PostgresConnection',
+    'PostgresSource',
+    'PostgresDatabase',
+    'PostgresSchema',
+    'PostgresTable',
+    'PostgresTableReference',
+    'PostgresField',
+    'PostgresType',
+    'PostgresRelationship',
+    'PostgresRelationshipOperator',
+    'PostgresRelationshipCollation',
+
+    'PostgresRecord',
+    'PostgresValue',
+    'PostgresRecordIdentity',
+];
+const postgresQueryAliases = [
+    'PostgresFilter',
+    'PostgresSort',
+    'PostgresSelectQuery',
+    'PostgresSelectResult',
+];
+const postgresRecordSettingsAliases = [
+    'PostgresIdentifierConfiguration',
+    'PostgresRecordDisplayConfiguration',
+    'PostgresRecordEditingConfiguration',
+    'PostgresRecordEditingValidation',
+];
+const postgresCreateAliases = ['PostgresCreateQuery', 'PostgresCreateResult'];
+const postgresUpdateAliases = [
+    'PostgresRowObservation',
+    'PostgresUpdateQuery',
+    'PostgresUpdateResult',
+];
+const postgresAttachmentAliases = ['PostgresAttachmentDisplayFailure'];
+// Existing private member authoring schemas, not public runtime operations.
+// Keep their source/type/state correlation rather than inventing SDK models.
+const readCopyPlanningValidation = () => {
+    const receipt = readPostgresCopyPlanningReceipt({ monorepo, revision });
+    return receipt == null
+        ? null
+        : {
+              ...receipt,
+              validatorSha256: hash(
+                  readFileSync(
+                      new URL(
+                          './postgres-copy-planning-receipts.mjs',
+                          import.meta.url
+                      )
+                  )
+              ),
+          };
+};
+const copyPlanningValidation = postgresOnly
+    ? readCopyPlanningValidation()
+    : null;
+const postgresCopyPlanningConfigAliases = copyPlanningValidation?.aliases ?? [];
+const postgresAuthoringContracts = [
     {
-        cwd: monorepo,
-        maxBuffer: 1024 * 1024,
-    }
+        source: 'types/postgres/relationships.ts',
+        aliases: [
+            'PostgresRelationshipConfig',
+            'PostgresRelationshipColumn',
+            'PostgresRelationshipBinding',
+            'PostgresRelationshipSelection',
+            'PostgresRelationshipChange',
+            'PostgresRelationshipClear',
+            'PostgresRelationshipCandidate',
+            'PostgresRelationshipCandidatePage',
+            'PostgresRelationshipPresentation',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/draftCommon.ts',
+        aliases: [
+            'PostgresConfiguredColumn',
+            'PostgresReadableRelationConfiguration',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/formDraft.ts',
+        aliases: ['PostgresFormDraftState', 'PostgresFormDraft'],
+    },
+    {
+        source: 'types/extensions/postgres/portalDraft.ts',
+        aliases: [
+            'PostgresPortalTab',
+            'PostgresPortalDraftState',
+            'PostgresPortalDraft',
+        ],
+    },
+    ...(copyPlanningValidation == null
+        ? []
+        : [
+              {
+                  source: postgresCopyPlanningDraftSource,
+                  aliases: [
+                      'PostgresCopyFieldValueDraftState',
+                      'PostgresCopyFieldValueDraft',
+                      'PostgresCopyFieldValuePlanMapping',
+                      'PostgresCopyFieldValuePlan',
+                  ],
+              },
+          ]),
+    {
+        source: 'types/extensions/postgres/recordCopierDraft.ts',
+        aliases: [
+            'PostgresRecordCopierDraftState',
+            'PostgresRecordCopierDraft',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/csvAttachmentDraft.ts',
+        aliases: ['PostgresCsvAttachmentState', 'PostgresCsvAttachmentDraft'],
+    },
+    {
+        source: 'types/extensions/postgres/randomNumbersDraft.ts',
+        aliases: [
+            'PostgresRandomNumbersDraftState',
+            'PostgresRandomNumbersDraft',
+        ],
+    },
+    {
+        source: 'types/extensions/postgres/nativeDraft.ts',
+        aliases: ['PostgresNativeDraft'],
+    },
+];
+const postgresAuthoringAliases = postgresAuthoringContracts.flatMap(
+    ({ aliases }) => aliases
 );
-if (!corsPolicy.equals(recordedCorsPolicy))
-    throw new Error(
-        `Canonical source drifted from ${revision}: ${canonicalCorsPolicyPath}`
+const readConfigurationValidation = () => ({
+    ...readPostgresConfigReceipt({ monorepo, revision }),
+    validatorSha256: hash(
+        readFileSync(new URL('./postgres-config-receipts.mjs', import.meta.url))
+    ),
+});
+// Historical receipts contribute text only; current receipts add Boolean.
+// Default operation generation never reads canonical configuration inputs.
+const configurationValidation = postgresOnly
+    ? readConfigurationValidation()
+    : null;
+const readFormAccessValidation = () => {
+    const receipt = readPostgresFormAccessReceipt({ monorepo, revision });
+    return receipt == null
+        ? null
+        : {
+              ...receipt,
+              validatorSha256: hash(
+                  readFileSync(
+                      new URL(
+                          './postgres-form-access-receipts.mjs',
+                          import.meta.url
+                      )
+                  )
+              ),
+          };
+};
+const formAccessValidation = postgresOnly ? readFormAccessValidation() : null;
+const postgresFormAccessAliases = formAccessValidation?.aliases ?? [];
+const postgresFieldConfigAliases = configurationValidation?.aliases ?? [];
+const postgresRuntimeSpecifications = postgresOnly
+    ? postgresRuntimeArtifactSpecifications(configurationValidation)
+    : [];
+const runtimeRegistrySha256 = postgresOnly
+    ? postgresRuntimeRegistrySha256()
+    : null;
+const runtimeEmitterHashes = new Map(
+    postgresRuntimeSpecifications.map((specification) => [
+        specification.module,
+        hash(readFileSync(specification.emitter)),
+    ])
+);
+const postgresRuntimeExports = postgresRuntimeSpecifications.flatMap(
+    (specification) => specification.exports
+);
+const postgresAliases = [
+    ...postgresModelAliases,
+    ...postgresQueryAliases,
+    ...postgresRecordSettingsAliases,
+    ...postgresCreateAliases,
+    ...postgresUpdateAliases,
+    ...postgresAttachmentAliases,
+    ...postgresFieldConfigAliases,
+    ...postgresFormAccessAliases,
+    ...postgresCopyPlanningConfigAliases,
+    ...postgresAuthoringAliases,
+];
+let corsValidation = null;
+let canonicalCorsPolicyPath;
+if (postgresOnly) {
+    entryLines.push(
+        `import type { ${postgresModelAliases.join(', ')} } from './types/postgres/types';`
     );
-const corsValidation = assertRuntimeCorsPolicy(
-    corsPolicy.toString('utf8'),
-    operationAliases
-);
-entryLines.push(
-    "import type { AirtableAttachment, AirtableBarcodeValue, AirtableCollaborator, AirtableField, AirtableFieldSet, AirtableRecord, AirtableValue, SelectFieldChoice } from './types/airtable/types';"
-);
-entryLines.push(
-    'export type CanonicalAirtableAttachment = AirtableAttachment;'
-);
-entryLines.push(
-    'export type CanonicalAirtableBarcodeValue = AirtableBarcodeValue;'
-);
-entryLines.push(
-    'export type CanonicalAirtableCollaborator = AirtableCollaborator;'
-);
-entryLines.push('export type CanonicalSelectFieldChoice = SelectFieldChoice;');
-entryLines.push('export type CanonicalAirtableField = AirtableField;');
-entryLines.push('export type CanonicalAirtableFieldSet = AirtableFieldSet;');
-entryLines.push('export type CanonicalAirtableRecord = AirtableRecord;');
-entryLines.push('export type CanonicalAirtableValue = AirtableValue;');
-entryLines.push(
-    "import type { LoadExtensionContext, Query, FormErrors, FormLoadedOutput, PortalLoadedOutput, LoginPageOutput, PasswordRequiredOutput, ExtensionScreenAndDataOutput } from './types/api/types/loadExtension';"
-);
-entryLines.push(
-    'export type CanonicalLoadExtensionContext = LoadExtensionContext;'
-);
-entryLines.push('export type CanonicalQuery = Query;');
-entryLines.push('export type CanonicalFormErrors = FormErrors;');
-entryLines.push('export type CanonicalFormLoadedOutput = FormLoadedOutput;');
-entryLines.push(
-    'export type CanonicalPortalLoadedOutput = PortalLoadedOutput;'
-);
-entryLines.push('export type CanonicalLoginPageOutput = LoginPageOutput;');
-entryLines.push(
-    'export type CanonicalPasswordRequiredOutput = PasswordRequiredOutput;'
-);
-entryLines.push(
-    "import type { PublicFormDeviceFingerprintInput } from './types/api/types/publicFormDeviceFingerprint';"
-);
-entryLines.push(
-    'export type CanonicalDeviceFingerprint = PublicFormDeviceFingerprintInput;'
-);
-entryLines.push(
-    "import type { PrefillDataForLinkedRecordsForm } from './types/api/prefillDataForLinkedRecordsForm';"
-);
-entryLines.push(
-    'export type CanonicalLinkedRecordPrefill = PrefillDataForLinkedRecordsForm;'
-);
-entryLines.push(
-    "import type { LinkedRecordsSelectorFilter, ConditionalLinkedRecordFilteringValues } from './types/api/types/fetchRecordsForLinkedRecordsSelector';"
-);
-entryLines.push(
-    'export type CanonicalSelectorFilter = LinkedRecordsSelectorFilter;'
-);
-entryLines.push(
-    'export type CanonicalConditionalLinkedRecordFilteringValues = ConditionalLinkedRecordFilteringValues;'
-);
-entryLines.push("import type { Language } from './types/i18n/strings';");
-entryLines.push('export type CanonicalLanguage = Language;');
+    entryLines.push(
+        `import type { ${postgresQueryAliases.join(', ')} } from './types/postgres/query';`
+    );
+    entryLines.push(
+        `import type { ${postgresRecordSettingsAliases.join(', ')} } from './types/postgres/recordSettings';`
+    );
+    entryLines.push(
+        `import type { ${postgresCreateAliases.join(', ')} } from './types/postgres/create';`
+    );
+    entryLines.push(
+        `import type { ${postgresUpdateAliases.join(', ')} } from './types/postgres/update';`
+    );
+    entryLines.push(
+        `import type { ${postgresAttachmentAliases.join(', ')} } from './types/postgres/attachmentDisplay';`
+    );
+    entryLines.push(
+        `import type { ${postgresFieldConfigAliases.join(', ')} } from './${postgresFieldConfigSource.replace(/\.ts$/, '')}';`
+    );
+    if (formAccessValidation != null)
+        entryLines.push(
+            `import type { ${postgresFormAccessAliases.join(', ')} } from './${postgresFormAccessSource.replace(/\.ts$/, '')}';`
+        );
+    if (copyPlanningValidation != null)
+        entryLines.push(
+            `import type { ${postgresCopyPlanningConfigAliases.join(', ')} } from './${postgresCopyPlanningSource.replace(/\.ts$/, '')}';`
+        );
+    for (const { source, aliases } of postgresAuthoringContracts)
+        entryLines.push(
+            `import type { ${aliases.join(', ')} } from './${source.replace(/\.ts$/, '')}';`
+        );
+    for (const name of postgresAliases)
+        entryLines.push(`export type Canonical${name} = ${name};`);
+} else {
+    const cors = await import('./runtime-cors-check.mjs');
+    canonicalCorsPolicyPath = cors.canonicalCorsPolicyPath;
+    // This explicit maintainer-only path is never called by customer/package CI.
+    // Pin policy bytes before compiling contracts or writing either output.
+    const corsPolicy = readFileSync(
+        path.join(monorepo, canonicalCorsPolicyPath)
+    );
+    const recordedCorsPolicy = execFileSync(
+        'git',
+        ['show', `${revision}:${canonicalCorsPolicyPath}`],
+        {
+            cwd: monorepo,
+            maxBuffer: 1024 * 1024,
+        }
+    );
+    if (!corsPolicy.equals(recordedCorsPolicy))
+        throw new Error(
+            `Canonical source drifted from ${revision}: ${canonicalCorsPolicyPath}`
+        );
+    corsValidation = cors.assertRuntimeCorsPolicy(
+        corsPolicy.toString('utf8'),
+        operationAliases
+    );
+    entryLines.push(
+        "import type { AirtableAttachment, AirtableBarcodeValue, AirtableCollaborator, AirtableField, AirtableFieldSet, AirtableRecord, AirtableValue, SelectFieldChoice } from './types/airtable/types';"
+    );
+    entryLines.push(
+        'export type CanonicalAirtableAttachment = AirtableAttachment;'
+    );
+    entryLines.push(
+        'export type CanonicalAirtableBarcodeValue = AirtableBarcodeValue;'
+    );
+    entryLines.push(
+        'export type CanonicalAirtableCollaborator = AirtableCollaborator;'
+    );
+    entryLines.push(
+        'export type CanonicalSelectFieldChoice = SelectFieldChoice;'
+    );
+    entryLines.push('export type CanonicalAirtableField = AirtableField;');
+    entryLines.push(
+        'export type CanonicalAirtableFieldSet = AirtableFieldSet;'
+    );
+    entryLines.push('export type CanonicalAirtableRecord = AirtableRecord;');
+    entryLines.push('export type CanonicalAirtableValue = AirtableValue;');
+    entryLines.push(
+        "import type { LoadExtensionContext, Query, FormErrors, FormLoadedOutput, PortalLoadedOutput, LoginPageOutput, PasswordRequiredOutput, ExtensionScreenAndDataOutput } from './types/api/types/loadExtension';"
+    );
+    entryLines.push(
+        'export type CanonicalLoadExtensionContext = LoadExtensionContext;'
+    );
+    entryLines.push('export type CanonicalQuery = Query;');
+    entryLines.push('export type CanonicalFormErrors = FormErrors;');
+    entryLines.push(
+        'export type CanonicalFormLoadedOutput = FormLoadedOutput;'
+    );
+    entryLines.push(
+        'export type CanonicalPortalLoadedOutput = PortalLoadedOutput;'
+    );
+    entryLines.push('export type CanonicalLoginPageOutput = LoginPageOutput;');
+    entryLines.push(
+        'export type CanonicalPasswordRequiredOutput = PasswordRequiredOutput;'
+    );
+    entryLines.push(
+        "import type { PublicFormDeviceFingerprintInput } from './types/api/types/publicFormDeviceFingerprint';"
+    );
+    entryLines.push(
+        'export type CanonicalDeviceFingerprint = PublicFormDeviceFingerprintInput;'
+    );
+    entryLines.push(
+        "import type { PrefillDataForLinkedRecordsForm } from './types/api/prefillDataForLinkedRecordsForm';"
+    );
+    entryLines.push(
+        'export type CanonicalLinkedRecordPrefill = PrefillDataForLinkedRecordsForm;'
+    );
+    entryLines.push(
+        "import type { LinkedRecordsSelectorFilter, ConditionalLinkedRecordFilteringValues } from './types/api/types/fetchRecordsForLinkedRecordsSelector';"
+    );
+    entryLines.push(
+        'export type CanonicalSelectorFilter = LinkedRecordsSelectorFilter;'
+    );
+    entryLines.push(
+        'export type CanonicalConditionalLinkedRecordFilteringValues = ConditionalLinkedRecordFilteringValues;'
+    );
+    entryLines.push("import type { Language } from './types/i18n/strings';");
+    entryLines.push('export type CanonicalLanguage = Language;');
+}
 
 if (verify) {
     const generatedModule = path
@@ -325,6 +594,54 @@ const canonicalFromGenerated${kind}${index}: ${sourceType} = generated${kind}${i
                 );
         }
     }
+    // Native PostgreSQL contracts can be exported before an operation consumes
+    // them. Verify their complete closure independently of operation payloads.
+    for (const name of postgresOnly ? postgresAliases : []) {
+        const sourceType = `CanonicalWire<Canonical${name}>`;
+        const generatedType = `CanonicalWire<Generated.Canonical${name}>`;
+        entryLines.push(`
+// ${name}: verify both assignment directions.
+declare const canonical${name}: ${sourceType};
+declare const generated${name}: ${generatedType};
+const generatedFromCanonical${name}: ${generatedType} = canonical${name};
+const canonicalFromGenerated${name}: ${sourceType} = generated${name};
+`);
+        if (!diagnose)
+            entryLines.push(
+                `type Verify${name} = AssertContract<EquivalentContract<${sourceType}, ${generatedType}>>;`
+            );
+    }
+    if (postgresOnly) {
+        for (const [
+            index,
+            specification,
+        ] of postgresRuntimeSpecifications.entries()) {
+            const runtimeModule = path
+                .relative(
+                    monorepo,
+                    path.join(outputDirectory, `${specification.module}.ts`)
+                )
+                .split(path.sep)
+                .join('/')
+                .replace(/\.ts$/, '');
+            entryLines.push(
+                `import type * as CanonicalRuntime${index} from './${specification.sourcePath.replace(/\.ts$/, '')}';`,
+                `import type * as GeneratedRuntime${index} from ${JSON.stringify(runtimeModule)};`
+            );
+            for (const name of specification.exports) {
+                entryLines.push(`
+declare const canonicalRuntime${name}: typeof CanonicalRuntime${index}.${name};
+declare const generatedRuntime${name}: typeof GeneratedRuntime${index}.${name};
+const generatedRuntimeFromCanonical${name}: typeof GeneratedRuntime${index}.${name} = canonicalRuntime${name};
+const canonicalRuntimeFromGenerated${name}: typeof CanonicalRuntime${index}.${name} = generatedRuntime${name};
+`);
+                if (!diagnose)
+                    entryLines.push(
+                        `type VerifyRuntime${name} = AssertContract<EquivalentContract<typeof CanonicalRuntime${index}.${name}, typeof GeneratedRuntime${index}.${name}>>;`
+                    );
+            }
+        }
+    }
 }
 
 const configuration = ts.readConfigFile(
@@ -345,7 +662,7 @@ const options = {
     incremental: false,
     noEmit: true,
     skipLibCheck: true,
-    types: ['node'],
+    types: postgresOnly ? [] : ['node'],
 };
 const host = ts.createCompilerHost(options);
 const originalReadFile = host.readFile.bind(host);
@@ -379,7 +696,17 @@ if (diagnose) {
             mode: 'diagnose',
             sourceRevision: revision,
             operationCount: operationAliases.length,
-            bidirectionalAssignmentPairsVerified: operationAliases.length * 2,
+            ...(postgresOnly
+                ? {
+                      nativeAliasCount: postgresAliases.length,
+                      nativeRuntimeExportCount: postgresRuntimeExports.length,
+                  }
+                : {}),
+            bidirectionalAssignmentPairsVerified:
+                operationAliases.length * 2 +
+                (postgresOnly
+                    ? postgresAliases.length + postgresRuntimeExports.length
+                    : 0),
         })
     );
     process.exit(0);
@@ -585,8 +912,11 @@ const transportMap = operationAliases
             `    ${JSON.stringify(operation)}: { transport: ${JSON.stringify(transport)}; route: ${JSON.stringify(route)}; kind: ${JSON.stringify(kind)} };`
     )
     .join('\n');
+const operationDeclarations = postgresOnly
+    ? ''
+    : `\nexport type CanonicalOperationInputs = {\n${inputMap}\n};\n\nexport type CanonicalOperationOutputs = {\n${outputMap}\n};\n\nexport type CanonicalOperationTransports = {\n${transportMap}\n};\n`;
 const generated = await prettier.format(
-    `// Generated by scripts/generate-runtime-contracts.mjs; do not edit.\n// Canonical monorepo revision: ${revision}\n// Enum values are emitted as their JSON string/number literals.\n\n${[...exported, ...declarations].join('\n\n')}\n\nexport type CanonicalOperationInputs = {\n${inputMap}\n};\n\nexport type CanonicalOperationOutputs = {\n${outputMap}\n};\n\nexport type CanonicalOperationTransports = {\n${transportMap}\n};\n`,
+    `// Generated by scripts/generate-runtime-contracts.mjs; do not edit.\n// Canonical monorepo revision: ${revision}\n// Enum values are emitted as their JSON string/number literals.\n\n${[...exported, ...declarations].join('\n\n')}\n${operationDeclarations}`,
     {
         ...JSON.parse(
             readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8')
@@ -599,16 +929,75 @@ const generated = await prettier.format(
 // mode still validates the entry before checking or writing either artifact.
 assertSemanticEntry();
 
+const generatedRuntimes = new Map();
+const runtimeArtifacts = [];
+if (postgresOnly) {
+    for (const specification of postgresRuntimeSpecifications) {
+        const canonicalRuntime = readFileSync(
+            path.join(monorepo, specification.sourcePath)
+        );
+        sourceFiles.add(specification.sourcePath);
+        const generatedRuntime = await specification.rewrite(
+            canonicalRuntime.toString('utf8'),
+            JSON.parse(
+                readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8')
+            )
+        );
+        generatedRuntimes.set(specification.module, generatedRuntime);
+        runtimeArtifacts.push({
+            module: specification.module,
+            sourcePath: specification.sourcePath,
+            sourceSha256: hash(canonicalRuntime),
+            emitterSha256: runtimeEmitterHashes.get(specification.module),
+            ...specification.outputHashes(generatedRuntime),
+        });
+    }
+    if (configurationValidation.presentation)
+        sourceFiles.add(configurationValidation.presentation.sourcePath);
+}
+
 // Provenance covers contract declarations and canonical procedure construction,
 // not unrelated files that the compiler happens to load from the app router.
-for (const [, module] of v1) sourceFiles.add(`types/api/types/${module}.ts`);
-sourceFiles.add('backend-src/trpc/index.ts');
-sourceFiles.add(canonicalCorsPolicyPath);
-sourceFiles.add('backend-src/trpc/routers.ts');
-sourceFiles.add('backend-src/trpc/airtable/trpcRoute.ts');
-sourceFiles.add('backend-src/trpc/publicExtensions/trpcRoute.ts');
-sourceFiles.add('types/api/routes.ts');
-for (const [, group, procedure] of trpc) {
+if (postgresOnly) {
+    // z.infer resolves through mapped Zod declarations. Pin the authored-schema
+    // output and its generation receipt even if those mapped symbols no longer
+    // retain a declaration in the canonical generated source file.
+    sourceFiles.add(postgresFieldConfigSource);
+    sourceFiles.add(postgresFieldConfigProvenance);
+    // Inferred Zod types can lose their authored declarations during mapping.
+    // Pin the composed schemas and their shared metadata inputs explicitly.
+    for (const { source } of postgresAuthoringContracts)
+        sourceFiles.add(source);
+    sourceFiles.add('types/constants/extensionType.ts');
+    sourceFiles.add('types/extensions/constants.ts');
+    sourceFiles.add('types/extensions/randomNumberSettings.ts');
+    sourceFiles.add('types/postgres/connections.ts');
+    sourceFiles.add('types/postgres/identifierBinding.ts');
+    sourceFiles.add('types/postgres/relationshipPresentation.ts');
+    sourceFiles.add(
+        'types/extensions/postgres/relationshipFieldDefinitions.ts'
+    );
+    if (copyPlanningValidation != null) {
+        sourceFiles.add(postgresCopyPlanningSource);
+        sourceFiles.add(postgresCopyPlanningProvenance);
+        sourceFiles.add(postgresCopyPlanningDraftSource);
+    }
+    if (formAccessValidation != null) {
+        sourceFiles.add(postgresFormAccessSource);
+        sourceFiles.add(postgresFormAccessProvenance);
+    }
+}
+for (const [, module] of selectedV1)
+    sourceFiles.add(`types/api/types/${module}.ts`);
+if (!postgresOnly) {
+    sourceFiles.add('backend-src/trpc/index.ts');
+    sourceFiles.add(canonicalCorsPolicyPath);
+    sourceFiles.add('backend-src/trpc/routers.ts');
+    sourceFiles.add('backend-src/trpc/airtable/trpcRoute.ts');
+    sourceFiles.add('backend-src/trpc/publicExtensions/trpcRoute.ts');
+    sourceFiles.add('types/api/routes.ts');
+}
+for (const [, group, procedure] of selectedTrpc) {
     const directory = path.join(
         monorepo,
         `backend-src/trpc/${group}/${procedure}`
@@ -643,24 +1032,44 @@ const dependencies = [...externalFiles]
         ),
         sha256: hash(readFileSync(file)),
     }));
-const provenance =
+const serializedProvenance =
     JSON.stringify(
         {
             sourceRepository: 'miniExtensions/monorepo',
             sourceRevision: revision,
             compilerVersion: ts.version,
             generatorSha256: hash(readFileSync(fileURLToPath(import.meta.url))),
-            corsValidation: {
-                ...corsValidation,
-                guardSha256: hash(
-                    readFileSync(
-                        new URL('./runtime-cors-check.mjs', import.meta.url)
-                    )
-                ),
-            },
-            transport:
-                'plain JSON; canonical enum literals; no runtime code or imports',
-            operations: operationAliases,
+            ...(postgresOnly
+                ? {
+                      contractFamily: 'postgres',
+                      aliases: postgresAliases,
+                      configurationValidation,
+                      ...(copyPlanningValidation == null
+                          ? {}
+                          : { copyPlanningValidation }),
+                      ...(formAccessValidation == null
+                          ? {}
+                          : { formAccessValidation }),
+                      runtimeRegistrySha256,
+                      runtimeArtifacts,
+                  }
+                : {
+                      corsValidation: {
+                          ...corsValidation,
+                          guardSha256: hash(
+                              readFileSync(
+                                  new URL(
+                                      './runtime-cors-check.mjs',
+                                      import.meta.url
+                                  )
+                              )
+                          ),
+                      },
+                  }),
+            transport: postgresOnly
+                ? 'plain JSON contracts; canonical enum literals; separate generated presentation runtime'
+                : 'plain JSON; canonical enum literals; no runtime code or imports',
+            ...(!postgresOnly ? { operations: operationAliases } : {}),
             sources,
             dependencies,
             declarationCount: declarations.length,
@@ -669,6 +1078,57 @@ const provenance =
         null,
         4
     ) + '\n';
+const provenance = postgresOnly
+    ? await prettier.format(serializedProvenance, {
+          ...JSON.parse(
+              readFileSync(path.join(sdkRoot, '.prettierrc.json'), 'utf8')
+          ),
+          parser: 'json',
+      })
+    : serializedProvenance;
+// Formatting can yield. Revalidate the captured canonical bytes and receipt
+// closure after the final await; output checking/writes below are synchronous.
+for (const source of sources)
+    if (hash(readFileSync(path.join(monorepo, source.path))) !== source.sha256)
+        throw new Error(
+            `Canonical source changed during generation: ${source.path}`
+        );
+if (
+    postgresOnly &&
+    JSON.stringify(readConfigurationValidation()) !==
+        JSON.stringify(configurationValidation)
+)
+    throw new Error(
+        'Canonical PostgreSQL configuration inputs changed during generation.'
+    );
+if (
+    postgresOnly &&
+    JSON.stringify(readFormAccessValidation()) !==
+        JSON.stringify(formAccessValidation)
+)
+    throw new Error(
+        'Canonical PostgreSQL Form access inputs changed during generation.'
+    );
+if (
+    postgresOnly &&
+    JSON.stringify(readCopyPlanningValidation()) !==
+        JSON.stringify(copyPlanningValidation)
+)
+    throw new Error(
+        'Canonical Copy planning inputs changed during generation.'
+    );
+if (
+    postgresOnly &&
+    (postgresRuntimeRegistrySha256() !== runtimeRegistrySha256 ||
+        postgresRuntimeSpecifications.some(
+            (specification) =>
+                hash(readFileSync(specification.emitter)) !==
+                runtimeEmitterHashes.get(specification.module)
+        ))
+)
+    throw new Error(
+        'PostgreSQL runtime emitter inputs changed during generation.'
+    );
 if (check) {
     const recordedGenerated = readFileSync(generatedFile, 'utf8');
     const recordedProvenance = readFileSync(provenanceFile, 'utf8');
@@ -700,17 +1160,34 @@ if (check) {
                 })
         );
     }
+    for (const [module, generatedRuntime] of generatedRuntimes) {
+        if (
+            readFileSync(path.join(outputDirectory, `${module}.ts`), 'utf8') !==
+            generatedRuntime
+        )
+            throw new Error('Generated PostgreSQL display runtime is stale.');
+    }
 } else {
     mkdirSync(outputDirectory, { recursive: true });
     writeFileSync(generatedFile, generated);
     writeFileSync(provenanceFile, provenance);
+    for (const [module, generatedRuntime] of generatedRuntimes)
+        writeFileSync(
+            path.join(outputDirectory, `${module}.ts`),
+            generatedRuntime
+        );
 }
 console.log(
     JSON.stringify({
         mode: check ? 'check' : 'generate',
         canonicalParityVerified: verify,
         sourceRevision: revision,
-        operationCount: operationAliases.length,
+        ...(postgresOnly
+            ? {
+                  contractFamily: 'postgres',
+                  nativeAliasCount: postgresAliases.length,
+              }
+            : { operationCount: operationAliases.length }),
         declarationCount: declarations.length,
         bytes: Buffer.byteLength(generated),
         sourceCount: sources.length,

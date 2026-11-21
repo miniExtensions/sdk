@@ -242,8 +242,13 @@ test('Gallery Unlink help follows focus, Escape and the current removable row', 
     await act(async () => {
         open.focus();
         movePointer(true);
-        await import('../src/react/fieldTooltipPopup.js');
     });
+    // Let the public Gallery load its own lazy popup in both source and package consumers.
+    for (let attempt = 0; attempt < 100 && tooltip() == null; attempt++) {
+        await act(
+            async () => new Promise<void>((resolve) => setTimeout(resolve, 10))
+        );
+    }
     const popup = tooltip();
     assert(popup);
     assert.equal(popup.textContent, description);

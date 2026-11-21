@@ -1540,22 +1540,40 @@ try {
                     }
                     document.addEventListener('keydown', observe);
                     try {
-                        return keys.map(({ key, modifier }) => {
-                            currentEvent = new KeyboardEvent('keydown', {
-                                key,
-                                [modifier]: true,
-                                bubbles: true,
-                                cancelable: true,
-                            });
-                            hostReceipts = 0;
-                            const dispatched = node.dispatchEvent(currentEvent);
-                            return {
-                                key,
-                                modifier,
-                                dispatched,
-                                defaultPrevented: currentEvent.defaultPrevented,
-                                hostReceipts,
+                        return keys.flatMap(({ key, modifier }) => {
+                            const dispatch = (repeat) => {
+                                currentEvent = new KeyboardEvent('keydown', {
+                                    key,
+                                    code: key,
+                                    [modifier]: !repeat,
+                                    repeat,
+                                    bubbles: true,
+                                    cancelable: true,
+                                });
+                                hostReceipts = 0;
+                                const dispatched =
+                                    node.dispatchEvent(currentEvent);
+                                return {
+                                    key,
+                                    modifier,
+                                    repeat,
+                                    dispatched,
+                                    defaultPrevented:
+                                        currentEvent.defaultPrevented,
+                                    hostReceipts,
+                                };
                             };
+                            try {
+                                return [dispatch(false), dispatch(true)];
+                            } finally {
+                                node.dispatchEvent(
+                                    new KeyboardEvent('keyup', {
+                                        key,
+                                        code: key,
+                                        bubbles: true,
+                                    })
+                                );
+                            }
                         });
                     } finally {
                         document.removeEventListener('keydown', observe);
@@ -1570,29 +1588,43 @@ try {
                         ),
                     },
                     {
-                        events: historyKeys.map((key) => ({
-                            ...key,
-                            dispatched: true,
-                            defaultPrevented: false,
-                            hostReceipts: 1,
-                        })),
+                        events: historyKeys.flatMap((key) =>
+                            [false, true].map((repeat) => ({
+                                ...key,
+                                repeat,
+                                dispatched: true,
+                                defaultPrevented: false,
+                                hostReceipts: 1,
+                            }))
+                        ),
                         width: 384,
                         commits: [],
                     },
-                    'Alt and Meta arrows must bubble without resizing or cancellation'
+                    'History arrows and their modifier-free repeats must bubble without resizing'
                 );
                 assert.deepEqual(await counts(), beforeHistoryArrows);
-                for (const [index, [key, width]] of [
-                    ['ArrowLeft', 374],
-                    ['ArrowRight', 384],
-                ].entries()) {
-                    const owner = await page.evaluate(() => {
-                        const { scope, revision } =
-                            window.fixtureCommittedSnapshot;
-                        return { scope, revision };
-                    });
-                    await page.keyboard.press(key);
-                    assert.equal(await measuredSidebar(), width);
+                let commitCount = 0;
+                for (const [key, freshWidth, repeatWidth] of [
+                    ['ArrowLeft', 374, 364],
+                    ['ArrowRight', 374, 384],
+                ]) {
+                    const readOwner = () =>
+                        page.evaluate(() => {
+                            const { scope, revision } =
+                                window.fixtureCommittedSnapshot;
+                            return { scope, revision };
+                        });
+                    const freshOwner = await readOwner();
+                    await page.keyboard.down(key);
+                    let repeatOwner;
+                    try {
+                        assert.equal(await measuredSidebar(), freshWidth);
+                        repeatOwner = await readOwner();
+                        await page.keyboard.down(key);
+                        assert.equal(await measuredSidebar(), repeatWidth);
+                    } finally {
+                        await page.keyboard.up(key);
+                    }
                     assert.deepEqual(
                         await page.evaluate(
                             (from) => ({
@@ -1604,14 +1636,18 @@ try {
                                     document.querySelector('main article') ===
                                     window.resizeBody,
                             }),
-                            index
+                            commitCount
                         ),
                         {
-                            commits: [{ ...owner, width }],
+                            commits: [
+                                { ...freshOwner, width: freshWidth },
+                                { ...repeatOwner, width: repeatWidth },
+                            ],
                             focused: true,
                             sameBody: true,
                         }
                     );
+                    commitCount += 2;
                 }
                 assert.deepEqual(await counts(), beforeHistoryArrows);
                 const drag = async (target, beforeRelease) => {
@@ -1633,7 +1669,7 @@ try {
                         await page.evaluate(
                             () => window.proof.sidebarWidths.length
                         ),
-                        2
+                        4
                     );
                 });
                 assert.equal(await measuredSidebar(), 484);
@@ -1650,7 +1686,7 @@ try {
                     await page.evaluate(
                         () => window.proof.sidebarWidths.length
                     ),
-                    8
+                    10
                 );
                 assert.equal(
                     await page.evaluate(
@@ -1674,7 +1710,7 @@ try {
                     await page.evaluate(
                         () => window.proof.sidebarWidths.length
                     ),
-                    8,
+                    10,
                     'New revision retires an allocated drag'
                 );
                 await drag(400, async () => {
@@ -1688,7 +1724,7 @@ try {
                     await page.evaluate(
                         () => window.proof.sidebarWidths.length
                     ),
-                    8
+                    10
                 );
                 await page.setViewportSize({ width: 390, height: 844 });
                 await page.evaluate(() => window.enableSidebarResize(true));

@@ -67,6 +67,7 @@ export function PortalSidebarResize(props: {
     );
     const accepted = useRef<typeof token | null>(null);
     const gesture = useRef<typeof token | null>(null);
+    const plainArrowKeys = useRef(new Set<string>());
     const engine = useRef<Resizable>(null);
     const useCommitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
@@ -95,12 +96,18 @@ export function PortalSidebarResize(props: {
         });
     }
     function keyboard(event: KeyboardEvent<HTMLButtonElement>) {
-        // Leave history shortcuts to the browser or host.
-        if (
-            (event.altKey || event.metaKey) &&
-            (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-        )
-            return;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            const key = event.code || event.key;
+            const keys = plainArrowKeys.current;
+            // A held history shortcut must not turn into a resize on modifier release.
+            if (event.altKey || event.metaKey) {
+                keys.delete(key);
+                return;
+            }
+            if (event.repeat && !keys.has(key)) return;
+            if (accepted.current !== token) return;
+            keys.add(key);
+        }
         const width =
             event.key === 'Home'
                 ? 120
@@ -146,6 +153,10 @@ export function PortalSidebarResize(props: {
                 'aria-valuenow': props.width,
                 className: 'mx-sdk-portal-sidebar-handle',
                 onKeyDown: keyboard,
+                onKeyUp: (event) => {
+                    plainArrowKeys.current.delete(event.code || event.key);
+                },
+                onBlur: () => plainArrowKeys.current.clear(),
             }),
         },
         onResizeStart: () => {

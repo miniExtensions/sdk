@@ -256,8 +256,14 @@ try {
     assert.equal(window.document.getElementById(neighborError).textContent,'Check review amount');
     assert.equal(hiddenNeighborHelp,neighborHelp);
     await React.act(async()=>amount.focus());
-    await React.act(async()=>row('number-b').querySelector('.mx-sdk-field-tooltip-trigger').focus());
+    const numberTrigger=row('number-b').querySelector('.mx-sdk-field-tooltip-trigger');
+    await React.act(async()=>numberTrigger.focus());
     assert(window.document.querySelector('[role="tooltip"]'));
+    // A warmed popup can observe its opening anchor focus at the document listener.
+    await React.act(async()=>numberTrigger.dispatchEvent(new window.FocusEvent('focusin',{bubbles:true})));
+    assert(window.document.querySelector('[role="tooltip"]'),'Anchor focus must not dismiss its own Form tooltip');
+    await React.act(async()=>amount.focus());
+    assert.equal(window.document.querySelector('[role="tooltip"]'),null,'Other Number focus must still dismiss the tooltip');
     models['number-b'].error=null;
     await render();assertAssociations();
     assert.equal(neighbor.getAttribute('aria-describedby'),neighborHelp);
@@ -934,6 +940,23 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
             (element) => element === document.activeElement
         )
     );
+    await page.keyboard.press('Shift+Tab');
+    await numberPopup.waitFor();
+    await page.keyboard.press('Tab');
+    await numberPopup.waitFor({ state: 'detached' });
+    assert(
+        await hiddenNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+
+    await numberTooltip.click();
+    await numberPopup.waitFor();
+    await amountRow.locator('label').click();
+    await numberPopup.waitFor({ state: 'detached' });
+    assert(
+        await amount.evaluate((element) => element === document.activeElement)
+    );
     await update('number-b', { error: null });
     value = await verify(
         'Number hidden title tooltip keyboard navigation and local error clearance'
@@ -946,6 +969,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     await update('number-b', { title: '', showTitle: true });
     const fallbackNeighbor = neighborRow.getByRole('textbox', {
         name: 'Amount',
+        exact: true,
     });
     assert.equal(await fallbackNeighbor.getAttribute('id'), neighborId);
     assert.equal(

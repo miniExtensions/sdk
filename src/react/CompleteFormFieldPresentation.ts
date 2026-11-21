@@ -333,6 +333,7 @@ export function CompleteFormFieldPresentation(
                                             onOpenChange: setTooltipOpen,
                                             onMouseEnter: openTooltip,
                                             onMouseLeave: leaveTooltip,
+                                            keepOpenOnAnchorInteraction: true,
                                             admitDescription:
                                                 props.admitDescription,
                                         },

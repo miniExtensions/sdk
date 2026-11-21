@@ -37,7 +37,8 @@ function retainedClick(element: object): () => void {
     assert(property, 'Capture the actual mounted SDK React callback');
     const props = Reflect.get(element, property);
     assert.equal(typeof props.onClick, 'function');
-    return props.onClick;
+    const click = props.onClick;
+    return () => click({ detail: 0, currentTarget: element });
 }
 
 test('Map shared-card branch renders escaped primary/title/ARIA and no hidden details/images', async (t) => {

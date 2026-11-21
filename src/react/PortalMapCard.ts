@@ -164,6 +164,7 @@ export function PortalMapCard({
                       keyboardPress.current = null;
                   },
                   onClick(event: MouseEvent<HTMLButtonElement>) {
+                      if (!live()) return;
                       const press =
                           event.detail === 0 ? keyboardPress : pointerPress;
                       const started = press.current;
@@ -174,7 +175,7 @@ export function PortalMapCard({
                           started.receipt !== receipt
                       )
                           return;
-                      if (live()) receipt.open?.activate();
+                      receipt.open?.activate();
                   },
               })
             : null,

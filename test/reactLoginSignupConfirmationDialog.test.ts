@@ -148,11 +148,11 @@ it('cancels only after a complete backdrop gesture even when click coordinates a
     dialog.getBoundingClientRect = () =>
         new ui.window.DOMRect(20, 20, 80.5, 80.5);
 
-    async function emit(
+    const emit = async (
         type: 'pointerdown' | 'pointerup' | 'pointercancel' | 'click',
         x: number,
         { pointerId = 7, trusted = true } = {}
-    ) {
+    ) => {
         const event = new ui.window.PointerEvent(type, {
             bubbles: true,
             clientX: x,
@@ -168,7 +168,7 @@ it('cancels only after a complete backdrop gesture even when click coordinates a
         await act(async () => {
             dialog.dispatchEvent(event);
         });
-    }
+    };
 
     await emit('pointerdown', 30);
     await emit('pointerup', 30);

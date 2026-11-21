@@ -55,6 +55,9 @@ the host Save control or use `FormRecordActionsMenu`, both from
 `@miniextensions/sdk/react`. Import `@miniextensions/sdk/react/form-record-actions.css`
 and supply the localized labels, including any custom delete label.
 
+The menu can open beyond a clipping ancestor in browsers with the Popover API.
+Browsers without that API use the inline disclosure, subject to ancestor overflow.
+
 The host publishes visibility, disabled state and operation progress. When the
 visitor confirms, the controller closes the dialog and asks the host to admit
 deletion for the currently accepted scope. The host owns eligibility, the

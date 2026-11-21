@@ -26,7 +26,7 @@ const scene = {
         ['recBeacon', ['Beacon', 'Taylor', 'Review', 'South', 'Keep Beacon']],
     ],
     openColumn: false,
-    scrollTarget: 192,
+    scrollTarget: 360,
 };
 const viewports = [
     { name: 'desktop', width: 1280, height: 800 },
@@ -70,13 +70,15 @@ const html = `<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-
 <body><div id="grid"></div><script defer src="/grid.js"></script></body></html>`;
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
-async function measureGrid({ primary, neighbor, scrollTarget }) {
+function createGridMeasurement({ primary, neighbor }) {
     const viewport = document.querySelector(
         '#grid .mx-sdk-readonly-grid__viewport'
     );
     const table = viewport.querySelector('table');
     const trackedFields = [primary, neighbor];
+    const headerNodes = [...table.querySelectorAll('thead th')];
     const rowNodes = [...table.querySelectorAll('tbody tr')];
+    const cellNodes = rowNodes.map((row) => [...row.cells]);
     const rect = (node, frame) => {
         const box = node.getBoundingClientRect();
         const left = frame.left + viewport.clientLeft;
@@ -115,6 +117,7 @@ async function measureGrid({ primary, neighbor, scrollTarget }) {
                         header.dataset.fieldId,
                         {
                             text: header.textContent.trim(),
+                            sameNode: headerNodes.includes(header),
                             ...rect(header, frame),
                         },
                     ])
@@ -135,6 +138,8 @@ async function measureGrid({ primary, neighbor, scrollTarget }) {
                             cell.dataset.fieldId,
                             {
                                 text: cell.textContent.trim(),
+                                sameNode:
+                                    cellNodes[index]?.includes(cell) ?? false,
                                 primary: cell.dataset.primary === 'true',
                                 ...rect(cell, frame),
                             },
@@ -144,12 +149,16 @@ async function measureGrid({ primary, neighbor, scrollTarget }) {
             activity: { ...window.gridActivity },
         };
     };
-    const before = snapshot();
-    viewport.scrollLeft = scrollTarget;
-    await new Promise((done) =>
-        requestAnimationFrame(() => requestAnimationFrame(done))
-    );
-    return { before, after: snapshot() };
+    return {
+        snapshot,
+        async scrollTo(target) {
+            viewport.scrollLeft = target;
+            await new Promise((done) =>
+                requestAnimationFrame(() => requestAnimationFrame(done))
+            );
+            return snapshot();
+        },
+    };
 }
 
 function checkGeometry({ before, after }, expectedWidth) {
@@ -163,6 +172,26 @@ function checkGeometry({ before, after }, expectedWidth) {
         );
     const scroll = after.viewport.scrollLeft - before.viewport.scrollLeft;
     close(before.viewport.scrollLeft, 0, 'initial horizontal offset');
+    const primaryRects = (sample) => [
+        ['Project header', sample.headers[scene.primary]],
+        ...sample.rows.map((row) => [
+            row.id + ' Project cell',
+            row.cells[scene.primary],
+        ]),
+    ];
+    for (const [label, rect] of primaryRects(before))
+        assert(
+            scroll > rect.right,
+            `Actual scroll ${scroll}px must cross initial ${label} far edge ${rect.right}px`
+        );
+    const room =
+        before.viewport.scrollWidth -
+        before.viewport.width -
+        before.viewport.scrollLeft;
+    assert(
+        room >= scene.scrollTarget,
+        `Shared ${scene.scrollTarget}px target exceeds available horizontal room ${room}px`
+    );
     close(scroll, scene.scrollTarget, 'actual horizontal scroll');
     for (const sample of [before, after]) {
         assert.equal(sample.pageWidth, expectedWidth);
@@ -183,12 +212,20 @@ function checkGeometry({ before, after }, expectedWidth) {
             const header = sample.headers[field];
             assert.equal(header.text, scene.columns[index][1]);
             assert(
-                header.width > 0 &&
-                    header.height > 0 &&
-                    header.right > 0 &&
-                    header.left < sample.viewport.width,
-                `Invisible ${field} header`
+                header.sameNode,
+                `Unexpected replacement of ${field} header`
             );
+            assert(
+                header.width > 0 && header.height > 0,
+                `Missing layout for ${field} header`
+            );
+            const requireVisibility =
+                sample === before || field !== scene.primary;
+            if (requireVisibility)
+                assert(
+                    header.right > 0 && header.left < sample.viewport.width,
+                    `Invisible ${field} header`
+                );
             for (const [rowIndex, row] of sample.rows.entries()) {
                 assert(row.sameNode, `Unexpected replacement of ${row.id}`);
                 assert.deepEqual(row.cellIds, ids);
@@ -201,9 +238,18 @@ function checkGeometry({ before, after }, expectedWidth) {
                 assert.equal(cell.text, scene.records[rowIndex][1][index]);
                 assert.equal(cell.primary, field === scene.primary);
                 assert(
-                    cell.width > 0 && cell.height > 0,
-                    `Invisible ${field} cell`
+                    cell.sameNode,
+                    `Unexpected replacement of ${row.id} ${field} cell`
                 );
+                assert(
+                    cell.width > 0 && cell.height > 0,
+                    `Missing layout for ${row.id} ${field} cell`
+                );
+                if (requireVisibility)
+                    assert(
+                        cell.right > 0 && cell.left < sample.viewport.width,
+                        `Invisible ${row.id} ${field} cell`
+                    );
                 close(
                     cell.left,
                     header.left,
@@ -217,26 +263,179 @@ function checkGeometry({ before, after }, expectedWidth) {
             }
         }
     }
+    const checkMovement = (initial, final, expected, label) => {
+        close(final.left - initial.left, expected, `${label} movement`);
+        close(
+            final.right - initial.right,
+            expected,
+            `${label} far edge movement`
+        );
+        assert.equal(final.width, initial.width, `${label} width changed`);
+        assert.equal(final.height, initial.height, `${label} height changed`);
+    };
     for (const field of [scene.neighbor, scene.primary]) {
         const expected = under640 || field === scene.neighbor ? -scroll : 0;
-        close(
-            after.headers[field].left - before.headers[field].left,
+        checkMovement(
+            before.headers[field],
+            after.headers[field],
             expected,
-            `${field} header movement`
+            `${field} header`
         );
         for (const [index, row] of after.rows.entries())
-            close(
-                row.cells[field].left - before.rows[index].cells[field].left,
+            checkMovement(
+                before.rows[index].cells[field],
+                row.cells[field],
                 expected,
-                `${row.id} ${field} cell movement`
+                `${row.id} ${field} cell`
             );
     }
-    if (!under640)
-        assert(
-            after.headers[scene.primary].left >= -1 &&
-                after.headers[scene.primary].right <= after.viewport.width + 1,
-            'Sticky primary must stay in the viewport'
-        );
+    for (const [label, rect] of primaryRects(after)) {
+        if (under640)
+            assert(
+                rect.right <= 0,
+                `${label} must be fully outside the scrollport at 639px`
+            );
+        else
+            assert(
+                rect.left >= -1 && rect.right <= after.viewport.width + 1,
+                `Sticky ${label} must stay in the viewport`
+            );
+    }
+}
+
+function checkOfflineGeometry() {
+    const snapshot = (pageWidth, scrollLeft, pinPrimary) => {
+        const viewport = {
+            width: pageWidth - 16,
+            scrollWidth: scene.columns.reduce(
+                (total, [, , width]) => total + width,
+                0
+            ),
+            scrollLeft,
+        };
+        const headerIds = scene.columns.map(([id]) => id);
+        const rect = (index, text) => {
+            const [id, , width] = scene.columns[index];
+            const left =
+                scene.columns
+                    .slice(0, index)
+                    .reduce((total, [, , size]) => total + size, 0) -
+                (id === scene.primary && pinPrimary ? 0 : scrollLeft);
+            return {
+                text,
+                sameNode: true,
+                left,
+                right: left + width,
+                width,
+                height: 32,
+            };
+        };
+        return {
+            pageWidth,
+            under640: pageWidth < 640,
+            viewport,
+            headerIds,
+            headers: Object.fromEntries(
+                scene.columns.map(([id, title], index) => [
+                    id,
+                    rect(index, title),
+                ])
+            ),
+            rows: scene.records.map(([id, values]) => ({
+                id,
+                sameNode: true,
+                cellIds: headerIds,
+                buttons: 0,
+                cells: Object.fromEntries(
+                    headerIds.map((field, index) => [
+                        field,
+                        {
+                            ...rect(index, values[index]),
+                            primary: field === scene.primary,
+                        },
+                    ])
+                ),
+            })),
+            activity: {
+                widthCommits: 0,
+                hiddenChanges: 0,
+                submits: 0,
+                fetches: 0,
+                xhr: 0,
+            },
+        };
+    };
+    const target = scene.scrollTarget;
+    checkGeometry(
+        {
+            before: snapshot(1280, 0, true),
+            after: snapshot(1280, target, true),
+        },
+        1280
+    );
+    checkGeometry(
+        {
+            before: snapshot(639, 0, false),
+            after: snapshot(639, target, false),
+        },
+        639
+    );
+    console.log(
+        'PASS synthetic controls: desktop pinning and 639px natural motion'
+    );
+    assert.throws(
+        () =>
+            checkGeometry(
+                {
+                    before: snapshot(639, 0, false),
+                    after: snapshot(639, 192, false),
+                },
+                639
+            ),
+        /cross initial Project header far edge/
+    );
+    console.log(
+        'PASS negative control: old 192px leaves Project partly visible'
+    );
+    const partial = snapshot(639, 0, false);
+    partial.rows[1].cells[scene.primary].right = target + 1;
+    assert.throws(
+        () =>
+            checkGeometry(
+                { before: partial, after: snapshot(639, target, false) },
+                639
+            ),
+        /cross initial recBeacon Project cell far edge/
+    );
+    console.log(
+        'PASS negative control: scroll clears the header but not every Project body far edge'
+    );
+    assert.throws(
+        () =>
+            checkGeometry(
+                {
+                    before: snapshot(1280, 0, false),
+                    after: snapshot(1280, target, false),
+                },
+                1280
+            ),
+        /fldProject header movement/
+    );
+    console.log(
+        'PASS negative control: desktop Project scrolls out without pinning'
+    );
+    assert.throws(
+        () =>
+            checkGeometry(
+                {
+                    before: snapshot(639, 0, false),
+                    after: snapshot(639, target, true),
+                },
+                639
+            ),
+        /fldProject header movement/
+    );
+    console.log('PASS negative control: Project remains pinned at 639px');
 }
 
 async function bundleInstalled({ consumer, archive, sha }) {
@@ -350,6 +549,7 @@ async function measurePacked({ executablePath, output, inputs, sha }) {
                 height,
                 unexpectedRequests: [],
                 errors: [],
+                screenshots: {},
             };
             report.packed.push(result);
             const context = await browser.newContext({
@@ -387,7 +587,36 @@ async function measurePacked({ executablePath, output, inputs, sha }) {
                         `tr[data-record-id="${scene.records[0][0]}"] td[data-field-id="${scene.primary}"]`
                     )
                     .waitFor({ state: 'visible' });
-                result.measurements = await page.evaluate(measureGrid, scene);
+                const measurement = await page.evaluateHandle(
+                    createGridMeasurement,
+                    scene
+                );
+                const captureViewport = async (phase) => {
+                    const png = `${name}-${phase}.png`;
+                    try {
+                        await page.screenshot({
+                            path: join(output, png),
+                            type: 'png',
+                            fullPage: false,
+                        });
+                        result.screenshots[phase] = png;
+                    } catch (error) {
+                        result.errors.push(
+                            `Screenshot ${phase}: ${error.message}`
+                        );
+                    }
+                };
+                result.measurements = {
+                    before: await measurement.evaluate((probe) =>
+                        probe.snapshot()
+                    ),
+                };
+                await captureViewport('before');
+                result.measurements.after = await measurement.evaluate(
+                    (probe, target) => probe.scrollTo(target),
+                    scene.scrollTarget
+                );
+                await captureViewport('after');
                 if (width >= 640) {
                     const inset =
                         result.measurements.after.headers[scene.primary]?.left;
@@ -404,7 +633,16 @@ async function measurePacked({ executablePath, output, inputs, sha }) {
                 result.status = 'failed';
                 result.failure = error.message;
             } finally {
-                await context.close();
+                // Retain the per-width observations before closing the browser context.
+                try {
+                    writeFileSync(
+                        join(output, `${name}.json`),
+                        JSON.stringify(result, null, 2) + '\n',
+                        { flag: 'wx' }
+                    );
+                } finally {
+                    await context.close();
+                }
             }
         }
     } catch (error) {
@@ -414,7 +652,8 @@ async function measurePacked({ executablePath, output, inputs, sha }) {
             await browser?.close();
             report.cleanup.browser = browser ? 'closed' : 'not-started';
         } catch (error) {
-            report.cleanup.browser = error.message;
+            report.cleanup.browser = 'failed';
+            report.cleanup.browserError = error.message;
         }
         try {
             if (server.listening)
@@ -424,7 +663,8 @@ async function measurePacked({ executablePath, output, inputs, sha }) {
                 });
             report.cleanup.server = 'closed';
         } catch (error) {
-            report.cleanup.server = error.message;
+            report.cleanup.server = 'failed';
+            report.cleanup.serverError = error.message;
         }
         const passed =
             !report.failure &&
@@ -460,6 +700,7 @@ try {
     if (args['check-fixture']) {
         assert.equal(Object.keys(args).length, 1);
         transformSync(sceneSource, { loader: 'js', target: 'es2022' });
+        checkOfflineGeometry();
         console.log(
             'Fixture entry syntax passed. Browser geometry unmeasured.'
         );

@@ -1,4 +1,4 @@
-// Installed sandboxed Chromium proof, separate from shared package registration.
+// Installed sandboxed Chromium proof, with same-run admission in Actions.
 // node scripts/check-readonly-portal-grid-autonumber.mjs <tgz> <sha256> <new results dir> <chromium>
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -6,16 +6,18 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import {
     existsSync,
+    lstatSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
+    readdirSync,
     realpathSync,
     rmSync,
     writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { build, stop, transformSync } from 'esbuild';
 import { chromium } from 'playwright';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
@@ -24,11 +26,79 @@ import {
     createArchiveMemberReader,
 } from './package-checks.mjs';
 
+const [commit, tree] = execFileSync(
+    'git',
+    ['rev-parse', 'HEAD', 'HEAD^{tree}'],
+    { encoding: 'utf8' }
+)
+    .trim()
+    .split('\n');
+const digest = (content) => createHash('sha256').update(content).digest('hex');
+
+function managedInputs(env) {
+    const absolute = (name) => {
+        assert(isAbsolute(env[name] ?? ''), `Missing absolute ${name}`);
+        return resolve(env[name]);
+    };
+    const regular = (path) => {
+        assert(lstatSync(path).isFile() && realpathSync(path) === path);
+        return readFileSync(path);
+    };
+    assert.equal(env.GITHUB_ACTIONS, 'true');
+    assert.equal(process.platform, 'linux');
+    assert.equal(env.GITHUB_SHA, commit);
+    assert.match(env.GITHUB_RUN_ID ?? '', /^\d+$/);
+    assert.match(env.GITHUB_RUN_ATTEMPT ?? '', /^[1-9]\d*$/);
+    assert(['push', 'pull_request'].includes(env.GITHUB_EVENT_NAME));
+    const ci = {
+        repository: env.GITHUB_REPOSITORY,
+        event: env.GITHUB_EVENT_NAME,
+        runId: env.GITHUB_RUN_ID,
+        runAttempt: env.GITHUB_RUN_ATTEMPT,
+        workflowSha: commit,
+        node: process.version,
+    };
+    if (ci.event === 'pull_request') {
+        assert.match(env.SDK_PR_HEAD_SHA ?? '', /^[a-f0-9]{40}$/);
+        ci.pullRequestHeadSha = env.SDK_PR_HEAD_SHA;
+    }
+    const directory = absolute('SDK_NATIVE_PACKAGE_DIR');
+    const kit = JSON.parse(regular(join(directory, 'artifact-receipt.json')));
+    assert.equal(kit.schemaVersion, 1);
+    assert.equal(kit.verification?.outcome, 'passed');
+    assert.deepEqual(kit.source, { commit, tree });
+    assert.deepEqual(kit.ci, ci);
+    const { name, filename, bytes, sha256 } = kit.package;
+    assert.equal(name, '@miniextensions/sdk');
+    assert.deepEqual(
+        readdirSync(directory).filter((file) => file.endsWith('.tgz')),
+        [filename]
+    );
+    const archive = join(directory, filename);
+    const archiveBytes = regular(archive);
+    assert.equal(archiveBytes.length, bytes);
+    assert.equal(digest(archiveBytes), sha256);
+    return {
+        args: [
+            archive,
+            sha256,
+            absolute('SDK_NATIVE_RESULT_DIR'),
+            '/usr/bin/google-chrome',
+        ],
+        scratchRoot: absolute('SDK_NATIVE_SCRATCH_DIR'),
+        ci,
+    };
+}
+
+const params = process.argv.slice(2);
+const managed =
+    params.length === 1 && params[0] === '--ci'
+        ? managedInputs(process.env)
+        : null;
 const [archivePath, expectedSha256, outputPath, chromePath] =
-    process.argv.slice(2);
+    managed?.args ?? params;
 assert(archivePath && expectedSha256 && outputPath && chromePath);
 assert.match(expectedSha256, /^[a-f0-9]{64}$/);
-const digest = (content) => createHash('sha256').update(content).digest('hex');
 const archive = realpathSync(archivePath);
 const archiveBytes = readFileSync(archive);
 assert.equal(digest(archiveBytes), expectedSha256);
@@ -42,15 +112,9 @@ const fixture = readFileSync(
     new URL('./readonly-portal-grid-autonumber-fixture.mjs', import.meta.url),
     'utf8'
 );
-const [commit, tree] = execFileSync(
-    'git',
-    ['rev-parse', 'HEAD', 'HEAD^{tree}'],
-    { encoding: 'utf8' }
-)
-    .trim()
-    .split('\n');
 const report = {
     source: { commit, tree, fixtureSha256: digest(fixture) },
+    ...(managed && { ci: managed.ci }),
     package: { sha256: expectedSha256, bytes: archiveBytes.length },
     executablePath,
     chromiumSandbox: true,
@@ -59,7 +123,13 @@ const report = {
     stage: 'consumer preparation',
 };
 mkdirSync(output);
-const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'a-')));
+const scratchRoot = managed?.scratchRoot ?? realpathSync(tmpdir());
+if (managed && !existsSync(scratchRoot)) mkdirSync(scratchRoot);
+assert(
+    lstatSync(scratchRoot).isDirectory() &&
+        realpathSync(scratchRoot) === scratchRoot
+);
+const scratch = mkdtempSync(join(scratchRoot, 'a-'));
 const cssNames = [
     'readonly-portal-grid.css',
     'field-presentation.css',
@@ -273,29 +343,57 @@ try {
     report.error = error.stack;
     throw error;
 } finally {
-    try {
-        if (browser) {
-            await browser.close();
-            report.cleanup.browserClosed = !browser.isConnected();
-        }
-    } finally {
+    const failures = [];
+    const finish = async (name, cleanup) => {
         try {
-            if (server.listening) {
-                server.close();
-                server.closeAllConnections();
-                await once(server, 'close');
-            }
-            report.cleanup.loopbackClosed = !server.listening;
-            await stop();
-            report.cleanup.esbuildStopped = true;
-        } finally {
-            rmSync(scratch, { recursive: true, force: true });
-            report.cleanup.scratchRemoved = !existsSync(scratch);
-            writeFileSync(
-                join(output, 'report.json'),
-                JSON.stringify(report, null, 2) + '\n',
-                { flag: 'wx' }
-            );
+            await cleanup();
+            report.cleanup[name] = true;
+        } catch (error) {
+            report.cleanup[name] = false;
+            failures.push(error);
         }
+    };
+    if (browser)
+        await finish('browserClosed', async () => {
+            await browser.close();
+            assert(!browser.isConnected());
+        });
+    await finish('loopbackClosed', async () => {
+        if (server.listening) {
+            const closed = once(server, 'close');
+            server.close();
+            server.closeAllConnections();
+            await closed;
+        }
+        assert(!server.listening);
+    });
+    await finish('esbuildStopped', stop);
+    if (report.cleanup.browserClosed !== false)
+        await finish('scratchRemoved', () => {
+            rmSync(scratch, { recursive: true, force: true });
+            assert(!existsSync(scratch));
+        });
+    if (failures.length) {
+        if (!report.error) report.stage = 'cleanup';
+        report.cleanup.errors = failures.map((error) => error.message);
     }
+    writeFileSync(
+        join(output, 'report.json'),
+        JSON.stringify(report, null, 2) + '\n',
+        { flag: 'wx' }
+    );
+    console.log(
+        JSON.stringify({
+            stage: report.stage,
+            packageSha256: report.package.sha256,
+            profiles: report.profiles.map(({ react, format, status }) => ({
+                react,
+                format,
+                status,
+            })),
+            cleanup: report.cleanup,
+        })
+    );
+    if (failures.length && !report.error)
+        throw new AggregateError(failures, 'AutoNumber proof cleanup failed');
 }

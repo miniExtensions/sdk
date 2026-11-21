@@ -286,6 +286,16 @@ try {
         Buffer.byteLength(scratch) <= 60,
         'Scratch path too long for sandboxed Chromium sockets'
     );
+    if (managed)
+        Object.assign(process.env, {
+            TMPDIR: scratch,
+            TMP: scratch,
+            TEMP: scratch,
+            XDG_CACHE_HOME: join(scratch, 'cache'),
+            XDG_CONFIG_HOME: join(scratch, 'config'),
+            XDG_RUNTIME_DIR: scratch,
+            npm_config_cache: join(scratch, 'npm-cache'),
+        });
     for (const react of ['18.3.1', '19.2.0']) {
         const directory = join(scratch, react);
         mkdirSync(directory);

@@ -10,8 +10,8 @@ export const portalMapPropsFactory = String.raw`
 function makePortalMapProps({ name, provider, rows, owner, identity, privateMarker, onOpen, registerTrigger }) {
     return { provider,
         markers: rows.map(row => ({ key: row.key,
-            position: { lat: row.lat, lng: row.lng },
-            card: { recordId: row.key, identity, owner,
+            position: row.position ?? { lat: row.lat, lng: row.lng },
+            card: { recordId: row.recordId ?? row.key, identity, owner,
                 accessibleLabel: 'Record ' + row.label,
                 projection: { status: 'present', layout: 'map', primary: row.label,
                     primaryIsEmpty: false, unrecognizedHiddenField: privateMarker },
@@ -101,7 +101,7 @@ const privateMarker = 'PORTAL_MAP_PRIVATE_UNMODELED_DATA';
 const configuration = Object.freeze({ apiKey });
 const stats = { react: React.version, realmReads: 0, acquisitions: 0,
     successfulAcquisitions: 0, refusals: [], opens: [], triggerRegistrations: 0,
-    triggerReleases: 0, trustedInputs: [], explicitCardRetirements: 0,
+    triggerReleases: 0, trustedInputs: [], submits: 0, explicitCardRetirements: 0,
     explicitCardSuccessors: 0, disposed: false,
     copiesDistinct: PortalMap !== ForeignPortalMap && bindPortalMapProvider !== foreignBindPortalMapProvider &&
         createPortalMapProviderOwnerScope !== foreignCreatePortalMapProviderOwnerScope,
@@ -159,7 +159,7 @@ function makeRoot(name, selected = configuration, copy = 'primary', hydration = 
     };
     const propsFor = state => makePortalMapProps({ name, provider: item.provider,
         rows: state.rows, owner: state.owner, identity: state.identity, privateMarker,
-        onOpen: row => stats.opens.push({ root: name, record: row.key }), registerTrigger });
+        onOpen: row => stats.opens.push({ root: name, record: row.recordId ?? row.key }), registerTrigger });
     item.initialPropsSignature = portalMapPropsSignature(propsFor({ rows: item.rows,
         owner: item.currentCardOwner, identity: item.identity }));
     function App() {
@@ -228,11 +228,34 @@ document.addEventListener('click', event => {
     if (event.target.closest?.('.mx-sdk-portal-map'))
         stats.trustedInputs.push(event.isTrusted);
 });
+document.addEventListener('submit', () => stats.submits++, true);
+let watchedOpen = null;
+let openEvents = [];
+for (const type of ['pointerdown', 'pointerup', 'keydown', 'keyup', 'click']) {
+    document.addEventListener(type, event => {
+        if (watchedOpen?.contains(event.target)) openEvents.push({
+            type, trusted: event.isTrusted, key: event.key ?? null,
+            detail: event.detail ?? null,
+        });
+    }, true);
+}
 window.portalMapProof = {
     snapshot: safeSnapshot,
+    watchOpen(button) { watchedOpen = button; openEvents = []; },
+    openEvents() { return openEvents.slice(); },
+    replaceOpenRecord(recordId) {
+        const item = requireRoot('first');
+        const [row, ...rest] = item.rows;
+        item.cardOwner.advance();
+        item.patch({ rows: [{ ...row, recordId }, ...rest],
+            owner: item.cardOwner.capture(), identity: {} });
+        return { marker: row.key, recordId: item.rows[0].recordId };
+    },
     beforeLoadRows() {
         setRows('first', [
-            { key: 'first-current-1', label: 'first current one', lat: 3, lng: 4 },
+            // Keep the provider overlay in place when only the Open record changes.
+            { key: 'first-current-1', label: 'first current one', lat: 3, lng: 4,
+                position: { lat: 3, lng: 4 } },
             { key: 'first-current-2', label: 'first current two', lat: 5, lng: 6 }
         ]);
         const second = roots.get('second');

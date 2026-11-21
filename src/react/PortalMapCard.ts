@@ -4,6 +4,9 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
     type ReactElement,
 } from 'react';
 import type { PortalMapProviderOwner } from '../portals/map/providerCoordinator.js';
@@ -52,9 +55,17 @@ export function PortalMapCard({
     card: PortalMapCardData;
 }): ReactElement {
     const receipt = useMemo(
-        () => ({ owner: card.owner, identity: card.identity, open: card.open }),
-        [card.owner, card.identity, card.open]
+        () => ({
+            owner: card.owner,
+            identity: card.identity,
+            recordId: card.recordId,
+            open: card.open,
+        }),
+        [card.owner, card.identity, card.recordId, card.open]
     );
+    type Press = { receipt: typeof receipt; button: HTMLButtonElement };
+    const pointerPress = useRef<Press | null>(null);
+    const keyboardPress = useRef<Press | null>(null);
     const committed = useRef<typeof receipt | null>(null);
     const button = useRef<HTMLButtonElement>(null);
     const live = () =>
@@ -130,7 +141,39 @@ export function PortalMapCard({
                   ref: button,
                   className: 'mx-sdk-portal-map-open',
                   'aria-label': card.open.label,
-                  onClick: () => {
+                  onPointerDown(event: PointerEvent<HTMLButtonElement>) {
+                      if (event.isPrimary && event.button === 0)
+                          pointerPress.current = {
+                              receipt,
+                              button: event.currentTarget,
+                          };
+                  },
+                  onPointerCancel(event: PointerEvent<HTMLButtonElement>) {
+                      if (event.isPrimary) pointerPress.current = null;
+                  },
+                  onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+                      if (event.key !== ' ' && event.key !== 'Enter') return;
+                      if (event.repeat) event.preventDefault();
+                      else
+                          keyboardPress.current = {
+                              receipt,
+                              button: event.currentTarget,
+                          };
+                  },
+                  onBlur() {
+                      keyboardPress.current = null;
+                  },
+                  onClick(event: MouseEvent<HTMLButtonElement>) {
+                      const press =
+                          event.detail === 0 ? keyboardPress : pointerPress;
+                      const started = press.current;
+                      press.current = null;
+                      // The mounted button can acquire a successor while the press is still held.
+                      if (
+                          started?.button === event.currentTarget &&
+                          started.receipt !== receipt
+                      )
+                          return;
                       if (live()) receipt.open?.activate();
                   },
               })

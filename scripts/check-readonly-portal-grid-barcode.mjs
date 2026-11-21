@@ -1,4 +1,4 @@
-// Open the reported URLs in managed Chrome, or pass --chromium /path/to/chrome.
+// Open the reported URLs in managed Chrome, pass --chromium, or use --ci in Actions.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -18,13 +18,37 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { build, stop, transformSync } from 'esbuild';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
+import { checkedKit } from './check-portal-view-loss-ci.mjs';
 import {
     assertBrowserInputs,
     createArchiveMemberReader,
 } from './package-checks.mjs';
 
+function managedInputs(env) {
+    assert.equal(env.GITHUB_ACTIONS, 'true');
+    assert.equal(process.platform, 'linux');
+    assert(isAbsolute(env.SDK_NATIVE_PACKAGE_DIR ?? ''));
+    assert(isAbsolute(env.SDK_NATIVE_RESULT_DIR ?? ''));
+    const kit = checkedKit(env, env.SDK_NATIVE_PACKAGE_DIR);
+    return {
+        args: [
+            kit.archive,
+            kit.package.sha256,
+            env.SDK_NATIVE_RESULT_DIR,
+            '--chromium',
+            '/usr/bin/google-chrome',
+        ],
+        ci: kit.ci,
+    };
+}
+
+const params = process.argv.slice(2);
+const managed =
+    params.length === 1 && params[0] === '--ci'
+        ? managedInputs(process.env)
+        : null;
 const [archiveArg, expectedSha256, outputArg, ...options] =
-    process.argv.slice(2);
+    managed?.args ?? params;
 assert(
     archiveArg && outputArg && /^[0-9a-f]{64}$/.test(expectedSha256 ?? ''),
     'Usage: node scripts/check-readonly-portal-grid-barcode.mjs archive.tgz sha256 output [profile ... | --chromium /path/to/chrome]'
@@ -81,6 +105,7 @@ const [commit, tree] = execFileSync(
     .split('\n');
 const report = {
     source: { commit, tree, fixtureSha256: sha(fixture) },
+    ...(managed && { ci: managed.ci }),
     archiveSha256: expectedSha256,
     mode: runnerChrome ? 'runner-chrome' : 'managed-browser-fixture',
     profiles: [],

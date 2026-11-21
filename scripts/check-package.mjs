@@ -4977,6 +4977,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     await stop();
     assert.equal(gridProof.profiles.length, 4);
+    assert.equal(gridProof.dateTimeCases, 8);
     assert.equal(gridProof.tests, 84);
     assert.equal(gridProof.textCellTests, 24);
     assert.equal(gridProof.ratingCellTests, 32);
@@ -4984,6 +4985,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.phoneCellTests, 8);
     assert.equal(gridProof.buttonCellTests, 8);
     assert.equal(gridProof.singleSelectCellTests, 16);
+    console.log(
+        'Installed readonly Portal Grid DateTime assertions passed.',
+        gridProof.profiles.map(({ react, format, dateTime }) => ({
+            react,
+            format,
+            timezones: dateTime.map(({ timezone }) => timezone),
+        }))
+    );
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );

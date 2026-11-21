@@ -183,6 +183,28 @@ export interface NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
     ): NativePortalCollectionState<Row, Schema, Detail>;
 }
 
+/** The factory's deletion-capable kernel; Read also accepts read-only implementations. */
+export interface NativePortalCollectionRemovalKernel<
+    Row,
+    Schema,
+    Detail,
+    Projection,
+> extends NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
+    /**
+     * After a host-authorized Delete acknowledgment, remove one record from
+     * the issued frame and raw paging. Commit against the exact current host
+     * snapshot, with the returned frame and paging in the same publication.
+     */
+    removeAcknowledgedRecord(
+        state: NativePortalCollectionState<Row, Schema, Detail>,
+        input: {
+            readonly scope: NativePortalCollectionScope;
+            readonly frame: NativePortalCollectionFrame<Row, Schema, Detail>;
+            readonly recordId: string;
+        }
+    ): NativePortalCollectionState<Row, Schema, Detail>;
+}
+
 function freeze<T>(value: T, seen = new WeakSet<object>()): T {
     if (value !== null && typeof value === 'object' && !seen.has(value)) {
         seen.add(value);
@@ -247,8 +269,17 @@ export function createNativePortalCollectionKernel<
     Schema,
     Detail,
     Projection = unknown,
->(): NativePortalCollectionKernel<Row, Schema, Detail, Projection> {
+>(): NativePortalCollectionRemovalKernel<Row, Schema, Detail, Projection> {
     type State = NativePortalCollectionState<Row, Schema, Detail>;
+    type Frame = NativePortalCollectionFrame<Row, Schema, Detail>;
+    const acceptedFrames = new WeakMap<
+        Frame,
+        {
+            scope: NativePortalCollectionScope;
+            generation: number;
+            sourceReadId: string;
+        }
+    >();
     const reads = new WeakSet<NativePortalCollectionReadReceipt>();
     const cleanups = new WeakSet<NativePortalCollectionCleanupReceipt>();
     const emptyPaging = (): NativePortalCollectionPaging => ({
@@ -295,7 +326,7 @@ export function createNativePortalCollectionKernel<
             throw new RangeError('Portal collection generation exhausted');
         return generation + 1;
     };
-    const kernel: NativePortalCollectionKernel<
+    const kernel: NativePortalCollectionRemovalKernel<
         Row,
         Schema,
         Detail,
@@ -352,6 +383,64 @@ export function createNativePortalCollectionKernel<
                 cleanup: null,
                 frame: null,
                 paging,
+            });
+        },
+        removeAcknowledgedRecord(state, input) {
+            const { frame, paging } = state;
+            if (
+                state.disposed ||
+                !frame ||
+                frame !== input.frame ||
+                !sameScope(state.scope, input.scope) ||
+                paging.type !== 'loaded' ||
+                paging.nextOffset !== frame.nextOffset ||
+                !frame.recordIds.includes(input.recordId)
+            )
+                return state;
+            const issued = acceptedFrames.get(frame);
+            if (
+                !issued ||
+                issued.generation !== state.generation ||
+                !sameScope(issued.scope, state.scope)
+            )
+                return state;
+            const uniqueIds = [...new Set(paging.recordIds)];
+            if (
+                uniqueIds.length !== frame.recordIds.length ||
+                uniqueIds.some((id, index) => id !== frame.recordIds[index])
+            )
+                return state;
+
+            const generation = increment(state.generation);
+            const nextFrame = freeze({
+                ...frame,
+                id: JSON.stringify([
+                    'portal-acknowledged-removal',
+                    issued.sourceReadId,
+                    generation,
+                ]),
+                recordIds: frame.recordIds.filter(
+                    (id) => id !== input.recordId
+                ),
+                records: frame.records.filter(
+                    (row) => row.id !== input.recordId
+                ),
+            });
+            acceptedFrames.set(nextFrame, { ...issued, generation });
+            return freeze({
+                ...state,
+                generation,
+                active: null,
+                cleanup: null,
+                frame: nextFrame,
+                paging: {
+                    ...paging,
+                    recordIds: paging.recordIds.filter(
+                        (id) => id !== input.recordId
+                    ),
+                    isPaginating: false,
+                    isReloading: false,
+                },
             });
         },
         begin(state, input) {
@@ -462,6 +551,12 @@ export function createNativePortalCollectionKernel<
                     }
                 }
             }
+            if (frame)
+                acceptedFrames.set(frame, {
+                    scope: detached(scope),
+                    generation: state.generation,
+                    sourceReadId: receipt.requestId,
+                });
             const recordIds =
                 receipt.mode === 'append' && state.paging.type === 'loaded'
                     ? [...state.paging.recordIds, ...response.recordIds]

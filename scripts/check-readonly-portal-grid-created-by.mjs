@@ -143,6 +143,12 @@ const html =
 const avatar =
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#2563eb"/></svg>';
 const assets = new Map();
+const resourceTypes = new Map([
+    ['text/html', 'document'],
+    ['text/javascript', 'script'],
+    ['text/css', 'stylesheet'],
+    ['image/svg+xml', 'image'],
+]);
 
 async function prepare(react, directory, installation, format) {
     const entry = `fixture.${format === 'esm' ? 'mjs' : 'cjs'}`;
@@ -224,25 +230,23 @@ async function measure(browser, origin, profile) {
         serviceWorkers: 'block',
     });
     const requests = [];
+    const avatarRequests = [];
     const refused = [];
     const errors = [];
     try {
         await context.route('**/*', (route) => {
             const request = route.request();
             const url = new URL(request.url());
+            const type = request.resourceType();
             if (
                 url.origin === origin &&
                 url.pathname.startsWith(profile.path) &&
                 !url.search &&
                 request.method() === 'GET' &&
-                assets.has(url.pathname) &&
-                (['document', 'script', 'stylesheet'].includes(
-                    request.resourceType()
-                ) ||
-                    (request.resourceType() === 'image' &&
-                        url.pathname === profile.path + 'avatar.svg'))
+                resourceTypes.get(assets.get(url.pathname)?.type) === type
             ) {
-                requests.push(url.pathname);
+                if (type === 'image') avatarRequests.push(url.pathname);
+                else requests.push(url.pathname);
                 return route.continue();
             }
             refused.push([request.method(), url.origin, url.pathname]);
@@ -271,7 +275,8 @@ async function measure(browser, origin, profile) {
                 image.naturalHeight === 32
             );
         });
-        assert.match(await group.ariaSnapshot(), /Fixture Creator/);
+        const accessible = await group.ariaSnapshot();
+        assert.match(accessible, /Fixture Creator/);
         assert.equal(
             await group.getByRole('img').count(),
             0,
@@ -292,6 +297,7 @@ async function measure(browser, origin, profile) {
 
         await page.evaluate(() => {
             window.trustedCreatedByClicks = [];
+            window.trustedCreatedByOpens = [];
             document.addEventListener(
                 'click',
                 (event) => {
@@ -302,6 +308,14 @@ async function measure(browser, origin, profile) {
                         window.trustedCreatedByClicks.push({
                             trusted: event.isTrusted,
                             target: event.target.tagName,
+                        });
+                    const open = event.target.closest?.(
+                        'button.mx-sdk-readonly-grid__open'
+                    );
+                    if (open)
+                        window.trustedCreatedByOpens.push({
+                            trusted: event.isTrusted,
+                            recordId: open.closest('tr')?.dataset.recordId,
                         });
                 },
                 { capture: true }
@@ -351,6 +365,12 @@ async function measure(browser, origin, profile) {
         const opened = await page.evaluate(() =>
             window.createdByGrid.observe()
         );
+        const openActivation = await page.evaluate(
+            () => window.trustedCreatedByOpens
+        );
+        assert.deepEqual(openActivation, [
+            { trusted: true, recordId: 'recCreator' },
+        ]);
         const expectedEffects = {
             ...noActions,
             opens: [{ action: 'open-row', recordId: 'recCreator' }],
@@ -370,19 +390,21 @@ async function measure(browser, origin, profile) {
         assert(requests.includes(profile.path + 'readonly-portal-grid.css'));
         assert(requests.includes(profile.path + 'complete-collaborators.css'));
         assert(requests.includes(profile.path + 'fixture.js'));
-        assert(requests.includes(profile.path + 'avatar.svg'));
+        assert(avatarRequests.length > 0);
         profile.receipt = {
             initial,
             inert,
             pointer,
             republished,
             opened,
+            openActivation,
             disposed,
+            accessible,
             avatarLoaded: true,
         };
         profile.status = 'passed';
     } finally {
-        profile.network = { requests, refused, errors };
+        profile.network = { requests, avatarRequests, refused, errors };
         await context.close();
         profile.contextClosed = true;
     }

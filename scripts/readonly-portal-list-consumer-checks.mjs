@@ -17,6 +17,7 @@ const action:ReadonlyPortalListOpenAction={revision:1,activate(isCurrent,returnF
 const actions:ReadonlyMap<string,ReadonlyPortalListOpenAction>=new Map([['rec_B',action]]);
 const props:ReadonlyPortalListProps={scope,renderers:{renderSingleLineTextField(field){if(field.capability.type!=='readonly')return null;const readonlyKind:'readonly'=field.capability.type;return String(field.value)+readonlyKind;}},openActions:actions,label:'Records'};
 createElement(ReadonlyPortalList,props);
+createElement(ReadonlyPortalList,{...props,recordLabel(recordId){return recordId==='rec_B'?'Account South':null;}});
 createElement(AirtableList,{scope,renderers:{},children(state){return state.rows.length;}});
 // @ts-expect-error the supplied accepted scope is mandatory
 createElement(ReadonlyPortalList,{renderers:{}});
@@ -26,6 +27,8 @@ const children:ReadonlyPortalListProps={...props,children(){return null;}};
 const transport:ReadonlyPortalListProps={...props,fetchRecords(){}};
 // @ts-expect-error no canonical writer belongs to this presenter
 const writer:ReadonlyPortalListProps={...props,onSave(){}};
+// @ts-expect-error row naming requires a string or null
+const invalidRecordLabel:ReadonlyPortalListProps={...props,recordLabel(){return 42;}};
 // @ts-expect-error command revision is numeric
 const wrongRevision:ReadonlyPortalListOpenAction={revision:'1',activate(){}};
 // @ts-expect-error a revision does not itself confer command authority
@@ -37,14 +40,14 @@ createElement(AirtableList,{scope,renderers:{}});
 const grid:ReadonlyPortalRecordsGridOptions={ready:true,preferenceScopeKey:'view',primaryFieldId:null,hiddenColumns:{},columnWidths:{}};
 const records:ReadonlyPortalRecordsProps={scope,grid,layout:'grid',renderers:{},openActions:{scope,byRecordId:actions}};
 createElement(ReadonlyPortalRecords,records);
-createElement(ReadonlyPortalRecords,{...records,layout:'list',status:{kind:'loading',message:'Loading records'}});
+createElement(ReadonlyPortalRecords,{...records,layout:'list',recordLabel(recordId){return recordId==='rec_A'?'Account North':null;},status:{kind:'loading',message:'Loading records'}});
 // @ts-expect-error the public composed presenter owns both layouts
 const recordLayout:ReadonlyPortalRecordsProps={...records,children(){return null;}};
 // @ts-expect-error preferences cannot introduce a host-supplied row or cell
 const recordGrid:ReadonlyPortalRecordsGridOptions={...grid,rows:[]};
 // @ts-expect-error registration from a different source is never implicit
 const recordActions:ReadonlyPortalRecordsProps={...records,openActions:{byRecordId:actions}};
-void [children,transport,writer,wrongRevision,noCommand,recordLayout,recordGrid,recordActions];
+void [children,transport,writer,invalidRecordLabel,wrongRevision,noCommand,recordLayout,recordGrid,recordActions];
 `;
 
 const runtime = String.raw`

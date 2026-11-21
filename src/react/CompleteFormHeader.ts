@@ -47,7 +47,7 @@ const disclosureLabels: Record<RuntimeLanguage, [string, string]> = {
     de: ['Mehr lesen', 'Weniger anzeigen'],
     ja: ['続きを読む', 'もっと少なく表示'],
     ko: ['더 읽기', '덜 보이기'],
-    pt: ['Leia mais', '덜 보이기'],
+    pt: ['Leia mais', 'Mostrar menos'],
     cs: ['Číst více', 'Zobrazit méně'],
     he: ['קרא עוד', 'הצג פחות'],
     it: ['Leggi di più', 'Mostra meno'],

@@ -516,20 +516,51 @@ it('resets description expansion on actual record A–B–A despite identical HT
 
 it('uses localized disclosure labels without replacing truncation state ownership', async (t) => {
     const f = await htmlPresentationFixture(t);
+    const render = (language: HeaderProps['language'], html: string) =>
+        f.render(
+            h(CompleteFormHeader, {
+                ...defaults,
+                language,
+                description: {
+                    enabled: true,
+                    source: staticSource(html),
+                    truncate: true,
+                },
+            })
+        );
+
     f.setGeometry({ clientHeight: 72, scrollHeight: 144 });
-    await f.render(
-        h(CompleteFormHeader, {
-            ...defaults,
-            language: 'es',
-            description: {
-                enabled: true,
-                source: staticSource(longHTML),
-                truncate: true,
-            },
-        })
-    );
-    await f.click(button(f, 'Leer más'));
-    assert.ok(button(f, 'Mostrar menos'));
+    for (const [language, readMore, showLess] of [
+        ['es', 'Leer más', 'Mostrar menos'],
+        ['ko', '더 읽기', '덜 보이기'],
+        ['pt', 'Leia mais', 'Mostrar menos'],
+    ] as const) {
+        await render(language, longHTML);
+        const disclosure = button(f, readMore);
+        const viewportId = disclosure.getAttribute('aria-controls');
+        assert.ok(viewportId && f.window.document.getElementById(viewportId));
+        assert.equal(disclosure.type, 'button');
+        assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
+        disclosure.focus();
+        assert.equal(f.window.document.activeElement, disclosure);
+
+        await f.click(disclosure);
+        assert.equal(button(f, showLess), disclosure);
+        assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
+        assert.equal(disclosure.getAttribute('aria-controls'), viewportId);
+        assert.equal(f.window.document.activeElement, disclosure);
+
+        await f.click(disclosure);
+        assert.equal(button(f, readMore), disclosure);
+        assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
+        f.unchangedEffects();
+    }
+
+    f.setGeometry({ clientHeight: 24, scrollHeight: 24 });
+    await render('pt', '<p>Descrição breve</p>');
+    assert.equal(f.container.textContent, 'Descrição breve');
+    assert.equal(f.container.querySelector('button'), null);
+    f.unchangedEffects();
 });
 
 it('replaces missing and blank footer fields with the proper preview placeholder', async (t) => {

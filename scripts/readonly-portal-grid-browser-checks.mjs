@@ -19,6 +19,10 @@ import {
     readonlyPortalGridDurationEntry,
 } from './readonly-portal-grid-duration-checks.mjs';
 import { checkReadonlyPortalGridShortcutBrowser } from './readonly-portal-grid-shortcut-browser-checks.mjs';
+import {
+    checkReadonlyPortalGridRichTextBrowser,
+    readonlyPortalGridRichTextEntry,
+} from './readonly-portal-grid-rich-text-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
@@ -29,6 +33,7 @@ import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
 import{mountDateTimeGrid}from'./readonly-portal-grid-datetime.mjs';
 import{mountDurationGrid}from'./readonly-portal-grid-duration.mjs';
 import{mountTimestampGrid}from'./readonly-portal-grid-timestamp-fixture.mjs';
+import{mountRichTextGrid}from'./readonly-portal-grid-rich-text.mjs';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -39,6 +44,7 @@ import'@miniextensions/sdk/react/complete-checkbox.css';
 import'@miniextensions/sdk/react/text.css';
 import'@miniextensions/sdk/react/complete-phone.css';
 import'@miniextensions/sdk/react/button.css';
+import'@miniextensions/sdk/react/rich-text.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -558,6 +564,7 @@ if (fixture === 'number-only') mountNumberGrid(root);
 else if (fixture === 'date-time') mountDateTimeGrid(root);
 else if (fixture === 'duration-only') mountDurationGrid(root);
 else if (fixture === 'timestamps') mountTimestampGrid(root, document.querySelector('#root'));
+else if (fixture === 'formatted-rich-text') mountRichTextGrid(root);
 else root.render(h(StrictMode, null, h(fixture === 'date-only' ? DateOnlyProbe : App)));
 `;
 
@@ -584,6 +591,10 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     writeFileSync(
         join(temporary, 'readonly-portal-grid-duration.mjs'),
         readonlyPortalGridDurationEntry
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-rich-text.mjs'),
+        readonlyPortalGridRichTextEntry
     );
     const timestampFixture = regular(
         fileURLToPath(
@@ -644,6 +655,9 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/PortalGridButtonCell.js',
         '/react/ButtonField.js',
         '/react/button.css',
+        '/react/RichTextField.js',
+        '/react/CompleteRichTextEditor.js',
+        '/react/rich-text.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -691,6 +705,16 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     report.readonlyPortalGrid = {
         sourceSha256: hash(readonlyPortalGridBrowserEntry),
         checkerSha256: hash(regular(fileURLToPath(import.meta.url))),
+        richTextCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-rich-text-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
         timestampFixtureSha256: hash(timestampFixture),
         dateTimeCheckerSha256: hash(
             regular(
@@ -3269,6 +3293,12 @@ export async function checkReadonlyPortalGridProfile({
             );
         }
         await checkReadonlyPortalGridDateBrowser({ browser, origin, evidence });
+        await checkReadonlyPortalGridRichTextBrowser({
+            browser,
+            origin,
+            evidence,
+            output,
+        });
         assert.deepEqual(unexpected, []);
         evidence.requests = requests;
     } catch (error) {

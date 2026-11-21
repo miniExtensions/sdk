@@ -5000,15 +5000,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     const gridCurrencySha256 = createHash('sha256')
         .update(readFileSync(gridCurrencyArchive))
         .digest('hex');
+    // The standalone runner bounds each install and test, then cleans up its consumers.
     const gridCurrencyProof = JSON.parse(
-        run(
+        execPackageFileSync(
             process.execPath,
             [
                 'scripts/check-readonly-portal-grid-currency.mjs',
                 gridCurrencyArchive,
                 gridCurrencySha256,
             ],
-            process.cwd()
+            {
+                cwd: process.cwd(),
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    npm_config_cache: join(temporaryDirectory, 'npm-cache'),
+                },
+            }
         )
     );
     const gridCurrencyProfiles = gridCurrencyProof.profiles.map(

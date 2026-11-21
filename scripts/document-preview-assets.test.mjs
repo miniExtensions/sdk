@@ -24,7 +24,7 @@ function fixture(t) {
     symlinkSync(
         join(process.cwd(), 'node_modules'),
         join(root, 'node_modules'),
-        'dir'
+        process.platform === 'win32' ? 'junction' : 'dir'
     );
     copyDocumentAssets(root);
     return root;

@@ -267,9 +267,13 @@ function capture() {
         );
         if (links.length) {
             equal(
-                [links[0].innerText, links[0].getAttribute('href')],
-                [destination, destination],
-                'URL display or destination changed'
+                [
+                    links[0].innerText,
+                    links[0].getAttribute('href'),
+                    links[0].getAttribute('target'),
+                ],
+                [destination, destination, '_blank'],
+                'URL display, destination, or target changed'
             );
         }
         assert(
@@ -319,6 +323,10 @@ function capture() {
     };
 }
 run(() => {
+    assert(
+        typeof getUserMedia === 'function',
+        'Loopback Chromium does not expose the camera API to guard'
+    );
     flushSync(() =>
         app.render(
             h(
@@ -364,6 +372,7 @@ republish.addEventListener('click', () =>
             'Expected one trusted click, Enter and Escape'
         );
         records = freezeRecords(structuredClone(originalRecords));
+        delivered.clear();
         stamp = {};
         flushSync(() => {
             for (const listener of listeners) listener();

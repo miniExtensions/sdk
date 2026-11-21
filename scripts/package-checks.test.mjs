@@ -446,6 +446,21 @@ async function proofInventoryFixture(t) {
     return { root, menu, readme };
 }
 
+function assertRuntimePrerequisites(readme) {
+    const normalized = readme.replace(/\r\n/g, '\n');
+    const heading = /^## Obtain the actual runtime configuration$/m;
+    const configuration = normalized.split(heading)[1]?.split(/^## /m)[0];
+    assert.ok(
+        configuration?.trim(),
+        'Runtime configuration prerequisites must be present'
+    );
+    assert.match(configuration, /extension\.shareId/);
+    assert.match(configuration, /default-domain/);
+    assert.match(configuration, /custom-domain slug is not the Share ID/);
+    assert.match(configuration, /no public SDK discovery endpoint/);
+    assert.match(configuration, /workspace administrator or deployment owner/);
+}
+
 test('onboarding documents stored Share ID discovery without invented setup UI', async () => {
     const root = new URL('../', import.meta.url);
     const manifest = JSON.parse(
@@ -460,23 +475,39 @@ test('onboarding documents stored Share ID discovery without invented setup UI',
         );
     }
     const readme = await readFile(new URL('README.md', root), 'utf8');
-    const configuration = readme
-        .split('## Obtain the actual runtime configuration\n')[1]
-        ?.split('\n## ')[0];
-    assert.ok(
-        configuration,
-        'Runtime configuration prerequisites must be present'
-    );
-    assert.match(configuration, /extension\.shareId/);
-    assert.match(configuration, /default-domain/);
-    assert.match(configuration, /custom-domain slug is not the Share ID/);
-    assert.match(configuration, /no public SDK discovery endpoint/);
-    assert.match(configuration, /workspace administrator or deployment owner/);
+    assertRuntimePrerequisites(readme);
     const starter = await readFile(
         new URL('examples/browser/README.md', root),
         'utf8'
     );
     assert.match(starter, /README\.md#obtain-the-actual-runtime-configuration/);
+});
+
+test('runtime configuration prerequisites accept LF and CRLF without borrowing content from other sections', async () => {
+    const raw = await readFile(
+        new URL('../README.md', import.meta.url),
+        'utf8'
+    );
+    const readme = raw.replace(/\r\n/g, '\n');
+    const heading = '## Obtain the actual runtime configuration';
+    const withoutHeading = readme.replace(heading, '## Renamed');
+    const outsideSection = readme.replace(
+        heading,
+        `${heading}\n\nUnrelated text.\n\n## Separate section`
+    );
+    for (const newline of ['\n', '\r\n']) {
+        const check = (text) =>
+            assertRuntimePrerequisites(text.replace(/\n/g, newline));
+        check(readme);
+        assert.throws(
+            () => check(withoutHeading),
+            /Runtime configuration prerequisites must be present/
+        );
+        assert.throws(() => check(outsideSection), {
+            code: 'ERR_ASSERTION',
+            operator: 'match',
+        });
+    }
 });
 
 test('privacy proof inventory accepts complete declarations without dispatching fixture transport', async (t) => {

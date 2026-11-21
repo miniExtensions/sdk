@@ -138,6 +138,15 @@ jobs:
               env:
                   SDK_PORTAL_SUMMARY_CHROMIUM: /usr/bin/google-chrome
                   SDK_PORTAL_SUMMARY_PROOF_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-summary-cards
+            - name: Qualify packed Portal view-loss recovery
+              timeout-minutes: 6
+              run: node scripts/check-portal-view-loss-ci.mjs
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results/portal-view-loss
+                  SDK_NATIVE_SCRATCH_DIR: ${{ runner.temp }}/sdk-native-browser-scratch
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Execute Count Chromium proof
               timeout-minutes: 3
               run: node scripts/check-count-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/count"

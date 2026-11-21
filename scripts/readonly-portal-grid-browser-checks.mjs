@@ -14,6 +14,7 @@ import {
     checkReadonlyPortalGridDateTimeBrowser,
     readonlyPortalGridDateTimeEntry,
 } from './readonly-portal-grid-datetime-checks.mjs';
+import { checkReadonlyPortalGridShortcutBrowser } from './readonly-portal-grid-shortcut-browser-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
@@ -1504,6 +1505,7 @@ export async function checkReadonlyPortalGridBrowser({
     await checkGuidanceLayoutBrowser({ page, evidence, output });
     await checkReadonlyPortalGridNumberBrowser({ page, evidence });
     await checkReadonlyPortalGridDateTimeBrowser({ page, evidence });
+    await checkReadonlyPortalGridShortcutBrowser({ page, evidence });
     Object.assign(evidence, {
         status: 'passed',
         results,

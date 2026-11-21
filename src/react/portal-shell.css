@@ -300,6 +300,35 @@
     .mx-sdk-portal-toggle {
         display: block;
     }
+    .mx-sdk-portal-shell--sidebar-icon-toggle > .mx-sdk-portal-header {
+        padding: 0.5rem;
+        flex-wrap: nowrap;
+        justify-content: start;
+        gap: 0.5rem;
+        border-bottom: 0;
+        box-shadow:
+            0 1px 3px #0000001a,
+            0 1px 2px -1px #0000001a;
+        z-index: 20;
+    }
+    .mx-sdk-portal-shell--sidebar-icon-toggle
+        > .mx-sdk-portal-header
+        > .mx-sdk-portal-toggle {
+        display: flex;
+        flex: none;
+        padding: 0.625rem;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #374151;
+    }
+    .mx-sdk-portal-shell--sidebar-icon-toggle
+        > .mx-sdk-portal-header
+        .mx-sdk-portal-title {
+        font-size: 1.125rem;
+        font-weight: 700;
+        line-height: 1.75rem;
+    }
     .mx-sdk-portal-navigation-wrap {
         display: none;
     }

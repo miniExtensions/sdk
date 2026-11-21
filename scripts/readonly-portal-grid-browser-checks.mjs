@@ -6,12 +6,17 @@ import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
+import {
+    checkReadonlyPortalGridNumberBrowser,
+    readonlyPortalGridNumberEntry,
+} from './readonly-portal-grid-number-browser-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
 import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell,PortalGridButtonCell}from'@miniextensions/sdk/react';
 import{DateField}from'@miniextensions/sdk/react/date';
+import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -536,9 +541,9 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
     startCheckboxCell: (key = 'ordinary') => root.render(h(StrictMode, null, h(CheckboxCellProbe, { key }))),
     startButtonCell: () => root.render(h(StrictMode, null, h(ButtonCellProbe))),
 };
-root.render(h(StrictMode, null, h(
-    new URLSearchParams(location.search).get('fixture') === 'date-only' ? DateOnlyProbe : App
-)));
+const fixture = new URLSearchParams(location.search).get('fixture');
+if (fixture === 'number-only') mountNumberGrid(root);
+else root.render(h(StrictMode, null, h(fixture === 'date-only' ? DateOnlyProbe : App)));
 `;
 
 export async function prepareReadonlyPortalGridBrowserFixtures(args) {
@@ -553,6 +558,10 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     } = args;
     const entry = join(temporary, 'readonly-portal-grid.mjs');
     writeFileSync(entry, readonlyPortalGridBrowserEntry);
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-number.mjs'),
+        readonlyPortalGridNumberEntry
+    );
     const bundle = await args.build({
         absWorkingDir: temporary,
         entryPoints: [entry],
@@ -572,6 +581,8 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/ReadonlyPortalGrid.js',
         '/react/date/DateField.js',
         '/react/CompleteReadOnlyTextField.js',
+        '/react/CompleteLocalizedNumericField.js',
+        '/react/localized-numeric.css',
         '/react/CompleteFormFieldPresentation.js',
         '/react/readonly-portal-grid.css',
         '/react/complete-readonly-text.css',
@@ -642,6 +653,16 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     report.readonlyPortalGrid = {
         sourceSha256: hash(readonlyPortalGridBrowserEntry),
         checkerSha256: hash(regular(fileURLToPath(import.meta.url))),
+        numberCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-number-browser-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
         react: JSON.parse(
             regular(join(temporary, 'node_modules/react/package.json'))
         ).version,
@@ -1461,6 +1482,7 @@ export async function checkReadonlyPortalGridBrowser({
     end = await snapshot();
     assert.deepEqual(end.errors, []);
     await checkGuidanceLayoutBrowser({ page, evidence, output });
+    await checkReadonlyPortalGridNumberBrowser({ page, evidence });
     Object.assign(evidence, {
         status: 'passed',
         results,

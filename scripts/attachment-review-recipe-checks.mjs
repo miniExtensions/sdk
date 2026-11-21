@@ -511,34 +511,36 @@ export function addAttachmentRootLoadCheckpoints(source) {
         !source.includes('__sdkAttachmentPhasePoint'),
         'Attachment diagnostic checkpoint name must be unused'
     );
-    const anchors = [
-        [
-            '            let result = await client.loadExtension(connection.input, {\n                signal,\n            });',
-            "\n            __sdkAttachmentPhasePoint?.('response-consumed');",
-        ],
-        [
-            '            acceptRootLoad(visitor, result, query);\n            render();\n            const loadedMessage =',
-            null,
-        ],
-    ];
-    for (const [anchor] of anchors) {
-        const first = source.indexOf(anchor);
+    const uniqueAnchor = (pattern) => {
+        const matches = [...source.matchAll(pattern)];
         assert(
-            first !== -1 && source.indexOf(anchor, first + 1) === -1,
+            matches.length === 1,
             'Attachment diagnostic root-load anchor must be unique'
         );
-    }
-    source = source.replace(anchors[0][0], anchors[0][0] + anchors[0][1]);
+        return matches[0];
+    };
+    const [response, responseNewline] = uniqueAnchor(
+        /            let result = await client\.loadExtension\(connection\.input, \{(\r?\n)                signal,\r?\n            \}\);/g
+    );
+    const [root, accept, beforeRender, render, beforeMessage, message] =
+        uniqueAnchor(
+            /(            acceptRootLoad\(visitor, result, query\);)(\r?\n)(            render\(\);)(\r?\n)(            const loadedMessage =)/g
+        );
+    const captureNewline = source.match(/\r?\n/)[0];
+    source = source.replace(
+        response,
+        `${response}${responseNewline}            __sdkAttachmentPhasePoint?.('response-consumed');`
+    );
     return (
-        'const __sdkAttachmentPhasePoint = globalThis.__sdkAttachmentPhasePoint;\n' +
+        `const __sdkAttachmentPhasePoint = globalThis.__sdkAttachmentPhasePoint;${captureNewline}` +
         source.replace(
-            anchors[1][0],
-            "            __sdkAttachmentPhasePoint?.('root-accept-start');\n" +
-                '            acceptRootLoad(visitor, result, query);\n' +
-                "            __sdkAttachmentPhasePoint?.('root-render-start');\n" +
-                '            render();\n' +
-                "            __sdkAttachmentPhasePoint?.('root-render-end');\n" +
-                '            const loadedMessage ='
+            root,
+            `            __sdkAttachmentPhasePoint?.('root-accept-start');${beforeRender}` +
+                `${accept}${beforeRender}` +
+                `            __sdkAttachmentPhasePoint?.('root-render-start');${beforeRender}` +
+                `${render}${beforeMessage}` +
+                `            __sdkAttachmentPhasePoint?.('root-render-end');${beforeMessage}` +
+                message
         )
     );
 }

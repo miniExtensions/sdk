@@ -22,10 +22,11 @@ const cases = [
     { id: 'Mixed', value: 0.425, label: '42,50%', fill: 42.5 },
     { id: 'Rounded', value: 0.426175, label: '42,62%', fill: 42.6175 },
     { id: 'Negative', value: -0.125, label: '-12,50%', fill: 0 },
-    { id: 'Over', value: 1.2345, label: '123,45%', fill: 100 },
+    { id: 'Over', value: 1.25, label: '125,00%', fill: 100 },
     { id: 'Zero', value: 0, label: '0,00%', fill: 0 },
     { id: 'Null', value: null, label: '', fill: null },
     { id: 'Omitted', label: '', fill: null },
+    { id: 'Grouped', value: 12.3456, label: '1.234,56%', fill: 100 },
 ];
 const freezeRecord = ({ id, fields: values }) =>
     Object.freeze({ id, fields: Object.freeze(values) });

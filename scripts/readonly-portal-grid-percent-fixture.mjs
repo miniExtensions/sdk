@@ -56,6 +56,7 @@ const detailFields = fields.map((field) => ({
         ...(field.config.type === 'percent'
             ? {
                   numberSeparator: 'period-comma',
+                  showThousandsSeparator: true,
                   showAsProgressBar: field.id === 'fldProgress',
               }
             : {}),

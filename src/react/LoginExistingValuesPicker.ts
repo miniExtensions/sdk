@@ -231,11 +231,11 @@ function Picker(props: LoginExistingValuesPickerProps) {
     }
 
     function handleDialogKey(event: KeyboardEvent<HTMLDivElement>) {
-        if (event.key === 'Escape' && view) {
-            event.preventDefault();
-            event.stopPropagation();
-            close(view.lookup);
-        }
+        if (event.key !== 'Escape' || !view || event.nativeEvent.isComposing)
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) close(view.lookup);
     }
 
     const panel = view

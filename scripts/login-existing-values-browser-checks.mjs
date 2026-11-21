@@ -8,7 +8,6 @@ const fixture = String.raw`
 import React, { createElement as h, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
-import { LoginExistingValuesPicker, LoginSignupConfirmationDialog } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/login-existing-values-picker.css';
 
 const duplicate = '  duplicate@example.com  ';
@@ -128,14 +127,20 @@ export async function checkLoginExistingValuesBrowser({
     evidence,
     output,
     expectedReactVersion,
+    format = 'esm',
 }) {
+    assert(format === 'esm' || format === 'cjs');
     const scratch = mkdtempSync(join(consumer, '.login-picker-browser-'));
     let context;
     const pageErrors = [];
     const unexpectedRequests = [];
     try {
         const entry = join(scratch, 'entry.mjs');
-        writeFileSync(entry, fixture);
+        const sdkImport =
+            format === 'esm'
+                ? "import { LoginExistingValuesPicker, LoginSignupConfirmationDialog } from '@miniextensions/sdk/react';"
+                : "const { LoginExistingValuesPicker, LoginSignupConfirmationDialog } = require('@miniextensions/sdk/react');";
+        writeFileSync(entry, sdkImport + '\n' + fixture);
         const bundle = await build({
             absWorkingDir: consumer,
             entryPoints: [entry],
@@ -150,7 +155,9 @@ export async function checkLoginExistingValuesBrowser({
         const inputs = Object.keys(bundle.metafile.inputs);
         assert(
             inputs.some((path) =>
-                path.endsWith('/react/LoginExistingValuesPicker.js')
+                path.endsWith(
+                    `/dist/${format}/react/LoginExistingValuesPicker.js`
+                )
             )
         );
         assert(
@@ -160,7 +167,9 @@ export async function checkLoginExistingValuesBrowser({
         );
         assert(
             inputs.some((path) =>
-                path.endsWith('/react/LoginSignupConfirmationDialog.js')
+                path.endsWith(
+                    `/dist/${format}/react/LoginSignupConfirmationDialog.js`
+                )
             )
         );
 
@@ -324,6 +333,84 @@ export async function checkLoginExistingValuesBrowser({
         await focus(search);
         await page.keyboard.press('Enter');
         assert.deepEqual((await read()).selections, selectedLabels);
+
+        const beforeEscape = await read();
+        await search.evaluate((input) => {
+            input.dispatchEvent(
+                new CompositionEvent('compositionstart', { bubbles: true })
+            );
+        });
+        const deliverEscape = (options) =>
+            search.evaluate((input, options) => {
+                const event = new KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    bubbles: true,
+                    cancelable: true,
+                    ...options,
+                });
+                let reachedDocument = false;
+                const observe = (observed) => {
+                    if (observed === event) reachedDocument = true;
+                };
+                document.addEventListener('keydown', observe);
+                const allowed = input.dispatchEvent(event);
+                document.removeEventListener('keydown', observe);
+                return { allowed, reachedDocument };
+            }, options);
+        const composingEscape = await deliverEscape({ isComposing: true });
+        evidence.imeEscape = composingEscape;
+        assert.deepEqual(composingEscape, {
+            allowed: true,
+            reachedDocument: true,
+        });
+        assert.equal(await dialog.isVisible(), true);
+        assert.equal(await search.inputValue(), '  Needle_*  ');
+        await focus(search);
+        await search.evaluate((input) => {
+            input.dispatchEvent(
+                new CompositionEvent('compositionend', { bubbles: true })
+            );
+        });
+        const repeatingEscape = await deliverEscape({ repeat: true });
+        assert.deepEqual(repeatingEscape, {
+            allowed: false,
+            reachedDocument: false,
+        });
+        assert.equal(await dialog.isVisible(), true);
+        assert.equal(await search.inputValue(), '  Needle_*  ');
+        await focus(search);
+        assert.deepEqual(await read(), beforeEscape);
+
+        await page.evaluate(() => {
+            document.addEventListener(
+                'keydown',
+                (event) => {
+                    window.pickerProof.escape = {
+                        key: event.key,
+                        trusted: event.isTrusted,
+                        repeating: event.repeat,
+                    };
+                },
+                { capture: true, once: true }
+            );
+        });
+        await page.keyboard.press('Escape');
+        assert.deepEqual(await page.evaluate(() => window.pickerProof.escape), {
+            key: 'Escape',
+            trusted: true,
+            repeating: false,
+        });
+        await dialog.waitFor({ state: 'hidden' });
+        await focus(trigger);
+        const afterEscape = await read();
+        assert.equal(afterEscape.calls.length, beforeEscape.calls.length);
+        assert.deepEqual(afterEscape.selections, beforeEscape.selections);
+        assert.equal(afterEscape.submits, beforeEscape.submits);
+        evidence.repeatingEscape = repeatingEscape;
+        evidence.trustedEscapeRestoredTrigger = true;
+
+        await trigger.click();
+        await choices.nth(0).waitFor();
         await page.keyboard.press('ArrowDown');
         await focus(choices.nth(0));
         await page.keyboard.press('Escape');

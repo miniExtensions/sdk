@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     cpSync,
@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
     consumerAgePolicy,
     installAgeQualifiedConsumer,
@@ -30,6 +31,7 @@ function fixture(
         npmLock = false,
         alias = false,
         packedFiles = {},
+        readConfigList = JSON.stringify,
     } = {}
 ) {
     const root = realpathSync(
@@ -89,8 +91,12 @@ function fixture(
         assert.equal(cwd, directory);
         calls.push(args);
         if (args[0] === '--version') return version;
-        if (args[0] === 'config')
-            return JSON.stringify({ ...consumerAgePolicy, ...policy }[args[2]]);
+        if (args[0] === 'config') {
+            const effective = { ...consumerAgePolicy, ...policy };
+            return args[1] === 'list'
+                ? readConfigList(effective)
+                : JSON.stringify(effective[args[2]]);
+        }
         assert.deepEqual(args, [
             'install',
             '--strict-peer-dependencies',
@@ -146,6 +152,57 @@ test('consumer adapter preserves the caller execution boundary and arguments', (
     }, args);
     assert.equal(value, 'receipt');
 });
+
+test('consumer CLI keeps real pnpm config stderr out of its output', (t) => {
+    const { directory, installed } = fixture(t);
+    const bin = join(dirname(directory), 'bin');
+    mkdirSync(bin);
+    const lock = join(directory, 'pnpm-lock.yaml');
+    writeFileSync(lock, 'retained lock');
+    writeFileSync(
+        join(bin, 'pnpm'),
+        String.raw`#!/bin/sh
+printf '%s\n' "$*" >> pnpm-calls
+case "$*" in
+    --version) printf '%s\n' 10.28.2 ;;
+    'config list --json') printf '%s\n' 'synthetic config list sentinel' >&2; exit 71 ;;
+    'config get nodeLinker --json') printf '%s\n' 'synthetic config getter sentinel' >&2; exit 72 ;;
+    *) exit 73 ;;
+esac
+`,
+        { mode: 0o700 }
+    );
+    const installer = fileURLToPath(
+        new URL('./age-qualified-consumer-install.mjs', import.meta.url)
+    );
+    const result = spawnSync(process.execPath, [installer, 'install'], {
+        cwd: directory,
+        env: { ...process.env, PATH: bin },
+        encoding: 'utf8',
+        timeout: 10_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.deepEqual(
+        readFileSync(join(directory, 'pnpm-calls'), 'utf8').trim().split('\n'),
+        ['--version', 'config list --json', 'config get nodeLinker --json']
+    );
+    assert.match(
+        result.stderr,
+        /Consumer policy could not be read: nodeLinker/
+    );
+    assert.doesNotMatch(
+        result.stdout,
+        /synthetic config (?:list|getter) sentinel/
+    );
+    assert.doesNotMatch(
+        result.stderr,
+        /synthetic config (?:list|getter) sentinel/
+    );
+    assert.equal(readFileSync(lock, 'utf8'), 'retained lock');
+    assert(existsSync(installed));
+});
+
 for (const npmLock of [false, true])
     test(`consumer installation verifies policy before install and preserves provenance (${npmLock})`, (t) => {
         const f = fixture(t, { npmLock });
@@ -159,15 +216,99 @@ for (const npmLock of [false, true])
         assert.equal(manifest.dependencies['host-moment'], 'npm:moment@2.30.1');
         assert.equal(manifest.dependencies.react, '19.2.0');
         assert.equal(manifest.dependencies['@types/react'], '19.2.2');
-        assert.deepEqual(
-            f.calls.slice(1, -1),
-            Object.keys(consumerAgePolicy).map((key) => [
-                'config',
-                'get',
-                key,
-                '--json',
+        assert.deepEqual(f.calls.slice(1, -1), [['config', 'list', '--json']]);
+        if (npmLock) return;
+
+        const getterCalls = Object.keys(consumerAgePolicy).map((key) => [
+            'config',
+            'get',
+            key,
+            '--json',
+        ]);
+        const aliases = Object.fromEntries(
+            Object.entries(consumerAgePolicy).map(([key, value]) => [
+                key.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase()),
+                value,
             ])
         );
+        for (const snapshot of [
+            aliases,
+            { ...consumerAgePolicy, ...aliases },
+        ]) {
+            const aliased = fixture(t, {
+                readConfigList: () => JSON.stringify(snapshot),
+            });
+            installAgeQualifiedConsumer(aliased);
+            assert.equal(aliased.installs, 1);
+            assert.deepEqual(aliased.calls.slice(1, -1), [
+                ['config', 'list', '--json'],
+            ]);
+        }
+        for (const response of [
+            () => '{}',
+            () => 'null',
+            () => '[]',
+            () => 'invalid JSON',
+            () => {
+                throw new Error('Unprinted config stderr sentinel');
+            },
+        ]) {
+            const fallback = fixture(t, { readConfigList: response });
+            installAgeQualifiedConsumer(fallback);
+            assert.equal(fallback.installs, 1);
+            assert.deepEqual(fallback.calls.slice(1, -1), [
+                ['config', 'list', '--json'],
+                ...getterCalls,
+            ]);
+        }
+
+        const sentinel = 'Unprinted config value sentinel';
+        for (const [policy, readConfigList, failure] of [
+            [
+                { ignoreScripts: false },
+                () => '{}',
+                /Consumer policy differs: ignoreScripts/,
+            ],
+            [
+                { ignoreScripts: undefined },
+                () => '{}',
+                /Consumer policy could not be read: ignoreScripts/,
+            ],
+            [
+                {},
+                () => JSON.stringify({ ignoreScripts: false }),
+                /Consumer policy differs: ignoreScripts/,
+            ],
+            [
+                {},
+                () => JSON.stringify({ ignoreScripts: sentinel }),
+                /Consumer policy differs: ignoreScripts/,
+            ],
+            [
+                {},
+                () =>
+                    JSON.stringify({
+                        ignoreScripts: true,
+                        'ignore-scripts': sentinel,
+                    }),
+                /Consumer policy aliases differ: ignoreScripts/,
+            ],
+        ]) {
+            const rejected = fixture(t, { policy, readConfigList });
+            const retainedLock = join(rejected.directory, 'pnpm-lock.yaml');
+            writeFileSync(retainedLock, 'retained lock');
+            assert.throws(
+                () => installAgeQualifiedConsumer(rejected),
+                (error) => {
+                    assert.match(error.message, failure);
+                    assert.doesNotMatch(String(error), /Unprinted config/);
+                    return true;
+                }
+            );
+            assert.equal(rejected.installs, 0);
+            assert(existsSync(rejected.installed));
+            assert.equal(readFileSync(retainedLock, 'utf8'), 'retained lock');
+        }
     });
 for (const policy of [
     { minimumReleaseAge: 0 },

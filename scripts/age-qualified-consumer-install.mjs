@@ -16,6 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 export const consumerAgePolicy = Object.freeze({
     nodeLinker: 'hoisted',
@@ -26,6 +27,56 @@ export const consumerAgePolicy = Object.freeze({
     ignoreScripts: true,
 });
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+function assertConsumerPolicy(pnpm) {
+    let listed;
+    try {
+        listed = JSON.parse(pnpm(['config', 'list', '--json']));
+    } catch {
+        // An unavailable group read can still use the original effective getters.
+    }
+    if (listed && typeof listed === 'object' && !Array.isArray(listed)) {
+        let complete = true;
+        for (const [key, expected] of Object.entries(consumerAgePolicy)) {
+            const dashed = key.replace(
+                /[A-Z]/g,
+                (letter) => '-' + letter.toLowerCase()
+            );
+            const hasCamel = Object.hasOwn(listed, key);
+            const hasDashed = Object.hasOwn(listed, dashed);
+            if (!hasCamel && !hasDashed) {
+                complete = false;
+                continue;
+            }
+            if (hasCamel && hasDashed)
+                assert(
+                    isDeepStrictEqual(listed[key], listed[dashed]),
+                    `Consumer policy aliases differ: ${key}`
+                );
+            assert(
+                isDeepStrictEqual(
+                    hasCamel ? listed[key] : listed[dashed],
+                    expected
+                ),
+                `Consumer policy differs: ${key}`
+            );
+        }
+        if (complete) return;
+    }
+    for (const [key, expected] of Object.entries(consumerAgePolicy)) {
+        let effective;
+        try {
+            effective = JSON.parse(pnpm(['config', 'get', key, '--json']));
+        } catch {
+            throw new Error(`Consumer policy could not be read: ${key}`);
+        }
+        assert(
+            isDeepStrictEqual(effective, expected),
+            `Consumer policy differs: ${key}`
+        );
+    }
+}
+
 function nonFileType(entry) {
     const types = {
         'symbolic link': entry.isSymbolicLink(),
@@ -106,6 +157,8 @@ export function installAgeQualifiedConsumer({
             cwd,
             encoding: 'utf8',
             timeout: 120000,
+            // Explicit pipes prevent execFileSync from forwarding config stderr.
+            stdio: argv[0] === 'config' ? 'pipe' : undefined,
             env: {
                 ...process.env,
                 COREPACK_ENABLE_AUTO_PIN: '0',
@@ -202,12 +255,7 @@ export function installAgeQualifiedConsumer({
     writeFileSync(policyPath, policyText);
     const pnpm = (argv) => execute('pnpm', argv, root);
     assert.equal(pnpm(['--version']).trim(), '10.28.2');
-    for (const [key, value] of Object.entries(consumerAgePolicy))
-        assert.deepEqual(
-            JSON.parse(pnpm(['config', 'get', key, '--json'])),
-            value,
-            `Consumer policy differs: ${key}`
-        );
+    assertConsumerPolicy(pnpm);
     const lockPath = join(root, 'pnpm-lock.yaml');
     const receiptsPath = join(root, 'consumer-age-install-receipts.json');
     const receipts = existsSync(receiptsPath)

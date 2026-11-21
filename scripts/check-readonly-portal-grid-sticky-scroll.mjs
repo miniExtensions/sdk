@@ -32,6 +32,7 @@ const viewports = [
     { name: 'desktop', width: 1280, height: 800 },
     { name: 'explicit-grid-under-640', width: 639, height: 800 },
 ];
+const verticalScroll = 120;
 const entryName = 'wide-readonly-grid-scene.mjs';
 const sceneSource = `
 import { createElement as h } from 'react';
@@ -41,9 +42,14 @@ import { CompleteReadOnlyTextField, ReadonlyPortalGrid } from '@miniextensions/s
 import '@miniextensions/sdk/react/readonly-portal-grid.css';
 
 const scene = ${JSON.stringify(scene)};
+const vertical = location.pathname === '/vertical';
+document.body.dataset.axis = vertical ? 'vertical' : 'horizontal';
 const activity = { widthCommits: 0, hiddenChanges: 0, submits: 0, fetches: 0, xhr: 0 };
 const columns = scene.columns.map(([fieldId, title]) => ({ fieldId, title, icon: 'text' }));
-const rows = scene.records.map(([recordId, values]) => ({
+const records = vertical ? [...scene.records, ...Array.from({ length: 12 }, (_, index) => [
+    'recExtra' + index, ['Project ' + index, 'Owner ' + index, 'Planning', 'North', 'Notes'],
+])] : scene.records;
+const rows = records.map(([recordId, values]) => ({
     recordId, label: values[0],
     cells: columns.map(({ fieldId }, index) => ({
         fieldId, node: h(CompleteReadOnlyTextField, { value: values[index], language: 'en' }),
@@ -67,7 +73,8 @@ window.gridActivity = activity;
 const html = `<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wide read-only Grid scroll</title><link rel="stylesheet" href="/grid.css"></head>
-<body><div id="grid"></div><script defer src="/grid.js"></script></body></html>`;
+<body><style>body[data-axis="vertical"] .mx-sdk-readonly-grid__viewport{max-block-size:190px}</style>
+<div id="grid"></div><script defer src="/grid.js"></script></body></html>`;
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 function createGridMeasurement({ primary, neighbor }) {
@@ -106,6 +113,8 @@ function createGridMeasurement({ primary, neighbor }) {
                 height: viewport.clientHeight,
                 scrollWidth: viewport.scrollWidth,
                 scrollLeft: viewport.scrollLeft,
+                scrollHeight: viewport.scrollHeight,
+                scrollTop: viewport.scrollTop,
             },
             headerIds: headers.map((header) => header.dataset.fieldId ?? null),
             headers: Object.fromEntries(
@@ -118,6 +127,18 @@ function createGridMeasurement({ primary, neighbor }) {
                         {
                             text: header.textContent.trim(),
                             sameNode: headerNodes.includes(header),
+                            hitHeading: (() => {
+                                const label = header
+                                    .querySelector(
+                                        '.mx-sdk-readonly-grid__heading'
+                                    )
+                                    .getBoundingClientRect();
+                                const hit = document.elementFromPoint(
+                                    label.left + label.width / 2,
+                                    label.top + label.height / 2
+                                );
+                                return hit?.closest('th') === header;
+                            })(),
                             ...rect(header, frame),
                         },
                     ])
@@ -151,14 +172,74 @@ function createGridMeasurement({ primary, neighbor }) {
     };
     return {
         snapshot,
-        async scrollTo(target) {
-            viewport.scrollLeft = target;
+        async scrollTo(target, axis = 'x') {
+            if (axis === 'x') viewport.scrollLeft = target;
+            else viewport.scrollTop = target;
             await new Promise((done) =>
                 requestAnimationFrame(() => requestAnimationFrame(done))
             );
             return snapshot();
         },
     };
+}
+
+function checkVerticalGeometry({ before, after }, width) {
+    const narrow = width < 640;
+    const shift = after.viewport.scrollTop;
+    assert.equal(before.viewport.scrollTop, 0);
+    assert.equal(shift, verticalScroll);
+    assert.equal(before.viewport.scrollLeft, 0);
+    assert.equal(after.viewport.scrollLeft, 0);
+    assert(before.viewport.scrollHeight > before.viewport.height + shift);
+    assert.equal(after.rows.length, scene.records.length + 12);
+    assert.deepEqual(after.headerIds, before.headerIds);
+    assert.deepEqual(
+        after.rows.map((row) => [row.id, row.cellIds]),
+        before.rows.map((row) => [row.id, row.cellIds])
+    );
+    for (const sample of [before, after]) {
+        assert.equal(sample.pageWidth, width);
+        assert.equal(sample.under640, narrow);
+        assert.deepEqual(Object.values(sample.activity), [0, 0, 0, 0, 0]);
+    }
+    for (const field of [scene.primary, scene.neighbor]) {
+        const initial = before.headers[field];
+        const header = after.headers[field];
+        assert(initial.hitHeading && header.sameNode);
+        assert.equal(header.text, initial.text);
+        assert.equal(header.left, initial.left);
+        assert.equal(header.width, initial.width);
+        assert.equal(
+            header.top - initial.top,
+            narrow ? -shift : 0,
+            `${field} header top after vertical scroll`
+        );
+        assert.equal(
+            header.hitHeading,
+            !narrow,
+            `${field} header hit after vertical scroll`
+        );
+        if (narrow) assert(header.bottom <= 0);
+        else assert(header.top >= 0 && header.bottom <= after.viewport.height);
+        const headerCenter = header.top + header.height / 2;
+        let bodyPassesBehindHeader = false;
+        for (const [index, row] of after.rows.entries()) {
+            const cell = row.cells[field];
+            const original = before.rows[index].cells[field];
+            assert(row.sameNode && cell.sameNode && row.buttons === 0);
+            assert.equal(cell.text, original.text);
+            assert.equal(cell.top - original.top, -shift);
+            assert.equal(cell.left, header.left);
+            assert.equal(cell.right, header.right);
+            if (cell.top <= headerCenter && cell.bottom > headerCenter)
+                bodyPassesBehindHeader = true;
+        }
+        if (!narrow)
+            assert(
+                bodyPassesBehindHeader,
+                `${field} body must pass behind its heading`
+            );
+    }
 }
 
 function checkGeometry({ before, after }, expectedWidth) {
@@ -500,6 +581,7 @@ async function bundleInstalled({ consumer, archive, sha }) {
 async function measurePacked({ executablePath, output, inputs, sha }) {
     const assets = new Map([
         ['/', ['text/html', html]],
+        ['/vertical', ['text/html', html]],
         ['/grid.js', ['text/javascript', inputs.js]],
         ['/grid.css', ['text/css', inputs.css]],
         ['/favicon.ico', ['image/x-icon', '']],
@@ -626,6 +708,71 @@ async function measurePacked({ executablePath, output, inputs, sha }) {
                             report.native.desktopNoOpenPrimaryInsetReferencePx;
                 }
                 checkGeometry(result.measurements, width);
+                await page.goto(origin + '/vertical');
+                await page
+                    .locator('tbody tr')
+                    .last()
+                    .waitFor({ state: 'attached' });
+                const vertical = await page.evaluateHandle(
+                    createGridMeasurement,
+                    scene
+                );
+                result.vertical = {
+                    before: await vertical.evaluate((probe) =>
+                        probe.snapshot()
+                    ),
+                };
+                await captureViewport('vertical-before');
+                result.vertical.after = await vertical.evaluate(
+                    (probe, target) => probe.scrollTo(target, 'y'),
+                    verticalScroll
+                );
+                await captureViewport('vertical-after');
+                checkVerticalGeometry(result.vertical, width);
+                if (width >= 640) {
+                    const resize = page
+                        .locator(`th[data-field-id="${scene.neighbor}"]`)
+                        .getByRole('separator');
+                    const initialWidth = Number(
+                        await resize.getAttribute('aria-valuenow')
+                    );
+                    await resize.focus();
+                    assert(
+                        await resize.evaluate(
+                            (node) => node === document.activeElement
+                        )
+                    );
+                    await page.keyboard.down('ArrowRight');
+                    assert.equal(
+                        Number(await resize.getAttribute('aria-valuenow')),
+                        initialWidth + 1
+                    );
+                    await page.keyboard.press('Escape');
+                    await page.keyboard.up('ArrowRight');
+                    assert.equal(
+                        Number(await resize.getAttribute('aria-valuenow')),
+                        initialWidth
+                    );
+                    const combined = await vertical.evaluate(
+                        (probe, target) => probe.scrollTo(target),
+                        scene.scrollTarget
+                    );
+                    result.vertical.combined = combined;
+                    assert.equal(combined.viewport.scrollTop, verticalScroll);
+                    assert.equal(
+                        combined.viewport.scrollLeft,
+                        scene.scrollTarget
+                    );
+                    const primary = combined.headers[scene.primary];
+                    assert.equal(primary.top, 0);
+                    assert.equal(primary.left, 0);
+                    assert(primary.hitHeading);
+                    assert.deepEqual(
+                        Object.values(combined.activity),
+                        [0, 0, 0, 0, 0]
+                    );
+                    await captureViewport('combined-after');
+                }
                 assert.deepEqual(result.unexpectedRequests, []);
                 assert.deepEqual(result.errors, []);
                 result.status = 'passed';

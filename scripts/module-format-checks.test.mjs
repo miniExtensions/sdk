@@ -702,6 +702,7 @@ for (const name of [
     'complete-calendly',
     'complete-record-comments',
     'complete-verification',
+    'complete-extension-password',
     'login-existing-values-picker',
     'complete-image-annotation',
     'complete-barcode-scanner',

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+    existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
@@ -65,12 +66,14 @@ const [commit, tree] = execFileSync(
     .split('\n');
 const output = resolve(outputArg);
 mkdirSync(output);
-const scratch = managed
-    ? process.env.SDK_NATIVE_SCRATCH_DIR
-    : realpathSync(tmpdir());
+const managedScratch = process.env.SDK_NATIVE_SCRATCH_DIR;
+const scratch = managedScratch ?? realpathSync(tmpdir());
+assert(isAbsolute(scratch), 'An absolute Phone scratch path is required');
 mkdirSync(scratch, { recursive: true });
 assert.equal(realpathSync(scratch), scratch);
-const temporary = mkdtempSync(join(scratch, 'sdk-grid-phone-'));
+const temporary = mkdtempSync(
+    join(scratch, managedScratch ? 'p-' : 'sdk-grid-phone-')
+);
 const report = {
     source: { commit, tree, fixtureSha256: sha256(fixture) },
     ...(kit && { ci: kit.ci }),
@@ -313,6 +316,19 @@ async function measure(browser, origin, path, profile) {
 
 let browser;
 try {
+    if (managedScratch) {
+        // Chromium uses a Unix socket under TMPDIR. Use only the new owned
+        // directory as the temporary root for Chromium and the installer.
+        assert(
+            Buffer.byteLength(temporary) <= 60,
+            'Phone scratch path is too long'
+        );
+        Object.assign(process.env, {
+            TMPDIR: temporary,
+            TMP: temporary,
+            TEMP: temporary,
+        });
+    }
     await new Promise((ready, reject) =>
         server.listen(0, '127.0.0.1', ready).once('error', reject)
     );
@@ -358,12 +374,16 @@ try {
     } finally {
         await new Promise((done) => server.close(done));
         report.cleanup.serverClosed = !server.listening;
-        await stop();
-        rmSync(temporary, { recursive: true, force: true });
-        report.cleanup.consumerRemoved = true;
-        writeFileSync(
-            join(output, 'result.json'),
-            JSON.stringify(report, null, 2) + '\n'
-        );
+        try {
+            await stop();
+        } finally {
+            rmSync(temporary, { recursive: true, force: true });
+            report.cleanup.consumerRemoved = !existsSync(temporary);
+            writeFileSync(
+                join(output, 'result.json'),
+                JSON.stringify(report, null, 2) + '\n'
+            );
+            assert.equal(report.cleanup.consumerRemoved, true);
+        }
     }
 }

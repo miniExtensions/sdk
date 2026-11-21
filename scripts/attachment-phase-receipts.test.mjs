@@ -727,7 +727,6 @@ function assertRootLoadCheckpoints(source, newline) {
     }
 }
 
-
 test('local points bracket submit, synthetic response, and readiness', async () => {
     const source = await readFile(
         new URL('./attachment-review-recipe-checks.mjs', import.meta.url),

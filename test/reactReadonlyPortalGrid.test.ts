@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { it } from 'node:test';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
-import type { EventTarget as HappyEventTarget } from 'happy-dom';
+import type {
+    Event as HappyEvent,
+    EventTarget as HappyEventTarget,
+} from 'happy-dom';
 import {
     ReadonlyPortalGrid,
     type ReadonlyPortalGridProps,
@@ -790,61 +793,241 @@ for (const boxSizing of ['border-box', 'content-box'] as const) {
     });
 }
 
-it('supports keyboard resize with measured settlement and Escape cancellation', async (t) => {
+it('preserves history shortcuts and supports keyboard resize with measured settlement', async (t) => {
     const f = await htmlPresentationFixture(t);
     const changes: unknown[] = [];
-    await f.render(
-        h(
-            ReadonlyPortalGrid,
-            model({ onColumnWidthCommit: (x) => changes.push(x) })
-        )
+    const opens: string[] = [];
+    const hostEvents: HappyEvent[] = [];
+    const observe = (event: HappyEvent) => {
+        hostEvents.push(event);
+    };
+    f.window.document.addEventListener('keydown', observe);
+    f.window.document.addEventListener('keyup', observe);
+    const send = async (
+        target: HappyEventTarget,
+        type: 'keydown' | 'keyup',
+        options: {
+            key: string;
+            code: string;
+            altKey?: boolean;
+            metaKey?: boolean;
+            shiftKey?: boolean;
+            repeat?: boolean;
+        }
+    ) => {
+        const event = new f.window.KeyboardEvent(type, {
+            ...options,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => target.dispatchEvent(event));
+        return {
+            delivered: hostEvents.filter((observed) => observed === event)
+                .length,
+            prevented: event.defaultPrevented,
+        };
+    };
+    const render = async (scope: string, width: number) =>
+        f.render(
+            h(
+                ReadonlyPortalGrid,
+                model({
+                    preferenceScopeKey: scope,
+                    columnWidths: { primary: 220, value: width },
+                    onColumnWidthCommit,
+                    onOpenRecord,
+                })
+            )
+        );
+    const onColumnWidthCommit = (change: unknown) => {
+        changes.push(change);
+    };
+    const onOpenRecord = (recordId: string) => {
+        opens.push(recordId);
+    };
+    const focusResizeSeparator = async () => {
+        const field = header(f);
+        const neighbor = header(f, 'primary');
+        for (const cell of [field, neighbor]) {
+            Object.defineProperty(cell, 'clientWidth', {
+                configurable: true,
+                get: () => Number.parseFloat(cell.style.width),
+            });
+        }
+        const separator = field.querySelector(
+            '[role="separator"][aria-label="Resize Value"]'
+        );
+        assert.ok(separator instanceof f.window.HTMLElement);
+        await act(async () => separator.focus());
+        assert.equal(f.window.document.activeElement, separator);
+        return {
+            field,
+            separator,
+            widths: () => [field.clientWidth, neighbor.clientWidth],
+        };
+    };
+    const passThrough = { delivered: 1, prevented: false };
+    const observed = [];
+    for (const modifier of ['Alt', 'Meta'] as const) {
+        const flags = modifier === 'Alt' ? { altKey: true } : { metaKey: true };
+        const modifierKey = { key: modifier, code: modifier + 'Left' };
+        for (const key of ['ArrowLeft', 'ArrowRight'] as const) {
+            const arrow = { key, code: key };
+            for (const modifierFirst of [false, true]) {
+                await render(`${modifier}-${key}-${modifierFirst}`, 240);
+                const { separator, widths } = await focusResizeSeparator();
+                const before = widths();
+                const start = changes.length;
+                const modifierDown = await send(separator, 'keydown', {
+                    ...modifierKey,
+                    ...flags,
+                });
+                const down = await send(separator, 'keydown', {
+                    ...arrow,
+                    ...flags,
+                });
+                const during = widths();
+                let modifierUp;
+                let repeat;
+                if (modifierFirst) {
+                    modifierUp = await send(separator, 'keyup', modifierKey);
+                    repeat = await send(separator, 'keydown', {
+                        ...arrow,
+                        repeat: true,
+                    });
+                }
+                const up = await send(separator, 'keyup', {
+                    ...arrow,
+                    ...(!modifierFirst && flags),
+                });
+                if (!modifierFirst)
+                    modifierUp = await send(separator, 'keyup', modifierKey);
+                observed.push({
+                    modifier,
+                    key,
+                    modifierFirst,
+                    modifierDown,
+                    down,
+                    up,
+                    modifierUp,
+                    repeat,
+                    before,
+                    during,
+                    after: widths(),
+                    commits: changes.length - start,
+                });
+            }
+        }
+    }
+    assert.deepEqual(
+        observed,
+        observed.map(({ modifier, key, modifierFirst }) => ({
+            modifier,
+            key,
+            modifierFirst,
+            modifierDown: passThrough,
+            down: passThrough,
+            up: passThrough,
+            modifierUp: passThrough,
+            repeat: modifierFirst ? passThrough : undefined,
+            before: [240, 220],
+            during: [240, 220],
+            after: [240, 220],
+            commits: 0,
+        }))
     );
-    const th = header(f);
-    Object.defineProperty(th, 'clientWidth', {
+    assert.equal(changes.length, 0);
+
+    const scope = 'ordinary resize';
+    await render(scope, 240);
+    const { field, separator, widths } = await focusResizeSeparator();
+    const left = { key: 'ArrowLeft', code: 'ArrowLeft' };
+    const right = { key: 'ArrowRight', code: 'ArrowRight' };
+    let width = 240;
+    const steps = [
+        [right, false, 1],
+        [left, false, -1],
+        [right, true, 10],
+        [left, true, -10],
+    ] as const;
+    for (const [index, [arrow, shiftKey, delta]] of steps.entries()) {
+        await send(separator, 'keydown', { ...arrow, shiftKey });
+        width += delta;
+        assert.deepEqual(widths(), [width, 220]);
+        assert.equal(changes.length, index);
+        await send(separator, 'keyup', arrow);
+        assert.equal(changes.length, index + 1);
+        assert.deepEqual(changes.at(-1), { fieldId: 'value', width });
+        await render(scope, width);
+    }
+
+    // A shortcut on the opposite arrow must not settle an owned resize.
+    await send(separator, 'keydown', right);
+    assert.deepEqual(
+        await send(separator, 'keydown', { ...left, altKey: true }),
+        passThrough
+    );
+    assert.deepEqual(await send(separator, 'keyup', left), passThrough);
+    assert.deepEqual(widths(), [241, 220]);
+    assert.equal(changes.length, 4);
+    // Settlement uses the measured width even when it differs from the request.
+    Object.defineProperty(field, 'clientWidth', {
         configurable: true,
-        get: () => 245,
+        value: 245,
     });
-    const handle = th.querySelector('[role="separator"]');
-    assert.ok(handle);
-    await act(async () => {
-        handle.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                key: 'ArrowRight',
-                shiftKey: true,
-                bubbles: true,
-                cancelable: true,
-            })
-        );
+    await send(separator, 'keyup', right);
+    assert.deepEqual(changes.at(-1), { fieldId: 'value', width: 245 });
+    await render(scope, 245);
+    Object.defineProperty(field, 'clientWidth', {
+        configurable: true,
+        get: () => Number.parseFloat(field.style.width),
     });
-    assert.equal(th.style.width, '255px');
-    await act(async () => {
-        handle.dispatchEvent(
-            new f.window.KeyboardEvent('keyup', {
-                key: 'ArrowRight',
-                bubbles: true,
-                cancelable: true,
-            })
-        );
-    });
-    assert.deepEqual(changes, [{ fieldId: 'value', width: 245 }]);
-    await act(async () => {
-        handle.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                key: 'ArrowLeft',
-                bubbles: true,
-                cancelable: true,
-            })
-        );
-        handle.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                key: 'Escape',
-                bubbles: true,
-                cancelable: true,
-            })
-        );
-    });
-    assert.equal(th.style.width, '200px');
-    assert.equal(changes.length, 1);
+
+    // A held resize can hand the same physical arrow back to a shortcut.
+    await send(separator, 'keydown', right);
+    assert.deepEqual(
+        await send(separator, 'keydown', {
+            ...right,
+            metaKey: true,
+            repeat: true,
+        }),
+        passThrough
+    );
+    assert.deepEqual(
+        await send(separator, 'keydown', { ...right, repeat: true }),
+        passThrough
+    );
+    assert.deepEqual(await send(separator, 'keyup', right), passThrough);
+    assert.deepEqual(widths(), [245, 220]);
+
+    await send(separator, 'keydown', left);
+    assert.deepEqual(widths(), [244, 220]);
+    await send(separator, 'keydown', { key: 'Escape', code: 'Escape' });
+    assert.deepEqual(await send(separator, 'keyup', left), passThrough);
+    assert.deepEqual(widths(), [245, 220]);
+    assert.equal(changes.length, 5);
+
+    // A shortcut handoff must leave an active pointer resize in control.
+    await send(separator, 'keydown', right);
+    await pointer(f, separator, 'pointerdown', 200);
+    await pointer(f, f.window.document, 'pointermove', 217);
+    const dragged = field.clientWidth;
+    assert(dragged > 245);
+    assert.deepEqual(
+        await send(separator, 'keydown', {
+            ...right,
+            altKey: true,
+            repeat: true,
+        }),
+        passThrough
+    );
+    assert.deepEqual(await send(separator, 'keyup', right), passThrough);
+    assert.deepEqual(widths(), [dragged, 220]);
+    assert.equal(changes.length, 5);
+    await pointer(f, f.window.document, 'pointerup', 217);
+    assert.equal(changes.length, 6);
+    assert.deepEqual(changes.at(-1), { fieldId: 'value', width: dragged });
+    assert.deepEqual(opens, []);
     f.unchangedEffects();
 });
 

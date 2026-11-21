@@ -120,6 +120,95 @@ it('preserves the masked host draft and admits only one intent per opening', asy
     ui.unchangedEffects();
 });
 
+it('cancels only after a complete backdrop gesture even when click coordinates are rounded', async (t) => {
+    const ui = await htmlPresentationFixture(t);
+    let cancels = 0;
+    const render = (open: boolean) =>
+        ui.render(
+            h(
+                Fragment,
+                null,
+                h('button', { type: 'button' }, 'Open signup'),
+                h(LoginSignupConfirmationDialog, {
+                    open,
+                    attemptId: 'backdrop-attempt',
+                    copy,
+                    onCancel: () => cancels++,
+                    onCreate: () => assert.fail('Backdrop cannot create'),
+                })
+            )
+        );
+    await render(false);
+    const opener = ui.container.querySelector('button');
+    assert(opener);
+    opener.focus();
+    await render(true);
+    const dialog = ui.container.querySelector('dialog[open]');
+    assert(dialog);
+    dialog.getBoundingClientRect = () =>
+        new ui.window.DOMRect(20, 20, 80.5, 80.5);
+
+    async function emit(
+        type: 'pointerdown' | 'pointerup' | 'pointercancel' | 'click',
+        x: number,
+        { pointerId = 7, trusted = true } = {}
+    ) {
+        const event = new ui.window.PointerEvent(type, {
+            bubbles: true,
+            clientX: x,
+            clientY: 40,
+            button: 0,
+            detail: type === 'click' ? 1 : 0,
+            isPrimary: true,
+            pointerId,
+            pointerType: 'mouse',
+        });
+        // Model browser trust in the synthetic DOM; Chromium tests use real input.
+        Object.defineProperty(event, 'isTrusted', { value: trusted });
+        await act(async () => {
+            dialog.dispatchEvent(event);
+        });
+    }
+
+    await emit('pointerdown', 30);
+    await emit('pointerup', 30);
+    await emit('click', 30);
+    assert.equal(cancels, 0);
+
+    await emit('pointerdown', 110);
+    await emit('pointerup', 30);
+    await emit('click', 30);
+    assert.equal(cancels, 0);
+
+    await emit('pointerdown', 110);
+    await emit('pointercancel', 110);
+    await emit('pointerup', 110);
+    await emit('click', 110);
+    assert.equal(cancels, 0);
+
+    await emit('pointerdown', 110, { trusted: false });
+    await emit('pointerup', 110);
+    await emit('click', 110);
+    assert.equal(cancels, 0);
+
+    await emit('pointerdown', 110);
+    await emit('pointerup', 110, { pointerId: 8 });
+    await emit('click', 110);
+    assert.equal(cancels, 0);
+
+    await emit('pointerdown', 110);
+    await emit('pointerup', 110);
+    await emit('click', 110, { pointerId: 8 });
+    assert.equal(cancels, 0);
+
+    await emit('pointerdown', 100.75);
+    await emit('pointerup', 100.75);
+    await emit('click', 100);
+    assert.equal(cancels, 1);
+    await render(false);
+    assert.equal(ui.window.document.activeElement, opener);
+});
+
 it('retires held decisions when an attempt is replaced, suspended, or closed', async (t) => {
     const ui = await htmlPresentationFixture(t);
     const intents: string[] = [];

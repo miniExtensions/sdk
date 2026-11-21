@@ -18,9 +18,12 @@ import {
     CompleteFormFieldPresentation,
     CompleteMultilineTextField,
     CompleteCheckboxField,
+    NumberField,
+    fieldPresentationDescribedBy,
     type CompleteFormFieldPresentationProps,
     type FieldPresentationComposition,
 } from '@miniextensions/sdk/react';
+import type {FieldRendererProps} from '@miniextensions/sdk/ui';
 const props:CompleteFormFieldPresentationProps={
     title:'Literal <b>title</b>',fieldName:'Notes',required:true,
     associationKind:'input',formId:'external-form',
@@ -43,6 +46,20 @@ createElement(CompleteFormFieldPresentation,{
         });
     },
 });
+declare const number:FieldRendererProps<'number'>;
+createElement(CompleteFormFieldPresentation,{
+    ...props,fieldName:'Amount',
+    children({association}:FieldPresentationComposition) {
+        return createElement(NumberField,{
+            mode:'controlled',field:number,options:{input:{
+                id:association.controlId,form:association.formId,
+                'aria-labelledby':association.labelId,
+                'aria-invalid':association.errorId!=null,
+                'aria-describedby':fieldPresentationDescribedBy(association),
+            }},
+        });
+    },
+});
 // @ts-expect-error no native whole-field renderer callback is accepted
 createElement(CompleteFormFieldPresentation,{...props,renderNative(){return null;}});
 // @ts-expect-error instance association is a discriminated DOM contract
@@ -62,7 +79,32 @@ const makeModels=()=>({
     'checkbox-b':{kind:'checkbox',value:false,title:'Approved',style:'toggle'},
     'button':{kind:'checkbox',value:false,title:'Action field',style:'button'},
     'calendly':{kind:'checkbox',value:false,title:'Scheduling field',calendly:true},
+    'number-a':{kind:'number',value:1234.5,title:'Invoice amount',required:true,formId:'number-form-a'},
+    'number-b':{kind:'number',value:28.5,title:'Review amount',required:false,formId:'number-form-b',placement:'tooltip',error:null},
 });
+const formIds=['external-form','number-form-a','number-form-b'];
+const formOwner=model=>model.formId??'external-form';
+const numberFieldId='fld_same_number';
+function forms(React,onSubmit) {
+    return formIds.map(id=>React.createElement('form',{id,key:id,onSubmit}));
+}
+function numberControl(React,api,model,write,{association}) {
+    const config={type:'number',options:{precision:2}};
+    const field={
+        physicalKind:'number',fieldId:numberFieldId,title:'Amount',value:model.value,
+        field:{id:numberFieldId,name:'Amount',description:null,isComputed:false,isPrimaryField:false,config},
+        presentation:{type:'physical',config},context:'form',computed:false,dirty:false,pending:false,
+        displayConfig:{numberSeparator:'period-comma',showThousandsSeparator:true,allowNegativeNumbers:true},
+        error:null,validation:[],
+        capability:{type:'editable',setValue(value){write(value);return{accepted:true};}},
+    };
+    return React.createElement(api.NumberField,{
+        mode:'controlled',field,options:{showLabel:false,commit:'immediate',input:{
+            id:association.controlId,form:association.formId,'aria-labelledby':association.labelId,
+            'aria-invalid':association.errorId!=null,'aria-describedby':api.fieldPresentationDescribedBy(association),
+        }},
+    });
+}
 function rows(React,api,models,write,actions) {
     return Object.entries(models).map(([key,model])=>{
         const kind=model.loading?'group':
@@ -70,12 +112,13 @@ function rows(React,api,models,write,actions) {
                 'non-labelable':'input';
         const description='description' in model?model.description:'<p>Help <strong>'+key+'</strong></p>';
         const error='error' in model?model.error:'Error '+key;
+        const fieldId=model.kind==='number'?numberFieldId:model.kind==='multiline'?'fld_same_notes':'fld_same_checkbox';
         return React.createElement('section',{
-            key,id:'row-'+key,className:'fixture-row','data-field-id':model.kind==='multiline'?'fld_same_notes':'fld_same_checkbox',
+            key,id:'row-'+key,className:'fixture-row','data-field-id':fieldId,
         },React.createElement(api.CompleteFormFieldPresentation,{
-            key:model.key??'mounted',title:model.title,fieldName:'Airtable fallback',
-            semanticTitle:model.title,showTitle:model.showTitle,required:true,
-            associationKind:kind,formId:'external-form',description,error,
+            key:model.key??'mounted',title:model.title,fieldName:model.kind==='number'?'Amount':'Airtable fallback',
+            semanticTitle:model.title,showTitle:model.showTitle,required:model.required??true,
+            associationKind:kind,formId:formOwner(model),description,error,
             descriptionPlacement:model.placement??'top',descriptionImageUrl:model.image,
             preview:model.preview,visible:model.visible,sameRow:model.sameRow,
             enableSideBySideOnMobile:model.mobile,truncateDescription:model.truncate,
@@ -85,6 +128,7 @@ function rows(React,api,models,write,actions) {
                     id:'fld_same_notes',value:model.value,onChange:value=>write(key,value),presentation,
                     readOnly:model.readOnly,characterLimit:100,hasDescription:true,hasErrorMessage:true,
                 });
+                if(model.kind==='number')return numberControl(React,api,model,value=>write(key,value),presentation);
                 return React.createElement(api.CompleteCheckboxField,{
                     id:'fld_same_checkbox',value:model.value,onChange:value=>write(key,value),presentation,
                     readOnly:model.readOnly,isInGrid:model.grid,checkboxStyle:model.style,
@@ -118,7 +162,7 @@ const {renderToString}=await import('react-dom/server');
 const models=makeModels(),writes=[],actions={schedule:0,submits:0};
 let root;
 const element=()=>React.createElement(React.StrictMode,null,
-    React.createElement('form',{id:'external-form',onSubmit(event){event.preventDefault();actions.submits++;}}),
+    ...forms(React,event=>{event.preventDefault();actions.submits++;}),
     ...rows(React,api,models,(key,value)=>{writes.push({key,value});models[key].value=value;root.render(element());},actions),
     React.createElement(api.CompleteCheckboxField,{title:'Standalone title',feedback:'Standalone feedback',value:false,onChange(){throw Error('Unexpected standalone activation');}}));
 // Run genuine no-DOM SSR in a child, then load the popup runtime after the
@@ -162,8 +206,9 @@ function assertAssociations() {
         if(label.tagName==='LABEL') {
             assert(label.control,'Input title must reference a mounted local control');
             assert(section.contains(label.control),'Input title must not activate another instance');
-            assert.equal(label.control.getAttribute('form'),'external-form');
-            assert(window.document.getElementById('external-form')); // actual .form is checked in Chromium
+            const formId=formOwner(models[key]);
+            assert.equal(label.control.getAttribute('form'),formId);
+            assert(window.document.getElementById(formId)); // actual .form is checked in Chromium
         } else assert.equal(label.getAttribute('for'),null,'Non-labelable title cannot carry htmlFor');
         for(const element of section.querySelectorAll('[aria-describedby]'))
             for(const id of element.getAttribute('aria-describedby').split(/\s+/)) {
@@ -185,7 +230,60 @@ try {
     assertAssociations();
     assert.equal(container.querySelectorAll('.mx-sdk-complete-checkbox__feedback').length,1);
     assert.equal(container.querySelector('.mx-sdk-complete-checkbox__feedback').textContent,'Standalone feedback');
-    const initialIds=Object.fromEntries(['notes-a','notes-b','checkbox-a','checkbox-b'].map(key=>[key,control(key).id]));
+    const initialIds=Object.fromEntries(['notes-a','notes-b','checkbox-a','checkbox-b','number-a','number-b'].map(key=>[key,control(key).id]));
+    const amount=control('number-a'),neighbor=control('number-b');
+    const label=key=>row(key).querySelector('label');
+    assert.equal(row('number-a').dataset.fieldId,row('number-b').dataset.fieldId);
+    assert.equal(label('number-a').textContent,'Invoice amount*');
+    assert.equal(label('number-b').textContent,'Review amount');
+    assert.equal(amount.getAttribute('aria-labelledby'),label('number-a').id);
+    assert.equal(neighbor.getAttribute('aria-labelledby'),label('number-b').id);
+    assert.equal(amount.getAttribute('aria-invalid'),'true');assert.equal(neighbor.getAttribute('aria-invalid'),'false');
+    const [numberError,numberHelp]=amount.getAttribute('aria-describedby').split(/\s+/);
+    const neighborHelp=neighbor.getAttribute('aria-describedby');
+    assert.equal(window.document.getElementById(numberError).textContent,'Error number-a');
+    assert.equal(window.document.getElementById(numberHelp).textContent,'Help number-a');
+    assert.notEqual(numberHelp,neighborHelp);
+    models['number-b'].showTitle=false;models['number-b'].error='Check review amount';
+    await render();assertAssociations();
+    assert.equal(control('number-b'),neighbor);
+    assert.equal(label('number-b').control,neighbor);
+    assert(label('number-b').classList.contains('mx-sdk-field-sr-only'));
+    assert.equal(label('number-b').textContent,'Review amount');
+    assert.equal(neighbor.getAttribute('aria-labelledby'),label('number-b').id);
+    assert.equal(neighbor.getAttribute('aria-invalid'),'true');
+    const [neighborError,hiddenNeighborHelp]=neighbor.getAttribute('aria-describedby').split(/\s+/);
+    assert.equal(window.document.getElementById(neighborError).textContent,'Check review amount');
+    assert.equal(hiddenNeighborHelp,neighborHelp);
+    await React.act(async()=>amount.focus());
+    const numberTrigger=row('number-b').querySelector('.mx-sdk-field-tooltip-trigger');
+    await React.act(async()=>numberTrigger.focus());
+    assert(window.document.querySelector('[role="tooltip"]'));
+    // A warmed popup can observe its opening anchor focus at the document listener.
+    await React.act(async()=>numberTrigger.dispatchEvent(new window.FocusEvent('focusin',{bubbles:true})));
+    assert(window.document.querySelector('[role="tooltip"]'),'Anchor focus must not dismiss its own Form tooltip');
+    await React.act(async()=>amount.focus());
+    assert.equal(window.document.querySelector('[role="tooltip"]'),null,'Other Number focus must still dismiss the tooltip');
+    models['number-b'].error=null;
+    await render();assertAssociations();
+    assert.equal(neighbor.getAttribute('aria-describedby'),neighborHelp);
+    assert.equal(window.document.getElementById(neighborError),null);
+    models['number-b'].title='';models['number-b'].showTitle=true;
+    await render();assertAssociations();
+    assert.equal(label('number-b').textContent,'Amount');
+    assert.equal(neighbor.getAttribute('aria-describedby'),neighborHelp);
+    models['number-a'].showTitle=false;models['number-a'].placement='bottom';models['number-a'].error=null;
+    models['number-b'].description='<p>&nbsp;<br></p>';
+    await render();assertAssociations();
+    assert.equal(control('number-a'),amount);assert.equal(control('number-b'),neighbor);
+    assert(label('number-a').classList.contains('mx-sdk-field-sr-only'));
+    assert.equal(label('number-a').textContent,'Invoice amount*');
+    assert.equal(amount.getAttribute('aria-invalid'),'false');
+    assert.equal(amount.getAttribute('aria-describedby'),numberHelp);
+    assert.equal(window.document.getElementById(numberError),null);
+    assert.equal(neighbor.getAttribute('aria-describedby'),null);
+    assert.equal(row('number-b').querySelector('.mx-sdk-field-tooltip-trigger'),null);
+    assert.deepEqual(writes,[]);assert.equal(actions.submits,0);assert.equal(networks,0);
     models['notes-a'].value='Updated literal';models['notes-a'].showTitle=false;
     models['notes-a'].placement='tooltip';models['notes-a'].error=null;
     await render();assertAssociations();
@@ -324,6 +422,7 @@ export function checkFieldPresentationReactMatrix({
                 'complete-multiline',
                 'complete-checkbox',
                 'html-description',
+                'localized-numeric',
             ]) {
                 const esm = readFileSync(
                     join(installed, 'dist/esm/react/' + name + '.css')
@@ -343,11 +442,11 @@ export function checkFieldPresentationReactMatrix({
                 String.raw`import{createRequire}from'node:module';
 const require=createRequire(import.meta.url);
 const{buildSync}=require(process.argv[1]);
-const styles=['field-presentation','complete-multiline','complete-checkbox','html-description'];
+const styles=['field-presentation','complete-multiline','complete-checkbox','html-description','localized-numeric'];
 for(const name of styles)require.resolve('@miniextensions/sdk/react/'+name+'.css');
 for(const format of ['esm','cjs']) {
  const imports=styles.map(name=>format==='esm'?"import'@miniextensions/sdk/react/"+name+".css';":"require('@miniextensions/sdk/react/"+name+".css');").join('');
- const api=format==='esm'?"import{CompleteFormFieldPresentation,CompleteCheckboxField,CompleteMultilineTextField}from'@miniextensions/sdk/react';console.log(CompleteFormFieldPresentation,CompleteCheckboxField,CompleteMultilineTextField);":"console.log(require('@miniextensions/sdk/react').CompleteFormFieldPresentation);";
+ const api=format==='esm'?"import{CompleteFormFieldPresentation,CompleteCheckboxField,CompleteMultilineTextField,NumberField}from'@miniextensions/sdk/react';console.log(CompleteFormFieldPresentation,CompleteCheckboxField,CompleteMultilineTextField,NumberField);":"const{CompleteFormFieldPresentation,NumberField}=require('@miniextensions/sdk/react');console.log(CompleteFormFieldPresentation,NumberField);";
  buildSync({stdin:{contents:imports+api,resolveDir:process.cwd()},bundle:true,platform:'browser',format:'iife',outdir:'browser-output',write:false,logLevel:'silent'});
 }`,
                 esbuildModulePath,
@@ -356,7 +455,7 @@ for(const format of ['esm','cjs']) {
             console.log(
                 'Installed field presentation React' +
                     version.react +
-                    ': ESM/CJS/types/CSS, real shell+Multiline+Checkbox SSR/hydration and local association isolation passed.'
+                    ': ESM/CJS/types/CSS, real shell with Number, Multiline and Checkbox, SSR/hydration and local associations passed.'
             );
         }
         return { versions, cleanup: 'completed' };
@@ -409,9 +508,10 @@ function snapshot() {
    const title=section.querySelector('.mx-sdk-field-title');
    const describedBy=control?.getAttribute('aria-describedby');
    const rectangle=shell?.getBoundingClientRect();
-   return[key,{value:model.value,id:control?.id??null,form:control?.form?.id??null,
+   return[key,{value:model.value,id:control?.id??null,form:control?.form?.id??null,expectedForm:formOwner(model),
     checked:control&&'checked'in control?control.checked:null,disabled:control?.disabled??null,
     labelId:title?.id??null,labelTag:title?.tagName??null,
+    labelPointerTrusted:title?.dataset.trustedClick==='true',
     labelIsLocal:title?.tagName==='LABEL'?!!title.control&&section.contains(title.control):null,
     descriptionIds:describedBy?.split(/\s+/)??[],
     descriptionsLocal:!describedBy||describedBy.split(/\s+/).every(id=>{const target=document.getElementById(id);return target&&section.contains(target);}),
@@ -503,7 +603,7 @@ function App({revision}) {
   React.createElement(FixtureControls),
   React.createElement('output',{className:'fixture-state','aria-label':'Synthetic fixture state','aria-live':'polite'},
    'Local value changes: '+writes.length+'; form submissions: '+actions.submits+'; local scheduling actions: '+actions.schedule),
-  React.createElement('form',{id:'external-form',onSubmit(event){event.preventDefault();actions.submits++;void publish();}}),
+  ...forms(React,event=>{event.preventDefault();actions.submits++;void publish();}),
   React.createElement('div',{className:'fixture-viewport','data-constrained':String(fixtureOptions.constrained),'aria-label':'Synthetic field viewport'},
    React.createElement('div',{className:'field-grid'},...fieldRows)));
 }
@@ -552,6 +652,8 @@ export async function prepareFieldPresentationBrowserFixtures({
         'CompleteFormFieldPresentation',
         'CompleteMultilineTextField',
         'CompleteCheckboxField',
+        'NumberField',
+        'CompleteLocalizedNumericField',
     ])
         assert(
             inputs.some((input) => input.endsWith('/react/' + name + '.js')),
@@ -582,6 +684,7 @@ export async function prepareFieldPresentationBrowserFixtures({
         'complete-multiline',
         'complete-checkbox',
         'html-description',
+        'localized-numeric',
     ]) {
         const path = realpathSync(
             require.resolve('@miniextensions/sdk/react/' + name + '.css')
@@ -652,7 +755,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
         for (const value of Object.values(snapshot.rows)) {
             assert(value.descriptionsLocal, name + ': feedback stays local');
             if (value.labelTag === 'LABEL') assert(value.labelIsLocal);
-            if (value.id != null) assert.equal(value.form, 'external-form');
+            if (value.id != null) assert.equal(value.form, value.expectedForm);
             if (value.visible) {
                 for (const measurement of ['top', 'left', 'height', 'width'])
                     assert(
@@ -688,6 +791,240 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     );
     assert.equal(await page.getByText('Duplicate leaf title').count(), 0);
     assert.equal(await page.getByText('Duplicate leaf feedback').count(), 0);
+
+    const amountRow = row('number-a');
+    const neighborRow = row('number-b');
+    const numberName = /^Invoice amount\s*\*$/;
+    const amount = amountRow.getByRole('textbox', { name: numberName });
+    const visibleNeighbor = neighborRow.getByRole('textbox', {
+        name: 'Review amount',
+    });
+    assert.equal(
+        await amountRow.getAttribute('data-field-id'),
+        await neighborRow.getAttribute('data-field-id')
+    );
+    assert.equal(value.rows['number-a'].form, 'number-form-a');
+    assert.equal(value.rows['number-b'].form, 'number-form-b');
+    const amountId = value.rows['number-a'].id;
+    const neighborId = value.rows['number-b'].id;
+    const [amountError, amountHelp] = value.rows['number-a'].descriptionIds;
+    const [neighborHelp] = value.rows['number-b'].descriptionIds;
+    assert.equal(value.rows['number-a'].descriptionIds.length, 2);
+    assert.equal(value.rows['number-b'].descriptionIds.length, 1);
+    assert.notEqual(amountHelp, neighborHelp);
+    assert.equal(await amount.getAttribute('aria-invalid'), 'true');
+    assert.equal(await visibleNeighbor.getAttribute('aria-invalid'), 'false');
+    const feedback = (fieldRow, id) => fieldRow.locator('[id="' + id + '"]');
+    assert.equal(
+        await feedback(amountRow, amountError).textContent(),
+        'Error number-a'
+    );
+    assert.equal(
+        await feedback(amountRow, amountHelp).textContent(),
+        'Help number-a'
+    );
+    assert.equal(
+        await feedback(neighborRow, neighborHelp).textContent(),
+        'Help number-b'
+    );
+
+    await amountRow.locator('label').click();
+    assert(
+        await amount.evaluate((element) => element === document.activeElement)
+    );
+    const neighborLabel = neighborRow.locator('label');
+    assert(
+        await neighborLabel.evaluate((label) => {
+            const { width, height } = label.getBoundingClientRect();
+            return (
+                width > 1 &&
+                height > 1 &&
+                label.control?.form?.id === 'number-form-b'
+            );
+        }),
+        'The second Number has a visible, labelable target before the pointer action'
+    );
+    await neighborLabel.evaluate((label) =>
+        label.addEventListener(
+            'click',
+            (event) => {
+                label.dataset.trustedClick = String(event.isTrusted);
+            },
+            { once: true }
+        )
+    );
+    await neighborLabel.click();
+    assert(
+        await visibleNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    value = await verify('Number visible label click reaches the second Form');
+    assert(value.rows['number-b'].labelPointerTrusted);
+    assert.equal(value.rows['number-b'].id, neighborId);
+    assert.deepEqual(value.writes, []);
+
+    await update('number-b', {
+        showTitle: false,
+        error: 'Check review amount',
+    });
+    const hiddenNeighbor = neighborRow.getByRole('textbox', {
+        name: 'Review amount',
+    });
+    assert.equal(await hiddenNeighbor.getAttribute('id'), neighborId);
+    assert(
+        await hiddenNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    assert(
+        await neighborLabel.evaluate(
+            (label, id) =>
+                label.classList.contains('mx-sdk-field-sr-only') &&
+                label.control?.id === id,
+            neighborId
+        )
+    );
+    assert.equal(
+        await hiddenNeighbor.getAttribute('aria-labelledby'),
+        await neighborLabel.getAttribute('id')
+    );
+    value = await verify(
+        'Number hidden title keeps its accessible name and local feedback'
+    );
+    const [neighborError, hiddenNeighborHelp] =
+        value.rows['number-b'].descriptionIds;
+    assert.deepEqual(value.rows['number-b'].descriptionIds, [
+        neighborError,
+        neighborHelp,
+    ]);
+    assert.equal(hiddenNeighborHelp, neighborHelp);
+    assert.equal(await hiddenNeighbor.getAttribute('aria-invalid'), 'true');
+    assert.equal(
+        await feedback(neighborRow, neighborError).textContent(),
+        'Check review amount'
+    );
+    assert.deepEqual(value.rows['number-a'].descriptionIds, [
+        amountError,
+        amountHelp,
+    ]);
+    assert.deepEqual(value.writes, []);
+    const numberTooltip = neighborRow.getByRole('button', {
+        name: 'Field description for Review amount',
+    });
+    const numberPopup = page
+        .getByRole('tooltip')
+        .filter({ hasText: 'Help number-b' });
+    await numberTooltip.hover();
+    await numberPopup.waitFor();
+    await page.mouse.move(8, 8);
+    await numberPopup.waitFor({ state: 'detached' });
+    await page.keyboard.press('Shift+Tab');
+    assert(
+        await numberTooltip.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    await numberPopup.waitFor();
+    await page.keyboard.press('Escape');
+    await numberPopup.waitFor({ state: 'detached' });
+    assert.equal(await numberTooltip.getAttribute('aria-expanded'), 'false');
+    assert(
+        await numberTooltip.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    await page.keyboard.press('Tab');
+    assert(
+        await hiddenNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+    await page.keyboard.press('Shift+Tab');
+    await numberPopup.waitFor();
+    await page.keyboard.press('Tab');
+    await numberPopup.waitFor({ state: 'detached' });
+    assert(
+        await hiddenNeighbor.evaluate(
+            (element) => element === document.activeElement
+        )
+    );
+
+    await numberTooltip.click();
+    await numberPopup.waitFor();
+    await amountRow.locator('label').click();
+    await numberPopup.waitFor({ state: 'detached' });
+    assert(
+        await amount.evaluate((element) => element === document.activeElement)
+    );
+    await update('number-b', { error: null });
+    value = await verify(
+        'Number hidden title tooltip keyboard navigation and local error clearance'
+    );
+    assert.deepEqual(value.rows['number-b'].descriptionIds, [neighborHelp]);
+    assert.equal(await hiddenNeighbor.getAttribute('aria-invalid'), 'false');
+    assert.equal(await feedback(neighborRow, neighborError).count(), 0);
+    assert.deepEqual(value.writes, []);
+
+    await update('number-b', { title: '', showTitle: true });
+    const fallbackNeighbor = neighborRow.getByRole('textbox', {
+        name: 'Amount',
+        exact: true,
+    });
+    assert.equal(await fallbackNeighbor.getAttribute('id'), neighborId);
+    assert.equal(
+        await fallbackNeighbor.getAttribute('aria-describedby'),
+        neighborHelp
+    );
+    assert.equal(
+        await neighborRow
+            .getByRole('button', { name: 'Field description for Amount' })
+            .count(),
+        1
+    );
+    value = await verify('Number empty title falls back to the field name');
+    assert.deepEqual(value.writes, []);
+
+    await update('number-a', {
+        showTitle: false,
+        placement: 'bottom',
+        error: null,
+    });
+    await update('number-b', { description: '<p>&nbsp;<br></p>' });
+    value = await verify(
+        'Number form owners, local labels, help, error and trusted keyboard'
+    );
+    assert.deepEqual(value.writes, []);
+    assert.equal(value.rows['number-a'].id, amountId);
+    assert.equal(value.rows['number-b'].id, neighborId);
+    assert.deepEqual(value.rows['number-a'].descriptionIds, [amountHelp]);
+    assert.deepEqual(value.rows['number-b'].descriptionIds, []);
+    assert.equal(await amount.getAttribute('aria-invalid'), 'false');
+    assert.equal(await feedback(amountRow, amountError).count(), 0);
+    assert.equal(
+        await neighborRow.locator('.mx-sdk-field-tooltip-trigger').count(),
+        0
+    );
+    assert.equal(await feedback(neighborRow, neighborHelp).count(), 0);
+    assert(
+        await amountRow
+            .locator('label')
+            .evaluate((element) =>
+                element.classList.contains('mx-sdk-field-sr-only')
+            )
+    );
+    assert(
+        await feedback(amountRow, amountHelp).evaluate(
+            (element, id) =>
+                Boolean(
+                    document
+                        .getElementById(id)
+                        .compareDocumentPosition(element) &
+                        Node.DOCUMENT_POSITION_FOLLOWING
+                ),
+            amountId
+        )
+    );
 
     await row('checkbox-a').locator('label').click();
     value = await verify(

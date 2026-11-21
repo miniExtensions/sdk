@@ -54,19 +54,31 @@ const consumers = new Set();
 
 async function admitManagedTeardown() {
     if (typeof process.send !== 'function') return;
-    let timer;
+    let dispose;
     try {
         const reply = await new Promise((done, fail) => {
-            timer = setTimeout(
+            const disconnected = () =>
+                fail(
+                    new Error('Worker supervisor disconnected before teardown')
+                );
+            const timer = setTimeout(
                 () => fail(new Error('Worker teardown admission timed out')),
                 5000
             );
+            dispose = () => {
+                clearTimeout(timer);
+                process.removeListener('message', done);
+                process.removeListener('disconnect', disconnected);
+            };
             process.once('message', done);
-            process.send('view-loss:teardown');
+            process.once('disconnect', disconnected);
+            process.send('view-loss:teardown', (error) => {
+                if (error) fail(error);
+            });
         });
         assert.equal(reply, 'view-loss:teardown-admitted');
     } finally {
-        clearTimeout(timer);
+        dispose?.();
         if (process.connected) process.disconnect();
     }
 }

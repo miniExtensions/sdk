@@ -137,13 +137,13 @@ export async function runOwnedWorker(args, env, signal, entry = fixtureScript) {
                 teardownAdmitted = Boolean(captured) && !signal.aborted;
             }
             if (child.connected)
-                await new Promise((done, fail) =>
-                    child.send(
-                        teardownAdmitted
-                            ? 'view-loss:teardown-admitted'
-                            : 'view-loss:teardown-refused',
-                        (error) => (error ? fail(error) : done())
-                    )
+                child.send(
+                    teardownAdmitted
+                        ? 'view-loss:teardown-admitted'
+                        : 'view-loss:teardown-refused',
+                    (error) => {
+                        if (error) teardownAdmitted = false;
+                    }
                 );
         })().catch((error) => {
             teardownAdmitted = false;
@@ -194,6 +194,7 @@ export async function runOwnedWorker(args, env, signal, entry = fixtureScript) {
             }
         } catch (error) {
             error.cleanupSafe = false;
+            if (child.connected) child.disconnect();
             child.unref();
             throw error;
         } finally {

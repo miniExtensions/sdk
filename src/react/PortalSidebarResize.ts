@@ -95,6 +95,12 @@ export function PortalSidebarResize(props: {
         });
     }
     function keyboard(event: KeyboardEvent<HTMLButtonElement>) {
+        // Leave history shortcuts to the browser or host.
+        if (
+            (event.altKey || event.metaKey) &&
+            (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+        )
+            return;
         const width =
             event.key === 'Home'
                 ? 120

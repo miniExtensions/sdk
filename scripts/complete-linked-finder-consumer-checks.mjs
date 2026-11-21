@@ -63,14 +63,16 @@ const profiles=[];
 for(const strict of [false,true]){
  let owner={},search='',allocations=0,closes=0,opens=0,root;
  const canonical=['hidden','A','A'],listeners=new Set(),page={records:[{id:'A'},{id:'B'},{id:'A'}],offset:'next'};
+ let loadPage=async()=>page;
+ const allocatedOffsets=[];
  const notify=()=>{for(const listener of listeners)listener();};
- const host={captureOwner:()=>owner,isOwnerCurrent:expected=>expected===owner,subscribe:listener=>{listeners.add(listener);return()=>listeners.delete(listener);},captureRead:expected=>({mode:'public',isCurrent:()=>expected===owner,query:async()=>{allocations++;return page;},publish:()=>({status:'admitted'})}),selection:()=>({ids:canonical,enabled:true,autoSelectScannedRecord:true}),recordId:row=>row.id,isOptionEnabled:()=>true,toggle(expected,id){if(expected!==owner)return{status:'refused'};const next=canonical.includes(id)?canonical.filter(value=>value!==id):[...canonical,id];canonical.splice(0,canonical.length,...next);notify();return{status:'admitted'};},close:()=>{closes++;return{status:'admitted'};},errorMessage:()=>''};
- const coordinator=models.createCompleteLinkedFinderCoordinator(host,{testing:true});
+ const host={captureOwner:()=>owner,isOwnerCurrent:expected=>expected===owner,subscribe:listener=>{listeners.add(listener);return()=>listeners.delete(listener);},captureRead:(expected,{offset})=>({mode:'public',isCurrent:()=>expected===owner,query:async()=>{allocations++;allocatedOffsets.push(offset);return loadPage();},publish:()=>({status:'admitted'})}),selection:()=>({ids:canonical,enabled:true,autoSelectScannedRecord:true}),recordId:row=>row.id,isOptionEnabled:()=>true,toggle(expected,id){if(expected!==owner)return{status:'refused'};const next=canonical.includes(id)?canonical.filter(value=>value!==id):[...canonical,id];canonical.splice(0,canonical.length,...next);notify();return{status:'admitted'};},close:()=>{closes++;return{status:'admitted'};},errorMessage:()=>''};
+ const coordinator=models.createCompleteLinkedFinderCoordinator(host);
  const result=await coordinator.queryNow({filter:'initial',resetOffset:true});assert.equal(result.page,page);assert.equal(result.status,'accepted');
  assert.equal(coordinator.getSnapshot().rawRecords,page.records);assert.equal(coordinator.model.getState().options.length,2);assert.deepEqual(canonical,['hidden','A','A']);
  const identity=coordinator.getSnapshot().readIdentity;assert(identity);assert(Object.isFrozen(identity));assert.deepEqual(Object.keys(identity),[]);
  const labels={search:'Buscar',loading:'Cargando',noMatches:'Ninguno',unavailable:'No disponible',loadMore:'Más'};
- const projection=id=>({status:'present',primary:id==='A'?'A <b>literal</b>':'B',fields:[],images:[],language:'en',layout:'list',imageFit:'cover',imageHeight:80,shouldRenderThumbnail:false,thumbnailLocation:'right',fieldsPerCardRow:1,labels:{previousImage:'Previous',nextImage:'Next',noImage:'None'}});
+ const projection=id=>({status:'present',primary:id==='A'?'A <b>literal</b>':id,fields:[],images:[],language:'en',layout:'list',imageFit:'cover',imageHeight:80,shouldRenderThumbnail:false,thumbnailLocation:'right',fieldsPerCardRow:1,labels:{previousImage:'Previous',nextImage:'Next',noImage:'None'}});
  const collectionOwner=owner;
  const collection={rows:[{key:'first',label:'A',openLabel:'Abrir primero',imageSources:[],icon:'document'},{key:'second',label:'A',openLabel:'Abrir segundo',imageSources:[],icon:'document'}],layout:'icon',columns:2,fit:'contain',showNames:true,owner:{isCurrent:()=>coordinator.getSnapshot().owner===collectionOwner},labels:{attachments:'Adjuntos',retry:'Reintentar',imageUnavailable:'No disponible'},onOpen:index=>{opens+=index+1;return{status:'admitted'};}};
  const element=()=>React.createElement(strict?React.StrictMode:React.Fragment,null,React.createElement(ui.CompleteLinkedFinderView,{host,coordinator,queryOnMount:false,queryKey:coordinator,filter:search,searchTerm:search,onSearchTermChange(value){search=value;root.render(element());},filterForSearch:value=>value,candidates:(_owner,ids)=>ids.map(id=>({id,projection:projection(id)})),optionTestId:'host-record-option',labels,closeAfterToggle:true}),React.createElement(ui.LinkedFinderAttachmentCollection,collection));
@@ -83,6 +85,7 @@ for(const strict of [false,true]){
  const originals=names.map(key=>Object.getOwnPropertyDescriptor(globalThis,key));
  for(const key of names)Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:key==='IS_REACT_ACT_ENVIRONMENT'?true:key==='Window'?Window:key==='IntersectionObserver'?Observer:key==='fetch'?async()=>{network++;throw Error('Unexpected network');}:['requestAnimationFrame','cancelAnimationFrame','getComputedStyle'].includes(key)?window[key].bind(window):window[key]});
  const container=window.document.createElement('main');container.innerHTML=html;window.document.body.append(container);
+ let submits=0;window.document.addEventListener('submit',()=>submits++,true);
  const errors=[],recoverable=[],oldError=console.error;console.error=(...values)=>errors.push(values.map(String).join(' '));
  try{
   const {hydrateRoot}=await import('react-dom/client');
@@ -91,9 +94,64 @@ for(const strict of [false,true]){
   await React.act(async()=>container.querySelectorAll('[data-testid="host-record-option"]')[1].click());assert.deepEqual(canonical,['hidden','A','A','B']);assert.equal(closes,1);
   await React.act(async()=>container.querySelectorAll('[role="option"]')[0].click());assert.deepEqual(canonical,['hidden','B']);assert.equal(closes,1);
   await React.act(async()=>{const input=container.querySelector('input[type="search"]');Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,'typed');input.dispatchEvent(new window.Event('input',{bubbles:true}));});assert.equal(search,'typed');
-  await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));assert.equal(allocations,2);
+  await React.act(async()=>{
+   if(coordinator.getSnapshot().phase!=='loading')return;
+   await new Promise(resolve=>{
+    const unsubscribe=coordinator.subscribe(()=>{
+     if(coordinator.getSnapshot().phase==='ready'){unsubscribe();resolve();}
+    });
+   });
+  });assert.equal(allocations,2);
   const old=observers.at(-1);assert.equal(old.options.rootMargin,'400px');
   await React.act(async()=>{const pending=coordinator.queryNow({filter:'newer',resetOffset:true});old.callback([{isIntersecting:true}],{});await pending;});assert.equal(allocations,3);
+  const cursor='opaque/+next=:1';
+  loadPage=async()=>({records:[],offset:cursor});
+  const beforeEmpty=allocations;
+  await React.act(async()=>{assert.equal((await coordinator.queryNow({filter:search,resetOffset:true})).status,'accepted');});
+  const noMatches=()=>container.textContent.includes(labels.noMatches);
+  const sentinel=()=>container.querySelector('.mx-sdk-finder-sentinel');
+  assert.equal(noMatches(),false,'Empty first page still has a continuation');
+  assert.equal(allocations,beforeEmpty+1);
+  assert.equal(sentinel().getAttribute('aria-label'),labels.loadMore);
+  const startContinuation=async()=>{
+   const observer=observers.at(-1);
+   let resolvePage,notifyAllocated;
+   const allocated=new Promise(resolve=>{notifyAllocated=resolve;});
+   loadPage=()=>new Promise(resolve=>{resolvePage=resolve;notifyAllocated();});
+   await React.act(async()=>{
+    observer.callback([{isIntersecting:true}],{});
+    await allocated;
+   });
+   return resolvePage;
+  };
+  const resolvePage=await startContinuation();
+  assert.deepEqual(allocatedOffsets.slice(beforeEmpty),[null,cursor]);
+  assert.equal(sentinel().querySelector('[role="status"]').textContent,labels.loading);
+  assert.equal(noMatches(),false,'Pending continuation still has no terminal result');
+  await React.act(async()=>resolvePage({records:[{id:'C'}],offset:null}));
+  assert.deepEqual([...container.querySelectorAll('[role="option"]')].map(option=>option.textContent),['C']);
+  assert.equal(sentinel(),null);
+  assert.deepEqual(canonical,['hidden','B']);
+  assert.equal(closes,1);assert.equal(submits,0);
+  loadPage=async()=>({records:[],offset:null});
+  await React.act(async()=>coordinator.queryNow({filter:search,resetOffset:true}));
+  assert.equal(noMatches(),true,'Terminal empty page shows the localized feedback');
+  assert.equal(sentinel(),null);
+  assert.deepEqual(allocatedOffsets.slice(beforeEmpty),[null,cursor,null]);
+  loadPage=async()=>({records:[],offset:cursor});
+  await React.act(async()=>coordinator.queryNow({filter:search,resetOffset:true}));
+  const replacedObserver=observers.at(-1);
+  await React.act(async()=>{
+   replacedObserver.callback([{isIntersecting:true}],{});
+   await coordinator.queryNow({filter:search,resetOffset:true});
+  });
+  assert.equal(replacedObserver.disconnected,true);
+  const resolveEmpty=await startContinuation();
+  assert.equal(noMatches(),false);
+  await React.act(async()=>resolveEmpty({records:[],offset:null}));
+  assert.equal(noMatches(),true,'An exhausted continuation also shows the localized feedback');
+  assert.deepEqual(allocatedOffsets.slice(beforeEmpty),[null,cursor,null,null,null,cursor]);
+  assert.deepEqual(canonical,['hidden','B']);assert.equal(closes,1);assert.equal(submits,0);
   await React.act(async()=>container.querySelector('[aria-label="Abrir segundo"]').click());assert.equal(opens,2);assert.equal(closes,1);assert.deepEqual(canonical,['hidden','B']);
   const collectionButton=container.querySelector('[aria-label="Abrir segundo"]');
   const oldOwner=owner;await React.act(async()=>{owner={};notify();});assert.deepEqual(await coordinator.toggle(oldOwner,'B',{closeAfterAddition:true}),{status:'refused'});
@@ -112,7 +170,7 @@ for(const strict of [false,true]){
   assert.deepEqual(driverValues.country,{recordId:'country-B',stringValue:'Same label'});assert.equal(cascadeQueries.filter(query=>query.fieldId==='state').length,hiddenReads);
   const cascadeReads=cascadeQueries.length;formReadOnly=true;await React.act(async()=>root.render(cascade()));await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));assert.equal(container.querySelector('input'),null);assert.equal(cascadeQueries.length,cascadeReads);
   assert.deepEqual(recoverable,[]);assert.deepEqual(errors,[]);assert.equal(network,0);
-  profiles.push({strict,hydrationErrors:recoverable.length,allocations,closes,cascadeReads,hiddenReads,network});
+  profiles.push({strict,hydrationErrors:recoverable.length,allocations,closes,cascadeReads,hiddenReads,network,emptyContinuation:true,submits});
  }finally{if(root)await React.act(async()=>root.unmount());coordinator.destroy();console.error=oldError;names.forEach((key,index)=>{if(originals[index])Object.defineProperty(globalThis,key,originals[index]);else Reflect.deleteProperty(globalThis,key);});await window.happyDOM.close();}
 }
 console.log(JSON.stringify({format,react:React.version,profiles,cleanup:'completed'}));

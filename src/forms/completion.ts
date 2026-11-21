@@ -348,7 +348,8 @@ export function projectFormCompletionNavigation(
             );
         }
     }
-    const recordIdIndex = current.pathname.indexOf('/rec');
+    // The first path segment belongs to the Form share, even when it starts with rec.
+    const recordIdIndex = current.pathname.indexOf('/rec', 1);
     if (recordIdIndex !== -1) {
         current.searchParams.delete('screen');
         current.pathname = current.pathname.slice(0, recordIdIndex);

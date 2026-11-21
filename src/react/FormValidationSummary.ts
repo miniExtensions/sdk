@@ -1,4 +1,4 @@
-import { createElement as h, type ReactElement } from 'react';
+import { createElement as h, type MouseEvent, type ReactElement } from 'react';
 
 /** A public field diagnostic that the host has already authorized for display. */
 export type FormValidationDiagnostic = Readonly<{
@@ -12,17 +12,34 @@ export type FormValidationSummaryProps = Readonly<{
     heading: string;
     /** Display order is preserved. Field IDs must be unique within the summary. */
     diagnostics: readonly FormValidationDiagnostic[];
+    /** The current focusable control for this field in the Form that supplied the diagnostic. */
+    resolveFieldTarget?: (fieldId: string) => HTMLElement | null;
 }>;
 
 /**
  * Complete form-level error presentation. The host retains validation, error
- * state, localization and native fragment navigation. Import form-validation-summary.css.
+ * state and localization. Import form-validation-summary.css.
  */
 export function FormValidationSummary({
     heading,
     diagnostics,
+    resolveFieldTarget,
 }: FormValidationSummaryProps): ReactElement | null {
     if (diagnostics.length === 0) return null;
+    const fieldLinkHandler = (fieldId: string) =>
+        resolveFieldTarget &&
+        ((event: MouseEvent<HTMLAnchorElement>) => {
+            if (event.defaultPrevented) return;
+            event.preventDefault();
+            const target = resolveFieldTarget(fieldId);
+            if (
+                !target?.isConnected ||
+                target.ownerDocument !== event.currentTarget.ownerDocument
+            )
+                return;
+            target.focus({ preventScroll: true });
+            target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        });
     return h(
         'div',
         {
@@ -75,7 +92,21 @@ export function FormValidationSummary({
                                         key: fieldId,
                                         'data-testid': `field-${fieldId}-error`,
                                     },
-                                    h('a', { href: `#${fieldId}` }, fieldTitle),
+                                    h(
+                                        'a',
+                                        {
+                                            href: resolveFieldTarget
+                                                ? '#'
+                                                : `#${fieldId}`,
+                                            onClick: fieldLinkHandler(fieldId),
+                                            onAuxClick: resolveFieldTarget
+                                                ? (
+                                                      event: MouseEvent<HTMLAnchorElement>
+                                                  ) => event.preventDefault()
+                                                : undefined,
+                                        },
+                                        fieldTitle
+                                    ),
                                     ` (${errorMessage})`
                                 )
                         )

@@ -277,8 +277,10 @@ function capture() {
             'Literal punctuation rendered as markup'
         );
         assert(
-            value?.text || cell.childElementCount === 0,
-            'Blank cell inherited leaf placeholder'
+            value?.text ||
+                (cell.textContent === '' &&
+                    !cell.querySelector('[aria-label],[title],[placeholder]')),
+            'Blank cell exposed leaf text or an accessible placeholder'
         );
         return {
             row: row.dataset.recordId,

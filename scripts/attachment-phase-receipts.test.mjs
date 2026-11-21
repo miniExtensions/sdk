@@ -718,11 +718,15 @@ function assertRootLoadCheckpoints(source, newline) {
             /root-load anchor must be unique/
         );
         assert.throws(
-            () => addAttachmentRootLoadCheckpoints(`${source}${newline}${anchor}`),
+            () =>
+                addAttachmentRootLoadCheckpoints(
+                    `${source}${newline}${anchor}`
+                ),
             /root-load anchor must be unique/
         );
     }
 }
+
 
 test('local points bracket submit, synthetic response, and readiness', async () => {
     const source = await readFile(

@@ -1,6 +1,8 @@
 import { createSelectionModel } from './model.js';
 import type { SelectionModel } from './types.js';
 
+export const linkedFinderPublicReadIntervalMs = 1000;
+
 /** Exact host transport page. This is not an accepted SDK linked-record page. */
 export type CompleteLinkedFinderPage<Row> = {
     readonly records: readonly Row[];
@@ -402,7 +404,8 @@ export function createCompleteLinkedFinderCoordinator<
                     !options.testing &&
                     !ticket.resetOffset &&
                     lastPublicAllocation !== null &&
-                    lastPublicAllocation > now - 1000
+                    lastPublicAllocation >
+                        now - linkedFinderPublicReadIntervalMs
                 ) {
                     phase = rawRecords.length ? 'ready' : 'idle';
                     loadingMore = false;

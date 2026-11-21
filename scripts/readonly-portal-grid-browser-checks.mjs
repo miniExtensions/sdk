@@ -52,7 +52,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  useEffect(()=>{stateRead=state;committed++;});
  const scope=state.scope,revision=state.revision,isCurrent=()=>!retired&&live.current.live&&live.current.ready&&live.current.scope===scope&&live.current.revision===revision;
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
- return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
+ return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,labels:state.hideColumnsLabel?{hideColumns:state.hideColumnsLabel}:undefined,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
 function TextCellProbe() {
     const [cell, setCell] = useState(() => ({
@@ -953,6 +953,134 @@ async function checkReadonlyPortalGridTimestamps({ page, evidence }) {
     }
 }
 
+async function checkHideColumnsTrigger({ page, patch, snapshot, output }) {
+    const originalViewport = page.viewportSize();
+    const effects = async () => {
+        const { hides, widths, opens, submits } = await snapshot();
+        return { hides, widths, opens, submits };
+    };
+    const before = await effects();
+    const profiles = [];
+    try {
+        for (const [width, label] of [
+            [1280, 'Hide Columns'],
+            [390, 'Masquer les colonnes'],
+        ]) {
+            await page.setViewportSize({ width, height: 800 });
+            await patch({ hideColumnsLabel: label });
+            const trigger = page.getByRole('button', {
+                name: label,
+                exact: true,
+            });
+            const measure = () =>
+                trigger.evaluate((button) => {
+                    const icon = button.querySelector('svg');
+                    const bounds = button.getBoundingClientRect();
+                    const iconBounds = icon?.getBoundingClientRect();
+                    const text = document.createRange();
+                    text.selectNode(button.lastChild);
+                    const textBounds = text.getBoundingClientRect();
+                    const style = getComputedStyle(button);
+                    return {
+                        bounds: [
+                            bounds.x,
+                            bounds.y,
+                            bounds.width,
+                            bounds.height,
+                        ],
+                        icon: icon
+                            ? {
+                                  size: [iconBounds.width, iconBounds.height],
+                                  hidden: icon.getAttribute('aria-hidden'),
+                                  paths: icon.querySelectorAll('path').length,
+                                  gap: textBounds.x - iconBounds.right,
+                              }
+                            : null,
+                        font: [
+                            style.fontSize,
+                            style.lineHeight,
+                            style.fontWeight,
+                        ],
+                        fill: style.backgroundColor,
+                        border: style.borderTopColor,
+                        text: style.color,
+                        focusVisible: button.matches(':focus-visible'),
+                        outline: style.outlineStyle,
+                    };
+                });
+            const save = async (state) => {
+                if (!output) return;
+                const box = await trigger.boundingBox();
+                const x = Math.max(0, Math.floor(box.x) - 6);
+                const y = Math.max(0, Math.floor(box.y) - 6);
+                await page.screenshot({
+                    clip: {
+                        x,
+                        y,
+                        width: Math.min(
+                            width - x,
+                            Math.ceil(box.x + box.width) - x + 6
+                        ),
+                        height: Math.ceil(box.y + box.height) - y + 6,
+                    },
+                    path: join(
+                        output,
+                        `grid-hide-columns-${width}-${state}.png`
+                    ),
+                });
+            };
+            await page.locator('#before').focus();
+            await page.mouse.move(0, 0);
+            const rest = await measure();
+            assert.deepEqual(rest.icon, {
+                size: [16, 16],
+                hidden: 'true',
+                paths: 3,
+                gap: 8,
+            });
+            assert.deepEqual(rest.font, ['12px', '16px', '500']);
+            assert.equal(rest.bounds[3], 30);
+            assert.equal(rest.fill, 'rgb(229, 231, 235)');
+            assert.equal(rest.border, 'rgb(209, 213, 219)');
+            assert.equal(rest.text, 'rgb(55, 65, 81)');
+            await save('rest');
+            await trigger.hover();
+            const hover = await measure();
+            assert.equal(hover.fill, 'rgb(209, 213, 219)');
+            assert.deepEqual(hover.bounds, rest.bounds);
+            await save('hover');
+            await page.mouse.move(0, 0);
+            await page.keyboard.press('Tab');
+            const focus = await measure();
+            assert.equal(focus.focusVisible, true);
+            assert.notEqual(focus.outline, 'none');
+            assert.deepEqual(focus.bounds, rest.bounds);
+            await save('focus');
+            await page.keyboard.press('Enter');
+            const dialog = page.getByRole('dialog', {
+                name: label,
+                exact: true,
+            });
+            await dialog.waitFor();
+            assert.equal(await dialog.count(), 1);
+            await page.keyboard.press('Escape');
+            await dialog.waitFor({ state: 'detached' });
+            assert.equal(
+                await trigger.evaluate(
+                    (node) => document.activeElement === node
+                ),
+                true
+            );
+            assert.deepEqual(await effects(), before);
+            profiles.push({ width, label, rest, hover, focus });
+        }
+    } finally {
+        await page.setViewportSize(originalViewport);
+        await patch({ hideColumnsLabel: null });
+    }
+    return profiles;
+}
+
 export async function checkReadonlyPortalGridBrowser({
     page,
     evidence,
@@ -1193,6 +1321,16 @@ export async function checkReadonlyPortalGridBrowser({
         passed: true,
     });
 
+    results.push({
+        group: 'native Hide columns trigger appearance and keyboard-only dismissal',
+        profiles: await checkHideColumnsTrigger({
+            page,
+            patch,
+            snapshot,
+            output,
+        }),
+        passed: true,
+    });
     const hide = page.getByRole('button', {
         name: 'Hide columns',
         exact: true,

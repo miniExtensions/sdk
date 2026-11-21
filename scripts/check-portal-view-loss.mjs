@@ -52,6 +52,25 @@ const report = {
 };
 const consumers = new Set();
 
+async function admitManagedTeardown() {
+    if (typeof process.send !== 'function') return;
+    let timer;
+    try {
+        const reply = await new Promise((done, fail) => {
+            timer = setTimeout(
+                () => fail(new Error('Worker teardown admission timed out')),
+                5000
+            );
+            process.once('message', done);
+            process.send('view-loss:teardown');
+        });
+        assert.equal(reply, 'view-loss:teardown-admitted');
+    } finally {
+        clearTimeout(timer);
+        if (process.connected) process.disconnect();
+    }
+}
+
 const mounted = String.raw`
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
@@ -327,6 +346,16 @@ try {
         report.testOutput = error.stdout;
     process.exitCode = 1;
 } finally {
+    try {
+        await admitManagedTeardown();
+    } catch (error) {
+        report.cleanup.cohortError = error.stack;
+        if (!report.error) {
+            report.error = error.stack;
+            report.stage = 'cleanup';
+        }
+        process.exitCode = 1;
+    }
     try {
         if (browser) {
             await browser.close();

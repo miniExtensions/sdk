@@ -113,7 +113,7 @@ export async function runOwnedWorker(args, env, signal, entry = fixtureScript) {
     const child = spawn(process.execPath, [entry, ...args], {
         env,
         detached: true,
-        stdio: 'inherit',
+        stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
     });
     const finished = new Promise((done) => {
         child.once('error', (error) => done({ error }));
@@ -124,6 +124,32 @@ export async function runOwnedWorker(args, env, signal, entry = fixtureScript) {
             cause: (await finished).error,
         });
     const observer = createProcessGroupObserver({ pid: child.pid });
+    let teardown;
+    let teardownAdmitted = false;
+    child.once('message', (message) => {
+        teardown = (async () => {
+            if (message === 'view-loss:teardown' && !signal.aborted) {
+                const captured = await waitForObservation(
+                    observer.capture,
+                    ({ state }) => state === 'live',
+                    2000
+                );
+                teardownAdmitted = Boolean(captured) && !signal.aborted;
+            }
+            if (child.connected)
+                await new Promise((done, fail) =>
+                    child.send(
+                        teardownAdmitted
+                            ? 'view-loss:teardown-admitted'
+                            : 'view-loss:teardown-refused',
+                        (error) => (error ? fail(error) : done())
+                    )
+                );
+        })().catch((error) => {
+            teardownAdmitted = false;
+            return error;
+        });
+    });
     let stop;
     const cancelled = new Promise((done) => {
         stop = () => done({ error: signal.reason });
@@ -145,11 +171,17 @@ export async function runOwnedWorker(args, env, signal, entry = fixtureScript) {
             0,
             'View-loss worker stopped with ' + (result.signal ?? result.code)
         );
+        if (entry === fixtureScript)
+            assert(
+                teardownAdmitted,
+                'Worker teardown ownership was not admitted'
+            );
         passed = true;
     } finally {
         signal.removeEventListener('abort', stop);
         let neededStop = false;
         try {
+            await teardown;
             if (!(await waitForObservation(observer.inspect, drained, 500))) {
                 neededStop = true;
                 if (!(await signalAndDrain(observer, 'SIGTERM', 2000)))

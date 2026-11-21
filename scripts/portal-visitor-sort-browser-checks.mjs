@@ -134,6 +134,48 @@ searchRoot.render(h(StrictMode, null, h(PortalVisitorSearch, {
         onClick: () => { scan = capture(); },
     }, 'Open scanner'),
 })));
+function mountLocalizedSearch(owner, viewId, searchTerm, labels) {
+    const section = document.createElement('section');
+    section.dataset.searchOwner = owner;
+    document.querySelector('form').append(section);
+    const root = createRoot(section);
+    const listeners = new Set();
+    const firstPageReads = [];
+    let current = {
+        stamp: {...frame.stamp, fieldId: owner, viewId},
+        searchTerm,
+        publicationRevision: 1,
+    };
+    const port = {
+        read: () => current,
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        apply(command) {
+            firstPageReads.push({
+                fieldId: command.stamp.fieldId,
+                viewId: command.stamp.viewId,
+                source: command.source,
+                offset: null,
+                expectedSearchTerm: command.expectedSearchTerm,
+                searchTerm: command.searchTerm,
+            });
+            const generation = current.stamp.generation;
+            const revision = current.publicationRevision + 1;
+            current = {...current, searchTerm: command.searchTerm, publicationRevision: revision};
+            for (const listener of listeners) listener();
+            return {type: 'allocated', requestId: owner + '-first', generation,
+                committedPublication: {generation, revision}};
+        },
+    };
+    root.render(h(StrictMode, null, h(PortalVisitorSearch, {port, labels})));
+    return {
+        snapshot: () => ({firstPageReads, searchTerm: current.searchTerm, listeners: listeners.size}),
+        unmount() { root.unmount(); section.remove(); },
+    };
+}
+let localizedSearch;
 globalThis.searchFixture = {
     summary: () => ({commands:searchCommands, outcomes:searchOutcomes, listeners:searchListeners.size}),
     failNextRead() { searchReadFails = true; },
@@ -160,6 +202,21 @@ globalThis.searchFixture = {
     },
     scan: (value) => scan?.(value),
     unmount: () => searchRoot.unmount(),
+    mountLocalized({layout, labels}) {
+        localizedSearch = {
+            current: mountLocalizedSearch('current', layout, 'previous', labels),
+            neighbor: mountLocalizedSearch('neighbor', layout, '', labels),
+        };
+    },
+    localizedSnapshot: () => ({
+        current: localizedSearch.current.snapshot(),
+        neighbor: localizedSearch.neighbor.snapshot(),
+        submits,
+    }),
+    unmountLocalized() {
+        localizedSearch.current.unmount();
+        localizedSearch.neighbor.unmount();
+    },
 };
 `;
 
@@ -932,6 +989,102 @@ async function checkSearch(page) {
     };
 }
 
+async function checkLocalizedSearch(page) {
+    const current = page.locator('[data-search-owner="current"]');
+    const neighbor = page.locator('[data-search-owner="neighbor"]');
+    const locales = [
+        { locale: 'fr', search: 'Chercher', clear: 'Effacer' },
+        { locale: 'es', search: 'Buscar', clear: 'Borrar' },
+        { locale: 'en', search: 'Search', clear: undefined },
+    ];
+    const cases = [];
+    const snapshot = () =>
+        page.evaluate(() => globalThis.searchFixture.localizedSnapshot());
+    for (const layout of ['grid', 'list']) {
+        for (const { locale, search, clear } of locales) {
+            const clearLabel = clear ?? 'Clear search';
+            const labels = {
+                input: search,
+                submit: search,
+                ...(clear ? { clear } : {}),
+            };
+            await page.evaluate(
+                (args) => globalThis.searchFixture.mountLocalized(args),
+                { layout, labels }
+            );
+            const input = current.getByRole('textbox', {
+                name: search,
+                exact: true,
+            });
+            const neighborInput = neighbor.getByRole('textbox', {
+                name: search,
+                exact: true,
+            });
+            const clearAction = current.getByRole('button', {
+                name: clearLabel,
+                exact: true,
+            });
+            await clearAction.waitFor({ state: 'visible' });
+            assert.equal(await clearAction.textContent(), clearLabel);
+            assert.equal(await clearAction.getAttribute('type'), 'button');
+            assert.equal(await clearAction.isEnabled(), true);
+            assert.equal(await input.isEnabled(), true);
+            assert.equal(await input.inputValue(), 'previous');
+            assert.equal(
+                await current
+                    .getByRole('button', { name: search, exact: true })
+                    .count(),
+                1
+            );
+            assert.equal(await neighborInput.inputValue(), '');
+            assert.equal(
+                await neighbor
+                    .getByRole('button', { name: clearLabel, exact: true })
+                    .count(),
+                0
+            );
+            const initial = await snapshot();
+            assert.deepEqual(initial.current.firstPageReads, []);
+            assert.deepEqual(initial.neighbor.firstPageReads, []);
+            assert.equal(initial.submits, 0);
+
+            await clearAction.press('Enter');
+            await clearAction.waitFor({ state: 'detached' });
+
+            assert.equal(await input.inputValue(), '');
+            assert.equal(await neighborInput.inputValue(), '');
+            const finished = await snapshot();
+            assert.deepEqual(finished.current.firstPageReads, [
+                {
+                    fieldId: 'current',
+                    viewId: layout,
+                    source: 'clear',
+                    offset: null,
+                    expectedSearchTerm: 'previous',
+                    searchTerm: '',
+                },
+            ]);
+            assert.equal(finished.current.searchTerm, '');
+            assert.deepEqual(finished.neighbor, initial.neighbor);
+            assert.equal(finished.submits, 0);
+            await page.evaluate(() =>
+                globalThis.searchFixture.unmountLocalized()
+            );
+            const retired = await snapshot();
+            assert.equal(retired.current.listeners, 0);
+            assert.equal(retired.neighbor.listeners, 0);
+            cases.push({
+                layout,
+                locale,
+                clearLabel,
+                firstPageReads: finished.current.firstPageReads,
+                submits: finished.submits,
+            });
+        }
+    }
+    return { cases, cleanup: 'completed' };
+}
+
 /** Exercise trusted keyboard events on an installed, synthetic host fixture. */
 export async function checkPortalVisitorSortBrowser({
     browser,
@@ -1141,6 +1294,7 @@ export async function checkPortalVisitorSortBrowser({
                 );
                 throw error;
             }
+            evidence.localizedSearch = await checkLocalizedSearch(page);
         }
         if (includeFilter) evidence.filter = await checkFilter(page);
         const end = await summary();

@@ -218,6 +218,78 @@ it('commits exact draft text on Enter or button click and clears without submitt
     assert.equal(owner.listeners.size, 0);
 });
 
+it('uses the localized Clear label for a populated owner while leaving an empty neighbor alone', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const locales = [
+        { search: 'Chercher', clear: 'Effacer' },
+        { search: 'Buscar', clear: 'Borrar' },
+        { search: 'Search', clear: undefined },
+    ];
+    for (const viewId of ['grid', 'list']) {
+        for (const { search, clear } of locales) {
+            const current = host();
+            current.select(viewId);
+            const neighbor = host();
+            neighbor.commit('');
+            const labels = {
+                input: search,
+                submit: search,
+                ...(clear ? { clear } : {}),
+            };
+            await f.render(
+                h(
+                    'div',
+                    null,
+                    h(PortalVisitorSearch, { port: current.port, labels }),
+                    h(PortalVisitorSearch, { port: neighbor.port, labels })
+                )
+            );
+            const [activeSearch, emptySearch] =
+                f.container.querySelectorAll('[role="search"]');
+            assert.ok(activeSearch && emptySearch);
+            const input = activeSearch.querySelector('input');
+            const emptyInput = emptySearch.querySelector('input');
+            const [clearButton, submit] =
+                activeSearch.querySelectorAll('button');
+            assert.ok(input && emptyInput && clearButton && submit);
+            assert.equal(input.disabled, false);
+            assert.equal(input.value, 'previous');
+            assert.equal(
+                activeSearch.querySelector('label')?.textContent,
+                search
+            );
+            assert.equal(submit.textContent, search);
+            assert.equal(clearButton.textContent, clear ?? 'Clear search');
+            assert.equal(clearButton.type, 'button');
+            assert.equal(clearButton.disabled, false);
+            assert.equal(emptyInput.value, '');
+            assert.equal(emptySearch.querySelectorAll('button').length, 1);
+            assert.deepEqual(current.commands, []);
+
+            await f.click(clearButton);
+
+            const frame = current.port.read();
+            assert.ok(frame);
+            assert.deepEqual(current.commands, [
+                {
+                    stamp: frame.stamp,
+                    source: 'clear',
+                    expectedSearchTerm: 'previous',
+                    expectedPublicationRevision: frame.publicationRevision,
+                    searchTerm: '',
+                },
+            ]);
+            assert.equal(input.value, '');
+            assert.equal(activeSearch.querySelectorAll('button').length, 1);
+            assert.equal(emptyInput.value, '');
+            assert.deepEqual(neighbor.commands, []);
+            await f.render(null);
+            assert.equal(current.listeners.size, 0);
+            assert.equal(neighbor.listeners.size, 0);
+        }
+    }
+});
+
 it('fences a scanner callback to its opened owner and accepts one result', async (t) => {
     const f = await htmlPresentationFixture(t);
     const owner = host();

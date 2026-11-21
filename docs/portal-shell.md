@@ -57,6 +57,10 @@ and optional title-settings control without repeating the header description.
 Hidden headers and inline desktop navigation do not render this copy. Omission
 retains header-only branding and creates no host, storage or provider work.
 
+`header.sidebarToggle:'icon'` places the menu icon before the brand for visible
+sidebar headers below 1024 px. The existing `openNavigation` and
+`closeNavigation` labels remain the button's accessible names.
+
 View metadata `badge` and finite `layout` retain configured indicators and native
 layout icons. Omitted layout renders no icon; explicit null uses the grid icon.
 Icons are shown in sidebar/mobile presentation; desktop topbar retains the badge.

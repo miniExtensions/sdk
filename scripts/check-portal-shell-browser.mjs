@@ -17,6 +17,7 @@ import { build } from 'esbuild';
 import ts from 'typescript';
 import { chromium } from 'playwright';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { checkNativeSidebarOpener } from './portal-shell-sidebar-opener-browser-checks.mjs';
 
 const output = resolve(process.argv[2] ?? 'dist/portal-shell-browser');
 mkdirSync(output, { recursive: true });
@@ -1927,6 +1928,12 @@ try {
                     configuredPresentation: await configuredPresentation(
                         browser,
                         origin,
+                        `${react}-${format}`
+                    ),
+                    nativeSidebarOpener: await checkNativeSidebarOpener(
+                        browser,
+                        origin,
+                        output,
                         `${react}-${format}`
                     ),
                 });

@@ -25,6 +25,7 @@ const theme = {
     linkHoverColor: 'rgb(59, 130, 246)',
 };
 const initialEffects = { writes: 0, opens: [], submits: 0, links: [] };
+export const richTextHelpPaths = ['/help/a', '/help/b'];
 
 export const readonlyPortalGridRichTextEntry = String.raw`
 import { StrictMode, createElement as h, version } from 'react';
@@ -114,7 +115,6 @@ export function mountRichTextGrid(root) {
             onClickCapture(event) {
                 const link = event.target instanceof Element && event.target.closest('.me-rich-text a');
                 if (!link) return;
-                event.preventDefault();
                 actions.links.push({ path: link.pathname, trusted: event.nativeEvent.isTrusted });
             },
         }, h(ReadonlyPortalRecords, {
@@ -152,12 +152,14 @@ export async function checkReadonlyPortalGridRichTextBrowser({
         '/readonly-portal-grid.js',
         '/readonly-portal-grid.css',
         '/favicon.ico',
+        ...richTextHelpPaths,
     ]);
     const context = await browser.newContext({
         viewport: { width: 1280, height: 800 },
         serviceWorkers: 'block',
     });
     const item = { refusedRequests: [], pageErrors: [], cleanup: false };
+    const helpRequests = [];
     evidence.formattedRichText = item;
     try {
         await context.route('**/*', (route) => {
@@ -167,8 +169,11 @@ export async function checkReadonlyPortalGridRichTextBrowser({
                 request.method() === 'GET' &&
                 url.origin === origin &&
                 assets.has(url.pathname + url.search)
-            )
+            ) {
+                if (richTextHelpPaths.includes(url.pathname))
+                    helpRequests.push(url.pathname);
                 return route.continue();
+            }
             item.refusedRequests.push(url.pathname);
             return route.abort();
         });
@@ -188,40 +193,58 @@ export async function checkReadonlyPortalGridRichTextBrowser({
                         'td[data-field-id="fldNotes"]'
                     );
                     const editor = cell.querySelector('.ProseMirror');
+                    const bold = editor?.querySelector('strong');
+                    const list = editor?.querySelector('ul');
                     const link = cell.querySelector('a');
+                    const blank = cell.querySelector(
+                        '[data-testid="no-value-test-id"]'
+                    );
                     return {
                         id: node.dataset.recordId,
                         title: node
                             .querySelector('td[data-field-id="fldTitle"]')
                             .textContent.trim(),
-                        bold:
-                            editor?.querySelector('strong')?.textContent ??
-                            null,
+                        bold: bold
+                            ? {
+                                  text: bold.textContent,
+                                  weight: getComputedStyle(bold).fontWeight,
+                              }
+                            : null,
                         readOnly:
                             editor?.getAttribute('contenteditable') === 'false',
-                        list: editor?.querySelector('ul')?.className ?? null,
+                        list: list
+                            ? {
+                                  className: list.className,
+                                  style: getComputedStyle(list).listStyleType,
+                              }
+                            : null,
                         checks: [
                             ...cell.querySelectorAll('input[type="checkbox"]'),
                         ].map((input) => ({
                             checked: input.checked,
-                            inert:
-                                input.disabled ||
-                                getComputedStyle(input).pointerEvents ===
-                                    'none',
+                            pointerEvents:
+                                getComputedStyle(input).pointerEvents,
+                            tabIndex: input.tabIndex,
                         })),
                         link: link
                             ? {
                                   path: link.pathname,
                                   sameOrigin: link.origin === location.origin,
                                   color: getComputedStyle(link).color,
+                                  decoration:
+                                      getComputedStyle(link).textDecorationLine,
+                                  rel: link.rel,
                               }
                             : null,
-                        blank:
-                            cell
-                                .querySelector(
-                                    '[data-testid="no-value-test-id"]'
-                                )
-                                ?.textContent.trim() ?? null,
+                        blank: blank
+                            ? {
+                                  text: blank.textContent.trim(),
+                                  color: getComputedStyle(blank).color,
+                                  hiddenIcon: blank
+                                      .querySelector('svg')
+                                      ?.getAttribute('aria-hidden'),
+                              }
+                            : null,
                     };
                 })
             );
@@ -230,36 +253,47 @@ export async function checkReadonlyPortalGridRichTextBrowser({
         await notes('recBlank')
             .getByText('No Value', { exact: true })
             .waitFor();
+        item.font = await form.evaluate(async (element) => {
+            await document.fonts.ready;
+            return {
+                family: getComputedStyle(element).fontFamily,
+                loaded: [...document.fonts]
+                    .filter((font) => font.status === 'loaded')
+                    .map((font) => font.family),
+            };
+        });
+        const checkState = (checked) => ({
+            checked,
+            pointerEvents: 'none',
+            tabIndex: -1,
+        });
+        const linkState = (path) => ({
+            path,
+            sameOrigin: true,
+            color: theme.linkColor,
+            decoration: 'none',
+            rel: 'noopener noreferrer nofollow',
+        });
+        const checkboxList = { className: 'checkbox_list', style: 'none' };
         const expected = [
             {
                 id: 'recAlpha',
                 title: 'Alpha record',
-                bold: 'Alpha',
+                bold: { text: 'Alpha', weight: '600' },
                 readOnly: true,
-                list: 'checkbox_list',
-                checks: [
-                    { checked: true, inert: true },
-                    { checked: false, inert: true },
-                ],
-                link: {
-                    path: '/help/a',
-                    sameOrigin: true,
-                    color: theme.linkColor,
-                },
+                list: checkboxList,
+                checks: [checkState(true), checkState(false)],
+                link: linkState('/help/a'),
                 blank: null,
             },
             {
                 id: 'recBeta',
                 title: 'Beta record',
-                bold: 'Beta',
+                bold: { text: 'Beta', weight: '600' },
                 readOnly: true,
-                list: 'checkbox_list',
-                checks: [{ checked: false, inert: true }],
-                link: {
-                    path: '/help/b',
-                    sameOrigin: true,
-                    color: theme.linkColor,
-                },
+                list: checkboxList,
+                checks: [checkState(false)],
+                link: linkState('/help/b'),
                 blank: null,
             },
             {
@@ -270,7 +304,11 @@ export async function checkReadonlyPortalGridRichTextBrowser({
                 list: null,
                 checks: [],
                 link: null,
-                blank: 'No Value',
+                blank: {
+                    text: 'No Value',
+                    color: 'rgb(107, 114, 128)',
+                    hiddenIcon: 'true',
+                },
             },
         ];
         item.initial = await cells();
@@ -292,7 +330,18 @@ export async function checkReadonlyPortalGridRichTextBrowser({
             await link.evaluate((node) => getComputedStyle(node).color),
             theme.linkHoverColor
         );
-        await link.click();
+        const [popup] = await Promise.all([
+            page.waitForEvent('popup'),
+            link.click(),
+        ]);
+        try {
+            await popup.waitForURL(origin + '/help/a');
+            assert.equal(await popup.title(), 'Owned Rich Text help');
+            assert.deepEqual(helpRequests, ['/help/a']);
+        } finally {
+            await popup.close();
+        }
+        assert.equal(context.pages().length, 1);
         await page.mouse.move(0, 0);
         assert.deepEqual((await actions()).actions, {
             ...initialEffects,

@@ -22,6 +22,7 @@ import { checkReadonlyPortalGridShortcutBrowser } from './readonly-portal-grid-s
 import {
     checkReadonlyPortalGridRichTextBrowser,
     readonlyPortalGridRichTextEntry,
+    richTextHelpPaths,
 } from './readonly-portal-grid-rich-text-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
@@ -690,6 +691,12 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
             allowed.has('/readonly-portal-grid.css')
     );
     allowed.set('/favicon.ico', Buffer.alloc(0));
+    for (const path of richTextHelpPaths) {
+        allowed.set(
+            path,
+            Buffer.from('<!doctype html><title>Owned Rich Text help</title>')
+        );
+    }
     allowed.set(
         '/grid-header-help.svg',
         Buffer.from(

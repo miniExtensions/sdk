@@ -7,6 +7,7 @@ import {
     useState,
     type CSSProperties,
     type FormEvent,
+    type ReactElement,
 } from 'react';
 import type { AuthOwnerScope, AuthPasswordResult } from '../auth/types.js';
 
@@ -40,7 +41,7 @@ const useCommitEffect =
 /** Password-entry UI for the current Form or Portal owner. */
 export function CompleteExtensionPasswordScreen(
     props: CompleteExtensionPasswordScreenProps
-) {
+): ReactElement {
     return h(ExtensionPasswordForm, {
         ...props,
         key: JSON.stringify([props.scope.ownerId, props.scope.revision]),

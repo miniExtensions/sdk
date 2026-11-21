@@ -1081,6 +1081,12 @@ it('owns the hide dialog, excludes primary and emits only current controlled int
     });
     await f.render(h(ReadonlyPortalGrid, props));
     const trigger = button(f, 'Hide columns');
+    assert.equal(trigger.type, 'button');
+    assert.equal(trigger.getAttribute('aria-haspopup'), 'dialog');
+    const icon = trigger.querySelector('svg[aria-hidden="true"]');
+    assert.equal(icon?.getAttribute('viewBox'), '0 0 24 24');
+    assert.equal(icon?.getAttribute('fill'), 'currentColor');
+    assert.equal(icon?.querySelectorAll('path').length, 3);
     await f.click(trigger);
     assert.equal(f.container.querySelectorAll('[role="switch"]').length, 1);
     const toggle = f.container.querySelector('[role="switch"]');

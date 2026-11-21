@@ -226,6 +226,7 @@ export async function checkGalleryUnlinkPresentation({
         assert.equal(after.submits, before.submits);
         assert.equal(after.pages, before.pages);
         assert.equal(after.unlinks, before.unlinks + 1);
+        assert.deepEqual(after.errors, []);
         assert.deepEqual(
             await page.evaluate(() => window.galleryUnlinkClicks),
             [{ trusted: true, detail: 0 }]

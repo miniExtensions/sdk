@@ -70,8 +70,10 @@ if (managedScratch) {
     mkdirSync(managedScratch, { recursive: true });
     assert.equal(realpathSync(managedScratch), managedScratch);
 }
+// Keep the managed path short for Chrome's Unix singleton socket under TMPDIR.
+const scratchPrefix = managedScratch ? 'p-' : 'sdk-portal-grid-percent-';
 const temporary = realpathSync(
-    mkdtempSync(join(managedScratch ?? tmpdir(), 'sdk-portal-grid-percent-'))
+    mkdtempSync(join(managedScratch ?? tmpdir(), scratchPrefix))
 );
 if (managedScratch)
     Object.assign(process.env, {

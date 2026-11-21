@@ -16,6 +16,7 @@ import { build, transformSync } from 'esbuild';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { checkReadonlyPortalGridDateTimeConsumer } from './readonly-portal-grid-datetime-checks.mjs';
+import { checkReadonlyPortalGridDurationConsumer } from './readonly-portal-grid-duration-checks.mjs';
 
 export const readonlyPortalGridTypedConsumer = String.raw`
 import {createElement} from 'react';
@@ -403,10 +404,18 @@ export async function checkReadonlyPortalGridReactMatrix({
                     react,
                     run,
                 });
+                const duration = checkReadonlyPortalGridDurationConsumer({
+                    root,
+                    format,
+                    extension,
+                    react,
+                    run,
+                });
                 profiles.push({
                     react,
                     format,
                     dateTime,
+                    duration,
                     tests: componentCases,
                     textCellTests: textCellCases,
                     emailCellTests: emailCellCases,

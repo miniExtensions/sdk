@@ -14,6 +14,10 @@ import {
     checkReadonlyPortalGridDateTimeBrowser,
     readonlyPortalGridDateTimeEntry,
 } from './readonly-portal-grid-datetime-checks.mjs';
+import {
+    checkReadonlyPortalGridDurationBrowser,
+    readonlyPortalGridDurationEntry,
+} from './readonly-portal-grid-duration-checks.mjs';
 import { checkReadonlyPortalGridShortcutBrowser } from './readonly-portal-grid-shortcut-browser-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
@@ -23,6 +27,7 @@ import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell
 import{DateField}from'@miniextensions/sdk/react/date';
 import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
 import{mountDateTimeGrid}from'./readonly-portal-grid-datetime.mjs';
+import{mountDurationGrid}from'./readonly-portal-grid-duration.mjs';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -550,6 +555,7 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
 const fixture = new URLSearchParams(location.search).get('fixture');
 if (fixture === 'number-only') mountNumberGrid(root);
 else if (fixture === 'date-time') mountDateTimeGrid(root);
+else if (fixture === 'duration-only') mountDurationGrid(root);
 else root.render(h(StrictMode, null, h(fixture === 'date-only' ? DateOnlyProbe : App)));
 `;
 
@@ -573,6 +579,10 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         join(temporary, 'readonly-portal-grid-datetime.mjs'),
         readonlyPortalGridDateTimeEntry
     );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-duration.mjs'),
+        readonlyPortalGridDurationEntry
+    );
     const bundle = await args.build({
         absWorkingDir: temporary,
         entryPoints: [entry],
@@ -592,6 +602,7 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/ReadonlyPortalGrid.js',
         '/react/date/DateField.js',
         '/react/CompleteReadOnlyTextField.js',
+        '/react/ReadOnlyDurationField.js',
         '/react/CompleteLocalizedNumericField.js',
         '/react/localized-numeric.css',
         '/react/CompleteFormFieldPresentation.js',
@@ -669,6 +680,16 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
                 fileURLToPath(
                     new URL(
                         './readonly-portal-grid-datetime-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
+        durationCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-duration-checks.mjs',
                         import.meta.url
                     )
                 )
@@ -1505,6 +1526,7 @@ export async function checkReadonlyPortalGridBrowser({
     await checkGuidanceLayoutBrowser({ page, evidence, output });
     await checkReadonlyPortalGridNumberBrowser({ page, evidence });
     await checkReadonlyPortalGridDateTimeBrowser({ page, evidence });
+    await checkReadonlyPortalGridDurationBrowser({ page, evidence });
     await checkReadonlyPortalGridShortcutBrowser({ page, evidence });
     Object.assign(evidence, {
         status: 'passed',

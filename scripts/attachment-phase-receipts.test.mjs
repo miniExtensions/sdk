@@ -649,6 +649,25 @@ test('root-load points instrument only unique starter anchors', async () => {
         new URL('../examples/browser/src/main.ts', import.meta.url),
         'utf8'
     );
+    const lf = source.replaceAll('\r\n', '\n');
+    for (const [input, newline] of [
+        [source, source.match(/\r?\n/)[0]],
+        [lf, '\n'],
+        [lf.replaceAll('\n', '\r\n'), '\r\n'],
+    ]) {
+        assertRootLoadCheckpoints(input, newline);
+    }
+    const recipe = await readFile(
+        new URL('./attachment-review-recipe-checks.mjs', import.meta.url),
+        'utf8'
+    );
+    assert.match(
+        recipe,
+        /const source = onScenarioPhase\s*\?\s*addAttachmentRootLoadCheckpoints\(originalSource\)\s*:\s*originalSource/
+    );
+});
+
+function assertRootLoadCheckpoints(source, newline) {
     const result = addAttachmentRootLoadCheckpoints(source);
     const names = [
         'response-consumed',
@@ -656,8 +675,7 @@ test('root-load points instrument only unique starter anchors', async () => {
         'root-render-start',
         'root-render-end',
     ];
-    const capture =
-        'const __sdkAttachmentPhasePoint = globalThis.__sdkAttachmentPhasePoint;\n';
+    const capture = `const __sdkAttachmentPhasePoint = globalThis.__sdkAttachmentPhasePoint;${newline}`;
     assert(result.startsWith(capture));
     const body = result.slice(capture.length);
     const points = [
@@ -666,9 +684,9 @@ test('root-load points instrument only unique starter anchors', async () => {
     assert.deepEqual(points, names);
     assert.equal(
         body
-            .split('\n')
+            .split(newline)
             .filter((line) => !line.includes('__sdkAttachmentPhasePoint?.('))
-            .join('\n'),
+            .join(newline),
         source
     );
     const calls = [];
@@ -683,7 +701,7 @@ test('root-load points instrument only unique starter anchors', async () => {
     assert.throws(
         () =>
             addAttachmentRootLoadCheckpoints(
-                `${source}\n__sdkAttachmentPhasePoint`
+                `${source}${newline}__sdkAttachmentPhasePoint`
             ),
         /checkpoint name must be unused/
     );
@@ -691,7 +709,8 @@ test('root-load points instrument only unique starter anchors', async () => {
         '            let result = await client.loadExtension(connection.input, {\n                signal,\n            });',
         '            acceptRootLoad(visitor, result, query);\n            render();\n            const loadedMessage =',
     ];
-    for (const anchor of anchors) {
+    for (const lfAnchor of anchors) {
+        const anchor = lfAnchor.replaceAll('\n', newline);
         assert.equal(source.indexOf(anchor), source.lastIndexOf(anchor));
         assert.notEqual(source.indexOf(anchor), -1);
         assert.throws(
@@ -699,19 +718,11 @@ test('root-load points instrument only unique starter anchors', async () => {
             /root-load anchor must be unique/
         );
         assert.throws(
-            () => addAttachmentRootLoadCheckpoints(`${source}\n${anchor}`),
+            () => addAttachmentRootLoadCheckpoints(`${source}${newline}${anchor}`),
             /root-load anchor must be unique/
         );
     }
-    const recipe = await readFile(
-        new URL('./attachment-review-recipe-checks.mjs', import.meta.url),
-        'utf8'
-    );
-    assert.match(
-        recipe,
-        /const source = onScenarioPhase\s*\?\s*addAttachmentRootLoadCheckpoints\(originalSource\)\s*:\s*originalSource/
-    );
-});
+}
 
 test('local points bracket submit, synthetic response, and readiness', async () => {
     const source = await readFile(

@@ -366,7 +366,7 @@ async function buildProfile(path, format) {
     await assertBrowserInputs(bundle.metafile, path);
     const sdkPrefix = 'node_modules/@miniextensions/sdk/dist/';
     const sdkJs = Object.keys(bundle.metafile.inputs).filter(
-        (name) => name.startsWith(sdkPrefix) && name.endsWith('.js')
+        (name) => name.startsWith(sdkPrefix) && /\.[cm]?js$/.test(name)
     );
     for (const part of ['react', 'ui', 'formulas']) {
         assert(
@@ -374,10 +374,13 @@ async function buildProfile(path, format) {
             `Expected the packed ${format} ${part} entry`
         );
     }
-    assert(
-        sdkJs.every((name) => name.startsWith(`${sdkPrefix}${format}/`)),
-        'Mixed SDK JavaScript export conditions'
+    // Both public export trees import shared, format-independent vendored files.
+    const wrongFormat = sdkJs.filter(
+        (name) =>
+            !name.startsWith(`${sdkPrefix}${format}/`) &&
+            !name.startsWith(`${sdkPrefix}vendor/`)
     );
+    assert.deepEqual(wrongFormat, [], 'Mixed SDK JavaScript export conditions');
     return bundle.outputFiles;
 }
 

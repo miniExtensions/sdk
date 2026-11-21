@@ -4996,6 +4996,44 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );
+    const gridCurrencyArchive = join(temporaryDirectory, packed.filename);
+    const gridCurrencySha256 = createHash('sha256')
+        .update(readFileSync(gridCurrencyArchive))
+        .digest('hex');
+    // The standalone runner bounds each install and test, then cleans up its consumers.
+    const gridCurrencyProof = JSON.parse(
+        execPackageFileSync(
+            process.execPath,
+            [
+                'scripts/check-readonly-portal-grid-currency.mjs',
+                gridCurrencyArchive,
+                gridCurrencySha256,
+            ],
+            {
+                cwd: process.cwd(),
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    npm_config_cache: join(temporaryDirectory, 'npm-cache'),
+                },
+            }
+        )
+    );
+    const gridCurrencyProfiles = gridCurrencyProof.profiles.map(
+        ({ react, format, cases }) => ({ react, format, cases })
+    );
+    assert.deepEqual(gridCurrencyProfiles, [
+        { react: '18.3.1', format: 'esm', cases: 1 },
+        { react: '18.3.1', format: 'cjs', cases: 1 },
+        { react: '19.2.0', format: 'esm', cases: 1 },
+        { react: '19.2.0', format: 'cjs', cases: 1 },
+    ]);
+    assert.equal(gridCurrencyProof.package.sha256, gridCurrencySha256);
+    assert.equal(gridCurrencyProof.cleanup.temporaryConsumersRemoved, true);
+    console.log(
+        `Installed readonly Portal Grid Currency assertions passed (${gridCurrencySha256}).`,
+        gridCurrencyProfiles
+    );
     const visitorQueryProof = checkPortalVisitorQueryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

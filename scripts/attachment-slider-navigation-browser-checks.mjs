@@ -20,6 +20,11 @@ const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
 const calls={selection:[],save:0,upload:0,delete:0,fetch:0};
 const downloads={pending:[],finished:0};
+const downloadListeners=new Set();
+const downloadOwner={token:0,isCurrent:()=>true,subscribe(listener){
+    downloadListeners.add(listener);
+    return ()=>downloadListeners.delete(listener);
+}};
 window.fetch=()=>{calls.fetch++;return Promise.reject(Error('Unexpected I/O'));};
 function Host(){
     const [rows,setRows]=useState([first,second]);
@@ -35,6 +40,7 @@ function Host(){
     }
     window.sliderProbe={calls,downloads,setSelectedIndex,setAcceptsIntent,
         replace,
+        rotateDownloadOwner(){downloadOwner.token++;for(const listener of [...downloadListeners])listener();},
         reset(owner){calls.selection.length=0;replace(owner);},
         remap(marker){setRows((items)=>items.map((item)=>({...item})));setPublication(marker);},
         duplicates(){setRows([first,{...second,filename:first.filename}]);setPublication('duplicates');},
@@ -45,6 +51,7 @@ function Host(){
         url:selected?.url??null,
         filename:selected?.filename+'.svg',
         identity:collectionOwner+':'+selectedIndex,
+        owner:downloadOwner,
         read(url){return new Promise((resolve)=>downloads.pending.push({url,resolve}));},
     });
     return h('form',{'data-publication':publication,onSubmit(event){event.preventDefault();calls.save++;}},
@@ -342,6 +349,22 @@ export async function checkAttachmentSliderNavigationBrowser({
                         window.sliderProbe.downloads.finished === expected,
                     count
                 );
+            const saveCurrent = async (index, contents) => {
+                const [saved] = await Promise.all([
+                    page.waitForEvent('download'),
+                    finish(index, contents),
+                ]);
+                try {
+                    assert.equal(saved.suggestedFilename(), 'Vue arrière.svg');
+                    assert.equal(
+                        readFileSync(await saved.path(), 'utf8'),
+                        contents
+                    );
+                    return saved.suggestedFilename();
+                } finally {
+                    await saved.delete();
+                }
+            };
             await download.click();
             assert.equal(await download.innerText(), '0%');
             await rearTile.press('Space');
@@ -355,31 +378,37 @@ export async function checkAttachmentSliderNavigationBrowser({
             await settled(1);
             assert.equal(await download.innerText(), '0%');
             assert.equal(saves.length, 0);
-            const [saved] = await Promise.all([
-                page.waitForEvent('download'),
-                finish(1, 'current'),
-            ]);
-            try {
-                assert.equal(saved.suggestedFilename(), 'Vue arrière.svg');
-                assert.equal(
-                    readFileSync(await saved.path(), 'utf8'),
-                    'current'
-                );
-            } finally {
-                await saved.delete();
-            }
+            const downloadFilename = await saveCurrent(1, 'current');
             await settled(2);
+
+            await download.click();
+            assert.equal(await download.innerText(), '0%');
+            await page.evaluate(() => window.sliderProbe.rotateDownloadOwner());
+            await page
+                .getByRole('button', { name: 'Télécharger la pièce jointe' })
+                .waitFor();
+            assert.equal(await download.isEnabled(), true);
+            await download.click();
+            await finish(2, 'retired-generation');
+            await settled(3);
+            assert.equal(await download.innerText(), '0%');
+            assert.equal(saves.length, 1);
+            await saveCurrent(3, 'successor-generation');
+            await settled(4);
+
             await download.click();
             await page.evaluate(() => window.sliderProbe.retire());
             await committed('retired');
-            await finish(2, 'dismissed');
-            await settled(3);
-            assert.equal(saves.length, 1);
+            await finish(4, 'dismissed');
+            await settled(5);
+            assert.equal(saves.length, 2);
             const readUrls = await page.evaluate(() =>
                 window.sliderProbe.downloads.pending.map(({ url }) => url)
             );
             assert.deepEqual(readUrls, [
                 '/front.svg',
+                '/rear.svg',
+                '/rear.svg',
                 '/rear.svg',
                 '/rear.svg',
             ]);
@@ -395,8 +424,9 @@ export async function checkAttachmentSliderNavigationBrowser({
                 },
                 download: {
                     readUrls,
-                    filename: saved.suggestedFilename(),
+                    filename: downloadFilename,
                     saves: saves.length,
+                    notifiedOwnerRotation: true,
                 },
                 unexpectedRequests,
                 pageErrors,

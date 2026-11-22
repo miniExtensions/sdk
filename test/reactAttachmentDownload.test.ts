@@ -124,15 +124,37 @@ test('only the current same-URL occurrence publishes its allocated download', as
         reads[5].resolve(response(6));
     });
     assert.equal(saved.length, 1);
-    assert.equal(listeners.size, 0);
-    owner.token = 2;
-    await render('B', true, owner);
+    assert.equal(listeners.size, 1);
+    await act(async () => {
+        owner.token = 2;
+        for (const listener of [...listeners]) listener();
+    });
     await fixture.click(button());
     owner.token = 3;
     await render('B', true, owner);
     await act(async () => reads[6].resolve(response(7)));
     assert.equal(saved.length, 1);
     assert.equal(listeners.size, 1);
+
+    await fixture.click(button());
+    assert.equal(button().textContent, '0%');
+    await act(async () => {
+        owner.token = 4;
+        for (const listener of [...listeners]) listener();
+    });
+    // The parent did not render with a new owner or new options.
+    assert.equal(button().textContent, 'Download');
+    assert.equal(button().disabled, false);
+    await fixture.click(button());
+    assert.equal(reads.length, 9);
+    await act(async () => reads[7].resolve(response(8)));
+    assert.equal(saved.length, 1);
+    assert.equal(button().textContent, '0%');
+    await act(async () => reads[8].resolve(response(9)));
+    assert.equal(saved.length, 2);
+    assert.deepEqual([...new Uint8Array(await bytes[1].arrayBuffer())], [9]);
+    assert.equal(button().textContent, 'Download');
+
     await fixture.render(null, true);
     assert.equal(listeners.size, 0);
     function OnFirstCommit() {
@@ -151,11 +173,11 @@ test('only the current same-URL occurrence publishes its allocated download', as
     }
     await fixture.render(h(OnFirstCommit), true);
     assert.equal(button().textContent, 'Download');
-    await act(async () => reads[7].resolve(response(8)));
-    assert.equal(saved.length, 1);
+    await act(async () => reads[9].resolve(response(10)));
+    assert.equal(saved.length, 2);
     assert.deepEqual(
         reads.map((request) => request.url),
-        Array(8).fill(url)
+        Array(10).fill(url)
     );
     assert.equal(document.querySelector('a[download]'), null);
     fixture.unchangedEffects();

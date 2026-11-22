@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
     resourceOwnerCurrent,
     resourceOwnerGeneration,
-    watchResourceOwner,
     type ReadonlyResourceOwner,
 } from './readonlyResourceOwner.js';
 
@@ -35,9 +34,10 @@ export function useAttachmentDownload({
     onError,
 }: AttachmentDownloadOptions): AttachmentDownload {
     const generation = resourceOwnerGeneration(owner);
+    const [ownerRevision, setOwnerRevision] = useState(0);
     const scope = useMemo(
         () => ({}),
-        [url, filename, identity, owner, generation]
+        [url, filename, identity, owner, generation, ownerRevision]
     );
     const active = useRef<{
         scope: object;
@@ -53,15 +53,39 @@ export function useAttachmentDownload({
         const mounted = { scope, busy: false, retired: false };
         active.current = mounted;
         setStatus(null);
-        const unwatch = watchResourceOwner(owner, () => {
+        let rotationPending = false;
+        const retire = () => {
             mounted.retired = true;
             if (active.current === mounted) setStatus(null);
-        });
+        };
+        const observeOwner = () => {
+            if (active.current !== mounted) return;
+            const authorized = resourceOwnerCurrent(owner);
+            const rotated = !Object.is(
+                resourceOwnerGeneration(owner),
+                generation
+            );
+            if (active.current !== mounted || (authorized && !rotated)) return;
+            retire();
+            // Keep observing a retired owner so a notified successor can start
+            // without a host render or waiting for the old read to finish.
+            if (rotated && !rotationPending) {
+                rotationPending = true;
+                setOwnerRevision((revision) => revision + 1);
+            }
+        };
+        let unsubscribe: (() => void) | undefined;
+        try {
+            unsubscribe = owner?.subscribe?.(observeOwner);
+            observeOwner();
+        } catch {
+            retire();
+        }
         return () => {
             if (active.current === mounted) active.current = null;
-            unwatch();
+            unsubscribe?.();
         };
-    }, [scope, owner]);
+    }, [scope, owner, generation]);
 
     const start = async () => {
         const mounted = active.current;

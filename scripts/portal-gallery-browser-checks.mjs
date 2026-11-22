@@ -1,3 +1,4 @@
+import { portalGalleryPagingAppearanceEntry } from './portal-gallery-paging-appearance-checks.mjs';
 import assert from 'node:assert/strict';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -7,6 +8,7 @@ export const portalGalleryBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useLayoutEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {PortalGallery} from '@miniextensions/sdk/react';
+import {mountPagingAppearance} from './portal-gallery-paging-appearance.mjs';
 import '@miniextensions/sdk/react/portal-gallery.css';
 let set,committed=0,opens=0,unlinks=0,pages=0,submits=0;const errors=[];
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));
@@ -22,7 +24,10 @@ function App(){
  return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Gallery'),h(PortalGallery,{label:'Synthetic Gallery',content:state.status==='rows'?{status:'rows',rows,emptyLabel:state.empty?'No records':null}:{status:state.status,label:state.status==='loading'?'Loading records':'Unavailable records'},columns:state.columns,width:state.width,unlinkingRecordId:state.pending,reloading:state.reload?{label:'Refreshing'}:null,paging:{canRequestMore:true,showSpinner:false,requestLabel:'Load more',loadingLabel:'Loading more',requestMore:()=>{pages++;}}}));
 }
 window.__nativeProbe={change:patch=>set(patch),returnFocus:()=>triggers.get(0)?.element.focus(),snapshot:()=>({react:React.version,registered:triggers.size,committed,opens,unlinks,pages,submits,errors})};
-createRoot(document.querySelector('#root')).render(h(StrictMode,null,h(App)));
+const root = createRoot(document.querySelector('#root'));
+const pagingLanguage = new URLSearchParams(location.search).get('paging');
+if (pagingLanguage) mountPagingAppearance(root, pagingLanguage);
+else root.render(h(StrictMode,null,h(App)));
 `;
 
 export async function preparePortalGalleryBrowserFixtures({
@@ -38,6 +43,10 @@ export async function preparePortalGalleryBrowserFixtures({
 }) {
     const entry = join(temporary, 'portal-gallery-layout.mjs');
     writeFileSync(entry, portalGalleryBrowserEntry);
+    writeFileSync(
+        join(temporary, 'portal-gallery-paging-appearance.mjs'),
+        portalGalleryPagingAppearanceEntry
+    );
     const bundled = await build({
         absWorkingDir: temporary,
         entryPoints: [entry],
@@ -111,6 +120,16 @@ export async function preparePortalGalleryBrowserFixtures({
     report.portalGallery = {
         sourceSha256: hash(portalGalleryBrowserEntry),
         checkerSha256: hash(regular(fileURLToPath(import.meta.url))),
+        pagingAppearanceSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './portal-gallery-paging-appearance-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
         react: JSON.parse(
             regular(join(temporary, 'node_modules/react/package.json'))
         ).version,

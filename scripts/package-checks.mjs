@@ -403,6 +403,9 @@ export async function assertInstalledArchive(
 export async function assertBrowserInputs(metafile, consumerRoot) {
     const consumer = await realpath(consumerRoot);
     const installed = join(consumer, sdkPath);
+    const dist = join(installed, 'dist');
+    const nestedModules = join(installed, 'node_modules');
+    const checkedPackages = new Set();
     let sdkInputs = 0;
     for (const input of Object.keys(metafile.inputs)) {
         const path = await realpath(resolve(consumer, input));
@@ -410,13 +413,36 @@ export async function assertBrowserInputs(metafile, consumerRoot) {
             isWithin(consumer, path),
             `Browser build input escapes the clean consumer: ${input}`
         );
-        if (isWithin(installed, path)) {
+        if (!isWithin(installed, path)) continue;
+        if (isWithin(nestedModules, path)) {
+            // pnpm can place its installed dependencies beside the archive
+            // payload. They are separate packages, never SDK dist inputs.
+            const parts = relative(installed, path).split(sep);
+            const start = parts.lastIndexOf('node_modules') + 1;
+            const end = start + (parts[start]?.startsWith('@') ? 2 : 1);
+            const invalidDependency = `Invalid nested browser dependency: ${input}`;
+            assert(end < parts.length, invalidDependency);
+            const packageRoot = join(installed, ...parts.slice(0, end));
+            if (checkedPackages.has(packageRoot)) continue;
+            const manifestPath = join(packageRoot, 'package.json');
+            const manifestFile = await lstat(manifestPath).catch(() => null);
+            assert(manifestFile?.isFile(), invalidDependency);
+            const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
             assert(
-                isWithin(join(installed, 'dist'), path),
-                `Browser build imported SDK source outside dist: ${input}`
+                manifest.name === parts.slice(start, end).join('/') &&
+                    manifest.name !== '@miniextensions/sdk' &&
+                    typeof manifest.version === 'string' &&
+                    manifest.version.length > 0,
+                invalidDependency
             );
-            sdkInputs++;
+            checkedPackages.add(packageRoot);
+            continue;
         }
+        assert(
+            isWithin(dist, path),
+            `Browser build imported SDK source outside dist: ${input}`
+        );
+        sdkInputs++;
     }
     assert(
         sdkInputs > 0,

@@ -954,6 +954,8 @@ try {
         ...['esm', 'cjs'].flatMap((format) => [
             `dist/${format}/react/PortalGridSingleLineTextCell.js`,
             `dist/${format}/react/PortalGridSingleLineTextCell.d.ts`,
+            `dist/${format}/react/PortalGridMultilineTextCell.js`,
+            `dist/${format}/react/PortalGridMultilineTextCell.d.ts`,
             `dist/${format}/react/PortalGridEmailCell.js`,
             `dist/${format}/react/PortalGridEmailCell.d.ts`,
             `dist/${format}/react/PortalGridPhoneNumberCell.js`,
@@ -5028,6 +5030,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.dateTimeCases, 8);
     assert.equal(gridProof.tests, 88);
     assert.equal(gridProof.textCellTests, 24);
+    assert.equal(gridProof.multilineCellTests, 12);
     assert.equal(gridProof.ratingCellTests, 32);
     assert.equal(gridProof.checkboxCellTests, 64);
     assert.equal(gridProof.phoneCellTests, 8);

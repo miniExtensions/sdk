@@ -130,8 +130,9 @@ function admittedWidth(value: unknown): number | null {
 const iconPaths: Record<ReadonlyPortalGridHeaderIcon, string> = {
     text: 'M3 12 6.5 3 10 12M4 9h5M11 6h3m-1.5 0v6',
     'multiline-text': 'M3 4h10M3 8h10M3 12h7',
-    number: 'M6 2 4 14M12 2l-2 12M2 6h12M1 10h12',
-    checkbox: 'M3 3h10v10H3ZM5 8l2 2 4-4',
+    number: 'M5 2v12M11 2v12M2 5h12M2 11h12',
+    checkbox:
+        'M3 1h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2ZM4 8l1.25-1.25 2 2 3.5-3.5L12 6.5l-4.75 4.75Z',
     formula: 'M11 3H8L6 13H3M4 7h6M11 8l3 5m0-5-3 5',
     date: 'M3 4h10v9H3ZM5 2v4m6-4v4M3 7h10',
     select: 'M3 5h10M3 8h6m1 3 2 2 2-2',
@@ -142,6 +143,7 @@ const iconPaths: Record<ReadonlyPortalGridHeaderIcon, string> = {
 
 function headerIcon(icon: ReadonlyPortalGridHeaderIcon | null | undefined) {
     if (icon == null) return null;
+    const isCheckbox = icon === 'checkbox';
     return h(
         'svg',
         {
@@ -150,13 +152,22 @@ function headerIcon(icon: ReadonlyPortalGridHeaderIcon | null | undefined) {
             fill: 'none',
             'aria-hidden': true,
         },
-        h('path', {
-            d: iconPaths[icon] ?? iconPaths.other,
-            stroke: 'currentColor',
-            strokeWidth: 1.25,
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
-        })
+        h(
+            'path',
+            isCheckbox
+                ? {
+                      d: iconPaths.checkbox,
+                      fill: 'currentColor',
+                      fillRule: 'evenodd',
+                  }
+                : {
+                      d: iconPaths[icon] ?? iconPaths.other,
+                      stroke: 'currentColor',
+                      strokeWidth: icon === 'number' ? 2 : 1.25,
+                      strokeLinecap: 'round',
+                      strokeLinejoin: 'round',
+                  }
+        )
     );
 }
 
@@ -359,6 +370,7 @@ function GridHeader({
             'div',
             {
                 className: 'mx-sdk-readonly-grid__heading',
+                'data-field-icon': column.icon ?? undefined,
                 onFocusCapture: admitHeaderEvent,
                 onClickCapture: admitHeaderEvent,
                 onAuxClickCapture: admitHeaderEvent,

@@ -152,12 +152,48 @@ it('owns complete table markup, accepted ordering, literal labels and empty head
                         title: 'No row needed',
                         icon: 'number',
                     },
+                    { fieldId: 'checked', title: 'Checked', icon: 'checkbox' },
+                    {
+                        fieldId: 'hidden-icon',
+                        title: 'Hidden icon',
+                        icon: null,
+                    },
+                    { fieldId: 'omitted-icon', title: 'Omitted icon' },
                 ],
             })
         )
     );
     assert.equal(f.container.querySelector('thead b'), null);
-    assert.equal(f.container.querySelectorAll('thead svg').length, 2);
+    assert.equal(f.container.querySelectorAll('thead svg').length, 3);
+    const numberIcon = header(f).querySelector('svg');
+    const checkboxIcon = header(f, 'checked').querySelector('svg');
+    for (const icon of [numberIcon, checkboxIcon]) {
+        assert.equal(icon?.getAttribute('aria-hidden'), 'true');
+        assert.equal(icon?.getAttribute('viewBox'), '0 0 16 16');
+    }
+    const numberPath = numberIcon?.querySelector('path');
+    assert.equal(
+        numberPath?.getAttribute('d'),
+        'M5 2v12M11 2v12M2 5h12M2 11h12'
+    );
+    assert.equal(numberPath?.getAttribute('stroke-width'), '2');
+    const checkboxPath = checkboxIcon?.querySelector('path');
+    assert.equal(checkboxPath?.getAttribute('fill'), 'currentColor');
+    assert.equal(checkboxPath?.getAttribute('fill-rule'), 'evenodd');
+    assert.equal(checkboxPath?.hasAttribute('stroke'), false);
+    assert.equal(
+        header(f, 'primary')
+            .querySelector('path')
+            ?.getAttribute('stroke-width'),
+        '1.25'
+    );
+    for (const fieldId of ['hidden-icon', 'omitted-icon']) {
+        assert.equal(header(f, fieldId).querySelector('svg'), null);
+        assert.equal(
+            header(f, fieldId).querySelector('[data-field-icon]'),
+            null
+        );
+    }
     assert.equal(f.container.querySelector('tbody')?.children.length, 0);
     assert.equal(
         f.container.querySelector('[role="status"]')?.textContent,

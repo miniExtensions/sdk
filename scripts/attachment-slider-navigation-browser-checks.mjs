@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
@@ -10,10 +11,10 @@ ${
     format === 'esm'
         ? `import {createElement as h, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderNavigation} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderNavigation}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail}=require('@miniextensions/sdk/react');`
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
@@ -44,6 +45,15 @@ function Host(){
             rows,selectedIndex,collectionOwner,labels:{navigation:'Pièces jointes',previous:'Précédent',next:'Suivant'},
             onSelect(index){calls.selection.push(index);if(acceptsIntent)setSelectedIndex(index);},
         },selected&&h(AttachmentPreview,{attachment:selected}),h('input',{'aria-label':'Détail'})),
+        collectionOwner&&h(AttachmentSliderThumbnailRail,{
+            rows:rows.map((row,index)=>({
+                key:collectionOwner+':'+index,
+                filename:row.filename,
+                thumbnailUrl:index===0?row.url:null,
+            })),
+            selectedIndex,
+            onSelect(index){calls.selection.push(index);if(acceptsIntent)setSelectedIndex(index);},
+        }),
         h('button',{type:'submit'},'Enregistrer'),
         h('button',{type:'button',onClick(){calls.upload++;}},'Téléverser'),
         h('button',{type:'button',onClick(){calls.delete++;}},'Supprimer'));
@@ -61,6 +71,10 @@ export async function checkAttachmentSliderNavigationBrowser({
 }) {
     evidence.formats = {};
     const staleGestures = [];
+    const require = createRequire(join(consumer, 'package.json'));
+    const styles = readFileSync(
+        require.resolve('@miniextensions/sdk/react/attachment-preview.css')
+    );
     for (const format of ['esm', 'cjs']) {
         const entry = `attachment-slider-navigation-proof.${format === 'esm' ? 'mjs' : 'cjs'}`;
         writeFileSync(join(consumer, entry), hostSource(format));
@@ -74,15 +88,22 @@ export async function checkAttachmentSliderNavigationBrowser({
             metafile: true,
         });
         await assertBrowserInputs(bundle.metafile, consumer);
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/AttachmentSliderThumbnailRail.js')
+            ),
+            'The installed Slider Thumbnail Rail must be bundled'
+        );
         const assets = new Map([
             [
                 '/',
                 [
                     'text/html',
-                    '<!doctype html><html lang="fr"><meta charset="utf-8"><main></main><script type="module" src="/host.js"></script></html>',
+                    '<!doctype html><html lang="fr"><meta charset="utf-8"><link rel="stylesheet" href="/attachment-preview.css"><main></main><script type="module" src="/host.js"></script></html>',
                 ],
             ],
             ['/host.js', ['text/javascript', bundle.outputFiles[0].text]],
+            ['/attachment-preview.css', ['text/css', styles]],
             ['/favicon.ico', ['image/svg+xml', svg]],
             ['/front.svg', ['image/svg+xml', svg]],
             ['/rear.svg', ['image/svg+xml', svg]],
@@ -240,6 +261,49 @@ export async function checkAttachmentSliderNavigationBrowser({
                 remappedPointer: await heldGesture('pointer', false),
                 remappedSpace: await heldGesture('space', false),
             };
+            await page.evaluate(() =>
+                window.sliderProbe.reset('thumbnail-rail')
+            );
+            await committed('thumbnail-rail');
+            const rail = page.locator('.mx-sdk-attachment-thumbnail-rail');
+            const frontTile = rail.getByRole('button', { name: 'Vue avant' });
+            const rearTile = rail.getByRole('button', { name: 'Vue arrière' });
+            await frontTile.waitFor();
+            assert.equal(await frontTile.getAttribute('data-selected'), 'true');
+            assert.equal(
+                await rail.locator('img').getAttribute('src'),
+                '/front.svg'
+            );
+            assert.equal(
+                await rail.locator('svg').getAttribute('aria-hidden'),
+                'true'
+            );
+            const railBounds = await rail.boundingBox();
+            const tileBounds = await frontTile.boundingBox();
+            const rearBounds = await rearTile.boundingBox();
+            assert.ok(railBounds && tileBounds && rearBounds);
+            const railGeometry = {
+                height: railBounds.height,
+                tile: [tileBounds.width, tileBounds.height],
+                gap: rearBounds.x - tileBounds.x - tileBounds.width,
+            };
+            assert.deepEqual(railGeometry, {
+                height: 44,
+                tile: [40, 40],
+                gap: 8,
+            });
+            await rearTile.click();
+            await rail
+                .locator('button[data-selected="true"]')
+                .getByText('Vue arrière')
+                .waitFor({ state: 'attached' });
+            await frontTile.press('Space');
+            await rail
+                .locator('button[data-selected="true"]')
+                .getByText('Vue avant')
+                .waitFor({ state: 'attached' });
+            const railSelection = (await probe()).selection;
+            assert.deepEqual(railSelection, [1, 0]);
             const { selection: _selection, ...otherCalls } = await probe();
             assert.deepEqual(otherCalls, {
                 save: 0,
@@ -253,6 +317,10 @@ export async function checkAttachmentSliderNavigationBrowser({
                 selection: calls.selection,
                 ownerCalls: calls,
                 gestures,
+                thumbnailRail: {
+                    geometry: railGeometry,
+                    selection: railSelection,
+                },
                 unexpectedRequests,
                 pageErrors,
             };

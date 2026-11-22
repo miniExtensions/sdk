@@ -3674,6 +3674,11 @@ export {
     type AttachmentSliderThumbnailRailProps,
     type AttachmentSliderThumbnail,
 } from './AttachmentSliderThumbnailRail.js';
+export {
+    useAttachmentDownload,
+    type AttachmentDownload,
+    type AttachmentDownloadOptions,
+} from './useAttachmentDownload.js';
 
 export {
     PortalSummaryCards,

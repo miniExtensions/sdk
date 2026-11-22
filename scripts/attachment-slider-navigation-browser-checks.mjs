@@ -11,14 +11,15 @@ ${
     format === 'esm'
         ? `import {createElement as h, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, useAttachmentDownload} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, useAttachmentDownload}=require('@miniextensions/sdk/react');`
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
 const calls={selection:[],save:0,upload:0,delete:0,fetch:0};
+const downloads={pending:[],finished:0};
 window.fetch=()=>{calls.fetch++;return Promise.reject(Error('Unexpected I/O'));};
 function Host(){
     const [rows,setRows]=useState([first,second]);
@@ -32,7 +33,7 @@ function Host(){
         setCollectionOwner(owner);
         setPublication(owner);
     }
-    window.sliderProbe={calls,setSelectedIndex,setAcceptsIntent,
+    window.sliderProbe={calls,downloads,setSelectedIndex,setAcceptsIntent,
         replace,
         reset(owner){calls.selection.length=0;replace(owner);},
         remap(marker){setRows((items)=>items.map((item)=>({...item})));setPublication(marker);},
@@ -40,6 +41,12 @@ function Host(){
         shrink(){setRows([first]);},
         retire(){setRows([]);setCollectionOwner(null);setPublication('retired');}};
     const selected=rows[selectedIndex];
+    const download=useAttachmentDownload({
+        url:selected?.url??null,
+        filename:selected?.filename+'.svg',
+        identity:collectionOwner+':'+selectedIndex,
+        read(url){return new Promise((resolve)=>downloads.pending.push({url,resolve}));},
+    });
     return h('form',{'data-publication':publication,onSubmit(event){event.preventDefault();calls.save++;}},
         h(AttachmentSliderNavigation,{
             rows,selectedIndex,collectionOwner,labels:{navigation:'Pièces jointes',previous:'Précédent',next:'Suivant'},
@@ -54,6 +61,9 @@ function Host(){
             selectedIndex,
             onSelect(index){calls.selection.push(index);if(acceptsIntent)setSelectedIndex(index);},
         }),
+        selected&&h('button',{type:'button','data-download':true,disabled:download.progress!=null,
+            onClick(){void download.start().then(()=>downloads.finished++);}},
+            download.progress==null?'Télécharger la pièce jointe':download.progress+'%'),
         h('button',{type:'submit'},'Enregistrer'),
         h('button',{type:'button',onClick(){calls.upload++;}},'Téléverser'),
         h('button',{type:'button',onClick(){calls.delete++;}},'Supprimer'));
@@ -311,6 +321,68 @@ export async function checkAttachmentSliderNavigationBrowser({
                 delete: 0,
                 fetch: 0,
             });
+            const download = page.locator('[data-download]');
+            const saves = [];
+            page.on('download', (file) => saves.push(file));
+            const finish = (index, value) =>
+                page.evaluate(
+                    ({ index, value }) =>
+                        window.sliderProbe.downloads.pending[index].resolve(
+                            new Response(value, {
+                                headers: {
+                                    'Content-Length': String(value.length),
+                                },
+                            })
+                        ),
+                    { index, value }
+                );
+            const settled = (count) =>
+                page.waitForFunction(
+                    (expected) =>
+                        window.sliderProbe.downloads.finished === expected,
+                    count
+                );
+            await download.click();
+            assert.equal(await download.innerText(), '0%');
+            await rearTile.press('Space');
+            await rail
+                .locator('button[data-selected="true"]')
+                .getByText('Vue arrière')
+                .waitFor({ state: 'attached' });
+            assert.equal(await download.isEnabled(), true);
+            await download.click();
+            await finish(0, 'old');
+            await settled(1);
+            assert.equal(await download.innerText(), '0%');
+            assert.equal(saves.length, 0);
+            const [saved] = await Promise.all([
+                page.waitForEvent('download'),
+                finish(1, 'current'),
+            ]);
+            try {
+                assert.equal(saved.suggestedFilename(), 'Vue arrière.svg');
+                assert.equal(
+                    readFileSync(await saved.path(), 'utf8'),
+                    'current'
+                );
+            } finally {
+                await saved.delete();
+            }
+            await settled(2);
+            await download.click();
+            await page.evaluate(() => window.sliderProbe.retire());
+            await committed('retired');
+            await finish(2, 'dismissed');
+            await settled(3);
+            assert.equal(saves.length, 1);
+            const readUrls = await page.evaluate(() =>
+                window.sliderProbe.downloads.pending.map(({ url }) => url)
+            );
+            assert.deepEqual(readUrls, [
+                '/front.svg',
+                '/rear.svg',
+                '/rear.svg',
+            ]);
             assert.deepEqual(unexpectedRequests, []);
             assert.deepEqual(pageErrors, []);
             evidence.formats[format] = {
@@ -320,6 +392,11 @@ export async function checkAttachmentSliderNavigationBrowser({
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
+                },
+                download: {
+                    readUrls,
+                    filename: saved.suggestedFilename(),
+                    saves: saves.length,
                 },
                 unexpectedRequests,
                 pageErrors,

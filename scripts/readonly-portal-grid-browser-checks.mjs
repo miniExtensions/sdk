@@ -42,6 +42,7 @@ import'@miniextensions/sdk/react/portal-grid-empty-cell.css';
 import'@miniextensions/sdk/react/portal-grid-cell.css';
 import'@miniextensions/sdk/react/rating.css';
 import'@miniextensions/sdk/react/complete-checkbox.css';
+import'./checkbox-partial-host-utilities.css';
 import'@miniextensions/sdk/react/text.css';
 import'@miniextensions/sdk/react/complete-phone.css';
 import'@miniextensions/sdk/react/button.css';
@@ -581,6 +582,21 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     } = args;
     const entry = join(temporary, 'readonly-portal-grid.mjs');
     writeFileSync(entry, readonlyPortalGridBrowserEntry);
+    // Reproduce the host build that retains generic utilities after extraction.
+    writeFileSync(
+        join(temporary, 'checkbox-partial-host-utilities.css'),
+        String.raw`
+#checkbox-probe-form {
+    --mx-sdk-field-theme-color: #9333ea;
+}
+:where(#checkbox-probe-form) .transform {
+    transform: translateX(0);
+}
+:where(#checkbox-probe-form) .focus-within\:ring-2:focus-within {
+    box-shadow: 0 0 0 2px rgb(59 130 246 / 0.5);
+}
+`
+    );
     writeFileSync(
         join(temporary, 'readonly-portal-grid-number.mjs'),
         readonlyPortalGridNumberEntry
@@ -3203,6 +3219,34 @@ async function checkCheckboxToggleStyleBrowser(page) {
     const x = before.x + before.width / 2;
     const y = before.y + before.height / 2;
     const toggle = table.locator('[data-style="toggle"] input');
+    const track = table.locator('.mx-sdk-complete-checkbox__toggle');
+    const appearance = () =>
+        track.evaluate(async (node) => {
+            const thumb = node.querySelector(
+                '.mx-sdk-complete-checkbox__toggle-thumb'
+            );
+            const trackBox = node.getBoundingClientRect();
+            await Promise.allSettled(
+                node
+                    .getAnimations({ subtree: true })
+                    .map((animation) => animation.finished)
+            );
+            const thumbBox = thumb.getBoundingClientRect();
+            const css = getComputedStyle(node);
+            return {
+                track: [trackBox.width, trackBox.height],
+                thumb: [thumbBox.width, thumbBox.height],
+                thumbLeft: thumbBox.left - trackBox.left,
+                color: css.backgroundColor,
+                ring: css.boxShadow,
+                outline: {
+                    style: css.outlineStyle,
+                    color: css.outlineColor,
+                    width: css.outlineWidth,
+                    offset: css.outlineOffset,
+                },
+            };
+        });
     const state = () =>
         page.evaluate(() => window.__checkboxCellProbe.snapshot());
 
@@ -3243,6 +3287,16 @@ async function checkCheckboxToggleStyleBrowser(page) {
         ]
     );
     assert.equal(await input.isChecked(), false);
+    const unchecked = await appearance();
+    const { outline: uncheckedOutline, ...uncheckedPaint } = unchecked;
+    assert.equal(uncheckedOutline.style, 'none');
+    assert.deepEqual(uncheckedPaint, {
+        track: [36, 20],
+        thumb: [16, 16],
+        thumbLeft: 2,
+        color: 'rgb(209, 213, 219)',
+        ring: 'none',
+    });
     await input.click();
     assert.equal(await input.isChecked(), true);
     assert.equal(
@@ -3251,8 +3305,28 @@ async function checkCheckboxToggleStyleBrowser(page) {
         ),
         true
     );
+    const checkedFocus = await appearance();
+    assert.deepEqual(checkedFocus, {
+        track: [36, 20],
+        thumb: [16, 16],
+        thumbLeft: 18,
+        color: 'rgb(147, 51, 234)',
+        ring: 'rgb(255, 255, 255) 0px 0px 0px 2px, rgb(79, 70, 229) 0px 0px 0px 4px',
+        outline: {
+            style: 'solid',
+            color: 'rgba(0, 0, 0, 0)',
+            width: '2px',
+            offset: '2px',
+        },
+    });
     await input.press('Space');
     assert.equal(await input.isChecked(), false);
+    const uncheckedFocus = await appearance();
+    assert.deepEqual(uncheckedFocus, {
+        ...checkedFocus,
+        thumbLeft: 2,
+        color: 'rgb(209, 213, 219)',
+    });
     const fresh = await state();
     assert.deepEqual(fresh.writes, [
         { record: 'checkbox-A', value: true },
@@ -3260,7 +3334,14 @@ async function checkCheckboxToggleStyleBrowser(page) {
     ]);
     assert.equal(fresh.opens, 0);
     assert.equal(fresh.submits, 0);
-    return { status: 'passed', released, fresh };
+    return {
+        status: 'passed',
+        released,
+        fresh,
+        unchecked,
+        checkedFocus,
+        uncheckedFocus,
+    };
 }
 
 async function checkCheckboxButtonStyleBrowser(page) {

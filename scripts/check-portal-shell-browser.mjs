@@ -12,11 +12,12 @@ import {
     rmSync,
 } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import ts from 'typescript';
 import { chromium } from 'playwright';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { checkNativeSidebarOpener } from './portal-shell-sidebar-opener-browser-checks.mjs';
 
 const output = resolve(process.argv[2] ?? 'dist/portal-shell-browser');
 mkdirSync(output, { recursive: true });
@@ -1392,10 +1393,10 @@ try {
             for (const file of bundled.outputFiles)
                 assets.set(
                     '/' +
-                        file.path
-                            .split('/')
-                            .at(-1)
-                            .replace(/main\.(cjs|mjs)\./, 'main.'),
+                        basename(file.path).replace(
+                            /main\.(cjs|mjs)\./,
+                            'main.'
+                        ),
                     file.contents
                 );
             const context = await browser.newContext({
@@ -1523,6 +1524,133 @@ try {
                 await page.evaluate(() => {
                     window.resizeBody = document.querySelector('main article');
                 });
+                await separator.focus();
+                const beforeHistoryArrows = await counts();
+                const historyKeys = ['altKey', 'metaKey'].flatMap((modifier) =>
+                    ['ArrowLeft', 'ArrowRight'].map((key) => ({
+                        key,
+                        modifier,
+                    }))
+                );
+                const historyArrows = await separator.evaluate((node, keys) => {
+                    window.resizeHandle = node;
+                    let currentEvent;
+                    let hostReceipts = 0;
+                    function observe(event) {
+                        if (event === currentEvent) hostReceipts++;
+                    }
+                    document.addEventListener('keydown', observe);
+                    try {
+                        return keys.flatMap(({ key, modifier }) => {
+                            const dispatch = (repeat) => {
+                                currentEvent = new KeyboardEvent('keydown', {
+                                    key,
+                                    code: key,
+                                    [modifier]: !repeat,
+                                    repeat,
+                                    bubbles: true,
+                                    cancelable: true,
+                                });
+                                hostReceipts = 0;
+                                const dispatched =
+                                    node.dispatchEvent(currentEvent);
+                                return {
+                                    key,
+                                    modifier,
+                                    repeat,
+                                    dispatched,
+                                    defaultPrevented:
+                                        currentEvent.defaultPrevented,
+                                    hostReceipts,
+                                };
+                            };
+                            try {
+                                return [dispatch(false), dispatch(true)];
+                            } finally {
+                                node.dispatchEvent(
+                                    new KeyboardEvent('keyup', {
+                                        key,
+                                        code: key,
+                                        bubbles: true,
+                                    })
+                                );
+                            }
+                        });
+                    } finally {
+                        document.removeEventListener('keydown', observe);
+                    }
+                }, historyKeys);
+                assert.deepEqual(
+                    {
+                        events: historyArrows,
+                        width: await measuredSidebar(),
+                        commits: await page.evaluate(
+                            () => window.proof.sidebarWidths
+                        ),
+                    },
+                    {
+                        events: historyKeys.flatMap((key) =>
+                            [false, true].map((repeat) => ({
+                                ...key,
+                                repeat,
+                                dispatched: true,
+                                defaultPrevented: false,
+                                hostReceipts: 1,
+                            }))
+                        ),
+                        width: 384,
+                        commits: [],
+                    },
+                    'History arrows and their modifier-free repeats must bubble without resizing'
+                );
+                assert.deepEqual(await counts(), beforeHistoryArrows);
+                let commitCount = 0;
+                for (const [key, freshWidth, repeatWidth] of [
+                    ['ArrowLeft', 374, 364],
+                    ['ArrowRight', 374, 384],
+                ]) {
+                    const readOwner = () =>
+                        page.evaluate(() => {
+                            const { scope, revision } =
+                                window.fixtureCommittedSnapshot;
+                            return { scope, revision };
+                        });
+                    const freshOwner = await readOwner();
+                    await page.keyboard.down(key);
+                    let repeatOwner;
+                    try {
+                        assert.equal(await measuredSidebar(), freshWidth);
+                        repeatOwner = await readOwner();
+                        await page.keyboard.down(key);
+                        assert.equal(await measuredSidebar(), repeatWidth);
+                    } finally {
+                        await page.keyboard.up(key);
+                    }
+                    assert.deepEqual(
+                        await page.evaluate(
+                            (from) => ({
+                                commits: window.proof.sidebarWidths.slice(from),
+                                focused:
+                                    document.activeElement ===
+                                    window.resizeHandle,
+                                sameBody:
+                                    document.querySelector('main article') ===
+                                    window.resizeBody,
+                            }),
+                            commitCount
+                        ),
+                        {
+                            commits: [
+                                { ...freshOwner, width: freshWidth },
+                                { ...repeatOwner, width: repeatWidth },
+                            ],
+                            focused: true,
+                            sameBody: true,
+                        }
+                    );
+                    commitCount += 2;
+                }
+                assert.deepEqual(await counts(), beforeHistoryArrows);
                 const drag = async (target, beforeRelease) => {
                     const bounds = await separator.boundingBox();
                     assert(bounds);
@@ -1542,7 +1670,7 @@ try {
                         await page.evaluate(
                             () => window.proof.sidebarWidths.length
                         ),
-                        0
+                        4
                     );
                 });
                 assert.equal(await measuredSidebar(), 484);
@@ -1559,7 +1687,7 @@ try {
                     await page.evaluate(
                         () => window.proof.sidebarWidths.length
                     ),
-                    6
+                    10
                 );
                 assert.equal(
                     await page.evaluate(
@@ -1583,7 +1711,7 @@ try {
                     await page.evaluate(
                         () => window.proof.sidebarWidths.length
                     ),
-                    6,
+                    10,
                     'New revision retires an allocated drag'
                 );
                 await drag(400, async () => {
@@ -1597,7 +1725,7 @@ try {
                     await page.evaluate(
                         () => window.proof.sidebarWidths.length
                     ),
-                    6
+                    10
                 );
                 await page.setViewportSize({ width: 390, height: 844 });
                 await page.evaluate(() => window.enableSidebarResize(true));
@@ -1927,6 +2055,12 @@ try {
                     configuredPresentation: await configuredPresentation(
                         browser,
                         origin,
+                        `${react}-${format}`
+                    ),
+                    nativeSidebarOpener: await checkNativeSidebarOpener(
+                        browser,
+                        origin,
+                        output,
                         `${react}-${format}`
                     ),
                 });

@@ -145,6 +145,12 @@ export {
     type CompleteVerificationErrorPresentation,
 } from './CompleteVerificationScreen.js';
 export {
+    CompleteExtensionPasswordScreen,
+    type CompleteExtensionPasswordScreenProps,
+    type CompleteExtensionPasswordScreenLabels,
+    type CompleteExtensionPasswordScreenResult,
+} from './CompleteExtensionPasswordScreen.js';
+export {
     LoginExistingValuesPicker,
     type LoginExistingValuesOwner,
     type LoginExistingValuesRequest,

@@ -33,6 +33,27 @@ export type LoginSignupConfirmationDialogProps = Readonly<{
     onCreate(): void;
 }>;
 
+function isPointerClick(event: MouseEvent) {
+    return (
+        event.detail > 0 ||
+        ('pointerType' in event.nativeEvent &&
+            event.nativeEvent.pointerType !== '')
+    );
+}
+
+function hitsBackdrop(event: MouseEvent<HTMLDialogElement>) {
+    if (event.target !== event.currentTarget) return false;
+    // The browser targets the dialog for both its padding and its backdrop.
+    const { left, right, top, bottom } =
+        event.currentTarget.getBoundingClientRect();
+    return (
+        event.clientX < left ||
+        event.clientX >= right ||
+        event.clientY < top ||
+        event.clientY >= bottom
+    );
+}
+
 /** The host opens the dialog, handles its intent, and controls dismissal. */
 export function LoginSignupConfirmationDialog({
     open,
@@ -55,6 +76,10 @@ function SignupConfirmation({
     const dialog = useRef<HTMLDialogElement>(null);
     const back = useRef<HTMLButtonElement>(null);
     const pointerStart = useRef<HTMLButtonElement | null>(null);
+    const backdropPress = useRef<{
+        pointerId: number;
+        releasedOutside: boolean;
+    } | null>(null);
     const spaceStart = useRef<HTMLButtonElement | null>(null);
     const decision = useRef<'inactive' | 'ready' | 'settled'>('inactive');
     const [settled, setSettled] = useState(false);
@@ -87,6 +112,7 @@ function SignupConfirmation({
 
     useCommitEffect(() => {
         pointerStart.current = null;
+        backdropPress.current = null;
         spaceStart.current = null;
         const current = dialog.current;
         const focused = current?.ownerDocument.activeElement;
@@ -122,13 +148,9 @@ function SignupConfirmation({
             onClick(event: MouseEvent<HTMLButtonElement>) {
                 // Pointer clicks must start in this lifetime. Non-pointer
                 // activations also include assistive technology and Enter.
-                const pointerClick =
-                    event.detail > 0 ||
-                    ('pointerType' in event.nativeEvent &&
-                        event.nativeEvent.pointerType !== '');
                 const beganHere = pointerStart.current === event.currentTarget;
                 pointerStart.current = null;
-                if (!pointerClick || beganHere) choose(action);
+                if (!isPointerClick(event) || beganHere) choose(action);
             },
             onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
                 if (event.key === ' ') {
@@ -159,6 +181,41 @@ function SignupConfirmation({
             'aria-labelledby': titleId,
             'aria-modal': true,
             'aria-describedby': bodyId,
+            onPointerDown(event: PointerEvent<HTMLDialogElement>) {
+                backdropPress.current =
+                    !disabled &&
+                    event.isTrusted &&
+                    event.isPrimary &&
+                    event.button === 0 &&
+                    hitsBackdrop(event)
+                        ? { pointerId: event.pointerId, releasedOutside: false }
+                        : null;
+            },
+            onPointerUp(event: PointerEvent<HTMLDialogElement>) {
+                const press = backdropPress.current;
+                if (!press || press.pointerId !== event.pointerId) return;
+                if (event.isTrusted && hitsBackdrop(event))
+                    press.releasedOutside = true;
+                else backdropPress.current = null;
+            },
+            onPointerCancel() {
+                backdropPress.current = null;
+            },
+            onClick(event: MouseEvent<HTMLDialogElement>) {
+                const press = backdropPress.current;
+                backdropPress.current = null;
+                // Press and release establish the bounds because click can round its coordinates.
+                // Waiting for click keeps controls behind the dialog inert through pointerup.
+                if (
+                    press?.releasedOutside &&
+                    event.isTrusted &&
+                    isPointerClick(event) &&
+                    event.target === event.currentTarget &&
+                    (!('pointerId' in event.nativeEvent) ||
+                        event.nativeEvent.pointerId === press.pointerId)
+                )
+                    choose(onCancel);
+            },
             onKeyDown(event: KeyboardEvent<HTMLDialogElement>) {
                 if (event.key === 'Escape' && event.repeat)
                     event.preventDefault();

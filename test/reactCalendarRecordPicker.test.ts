@@ -300,6 +300,81 @@ it('real listbox R30 retains off-day membership, invokes one native toggle and w
     assert.deepEqual(f.native.state.events[2], ['toggle', 'second']);
 });
 
+it('moves listbox focus with ArrowDown and toggles only the focused record with Space', async (t) => {
+    const f = await fixture(t);
+    const presentationByRecordId = {
+        ...f.native.frame().presentationByRecordId,
+        'hidden-selected': {
+            type: 'calendar' as const,
+            primary: 'Off-day event',
+            subtitle: '',
+        },
+    };
+    const frame = f.native.frame({
+        presentationByRecordId,
+        records: [
+            records[0],
+            { ...records[1], fields: records[0].fields },
+            { ...records[1], id: 'hidden-selected' },
+        ],
+    });
+    await f.update({ frame });
+
+    const list = f.container.querySelector('[role="listbox"]');
+    assert.ok(list);
+    const [first, second] = list.querySelectorAll('li');
+    assert.ok(first && second);
+    assert.match(first.textContent ?? '', /First event/);
+    assert.match(second.textContent ?? '', /Second event/);
+    const document = first.ownerDocument;
+    const window = document.defaultView;
+    assert.ok(window);
+    const press = async (key: string, code = key) => {
+        await act(async () => {
+            for (const type of ['keydown', 'keyup']) {
+                document.activeElement?.dispatchEvent(
+                    new window.KeyboardEvent(type, {
+                        key,
+                        code,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+            }
+        });
+    };
+
+    await act(async () => first.focus());
+    assert.equal(document.activeElement, first);
+    await press('ArrowDown');
+    assert.equal(document.activeElement, second);
+    assert.deepEqual(f.native.state.events, []);
+
+    await press(' ', 'Space');
+    const expectedEvents = [['toggle', 'second']];
+    assert.deepEqual(f.native.state.events, expectedEvents);
+    assert.equal(second.getAttribute('aria-selected'), 'false');
+    await f.update({
+        frame: f.native.frame({
+            records: frame.records,
+            presentationByRecordId,
+            selectedRecordIds: ['hidden-selected', 'second'],
+        }),
+    });
+    assert.equal(second.getAttribute('aria-selected'), 'true');
+    assert.equal(document.activeElement, second);
+    assert.deepEqual(f.native.state.events, expectedEvents);
+
+    const offDay = f.container.querySelector(
+        '[data-date="2026-02-13"] .mx-sdk-calendar__day'
+    );
+    assert.ok(offDay);
+    await f.click(offDay);
+    assert.match(f.option().textContent ?? '', /Off-day event/);
+    assert.equal(f.option().getAttribute('aria-selected'), 'true');
+    assert.deepEqual(f.native.state.events, expectedEvents);
+});
+
 it('Calendar error precedes loading, metadata repair is immediate, and missing displays use no hidden fallback', async (t) => {
     const f = await fixture(t);
     assert.ok(f.container.querySelector('.mx-sdk-calendar__badge'));

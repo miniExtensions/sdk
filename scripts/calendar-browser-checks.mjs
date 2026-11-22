@@ -55,6 +55,7 @@ const clock={utcDay:()=> '2026-02-15',localDay:()=> '2026-02-15',localMonth:()=>
 const date=id=>({id,name:id,description:null,isComputed:false,isPrimaryField:false,config:{type:'date',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}}});
 const admitted=()=>({type:'admitted'}),refused=reason=>({type:'refused',reason});
 const canonical=['off-day'],attempts=[],writes=[],pickerReads=[],portalReads=[],opens=[],removals=[];
+const holdPickerEcho=new URLSearchParams(window.location.search).has('hold-picker-echo');
 const visiblePublications=[];
 let activeVisiblePublication=null;
 let pickerOwner={},pickerLive=true,pickerControlLive=true,capped=false,refuseReads=false;
@@ -63,7 +64,7 @@ let setPickerFrame=null,setPortalFrame=null,observed=null;
 const pickerControl={owner:{},isCurrent:()=>pickerControlLive,scheduleRead(request){pickerReads.push(request);return refuseReads?refused('native-read-refusal'):admitted();}};
 const pickerRecords=[{id:'one',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'two',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'off-day',fields:{start:'2026-02-21',end:'2026-02-21'}}];
 const presentations={one:{type:'list',primary:'Rich appointment',showPreviewFieldTitle:true,details:[{key:'notes',title:'Notes',leaf:{kind:'text',display:{value:'Rich https://example.test/calendar',language:'en',layout:'linked-list'}}},{key:'tag',title:'Tag',leaf:{kind:'pills',items:[{label:'Accepted tag'}]}}]},two:{type:'calendar',primary:'Second appointment',subtitle:'Native compact detail'},'off-day':{type:'calendar',primary:'Off-day selection',subtitle:''}};
-function makePicker(patch={}){const expected=pickerOwner;return Object.freeze({control:pickerControl,presentationOwner:{owner:expected,isCurrent:()=>pickerLive&&pickerOwner===expected},records:pickerRecords,startField:date('start'),endField:date('end'),selectedRecordIds:[...canonical],presentationByRecordId:presentations,selectionEnabled:true,errorMessage:null,isLoading:false,isLoadingMore:false,canLoadMore:true,toggleRecord(id){attempts.push(id);if(!pickerControlLive||!pickerLive||pickerOwner!==expected)return refused('stale-host');if(capped&&!canonical.includes(id))return refused('native-cap');const index=canonical.indexOf(id);if(index>=0)canonical.splice(index,1);else canonical.push(id);writes.push(id);publishPicker();return admitted();},...patch});}
+function makePicker(patch={}){const expected=pickerOwner;return Object.freeze({control:pickerControl,presentationOwner:{owner:expected,isCurrent:()=>pickerLive&&pickerOwner===expected},records:pickerRecords,startField:date('start'),endField:date('end'),selectedRecordIds:[...canonical],presentationByRecordId:presentations,selectionEnabled:true,errorMessage:null,isLoading:false,isLoadingMore:false,canLoadMore:true,toggleRecord(id){attempts.push(id);if(!pickerControlLive||!pickerLive||pickerOwner!==expected)return refused('stale-host');if(capped&&!canonical.includes(id))return refused('native-cap');const index=canonical.indexOf(id);if(index>=0)canonical.splice(index,1);else canonical.push(id);writes.push(id);if(!holdPickerEcho)publishPicker();return admitted();},...patch});}
 function publishPicker(patch={}){pickerOwner={};setPickerFrame?.(makePicker(patch));}
 const portalControl={owner:{},isCurrent:()=>portalControlLive,retainMonth(month){if(!portalControlLive)return refused('stale-control');portalReads.push(['retain',month]);retainedMonth=month;publishPortal();return admitted();},readFirstPage(request){if(!portalControlLive)return refused('stale-control');portalReads.push(['read',request]);return admitted();}};
 function makePortal(){const expected=portalOwner;const current=()=>portalControlLive&&portalLive&&portalOwner===expected;return Object.freeze({control:portalControl,presentationOwner:{token:expected,isCurrent:()=>portalLive&&portalOwner===expected},retainedMonth,records:[{id:'one',fields:{date:'2026-02-15'},display:{status:'present',primary:'Literal <appointment>',subtitle:'Native compact subtitle'}}],dateField:date('date'),fallbackClientUtcOffset:0,shouldShowToTheSide:true,recordActions:[{recordId:'one',...(portalCanOpen?{open(request){if(!current())return refused('stale-host');opens.push(request);return admitted();}}:{}),remove(){if(!current())return refused('stale-host');removals.push('one');return admitted();}}],status:'ready'});}
@@ -103,7 +104,7 @@ function App(){
   mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.completeCalendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],portalReads:[...portalReads],opens:[...opens],removals:[...removals],visibleRecordIds:activeVisiblePublication?.isCurrent()?[...activeVisiblePublication.recordIds]:null,visiblePublications:visiblePublications.length,retiredVisiblePublications:visiblePublications.filter(value=>!value.isCurrent()).length})};
+window.completeCalendarProof={publishPickerEcho:()=>publishPicker(),snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],portalReads:[...portalReads],opens:[...opens],removals:[...removals],visibleRecordIds:activeVisiblePublication?.isCurrent()?[...activeVisiblePublication.recordIds]:null,visiblePublications:visiblePublications.length,retiredVisiblePublications:visiblePublications.filter(value=>!value.isCurrent()).length})};
 `;
 
 const fixtureStyle = `
@@ -820,6 +821,72 @@ export async function checkCalendarBrowser({
             unmounted.retiredVisiblePublications,
             unmounted.visiblePublications
         );
+
+        await page.setViewportSize({ width: 375, height: 844 });
+        await page.goto(origin + '/complete?hold-picker-echo');
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const secondAppointment = page.getByRole('option', {
+            name: /Second appointment/,
+        });
+        const secondHasFocus = () =>
+            secondAppointment.evaluate((row) => row === document.activeElement);
+        await option(0).focus();
+        await page.keyboard.press('ArrowDown');
+        assert.equal(await secondHasFocus(), true);
+        const afterArrow = await completeSnapshot();
+        assert.deepEqual(afterArrow.attempts, []);
+        assert.deepEqual(afterArrow.writes, []);
+        assert.deepEqual(afterArrow.pickerReads, []);
+
+        await page.keyboard.press('Space');
+        const beforeEcho = await completeSnapshot();
+        assert.deepEqual(beforeEcho.attempts, ['two']);
+        assert.deepEqual(beforeEcho.writes, ['two']);
+        const selectedBeforeEcho =
+            await secondAppointment.getAttribute('aria-selected');
+        assert.equal(selectedBeforeEcho, 'false');
+
+        await page.evaluate(() =>
+            window.completeCalendarProof.publishPickerEcho()
+        );
+        await page
+            .getByRole('option', { name: /Second appointment/, selected: true })
+            .waitFor();
+        const focusedAfterEcho = await secondHasFocus();
+        assert.equal(focusedAfterEcho, true);
+        const selectedAfterEcho =
+            await secondAppointment.getAttribute('aria-selected');
+        assert.equal(selectedAfterEcho, 'true');
+        assert.equal(await option(0).getAttribute('aria-selected'), 'false');
+        await saveScreenshot('complete-picker-keyboard-selection');
+
+        await day('2026-02-21').click();
+        const offDayAppointment = page.getByRole('option', {
+            name: /Off-day selection/,
+        });
+        const offDaySelected =
+            await offDayAppointment.getAttribute('aria-selected');
+        assert.equal(offDaySelected, 'true');
+        const afterOffDay = await completeSnapshot();
+        assert.deepEqual(afterOffDay.canonical, ['off-day', 'two']);
+        assert.deepEqual(afterOffDay.attempts, ['two']);
+        assert.deepEqual(afterOffDay.writes, ['two']);
+        assert.deepEqual(afterOffDay.pickerReads, []);
+        evidence.results.push({
+            name: 'complete-picker-keyboard-selection-echo',
+            focusAfterArrow: 'Second appointment',
+            attemptsAfterArrow: afterArrow.attempts,
+            toggleAttempts: afterOffDay.attempts,
+            writes: afterOffDay.writes,
+            selectedBeforeEcho,
+            selectedAfterEcho,
+            focusedAfterEcho,
+            offDaySelected,
+            canonical: afterOffDay.canonical,
+            reads: afterOffDay.pickerReads,
+        });
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.status = 'passed';

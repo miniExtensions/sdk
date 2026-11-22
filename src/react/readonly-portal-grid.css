@@ -129,6 +129,11 @@
     min-width: max-content;
 }
 
+.mx-sdk-readonly-grid__heading[data-field-icon='checkbox'],
+.mx-sdk-readonly-grid__heading[data-field-icon='number'] {
+    column-gap: 0.5rem;
+}
+
 .mx-sdk-readonly-grid__heading > .mx-sdk-field-row-break,
 .mx-sdk-readonly-grid__field-heading .mx-sdk-field-control {
     display: none;

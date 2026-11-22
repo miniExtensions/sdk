@@ -192,10 +192,52 @@ export async function checkFormHeaderBrowser({
             });
             await title.click();
         } else {
-            await title.focus();
-            assert(
-                await title.evaluate((node) => node === document.activeElement)
-            );
+            await page.mouse.move(0, 0);
+            await preview.focus();
+            for (let tab = 0; tab < 16; tab++) {
+                await page.keyboard.press('Tab');
+                if (
+                    await title.evaluate(
+                        (node) => node === document.activeElement
+                    )
+                )
+                    break;
+            }
+            const focus = await title.evaluate((node) => {
+                const style = getComputedStyle(node);
+                return {
+                    focused:
+                        node === document.activeElement &&
+                        node.matches(':focus-visible'),
+                    radius: style.borderRadius,
+                    outline: [
+                        style.outlineStyle,
+                        style.outlineWidth,
+                        style.outlineColor,
+                        style.outlineOffset,
+                    ],
+                };
+            });
+            assert.deepEqual(focus, {
+                focused: true,
+                radius: '0px',
+                outline: ['solid', '2px', 'rgb(36, 124, 103)', '3px'],
+            });
+            if (activation === 'Enter') {
+                evidence.keyboardFocus = focus;
+                const box = await title.boundingBox();
+                assert(box);
+                const outlineMargin = 6;
+                await page.screenshot({
+                    path: join(output, 'form-title-keyboard-focus.png'),
+                    clip: {
+                        x: box.x - outlineMargin,
+                        y: box.y - outlineMargin,
+                        width: box.width + 2 * outlineMargin,
+                        height: box.height + 2 * outlineMargin,
+                    },
+                });
+            }
             await page.keyboard.press(activation);
         }
         await page.waitForFunction(
@@ -221,6 +263,12 @@ export async function checkFormHeaderBrowser({
         exact: true,
     });
     await sourceTitle.waitFor();
+    assert.equal(
+        await sourceTitle.evaluate(
+            (node) => getComputedStyle(node).borderRadius
+        ),
+        '6px'
+    );
     await page.mouse.move(0, 0);
     evidence.sourceRest = await paint(sourceTitle);
     assert.deepEqual(evidence.sourceRest, {

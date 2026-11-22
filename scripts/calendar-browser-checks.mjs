@@ -76,9 +76,12 @@ if(nestedPickerActions){
   {key:'link',title:'Link',leaf:{kind:'button',accepted:{mode:'controlled',value:{label:'Nested Calendar link',url:target},config:{openLinkType:'_blank'},owner}}},
   {key:'disabled',title:'Disabled',leaf:webhook('Disabled Calendar action',true)},
  ];
- if(scenario.has('picker-model-action')){
+ if(scenario.has('picker-model-action')||scenario.has('picker-url-action')){
   const link=(label)=>({label,url:new URL(target,window.location.origin).href});
-  presentations.one.details=[{key:'model',title:'Model link',leaf:{kind:'button',accepted:{mode:'model',phase:'idle',field:{id:'model',name:'Model Calendar link'},value:link('Model Calendar link'),config:{openLinkType:'_blank'},feedback:null,busy:false,canLink:true,prepareLink:()=>({href:link('Model Calendar link').url,target:'_blank',rel:'noreferrer'})}}}];
+  const trailingLink=scenario.has('picker-url-action')
+   ? {kind:'urlButton',display:{href:link('URL Calendar link').url,buttonLabel:'URL Calendar link',owner}}
+   : {kind:'button',accepted:{mode:'model',phase:'idle',field:{id:'model',name:'Model Calendar link'},value:link('Model Calendar link'),config:{openLinkType:'_blank'},feedback:null,busy:false,canLink:true,prepareLink:()=>({href:link('Model Calendar link').url,target:'_blank',rel:'noreferrer'})}};
+  presentations.one.details=[{key:'trailing',title:'Link',leaf:trailingLink}];
   presentations.two={type:'list',primary:'Second appointment',showPreviewFieldTitle:true,details:[{key:'later',title:'Later link',leaf:{kind:'button',accepted:{mode:'controlled',value:link('Later row link'),config:{openLinkType:'_blank'},owner}}}]};
  }
 }
@@ -1041,6 +1044,50 @@ export async function checkCalendarBrowser({
             attempts: model.attempts,
             writes: model.writes,
             reads: model.pickerReads,
+        });
+
+        await page.goto(
+            origin + '/complete?nested-picker-actions&picker-url-action'
+        );
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const urlLink = page.getByRole('link', { name: 'URL Calendar link' });
+        assert.match(
+            await urlLink.getAttribute('class'),
+            /\bmx-sdk-created-time-url-button\b/
+        );
+        assert.equal(
+            await urlLink.getAttribute('href'),
+            origin + '/calendar-picker-link-target'
+        );
+        assert.equal(await laterLink.count(), 1);
+        await beforePicker.focus();
+        await tabTo('Tab', option(0), 'Enter the row with a URL Button');
+        await tabTo('Tab', urlLink, 'Reach the genuine URL Button');
+        await tabTo('Tab', afterPicker, 'A URL Button exits the list');
+        await tabTo(
+            'Shift+Tab',
+            laterLink,
+            'Reverse entry reaches the trailing row action'
+        );
+        await tabTo(
+            'Shift+Tab',
+            option(1),
+            'Reverse traversal returns to the trailing action row'
+        );
+        const url = await completeSnapshot();
+        assert.deepEqual(url.attempts, []);
+        assert.deepEqual(url.writes, []);
+        assert.deepEqual(url.pickerReads, []);
+        assert.deepEqual(url.canonical, ['off-day']);
+        evidence.results.push({
+            name: 'complete-picker-url-button-exit',
+            forward: ['row', 'URL Button', 'after'],
+            reverse: ['later link', 'later row'],
+            attempts: url.attempts,
+            writes: url.writes,
+            reads: url.pickerReads,
         });
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);

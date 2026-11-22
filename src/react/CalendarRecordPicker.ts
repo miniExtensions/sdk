@@ -408,9 +408,9 @@ function focusPickerActionOnTab(
         ? (actions[index - 1] ?? row)
         : actions[index + 1];
     if (!next) {
-        // Model Buttons stop bubbling key events. Give the listbox its
-        // normal forward exit before the Button handles this Tab.
-        if (target.closest('[data-calendar-picker-action="model"]'))
+        // Model Buttons and URL resources stop bubbling key events. Give the
+        // listbox its normal forward exit before the action handles this Tab.
+        if (target.closest('[data-calendar-picker-action="contains-tab"]'))
             onListKeyDown?.(event);
         return;
     }
@@ -568,9 +568,9 @@ function presentDetails(
                         ? {
                               ...pickerActionBoundary,
                               'data-calendar-picker-action':
-                                  detail.leaf.kind === 'button' &&
+                                  detail.leaf.kind === 'urlButton' ||
                                   detail.leaf.accepted.mode !== 'controlled'
-                                      ? 'model'
+                                      ? 'contains-tab'
                                       : '',
                           }
                         : null,

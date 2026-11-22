@@ -489,29 +489,37 @@ it('retains stored marks when the native cursor already matches the model', asyn
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();
     const writes: string[] = [];
-    await f.render(
-        h(ControlledCompleteEditor, {
-            editorRef: ref,
-            writes,
-            initial: 'Original',
-        })
-    );
-    const { view } = await f.editor(ref);
-    await f.select(view, 4);
-    const strong = view.state.schema.marks.strong;
-    assert(strong);
-    await act(async () =>
-        view.dispatch(view.state.tr.addStoredMark(strong.create()))
-    );
-    const state = view.state;
-    await act(async () => {
-        view.dom.dispatchEvent(
-            richTextShortcut(f.window, 'F8', 119) as unknown as Event
+    // Own mount-time Prism metadata before taking a state-identity baseline.
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => t.mock.timers.reset());
+    try {
+        await f.render(
+            h(ControlledCompleteEditor, {
+                editorRef: ref,
+                writes,
+                initial: 'Original',
+            })
         );
-    });
-    assert.equal(view.state, state);
-    assert.equal(view.state.storedMarks, state.storedMarks);
-    assert.deepEqual(writes, []);
+        const { view } = await f.editor(ref);
+        await f.select(view, 4);
+        await act(async () => t.mock.timers.tick(20));
+        const strong = view.state.schema.marks.strong;
+        assert(strong);
+        await act(async () =>
+            view.dispatch(view.state.tr.addStoredMark(strong.create()))
+        );
+        const state = view.state;
+        await act(async () => {
+            view.dom.dispatchEvent(
+                richTextShortcut(f.window, 'F8', 119) as unknown as Event
+            );
+        });
+        assert.equal(view.state, state);
+        assert.equal(view.state.storedMarks, state.storedMarks);
+        assert.deepEqual(writes, []);
+    } finally {
+        t.mock.timers.reset();
+    }
 });
 
 for (const collapsed of [false, true]) {
@@ -2503,6 +2511,10 @@ it('retains reverse navigation ranges and equal-caret stored marks', async (t) =
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();
     const writes: string[] = [];
+    // Capture the real editor's mount timers before its Prism plugin schedules
+    // metadata initialization; drain them before asserting state identity.
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => t.mock.timers.reset());
     await f.render(
         h(CompleteRichTextEditor, {
             ref,
@@ -2511,7 +2523,6 @@ it('retains reverse navigation ranges and equal-caret stored marks', async (t) =
         })
     );
     const { view } = await f.editor(ref);
-    t.mock.timers.enable({ apis: ['setTimeout'] });
     let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
     try {
         await f.select(view, 1);
@@ -2617,6 +2628,10 @@ async function focusWitnessProposalFixture(
     initial = 'Alpha Beta'
 ) {
     const f = await completeRichTextFixture(t);
+    // Timers enabled after mounting cannot control already-scheduled native
+    // Prism metadata updates, which would invalidate a later state baseline.
+    // Own mount-time Prism/focus timers; cleanup is registered before mounting.
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const ref = createRef<NativeRichTextEditorHandle>();
     const writes: string[] = [];
     const onValueChange = (value: string) => writes.push(value);
@@ -2639,8 +2654,6 @@ async function focusWitnessProposalFixture(
                 })
             )
         );
-    // Own mount-time Prism/focus timers before capturing editor-state identity.
-    t.mock.timers.enable({ apis: ['setTimeout'] });
     let pending: ReturnType<typeof deferNativeSelectionChanges> | undefined;
     let cleaned = false;
     const cleanup = () => {

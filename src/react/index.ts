@@ -3669,6 +3669,11 @@ export {
     AttachmentSliderNavigation,
     type AttachmentSliderNavigationProps,
 } from './AttachmentSliderNavigation.js';
+export {
+    AttachmentSliderThumbnailRail,
+    type AttachmentSliderThumbnailRailProps,
+    type AttachmentSliderThumbnail,
+} from './AttachmentSliderThumbnailRail.js';
 
 export {
     PortalSummaryCards,

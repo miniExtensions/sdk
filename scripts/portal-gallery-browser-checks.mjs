@@ -351,6 +351,38 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
             .evaluate((n) => getComputedStyle(n).fontSize),
         '16px'
     );
+    const cardFrame = await first
+        .locator('.mx-sdk-portal-gallery-card-content')
+        .evaluate((card) => {
+            const readFrame = () => {
+                const style = getComputedStyle(card);
+                return {
+                    borderColor: style.borderTopColor,
+                    borderWidth: style.borderTopWidth,
+                    radius: style.borderTopLeftRadius,
+                    shadow: style.boxShadow,
+                };
+            };
+            const standalone = readFrame();
+            const gallery = card.closest('.mx-sdk-portal-gallery');
+            gallery.style.setProperty(
+                '--mx-sdk-portal-gallery-card-border',
+                'rgb(80, 100, 120)'
+            );
+            const hosted = readFrame();
+            gallery.style.removeProperty('--mx-sdk-portal-gallery-card-border');
+            return { standalone, hosted };
+        });
+    assert.deepEqual(cardFrame.standalone, {
+        borderColor: 'rgb(226, 232, 240)',
+        borderWidth: '3px',
+        radius: '6px',
+        shadow: 'rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.1) 0px 1px 2px -1px',
+    });
+    assert.deepEqual(cardFrame.hosted, {
+        ...cardFrame.standalone,
+        borderColor: 'rgb(80, 100, 120)',
+    });
     await patch({ titles: false, fields: 2 });
     assert.equal(await page.getByRole('term').count(), 0);
     assert.equal(

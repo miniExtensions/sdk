@@ -3289,6 +3289,7 @@ try {
             await checkPortalGalleryBrowser({
                 page,
                 evidence: report.portalGallery,
+                output,
             });
             await checkPortalGalleryPagingAppearance({
                 browser,

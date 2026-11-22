@@ -1,13 +1,23 @@
 import {
     createElement as h,
+    Fragment,
+    lazy,
+    Suspense,
+    useEffect,
+    useId,
     useMemo,
+    useRef,
+    useState,
     type CSSProperties,
+    type KeyboardEvent,
     type ReactElement,
 } from 'react';
 import {
     LinkedFinderCard,
     type LinkedFinderCardProjection,
 } from './LinkedFinderCard.js';
+
+const FieldTooltipPopup = lazy(() => import('./fieldTooltipPopup.js'));
 
 export type PortalGalleryColumns = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -89,6 +99,133 @@ export type PortalGalleryProps = Readonly<{
     className?: string;
 }>;
 
+function GalleryUnlinkButton({
+    action,
+    pending,
+    disabled,
+}: {
+    action: NonNullable<PortalGalleryRow['requestUnlink']>;
+    pending: boolean;
+    disabled: boolean;
+}): ReactElement {
+    const id = useId();
+    const button = useRef<HTMLButtonElement>(null);
+    const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+        undefined
+    );
+    const [open, setOpen] = useState(false);
+    const [ready, setReady] = useState(false);
+    const showTooltip = open && !disabled && action.description !== '';
+    useEffect(() => () => clearTimeout(closeTimer.current), []);
+    useEffect(() => {
+        if (disabled) setOpen(false);
+    }, [disabled]);
+
+    function show() {
+        clearTimeout(closeTimer.current);
+        setOpen(!disabled && action.description !== '');
+    }
+    function hide() {
+        clearTimeout(closeTimer.current);
+        setOpen(false);
+    }
+    function leave() {
+        clearTimeout(closeTimer.current);
+        if (button.current?.ownerDocument.activeElement !== button.current) {
+            // Keep the description reachable across the gap to its portal.
+            closeTimer.current = setTimeout(hide, 150);
+        }
+    }
+
+    return h(
+        Fragment,
+        null,
+        h(
+            'button',
+            {
+                ref: button,
+                type: 'button',
+                className: 'mx-sdk-portal-gallery-unlink',
+                'aria-label': action.label,
+                'aria-describedby': showTooltip && ready ? id : undefined,
+                'data-testid': action.testId,
+                'aria-busy': pending,
+                disabled,
+                onMouseEnter: show,
+                onMouseLeave: leave,
+                onFocus: show,
+                onBlur: hide,
+                onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+                    if (event.key !== 'Escape' || !showTooltip) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    hide();
+                },
+                onClick: () => {
+                    hide();
+                    action.activate();
+                },
+            },
+            pending
+                ? h(
+                      'svg',
+                      {
+                          className: 'mx-sdk-portal-gallery-unlink-spinner',
+                          viewBox: '0 0 24 24',
+                          fill: 'none',
+                          'aria-hidden': true,
+                      },
+                      h('circle', {
+                          cx: 12,
+                          cy: 12,
+                          r: 10,
+                          stroke: 'currentColor',
+                          strokeWidth: 4,
+                          opacity: 0.25,
+                      }),
+                      h('path', {
+                          fill: 'currentColor',
+                          opacity: 0.75,
+                          d: 'M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z',
+                      })
+                  )
+                : h(
+                      'svg',
+                      {
+                          viewBox: '0 0 24 24',
+                          fill: 'currentColor',
+                          'aria-hidden': true,
+                      },
+                      h('path', {
+                          fillRule: 'evenodd',
+                          clipRule: 'evenodd',
+                          d: 'M4.25 12a.75.75 0 0 1 .75-.75h14a.75.75 0 0 1 0 1.5H5a.75.75 0 0 1-.75-.75Z',
+                      })
+                  )
+        ),
+        showTooltip
+            ? h(
+                  Suspense,
+                  { fallback: null },
+                  h(
+                      FieldTooltipPopup,
+                      {
+                          id,
+                          anchorRef: button,
+                          onReadyChange: setReady,
+                          onOpenChange: setOpen,
+                          onMouseEnter: show,
+                          onMouseLeave: leave,
+                          keepOpenOnAnchorInteraction: true,
+                          className: 'mx-sdk-portal-gallery-unlink-tooltip',
+                      },
+                      action.description
+                  )
+              )
+            : null
+    );
+}
+
 function GalleryRow({
     row,
     unlinkingRecordId,
@@ -98,7 +235,6 @@ function GalleryRow({
 }): ReactElement {
     const register = row.open?.registerTrigger;
     const activateOpen = row.open?.activate;
-    const requestUnlink = row.requestUnlink?.activate;
     const openRef = useMemo(() => {
         let generation = 0;
         let cleanup: (() => void) | undefined;
@@ -149,31 +285,11 @@ function GalleryRow({
               })
             : null,
         row.requestUnlink
-            ? h(
-                  'button',
-                  {
-                      type: 'button',
-                      className: 'mx-sdk-portal-gallery-unlink',
-                      title: row.requestUnlink.description,
-                      'aria-label': row.requestUnlink.label,
-                      'data-testid': row.requestUnlink.testId,
-                      'aria-busy': pending,
-                      disabled: unlinkingRecordId !== null,
-                      onClick: () => {
-                          requestUnlink?.();
-                      },
-                  },
-                  h(
-                      'span',
-                      {
-                          className: pending
-                              ? 'mx-sdk-portal-gallery-spinner'
-                              : undefined,
-                          'aria-hidden': true,
-                      },
-                      pending ? undefined : '−'
-                  )
-              )
+            ? h(GalleryUnlinkButton, {
+                  action: row.requestUnlink,
+                  pending,
+                  disabled: unlinkingRecordId !== null,
+              })
             : null
     );
 }

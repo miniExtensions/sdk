@@ -1,0 +1,188 @@
+import { createHash } from 'node:crypto';
+import ts from 'typescript';
+import prettier from 'prettier';
+
+export const postgresPresentationRuntimeModule =
+    'postgresTextPresentation.generated';
+export const postgresPresentationRuntimeSource =
+    'types/generated/postgres/text-presentation.ts';
+export const postgresPresentationRuntimeExports = [
+    'postgresTextColumnPresentationDefinition',
+    'resolvePostgresTextColumnPresentation',
+    'PostgresTextColumnPresentationError',
+];
+const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const exported = (node) =>
+    (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0;
+
+const assertLiteral = (node) => {
+    if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))
+        return assertLiteral(node.expression);
+    if (ts.isObjectLiteralExpression(node)) {
+        for (const property of node.properties) {
+            if (
+                !ts.isPropertyAssignment(property) ||
+                (!ts.isIdentifier(property.name) &&
+                    !ts.isStringLiteral(property.name))
+            )
+                throw new Error(
+                    'Presentation metadata must be callback-free JSON.'
+                );
+            assertLiteral(property.initializer);
+        }
+        return;
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+        for (const element of node.elements) assertLiteral(element);
+        return;
+    }
+    if (
+        ts.isStringLiteral(node) ||
+        ts.isNumericLiteral(node) ||
+        node.kind === ts.SyntaxKind.TrueKeyword ||
+        node.kind === ts.SyntaxKind.FalseKeyword ||
+        node.kind === ts.SyntaxKind.NullKeyword
+    )
+        return;
+    throw new Error('Presentation metadata must be callback-free JSON.');
+};
+
+/** Relocate the canonical generated policy, never author a second evaluator. */
+export async function rewritePostgresPresentationRuntime(
+    source,
+    formatOptions
+) {
+    const file = ts.createSourceFile(
+        postgresPresentationRuntimeSource,
+        source,
+        ts.ScriptTarget.ES2022,
+        true,
+        ts.ScriptKind.TS
+    );
+    if (
+        file.parseDiagnostics.length ||
+        file.referencedFiles.length ||
+        file.typeReferenceDirectives.length ||
+        file.libReferenceDirectives.length
+    )
+        throw new Error(
+            'Canonical PostgreSQL presentation runtime has invalid syntax or references.'
+        );
+    const values = [];
+    const types = [];
+    for (const statement of file.statements) {
+        if (!exported(statement))
+            throw new Error(
+                'Unexpected canonical PostgreSQL presentation statement.'
+            );
+        if (ts.isVariableStatement(statement)) {
+            for (const declaration of statement.declarationList.declarations) {
+                if (
+                    !ts.isIdentifier(declaration.name) ||
+                    !declaration.initializer
+                )
+                    throw new Error(
+                        'Unexpected canonical PostgreSQL presentation export.'
+                    );
+                values.push(declaration.name.text);
+                if (
+                    declaration.name.text ===
+                    postgresPresentationRuntimeExports[0]
+                )
+                    assertLiteral(declaration.initializer);
+            }
+        } else if (ts.isClassDeclaration(statement) && statement.name)
+            values.push(statement.name.text);
+        else if (ts.isTypeAliasDeclaration(statement))
+            types.push(statement.name.text);
+        else
+            throw new Error(
+                'Unexpected canonical PostgreSQL presentation export.'
+            );
+    }
+    if (
+        JSON.stringify([...values].sort()) !==
+            JSON.stringify([...postgresPresentationRuntimeExports].sort()) ||
+        JSON.stringify(types) !==
+            JSON.stringify(['PostgresTextColumnPresentation'])
+    )
+        throw new Error(
+            'Unexpected canonical PostgreSQL presentation exports.'
+        );
+    const inspect = (node) => {
+        if (
+            ts.isImportDeclaration(node) ||
+            ts.isImportEqualsDeclaration(node) ||
+            ts.isImportTypeNode(node) ||
+            (ts.isExportDeclaration(node) && node.moduleSpecifier != null) ||
+            (ts.isCallExpression(node) &&
+                (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+                    (ts.isIdentifier(node.expression) &&
+                        node.expression.text === 'require')))
+        )
+            throw new Error(
+                'PostgreSQL presentation runtime must remain portable and import-free.'
+            );
+        ts.forEachChild(node, inspect);
+    };
+    inspect(file);
+    // Canonical generated banners contain private input paths. Remove comments
+    // before declaration emission, then add only the public SDK notice.
+    return prettier.format(
+        '// Generated by scripts/generate-runtime-contracts.mjs; do not edit.\n' +
+            ts
+                .createPrinter({
+                    newLine: ts.NewLineKind.LineFeed,
+                    removeComments: true,
+                })
+                .printFile(file),
+        { ...formatOptions, parser: 'typescript' }
+    );
+}
+
+export function compilePostgresPresentationRuntime(source) {
+    const outputs = {};
+    for (const [format, module] of [
+        ['esm', ts.ModuleKind.ESNext],
+        ['cjs', ts.ModuleKind.CommonJS],
+    ]) {
+        const result = ts.transpileModule(source, {
+            fileName: `${postgresPresentationRuntimeModule}.ts`,
+            reportDiagnostics: true,
+            compilerOptions: {
+                target: ts.ScriptTarget.ES2022,
+                module,
+                esModuleInterop: true,
+                newLine: ts.NewLineKind.LineFeed,
+            },
+        });
+        if (result.diagnostics?.length)
+            throw new Error(
+                'Could not compile portable PostgreSQL presentation runtime.'
+            );
+        outputs[format] = result.outputText;
+    }
+    const declaration = ts.transpileDeclaration(source, {
+        fileName: `${postgresPresentationRuntimeModule}.ts`,
+        reportDiagnostics: true,
+        compilerOptions: {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.ESNext,
+            newLine: ts.NewLineKind.LineFeed,
+        },
+    });
+    if (declaration.diagnostics?.length)
+        throw new Error(
+            'Could not declare portable PostgreSQL presentation runtime.'
+        );
+    return { ...outputs, declaration: declaration.outputText };
+}
+
+export function postgresPresentationRuntimeOutputHashes(source) {
+    const output = compilePostgresPresentationRuntime(source);
+    return {
+        generatedSha256: hash(source),
+        moduleSha256: { esm: hash(output.esm), cjs: hash(output.cjs) },
+        declarationsSha256: hash(output.declaration),
+    };
+}

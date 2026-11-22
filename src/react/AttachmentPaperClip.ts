@@ -1,7 +1,11 @@
-import { createElement as h } from 'react';
+import { createElement as h, type ReactElement } from 'react';
 
 /** Heroicons 2.1.1 PaperClip outline, MIT; see THIRD_PARTY_NOTICES. */
-export function AttachmentPaperClip({ className }: { className: string }) {
+export function AttachmentPaperClip({
+    className,
+}: {
+    className: string;
+}): ReactElement {
     return h(
         'svg',
         {

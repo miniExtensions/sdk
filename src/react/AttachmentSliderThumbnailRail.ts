@@ -1,4 +1,9 @@
-import { createElement as h, forwardRef } from 'react';
+import {
+    createElement as h,
+    forwardRef,
+    type ForwardRefExoticComponent,
+    type RefAttributes,
+} from 'react';
 import { ActionButton } from './ActionButton.js';
 import { AttachmentPaperClip } from './AttachmentPaperClip.js';
 
@@ -20,10 +25,9 @@ export type AttachmentSliderThumbnailRailProps = {
 const rail = 'mx-sdk-attachment-thumbnail-rail';
 
 /** The ref attaches to the rail's native dialog focus target. */
-export const AttachmentSliderThumbnailRail = forwardRef<
-    HTMLDivElement,
-    AttachmentSliderThumbnailRailProps
->(function AttachmentSliderThumbnailRail(
+export const AttachmentSliderThumbnailRail: ForwardRefExoticComponent<
+    AttachmentSliderThumbnailRailProps & RefAttributes<HTMLDivElement>
+> = forwardRef(function AttachmentSliderThumbnailRail(
     { rows, selectedIndex, onSelect },
     ref
 ) {

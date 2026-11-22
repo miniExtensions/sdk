@@ -11,10 +11,9 @@
     line-height: 1.5;
 }
 .mx-sdk-form-completion-icon {
-    flex: 0 0 1.25rem;
-    width: 1.25rem;
-    height: 1.25rem;
-    margin-top: 0.125rem;
+    flex: 0 0 1.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
 }
 .mx-sdk-form-completion-content {
     flex: 1;

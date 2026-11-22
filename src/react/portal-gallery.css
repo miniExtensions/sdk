@@ -57,11 +57,13 @@
 .mx-sdk-portal-gallery-card-content {
     height: 100%;
     overflow: hidden;
-    border: 3px solid #e5e7eb;
+    border: 3px solid var(--mx-sdk-portal-gallery-card-border, #e2e8f0);
     border-radius: 6px;
     background: white;
     color: #1f2937;
-    box-shadow: 0 1px 3px #0002;
+    box-shadow:
+        0 1px 3px 0 rgb(0 0 0 / 0.1),
+        0 1px 2px -1px rgb(0 0 0 / 0.1);
 }
 .mx-sdk-portal-gallery-open {
     position: absolute;

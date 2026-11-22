@@ -268,9 +268,16 @@ const createConditionalFieldFormula = (
             // Use regex to make sure an exact match is found.
             const findConditions = validReadableValues
                 .map((val) => {
-                    return `REGEX_MATCH({${fieldReference}}, '(^|, )${escapeStringForRegex(
-                        escapeValueSingleQuotes(formatMultiSelectValue(val))
-                    )}(,|$)')`;
+                    const pattern = `(^|, )${escapeStringForRegex(
+                        formatMultiSelectValue(val)
+                    )}(,|$)`;
+                    // Quote the completed regex as an Airtable formula string.
+                    // Escaping quotes before regex construction corrupts names
+                    // containing apostrophes, quotes and regex punctuation.
+                    const literal = pattern
+                        .replaceAll('\\', '\\\\')
+                        .replaceAll("'", "\\'");
+                    return `REGEX_MATCH({${fieldReference}}, '${literal}')`;
                 })
                 .join(',');
             if ('hasAllOf' === setting.type) return `AND(${findConditions})`;

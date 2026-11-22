@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import {
+    FormulaRunner,
+    formatMultiSelectValue,
+} from '../src/formulas/index.js';
 import { compileSelectConditions } from '../src/forms/selectConditions.js';
 import { compileSelectCompatibilityConditions } from '../src/forms/selectCompatibilityConditions.js';
 import type {
@@ -49,6 +53,45 @@ const contains: RuntimeConditionSetting = {
 };
 
 describe('portable whole-AST Select compatibility compilation', () => {
+    for (const name of [
+        `O'Reilly, "A" [x]+ (日本語)`,
+        `O'Reilly, "A" 日本語`,
+    ]) {
+        it(`matches a literal multiple-select name: ${name}`, () => {
+            const field: RuntimeAirtableField = {
+                ...select,
+                config: {
+                    type: 'multipleSelects',
+                    options: { choices: [{ id: 'sel_a', name }] },
+                },
+            };
+            const formula = compileSelectCompatibilityConditions(
+                group({
+                    type: 'hasAnyOf',
+                    fieldType: 'multipleSelects',
+                    idOrName: { type: 'id', id: field.id },
+                    value: ['sel_a'],
+                }),
+                [field]
+            );
+            for (const [value, expected] of [
+                [name, true],
+                ['Other choice', false],
+            ] as const) {
+                const runner = new FormulaRunner(formula, false, {
+                    resolveFieldReference: () => ({
+                        nativeValue: [value],
+                        toPrimitive: () => formatMultiSelectValue(value),
+                    }),
+                });
+                assert.equal(
+                    !FormulaRunner.isFalsyValue(runner.run()),
+                    expected
+                );
+            }
+        });
+    }
+
     it('retains the qualified Select cohort and full native-formula fallback', () => {
         assert.equal(
             compileSelectConditions(group(alpha), [select]).type,
@@ -285,7 +328,7 @@ describe('whole-AST compatibility operator regressions', () => {
         assert.equal(emit('hasNoneOf', null, multiField), 'AND()');
         assert.equal(
             emit('hasAnyOf', ['punctuation'], multiField),
-            "OR(REGEX_MATCH({fld_text}, '(^|, )a\\x2db\\.c(,|$)'))"
+            "OR(REGEX_MATCH({fld_text}, '(^|, )a\\\\x2db\\\\.c(,|$)'))"
         );
         assert.equal(
             emit('isExactly', ['quoted'], multiField),

@@ -107,6 +107,10 @@
     color: #6b7280;
 }
 
+.mx-sdk-form-group__disclosure > .mx-sdk-form-group__chevron {
+    align-self: flex-start;
+}
+
 .mx-sdk-form-group__description {
     padding: 0.5rem 0;
     color: #374151;

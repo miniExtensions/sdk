@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { it } from 'node:test';
-import { Window } from 'happy-dom';
+import { Window, type Element as HappyDomElement } from 'happy-dom';
 import { act, createElement as h, useState, type ReactNode } from 'react';
 import { FormGroup, type FormGroupProps } from '../src/react/FormGroup.js';
 import { CompleteMultilineTextField } from '../src/react/CompleteMultilineTextField.js';
@@ -43,6 +43,44 @@ function publicToggle(f: Fixture) {
 function panel(f: Fixture) {
     return f.container.querySelector('.mx-sdk-form-group__panel');
 }
+
+it('draws the native solid chevrons in both disclosure surfaces', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const down =
+        'M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z';
+    const up =
+        'M11.47 7.72a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 1 1-1.06 1.06L12 9.31l-6.97 6.97a.75.75 0 0 1-1.06-1.06l7.5-7.5Z';
+    for (const preview of [
+        undefined,
+        { startFieldId: 'fld_email', onSelectSection: () => {} },
+    ]) {
+        await f.render(group({ preview }));
+        const button = f.container.querySelector('button[aria-expanded]');
+        assert.ok(button instanceof f.window.HTMLButtonElement);
+        for (const [expanded, path] of [
+            [false, down],
+            [true, up],
+        ] as const) {
+            const chevron: HappyDomElement | null = button.querySelector('svg');
+            const glyph: HappyDomElement | null =
+                chevron?.querySelector('path') ?? null;
+            assert.ok(chevron && glyph);
+            assert.equal(
+                button.getAttribute('aria-expanded'),
+                String(expanded)
+            );
+            assert.equal(chevron.getAttribute('aria-hidden'), 'true');
+            assert.equal(chevron.getAttribute('viewBox'), '0 0 24 24');
+            assert.equal(chevron.getAttribute('fill'), 'currentColor');
+            assert.equal(chevron.getAttribute('stroke'), null);
+            assert.equal(glyph.getAttribute('d'), path);
+            assert.equal(glyph.getAttribute('fill-rule'), 'evenodd');
+            assert.equal(glyph.getAttribute('clip-rule'), 'evenodd');
+            await f.click(button);
+        }
+    }
+    f.unchangedEffects();
+});
 
 it('renders native metadata, the supplied error dot and the existing Quill HTML description', async (t) => {
     const f = await htmlPresentationFixture(t);

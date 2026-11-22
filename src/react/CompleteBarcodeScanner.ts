@@ -10,6 +10,11 @@ import {
     type CSSProperties,
 } from 'react';
 import { ScannerReader } from './scannerReader.js';
+import {
+    NotFoundException,
+    ChecksumException,
+    FormatException,
+} from '@zxing/library';
 
 export type BarcodeScannerLabels = {
     scan_barcode_or_qr_code: string;
@@ -277,7 +282,12 @@ function ScannerVideo(
                     (result, error) => {
                         if (!active) return;
                         if (result) void deliver(result.getText());
-                        else if (error && error.name !== 'NotFoundException')
+                        else if (
+                            error &&
+                            !(error instanceof NotFoundException) &&
+                            !(error instanceof ChecksumException) &&
+                            !(error instanceof FormatException)
+                        )
                             fail(error);
                     }
                 );

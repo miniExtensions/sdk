@@ -7,6 +7,8 @@ import {
     type Result,
     NotFoundException,
     ChecksumException,
+    FormatException,
+    IllegalStateException,
 } from '@zxing/library';
 import type {
     CompleteBarcodeScannerProps,
@@ -190,7 +192,7 @@ it('retries an actual failed attempt once and delivers a single success', async 
     assert.equal(media.stops(), 1);
 });
 
-it('ignores continuous NotFound frames, reports real failure, and rejects retained old callbacks after retry', async (t) => {
+it('ignores retryable continuous frames, reports real failure, and rejects retained old callbacks after retry', async (t) => {
     const f = await fixture(t);
     let writes: string[] = [];
     const streams = [cameraStream(), cameraStream(), cameraStream()];
@@ -228,9 +230,22 @@ it('ignores continuous NotFound frames, reports real failure, and rejects retain
             onDismiss() {},
         })
     );
+    // Production minification changes error.name. ZXing's ordinary frame
+    // failures must keep the same camera attempt alive until a real result.
+    for (const FrameError of [
+        NotFoundException,
+        ChecksumException,
+        FormatException,
+    ]) {
+        const frameError = new FrameError();
+        Object.defineProperty(frameError, 'name', { value: 'e' });
+        await act(async () => callbacks[0](null!, frameError));
+        assert.equal(f.document.querySelector('[role="alert"]'), null);
+        assert.equal(streams[0].stops(), 0);
+    }
     await act(async () => callbacks[0](null!, new NotFoundException()));
     assert.equal(f.document.querySelector('[role=alert]'), null);
-    await act(async () => callbacks[0](null!, new ChecksumException()));
+    await act(async () => callbacks[0](null!, new IllegalStateException()));
     assert(f.document.querySelector('[role=alert]'));
     assert.equal(streams[0].stops(), 1);
     await f.click('Try again');

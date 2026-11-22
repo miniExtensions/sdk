@@ -92,6 +92,7 @@ export function PortalGridMultilineTextCell({
         lastRow,
         stickyLeft,
         copyDisabled,
+        className: 'mx-sdk-portal-grid-multiline-text-cell',
         guidance:
             selected && editor == null && readOnlyGuidance != null
                 ? h(PortalGridCellGuidance, {

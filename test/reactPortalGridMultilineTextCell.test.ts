@@ -67,6 +67,10 @@ async function change(
 
 it('renders a literal linked value, a blank cell and selected guidance on the server', () => {
     const literal = renderToString(grid());
+    assert.match(
+        literal,
+        /class="mx-sdk-portal-grid-cell mx-sdk-portal-grid-multiline-text-cell"/
+    );
     assert.match(literal, /href="https:\/\/example\.test\/notes"/);
     assert.match(literal, /data-row-height="medium"/);
     assert.doesNotMatch(literal, /<textarea/);

@@ -26,20 +26,21 @@ export type FormGroupProps = Readonly<{
 }>;
 
 function Chevron({ open }: { open: boolean }): React.ReactElement {
+    // Match the native Form section's Heroicons 2.1.1 solid chevrons.
     return h(
         'svg',
         {
             className: 'mx-sdk-form-group__chevron',
             viewBox: '0 0 24 24',
-            fill: 'none',
-            stroke: 'currentColor',
-            strokeWidth: 2,
+            fill: 'currentColor',
             'aria-hidden': true,
         },
         h('path', {
-            d: open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6',
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
+            d: open
+                ? 'M11.47 7.72a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 1 1-1.06 1.06L12 9.31l-6.97 6.97a.75.75 0 0 1-1.06-1.06l7.5-7.5Z'
+                : 'M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z',
+            fillRule: 'evenodd',
+            clipRule: 'evenodd',
         })
     );
 }

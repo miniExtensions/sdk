@@ -407,6 +407,29 @@ export async function checkFormGroupBrowser({ page, evidence }) {
     let expectedSelected = [];
     const first = () => page.locator('.mx-sdk-form-group').first();
     const toggle = () => first().locator('button[aria-expanded]');
+    const measurePublicChevron = async () =>
+        toggle()
+            .locator('svg')
+            .evaluate((svg) => {
+                const path = svg.querySelector('path');
+                const box = svg.getBoundingClientRect();
+                const button = svg.parentElement.getBoundingClientRect();
+                const paint = getComputedStyle(path);
+                return {
+                    width: box.width,
+                    height: box.height,
+                    topInset: box.top - button.top,
+                    fill: paint.fill,
+                    stroke: paint.stroke,
+                };
+            });
+    const nativeChevronPaint = {
+        width: 24,
+        height: 24,
+        topInset: 8,
+        fill: 'rgb(107, 114, 128)',
+        stroke: 'none',
+    };
     const verify = async (name) => {
         const snapshot = await page.evaluate(() =>
             window.__formGroupFixture.snapshot()
@@ -422,6 +445,7 @@ export async function checkFormGroupBrowser({ page, evidence }) {
         return snapshot;
     };
     assert.equal(await page.locator('#fld_email').count(), 0);
+    assert.deepEqual(await measurePublicChevron(), nativeChevronPaint);
     assert.equal(
         await page.locator('#readonly-value').textContent(),
         'Readonly canonical value'
@@ -444,6 +468,7 @@ export async function checkFormGroupBrowser({ page, evidence }) {
     await toggle().focus();
     await page.keyboard.press('Enter');
     await page.locator('#fld_email').waitFor({ state: 'visible' });
+    assert.deepEqual(await measurePublicChevron(), nativeChevronPaint);
     assert.equal(
         await toggle().evaluate((node) => node === document.activeElement),
         true
@@ -611,6 +636,7 @@ export async function checkFormGroupBrowser({ page, evidence }) {
     await verify('unmount preserves action counts and no-I/O state');
     evidence.groups = groups;
     evidence.paint = paint;
+    evidence.chevronPaint = nativeChevronPaint;
     evidence.errorPaint = errorPaint;
     evidence.cleanup = 'component unmounted';
     evidence.boundaries = [

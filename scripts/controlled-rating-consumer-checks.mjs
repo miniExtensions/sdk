@@ -110,6 +110,10 @@ export async function checkControlledRatingReactMatrix({
                 require.resolve('@miniextensions/sdk/react/rating.css')
             );
             assert.match(css.toString(), /\.mx-sdk-rating-icon/);
+            assert.match(
+                css.toString(),
+                /\.mx-sdk-rating-empty\s*\{[^}]*line-height:\s*1\.25rem\s*;/
+            );
             assert.match(css.toString(), /@media print/);
             assert.equal(sha(readFileSync(archivePath)), archiveSha256);
             profiles.push({

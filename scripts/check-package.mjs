@@ -1146,6 +1146,12 @@ try {
                 'src/runtime/contracts/generated.provenance.json',
                 'utf8'
             )
+        ),
+        JSON.parse(
+            readFileSync(
+                'src/runtime/contracts/postgres.generated.provenance.json',
+                'utf8'
+            )
         )
     );
     await assertPackedDocLinks(
@@ -2017,6 +2023,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         'scripts/native-form-progress-exact-optional-consumer.types.ts.txt',
         'utf8'
     );
+    const postgresMetadataConsumer = readFileSync(
+        'scripts/postgres-public-consumer.types.ts.txt',
+        'utf8'
+    );
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
@@ -2085,6 +2095,11 @@ new Parser([]).parse({maxDepth:'48'});
             join(temporaryDirectory, sourceEnvelopeFilename),
             sourceEnvelopeConsumer
         );
+        const postgresMetadataFilename = `postgres-metadata-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, postgresMetadataFilename),
+            postgresMetadataConsumer
+        );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',
@@ -2104,6 +2119,7 @@ new Parser([]).parse({maxDepth:'48'});
             linkedChildEditFilename,
             pageFilename,
             sourceEnvelopeFilename,
+            postgresMetadataFilename,
             ...formulasGuideSources,
         ]);
         const exactOptionalFilename = `native-progress-exact-optional-${filename}`;
@@ -2125,12 +2141,32 @@ new Parser([]).parse({maxDepth:'48'});
             '--moduleResolution',
             moduleResolution,
             exactOptionalFilename,
+            postgresMetadataFilename,
         ]);
     }
 
     console.log(
         'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent; native progress also checked with exact optional properties.'
     );
+
+    const postgresRuntimeConsumer = readFileSync(
+        'scripts/postgres-public-runtime-consumer.js.txt',
+        'utf8'
+    );
+    for (const format of ['esm', 'cjs']) {
+        const filename =
+            format === 'esm'
+                ? 'postgres-runtime-consumer.mjs'
+                : 'postgres-runtime-consumer.cjs';
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            (format === 'esm'
+                ? "import assert from 'node:assert/strict';\nimport * as SDK from '@miniextensions/sdk';\n"
+                : "const assert = require('node:assert/strict');\nconst SDK = require('@miniextensions/sdk');\n") +
+                postgresRuntimeConsumer
+        );
+        run(process.execPath, [filename]);
+    }
 
     const bundled = await build({
         entryPoints: [join(temporaryDirectory, 'consumer.mjs')],

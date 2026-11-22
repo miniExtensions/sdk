@@ -97,6 +97,13 @@
     white-space: nowrap;
 }
 
+.mx-sdk-readonly-grid__cell
+    .me-rich-text
+    .ProseMirror[contenteditable='false']
+    a {
+    text-decoration: none;
+}
+
 .mx-sdk-readonly-grid__cell-content.cell-short {
     height: 24px;
 }

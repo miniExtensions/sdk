@@ -84,6 +84,7 @@ import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
 import { checkCompleteExtensionPasswordBrowser } from './complete-extension-password-browser-checks.mjs';
+import { checkReadonlyPortalGridRichTextBrowser } from './readonly-portal-grid-rich-text-checks.mjs';
 import { checkLoginExistingValuesBrowser } from './login-existing-values-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
@@ -3289,6 +3290,12 @@ try {
                 browser,
                 origin,
                 evidence: report.readonlyPortalGrid,
+            });
+            await checkReadonlyPortalGridRichTextBrowser({
+                browser,
+                origin,
+                evidence: report.readonlyPortalGrid,
+                output,
             });
         });
         await run('portal-gallery-layout', async (page, origin) => {

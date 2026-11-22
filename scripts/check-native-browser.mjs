@@ -2664,8 +2664,15 @@ try {
             report.portalMap.profiles.map(({ format }) => format),
             ['esm', 'cjs']
         );
-        for (const profile of report.portalMap.profiles)
-            assert.equal(profile.cases.length, 11);
+        for (const profile of report.portalMap.profiles) {
+            assert.equal(profile.cases.length, 12);
+            assert.equal(
+                profile.cases.filter(
+                    ({ name }) => name === 'held-open-owner-replacement'
+                ).length,
+                1
+            );
+        }
         assert.equal(report.portalMap.externalProviderEgress, 0);
         assert.equal(report.portalMap.cleanup.context, 'completed');
         assert.equal(report.portalMap.cleanup.server, 'completed');

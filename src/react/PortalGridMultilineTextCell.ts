@@ -3,6 +3,7 @@ import {
     useEffect,
     useLayoutEffect,
     useMemo,
+    useState,
     type ReactElement,
 } from 'react';
 import type { RuntimeLanguage } from '../runtime/types.js';
@@ -68,9 +69,22 @@ export function PortalGridMultilineTextCell({
 }: PortalGridMultilineTextCellProps): ReactElement {
     const editing = selected && editor != null;
     const ownerToken = editor?.owner.token;
+    const [control, setControl] = useState({
+        cellIdentity,
+        ownerToken,
+        key: 0,
+    });
+    // A composition can finish on the old textarea after the host rebinds the
+    // cell. Replace the textarea without replacing the Grid cell itself.
+    if (
+        !Object.is(control.cellIdentity, cellIdentity) ||
+        !Object.is(control.ownerToken, ownerToken)
+    ) {
+        setControl({ cellIdentity, ownerToken, key: control.key + 1 });
+    }
     const admission = useMemo(
         (): { editor?: PortalGridMultilineTextEditor } => ({}),
-        [cellIdentity, ownerToken, editing]
+        [control, editing]
     );
     const useCommittedEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
@@ -102,6 +116,7 @@ export function PortalGridMultilineTextCell({
                 : undefined,
         children: editing
             ? h(CompleteMultilineTextField, {
+                  key: control.key,
                   value,
                   id: editor.id,
                   form: editor.form,

@@ -5030,7 +5030,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.dateTimeCases, 8);
     assert.equal(gridProof.tests, 88);
     assert.equal(gridProof.textCellTests, 24);
-    assert.equal(gridProof.multilineCellTests, 12);
+    assert.equal(gridProof.multilineCellTests, 20);
     assert.equal(gridProof.ratingCellTests, 32);
     assert.equal(gridProof.checkboxCellTests, 64);
     assert.equal(gridProof.phoneCellTests, 8);

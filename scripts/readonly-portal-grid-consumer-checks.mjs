@@ -244,7 +244,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const componentCases = 22;
     const multipleSelectCellCases = 2;
     const textCellCases = 6;
-    const multilineCellCases = 3;
+    const multilineCellCases = 5;
     const emailCellCases = 6;
     const phoneCellCases = 2;
     const emptyCellCases = 3;

@@ -47,7 +47,8 @@ async function change(
     fixture: Fixture,
     field: ReturnType<typeof textarea>,
     value: string,
-    isComposing = false
+    isComposing = false,
+    selection?: readonly [number, number]
 ) {
     const setter = Object.getOwnPropertyDescriptor(
         fixture.window.HTMLTextAreaElement.prototype,
@@ -56,11 +57,24 @@ async function change(
     assert.ok(setter);
     await act(async () => {
         setter.call(field, value);
+        if (selection) field.setSelectionRange(...selection);
         field.dispatchEvent(
             new fixture.window.InputEvent('input', {
                 bubbles: true,
                 isComposing,
             })
+        );
+    });
+}
+
+async function composition(
+    fixture: Fixture,
+    field: ReturnType<typeof textarea>,
+    type: 'compositionstart' | 'compositionend'
+) {
+    await act(async () => {
+        field.dispatchEvent(
+            new fixture.window.CompositionEvent(type, { bubbles: true })
         );
     });
 }
@@ -137,32 +151,116 @@ it('selects without writing and forwards literal native changes including compos
     assert.deepEqual(writes, ['First\n中', '']);
 });
 
-it('checks host admission on each change and uses only the current cell writer', async (t) => {
+it('rejects trailing composition input from a replaced textarea and admits the new cell', async (t) => {
     const fixture = await htmlPresentationFixture(t);
     const firstWrites: string[] = [];
     const nextWrites: string[] = [];
     let current = true;
     const first: PortalGridMultilineTextEditor = {
-        id: 'notes-A',
+        id: 'notes',
         owner: { token: {}, isCurrent: () => current },
         onChange: (value) => firstWrites.push(value),
     };
     const next: PortalGridMultilineTextEditor = {
-        id: 'notes-B',
+        id: first.id,
         owner: { token: {}, isCurrent: () => true },
         onChange: (value) => nextWrites.push(value),
     };
     await fixture.render(grid({ editor: first, selected: true }));
     const firstField = textarea(fixture);
-    await change(fixture, firstField, 'Accepted A');
+    const cell = firstField.closest('td');
+    assert.ok(cell);
+    firstField.focus();
+    await composition(fixture, firstField, 'compositionstart');
+    await change(fixture, firstField, 'Composing in A 中', true);
     current = false;
-    await change(fixture, firstField, 'Revoked A');
+    await change(fixture, firstField, 'Revoked A', true);
     await fixture.render(
-        grid({ cellIdentity: 'row-B', editor: next, selected: true })
+        grid({
+            cellIdentity: 'row-B',
+            editor: next,
+            selected: true,
+            value: 'Baseline B',
+        })
     );
     const nextField = textarea(fixture);
-    assert.equal(nextField.id, 'notes-B');
+    await composition(fixture, firstField, 'compositionend');
+    await change(fixture, firstField, 'Final input from A 中');
+    assert.deepEqual(nextWrites, []);
+    assert.notEqual(nextField, firstField);
+    assert.equal(firstField.isConnected, false);
+    assert.equal(nextField.closest('td'), cell);
+    assert.equal(nextField.value, 'Baseline B');
+    nextField.focus();
     await change(fixture, nextField, 'Accepted B');
-    assert.deepEqual(firstWrites, ['Accepted A']);
+    assert.deepEqual(firstWrites, ['Composing in A 中']);
     assert.deepEqual(nextWrites, ['Accepted B']);
+});
+
+it('preserves the focused textarea and caret across controlled updates for the same owner', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const originalWrites: string[] = [];
+    const currentWrites: string[] = [];
+    const editor: PortalGridMultilineTextEditor = {
+        id: 'notes',
+        owner: { token: {}, isCurrent: () => true },
+        onChange: (value) => originalWrites.push(value),
+    };
+    await fixture.render(grid({ editor, selected: true }));
+    const field = textarea(fixture);
+    field.focus();
+    await composition(fixture, field, 'compositionstart');
+    await change(fixture, field, 'Composing in A 中', true, [2, 6]);
+
+    const echoedEditor: PortalGridMultilineTextEditor = {
+        ...editor,
+        owner: { ...editor.owner },
+        onChange: (value) => currentWrites.push(value),
+    };
+    await fixture.render(
+        grid({
+            editor: echoedEditor,
+            selected: true,
+            value: 'Composing in A 中',
+        })
+    );
+    assert.equal(textarea(fixture), field);
+    assert.equal(fixture.window.document.activeElement, field);
+    assert.equal(field.value, 'Composing in A 中');
+    assert.deepEqual([field.selectionStart, field.selectionEnd], [2, 6]);
+    await composition(fixture, field, 'compositionend');
+    await change(fixture, field, 'Completed in A 中文');
+    assert.deepEqual(originalWrites, ['Composing in A 中']);
+    assert.deepEqual(currentWrites, ['Completed in A 中文']);
+});
+
+it('replaces the textarea when either opaque identity changes independently', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const editor: PortalGridMultilineTextEditor = {
+        id: 'notes',
+        owner: { token: Symbol('owner'), isCurrent: () => true },
+        onChange() {},
+    };
+    const firstIdentity = Symbol('row');
+    const nextIdentity = Symbol('row');
+    await fixture.render(
+        grid({ cellIdentity: firstIdentity, editor, selected: true })
+    );
+    const first = textarea(fixture);
+    await fixture.render(
+        grid({ cellIdentity: nextIdentity, editor, selected: true })
+    );
+    const next = textarea(fixture);
+    assert.notEqual(next, first);
+    await fixture.render(
+        grid({
+            cellIdentity: nextIdentity,
+            editor: {
+                ...editor,
+                owner: { ...editor.owner, token: Symbol('owner') },
+            },
+            selected: true,
+        })
+    );
+    assert.notEqual(textarea(fixture), next);
 });

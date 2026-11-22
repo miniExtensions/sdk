@@ -1,0 +1,1400 @@
+import {
+    parsePostgresAttachmentDisplay,
+    PostgresAttachmentDisplayError,
+    POSTGRES_ATTACHMENT_DISPLAY_SYNTAX,
+    postgresTextColumnPresentationDefinition,
+    resolvePostgresTextColumnPresentation,
+    PostgresTextColumnPresentationError,
+} from '@miniextensions/sdk';
+import type {
+    PostgresAttachmentDisplayFailure,
+    PostgresCsvAttachmentDraft,
+    PostgresRecordCopierDraft,
+    PostgresRandomNumbersDraft,
+    PostgresBooleanColumnConfig,
+    PostgresEnumColumnConfig,
+    PostgresUuidColumnConfig,
+    PostgresConnection,
+    PostgresCreateQuery,
+    PostgresCreateResult,
+    PostgresDatabase,
+    PostgresDateColumnConfig,
+    PostgresSchema,
+    PostgresTable,
+    PostgresTableReference,
+    PostgresField,
+    PostgresFormRecordAccess,
+    PostgresType,
+    PostgresRelationship,
+    PostgresRecord,
+    PostgresRecordIdentity,
+    PostgresRowObservation,
+    PostgresValue,
+    PostgresSource,
+    PostgresFilter,
+    PostgresSort,
+    PostgresSelectQuery,
+    PostgresSelectResult,
+    PostgresIdentifierConfiguration,
+    PostgresNumericColumnConfig,
+    PostgresRecordDisplayConfiguration,
+    PostgresRecordEditingConfiguration,
+    PostgresRecordEditingValidation,
+    PostgresTextColumnConfig,
+    PostgresTextColumnPresentation,
+    PostgresUpdateQuery,
+    PostgresUpdateResult,
+} from '@miniextensions/sdk';
+
+export function nativeIdentityProtocolMetadata(type: PostgresType) {
+    const array: boolean | undefined = type.nativeArrayProtocol;
+    const enumProtocol: boolean | undefined = type.nativeEnumProtocol;
+    const attested: PostgresType = {
+        ...type,
+        nativeArrayProtocol: true,
+        nativeEnumProtocol: false,
+    };
+    const invalid: PostgresType = {
+        ...type,
+        // @ts-expect-error Native protocol metadata cannot be inferred from a caller's type-name string.
+        nativeEnumProtocol: 'enum_recv',
+    };
+    return { array, enumProtocol, attested, invalid };
+}
+
+export function nativeArrayIdentityTransport(
+    binary: NonNullable<PostgresRecordIdentity['values'][number]['binary']>
+) {
+    const format: 'postgres-array-binary-v1' = binary.format;
+    const hex: string = binary.hex;
+    const sourceConnection: string = binary.source.connectionId;
+    const identity: PostgresRecordIdentity = {
+        formatVersion: 1,
+        type: 'primary-key',
+        values: [{ columnName: 'key', value: '{NULL}', binary }],
+    };
+    const invalid = {
+        ...binary,
+        // @ts-expect-error Binary identity input must remain portable JSON hex.
+        hex: new Uint8Array(12),
+    } satisfies typeof binary;
+    return { format, hex, sourceConnection, identity, invalid };
+}
+
+export const defaultTextPresentation: 'text' =
+    postgresTextColumnPresentationDefinition.defaultValue;
+export const ordinaryTextPresentation: PostgresTextColumnPresentation =
+    resolvePostgresTextColumnPresentation({});
+export const absentDisplayPresentation: PostgresTextColumnPresentation =
+    resolvePostgresTextColumnPresentation({ displayAs: undefined });
+export function inspectNativeTextPresentation(
+    presentation: PostgresTextColumnPresentation
+) {
+    const stored: 'text' = presentation.storedValue;
+    const mutation: 'excluded' = presentation.attachmentMutation;
+    const output: 'excluded' = presentation.generatedAttachmentOutput;
+    if (presentation.renderer === 'public-url-attachments') {
+        const input: 'read-only' = presentation.nativeValueInput;
+        const opening: 'existing-public-http-urls' = presentation.fileOpening;
+        return { stored, mutation, output, input, opening };
+    }
+    const input: 'applicable' = presentation.nativeValueInput;
+    return { stored, mutation, output, input };
+}
+export const invalidPresentationReason: 'INVALID_PRESENTATION' =
+    new PostgresTextColumnPresentationError().reason;
+// @ts-expect-error Presentation metadata is a readonly authored descriptor.
+postgresTextColumnPresentationDefinition.defaultValue = 'text';
+resolvePostgresTextColumnPresentation({
+    displayAs: 'text',
+    // @ts-expect-error Presentation selection does not accept a database-permission callback.
+    canEdit: () => true,
+});
+
+// These remain optional stored settings, not editor-default materialization.
+export const absentTextConfig: PostgresTextColumnConfig = {};
+export const textConfig: PostgresTextColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+    displayAs: 'attachments-public-urls',
+    placeholderText: '',
+    characterLimit: 0,
+    preserveTrailingWhitespace: false,
+};
+export const undefinedTextConfig: PostgresTextColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+    displayAs: undefined,
+    placeholderText: undefined,
+    characterLimit: undefined,
+    preserveTrailingWhitespace: undefined,
+};
+export const textModes: PostgresTextColumnConfig[] = [
+    { descriptionStyle: 'top', displayAs: 'text' },
+    { descriptionStyle: 'bottom' },
+];
+textConfig.title = 'A changed title';
+delete textConfig.title;
+export const wrongBooleanConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Settings booleans do not accept string coercion.
+    readOnly: 'false',
+};
+export const wrongNumberConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Settings numbers do not accept string coercion.
+    characterLimit: '0',
+};
+export const wrongDisplayConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error URL display is a literal option, never upload admission.
+    displayAs: 'upload',
+};
+export const wrongDescriptionConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Only authored description placements belong to storage.
+    descriptionStyle: 'side',
+};
+export const nullTextConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error An absent optional setting is different from SQL NULL.
+    title: null,
+};
+export const unknownTextConfig: PostgresTextColumnConfig = {
+    // @ts-expect-error Unauthored settings cannot enter a fresh config literal.
+    uploadFile: false,
+};
+
+export const absentBooleanConfig: PostgresBooleanColumnConfig = {};
+export const booleanConfig: PostgresBooleanColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedBooleanConfig: PostgresBooleanColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const booleanDescriptionStyles: PostgresBooleanColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+booleanConfig.title = 'A Boolean field';
+delete booleanConfig.title;
+export const wrongBooleanSetting: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Native database text is not a settings boolean.
+    readOnly: 't',
+};
+export const nullBooleanSetting: PostgresBooleanColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    required: null,
+};
+export const textDisplayOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Boolean settings do not offer text or attachment display.
+    displayAs: 'attachments-public-urls',
+};
+export const textPlaceholderOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Placeholder text belongs to text-column settings.
+    placeholderText: '',
+};
+export const textLimitOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Character limits belong to text-column settings.
+    characterLimit: 0,
+};
+export const textWhitespaceOnBoolean: PostgresBooleanColumnConfig = {
+    // @ts-expect-error Whitespace policy belongs to text-column settings.
+    preserveTrailingWhitespace: false,
+};
+export const unfinishedBooleanStyle: PostgresBooleanColumnConfig = {
+    // @ts-expect-error This scalar storage checkpoint does not include checkbox styles.
+    checkboxStyle: 'switch',
+};
+
+export const absentEnumConfig: PostgresEnumColumnConfig = {};
+export const enumConfig: PostgresEnumColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedEnumConfig: PostgresEnumColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const enumDescriptionStyles: PostgresEnumColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+enumConfig.title = 'A Enum field';
+delete enumConfig.title;
+export const wrongEnumSetting: PostgresEnumColumnConfig = {
+    // @ts-expect-error Native database text is not a settings boolean.
+    readOnly: 't',
+};
+export const nullEnumSetting: PostgresEnumColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    required: null,
+};
+export const textDisplayOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Enum settings do not offer text or attachment display.
+    displayAs: 'attachments-public-urls',
+};
+export const textPlaceholderOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Placeholder text belongs to text-column settings.
+    placeholderText: '',
+};
+export const textLimitOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Character limits belong to text-column settings.
+    characterLimit: 0,
+};
+export const textWhitespaceOnEnum: PostgresEnumColumnConfig = {
+    // @ts-expect-error Whitespace policy belongs to text-column settings.
+    preserveTrailingWhitespace: false,
+};
+export const unfinishedEnumStyle: PostgresEnumColumnConfig = {
+    // @ts-expect-error This scalar storage checkpoint does not include checkbox styles.
+    checkboxStyle: 'switch',
+};
+
+export const storedEnumChoices: PostgresEnumColumnConfig = {
+    // @ts-expect-error Enum labels are native database metadata, not settings.
+    enumLabels: ['copied label'],
+};
+
+export const absentNumericConfig: PostgresNumericColumnConfig = {};
+export const numericConfig: PostgresNumericColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedNumericConfig: PostgresNumericColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const numericDescriptionStyles: PostgresNumericColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+numericConfig.title = 'A native numeric field';
+delete numericConfig.title;
+export const numericBooleanCoercion: PostgresNumericColumnConfig = {
+    // @ts-expect-error Native numeric text does not coerce a settings boolean.
+    required: '0',
+};
+export const numericSqlNull: PostgresNumericColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    title: null,
+};
+export const numericTextDisplay: PostgresNumericColumnConfig = {
+    // @ts-expect-error Numeric columns do not offer text/attachment display.
+    displayAs: 'attachments-public-urls',
+};
+export const numericPrecision: PostgresNumericColumnConfig = {
+    // @ts-expect-error Common stored settings do not format native numeric values.
+    decimalPlaces: 2,
+};
+export const numericCheckbox: PostgresNumericColumnConfig = {
+    // @ts-expect-error Numeric settings have no checkbox style.
+    checkboxStyle: 'switch',
+};
+
+export const absentDateConfig: PostgresDateColumnConfig = {};
+export const dateConfig: PostgresDateColumnConfig = {
+    readOnly: false,
+    required: false,
+    showTitle: false,
+    title: '',
+    subtitle: '',
+    descriptionStyle: 'tooltip',
+};
+export const undefinedDateConfig: PostgresDateColumnConfig = {
+    readOnly: undefined,
+    required: undefined,
+    showTitle: undefined,
+    title: undefined,
+    subtitle: undefined,
+    descriptionStyle: undefined,
+};
+export const dateDescriptionStyles: PostgresDateColumnConfig[] = [
+    { descriptionStyle: 'top' },
+    { descriptionStyle: 'bottom' },
+];
+dateConfig.title = 'A native SQL DATE field';
+delete dateConfig.title;
+export const dateBooleanCoercion: PostgresDateColumnConfig = {
+    // @ts-expect-error Stored boolean settings do not accept string coercion.
+    readOnly: 'false',
+};
+export const dateSqlNull: PostgresDateColumnConfig = {
+    // @ts-expect-error SQL NULL is not an absent optional setting.
+    required: null,
+};
+export const dateTextPlaceholder: PostgresDateColumnConfig = {
+    // @ts-expect-error Text placeholders are not common SQL DATE settings.
+    placeholderText: '',
+};
+export const dateFormat: PostgresDateColumnConfig = {
+    // @ts-expect-error These settings add no date-format option or parser.
+    dateFormat: 'YYYY-MM-DD',
+};
+export const dateTimeZone: PostgresDateColumnConfig = {
+    // @ts-expect-error SQL DATE settings do not introduce a time zone.
+    timeZone: 'UTC',
+};
+
+export type NativeMetadataExports = [
+    PostgresConnection,
+    PostgresDatabase,
+    PostgresSchema,
+    PostgresTable,
+    PostgresField,
+    PostgresType,
+    PostgresRelationship,
+];
+
+export const table: PostgresTableReference = {
+    connectionId: 'synthetic-connection',
+    schemaName: 'Sales Ops',
+    tableName: 'Order Items',
+};
+export const identity: PostgresRecordIdentity = {
+    formatVersion: 1 as const,
+    type: 'primary-key',
+    values: [
+        { columnName: 'tenant_id', value: 'tenant-one' },
+        { columnName: 'id', value: '9007199254740993' },
+    ],
+};
+export const record: PostgresRecord = {
+    table,
+    identity,
+    fields: {
+        id: '9007199254740993',
+        amount: '12345678901234567890.1234567890',
+        nullable: null,
+    },
+};
+export const keyless: PostgresRecord = {
+    table,
+    identity: null,
+    fields: { title: '' },
+};
+export const value: PostgresValue = record.fields.id;
+
+export const source: PostgresSource = {
+    type: 'postgres',
+    connectionId: table.connectionId,
+    databaseName: 'synthetic_database',
+};
+export const filter: PostgresFilter = {
+    type: 'and',
+    filters: [
+        {
+            type: 'comparison',
+            columnName: 'amount',
+            operator: 'gte',
+            value: '12345678901234567890.1234567890',
+        },
+        {
+            type: 'not',
+            filter: {
+                type: 'or',
+                filters: [
+                    { type: 'null', columnName: 'title', operator: 'is-null' },
+                    {
+                        type: 'text',
+                        columnName: 'title',
+                        operator: 'starts-with',
+                        caseSensitive: true,
+                        value: 'literal_%',
+                    },
+                ],
+            },
+        },
+    ],
+};
+export const sort: PostgresSort = {
+    columnName: 'amount',
+    direction: 'asc',
+    nulls: 'first',
+};
+export const query: PostgresSelectQuery = {
+    source,
+    table,
+    columns: ['id', 'amount', 'nullable'],
+    where: filter,
+    orderBy: [sort],
+    limit: 25,
+    offset: 0,
+};
+export const result: PostgresSelectResult = {
+    source,
+    table,
+    columns: [],
+    rows: [record.fields],
+    page: { limit: 25, offset: 0, hasMore: false, nextOffset: null },
+};
+
+export const createQuery: PostgresCreateQuery = {
+    source,
+    table,
+    values: [
+        { columnName: 'amount', value: '12345678901234567890.1234567890' },
+        { columnName: 'nullable', value: null },
+    ],
+    returningColumns: ['id', 'customer_name'],
+    displayColumnName: 'customer_name',
+};
+export const created: PostgresCreateResult = {
+    outcome: 'committed',
+    source,
+    table,
+    columns: [],
+    fields: { id: '9007199254740993', customer_name: 'Synthetic customer' },
+};
+export const countOnly: PostgresCreateResult = {
+    ...created,
+    // @ts-expect-error Create results are committed native RETURNING values.
+    outcome: 'count-only',
+};
+export const wrongCreateSource: PostgresCreateQuery = {
+    ...createQuery,
+    source: {
+        // @ts-expect-error Native create cannot cross to an Airtable source.
+        type: 'airtable',
+        baseId: 'appSynthetic',
+        tableId: 'tblSynthetic',
+    },
+};
+
+const observedId: PostgresField = {
+    name: 'id',
+    ordinal: 2,
+    typeOid: 20,
+    formattedType: 'bigint',
+    collationOid: null,
+    notNull: true,
+    hasDefault: false,
+    identity: null,
+    generated: null,
+    description: null,
+    privileges: { select: true, insert: false, update: true },
+};
+export const observation: PostgresRowObservation = {
+    formatVersion: 1 as const,
+    source,
+    table,
+    relationOid: 16400,
+    identifier: {
+        configuration: { type: 'primary-key' },
+        columns: [
+            {
+                name: 'tenant_id',
+                ordinal: 1,
+                typeOid: 25,
+                formattedType: 'text',
+                collationOid: 16422,
+            },
+            {
+                name: 'id',
+                ordinal: 2,
+                typeOid: 20,
+                formattedType: 'bigint',
+                collationOid: null,
+            },
+        ],
+    },
+    identity,
+    columns: [
+        {
+            ...observedId,
+            name: 'tenant_id',
+            ordinal: 1,
+            typeOid: 25,
+            formattedType: 'text',
+            collationOid: 16422,
+        },
+        observedId,
+        {
+            ...observedId,
+            name: 'customer_name',
+            ordinal: 3,
+            typeOid: 25,
+            formattedType: 'text',
+            collationOid: 16422,
+            notNull: false,
+        },
+    ],
+    fields: {
+        tenant_id: 'tenant-one',
+        id: '9007199254740993',
+        customer_name: null,
+    },
+};
+export const updateQuery: PostgresUpdateQuery = {
+    formatVersion: 1 as const,
+    source,
+    table,
+    identifier: observation.identifier,
+    identity,
+    changes: [
+        {
+            columnName: 'id',
+            expected: '9007199254740993',
+            value: '9007199254740995',
+        },
+        { columnName: 'customer_name', expected: null, value: '' },
+    ],
+    criteria: { where: filter, orderBy: [sort] },
+    returningColumns: ['tenant_id', 'id', 'customer_name'],
+    displayColumnName: 'customer_name',
+};
+export const unchangedKeyUpdate: PostgresUpdateQuery = {
+    ...updateQuery,
+    criteria: { orderBy: [] },
+    changes: [{ columnName: 'customer_name', expected: '', value: null }],
+};
+export const updated: PostgresUpdateResult = {
+    outcome: 'committed',
+    source,
+    table,
+    observation: {
+        ...observation,
+        identity: {
+            ...identity,
+            values: [
+                { columnName: 'tenant_id', value: 'tenant-one' },
+                { columnName: 'id', value: '9007199254740995' },
+            ],
+        },
+        fields: {
+            ...observation.fields,
+            id: '9007199254740995',
+            customer_name: '',
+        },
+    },
+};
+export const configuredObservation: PostgresRowObservation = {
+    ...observation,
+    identifier: {
+        ...observation.identifier,
+        configuration: {
+            type: 'configured-key',
+            columnNames: ['tenant_id', 'id'],
+            stabilityConfirmed: true,
+        },
+    },
+    identity: { ...identity, type: 'configured-key' },
+};
+export const configuredUpdateQuery: PostgresUpdateQuery = {
+    ...unchangedKeyUpdate,
+    identifier: configuredObservation.identifier,
+    identity: configuredObservation.identity,
+};
+// These older saved-authoring shapes are loadable for explicit refresh/rebind.
+// Their missing metadata never establishes valid read/edit or mutation authority.
+export const legacyPrimaryBindingForRebind: PostgresRowObservation['identifier'] =
+    {
+        configuration: { type: 'primary-key' },
+        columns: [
+            {
+                name: 'tenant_id',
+                ordinal: 1,
+                typeOid: 25,
+                formattedType: 'text',
+            },
+            { name: 'id', ordinal: 2, typeOid: 20, formattedType: 'bigint' },
+        ],
+    };
+export const legacyConfiguredBindingForRebind: PostgresRowObservation['identifier'] =
+    {
+        ...legacyPrimaryBindingForRebind,
+        configuration: {
+            type: 'configured-key',
+            columnNames: ['tenant_id', 'id'],
+            stabilityConfirmed: true,
+        },
+    };
+const { collationOid: knownCollation, ...legacyFieldMetadata } = observedId;
+// @ts-expect-error Fresh discovered fields require known collation metadata.
+export const missingFieldCollation: PostgresField = legacyFieldMetadata;
+export const undefinedFieldCollation: PostgresField = {
+    ...observedId,
+    // @ts-expect-error Undefined cannot stand in for a known noncollatable field.
+    collationOid: undefined,
+};
+export const stringFieldCollation: PostgresField = {
+    ...observedId,
+    // @ts-expect-error Native collation OIDs do not accept string coercion.
+    collationOid: '16422',
+};
+export const stringBindingCollation: PostgresRowObservation['identifier']['columns'][number] =
+    {
+        name: 'id',
+        ordinal: 2,
+        typeOid: 20,
+        formattedType: 'bigint',
+        // @ts-expect-error A present binding collation is an OID or explicit SQL NULL.
+        collationOid: '16422',
+    };
+export const unconfirmedUpdateKey: PostgresRowObservation['identifier']['configuration'] =
+    {
+        type: 'configured-key',
+        columnNames: ['tenant_id', 'id'],
+        // @ts-expect-error A configured stable key requires explicit confirmation.
+        stabilityConfirmed: false,
+    };
+export const missingUpdateBaseline: PostgresUpdateQuery = {
+    ...updateQuery,
+    // @ts-expect-error A submitted field always includes its observed baseline.
+    changes: [{ columnName: 'customer_name', value: '' }],
+};
+export const undefinedUpdateValue: PostgresUpdateQuery = {
+    ...updateQuery,
+    changes: [
+        {
+            columnName: 'customer_name',
+            expected: null,
+            // @ts-expect-error Undefined is not SQL NULL or omission from the changes array.
+            value: undefined,
+        },
+    ],
+};
+export const numericUpdateValue: PostgresUpdateQuery = {
+    ...updateQuery,
+    // @ts-expect-error Updating a native numeric column never coerces a JS number.
+    changes: [{ columnName: 'id', expected: '9007199254740993', value: 1 }],
+};
+export const wrongUpdateSource: PostgresUpdateQuery = {
+    ...updateQuery,
+    source: {
+        // @ts-expect-error Native updates do not consume Airtable source identity.
+        type: 'airtable',
+        baseId: 'appSynthetic',
+        tableId: 'tblSynthetic',
+    },
+};
+export const uncertainUpdate: PostgresUpdateResult = {
+    ...updated,
+    // @ts-expect-error An uncertain write cannot be a committed returned observation.
+    outcome: 'unknown',
+};
+// @ts-expect-error A committed update must include its actual returned observation.
+export const countOnlyUpdate: PostgresUpdateResult = {
+    outcome: 'committed',
+    source,
+    table,
+};
+export const absentUpdateIdentity: PostgresRowObservation = {
+    ...observation,
+    // @ts-expect-error An editable observation cannot invent a missing native key.
+    identity: null,
+};
+export const attachmentReason: PostgresAttachmentDisplayFailure =
+    'URL_CREDENTIALS';
+export const attachmentError = new PostgresAttachmentDisplayError(
+    1,
+    attachmentReason
+);
+export const attachmentURLs: readonly string[] = parsePostgresAttachmentDisplay(
+    'https://example.invalid/a%2Cb.pdf'
+);
+export const attachmentGrammar: string = POSTGRES_ATTACHMENT_DISPLAY_SYNTAX;
+// @ts-expect-error Public URL projections cannot become mutable attachment values.
+attachmentURLs.push('https://example.invalid/upload');
+// @ts-expect-error Native display values are stored text or SQL NULL.
+parsePostgresAttachmentDisplay([{ url: 'https://example.invalid/a.pdf' }]);
+// @ts-expect-error Failure reasons remain a finite canonical union.
+export const unknownAttachmentReason: PostgresAttachmentDisplayFailure =
+    'UPLOAD_FAILED';
+
+export const displayConfiguration: PostgresRecordDisplayConfiguration = {
+    source,
+    table,
+    displayColumnName: 'customer_name',
+};
+export const configuredIdentifier: PostgresIdentifierConfiguration = {
+    type: 'configured-key',
+    columnNames: ['tenant_id', 'external_id'],
+    stabilityConfirmed: true,
+};
+export const editingConfiguration: PostgresRecordEditingConfiguration = {
+    ...displayConfiguration,
+    identifier: configuredIdentifier,
+};
+export const nativePkConfiguration: PostgresRecordEditingConfiguration = {
+    ...displayConfiguration,
+    identifier: { type: 'primary-key' },
+};
+export const editingObservation: PostgresRecordEditingValidation = {
+    configuration: editingConfiguration,
+    relationOid: 16400,
+    identifierColumnNames: ['tenant_id', 'external_id'],
+    hasVisibleRows: true,
+    uniquenessScope: 'current-visible-snapshot',
+    stabilityBasis: 'customer-confirmed',
+};
+
+// @ts-expect-error Even native-primary-key editing requires an explicit display column.
+export const missingDisplay: PostgresRecordEditingConfiguration = {
+    source,
+    table,
+    identifier: { type: 'primary-key' },
+};
+// @ts-expect-error Configured keys require explicit customer stability confirmation.
+export const unconfirmedIdentifier: PostgresIdentifierConfiguration = {
+    type: 'configured-key',
+    columnNames: ['external_id'],
+};
+export const permanentUniqueness: PostgresRecordEditingValidation = {
+    ...editingObservation,
+    // @ts-expect-error A visible-row observation cannot establish permanent global uniqueness.
+    uniquenessScope: 'all-rows-forever',
+};
+
+export const crossedSource: PostgresSource = {
+    // @ts-expect-error Native PostgreSQL query sources cannot become Airtable sources.
+    type: 'airtable',
+    connectionId: table.connectionId,
+    databaseName: 'synthetic_database',
+};
+export const crossedQuery: PostgresSelectQuery = {
+    ...query,
+    // @ts-expect-error PostgreSQL queries do not use Airtable filter formulas.
+    where: 'AND({amount} > 0)',
+};
+export const implicitNull: PostgresFilter = {
+    type: 'comparison',
+    columnName: 'amount',
+    operator: 'eq',
+    // @ts-expect-error SQL NULL has explicit operators rather than a scalar operand.
+    value: null,
+};
+
+// @ts-expect-error Native wire values must not lose integer/numeric precision.
+export const numericCoercion: PostgresValue = 9007199254740993;
+// @ts-expect-error Temporal wire values retain PostgreSQL text precision/timezone semantics.
+export const temporalCoercion: PostgresValue = new Date();
+// @ts-expect-error Native identities do not become Airtable record IDs.
+export const airtableIdentity: PostgresRecordIdentity = 'rec_example';
+
+
+// Saved private access intent is a type-only contract, independently of public Form admission.
+declare const savedFormIdentifier: PostgresRowObservation['identifier'];
+export const editOnlyFormAccess: PostgresFormRecordAccess = {
+    disableCreatingRecords: true,
+    disableAccessingExistingRecords: false,
+    identifier: savedFormIdentifier,
+};
+export const disabledFormAccess: PostgresFormRecordAccess = { disableAccessingExistingRecords: true };
+export const dormantFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: true, identifier: savedFormIdentifier };
+// @ts-expect-error Enabling editing requires a saved identifier.
+export const missingFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: false };
+// @ts-expect-error A present native access object cannot silently turn editing on.
+export const unspecifiedFormAccess: PostgresFormRecordAccess = {};
+// @ts-expect-error Absence belongs to the containing optional access property.
+export const absentFormAccess: PostgresFormRecordAccess = undefined;
+export function inspectFormAccess(access: PostgresFormRecordAccess) {
+    if (access.disableAccessingExistingRecords === false) {
+        const identifier: PostgresRowObservation['identifier'] = access.identifier;
+        return identifier.configuration;
+    }
+    return access.identifier?.configuration;
+}
+
+// @ts-expect-error Enabled editing cannot use SQL NULL as an identifier.
+export const nullFormIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: false, identifier: null };
+export const explicitlyAbsentDormantIdentifier: PostgresFormRecordAccess = { disableAccessingExistingRecords: true, identifier: undefined };
+
+export const nativeUuidConfig: PostgresUuidColumnConfig = { readOnly: false, required: true, title: 'Native UUID', descriptionStyle: 'tooltip' };
+// @ts-expect-error UUID settings have no text normalization.
+export const uuidTextNormalization: PostgresUuidColumnConfig = { preserveTrailingWhitespace: true };
+// @ts-expect-error UUID values have no attachment presentation.
+export const uuidAttachmentDisplay: PostgresUuidColumnConfig = { displayAs: 'attachments-public-urls' };
+// @ts-expect-error Database UUID defaults do not add a value generator setting.
+export const uuidValueGeneration: PostgresUuidColumnConfig = { generateUuid: true };
+
+
+// Composed private native authoring contracts, checked from the installed package.
+import type {
+    FormLoadedResult,
+    PostgresConfiguredColumn,
+    PostgresFormDraft,
+    PostgresFormDraftState,
+    PostgresNativeDraft,
+    PostgresPortalDraft,
+    PostgresPortalDraftState,
+    PostgresPortalTab,
+    PostgresReadableRelationConfiguration,
+} from '@miniextensions/sdk';
+
+declare const privateForm: PostgresFormDraft;
+declare const privatePortal: PostgresPortalDraft;
+declare const privateTab: PostgresPortalTab;
+
+export const nativeFormArm: PostgresNativeDraft = privateForm;
+export const nativePortalArm: PostgresNativeDraft = privatePortal;
+export const formState: PostgresFormDraftState = {
+    table: privateForm.state.table,
+    displayColumnName: 'title',
+    formFields: [
+        {
+            kind: 'text',
+            columnName: 'links',
+            config: { displayAs: 'attachments-public-urls' },
+        },
+        { kind: 'boolean', columnName: 'approved', config: { required: true } },
+        { kind: 'numeric', columnName: 'amount', config: {} },
+        { kind: 'date', columnName: 'day', config: {} },
+        { kind: 'enum', columnName: 'status', config: {} },
+        { kind: 'uuid', columnName: 'id', config: { readOnly: false } },
+    ],
+    access: undefined,
+};
+export const portalState: PostgresPortalDraftState = {
+    tabs: [
+        {
+            ...privateTab,
+            criteria: {
+                where: {
+                    type: 'comparison',
+                    columnName: 'amount',
+                    operator: 'gt',
+                    value: '9007199254740993.123456789',
+                },
+                orderBy: [
+                    { columnName: 'amount', direction: 'asc', nulls: 'last' },
+                ],
+            },
+            identifier: undefined,
+        },
+        { ...privateTab, id: 'another-tab', criteria: undefined },
+    ],
+};
+export const readableRelation: PostgresReadableRelationConfiguration = {
+    source: privateForm.source,
+    table: privateTab.table,
+    relationOid: privateTab.relationOid,
+    displayColumnName: privateTab.displayColumnName,
+    columns: privateTab.columns,
+};
+
+export function inspectPrivateDraft(draft: PostgresNativeDraft) {
+    const nativeSource: 'postgres' = draft.source.type;
+    const currentVersion: 106 = draft.version;
+    if (draft.type === 'form') {
+        const fields: PostgresConfiguredColumn[] = draft.state.formFields;
+        const generation: number = draft.relationOid;
+        // @ts-expect-error Form state does not acquire Portal tabs.
+        draft.state.tabs;
+        return { nativeSource, currentVersion, fields, generation };
+    }
+    if (draft.type === 'BULK_COPY_FIELD_VALUE') {
+        const mapping: PostgresCopyPlanningConfig = draft.state.mapping;
+        const generation: number = draft.relationOid;
+        // @ts-expect-error Copy state does not acquire Portal tabs.
+        draft.state.tabs;
+        // @ts-expect-error Copy state does not acquire Form fields.
+        draft.state.formFields;
+        return { nativeSource, currentVersion, mapping, generation };
+    }
+    if (draft.type === 'BULK_CREATE_RECORDS_FROM_CSV') {
+        const csv: PostgresCsvAttachmentDraft = draft;
+        const displayColumn: string | undefined = csv.state.targetDisplayColumnName;
+        // @ts-expect-error A CSV destination does not have a Copier count column.
+        csv.state.numberOfCopiesField;
+        return { nativeSource, currentVersion, displayColumn };
+    }
+    if (draft.type === 'BULK_RECORD_COPIER') {
+        const copier: PostgresRecordCopierDraft = draft;
+        const countColumn: string = copier.state.numberOfCopiesField;
+        // @ts-expect-error Copier state does not have a CSV destination.
+        copier.state.targetTable;
+        return { nativeSource, currentVersion, countColumn };
+    }
+    if (draft.type === 'BULK_generate_random_numbers') {
+        const random: PostgresRandomNumbersDraft = draft;
+        const length: number | null | undefined = random.state.generatedValueLength;
+        const destination: string = random.state.destinationColumnName;
+        // @ts-expect-error Random Numbers does not use a Copy field mapping.
+        random.state.mapping;
+        return { nativeSource, currentVersion, length, destination };
+    }
+    const tabs: PostgresPortalTab[] = draft.state.tabs;
+    // @ts-expect-error Portal state does not acquire Form fields.
+    draft.state.formFields;
+    return { nativeSource, currentVersion, tabs };
+}
+
+// @ts-expect-error Existing Form and Portal types retain their corresponding state.
+export const crossedFormState: PostgresFormDraftState = portalState;
+// @ts-expect-error Existing Portal and Form types retain their corresponding state.
+export const crossedPortalState: PostgresPortalDraftState = formState;
+// @ts-expect-error A Form discriminator cannot pair with Portal state.
+export const crossedDraft: PostgresNativeDraft = {
+    ...privatePortal,
+    type: 'form',
+};
+export const historicalDraft: PostgresNativeDraft = {
+    ...privateForm,
+    // @ts-expect-error The private native draft belongs to schema 106.
+    version: 105,
+};
+export const airtableDraft: PostgresNativeDraft = {
+    ...privateForm,
+    // @ts-expect-error Private native drafts do not accept Airtable source envelopes.
+    source: { type: 'airtable', baseId: 'app_fixture' },
+};
+// @ts-expect-error A Form requires an explicit display-column property.
+export const missingFormDisplay: PostgresFormDraftState = {
+    table: privateTab.table,
+    formFields: [],
+};
+// @ts-expect-error A readable relation requires an explicit display-column property.
+export const missingRelationDisplay: PostgresReadableRelationConfiguration = {
+    source: privateForm.source,
+    table: privateTab.table,
+    relationOid: 1,
+    columns: [],
+};
+// @ts-expect-error A Portal tab requires an explicit display-column property.
+export const missingTabDisplay: PostgresPortalTab = {
+    id: 'tab',
+    name: 'Tab',
+    table: privateTab.table,
+    relationOid: 1,
+    columns: [],
+};
+export const unknownColumn: PostgresConfiguredColumn = {
+    // @ts-expect-error A configured column's kind must be a supported native control.
+    kind: 'airtable',
+    columnName: 'value',
+    config: {},
+};
+export const uuidAttachmentColumn: PostgresConfiguredColumn = {
+    kind: 'uuid',
+    columnName: 'id',
+    // @ts-expect-error UUID configuration cannot acquire text attachment presentation.
+    config: { displayAs: 'attachments-public-urls' },
+};
+export const booleanTextColumn: PostgresConfiguredColumn = {
+    kind: 'boolean',
+    columnName: 'approved',
+    // @ts-expect-error Boolean configuration cannot acquire text-only normalization.
+    config: { preserveTrailingWhitespace: true },
+};
+export const editingWithoutIdentifier: PostgresFormDraftState = {
+    ...formState,
+    // @ts-expect-error Enabling existing-record editing still requires a saved identifier.
+    access: { disableAccessingExistingRecords: false },
+};
+// @ts-expect-error Native saved configuration is not a released public Airtable source.
+export const publicFormSource: NonNullable<FormLoadedResult['source']> =
+    privateForm.source;
+
+// Connection equality, duplicate names, bounds and live grants are runtime checks.
+// These witnesses intentionally assert no value-dependent authority for strings.
+
+
+// Native temporal configuration is type-only; no epoch or timezone conversion.
+import type {
+    PostgresTimestampColumnConfig,
+    PostgresTimestamptzColumnConfig,
+} from '@miniextensions/sdk';
+
+export const nativeLocalTimestampConfig: PostgresTimestampColumnConfig = {};
+export const nativeInstantConfig: PostgresTimestamptzColumnConfig = {
+    required: true,
+    readOnly: false,
+    title: 'Native instant',
+    descriptionStyle: 'tooltip',
+};
+export const localTimestampColumn: PostgresConfiguredColumn = {
+    kind: 'timestamp',
+    columnName: 'local_value',
+    config: nativeLocalTimestampConfig,
+};
+export const instantColumn: PostgresConfiguredColumn = {
+    kind: 'timestamptz',
+    columnName: 'moment',
+    config: nativeInstantConfig,
+};
+export const localTimezoneSetting: PostgresTimestampColumnConfig = {
+    // @ts-expect-error Native column settings do not change the database timezone.
+    timeZone: 'UTC',
+};
+export const instantPrecisionSetting: PostgresTimestamptzColumnConfig = {
+    // @ts-expect-error Native typmod precision is not an extension storage setting.
+    precision: 3,
+};
+export const temporalEpochSetting: PostgresTimestampColumnConfig = {
+    // @ts-expect-error Native timestamp settings do not select epoch/JavaScript Date conversion.
+    dateFormat: 'epoch-milliseconds',
+};
+export const temporalAttachmentSetting: PostgresConfiguredColumn = {
+    kind: 'timestamptz',
+    columnName: 'moment',
+    // @ts-expect-error Attachment presentation belongs to configured text columns.
+    config: { displayAs: 'attachments-public-urls' },
+};
+
+// Ephemeral observations cannot silently upgrade previously formatted values.
+type VersionAssert<T extends true> = T;
+type InvalidObservedVersion<T, V> = Omit<T, 'formatVersion'> & {
+    formatVersion: V;
+} extends T
+    ? false
+    : true;
+export type PostgresObservedValueVersions = [
+    VersionAssert<
+        Omit<
+            PostgresRowObservation,
+            'formatVersion'
+        > extends PostgresRowObservation
+            ? false
+            : true
+    >,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, undefined>>,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, 0>>,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, 2>>,
+    VersionAssert<InvalidObservedVersion<PostgresRowObservation, '1'>>,
+    VersionAssert<
+        Omit<PostgresUpdateQuery, 'formatVersion'> extends PostgresUpdateQuery
+            ? false
+            : true
+    >,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, undefined>>,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, 0>>,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, 2>>,
+    VersionAssert<InvalidObservedVersion<PostgresUpdateQuery, '1'>>,
+    VersionAssert<
+        Omit<
+            PostgresRowObservation['identity'],
+            'formatVersion'
+        > extends PostgresRowObservation['identity']
+            ? false
+            : true
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], undefined>
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], 0>
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], 2>
+    >,
+    VersionAssert<
+        InvalidObservedVersion<PostgresRowObservation['identity'], '1'>
+    >,
+];
+
+import type {
+    PostgresTimeColumnConfig,
+    PostgresTimetzColumnConfig,
+} from '@miniextensions/sdk';
+
+export const nativeLocalTimeConfig: PostgresTimeColumnConfig = {};
+export const nativeOffsetClockConfig: PostgresTimetzColumnConfig = {
+    required: false,
+    readOnly: false,
+    title: 'Native clock with offset',
+    descriptionStyle: 'tooltip',
+};
+export const localTimeColumn: PostgresConfiguredColumn = {
+    kind: 'time',
+    columnName: 'local_value',
+    config: nativeLocalTimeConfig,
+};
+export const offsetClockColumn: PostgresConfiguredColumn = {
+    kind: 'timetz',
+    columnName: 'moment',
+    config: nativeOffsetClockConfig,
+};
+export const clockTimezoneSetting: PostgresTimeColumnConfig = {
+    // @ts-expect-error Native column settings do not change the database timezone.
+    timeZone: 'UTC',
+};
+export const offsetPrecisionSetting: PostgresTimetzColumnConfig = {
+    // @ts-expect-error Native typmod precision is not an extension storage setting.
+    precision: 3,
+};
+export const clockEpochSetting: PostgresTimeColumnConfig = {
+    // @ts-expect-error Native time settings do not select epoch/JavaScript Date conversion.
+    dateFormat: 'epoch-milliseconds',
+};
+export const clockAttachmentSetting: PostgresConfiguredColumn = {
+    kind: 'timetz',
+    columnName: 'moment',
+    // @ts-expect-error Attachment presentation belongs to configured text columns.
+    config: { displayAs: 'attachments-public-urls' },
+};
+
+export const clockTextNormalization: PostgresTimeColumnConfig = {
+    // @ts-expect-error Native time columns have no text-normalization setting.
+    trimWhitespace: true,
+};
+
+import type {PostgresIntervalColumnConfig} from '@miniextensions/sdk';
+export const nativeIntervalConfig:PostgresIntervalColumnConfig={};
+export const explicitFalseInterval:PostgresIntervalColumnConfig={required:false,readOnly:false,showTitle:false};
+export const intervalColumn:PostgresConfiguredColumn={kind:'interval',columnName:'span',config:explicitFalseInterval};
+export const intervalSessionFormat:PostgresIntervalColumnConfig={
+ // @ts-expect-error Session input rules are not per-field configuration.
+ intervalStyle:'iso_8601',
+};
+export const intervalUnitConversion:PostgresIntervalColumnConfig={
+ // @ts-expect-error Native components are not JavaScript milliseconds.
+ durationUnit:'milliseconds',
+};
+export const intervalPrecision:PostgresIntervalColumnConfig={
+ // @ts-expect-error Precision belongs to the native column typmod.
+ precision:3,
+};
+export const intervalTextNormalization:PostgresIntervalColumnConfig={
+ // @ts-expect-error Text settings do not configure interval values.
+ preserveTrailingWhitespace:true,
+};
+export const intervalAttachments:PostgresIntervalColumnConfig={
+ // @ts-expect-error Public URL attachment display belongs to text columns.
+ displayAs:'attachments-public-urls',
+};
+
+import type {PostgresJsonColumnConfig,PostgresJsonbColumnConfig} from '@miniextensions/sdk';
+export const jsonSettings:PostgresJsonColumnConfig={};
+export const jsonbSettings:PostgresJsonbColumnConfig={required:false,readOnly:false,showTitle:false};
+export const jsonColumn:PostgresConfiguredColumn={kind:'json',columnName:'document',config:jsonSettings};
+export const jsonbColumn:PostgresConfiguredColumn={kind:'jsonb',columnName:'normalized',config:jsonbSettings};
+export const jsonNullDocument:PostgresValue='null';
+export const sqlNullDocument:PostgresValue=null;
+export const exactLargeJsonDocument:PostgresValue='{"n":9007199254740993}';
+// @ts-expect-error Native document values are raw strings, never parsed JavaScript objects.
+export const parsedNativeJson:PostgresValue={n:1};
+// @ts-expect-error Native numeric JSON values are not JavaScript numbers.
+export const numericNativeJson:PostgresValue=1;
+export const jsonSchemaSetting:PostgresJsonColumnConfig={
+ // @ts-expect-error Database/domain constraints are not copied into field settings.
+ jsonSchema:{type:'object'},
+};
+export const jsonbCoercion:PostgresJsonbColumnConfig={
+ // @ts-expect-error Native parsing must not coerce numeric document values in JavaScript.
+ coerceNumbers:true,
+};
+export const jsonTextNormalization:PostgresJsonColumnConfig={
+ // @ts-expect-error Native JSON is not a text-column transformation.
+ preserveTrailingWhitespace:true,
+};
+export const jsonAttachmentDisplay:PostgresJsonbColumnConfig={
+ // @ts-expect-error Public URL attachment display applies only to configured text columns.
+ displayAs:'attachments-public-urls',
+};
+
+import type {
+    PostgresRelationshipBinding as RelationshipWitnessPostgresRelationshipBinding,
+    PostgresRelationshipColumn as RelationshipWitnessPostgresRelationshipColumn,
+    PostgresRelationshipOperator as RelationshipWitnessPostgresRelationshipOperator,
+    PostgresRelationshipCollation as RelationshipWitnessPostgresRelationshipCollation,
+    PostgresRelationshipConfig as RelationshipWitnessPostgresRelationshipConfig,
+    PostgresRelationshipSelection as RelationshipWitnessPostgresRelationshipSelection,
+    PostgresRelationshipChange as RelationshipWitnessPostgresRelationshipChange,
+    PostgresRelationshipClear as RelationshipWitnessPostgresRelationshipClear,
+    PostgresRelationshipCandidate as RelationshipWitnessPostgresRelationshipCandidate,
+    PostgresRelationshipCandidatePage as RelationshipWitnessPostgresRelationshipCandidatePage,
+    PostgresRelationshipPresentation as RelationshipWitnessPostgresRelationshipPresentation,
+    PostgresRowObservation as RelationshipWitnessPostgresRowObservation,
+    PostgresSelectResult as RelationshipWitnessPostgresSelectResult,
+    PostgresFormDraftState as RelationshipWitnessPostgresFormDraftState,
+    PostgresPortalTab as RelationshipWitnessPostgresPortalTab,
+    PostgresReadableRelationConfiguration as RelationshipWitnessPostgresReadableRelationConfiguration,
+    FormLoadedResult as RelationshipWitnessFormLoadedResult,
+} from '@miniextensions/sdk';
+
+declare const binding: RelationshipWitnessPostgresRelationshipBinding;
+declare const column: RelationshipWitnessPostgresRelationshipColumn;
+declare const page: RelationshipWitnessPostgresRelationshipCandidatePage;
+declare const form: RelationshipWitnessPostgresFormDraftState;
+declare const tab: RelationshipWitnessPostgresPortalTab;
+declare const readable: RelationshipWitnessPostgresReadableRelationConfiguration;
+export const operator: RelationshipWitnessPostgresRelationshipOperator = {
+    oid: 98,
+    schemaName: 'pg_catalog',
+    name: '=',
+    leftTypeOid: 25,
+    rightTypeOid: 25,
+};
+export const collation: RelationshipWitnessPostgresRelationshipCollation = {
+    oid: 100,
+    schemaName: 'pg_catalog',
+    name: 'default',
+};
+export const config: RelationshipWitnessPostgresRelationshipConfig = {
+    readOnly: false,
+    required: false,
+    clearColumnNames: ['contact_id'],
+};
+export const selection: RelationshipWitnessPostgresRelationshipSelection = {
+    formatVersion: 1,
+    relationshipName: 'customer_fk',
+    values: [
+        { columnName: 'tenant', value: ' Exact ' },
+        { columnName: 'code', value: '9007199254740993' },
+    ],
+};
+export const change: RelationshipWitnessPostgresRelationshipChange = {
+    selection,
+    expected: [
+        { columnName: 'tenant_id', value: ' Exact ' },
+        { columnName: 'contact_id', value: null },
+    ],
+};
+export const clear: RelationshipWitnessPostgresRelationshipClear = {
+    relationshipName: 'customer_fk',
+    expected: change.expected,
+};
+export const createClear: RelationshipWitnessPostgresRelationshipClear = {
+    relationshipName: 'customer_fk',
+};
+export const choosing: RelationshipWitnessPostgresRelationshipBinding = {
+    ...binding,
+    config,
+    selection: { enabled: true, displayColumn: column },
+};
+export const clearOnly: RelationshipWitnessPostgresRelationshipBinding = {
+    ...binding,
+    config,
+    selection: { enabled: false },
+};
+export const candidates: RelationshipWitnessPostgresRelationshipCandidate[] = [
+    { selection, label: 'Duplicate' },
+    { selection, label: 'Duplicate' },
+    { selection, label: null },
+    { selection, label: '' },
+];
+export const returned: RelationshipWitnessPostgresRelationshipCandidatePage = {
+    ...page,
+    candidates,
+};
+export const formWithRelationships: RelationshipWitnessPostgresFormDraftState = {
+    ...form,
+    relationships: [choosing, clearOnly],
+};
+export const tabWithRelationships: RelationshipWitnessPostgresPortalTab = {
+    ...tab,
+    relationships: [choosing],
+};
+export const readWithRelationships: RelationshipWitnessPostgresReadableRelationConfiguration = {
+    ...readable,
+    relationships: [clearOnly],
+};
+export const missingRelationshipDisplay: RelationshipWitnessPostgresRelationshipBinding = {
+    ...binding,
+    // @ts-expect-error Enabled selection requires an explicit display column.
+    selection: { enabled: true },
+};
+export const requestOwnedClear: RelationshipWitnessPostgresRelationshipClear = {
+    ...clear,
+    // @ts-expect-error Clear intent cannot supply server-owned columns to empty.
+    clearColumnNames: ['tenant_id'],
+};
+export const requestOwnedWrite: RelationshipWitnessPostgresRelationshipSelection = {
+    ...selection,
+    // @ts-expect-error Selection cannot supply server-owned assignment columns.
+    writeColumnNames: ['tenant_id'],
+};
+export const numericKey: RelationshipWitnessPostgresRelationshipSelection = {
+    ...selection,
+    // @ts-expect-error Native key inputs stay lossless strings, never JavaScript numbers.
+    values: [{ columnName: 'code', value: 9007199254740993 }],
+};
+export const publicSource: RelationshipWitnessFormLoadedResult['source'] = {
+    // @ts-expect-error Relationship authoring does not admit the existing public Airtable Form protocol.
+    type: 'postgres',
+    connectionId: 'native',
+    databaseName: 'database',
+};
+
+export const loadedPresentation:RelationshipWitnessPostgresRelationshipPresentation={formatVersion:1,relationshipName:'customer_fk',baseline:[{columnName:'tenant_id',value:' Exact '},{columnName:'contact_id',value:null}],status:'resolved',label:''};
+export const nullPresentation:RelationshipWitnessPostgresRelationshipPresentation={...loadedPresentation,status:'resolved',label:null};
+export const unavailablePresentation:RelationshipWitnessPostgresRelationshipPresentation={formatVersion:1,relationshipName:'customer_fk',baseline:loadedPresentation.baseline,status:'unavailable'};
+export const emptyPresentation:RelationshipWitnessPostgresRelationshipPresentation={...unavailablePresentation,status:'empty'};
+declare const observed:RelationshipWitnessPostgresRowObservation;
+declare const records:RelationshipWitnessPostgresSelectResult;
+export const observedLabels:RelationshipWitnessPostgresRowObservation={...observed,relationshipPresentations:[loadedPresentation]};
+export const rowAlignedLabels:RelationshipWitnessPostgresSelectResult={...records,relationshipPresentations:[[loadedPresentation],[unavailablePresentation]]};
+// @ts-expect-error Loaded presentation has no native target selection tuple.
+export const presentationIsNotSelection:RelationshipWitnessPostgresRelationshipSelection=loadedPresentation;
+export const unavailableHasNoLabel:RelationshipWitnessPostgresRelationshipPresentation={...unavailablePresentation,
+// @ts-expect-error Only a resolved presentation carries a label.
+label:'hidden'};
+
+import type { PostgresByteaColumnConfig } from '@miniextensions/sdk';
+export const byteaSettings: PostgresByteaColumnConfig = {};
+export const byteaRequired: PostgresByteaColumnConfig = {required:true,readOnly:false,title:'Bytes'};
+export const byteaColumn: PostgresConfiguredColumn = {kind:'bytea',columnName:'payload',config:byteaSettings};
+export const byteaHex:PostgresValue=String.raw`\x0080ff`;
+export const byteaEscape:PostgresValue=String.raw`\000\200\377`;
+export const byteaSqlNull:PostgresValue=null;
+export const byteaEmptyInput:PostgresValue='';
+// @ts-expect-error Native values remain lossless wire strings, not JavaScript buffers.
+export const byteaBuffer:PostgresValue=new Uint8Array([0,255]);
+export const byteaTextTransformation:PostgresByteaColumnConfig={
+ // @ts-expect-error BYTEA is not a text column.
+ preserveTrailingWhitespace:true,
+};
+export const byteaAttachment:PostgresByteaColumnConfig={
+ // @ts-expect-error URL attachment display applies only to text.
+ displayAs:'attachments-public-urls',
+};
+export const byteaUpload:PostgresByteaColumnConfig={
+ // @ts-expect-error Native BYTEA is not a file upload service.
+ upload:true,
+};
+export const byteaEncoding:PostgresByteaColumnConfig={
+ // @ts-expect-error Parsing belongs to PostgreSQL, with no copied encoding policy.
+ encoding:'base64',
+};
+
+export const byteaCanonicalZeroBytes:PostgresValue=String.raw`\x`;
+
+import type {PostgresCopyPlanningConfig,PostgresCopyFieldValueDraft,PostgresCopyFieldValuePlan} from '@miniextensions/sdk';
+export const copyMapping:PostgresCopyPlanningConfig={fieldsToCopy:['source'],destinationFields:['destination']};
+export const copyDraftTag:PostgresCopyFieldValueDraft['type']='BULK_COPY_FIELD_VALUE';
+export const copyExecutionAdmission:PostgresCopyFieldValuePlan['executionAdmission']='pending';
+export const copyNativeArm:Extract<PostgresNativeDraft,{type:'BULK_COPY_FIELD_VALUE'}>['state']['mapping']=copyMapping;
+// @ts-expect-error Private read planning cannot enable execution.
+export const unsafeCopyExecution:PostgresCopyFieldValuePlan['executionAdmission']='enabled';
+export const forbiddenCopyPolicy:PostgresCopyPlanningConfig={
+ fieldsToCopy:['source'],destinationFields:['destination'],
+ // @ts-expect-error Exact native copying is fixed; callers cannot opt into skip-empty behavior.
+ skipEmpty:true,
+};
+// @ts-expect-error Native Copy uses its existing extension type, never Form.
+export const wrongCopyType:PostgresCopyFieldValueDraft['type']='FORM';
+
+export const copyExactValuePolicy:PostgresCopyFieldValuePlan['valuePolicy']='exact-native-values';
+export const copyOptionalIdentifier:PostgresCopyFieldValueDraft['state']['identifier']=undefined;
+// @ts-expect-error Native Copy cannot inherit Airtable skip-empty semantics.
+export const wrongCopyValuePolicy:PostgresCopyFieldValuePlan['valuePolicy']='skip-empty';

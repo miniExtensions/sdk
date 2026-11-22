@@ -22,6 +22,79 @@ import type {
     CanonicalSelectorFilter,
     CanonicalSelectFieldChoice,
 } from './contracts/generated.js';
+import type {
+    CanonicalPostgresAttachmentDisplayFailure,
+    CanonicalPostgresBooleanColumnConfig,
+    CanonicalPostgresConnection,
+    CanonicalPostgresConfiguredColumn,
+    CanonicalPostgresCreateQuery,
+    CanonicalPostgresCreateResult,
+    CanonicalPostgresDatabase,
+    CanonicalPostgresDateColumnConfig,
+    CanonicalPostgresEnumColumnConfig,
+    CanonicalPostgresUuidColumnConfig,
+    CanonicalPostgresTimestampColumnConfig,
+    CanonicalPostgresTimestamptzColumnConfig,
+    CanonicalPostgresTimeColumnConfig,
+    CanonicalPostgresTimetzColumnConfig,
+    CanonicalPostgresIntervalColumnConfig,
+    CanonicalPostgresJsonColumnConfig,
+    CanonicalPostgresJsonbColumnConfig,
+    CanonicalPostgresByteaColumnConfig,
+    CanonicalPostgresField,
+    CanonicalPostgresFormRecordAccess,
+    CanonicalPostgresFormDraftState,
+    CanonicalPostgresFormDraft,
+    CanonicalPostgresFilter,
+    CanonicalPostgresIdentifierConfiguration,
+    CanonicalPostgresNumericColumnConfig,
+    CanonicalPostgresNativeDraft,
+    CanonicalPostgresCopyPlanningConfig,
+    CanonicalPostgresCopyFieldValueDraftState,
+    CanonicalPostgresCopyFieldValueDraft,
+    CanonicalPostgresCopyFieldValuePlanMapping,
+    CanonicalPostgresCopyFieldValuePlan,
+    CanonicalPostgresPortalTab,
+    CanonicalPostgresPortalDraftState,
+    CanonicalPostgresPortalDraft,
+    CanonicalPostgresRecordCopierDraftState,
+    CanonicalPostgresRecordCopierDraft,
+    CanonicalPostgresCsvAttachmentState,
+    CanonicalPostgresCsvAttachmentDraft,
+    CanonicalPostgresRandomNumbersDraftState,
+    CanonicalPostgresRandomNumbersDraft,
+    CanonicalPostgresRecord,
+    CanonicalPostgresRecordDisplayConfiguration,
+    CanonicalPostgresRecordEditingConfiguration,
+    CanonicalPostgresRecordEditingValidation,
+    CanonicalPostgresRecordIdentity,
+    CanonicalPostgresReadableRelationConfiguration,
+    CanonicalPostgresRelationship,
+    CanonicalPostgresRelationshipOperator,
+    CanonicalPostgresRelationshipCollation,
+    CanonicalPostgresRelationshipConfig,
+    CanonicalPostgresRelationshipColumn,
+    CanonicalPostgresRelationshipBinding,
+    CanonicalPostgresRelationshipSelection,
+    CanonicalPostgresRelationshipChange,
+    CanonicalPostgresRelationshipClear,
+    CanonicalPostgresRelationshipCandidate,
+    CanonicalPostgresRelationshipCandidatePage,
+    CanonicalPostgresRelationshipPresentation,
+    CanonicalPostgresRowObservation,
+    CanonicalPostgresSchema,
+    CanonicalPostgresSelectQuery,
+    CanonicalPostgresSelectResult,
+    CanonicalPostgresSort,
+    CanonicalPostgresSource,
+    CanonicalPostgresTable,
+    CanonicalPostgresTableReference,
+    CanonicalPostgresTextColumnConfig,
+    CanonicalPostgresType,
+    CanonicalPostgresUpdateQuery,
+    CanonicalPostgresUpdateResult,
+    CanonicalPostgresValue,
+} from './contracts/postgres.generated.js';
 
 export type { CanonicalOperationTransports } from './contracts/generated.js';
 
@@ -45,6 +118,106 @@ export type SelectFieldChoice = CanonicalSelectFieldChoice;
 export type AirtableFieldSet = CanonicalAirtableFieldSet;
 export type AirtableRecord = CanonicalAirtableRecord;
 export type AirtableValue = CanonicalAirtableValue;
+/** Native PostgreSQL metadata and wire values; these do not imply a loaded Form. */
+export type PostgresAttachmentDisplayFailure =
+    CanonicalPostgresAttachmentDisplayFailure;
+export type PostgresConnection = CanonicalPostgresConnection;
+/** Native adapter contracts; these do not add a public Form transport operation. */
+export type PostgresCreateQuery = CanonicalPostgresCreateQuery;
+export type PostgresCreateResult = CanonicalPostgresCreateResult;
+/** Loaded native baselines confer no continuing authorization to edit a row. */
+export type PostgresRowObservation = CanonicalPostgresRowObservation;
+/** Native adapter contracts; these do not add a public Portal save operation. */
+export type PostgresUpdateQuery = CanonicalPostgresUpdateQuery;
+export type PostgresUpdateResult = CanonicalPostgresUpdateResult;
+/** Saved private Form access intent; current database/workspace checks still apply. No public transport admission. */
+export type PostgresFormRecordAccess = CanonicalPostgresFormRecordAccess;
+/** Private member authoring contracts; parsing and current authorization remain server-side. */
+export type PostgresConfiguredColumn = CanonicalPostgresConfiguredColumn;
+export type PostgresReadableRelationConfiguration =
+    CanonicalPostgresReadableRelationConfiguration;
+export type PostgresFormDraftState = CanonicalPostgresFormDraftState;
+export type PostgresFormDraft = CanonicalPostgresFormDraft;
+export type PostgresPortalTab = CanonicalPostgresPortalTab;
+export type PostgresPortalDraftState = CanonicalPostgresPortalDraftState;
+export type PostgresPortalDraft = CanonicalPostgresPortalDraft;
+export type PostgresRecordCopierDraftState =
+    CanonicalPostgresRecordCopierDraftState;
+export type PostgresRecordCopierDraft = CanonicalPostgresRecordCopierDraft;
+export type PostgresCsvAttachmentState = CanonicalPostgresCsvAttachmentState;
+export type PostgresCsvAttachmentDraft = CanonicalPostgresCsvAttachmentDraft;
+export type PostgresRandomNumbersDraftState =
+    CanonicalPostgresRandomNumbersDraftState;
+export type PostgresRandomNumbersDraft = CanonicalPostgresRandomNumbersDraft;
+export type PostgresNativeDraft = CanonicalPostgresNativeDraft;
+export type PostgresSource = CanonicalPostgresSource;
+export type PostgresDatabase = CanonicalPostgresDatabase;
+export type PostgresSchema = CanonicalPostgresSchema;
+export type PostgresTable = CanonicalPostgresTable;
+export type PostgresTableReference = CanonicalPostgresTableReference;
+export type PostgresField = CanonicalPostgresField;
+export type PostgresType = CanonicalPostgresType;
+export type PostgresRelationship = CanonicalPostgresRelationship;
+/** Saved native relationship intent; current settings, grants and tuple checks remain server-side. */
+export type PostgresRelationshipOperator =
+    CanonicalPostgresRelationshipOperator;
+export type PostgresRelationshipCollation =
+    CanonicalPostgresRelationshipCollation;
+export type PostgresRelationshipConfig = CanonicalPostgresRelationshipConfig;
+export type PostgresRelationshipColumn = CanonicalPostgresRelationshipColumn;
+export type PostgresRelationshipBinding = CanonicalPostgresRelationshipBinding;
+export type PostgresRelationshipSelection =
+    CanonicalPostgresRelationshipSelection;
+export type PostgresRelationshipChange = CanonicalPostgresRelationshipChange;
+export type PostgresRelationshipClear = CanonicalPostgresRelationshipClear;
+export type PostgresRelationshipCandidate =
+    CanonicalPostgresRelationshipCandidate;
+export type PostgresRelationshipCandidatePage =
+    CanonicalPostgresRelationshipCandidatePage;
+
+/** Optional loaded display data; never a relationship selection or write capability. */
+export type PostgresRelationshipPresentation =
+    CanonicalPostgresRelationshipPresentation;
+
+export type PostgresRecord = CanonicalPostgresRecord;
+export type PostgresValue = CanonicalPostgresValue;
+/** Generated scalar storage only; no schema validator or Form admission. */
+export type PostgresTextColumnConfig = CanonicalPostgresTextColumnConfig;
+/** Generated Boolean-column settings only; native values remain text/NULL. */
+export type PostgresBooleanColumnConfig = CanonicalPostgresBooleanColumnConfig;
+/** Generated numeric-column settings only; native values stay lossless text. */
+export type PostgresNumericColumnConfig = CanonicalPostgresNumericColumnConfig;
+/** Generated SQL DATE settings only; this adds no date parser or coercion. */
+export type PostgresDateColumnConfig = CanonicalPostgresDateColumnConfig;
+export type PostgresEnumColumnConfig = CanonicalPostgresEnumColumnConfig;
+export type PostgresUuidColumnConfig = CanonicalPostgresUuidColumnConfig;
+/** Native temporal configuration only; values retain PostgreSQL text precision. */
+export type PostgresTimestampColumnConfig =
+    CanonicalPostgresTimestampColumnConfig;
+export type PostgresTimestamptzColumnConfig =
+    CanonicalPostgresTimestamptzColumnConfig;
+export type PostgresTimeColumnConfig = CanonicalPostgresTimeColumnConfig;
+export type PostgresTimetzColumnConfig = CanonicalPostgresTimetzColumnConfig;
+export type PostgresIntervalColumnConfig =
+    CanonicalPostgresIntervalColumnConfig;
+export type PostgresJsonColumnConfig = CanonicalPostgresJsonColumnConfig;
+export type PostgresJsonbColumnConfig = CanonicalPostgresJsonbColumnConfig;
+export type PostgresByteaColumnConfig = CanonicalPostgresByteaColumnConfig;
+export type PostgresRecordIdentity = CanonicalPostgresRecordIdentity;
+export type PostgresIdentifierConfiguration =
+    CanonicalPostgresIdentifierConfiguration;
+export type PostgresRecordDisplayConfiguration =
+    CanonicalPostgresRecordDisplayConfiguration;
+export type PostgresRecordEditingConfiguration =
+    CanonicalPostgresRecordEditingConfiguration;
+/** A current visible snapshot observation, never ongoing mutation authority. */
+export type PostgresRecordEditingValidation =
+    CanonicalPostgresRecordEditingValidation;
+/** Structured read contracts; public runtime transport is a separate integration. */
+export type PostgresFilter = CanonicalPostgresFilter;
+export type PostgresSort = CanonicalPostgresSort;
+export type PostgresSelectQuery = CanonicalPostgresSelectQuery;
+export type PostgresSelectResult = CanonicalPostgresSelectResult;
 export type RuntimeQuery = CanonicalQuery;
 export type RuntimeLanguage = CanonicalLanguage;
 export type RuntimeAirtableField = CanonicalAirtableField;
@@ -336,3 +509,11 @@ export type MiniExtensionsClient = {
         ): Promise<void>;
     };
 };
+
+export type PostgresCopyPlanningConfig = CanonicalPostgresCopyPlanningConfig;
+export type PostgresCopyFieldValueDraftState =
+    CanonicalPostgresCopyFieldValueDraftState;
+export type PostgresCopyFieldValueDraft = CanonicalPostgresCopyFieldValueDraft;
+export type PostgresCopyFieldValuePlanMapping =
+    CanonicalPostgresCopyFieldValuePlanMapping;
+export type PostgresCopyFieldValuePlan = CanonicalPostgresCopyFieldValuePlan;

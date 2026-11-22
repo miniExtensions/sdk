@@ -512,6 +512,13 @@ it('SSR renders complete sanitized default UI and localized stock actions withou
         )
     );
     assert(html.includes('role="alert"'));
+    const icon = html.match(
+        /<svg[^>]*class="mx-sdk-form-completion-icon"[^>]*>.*?<\/svg>/
+    )?.[0];
+    assert(icon);
+    assert(icon.includes('viewBox="0 0 24 24"'));
+    assert(icon.includes('aria-hidden="true"'));
+    assert(icon.includes('d="M2.25 12c0-5.385'));
     assert(html.includes('<strong>world</strong>'));
     assert(!html.includes('<script>'));
     assert(html.includes('Submit another form'));

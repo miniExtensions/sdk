@@ -11,14 +11,20 @@ ${
     format === 'esm'
         ? `import {createElement as h, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, useAttachmentDownload} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, useAttachmentDownload}=require('@miniextensions/sdk/react');`
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
 const calls={selection:[],save:0,upload:0,delete:0,fetch:0};
+const downloads={pending:[],finished:0};
+const downloadListeners=new Set();
+const downloadOwner={token:0,isCurrent:()=>true,subscribe(listener){
+    downloadListeners.add(listener);
+    return ()=>downloadListeners.delete(listener);
+}};
 window.fetch=()=>{calls.fetch++;return Promise.reject(Error('Unexpected I/O'));};
 function Host(){
     const [rows,setRows]=useState([first,second]);
@@ -32,14 +38,22 @@ function Host(){
         setCollectionOwner(owner);
         setPublication(owner);
     }
-    window.sliderProbe={calls,setSelectedIndex,setAcceptsIntent,
+    window.sliderProbe={calls,downloads,setSelectedIndex,setAcceptsIntent,
         replace,
+        rotateDownloadOwner(){downloadOwner.token++;for(const listener of [...downloadListeners])listener();},
         reset(owner){calls.selection.length=0;replace(owner);},
         remap(marker){setRows((items)=>items.map((item)=>({...item})));setPublication(marker);},
         duplicates(){setRows([first,{...second,filename:first.filename}]);setPublication('duplicates');},
         shrink(){setRows([first]);},
         retire(){setRows([]);setCollectionOwner(null);setPublication('retired');}};
     const selected=rows[selectedIndex];
+    const download=useAttachmentDownload({
+        url:selected?.url??null,
+        filename:selected?.filename+'.svg',
+        identity:collectionOwner+':'+selectedIndex,
+        owner:downloadOwner,
+        read(url){return new Promise((resolve)=>downloads.pending.push({url,resolve}));},
+    });
     return h('form',{'data-publication':publication,onSubmit(event){event.preventDefault();calls.save++;}},
         h(AttachmentSliderNavigation,{
             rows,selectedIndex,collectionOwner,labels:{navigation:'Pièces jointes',previous:'Précédent',next:'Suivant'},
@@ -54,6 +68,9 @@ function Host(){
             selectedIndex,
             onSelect(index){calls.selection.push(index);if(acceptsIntent)setSelectedIndex(index);},
         }),
+        selected&&h('button',{type:'button','data-download':true,disabled:download.progress!=null,
+            onClick(){void download.start().then(()=>downloads.finished++);}},
+            download.progress==null?'Télécharger la pièce jointe':download.progress+'%'),
         h('button',{type:'submit'},'Enregistrer'),
         h('button',{type:'button',onClick(){calls.upload++;}},'Téléverser'),
         h('button',{type:'button',onClick(){calls.delete++;}},'Supprimer'));
@@ -311,6 +328,90 @@ export async function checkAttachmentSliderNavigationBrowser({
                 delete: 0,
                 fetch: 0,
             });
+            const download = page.locator('[data-download]');
+            const saves = [];
+            page.on('download', (file) => saves.push(file));
+            const finish = (index, value) =>
+                page.evaluate(
+                    ({ index, value }) =>
+                        window.sliderProbe.downloads.pending[index].resolve(
+                            new Response(value, {
+                                headers: {
+                                    'Content-Length': String(value.length),
+                                },
+                            })
+                        ),
+                    { index, value }
+                );
+            const settled = (count) =>
+                page.waitForFunction(
+                    (expected) =>
+                        window.sliderProbe.downloads.finished === expected,
+                    count
+                );
+            const saveCurrent = async (index, contents) => {
+                const [saved] = await Promise.all([
+                    page.waitForEvent('download'),
+                    finish(index, contents),
+                ]);
+                try {
+                    assert.equal(saved.suggestedFilename(), 'Vue arrière.svg');
+                    assert.equal(
+                        readFileSync(await saved.path(), 'utf8'),
+                        contents
+                    );
+                    return saved.suggestedFilename();
+                } finally {
+                    await saved.delete();
+                }
+            };
+            await download.click();
+            assert.equal(await download.innerText(), '0%');
+            await rearTile.press('Space');
+            await rail
+                .locator('button[data-selected="true"]')
+                .getByText('Vue arrière')
+                .waitFor({ state: 'attached' });
+            assert.equal(await download.isEnabled(), true);
+            await download.click();
+            await finish(0, 'old');
+            await settled(1);
+            assert.equal(await download.innerText(), '0%');
+            assert.equal(saves.length, 0);
+            const downloadFilename = await saveCurrent(1, 'current');
+            await settled(2);
+
+            await download.click();
+            assert.equal(await download.innerText(), '0%');
+            await page.evaluate(() => window.sliderProbe.rotateDownloadOwner());
+            await page
+                .getByRole('button', { name: 'Télécharger la pièce jointe' })
+                .waitFor();
+            assert.equal(await download.isEnabled(), true);
+            await download.click();
+            await finish(2, 'retired-generation');
+            await settled(3);
+            assert.equal(await download.innerText(), '0%');
+            assert.equal(saves.length, 1);
+            await saveCurrent(3, 'successor-generation');
+            await settled(4);
+
+            await download.click();
+            await page.evaluate(() => window.sliderProbe.retire());
+            await committed('retired');
+            await finish(4, 'dismissed');
+            await settled(5);
+            assert.equal(saves.length, 2);
+            const readUrls = await page.evaluate(() =>
+                window.sliderProbe.downloads.pending.map(({ url }) => url)
+            );
+            assert.deepEqual(readUrls, [
+                '/front.svg',
+                '/rear.svg',
+                '/rear.svg',
+                '/rear.svg',
+                '/rear.svg',
+            ]);
             assert.deepEqual(unexpectedRequests, []);
             assert.deepEqual(pageErrors, []);
             evidence.formats[format] = {
@@ -320,6 +421,12 @@ export async function checkAttachmentSliderNavigationBrowser({
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
+                },
+                download: {
+                    readUrls,
+                    filename: downloadFilename,
+                    saves: saves.length,
+                    notifiedOwnerRotation: true,
                 },
                 unexpectedRequests,
                 pageErrors,

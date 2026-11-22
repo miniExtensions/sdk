@@ -231,6 +231,7 @@ export function assertModuleFormats(root) {
                 './react/field-presentation.css',
                 './react/complete-checkbox.css',
                 './react/complete-verification.css',
+                './react/complete-extension-password.css',
                 './react/login-existing-values-picker.css',
                 './react/complete-image-annotation.css',
                 './react/complete-barcode-scanner.css',

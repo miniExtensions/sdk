@@ -21,6 +21,21 @@ const h=React.createElement,f=createListFixture(ui),root=createRoot(document.que
 const proof={opens:[],submits:0,held:0,retiredRefusals:0,presenterStarts:0,presenterActive:0,preferences:[],nestedActivations:0};window.proof=proof;
 const scope={getSnapshot:()=>f.scope.getSnapshot(),subscribe(listener){proof.presenterStarts++;proof.presenterActive++;const stop=f.scope.subscribe(listener);return()=>{proof.presenterActive--;stop();};}};
 let layout='list',preview=false,noChild=false,hold=false,pending,child=null,commands;
+const namingEntryPoint = new URLSearchParams(location.search).get('list-entry');
+let namedRows = false, nullBetaLabel = false;
+const rowLabels = {rec_A: 'Account North', rec_B: 'Account South', rec_C: 'Account West'};
+const replacement = {id: 'rec_C', fields: {fld_title: 'Gamma', fld_detail: 'C detail'}};
+function recordLabel(recordId) {
+    return recordId === 'rec_B' && nullBetaLabel ? null : (rowLabels[recordId] ?? null);
+}
+function replaceAlpha() {
+    const records = f.scope.getSnapshot().rows.map(({recordId}) =>
+        recordId === 'rec_A' || recordId === 'rec_C'
+            ? replacement
+            : f.initial.records.find(({id}) => id === recordId)
+    );
+    change(() => f.replace({...f.initial, records}));
+}
 let hiddenColumns={},columnWidths={fld_title:211,fld_detail:235};
 const renderers = {
     renderSingleLineTextField(field) {
@@ -37,11 +52,18 @@ function change(update){update();publishCommands();render();}
 function navigate(delta){if(!child?.isCurrent())return;const snapshot=f.scope.getSnapshot(),index=snapshot.rows.findIndex(row=>row.recordId===child.recordId),next=snapshot.rows[index+delta];if(!next)return;void snapshot.actions.openChild(next.recordId);proof.opens.push(next.recordId);child={...child,recordId:next.recordId};render();}
 function close(){const previous=child;child=null;render();previous?.restore();}
 function button(label,action){return h('button',{type:'button',onClick:action},label);}
-function render(){flushSync(()=>root.render(h(React.StrictMode,null,h('form',{onSubmit(event){event.preventDefault();proof.submits++;}},
+function render(){
+ const actions=preview||noChild?undefined:commands;
+ const listProps={scope,renderers,label:'Accepted records',recordLabel:namedRows?recordLabel:undefined};
+ flushSync(()=>root.render(h(React.StrictMode,null,h('form',{onSubmit(event){event.preventDefault();proof.submits++;}},
  h('nav',{'aria-label':'Synthetic host controls'},button('List',()=>{layout='list';render();}),button('Grid',()=>{layout='grid';render();}),button('Reverse',()=>change(()=>f.replace({...f.initial,records:[...f.initial.records].reverse()}))),button('Empty',()=>change(()=>f.replace({...f.initial,records:[]}))),button('Reset',()=>change(()=>{preview=false;noChild=false;hold=false;child=null;f.replace();})),button('Preview',()=>{preview=!preview;render();}),button('No child',()=>{noChild=!noChild;render();}),button('Hold Open',()=>{hold=true;}),button('Release Open',()=>{hold=false;const invoke=pending;pending=undefined;invoke?.();}),button('Retire',()=>change(()=>f.replace(null)))),
- h(api.ReadonlyPortalRecords, {
-    scope, layout, renderers, label: 'Accepted records',
-    openActions: preview || noChild ? undefined : { scope, byRecordId: commands },
+ namingEntryPoint && h('nav',{'aria-label':'List row naming controls'},
+    button('Name rows', () => {namedRows = true; render();}),
+    button('Toggle Beta name', () => {nullBetaLabel = !nullBetaLabel; render();}),
+    button('Replace Alpha', replaceAlpha)),
+ namingEntryPoint === 'ReadonlyPortalList' ? h(api.ReadonlyPortalList,{...listProps,openActions:actions}) : h(api.ReadonlyPortalRecords, {
+    ...listProps, layout,
+    openActions: actions && { scope, byRecordId: actions },
     grid: {
         ready: true, preferenceScopeKey: 'portal/field/view', primaryFieldId: 'fld_title',
         hiddenColumns, columnWidths, allowHideColumns: true, labels: { caption: 'Accepted grid' },
@@ -61,6 +83,120 @@ function render(){flushSync(()=>root.render(h(React.StrictMode,null,h('form',{on
 window.listProofSnapshot=()=>({react:React.version,opens:[...proof.opens],submits:proof.submits,held:proof.held,retiredRefusals:proof.retiredRefusals,subscriptions:f.subscriptions,presenterStarts:proof.presenterStarts,presenterActive:proof.presenterActive,preferences:[...proof.preferences],nestedActivations:proof.nestedActivations,scopeCalls:f.calls.map(call=>({...call})),layout});
 publishCommands();render();
 `;
+
+async function checkNamedRows(page, origin, entryPoint) {
+    await page.goto(`${origin}/?list-entry=${entryPoint}`);
+    const control = (name) => page.getByRole('button', { name, exact: true });
+    const list = page.getByRole('list', {
+        name: 'Accepted records',
+        exact: true,
+    });
+    const items = list.getByRole('listitem');
+    const item = (recordId) => list.locator(`li[data-record-id="${recordId}"]`);
+    const group = (recordId, name) =>
+        item(recordId).getByRole('group', { name, exact: true });
+    const open = (recordId, name) =>
+        group(recordId, name).getByRole('button', {
+            name: `Open record ${name}`,
+            exact: true,
+        });
+    const acceptedOrder = () =>
+        items.evaluateAll((rows) => rows.map((row) => row.dataset.recordId));
+    const snapshot = () => page.evaluate(() => window.listProofSnapshot());
+    await list.waitFor();
+    assert.deepEqual(await acceptedOrder(), ['rec_B', 'rec_A']);
+    assert.equal(await list.getByRole('group').count(), 0);
+    assert.equal(
+        await list
+            .getByRole('button', { name: 'Open record', exact: true })
+            .count(),
+        2
+    );
+
+    await control('Name rows').click();
+    const alpha = group('rec_A', 'Account North');
+    const beta = group('rec_B', 'Account South');
+    assert.deepEqual(await alpha.locator('[data-field-id]').allTextContents(), [
+        'Alpha',
+        'A detail',
+    ]);
+    assert.deepEqual(await beta.locator('[data-field-id]').allTextContents(), [
+        'Beta',
+        'B detail',
+    ]);
+    const alphaOpen = open('rec_A', 'Account North');
+    const betaOpen = open('rec_B', 'Account South');
+    await alphaOpen.focus();
+    assert(await alphaOpen.evaluate((node) => document.activeElement === node));
+    assert.equal(await alphaOpen.textContent(), 'Open record');
+
+    await control('Reverse').click();
+    assert.deepEqual(await acceptedOrder(), ['rec_A', 'rec_B']);
+    assert.equal(await alpha.count(), 1);
+    assert.equal(await beta.count(), 1);
+    await control('Replace Alpha').click();
+    assert.deepEqual(await acceptedOrder(), ['rec_C', 'rec_B']);
+    assert.equal(
+        await list.getByRole('group', { name: 'Account North' }).count(),
+        0
+    );
+    assert.equal(
+        await group('rec_C', 'Account West')
+            .getByText('Gamma', { exact: true })
+            .count(),
+        1
+    );
+
+    await control('Toggle Beta name').click();
+    assert.equal(await beta.count(), 0);
+    assert.equal(
+        await item('rec_B')
+            .getByRole('button', { name: 'Open record', exact: true })
+            .count(),
+        1
+    );
+    await control('Toggle Beta name').click();
+    for (const mode of ['Preview', 'No child']) {
+        await control(mode).click();
+        assert.equal(await beta.count(), 1);
+        assert.equal(
+            await list.getByRole('button', { name: /^Open record/ }).count(),
+            0
+        );
+        await control(mode).click();
+    }
+
+    await betaOpen.focus();
+    assert(await betaOpen.evaluate((node) => document.activeElement === node));
+    assert.equal(await betaOpen.textContent(), 'Open record');
+    const before = await snapshot();
+    assert.deepEqual(before.opens, []);
+    assert.deepEqual(before.scopeCalls, []);
+    assert.equal(before.submits, 0);
+    await page.keyboard.press('Enter');
+    await page
+        .getByRole('heading', { name: 'Child rec_B', exact: true })
+        .waitFor();
+    await control('Close').click();
+    assert(await betaOpen.evaluate((node) => document.activeElement === node));
+    const after = await snapshot();
+    assert.deepEqual(after.opens, ['rec_B']);
+    assert.deepEqual(
+        after.scopeCalls.map(({ recordId }) => recordId),
+        ['rec_B']
+    );
+    assert.equal(after.submits, 0);
+    return {
+        entryPoint,
+        rowLabels: ['Account North', 'Account South', 'Account West'],
+        focusedOpenNames: [
+            'Open record Account North',
+            'Open record Account South',
+        ],
+        opens: after.opens,
+        submits: after.submits,
+    };
+}
 
 export async function checkReadonlyPortalListBrowser({
     browser,
@@ -419,6 +555,15 @@ export async function checkReadonlyPortalListBrowser({
                 path: screenshot,
                 sha256: digest(readFileSync(screenshot)),
             };
+            profile.namedRows = [];
+            for (const entryPoint of [
+                'ReadonlyPortalRecords',
+                'ReadonlyPortalList',
+            ]) {
+                profile.namedRows.push(
+                    await checkNamedRows(page, origin, entryPoint)
+                );
+            }
             assert.deepEqual(errors, []);
             assert.deepEqual(warnings, []);
             assert.deepEqual(external, []);

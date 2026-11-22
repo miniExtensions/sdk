@@ -4,7 +4,10 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Window } from 'happy-dom';
-import { CompletePortalShell } from '../src/react/CompletePortalShell.js';
+import {
+    CompletePortalShell,
+    type PortalShellSnapshot,
+} from '../src/react/CompletePortalShell.js';
 import { resolvePortalShellSelection } from '../src/portals/shell.js';
 import { assertPortalShellNavigationConsumer } from '../scripts/portal-shell-navigation-runtime.mjs';
 import {
@@ -78,6 +81,70 @@ it('configured shell presentation preserves native availability/layout/disclosur
         synchronousPublications: 1,
         siblingLogoutIntents: 1,
     });
+});
+
+it('renders a leading icon and localized name only for an opted-in visible sidebar', (t) => {
+    const window = new Window();
+    t.after(() => window.happyDOM.close());
+    const { document } = window;
+    const name = 'Abrir menú de navegación';
+    const renderHeader = (header: PortalShellSnapshot['header']) => {
+        const template = document.createElement('template');
+        template.innerHTML = renderToString(
+            React.createElement(CompletePortalShell, {
+                snapshot: {
+                    scope: 'projects',
+                    revision: 1,
+                    items: [
+                        { type: 'table', id: 'projects', label: 'Proyectos' },
+                    ],
+                    selection: {
+                        type: 'table',
+                        itemId: 'projects',
+                        viewId: null,
+                    },
+                    header,
+                },
+                labels: { openNavigation: name },
+                onIntent() {
+                    assert.fail(
+                        'Rendering the opener dispatched a host action'
+                    );
+                },
+            })
+        );
+        const shell = template.content.querySelector('header');
+        const button = shell?.querySelector('button.mx-sdk-portal-toggle');
+        assert(shell && button);
+        return { shell, button };
+    };
+
+    const title = 'Proyectos';
+    const { shell, button } = renderHeader({
+        layout: 'sidebar',
+        sidebarToggle: 'icon',
+        title,
+    });
+    assert.equal(shell.firstElementChild, button);
+    assert.equal(button.textContent, '');
+    assert.equal(button.getAttribute('aria-label'), name);
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+    assert.equal(
+        button.querySelector('svg')?.getAttribute('aria-hidden'),
+        'true'
+    );
+    assert.equal(shell.querySelector('h1')?.textContent, title);
+
+    for (const header of [
+        { layout: 'sidebar', title },
+        { layout: 'sidebar', sidebarToggle: 'icon', hidden: true, title },
+        { layout: 'topbar', sidebarToggle: 'icon', title },
+    ] as const) {
+        const { button } = renderHeader(header);
+        assert.equal(button.textContent, name);
+        assert.equal(button.getAttribute('aria-label'), null);
+        assert.equal(button.querySelector('svg'), null);
+    }
 });
 
 it('controlled sidebar reuses the native resize engine with end-only current-owner commits and stable record body', async () => {

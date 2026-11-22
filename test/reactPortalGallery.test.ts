@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Window } from 'happy-dom';
-import { createElement as h } from 'react';
+import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
     PortalGallery,
@@ -199,6 +199,117 @@ test('Gallery sends separate Open, Unlink and manual paging requests without sub
     assert.deepEqual(actions, ['open:a', 'unlink:a', 'page']);
     f.unchangedEffects();
 });
+test('Gallery Unlink help follows focus, Escape and the current removable row', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const actions: string[] = [];
+    const label = 'Eliminar registro vinculado';
+    const description = 'Desvincular registro';
+    const removable = {
+        ...row('a'),
+        open: { label: 'Open A', activate: () => actions.push('open') },
+        requestUnlink: {
+            label,
+            description,
+            activate: () => actions.push('unlink'),
+        },
+    };
+    const neighbor = row('b');
+    const rows = [removable, neighbor];
+    await f.render(h(PortalGallery, props(rows)));
+    const open = f.container.querySelector('button[aria-label="Open A"]');
+    const unlink = f.container.querySelector(`button[aria-label="${label}"]`);
+    assert(open instanceof f.window.HTMLButtonElement);
+    assert(unlink instanceof f.window.HTMLButtonElement);
+    const tooltip = () =>
+        f.window.document.body.querySelector('[role="tooltip"]');
+    const movePointer = (enterUnlink: boolean) => {
+        const from = enterUnlink ? open : unlink;
+        const to = enterUnlink ? unlink : open;
+        from.dispatchEvent(
+            new f.window.MouseEvent('mouseout', {
+                bubbles: true,
+                relatedTarget: to,
+            })
+        );
+        to.dispatchEvent(
+            new f.window.MouseEvent('mouseover', {
+                bubbles: true,
+                relatedTarget: from,
+            })
+        );
+    };
+
+    await act(async () => {
+        open.focus();
+        movePointer(true);
+    });
+    // Let the public Gallery load its own lazy popup in both source and package consumers.
+    for (let attempt = 0; attempt < 100 && tooltip() == null; attempt++) {
+        await act(
+            async () => new Promise<void>((resolve) => setTimeout(resolve, 10))
+        );
+    }
+    const popup = tooltip();
+    assert(popup);
+    assert.equal(popup.textContent, description);
+    assert.equal(unlink.getAttribute('aria-describedby'), popup.id);
+    assert.equal(unlink.getAttribute('aria-label'), label);
+    assert.equal(f.window.document.activeElement, open);
+    await act(async () => {
+        movePointer(false);
+        unlink.focus();
+    });
+    assert.equal(tooltip(), popup);
+    await act(async () => {
+        movePointer(false);
+        unlink.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'ArrowLeft',
+                bubbles: true,
+            })
+        );
+    });
+    assert.equal(tooltip(), popup);
+    await act(async () =>
+        unlink.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Escape',
+                bubbles: true,
+                cancelable: true,
+            })
+        )
+    );
+    assert.equal(tooltip(), null);
+    assert.equal(unlink.getAttribute('aria-describedby'), null);
+    assert.equal(f.window.document.activeElement, unlink);
+
+    await act(async () => {
+        open.focus();
+        unlink.focus();
+    });
+    assert(tooltip());
+    await f.render(
+        h(PortalGallery, { ...props(rows), unlinkingRecordId: 'a' })
+    );
+    assert.equal(tooltip(), null);
+    assert.equal(unlink.disabled, true);
+    await f.render(h(PortalGallery, props(rows)));
+    await act(async () => {
+        open.focus();
+        movePointer(true);
+    });
+    assert(tooltip());
+    await act(async () => movePointer(false));
+    await f.render(h(PortalGallery, props([neighbor])));
+    assert.equal(tooltip(), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-portal-gallery-unlink'),
+        null
+    );
+    assert.deepEqual(actions, []);
+    f.unchangedEffects();
+});
+
 test('Gallery honors controlled Unlink pending across all visible records and only supplied review dots', async (t) => {
     const f = await htmlPresentationFixture(t);
     let mutations = 0;

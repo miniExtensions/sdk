@@ -22,6 +22,7 @@ export default function FieldTooltipPopup(props: {
     onMouseLeave: () => void;
     admitDescription?: () => boolean;
     keepOpenOnAnchorInteraction?: boolean;
+    className?: string;
     children?: ReactNode;
 }): ReactElement | null {
     const markReady = useCallback(
@@ -51,7 +52,7 @@ export default function FieldTooltipPopup(props: {
                 id: props.id,
                 role: 'tooltip',
                 side: 'bottom',
-                className: 'mx-sdk-field-tooltip-popup',
+                className: props.className ?? 'mx-sdk-field-tooltip-popup',
                 onOpenAutoFocus: (event: Event) => event.preventDefault(),
                 onCloseAutoFocus: (event: Event) => event.preventDefault(),
                 onMouseEnter: props.onMouseEnter,

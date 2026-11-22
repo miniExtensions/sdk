@@ -12,6 +12,7 @@ import {
 import { createAddressRuntime } from '../../vendor/headlessui-address/sdk-runtime.js';
 import {
     createCompleteLinkedFinderCoordinator,
+    linkedFinderPublicReadIntervalMs,
     type CompleteLinkedFinderCoordinator,
     type CompleteLinkedFinderHost,
 } from '../ui/completeLinkedFinder.js';
@@ -131,8 +132,11 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         coordinator?.model.getState().options.map((option) => option.value) ??
         [];
     const offset = preview ? preview.offset : snapshot?.offset;
+    const hasContinuation = Boolean(offset);
     const error = preview ? preview.error : snapshot?.error;
     const loadingMore = !preview && snapshot?.loadingMore === true;
+    const deferEmptyContinuation =
+        !preview && rawIds.length === 0 && !props.testing;
     useEffect(() => {
         if (props.queryOnMount === false) return;
         coordinator?.scheduleSearch({
@@ -145,7 +149,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
             !coordinator ||
             !owner ||
             !readIdentity ||
-            !offset ||
+            !hasContinuation ||
             loadingMore ||
             (!preview && snapshot?.phase !== 'ready') ||
             !sentinel.current ||
@@ -153,26 +157,43 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         )
             return;
         let active = true;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const loadMore = () => {
+            timer = undefined;
+            if (!active) return;
+            const current = coordinator.getSnapshot();
+            if (
+                active &&
+                current.owner === owner &&
+                current.readIdentity === readIdentity &&
+                (preview ||
+                    (current.phase === 'ready' && current.offset === offset))
+            )
+                void coordinator.queryNow({
+                    filter: props.filter,
+                    resetOffset: false,
+                });
+        };
         const observer = new IntersectionObserver(
             (entries) => {
                 if (!active) return;
-                const current = coordinator.getSnapshot();
-                if (
-                    active &&
-                    entries.some((entry) => entry.isIntersecting) &&
-                    current.owner === owner &&
-                    current.readIdentity === readIdentity
-                )
-                    void coordinator.queryNow({
-                        filter: props.filter,
-                        resetOffset: false,
-                    });
+                if (!entries.some((entry) => entry.isIntersecting)) {
+                    clearTimeout(timer);
+                    timer = undefined;
+                } else if (deferEmptyContinuation) {
+                    // Keep a fast empty page's next read outside the public throttle window.
+                    timer ??= setTimeout(
+                        loadMore,
+                        linkedFinderPublicReadIntervalMs
+                    );
+                } else loadMore();
             },
             { root: scroll.current, rootMargin: '400px' }
         );
         observer.observe(sentinel.current);
         return () => {
             active = false;
+            clearTimeout(timer);
             observer.disconnect();
         };
     }, [
@@ -180,6 +201,8 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         owner,
         readIdentity,
         offset,
+        hasContinuation,
+        deferEmptyContinuation,
         loadingMore,
         preview !== null,
         snapshot?.phase,
@@ -284,11 +307,13 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                           })
                       )
                   )
-                : h(
-                      'div',
-                      { className: 'mx-sdk-finder-feedback' },
-                      props.labels.noMatches
-                  );
+                : hasContinuation
+                  ? null
+                  : h(
+                        'div',
+                        { className: 'mx-sdk-finder-feedback' },
+                        props.labels.noMatches
+                    );
     return h(
         'div',
         {
@@ -358,7 +383,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                     'div',
                     { ref: scroll, className: 'mx-sdk-finder-scroll' },
                     body,
-                    offset
+                    hasContinuation
                         ? h(
                               'div',
                               {

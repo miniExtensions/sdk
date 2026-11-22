@@ -165,6 +165,7 @@ import { checkSearchGateReactMatrix } from './search-gate-consumer-checks.mjs';
 import { checkCompleteCalendlyReactMatrix } from './complete-calendly-consumer-checks.mjs';
 import { checkCompleteBarcodeReactMatrix } from './complete-barcode-consumer-checks.mjs';
 import { checkCompleteVerificationReactMatrix } from './complete-verification-consumer-checks.mjs';
+import { checkInstalledCompleteExtensionPassword } from './complete-extension-password-consumer-checks.mjs';
 import { checkInstalledLoginExistingValuesPicker } from './login-existing-values-consumer-checks.mjs';
 import { checkImageAnnotationReactMatrix } from './image-annotation-consumer-checks.mjs';
 import { checkPortalMapReactMatrix } from './portal-map-consumer-checks.mjs';
@@ -1005,6 +1006,12 @@ try {
         'dist/cjs/react/complete-barcode-scanner.css',
         'dist/esm/react/complete-verification.css',
         'dist/cjs/react/complete-verification.css',
+        'dist/esm/react/complete-extension-password.css',
+        'dist/cjs/react/complete-extension-password.css',
+        'dist/esm/react/CompleteExtensionPasswordScreen.js',
+        'dist/esm/react/CompleteExtensionPasswordScreen.d.ts',
+        'dist/cjs/react/CompleteExtensionPasswordScreen.js',
+        'dist/cjs/react/CompleteExtensionPasswordScreen.d.ts',
         'dist/esm/react/login-existing-values-picker.css',
         'dist/cjs/react/login-existing-values-picker.css',
         'dist/esm/react/LoginExistingValuesPicker.js',
@@ -4127,7 +4134,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
         happyDomModulePath: require.resolve('happy-dom'),
-        checkInstalledConsumer: checkInstalledLoginExistingValuesPicker,
+        checkInstalledConsumer(consumer) {
+            checkInstalledLoginExistingValuesPicker(consumer);
+            const password = checkInstalledCompleteExtensionPassword(consumer);
+            assert.deepEqual(password.formats, ['esm', 'cjs']);
+            assert.equal(password.cleanup, 'completed');
+        },
     });
     await stop();
     assert.equal(verificationMatrix.versions.length, 2);
@@ -4978,7 +4990,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     await stop();
     assert.equal(gridProof.profiles.length, 4);
     assert.equal(gridProof.dateTimeCases, 8);
-    assert.equal(gridProof.tests, 84);
+    assert.equal(gridProof.tests, 88);
     assert.equal(gridProof.textCellTests, 24);
     assert.equal(gridProof.ratingCellTests, 32);
     assert.equal(gridProof.checkboxCellTests, 64);
@@ -4996,6 +5008,44 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         'Installed readonly Portal Grid React18/19 ESM/CJS/NodeNext/Bundler/SSR/CSS/lifecycle assertions passed.'
     );
+    const gridCurrencyArchive = join(temporaryDirectory, packed.filename);
+    const gridCurrencySha256 = createHash('sha256')
+        .update(readFileSync(gridCurrencyArchive))
+        .digest('hex');
+    // The standalone runner bounds each install and test, then cleans up its consumers.
+    const gridCurrencyProof = JSON.parse(
+        execPackageFileSync(
+            process.execPath,
+            [
+                'scripts/check-readonly-portal-grid-currency.mjs',
+                gridCurrencyArchive,
+                gridCurrencySha256,
+            ],
+            {
+                cwd: process.cwd(),
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    npm_config_cache: join(temporaryDirectory, 'npm-cache'),
+                },
+            }
+        )
+    );
+    const gridCurrencyProfiles = gridCurrencyProof.profiles.map(
+        ({ react, format, cases }) => ({ react, format, cases })
+    );
+    assert.deepEqual(gridCurrencyProfiles, [
+        { react: '18.3.1', format: 'esm', cases: 1 },
+        { react: '18.3.1', format: 'cjs', cases: 1 },
+        { react: '19.2.0', format: 'esm', cases: 1 },
+        { react: '19.2.0', format: 'cjs', cases: 1 },
+    ]);
+    assert.equal(gridCurrencyProof.package.sha256, gridCurrencySha256);
+    assert.equal(gridCurrencyProof.cleanup.temporaryConsumersRemoved, true);
+    console.log(
+        `Installed readonly Portal Grid Currency assertions passed (${gridCurrencySha256}).`,
+        gridCurrencyProfiles
+    );
     const visitorQueryProof = checkPortalVisitorQueryReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -5011,7 +5061,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(galleryProof.tests, 48);
+    assert.equal(galleryProof.tests, 52);
     console.log(
         'Installed Portal Gallery React18/19 ESM/CJS/types/SSR/styles and source lifecycle assertions passed.',
         galleryProof

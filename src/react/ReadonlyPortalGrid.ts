@@ -130,8 +130,9 @@ function admittedWidth(value: unknown): number | null {
 const iconPaths: Record<ReadonlyPortalGridHeaderIcon, string> = {
     text: 'M3 12 6.5 3 10 12M4 9h5M11 6h3m-1.5 0v6',
     'multiline-text': 'M3 4h10M3 8h10M3 12h7',
-    number: 'M6 2 4 14M12 2l-2 12M2 6h12M1 10h12',
-    checkbox: 'M3 3h10v10H3ZM5 8l2 2 4-4',
+    number: 'M5 2v12M11 2v12M2 5h12M2 11h12',
+    checkbox:
+        'M3 1h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2ZM4 8l1.25-1.25 2 2 3.5-3.5L12 6.5l-4.75 4.75Z',
     formula: 'M11 3H8L6 13H3M4 7h6M11 8l3 5m0-5-3 5',
     date: 'M3 4h10v9H3ZM5 2v4m6-4v4M3 7h10',
     select: 'M3 5h10M3 8h6m1 3 2 2 2-2',
@@ -142,6 +143,7 @@ const iconPaths: Record<ReadonlyPortalGridHeaderIcon, string> = {
 
 function headerIcon(icon: ReadonlyPortalGridHeaderIcon | null | undefined) {
     if (icon == null) return null;
+    const isCheckbox = icon === 'checkbox';
     return h(
         'svg',
         {
@@ -150,18 +152,28 @@ function headerIcon(icon: ReadonlyPortalGridHeaderIcon | null | undefined) {
             fill: 'none',
             'aria-hidden': true,
         },
-        h('path', {
-            d: iconPaths[icon] ?? iconPaths.other,
-            stroke: 'currentColor',
-            strokeWidth: 1.25,
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
-        })
+        h(
+            'path',
+            isCheckbox
+                ? {
+                      d: iconPaths.checkbox,
+                      fill: 'currentColor',
+                      fillRule: 'evenodd',
+                  }
+                : {
+                      d: iconPaths[icon] ?? iconPaths.other,
+                      stroke: 'currentColor',
+                      strokeWidth: icon === 'number' ? 2 : 1.25,
+                      strokeLinecap: 'round',
+                      strokeLinejoin: 'round',
+                  }
+        )
     );
 }
 
 type HeaderProps = {
     column: ReadonlyPortalGridColumn;
+    primary: boolean;
     width: unknown;
     isCurrent: () => boolean;
     onCommit: ReadonlyPortalGridProps['onColumnWidthCommit'];
@@ -171,6 +183,7 @@ type HeaderProps = {
 
 function GridHeader({
     column,
+    primary,
     width,
     isCurrent,
     onCommit,
@@ -351,11 +364,13 @@ function GridHeader({
             className: 'mx-sdk-readonly-grid__header',
             style: { width: (localWidth ?? 200) + cssWidthAdjustment },
             'data-field-id': column.fieldId,
+            'data-primary': primary,
         },
         h(
             'div',
             {
                 className: 'mx-sdk-readonly-grid__heading',
+                'data-field-icon': column.icon ?? undefined,
                 onFocusCapture: admitHeaderEvent,
                 onClickCapture: admitHeaderEvent,
                 onAuxClickCapture: admitHeaderEvent,
@@ -589,6 +604,24 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                         if (isCurrent()) setVisibilityDialog(token);
                     },
                 },
+                h(
+                    'svg',
+                    {
+                        'aria-hidden': true,
+                        className: 'mx-sdk-readonly-grid__hide-icon',
+                        viewBox: '0 0 24 24',
+                        fill: 'currentColor',
+                    },
+                    h('path', {
+                        d: 'M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z',
+                    }),
+                    h('path', {
+                        d: 'M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12.53 15.713l-4.243-4.244a3.75 3.75 0 0 0 4.244 4.243Z',
+                    }),
+                    h('path', {
+                        d: 'M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 0 0-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 0 1 6.75 12Z',
+                    })
+                ),
                 labels.hideColumns
             ),
         hideAllowed &&
@@ -627,6 +660,8 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                             h(GridHeader, {
                                 key: `${identity}:${column.fieldId}`,
                                 column,
+                                primary:
+                                    column.fieldId === props.primaryFieldId,
                                 width: props.columnWidths[column.fieldId],
                                 isCurrent,
                                 onCommit: props.onColumnWidthCommit,

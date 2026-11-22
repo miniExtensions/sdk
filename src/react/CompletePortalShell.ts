@@ -63,6 +63,8 @@ export type PortalShellSnapshot = Readonly<{
         hidden?: boolean;
         /** Repeat configured branding inside an open overlay drawer. Omission retains header-only branding. */
         showBrandInNavigation?: boolean;
+        /** Use a leading menu icon for the visible sidebar's narrow header. */
+        sidebarToggle?: 'icon';
         title: string;
         /** Native HTML title, sanitized by the stock renderer. Empty stays blank. */
         titleHtml?: string;
@@ -371,6 +373,10 @@ function Shell(props: CompletePortalShellProps) {
         (snapshot.header.sidebarWidth !== undefined ||
             props.onSidebarWidthCommit !== undefined);
     const layoutActions = snapshot.header.actionsPlacement === 'layout';
+    const sidebarIconToggle =
+        snapshot.header.layout === 'sidebar' &&
+        !snapshot.header.hidden &&
+        snapshot.header.sidebarToggle === 'icon';
     const mobileLimit =
         layoutActions && snapshot.header.layout === 'topbar' ? 639 : 1023;
     const actionsInNavigation =
@@ -1386,6 +1392,54 @@ function Shell(props: CompletePortalShellProps) {
                   settingsButton({ type: 'title' }, snapshot.settings?.title)
               )
             : null;
+    const toggleLabel = open ? labels.closeNavigation : labels.openNavigation;
+    const navigationToggle = showNavigation
+        ? h(
+              'button',
+              {
+                  ref: toggle,
+                  type: 'button',
+                  className: 'mx-sdk-portal-toggle',
+                  'aria-expanded': open,
+                  'aria-controls': navId,
+                  'aria-label': sidebarIconToggle ? toggleLabel : undefined,
+                  onClick: () => {
+                      openingNavigationEdge.current = null;
+                      setOpen(!open);
+                  },
+                  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+                      if (
+                          event.defaultPrevented ||
+                          !overlay ||
+                          snapshot.header.menuInteraction !== 'menu' ||
+                          !['ArrowDown', 'ArrowUp'].includes(event.key)
+                      )
+                          return;
+                      event.preventDefault();
+                      openingNavigationEdge.current =
+                          event.key === 'ArrowUp' ? 'last' : 'first';
+                      setOpen(true);
+                  },
+              },
+              sidebarIconToggle
+                  ? h(
+                        'svg',
+                        {
+                            width: 24,
+                            height: 24,
+                            viewBox: '0 0 24 24',
+                            fill: 'currentColor',
+                            'aria-hidden': true,
+                        },
+                        h('path', {
+                            fillRule: 'evenodd',
+                            clipRule: 'evenodd',
+                            d: 'M3 6.75A.75.75 0 0 1 3.75 6h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 6.75ZM3 12a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 12Zm0 5.25a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z',
+                        })
+                    )
+                  : toggleLabel
+          )
+        : null;
     return h(
         'div',
         {
@@ -1401,6 +1455,9 @@ function Shell(props: CompletePortalShellProps) {
                 snapshot.header.hidden ? 'mx-sdk-portal-shell--hidden' : '',
                 controlledSidebar ? 'mx-sdk-portal-shell--resizable' : '',
                 layoutActions ? 'mx-sdk-portal-shell--layout-actions' : '',
+                sidebarIconToggle
+                    ? 'mx-sdk-portal-shell--sidebar-icon-toggle'
+                    : '',
                 props.className,
             ]
                 .filter(Boolean)
@@ -1418,39 +1475,9 @@ function Shell(props: CompletePortalShellProps) {
         h(
             'header',
             { className: 'mx-sdk-portal-header' },
+            sidebarIconToggle ? navigationToggle : null,
             brand(true),
-            showNavigation
-                ? h(
-                      'button',
-                      {
-                          ref: toggle,
-                          type: 'button',
-                          className: 'mx-sdk-portal-toggle',
-                          'aria-expanded': open,
-                          'aria-controls': navId,
-                          onClick: () => {
-                              openingNavigationEdge.current = null;
-                              setOpen(!open);
-                          },
-                          onKeyDown: (
-                              event: KeyboardEvent<HTMLButtonElement>
-                          ) => {
-                              if (
-                                  event.defaultPrevented ||
-                                  !overlay ||
-                                  snapshot.header.menuInteraction !== 'menu' ||
-                                  !['ArrowDown', 'ArrowUp'].includes(event.key)
-                              )
-                                  return;
-                              event.preventDefault();
-                              openingNavigationEdge.current =
-                                  event.key === 'ArrowUp' ? 'last' : 'first';
-                              setOpen(true);
-                          },
-                      },
-                      open ? labels.closeNavigation : labels.openNavigation
-                  )
-                : null,
+            sidebarIconToggle ? null : navigationToggle,
             actionsInNavigation ? null : actions
         ),
         showNavigation

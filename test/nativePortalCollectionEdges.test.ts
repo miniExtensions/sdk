@@ -197,6 +197,229 @@ describe('native Portal host transaction boundaries', () => {
         ]);
     });
 
+    it('publishes accepted siblings without I/O and rejects a held obsolete Reload after an acknowledged removal', async () => {
+        const f = fixture();
+        const first = response('');
+        const firstWithSiblings: Response = {
+            ...first,
+            recordIds: ['one', 'north', 'one', 'south', 'north'],
+            recordsById: {
+                ...first.recordsById,
+                north: { id: 'north', value: { text: 'North' } },
+                south: { id: 'south', value: { text: 'South' } },
+            },
+            scopeAfter: { ...scope, bindingKey: 'response-detail-binding' },
+        };
+        const held = deferred<Outcome>();
+        f.hooks.allocate = async (id) =>
+            id === 'first'
+                ? { type: 'response', response: firstWithSiblings }
+                : held.promise;
+        assert.equal(
+            await runNativePortalCollectionRead(f.kernel, f.host, {
+                requestId: 'first',
+                mode: 'first',
+            }),
+            'committed'
+        );
+        const reload = runNativePortalCollectionRead(f.kernel, f.host, {
+            requestId: 'held-reload',
+            mode: 'reload',
+        });
+        const current = f.snapshot();
+        const { frame, active } = current;
+        assert.ok(frame && active && f.kernel.isCurrent(current, active));
+        const input = { scope: current.scope, frame, recordId: 'one' };
+        const next = f.kernel.removeAcknowledgedRecord(current, input);
+        assert.equal(f.host.commit(current, { state: next }), true);
+        assert.equal(f.snapshot(), next);
+        assert.equal(next.generation, current.generation + 1);
+        assert.deepEqual(next.paging.recordIds, ['north', 'south', 'north']);
+        assert.equal(next.paging.nextOffset, '');
+        assert.equal(next.paging.acceptedFetchOwnerKey, scope.fetchOwnerKey);
+        assert.equal(next.paging.isReloading, false);
+        const survivors = next.frame;
+        assert.ok(survivors);
+        assert.notEqual(survivors.id, frame.id);
+        assert.deepEqual(survivors.recordIds, ['north', 'south']);
+        assert.deepEqual(survivors.records, [
+            { id: 'north', value: { text: 'North' } },
+            { id: 'south', value: { text: 'South' } },
+        ]);
+        assert.equal(survivors.records[0], frame.records[1]);
+        assert.equal(survivors.schema, frame.schema);
+        assert.equal(survivors.details, frame.details);
+        assert.equal(survivors.primary, frame.primary);
+        assert.equal(survivors.nextOffset, '');
+        assert.equal(next.active, null);
+        assert.equal(f.kernel.isCurrent(next, active), false);
+        assert.equal(f.kernel.removeAcknowledgedRecord(next, input), next);
+        const commitCount = f.commits.length;
+        const projection = f.projection();
+        held.resolve({ type: 'response', response: response('obsolete') });
+        assert.equal(await reload, 'stale');
+        assert.equal(f.commits.length, commitCount);
+        assert.equal(f.projection(), projection);
+        assert.equal(f.snapshot(), next);
+        assert.deepEqual(
+            f.requests.map((request) => request.requestId),
+            ['first', 'held-reload']
+        );
+
+        const second = f.kernel.removeAcknowledgedRecord(next, {
+            scope: next.scope,
+            frame: survivors,
+            recordId: 'north',
+        });
+        assert.deepEqual(second.paging.recordIds, ['south']);
+        assert.deepEqual(second.frame?.recordIds, ['south']);
+        assert.notEqual(second.frame?.id, survivors.id);
+        const continuation = f.kernel.begin(second, {
+            requestId: 'next',
+            mode: 'next',
+        });
+        assert.equal(continuation?.plan.mode, 'next');
+        assert.equal(continuation.plan.cursor, '');
+        assert.equal(continuation.plan.parentFrameId, second.frame?.id);
+    });
+
+    it('keeps an absent removal immutable and retires an exact cleanup only when membership changes', () => {
+        const f = fixture();
+        const read = f.kernel.begin(f.snapshot(), {
+            requestId: 'first',
+            mode: 'first',
+        });
+        assert.ok(read);
+        const accepted = f.kernel.succeed(
+            read.state,
+            read.receipt,
+            response(null)
+        );
+        assert.ok(accepted?.state.frame);
+        const next = f.kernel.begin(accepted.state, {
+            requestId: 'held-read',
+            mode: 'reload',
+        });
+        assert.ok(next);
+        const correction = f.kernel.cleanup(
+            next.state,
+            next.receipt,
+            'sort',
+            []
+        );
+        assert.ok(correction?.cleanup);
+        const { state } = correction;
+        const { receipt } = correction.cleanup;
+        const input = { scope: state.scope, frame: accepted.state.frame };
+        assert.equal(f.kernel.isCleanupCurrent(state, receipt), true);
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(state, {
+                ...input,
+                recordId: 'absent',
+            }),
+            state
+        );
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(next.state, {
+                ...input,
+                recordId: 'absent',
+            }),
+            next.state
+        );
+        assert.equal(f.kernel.isCurrent(next.state, next.receipt), true);
+        const removed = f.kernel.removeAcknowledgedRecord(state, {
+            ...input,
+            recordId: 'one',
+        });
+        assert.deepEqual(removed.paging.recordIds, []);
+        assert.deepEqual(removed.frame?.recordIds, []);
+        assert.equal(removed.frame?.nextOffset, null);
+        assert.equal(removed.cleanup, null);
+        assert.equal(f.kernel.completeCleanup(removed, receipt), null);
+    });
+
+    it('refuses unissued, foreign, rebound, superseded and inconsistent removal frames', () => {
+        const f = fixture();
+        const read = f.kernel.begin(f.snapshot(), {
+            requestId: 'first',
+            mode: 'first',
+        });
+        assert.ok(read);
+        const accepted = f.kernel.succeed(read.state, read.receipt, response());
+        assert.ok(accepted?.state.frame);
+        const { state } = accepted;
+        const { frame } = accepted.state;
+        const input = { scope: state.scope, frame, recordId: 'one' };
+        const foreign = fixture();
+        assert.equal(
+            foreign.kernel.removeAcknowledgedRecord(state, input),
+            state
+        );
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(state, {
+                ...input,
+                scope: { ...state.scope, cacheOwnerEpoch: 2 },
+            }),
+            state
+        );
+        const clone = { ...state, frame: { ...frame } };
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(clone, {
+                ...input,
+                frame: clone.frame,
+            }),
+            clone
+        );
+        const inconsistent = {
+            ...state,
+            paging: { ...state.paging, recordIds: ['one', 'unaccepted'] },
+        };
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(inconsistent, input),
+            inconsistent
+        );
+        const rebound = f.kernel.observe(state, {
+            ...state.scope,
+            bindingKey: 'new-binding',
+        });
+        const returned = f.kernel.observe(rebound, state.scope);
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(returned, input),
+            returned
+        );
+        const disposed = f.kernel.retire(state);
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(disposed, input),
+            disposed
+        );
+        const newRead = f.kernel.begin(state, {
+            requestId: 'successor',
+            mode: 'reload',
+        });
+        assert.ok(newRead);
+        const successor = f.kernel.succeed(
+            newRead.state,
+            newRead.receipt,
+            response()
+        );
+        assert.ok(successor?.state.frame);
+        assert.equal(successor.state.generation, state.generation);
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(successor.state, input),
+            successor.state
+        );
+        const withheld = f.kernel.succeed(newRead.state, newRead.receipt, {
+            ...response(),
+            schema: null,
+        });
+        assert.ok(withheld);
+        assert.equal(withheld.state.frame, null);
+        assert.equal(
+            f.kernel.removeAcknowledgedRecord(withheld.state, input),
+            withheld.state
+        );
+    });
+
     it('F: rejected begin commit performs no transport', async () => {
         const f = fixture();
         f.hooks.reject = () => true;

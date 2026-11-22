@@ -46,6 +46,17 @@ const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const forms=format==='esm'?await import('@miniextensions/sdk/forms'):require('@miniextensions/sdk/forms');
 const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
+for (const share of ['record-survey', 'survey']) {
+    const current = 'https://consumer.invalid/' + share + '/rec12345678901234?screen=success&recordIdToCopyFrom=recOld&prefill_Title=Keep&campaign=summer#section';
+    assert.deepEqual(forms.projectFormCompletionNavigation({
+        currentURL: current, inIframe: false, recordId: 'rec12345678901234',
+        command: 'submit_another_form',
+    }), [{ type: 'navigate', route: 'self', url: 'https://consumer.invalid/' + share + '?prefill_Title=Keep&campaign=summer#section' }]);
+}
+assert.deepEqual(forms.projectFormCompletionNavigation({
+    currentURL: 'https://consumer.invalid/record-survey?screen=review#section',
+    inIframe: false,
+}), [{ type: 'navigate', route: 'self', url: 'https://consumer.invalid/record-survey?screen=review#section' }]);
 const {renderToString}=await import('react-dom/server');
 const calls=[];
 let configuration={afterFormSubmission:'stay',successAction:true,successMessageStatic:'<p><strong>Saved</strong><script>alert(1)</script></p>',successMessageCanCreateNewRecord:true,allowCopySubmittedToNewForm:true};

@@ -145,6 +145,7 @@ function App() {
         {
             key: mount,
             snapshot,
+            labels: window.sidebarOpenerLabels,
             onIntent: command,
             onSelectionActivate: activationEnabled
                 ? (request) => {

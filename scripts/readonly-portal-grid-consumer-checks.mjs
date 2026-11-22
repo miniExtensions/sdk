@@ -22,6 +22,7 @@ export const readonlyPortalGridTypedConsumer = String.raw`
 import {createElement} from 'react';
 import {ReadonlyPortalGrid,type ReadonlyPortalGridProps,type ReadonlyPortalGridRow,type ReadonlyPortalGridColumn} from '@miniextensions/sdk/react';
 import {PortalGridSingleLineTextCell,type PortalGridSingleLineTextCellProps} from '@miniextensions/sdk/react';
+import {PortalGridMultilineTextCell,type PortalGridMultilineTextCellProps,type PortalGridMultilineTextEditor} from '@miniextensions/sdk/react';
 import {PortalGridEmailCell,type PortalGridEmailCellProps,type PortalGridEmailCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridPhoneNumberCell,type PortalGridPhoneNumberCellProps,type PortalGridPhoneNumberCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
@@ -61,6 +62,12 @@ createElement(PortalGridSingleLineTextCell,{...textCell,editor:undefined,readOnl
 // @ts-expect-error a writable port requires a captured native owner
 const unowned:PortalGridSingleLineTextCellProps={...textCell,editor:{onChange(){}}};
 void unowned;
+const multilineEditor:PortalGridMultilineTextEditor={id:'notes',owner:{token:Symbol(),isCurrent:()=>true},onChange(text){const literal:string=text;void literal;}};
+const multilineCell:PortalGridMultilineTextCellProps={value:null,displayText:'',language:'en',cellIdentity:'row-notes',selected:true,onSelect(){},rowHeight:'medium',editor:multilineEditor};
+createElement(PortalGridMultilineTextCell,multilineCell);
+// @ts-expect-error a writable multiline editor requires the captured host owner
+const unownedMultiline:PortalGridMultilineTextEditor={id:'notes',onChange(){}};
+void unownedMultiline;
 const emailEditor:PortalGridEmailCellEditor={owner:{token:Symbol(),isCurrent:()=>true},onChange(value){const literal:string=value;void literal;},form:'form',placeholder:'Email address'};
 const emailCell:PortalGridEmailCellProps={value:'seed@example.com',displayText:'seed@example.com',title:'Email',language:'en',cellIdentity:'row-email',selected:true,onSelect(){},rowHeight:'medium',editor:emailEditor};
 createElement(PortalGridEmailCell,emailCell);
@@ -163,6 +170,13 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const multilineCellSource = readFileSync(
+        new URL(
+            '../test/reactPortalGridMultilineTextCell.test.ts',
+            import.meta.url
+        ),
+        'utf8'
+    );
     const emailCellSource = readFileSync(
         fileURLToPath(
             new URL('../test/reactPortalGridEmailCell.test.ts', import.meta.url)
@@ -230,6 +244,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const componentCases = 22;
     const multipleSelectCellCases = 2;
     const textCellCases = 6;
+    const multilineCellCases = 5;
     const emailCellCases = 6;
     const phoneCellCases = 2;
     const emptyCellCases = 3;
@@ -336,6 +351,11 @@ export async function checkReadonlyPortalGridReactMatrix({
                 for (const [name, content, cases] of [
                     ['readonly-grid', source, componentCases],
                     ['grid-text-cell', textCellSource, textCellCases],
+                    [
+                        'grid-multiline-text-cell',
+                        multilineCellSource,
+                        multilineCellCases,
+                    ],
                     ['grid-email-cell', emailCellSource, emailCellCases],
                     ['grid-phone-cell', phoneCellSource, phoneCellCases],
                     ['grid-empty-cell', emptyCellSource, emptyCellCases],
@@ -359,7 +379,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell|PortalGridMultipleSelectCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridMultilineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell|PortalGridMultipleSelectCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -423,6 +443,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     duration,
                     tests: componentCases,
                     textCellTests: textCellCases,
+                    multilineCellTests: multilineCellCases,
                     emailCellTests: emailCellCases,
                     phoneCellTests: phoneCellCases,
                     emptyCellTests: emptyCellCases,
@@ -580,6 +601,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 profiles: 2,
                 tests: componentCases * 2,
                 textCellTests: textCellCases * 2,
+                multilineCellTests: multilineCellCases * 2,
                 emailCellTests: emailCellCases * 2,
                 phoneCellTests: phoneCellCases * 2,
                 emptyCellTests: emptyCellCases * 2,
@@ -607,6 +629,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         tests: profiles.reduce((total, profile) => total + profile.tests, 0),
         textCellTests: profiles.reduce(
             (total, profile) => total + profile.textCellTests,
+            0
+        ),
+        multilineCellTests: profiles.reduce(
+            (total, profile) => total + profile.multilineCellTests,
             0
         ),
         emptyCellTests: profiles.reduce(

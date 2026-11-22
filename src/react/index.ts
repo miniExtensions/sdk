@@ -3861,6 +3861,11 @@ export {
     type PortalGridSingleLineTextEditor,
 } from './PortalGridSingleLineTextCell.js';
 export {
+    PortalGridMultilineTextCell,
+    type PortalGridMultilineTextCellProps,
+    type PortalGridMultilineTextEditor,
+} from './PortalGridMultilineTextCell.js';
+export {
     PortalGridEmailCell,
     type PortalGridEmailCellProps,
     type PortalGridEmailCellEditor,

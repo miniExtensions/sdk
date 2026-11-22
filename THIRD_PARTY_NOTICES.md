@@ -1510,7 +1510,7 @@ the CommonJS build generates a closure from that exact release and packages
 its full Apache license at `dist/cjs/react/docx-preview.LICENSE.txt`. The
 renderer and its default options are unmodified; no vendor upgrade is made.
 
-The unsupported-media paperclip SVG is copied from Heroicons 2.1.1
+The unsupported-media and slider thumbnail paperclip SVG is copied from Heroicons 2.1.1
 (`24/outline/PaperClipIcon`), with the following license:
 
 MIT License

@@ -110,7 +110,7 @@ test('native require honors a canonical package root reached through a parent al
     const directory = mkdtempSync(join(tmpdir(), 'sdk-module-parent-alias-'));
     t.after(() => rmSync(directory, { recursive: true, force: true }));
     const alias = join(directory, 'package');
-    symlinkSync(root, alias, 'dir');
+    symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
     const receipt = assertModuleFormats(alias);
     assert.deepEqual(receipt, assertModuleFormats(root));
     assert.equal(

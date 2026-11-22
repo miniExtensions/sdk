@@ -6318,6 +6318,12 @@ createElement(CompleteVerificationScreen<Confirmed>, {
 });
 ```
 
+The stylesheet gives Continue and Reload the compact button size. The button
+uses Inter when the host has loaded it, with the system sans-serif as a fallback.
+To supply an exact hover color, set `--mx-sdk-verification-hover-accent` on the
+verification surface, for example to `rgb(var(--theme-500))` in a host with that
+palette. The default hover color is a lighter shade of the active accent.
+
 The host supplies transport, language, normalized service failure, continuation,
 error observation and Reload. `onError` must be nonthrowing and must not include
 codes or private results in telemetry. `formatErrorMessage` is an optional pure

@@ -353,6 +353,8 @@ The numeric, controlled Rating and complete readonly-text empty-state symbols re
 
 The read-only Form footer retains the native solid ArrowPathRoundedSquare and DocumentDuplicate icons from Heroicons 2.1.1.
 
+The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.
+
 ```text
 MIT License
 

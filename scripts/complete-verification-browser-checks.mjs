@@ -55,11 +55,11 @@ import {CompleteVerificationScreen} from '@miniextensions/sdk/react';
 const mode=new URLSearchParams(location.search).get('mode')||'retry';
 const labels={sentCodeTo:'Code sent to',enterCode:'Verification code',continue:'Continue',reload:'Reload',attemptsExhausted:'Attempts exhausted',loading:'Loading'};
 const french={sentCodeTo:'Code envoyé à',enterCode:'Code de vérification',continue:'Continuer',reload:'Recharger',attemptsExhausted:'Essais épuisés',loading:'Chargement'};
-const stats={confirms:0,continues:0,secondConfirms:0,secondContinues:0,reloads:0,identities:[],writers:[],challenges:[],codeLengths:[],observedErrors:[],trustedInputs:[],helpActions:0};
+const stats={confirms:0,continues:0,submits:0,secondConfirms:0,secondContinues:0,reloads:0,identities:[],writers:[],challenges:[],codeLengths:[],observedErrors:[],trustedInputs:[],helpActions:0};
 const results=new WeakSet();let confirmHeld,loadHeld,change,committed,secondRoot;
 function App(){const [state,setState]=useState({mounted:true,challenge:'A',writer:'initial',french:mode==='french',helpDisabled:true});committed=state;change=patch=>flushSync(()=>setState(old=>({...old,...patch})));
  const text=state.french?french:labels;
- const props={verificationId:state.challenge,maskedDestination:'s***@example.invalid',labels:text,accentColor:'#0f766e',
+ const props={verificationId:state.challenge,maskedDestination:'s***@example.invalid',labels:text,accentColor:mode==='appearance-default'?undefined:'#0f766e',
   async confirm(input){stats.confirms++;stats.challenges.push(input.verificationId);stats.codeLengths.push(input.verificationCode.length);const result=Object.freeze({syntheticPrivateResult:'must-not-render'});results.add(result);
    if(mode==='held-confirm')return new Promise(resolve=>{confirmHeld=()=>resolve(result);});
    if(mode==='feedback')throw new Error('Synthetic feedback source');
@@ -76,6 +76,7 @@ function App(){const [state,setState]=useState({mounted:true,challenge:'A',write
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 if(mode==='two'){secondRoot=createRoot(document.querySelector('[data-proof-root=second]'));secondRoot.render(h(React.StrictMode,null,h(CompleteVerificationScreen,{verificationId:'independent',maskedDestination:'***42',labels,async confirm(){stats.secondConfirms++;const result=Object.freeze({});results.add(result);return result;},async continueWithResult(result){stats.identities.push(results.has(result));if(++stats.secondContinues===1)throw new Error('Second synthetic load failure');},reload(){stats.reloads++;}})));}
 document.addEventListener('input',event=>{if(event.target.closest?.('.mx-sdk-verification'))stats.trustedInputs.push(event.isTrusted);});
+document.addEventListener('submit',event=>{if(event.target.matches('.mx-sdk-verification'))stats.submits++;},true);
 window.verificationProof={snapshot:()=>({react:React.version,...stats,identities:[...stats.identities],writers:[...stats.writers],challenges:[...stats.challenges],codeLengths:[...stats.codeLengths],observedErrors:[...stats.observedErrors],trustedInputs:[...stats.trustedInputs],mounted:committed?.mounted,writer:committed?.writer,challenge:committed?.challenge}),patch:patch=>change(patch),unmountSecond:()=>secondRoot.unmount(),resolveConfirmation:()=>confirmHeld(),rejectLoad:()=>loadHeld.reject('Late synthetic load failure'),resolveLoad:()=>loadHeld.resolve()};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
@@ -147,10 +148,11 @@ window.verificationProof={snapshot:()=>({react:React.version,...stats,identities
         );
         const origin = `http://127.0.0.1:${server.address().port}`;
         const first = () => page.locator('[data-proof=first]');
-        const open = async (mode, narrow = false) => {
+        const open = async (mode, narrow = false, forcedColors = 'none') => {
             if (context) await context.close();
             context = await browser.newContext({
                 serviceWorkers: 'block',
+                forcedColors,
                 viewport: narrow
                     ? { width: 390, height: 844 }
                     : { width: 1024, height: 768 },
@@ -179,6 +181,123 @@ window.verificationProof={snapshot:()=>({react:React.version,...stats,identities
         };
         const snapshot = () =>
             page.evaluate(() => window.verificationProof.snapshot());
+        const continueButton = () =>
+            first().getByRole('button', { name: 'Continue', exact: true });
+        const submitAppearance = (button) =>
+            button.evaluate((node) => {
+                const style = getComputedStyle(node);
+                return {
+                    height: node.getBoundingClientRect().height,
+                    padding: [style.paddingTop, style.paddingLeft],
+                    fontWeight: style.fontWeight,
+                    fontSize: style.fontSize,
+                    lineHeight: style.lineHeight,
+                    fontFamily: style.fontFamily,
+                    background: style.backgroundColor,
+                    shadow: style.boxShadow,
+                    opacity: style.opacity,
+                    pointerEvents: style.pointerEvents,
+                    outline: [
+                        style.outlineStyle,
+                        style.outlineWidth,
+                        style.outlineOffset,
+                        style.outlineColor,
+                    ],
+                    border: [style.borderTopStyle, style.borderTopWidth],
+                    focusVisible: node.matches(':focus-visible'),
+                };
+            });
+        const appearanceInput = await open('appearance-default', true);
+        const appearanceButton = continueButton();
+        assert(await appearanceButton.isDisabled());
+        const disabledAppearance = await submitAppearance(appearanceButton);
+        assert.equal(disabledAppearance.height, 32);
+        assert.equal(disabledAppearance.opacity, '0.5');
+        assert.equal(disabledAppearance.pointerEvents, 'none');
+        assert.equal(disabledAppearance.background, 'rgb(79, 70, 229)');
+        await appearanceInput.fill('123456');
+        const enabledAppearance = await submitAppearance(appearanceButton);
+        assert.equal(enabledAppearance.height, 32);
+        assert.deepEqual(enabledAppearance.padding, ['6px', '10px']);
+        assert.equal(enabledAppearance.fontSize, '14px');
+        assert.equal(enabledAppearance.lineHeight, '20px');
+        assert.equal(enabledAppearance.fontWeight, '500');
+        assert.match(enabledAppearance.fontFamily, /^Inter,/);
+        assert.equal(
+            enabledAppearance.shadow,
+            'rgba(0, 0, 0, 0.05) 0px 1px 2px 0px'
+        );
+        assert.equal(enabledAppearance.background, 'rgb(79, 70, 229)');
+        await appearanceButton.hover();
+        const defaultHover = await submitAppearance(appearanceButton);
+        assert.notEqual(defaultHover.background, enabledAppearance.background);
+        await first().evaluate((surface) => {
+            surface.style.setProperty('--mx-sdk-accent', 'rgb(13, 148, 136)');
+        });
+        await page.mouse.move(0, 300);
+        const themedBase = (await submitAppearance(appearanceButton))
+            .background;
+        assert.equal(themedBase, 'rgb(13, 148, 136)');
+        await appearanceButton.hover();
+        const themedFallback = (await submitAppearance(appearanceButton))
+            .background;
+        assert.notEqual(themedFallback, themedBase);
+        const themedHover = [];
+        for (const [accent, hover] of [
+            ['rgb(37, 99, 235)', 'rgb(59, 130, 246)'],
+            ['rgb(13, 148, 136)', 'rgb(20, 184, 166)'],
+        ]) {
+            await first().evaluate(
+                (surface, colors) => {
+                    surface.style.setProperty('--mx-sdk-accent', colors.accent);
+                    surface.style.setProperty(
+                        '--mx-sdk-verification-hover-accent',
+                        colors.hover
+                    );
+                },
+                { accent, hover }
+            );
+            await page.mouse.move(0, 300);
+            assert.equal(
+                (await submitAppearance(appearanceButton)).background,
+                accent
+            );
+            await appearanceButton.hover();
+            const state = await submitAppearance(appearanceButton);
+            assert.equal(state.background, hover);
+            themedHover.push(state.background);
+        }
+        await page.mouse.move(0, 300);
+        await page.keyboard.press('Tab');
+        const focusedAppearance = await submitAppearance(appearanceButton);
+        assert(focusedAppearance.focusVisible);
+        assert.deepEqual(focusedAppearance.outline, [
+            'solid',
+            '2px',
+            '2px',
+            'rgb(13, 148, 136)',
+        ]);
+        const appearanceState = await snapshot();
+        assert.equal(appearanceState.submits, 0);
+        assert.equal(appearanceState.confirms, 0);
+        assert.equal(appearanceState.continues, 0);
+        const forcedInput = await open('appearance-default', true, 'active');
+        const forcedButton = continueButton();
+        const forcedAppearance = await submitAppearance(forcedButton);
+        assert.deepEqual(forcedAppearance.border, ['solid', '1px']);
+        await forcedInput.fill('123456');
+        await page.keyboard.press('Tab');
+        assert((await submitAppearance(forcedButton)).focusVisible);
+        assert.equal((await snapshot()).submits, 0);
+        evidence.submitAppearance = {
+            disabledAppearance,
+            enabledAppearance,
+            defaultHover,
+            themedFallback,
+            themedHover,
+            focusedAppearance,
+            forcedAppearance,
+        };
         const finish = async (name) => {
             const state = await snapshot();
             assert.deepEqual(evidence.pageErrors, []);

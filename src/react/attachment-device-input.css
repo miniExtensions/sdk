@@ -14,11 +14,7 @@
         color 150ms;
 }
 
-.mx-sdk-attachment-device:not([data-disabled]):is(
-        :hover,
-        :focus-within,
-        [data-drag-active]
-    ) {
+.mx-sdk-attachment-device:not([data-disabled]):is(:hover, :focus-within) {
     border-color: var(--mx-sdk-accent, #2563eb);
     color: var(--mx-sdk-accent, #2563eb);
 }
@@ -41,6 +37,11 @@
     block-size: 3.5rem;
     margin-block-end: 0.5rem;
     pointer-events: none;
+}
+
+.mx-sdk-attachment-device[data-drag-active]:not([data-disabled])
+    > .mx-sdk-attachment-device__icon {
+    color: var(--mx-sdk-accent, #2563eb);
 }
 
 .mx-sdk-attachment-device__title {

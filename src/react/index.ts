@@ -145,6 +145,12 @@ export {
     type CompleteVerificationErrorPresentation,
 } from './CompleteVerificationScreen.js';
 export {
+    CompleteExtensionPasswordScreen,
+    type CompleteExtensionPasswordScreenProps,
+    type CompleteExtensionPasswordScreenLabels,
+    type CompleteExtensionPasswordScreenResult,
+} from './CompleteExtensionPasswordScreen.js';
+export {
     LoginExistingValuesPicker,
     type LoginExistingValuesOwner,
     type LoginExistingValuesRequest,
@@ -3079,6 +3085,8 @@ export type ReadonlyPortalListProps<
 > = Omit<AirtableListProps<S>, 'children'> & {
     label?: string;
     openRecordLabel?: string;
+    /** Host-supplied accessible row name for an accepted List record. */
+    recordLabel?: (recordId: string) => string | null;
     /** Omit in preview or when no current native child is admitted. */
     openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
 };
@@ -3158,12 +3166,14 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
     openActions,
     label,
     openRecordLabel,
+    recordLabel,
 }: {
     scope: PortalPresentationSource<S>;
     state: AirtablePortalRenderState<S>;
     openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
     label?: string;
     openRecordLabel: string;
+    recordLabel?: ReadonlyPortalListProps<S>['recordLabel'];
 }): ReactNode {
     const open = usePortalOpen(scope, state.revision, openActions);
     return createElement(
@@ -3189,23 +3199,18 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
             },
             state.rows.map((row) => {
                 const action = openActions?.get(row.recordId);
-                return createElement(
-                    'li',
-                    {
-                        key: row.recordId,
-                        className: 'mx-sdk-readonly-portal-list__row',
-                        'data-record-id': row.recordId,
-                    },
-                    row.cells.map((cell) =>
-                        createElement(
-                            'div',
-                            {
-                                key: cell.fieldId,
-                                'data-field-id': cell.fieldId,
-                            },
-                            cell.node
-                        )
-                    ),
+                const rowLabel = recordLabel?.(row.recordId);
+                const cells = row.cells.map((cell) =>
+                    createElement(
+                        'div',
+                        {
+                            key: cell.fieldId,
+                            'data-field-id': cell.fieldId,
+                        },
+                        cell.node
+                    )
+                );
+                const openButton =
                     action?.revision === state.revision
                         ? createElement(
                               'button',
@@ -3213,6 +3218,9 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                                   type: 'button',
                                   className:
                                       'mx-sdk-readonly-portal-list__open',
+                                  'aria-label': rowLabel
+                                      ? `${openRecordLabel} ${rowLabel}`
+                                      : undefined,
                                   'data-testid': action.testId,
                                   onClick: (
                                       event: import('react').MouseEvent<HTMLButtonElement>
@@ -3228,7 +3236,24 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                               },
                               openRecordLabel
                           )
-                        : null
+                        : null;
+                return createElement(
+                    'li',
+                    {
+                        key: row.recordId,
+                        className: 'mx-sdk-readonly-portal-list__row',
+                        'data-record-id': row.recordId,
+                    },
+                    ...(rowLabel
+                        ? [
+                              createElement(
+                                  'div',
+                                  { role: 'group', 'aria-label': rowLabel },
+                                  cells,
+                                  openButton
+                              ),
+                          ]
+                        : [cells, openButton])
                 );
             })
         )
@@ -3249,6 +3274,7 @@ export function ReadonlyPortalList<
     openActions,
     label,
     openRecordLabel = 'Open record',
+    recordLabel,
 }: ReadonlyPortalListProps<S>): ReactNode {
     return createElement(AirtableList<S>, {
         scope,
@@ -3261,6 +3287,7 @@ export function ReadonlyPortalList<
                 openActions,
                 label,
                 openRecordLabel,
+                recordLabel,
             }),
     });
 }
@@ -3387,6 +3414,7 @@ export function ReadonlyPortalRecords<
     openActions,
     label,
     openRecordLabel = 'Open record',
+    recordLabel,
     status,
     renderChildRegistration,
 }: ReadonlyPortalRecordsProps<S>): ReactNode {
@@ -3415,6 +3443,7 @@ export function ReadonlyPortalRecords<
                   openActions: currentActions,
                   label,
                   openRecordLabel,
+                  recordLabel,
               });
     return createElement(
         Fragment,

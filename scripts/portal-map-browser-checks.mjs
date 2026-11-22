@@ -943,6 +943,95 @@ export async function checkPortalMapBrowser({
                 'keyboard-current-owner-ABA-no-unlink-hidden-data'
             );
 
+            evidence.phase = format + ':held-open-replacement';
+            const heldOpens = [];
+            const openButton = await open.elementHandle();
+            assert(openButton);
+            try {
+                for (const modality of ['keyboard', 'pointer']) {
+                    await open.focus();
+                    await openButton.evaluate((button) => {
+                        window.portalMapProof.watchOpen(button);
+                    });
+                    const before = (await snapshot()).host.opens.length;
+                    const recordId = modality + '-open-successor';
+                    if (modality === 'keyboard') {
+                        await item.page.keyboard.down('Space');
+                    } else {
+                        await open.hover();
+                        await item.page.mouse.down();
+                    }
+                    try {
+                        assert.deepEqual(
+                            await item.page.evaluate(
+                                (id) =>
+                                    window.portalMapProof.replaceOpenRecord(id),
+                                recordId
+                            ),
+                            { marker: 'first-current-1', recordId }
+                        );
+                        assert(
+                            await openButton.evaluate(
+                                (button) =>
+                                    button === document.activeElement &&
+                                    button ===
+                                        document.querySelector(
+                                            '[aria-label="Open first current one"]'
+                                        )
+                            ),
+                            'The replacement must reuse the focused Open button'
+                        );
+                    } finally {
+                        if (modality === 'keyboard')
+                            await item.page.keyboard.up('Space');
+                        else await item.page.mouse.up();
+                    }
+                    const afterRelease = (await snapshot()).host.opens;
+                    const events = await item.page.evaluate(() =>
+                        window.portalMapProof.openEvents()
+                    );
+                    assert.deepEqual(
+                        events.map((event) => event.type),
+                        modality === 'keyboard'
+                            ? ['keydown', 'keyup', 'click']
+                            : ['pointerdown', 'pointerup', 'click']
+                    );
+                    assert(events.every((event) => event.trusted));
+                    assert.equal(
+                        events.at(-1).detail === 0,
+                        modality === 'keyboard'
+                    );
+                    if (modality === 'keyboard')
+                        await item.page.keyboard.press('Space');
+                    else await open.click();
+                    const afterFresh = (await snapshot()).host.opens;
+                    heldOpens.push({
+                        modality,
+                        events,
+                        held: afterRelease.slice(before),
+                        fresh: afterFresh.slice(afterRelease.length),
+                    });
+                    assert.deepEqual(heldOpens.at(-1).fresh, [
+                        { root: 'first', record: recordId },
+                    ]);
+                }
+            } finally {
+                await item.page.evaluate(() =>
+                    window.portalMapProof.watchOpen(null)
+                );
+                await openButton.dispose();
+            }
+            evidence.heldOpenGestures ??= {};
+            evidence.heldOpenGestures[format] = heldOpens;
+            assert.deepEqual(
+                heldOpens.map((proof) => proof.held),
+                [[], []],
+                'Held Space and pointer releases must leave the replacement closed'
+            );
+            assert.equal((await snapshot()).host.submits, 0);
+            assert.equal(item.providerRequests, 1);
+            await record(cases, format, 'held-open-owner-replacement');
+
             evidence.phase = format + ':no-ordinary-refit';
             const before = (await snapshot()).boundary;
             await item.page.evaluate(() => window.portalMapProof.laterRows());
@@ -1358,7 +1447,7 @@ export async function checkPortalMapBrowser({
             );
             cases.at(-1).cleanupAfterUnmount = state;
 
-            assert.equal(cases.length, 11);
+            assert.equal(cases.length, 12);
             evidence.profiles.push({ format, react, cases });
         }
         await closeCurrent();

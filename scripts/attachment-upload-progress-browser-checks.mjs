@@ -136,6 +136,89 @@ export async function checkAttachmentUploadProgressBrowser({
                 ),
                 'dashed'
             );
+            const dispatchDrag = (...types) =>
+                picker.evaluate((input, types) => {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(new File(['cd'], 'drop.txt'));
+                    return types.map((type) =>
+                        input.parentElement.dispatchEvent(
+                            new DragEvent(type, {
+                                bubbles: true,
+                                cancelable: true,
+                                dataTransfer: transfer,
+                            })
+                        )
+                    );
+                }, types);
+            const readPickerPaint = () =>
+                picker.evaluate(async (input) => {
+                    const target = input.parentElement;
+                    const glyph = target.querySelector('svg');
+                    await new Promise((resolve) =>
+                        requestAnimationFrame(() =>
+                            requestAnimationFrame(resolve)
+                        )
+                    );
+                    await Promise.all(
+                        target
+                            .getAnimations()
+                            .map((animation) => animation.finished)
+                    );
+                    const { fill, stroke } = getComputedStyle(glyph);
+                    return {
+                        border: getComputedStyle(target).borderTopColor,
+                        fill,
+                        stroke,
+                        hover: target.matches(':hover'),
+                        focus: input.matches(':focus-visible'),
+                        drag: target.hasAttribute('data-drag-active'),
+                    };
+                });
+            await page.mouse.move(0, 0);
+            const rest = await readPickerPaint();
+            assert.deepEqual(rest, {
+                border: 'rgb(209, 213, 219)',
+                fill: 'rgb(156, 163, 175)',
+                stroke: 'none',
+                hover: false,
+                focus: false,
+                drag: false,
+            });
+            const accent = 'rgb(37, 99, 235)';
+            assert.deepEqual(await dispatchDrag('dragenter', 'dragover'), [
+                false,
+                false,
+            ]);
+            assert.deepEqual(await readPickerPaint(), {
+                ...rest,
+                fill: accent,
+                drag: true,
+            });
+            await picker.hover();
+            assert.deepEqual(await readPickerPaint(), {
+                ...rest,
+                border: accent,
+                fill: accent,
+                hover: true,
+                drag: true,
+            });
+            await page.mouse.move(0, 0);
+            assert.deepEqual(await dispatchDrag('dragleave'), [false]);
+            assert.deepEqual(await readPickerPaint(), rest);
+            assert.deepEqual(
+                await page.evaluate(
+                    () => window.uploadProgressProbe.selections
+                ),
+                []
+            );
+            await page.keyboard.press('Tab');
+            await page.keyboard.press('Tab');
+            assert.deepEqual(await readPickerPaint(), {
+                ...rest,
+                border: accent,
+                fill: accent,
+                focus: true,
+            });
             const payload = [
                 {
                     name: 'one.txt',
@@ -161,26 +244,14 @@ export async function checkAttachmentUploadProgressBrowser({
             ]);
             await keyboardChooser.setFiles(payload);
             assert.equal(await picker.inputValue(), '');
-            const dispatchDrop = async () =>
-                picker.evaluate((input) => {
-                    const transfer = new DataTransfer();
-                    transfer.items.add(new File(['cd'], 'drop.txt'));
-                    return input.parentElement.dispatchEvent(
-                        new DragEvent('drop', {
-                            bubbles: true,
-                            cancelable: true,
-                            dataTransfer: transfer,
-                        })
-                    );
-                });
-            assert.equal(await dispatchDrop(), false);
+            assert.deepEqual(await dispatchDrag('drop'), [false]);
             await page.evaluate(() =>
                 window.uploadProgressProbe.setDisabled(true)
             );
             await page.waitForFunction(
                 () => document.querySelector('#device-picker')?.disabled
             );
-            assert.equal(await dispatchDrop(), false);
+            assert.deepEqual(await dispatchDrag('drop'), [false]);
             const selected = await page.evaluate(
                 () => window.uploadProgressProbe.selections
             );

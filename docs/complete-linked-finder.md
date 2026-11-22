@@ -66,7 +66,9 @@ query. Controlled search echoes update the input and current pagination filter
 without superseding a scan or scheduling a second search. Typing and scanner
 callbacks schedule their own request. `initialLoading` is the host's table/schema
 readiness. Initial loading precedes errors, then admitted rows, then the supplied
-empty label; pagination keeps the rows and displays its own loading indicator.
+empty label after the results are exhausted. An empty page with a continuation
+keeps the paging sentinel, and an in-flight continuation shows its own loading
+indicator.
 The observer uses the actual scrolling element and a `400px` root margin.
 Each observer retains the snapshot's opaque `readIdentity` and retires on
 cleanup; an old queued intersection cannot supersede a newer same-owner search.

@@ -61,12 +61,47 @@
     border-inline-end-width: 1px;
 }
 
+@media (min-width: 640px) {
+    .mx-sdk-readonly-grid__table > thead > tr > th,
+    .mx-sdk-readonly-grid__cell[data-primary='true'] {
+        position: sticky;
+        /* Keep scrolling cells hidden even with a translucent Portal surface. */
+        background-color: Canvas;
+        background-image: linear-gradient(
+            var(--mx-portal-background, transparent),
+            var(--mx-portal-background, transparent)
+        );
+    }
+
+    .mx-sdk-readonly-grid__cell[data-primary='true'] {
+        inset-inline-start: 0;
+        z-index: 1;
+    }
+
+    .mx-sdk-readonly-grid__table > thead > tr > th {
+        inset-block-start: 0;
+        z-index: 2;
+    }
+
+    .mx-sdk-readonly-grid__header[data-primary='true'] {
+        inset-inline-start: 0;
+        z-index: 3;
+    }
+}
+
 .mx-sdk-readonly-grid__cell-content {
     width: 0;
     min-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.mx-sdk-readonly-grid__cell
+    .me-rich-text
+    .ProseMirror[contenteditable='false']
+    a {
+    text-decoration: none;
 }
 
 .mx-sdk-readonly-grid__cell-content.cell-short {
@@ -92,6 +127,11 @@
     gap: 0.375rem;
     pointer-events: auto;
     min-width: max-content;
+}
+
+.mx-sdk-readonly-grid__heading[data-field-icon='checkbox'],
+.mx-sdk-readonly-grid__heading[data-field-icon='number'] {
+    column-gap: 0.5rem;
 }
 
 .mx-sdk-readonly-grid__heading > .mx-sdk-field-row-break,
@@ -131,7 +171,6 @@
     outline-offset: -2px;
 }
 
-.mx-sdk-readonly-grid__hide,
 .mx-sdk-readonly-grid__open,
 .mx-sdk-readonly-grid__dialog button {
     font: inherit;
@@ -140,7 +179,35 @@
 }
 
 .mx-sdk-readonly-grid__hide {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-block-end: 0.5rem;
+    padding: 0.375rem 0.625rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    background-color: #e5e7eb;
+    color: #374151;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1rem;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    cursor: pointer;
+}
+
+.mx-sdk-readonly-grid__hide:hover {
+    background-color: #d1d5db;
+}
+
+.mx-sdk-readonly-grid__hide-icon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-inline-start: -0.125rem;
+    margin-inline-end: 0.5rem;
 }
 
 .mx-sdk-readonly-grid__dialog {

@@ -6318,6 +6318,12 @@ createElement(CompleteVerificationScreen<Confirmed>, {
 });
 ```
 
+The stylesheet gives Continue and Reload the compact button size. The button
+uses Inter when the host has loaded it, with the system sans-serif as a fallback.
+To supply an exact hover color, set `--mx-sdk-verification-hover-accent` on the
+verification surface, for example to `rgb(var(--theme-500))` in a host with that
+palette. The default hover color is a lighter shade of the active accent.
+
 The host supplies transport, language, normalized service failure, continuation,
 error observation and Reload. `onError` must be nonthrowing and must not include
 codes or private results in telemetry. `formatErrorMessage` is an optional pure
@@ -6392,6 +6398,58 @@ copy the code/loading/cache/error state into the wrapper. Do not change
 `LoginPageExtensionView`, `loginIntoExtensionUsingLoginPage`, SDK auth safety or
 backend policy. This SDK stage is not native adoption, actual code delivery,
 credential-storage qualification or hosted authentication acceptance.
+
+## Complete extension password screen
+
+`CompleteExtensionPasswordScreen` renders the password prompt shared by Form
+and Portal. Render it as a standalone screen, outside any existing form.
+
+```tsx
+import { createElement } from 'react';
+import type { AuthOwnerScope } from '@miniextensions/sdk/auth';
+import {
+    CompleteExtensionPasswordScreen,
+    type CompleteExtensionPasswordScreenProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-extension-password.css';
+
+declare const scope: AuthOwnerScope;
+declare const verifyPassword: CompleteExtensionPasswordScreenProps['verifyPassword'];
+
+createElement(CompleteExtensionPasswordScreen, {
+    scope,
+    verifyPassword,
+    labels: {
+        password: 'Password',
+        submit: 'Submit',
+        pending: 'Checking password',
+        wrong: 'Incorrect password',
+        blocked: 'Too many attempts',
+        error: 'Unable to check your password',
+    },
+});
+```
+
+The host supplies the accepted page scope and handles verification and any
+accepted result. The screen passes the submitted text verbatim to the host.
+An empty draft disables Submit. While a request is pending the same input stays
+editable and Submit stays disabled. A `wrong` or `error` result permits an
+explicit retry with the latest draft. A rejected verification shows the
+localized `error` label. A `blocked` result locks Submit for the current scope.
+After `correct`, the draft is cleared and Submit remains locked until the host
+replaces the screen.
+
+Advance the scope revision on accepted page, connection, session, or visitor
+changes. A scope change makes a fresh prompt and prevents earlier results from
+updating its UI. Check ownership in the host adapter before committing any
+result. The screen keeps the draft in the mounted input and never calls
+transport, storage or navigation APIs. Use distinct React `identifierPrefix`
+values for separate server-rendered roots on a page, and pass the same prefix
+to each corresponding hydration.
+
+The stylesheet is optional. It reproduces the standalone native card and
+supports a local `accentColor` for the submit button. The form retains its
+labels, keyboard submission and feedback without the stylesheet.
 
 ## Configured Address field
 

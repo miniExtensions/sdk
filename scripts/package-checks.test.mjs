@@ -1291,6 +1291,52 @@ test('browser build requires bundled SDK dist inside the clean consumer', async 
     );
 });
 
+test('browser build separates hoisted nested dependencies from SDK source', async (t) => {
+    const fixture = await installedFixture(t);
+    const dependency = `${fixture.sdk}/node_modules/entities`;
+    await write(
+        fixture.consumer,
+        `${dependency}/package.json`,
+        JSON.stringify({ name: 'entities', version: '2.1.0' })
+    );
+    const entityMap = `${dependency}/lib/maps/entities.json`;
+    await write(fixture.consumer, entityMap, '{}');
+    const dist = `${fixture.sdk}/dist/esm/runtime/index.js`;
+    await assertBrowserInputs(
+        { inputs: { [dist]: {}, [entityMap]: {} } },
+        fixture.consumer
+    );
+    await assert.rejects(
+        assertBrowserInputs({ inputs: { [entityMap]: {} } }, fixture.consumer),
+        /did not bundle the installed SDK dist/
+    );
+});
+
+test('browser build rejects unowned files and SDK copies in nested modules', async (t) => {
+    const fixture = await installedFixture(t);
+    const modules = `${fixture.sdk}/node_modules`;
+    const sdkManifest = JSON.stringify({
+        name: '@miniextensions/sdk',
+        version: '0.1.0',
+    });
+    const loose = `${modules}/loose.js`;
+    await write(fixture.consumer, loose, 'export {};');
+    const inputs = [loose];
+    for (const name of ['sdk', 'sdk-copy']) {
+        const copy = `${modules}/@miniextensions/${name}`;
+        const source = `${copy}/src/runtime/index.ts`;
+        await write(fixture.consumer, `${copy}/package.json`, sdkManifest);
+        await write(fixture.consumer, source, 'export {};');
+        inputs.push(source);
+    }
+    for (const input of inputs) {
+        await assert.rejects(
+            assertBrowserInputs({ inputs: { [input]: {} } }, fixture.consumer),
+            /Invalid nested browser dependency/
+        );
+    }
+});
+
 test('browser build rejects source imports and paths escaping the consumer', async (t) => {
     const fixture = await installedFixture(t);
     const source = `${fixture.sdk}/src/runtime/index.ts`;

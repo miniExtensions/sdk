@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const typed = String.raw`
 import {createElement} from 'react';
@@ -14,6 +14,8 @@ const diagnostic:FormValidationDiagnostic={fieldId:'fld_hidden',fieldTitle:'Sema
 const diagnostics:readonly FormValidationDiagnostic[]=[diagnostic];
 const props:FormValidationSummaryProps={heading:'Please correct the following fields',diagnostics};
 createElement(FormValidationSummary,props);
+const dateInput={current:null as HTMLInputElement|null};
+createElement(FormValidationSummary,{...props,resolveFieldTarget:fieldId=>fieldId===diagnostic.fieldId?dateInput.current:null});
 const nativeDiagnostics:{fieldId:string;fieldTitle:string;errorMessage:string}[]=[{...diagnostic}];
 createElement(FormValidationSummary,{heading:props.heading,diagnostics:nativeDiagnostics});
 // @ts-expect-error public diagnostics are immutable
@@ -114,8 +116,12 @@ import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
 import {FormValidationSummary} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/form-validation-summary.css';
-const root=createRoot(document.querySelector('#summary-owner'));
+import {mountLinkedChild} from './linked-child-fixture.mjs';
 window.fixtureReactVersion=React.version;
+const linkedChild=document.querySelector('#linked-child-owner');
+if(linkedChild)mountLinkedChild(linkedChild);
+else {
+const root=createRoot(document.querySelector('#summary-owner'));
 window.fixtureIdentity=crypto.randomUUID();
 window.summaryRenderCalls=0;
 window.renderSummary=(heading,diagnostics)=>{
@@ -126,6 +132,7 @@ window.renderSummary('Please correct the following fields',[
  {fieldId:'fld_hidden',fieldTitle:'Hidden semantic title',errorMessage:'Field is required'},
  {fieldId:'fld_email',fieldTitle:'Email address',errorMessage:'Enter a valid email address'}
 ]);
+}
 `;
 
 const localhostBrowser = String.raw`
@@ -141,7 +148,8 @@ const executablePath=process.argv[4],expectedReact=process.argv[5];
 mkdirSync('browser-proof',{recursive:true});
 buildSync({entryPoints:['browser-fixture.mjs'],bundle:true,platform:'browser',format:'iife',outfile:'browser-proof/app.js',define:{'process.env.NODE_ENV':'"production"'},logLevel:'silent'});
 writeFileSync('browser-proof/index.html','<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/app.css"><style>body{margin:0;padding:16px;font-family:Arial,sans-serif}.fixture-frame{display:flex;flex-direction:column;height:180px;width:100%;overflow:hidden}.fixture-targets{margin-top:400px;padding-bottom:200px}</style><script defer src="/app.js"></script></head><body><main id="summary-owner" class="fixture-frame"></main><section class="fixture-targets"><label hidden for="fld_hidden">Hidden inline label</label><input id="fld_hidden" aria-label="Hidden-label field"><label for="fld_email">Email field</label><input id="fld_email"></section></body></html>');
-const allowed=new Map([['/','index.html'],['/index.html','index.html'],['/app.js','app.js'],['/app.css','app.css']]);
+writeFileSync('browser-proof/linked-child.html','<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/app.css"><style>body{font-family:Arial,sans-serif}dialog{width:360px}#parent-proof-scroll,#child-proof-scroll{height:152px;overflow:auto}.proof-gap{display:flex;align-items:flex-end;height:480px}</style><script defer src="/app.js"></script></head><body><div id="linked-child-owner"></div></body></html>');
+const allowed=new Map([['/','index.html'],['/index.html','index.html'],['/linked-child.html','linked-child.html'],['/app.js','app.js'],['/app.css','app.css']]);
 const unexpectedPaths=[];
 const server=createServer((request,response)=>{
  const path=new URL(request.url,'http://127.0.0.1').pathname,file=allowed.get(path);
@@ -199,7 +207,64 @@ try {
  assert.deepEqual(await page.locator('[role="list"] li').allTextContents(),['Restored semantic title (Current error)']);
  assert.equal(await page.locator('[role="list"] a').getAttribute('href'),'#fld_hidden');
  assert.deepEqual(pageErrors,[]);assert.deepEqual(externalRequests,[]);assert.deepEqual(unexpectedPaths,[]);assert.equal(documentRequests,1);
- console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),viewport:{width:480,height:360},nativeAnchorChecks:2,documentRequests,scroll,transitions:['updated','cleared','restored'],pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
+ await page.goto(origin+'/linked-child.html',{waitUntil:'networkidle'});
+ await page.getByRole('button',{name:'Open linked child'}).click();
+ const dialog=page.getByRole('dialog',{name:'Create linked record'});
+ const validate=dialog.getByRole('button',{name:'Validate child'});
+ const childLink=dialog.getByRole('link',{name:'Child appointment date'});
+ const requests=[],navigations=[];
+ page.on('request',request=>requests.push(request.url()));
+ page.on('framenavigated',frame=>navigations.push(frame.url()));
+ assert.equal(await childLink.count(),0,'The summary requires explicit child validation');
+ await validate.click();
+ await childLink.waitFor();
+ const childHref=await childLink.getAttribute('href');
+ assert.match(await dialog.getByRole('alert').textContent(),/Child appointment date \(Date is required\)/);
+ assert(await validate.evaluate(button=>document.activeElement===button));
+ await page.keyboard.press('Tab');
+ assert(await childLink.evaluate(link=>document.activeElement===link),'Tab must reach the child diagnostic');
+ const activation=await childLink.evaluateHandle(link=>{
+  const events=[];
+  link.addEventListener('keydown',event=>events.push({type:'keydown',key:event.key,trusted:event.isTrusted}),{once:true});
+  link.addEventListener('click',event=>events.push({type:'click',trusted:event.isTrusted}),{once:true});
+  return events;
+ });
+ const before=await page.evaluate(()=>window.readLinkedValidation());
+ assert(before.parentFirst&&before.sharedId&&!before.childVisible&&before.childScroll>0);
+ assert.deepEqual(before.calls,{loads:1,saves:0,submits:[],writes:[],parentFocus:0});
+ await page.keyboard.press('Enter');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const after=await page.evaluate(()=>window.readLinkedValidation());
+ const events=await activation.jsonValue();
+ assert.deepEqual(events,[{type:'keydown',key:'Enter',trusted:true},{type:'click',trusted:true}]);
+ // The Date control settles its draft when focus leaves it. Measure the
+ // pointer activation after returning focus to the link.
+ await childLink.focus();
+ const beforePointer=await page.evaluate(()=>window.readLinkedValidation());
+ await childLink.click();
+ const afterPointer=await page.evaluate(()=>window.readLinkedValidation());
+ await childLink.focus();
+ const auxiliary=await childLink.evaluateHandle(link=>{
+  const events=[];
+  link.ownerDocument.defaultView.addEventListener('auxclick',event=>{
+   events.push({button:event.button,trusted:event.isTrusted,canceled:event.defaultPrevented});
+  },{once:true});
+  return events;
+ });
+ await childLink.click({button:'middle'});
+ const auxiliaryEvents=await auxiliary.jsonValue();
+ const openPages=context.pages().length;
+ const remove=dialog.getByRole('button',{name:'Remove child Date'});
+ await remove.click();
+ assert.equal(await dialog.getByTestId('child-proof-date').count(),0);
+ await page.keyboard.press('Tab');
+ await page.keyboard.press('Tab');
+ assert(await childLink.evaluate(link=>document.activeElement===link));
+ const beforeMissing=await page.evaluate(()=>window.readLinkedValidation());
+ await page.keyboard.press('Enter');
+ const afterMissing=await page.evaluate(()=>window.readLinkedValidation());
+ assert.deepEqual(pageErrors,[]);assert.deepEqual(externalRequests,[]);assert.deepEqual(unexpectedPaths,[]);
+ console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),viewport:{width:480,height:360},nativeAnchorChecks:2,documentRequests,scroll,transitions:['updated','cleared','restored'],pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true,linkedChild:{childHref,before,after,beforePointer,afterPointer,beforeMissing,afterMissing,events,auxiliaryEvents,requests,navigations,openPages}}));
 } finally {
  if(browser)await browser.close();
  if(server.listening)await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));
@@ -239,6 +304,30 @@ export function checkFormValidationSummaryReactMatrix({
         );
         writeFileSync(join(directory, 'runtime.mjs'), runtime);
         if (playwrightModulePath) {
+            const require = createRequire(import.meta.url);
+            const { buildSync } = require(esbuildModulePath);
+            buildSync({
+                entryPoints: [
+                    fileURLToPath(
+                        new URL(
+                            '../test/formLinkedChildFixtures.ts',
+                            import.meta.url
+                        )
+                    ),
+                ],
+                bundle: true,
+                format: 'esm',
+                outfile: join(directory, 'linked-child-data.mjs'),
+            });
+            writeFileSync(
+                join(directory, 'linked-child-fixture.mjs'),
+                readFileSync(
+                    new URL(
+                        './form-validation-summary-linked-child-fixture.mjs',
+                        import.meta.url
+                    )
+                )
+            );
             writeFileSync(
                 join(directory, 'browser-fixture.mjs'),
                 browserFixture
@@ -356,6 +445,56 @@ export function checkFormValidationSummaryReactMatrix({
             console.log(
                 `Installed FormValidationSummary React ${version.react}: ESM/CJS/types/CSS/browser bundles/SSR/hydration/diagnostic updates and clearing passed; no network.`
             );
+        }
+        for (const { react, localhost } of versions) {
+            if (!localhost) continue;
+            const proof = localhost.linkedChild;
+            console.log(JSON.stringify({ react, linkedChild: proof }));
+        }
+        for (const { react, localhost } of versions) {
+            if (!localhost) continue;
+            const {
+                childHref,
+                before,
+                after,
+                beforePointer,
+                afterPointer,
+                beforeMissing,
+                afterMissing,
+                auxiliaryEvents,
+                requests,
+                navigations,
+                openPages,
+            } = localhost.linkedChild;
+            assert(
+                after.focus === 'child' &&
+                    after.childVisible &&
+                    after.childScroll < before.childScroll,
+                `React ${react}: Enter must focus and scroll to the child Date input`
+            );
+            assert.equal(after.parentScroll, before.parentScroll);
+            assert.equal(after.pageScroll, before.pageScroll);
+            assert.equal(after.parentValue, before.parentValue);
+            assert.equal(after.parentDraft, before.parentDraft);
+            assert.equal(after.childValue, before.childValue);
+            assert.equal(after.childDraft, before.childDraft);
+            assert.deepEqual(after.calls, before.calls);
+            assert.equal(after.url, before.url);
+            assert.equal(after.historyLength, before.historyLength);
+            assert.equal(childHref, '#');
+            assert.equal(afterPointer.focus, 'child');
+            assert.equal(afterPointer.childVisible, true);
+            assert.deepEqual(afterPointer.calls, beforePointer.calls);
+            assert.deepEqual(auxiliaryEvents, [
+                { button: 1, trusted: true, canceled: true },
+            ]);
+            assert.equal(beforeMissing.focus, 'A');
+            assert.equal(beforeMissing.parentFirst, true);
+            assert.deepEqual(afterMissing, beforeMissing);
+            assert.deepEqual(requests, []);
+            assert.deepEqual(navigations, []);
+            assert.equal(openPages, 1);
+            assert.equal(localhost.documentRequests, 2);
         }
         return { versions, cleanup: 'completed' };
     } finally {

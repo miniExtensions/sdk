@@ -14,7 +14,16 @@ import {
     checkReadonlyPortalGridDateTimeBrowser,
     readonlyPortalGridDateTimeEntry,
 } from './readonly-portal-grid-datetime-checks.mjs';
+import {
+    checkReadonlyPortalGridDurationBrowser,
+    readonlyPortalGridDurationEntry,
+} from './readonly-portal-grid-duration-checks.mjs';
 import { checkReadonlyPortalGridShortcutBrowser } from './readonly-portal-grid-shortcut-browser-checks.mjs';
+import {
+    checkReadonlyPortalGridRichTextBrowser,
+    readonlyPortalGridRichTextEntry,
+    richTextHelpPaths,
+} from './readonly-portal-grid-rich-text-checks.mjs';
 
 export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
@@ -23,6 +32,9 @@ import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell
 import{DateField}from'@miniextensions/sdk/react/date';
 import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
 import{mountDateTimeGrid}from'./readonly-portal-grid-datetime.mjs';
+import{mountDurationGrid}from'./readonly-portal-grid-duration.mjs';
+import{mountTimestampGrid}from'./readonly-portal-grid-timestamp-fixture.mjs';
+import{mountRichTextGrid}from'./readonly-portal-grid-rich-text.mjs';
 import'@miniextensions/sdk/react/readonly-portal-grid.css';
 import'@miniextensions/sdk/react/portal-grid-single-line-text-cell.css';
 import'@miniextensions/sdk/react/single-line-text.css';
@@ -33,6 +45,7 @@ import'@miniextensions/sdk/react/complete-checkbox.css';
 import'@miniextensions/sdk/react/text.css';
 import'@miniextensions/sdk/react/complete-phone.css';
 import'@miniextensions/sdk/react/button.css';
+import'@miniextensions/sdk/react/rich-text.css';
 const records=Object.freeze([{recordId:'second',name:'Alpha',amount:'0',notes:'Detailed note '.repeat(120)},{recordId:'first',name:'Beta',amount:'false',notes:'Small note'}].map(Object.freeze));
 const original=JSON.stringify(records),hides=[],widths=[],opens=[],errors=[],pointers=[],headerEvents=[];let change,committed=0,retired=false,activeTrigger=null,returnCheck=null,stateRead=null,submits=0;
 window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trusted:e.isTrusted}),{capture:true});
@@ -46,7 +59,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  useEffect(()=>{stateRead=state;committed++;});
  const scope=state.scope,revision=state.revision,isCurrent=()=>!retired&&live.current.live&&live.current.ready&&live.current.scope===scope&&live.current.revision===revision;
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
- return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
+ return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,labels:state.hideColumnsLabel?{hideColumns:state.hideColumnsLabel}:undefined,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
 function TextCellProbe() {
     const [cell, setCell] = useState(() => ({
@@ -550,6 +563,9 @@ window.__nativeProbe={change:p=>change(p),retire:()=>{retired=true;},snapshot:()
 const fixture = new URLSearchParams(location.search).get('fixture');
 if (fixture === 'number-only') mountNumberGrid(root);
 else if (fixture === 'date-time') mountDateTimeGrid(root);
+else if (fixture === 'duration-only') mountDurationGrid(root);
+else if (fixture === 'timestamps') mountTimestampGrid(root, document.querySelector('#root'));
+else if (fixture === 'formatted-rich-text') mountRichTextGrid(root);
 else root.render(h(StrictMode, null, h(fixture === 'date-only' ? DateOnlyProbe : App)));
 `;
 
@@ -573,6 +589,26 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         join(temporary, 'readonly-portal-grid-datetime.mjs'),
         readonlyPortalGridDateTimeEntry
     );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-duration.mjs'),
+        readonlyPortalGridDurationEntry
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-rich-text.mjs'),
+        readonlyPortalGridRichTextEntry
+    );
+    const timestampFixture = regular(
+        fileURLToPath(
+            new URL(
+                './readonly-portal-grid-timestamp-fixture.mjs',
+                import.meta.url
+            )
+        )
+    );
+    writeFileSync(
+        join(temporary, 'readonly-portal-grid-timestamp-fixture.mjs'),
+        timestampFixture
+    );
     const bundle = await args.build({
         absWorkingDir: temporary,
         entryPoints: [entry],
@@ -592,6 +628,9 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/ReadonlyPortalGrid.js',
         '/react/date/DateField.js',
         '/react/CompleteReadOnlyTextField.js',
+        '/react/ReadOnlyDurationField.js',
+        '/react/CreatedTimeField.js',
+        '/react/LastModifiedTimeField.js',
         '/react/CompleteLocalizedNumericField.js',
         '/react/localized-numeric.css',
         '/react/CompleteFormFieldPresentation.js',
@@ -617,6 +656,9 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/PortalGridButtonCell.js',
         '/react/ButtonField.js',
         '/react/button.css',
+        '/react/RichTextField.js',
+        '/react/CompleteRichTextEditor.js',
+        '/react/rich-text.css',
     ])
         assert(
             inputs.some((name) => name.endsWith(suffix)),
@@ -649,6 +691,12 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
             allowed.has('/readonly-portal-grid.css')
     );
     allowed.set('/favicon.ico', Buffer.alloc(0));
+    for (const path of richTextHelpPaths) {
+        allowed.set(
+            path,
+            Buffer.from('<!doctype html><title>Owned Rich Text help</title>')
+        );
+    }
     allowed.set(
         '/grid-header-help.svg',
         Buffer.from(
@@ -664,11 +712,32 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
     report.readonlyPortalGrid = {
         sourceSha256: hash(readonlyPortalGridBrowserEntry),
         checkerSha256: hash(regular(fileURLToPath(import.meta.url))),
+        richTextCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-rich-text-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
+        timestampFixtureSha256: hash(timestampFixture),
         dateTimeCheckerSha256: hash(
             regular(
                 fileURLToPath(
                     new URL(
                         './readonly-portal-grid-datetime-checks.mjs',
+                        import.meta.url
+                    )
+                )
+            )
+        ),
+        durationCheckerSha256: hash(
+            regular(
+                fileURLToPath(
+                    new URL(
+                        './readonly-portal-grid-duration-checks.mjs',
                         import.meta.url
                     )
                 )
@@ -799,6 +868,248 @@ export async function checkReadonlyPortalGridDateBrowser({
     }
     const failed = cases.filter((item) => item.error);
     assert.deepEqual(failed, [], 'Packed read-only Date-only Grid');
+}
+
+async function checkReadonlyPortalGridTimestamps({ page, evidence }) {
+    const browser = page.context().browser();
+    assert(browser);
+    const origin = new URL(page.url()).origin;
+    const fixture = '/readonly-portal-grid.html?fixture=timestamps';
+    const allowed = new Set([
+        fixture,
+        '/readonly-portal-grid.js',
+        '/readonly-portal-grid.css',
+        '/favicon.ico',
+    ]);
+    const proof = {
+        nativeReference: {
+            monorepo: '26359379935d844cda84fe702dadc05cf889b9c2',
+            sdk: 'e93ac6d052d394ee7cf0c38c9a57aa7615b98bc6',
+        },
+        providerRequests: [],
+        pageErrors: [],
+    };
+    evidence.timestamps = proof;
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+        await context.route('**/*', (route) => {
+            const request = route.request();
+            const url = new URL(request.url());
+            if (
+                url.origin === origin &&
+                request.method() === 'GET' &&
+                !['fetch', 'xhr'].includes(request.resourceType()) &&
+                allowed.has(url.pathname + url.search)
+            )
+                return route.continue();
+            proof.providerRequests.push({
+                method: request.method(),
+                path: url.pathname,
+            });
+            return route.abort();
+        });
+        const timestamps = await context.newPage();
+        timestamps.on('pageerror', (error) =>
+            proof.pageErrors.push(error.message)
+        );
+        await timestamps.goto(origin + fixture, { waitUntil: 'networkidle' });
+        const grid = timestamps.getByRole('table');
+        await grid.waitFor({ state: 'visible' });
+        for (const name of ['Name', 'Created at', 'Modified at', 'Note'])
+            assert(
+                await grid
+                    .getByRole('columnheader', { name, exact: true })
+                    .isVisible(),
+                `Accessible timestamp header ${name}`
+            );
+        const stored = grid.locator('tr[data-record-id="recStored"]');
+        const readCell = async (fieldId, expected, previous = expected) => {
+            const cell = stored
+                .getByRole('cell')
+                .and(stored.locator(`td[data-field-id="${fieldId}"]`));
+            assert.equal(await cell.count(), 1, `Unique ${fieldId} cell`);
+            assert(await cell.isVisible(), `Visible ${fieldId} cell`);
+            assert.equal((await cell.innerText()).trim(), expected, fieldId);
+            const accessible = await cell.ariaSnapshot();
+            // ComputedTimeDisplay exposes its text inside a group. The cell
+            // role keeps its identity even when its content is not its name.
+            assert.equal(
+                accessible.includes(previous),
+                expected !== '',
+                `Accessible ${fieldId} content: ${accessible}`
+            );
+            return accessible;
+        };
+        const createdText = 'November 11, 2026 16:30';
+        const modifiedText = 'November 12, 2026 08:05';
+        const accessibleCells = async (valid) => ({
+            created: await readCell('fldCreated', createdText),
+            modified: await readCell(
+                'fldModified',
+                valid ? modifiedText : '',
+                modifiedText
+            ),
+        });
+        proof.initial = await timestamps.evaluate(() =>
+            window.__timestampGrid.initial()
+        );
+        proof.initial.accessibleCells = await accessibleCells(true);
+        proof.republished = await timestamps.evaluate(() =>
+            window.__timestampGrid.republish(true)
+        );
+        proof.republished.accessibleCells = await accessibleCells(true);
+        proof.invalidMetadata = await timestamps.evaluate(() =>
+            window.__timestampGrid.republish(false)
+        );
+        proof.invalidMetadata.accessibleCells = await accessibleCells(false);
+        for (const observation of [
+            proof.initial,
+            proof.republished,
+            proof.invalidMetadata,
+        ])
+            assert.equal(observation.react, evidence.react);
+        assert(proof.republished.revision > proof.initial.revision);
+        assert(proof.invalidMetadata.revision > proof.republished.revision);
+        proof.cleanup = await timestamps.evaluate(() =>
+            window.__timestampGrid.close()
+        );
+        assert.equal(await grid.count(), 0);
+        await timestamps.waitForLoadState('networkidle');
+        assert.deepEqual(proof.providerRequests, []);
+        assert.deepEqual(proof.pageErrors, []);
+        proof.status = 'passed';
+    } finally {
+        await context.close();
+        proof.contextClosed = true;
+    }
+}
+
+async function checkHideColumnsTrigger({ page, patch, snapshot, output }) {
+    const originalViewport = page.viewportSize();
+    const effects = async () => {
+        const { hides, widths, opens, submits } = await snapshot();
+        return { hides, widths, opens, submits };
+    };
+    const before = await effects();
+    const profiles = [];
+    try {
+        for (const [width, label] of [
+            [1280, 'Hide Columns'],
+            [390, 'Masquer les colonnes'],
+        ]) {
+            await page.setViewportSize({ width, height: 800 });
+            await patch({ hideColumnsLabel: label });
+            const trigger = page.getByRole('button', {
+                name: label,
+                exact: true,
+            });
+            const measure = () =>
+                trigger.evaluate((button) => {
+                    const icon = button.querySelector('svg');
+                    const bounds = button.getBoundingClientRect();
+                    const iconBounds = icon?.getBoundingClientRect();
+                    const text = document.createRange();
+                    text.selectNode(button.lastChild);
+                    const textBounds = text.getBoundingClientRect();
+                    const style = getComputedStyle(button);
+                    return {
+                        bounds: [
+                            bounds.x,
+                            bounds.y,
+                            bounds.width,
+                            bounds.height,
+                        ],
+                        icon: icon
+                            ? {
+                                  size: [iconBounds.width, iconBounds.height],
+                                  hidden: icon.getAttribute('aria-hidden'),
+                                  paths: icon.querySelectorAll('path').length,
+                                  gap: textBounds.x - iconBounds.right,
+                              }
+                            : null,
+                        font: [
+                            style.fontSize,
+                            style.lineHeight,
+                            style.fontWeight,
+                        ],
+                        fill: style.backgroundColor,
+                        border: style.borderTopColor,
+                        text: style.color,
+                        focusVisible: button.matches(':focus-visible'),
+                        outline: style.outlineStyle,
+                    };
+                });
+            const save = async (state) => {
+                if (!output) return;
+                const box = await trigger.boundingBox();
+                const x = Math.max(0, Math.floor(box.x) - 6);
+                const y = Math.max(0, Math.floor(box.y) - 6);
+                await page.screenshot({
+                    clip: {
+                        x,
+                        y,
+                        width: Math.min(
+                            width - x,
+                            Math.ceil(box.x + box.width) - x + 6
+                        ),
+                        height: Math.ceil(box.y + box.height) - y + 6,
+                    },
+                    path: join(
+                        output,
+                        `grid-hide-columns-${width}-${state}.png`
+                    ),
+                });
+            };
+            await page.locator('#before').focus();
+            await page.mouse.move(0, 0);
+            const rest = await measure();
+            assert.deepEqual(rest.icon, {
+                size: [16, 16],
+                hidden: 'true',
+                paths: 3,
+                gap: 8,
+            });
+            assert.deepEqual(rest.font, ['12px', '16px', '500']);
+            assert.equal(rest.bounds[3], 30);
+            assert.equal(rest.fill, 'rgb(229, 231, 235)');
+            assert.equal(rest.border, 'rgb(209, 213, 219)');
+            assert.equal(rest.text, 'rgb(55, 65, 81)');
+            await save('rest');
+            await trigger.hover();
+            const hover = await measure();
+            assert.equal(hover.fill, 'rgb(209, 213, 219)');
+            assert.deepEqual(hover.bounds, rest.bounds);
+            await save('hover');
+            await page.mouse.move(0, 0);
+            await page.keyboard.press('Tab');
+            const focus = await measure();
+            assert.equal(focus.focusVisible, true);
+            assert.notEqual(focus.outline, 'none');
+            assert.deepEqual(focus.bounds, rest.bounds);
+            await save('focus');
+            await page.keyboard.press('Enter');
+            const dialog = page.getByRole('dialog', {
+                name: label,
+                exact: true,
+            });
+            await dialog.waitFor();
+            assert.equal(await dialog.count(), 1);
+            await page.keyboard.press('Escape');
+            await dialog.waitFor({ state: 'detached' });
+            assert.equal(
+                await trigger.evaluate(
+                    (node) => document.activeElement === node
+                ),
+                true
+            );
+            assert.deepEqual(await effects(), before);
+            profiles.push({ width, label, rest, hover, focus });
+        }
+    } finally {
+        await page.setViewportSize(originalViewport);
+        await patch({ hideColumnsLabel: null });
+    }
+    return profiles;
 }
 
 export async function checkReadonlyPortalGridBrowser({
@@ -1041,6 +1352,16 @@ export async function checkReadonlyPortalGridBrowser({
         passed: true,
     });
 
+    results.push({
+        group: 'native Hide columns trigger appearance and keyboard-only dismissal',
+        profiles: await checkHideColumnsTrigger({
+            page,
+            patch,
+            snapshot,
+            output,
+        }),
+        passed: true,
+    });
     const hide = page.getByRole('button', {
         name: 'Hide columns',
         exact: true,
@@ -1505,6 +1826,8 @@ export async function checkReadonlyPortalGridBrowser({
     await checkGuidanceLayoutBrowser({ page, evidence, output });
     await checkReadonlyPortalGridNumberBrowser({ page, evidence });
     await checkReadonlyPortalGridDateTimeBrowser({ page, evidence });
+    await checkReadonlyPortalGridDurationBrowser({ page, evidence });
+    await checkReadonlyPortalGridTimestamps({ page, evidence });
     await checkReadonlyPortalGridShortcutBrowser({ page, evidence });
     Object.assign(evidence, {
         status: 'passed',
@@ -3115,6 +3438,12 @@ export async function checkReadonlyPortalGridProfile({
             );
         }
         await checkReadonlyPortalGridDateBrowser({ browser, origin, evidence });
+        await checkReadonlyPortalGridRichTextBrowser({
+            browser,
+            origin,
+            evidence,
+            output,
+        });
         assert.deepEqual(unexpected, []);
         evidence.requests = requests;
     } catch (error) {

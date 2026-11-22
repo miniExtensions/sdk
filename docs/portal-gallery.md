@@ -69,6 +69,9 @@ empty styling uses explicit `primaryIsEmpty`, never a comparison with a localize
 placeholder. Available titles have associated term/definition roles; withheld
 titles remain unnamed value groups, without deriving labels from schemas.
 
+Set `--mx-sdk-portal-gallery-card-border` to a CSS color on the Gallery or an
+ancestor to use your host's card border color. The default is `#e2e8f0`.
+
 The shared image controller preserves identity within the first six Gallery
 thumbnails; failed images do not promote a seventh. List image fallback remains
 an independent full-array policy. A temporary loading publication retains only

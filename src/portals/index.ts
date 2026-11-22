@@ -16,6 +16,7 @@ export type {
     NativePortalCollectionBegin,
     NativePortalCollectionTransition,
     NativePortalCollectionKernel,
+    NativePortalCollectionRemovalKernel,
 } from './nativeCollectionKernel.js';
 export { getPortalLinkedRecordFieldConfig } from './helpers.js';
 export { evaluatePortalViewAvailability } from './viewAvailability.js';

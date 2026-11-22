@@ -220,6 +220,21 @@ it('read-only root footer buttons each emit one distinct intent for host navigat
     const [submitAnother, copy] = f.container.querySelectorAll('button');
     assert.equal(submitAnother?.textContent, 'Submit another form');
     assert.equal(copy?.textContent, 'Copy submission');
+    for (const [button, pathCount] of [
+        [submitAnother, 1],
+        [copy, 2],
+    ] as const) {
+        assert(
+            button.classList.contains(
+                'mx-sdk-form-readonly-footer-action--styled'
+            )
+        );
+        const icon = button.querySelector('svg');
+        assert.equal(icon?.getAttribute('aria-hidden'), 'true');
+        assert.equal(icon?.getAttribute('width'), '16');
+        assert.equal(icon?.getAttribute('height'), '16');
+        assert.equal(icon?.querySelectorAll('path').length, pathCount);
+    }
     assert.deepEqual(intents, []);
     await act(async () => submitAnother.click());
     assert.deepEqual(intents, ['submit_another_form']);
@@ -497,6 +512,13 @@ it('SSR renders complete sanitized default UI and localized stock actions withou
         )
     );
     assert(html.includes('role="alert"'));
+    const icon = html.match(
+        /<svg[^>]*class="mx-sdk-form-completion-icon"[^>]*>.*?<\/svg>/
+    )?.[0];
+    assert(icon);
+    assert(icon.includes('viewBox="0 0 24 24"'));
+    assert(icon.includes('aria-hidden="true"'));
+    assert(icon.includes('d="M2.25 12c0-5.385'));
     assert(html.includes('<strong>world</strong>'));
     assert(!html.includes('<script>'));
     assert(html.includes('Submit another form'));

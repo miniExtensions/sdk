@@ -8,6 +8,7 @@ import {
     preparePortalGalleryBrowserFixtures,
     checkPortalGalleryBrowser,
 } from './portal-gallery-browser-checks.mjs';
+import { checkPortalGalleryPagingAppearance } from './portal-gallery-paging-appearance-checks.mjs';
 import {
     prepareReadonlyPortalGridBrowserFixtures,
     checkReadonlyPortalGridBrowser,
@@ -82,6 +83,8 @@ import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
 import { checkCompleteCalendlyBrowser } from './complete-calendly-browser-checks.mjs';
 import { checkCompleteBarcodeBrowser } from './complete-barcode-browser-checks.mjs';
 import { checkCompleteVerificationBrowser } from './complete-verification-browser-checks.mjs';
+import { checkCompleteExtensionPasswordBrowser } from './complete-extension-password-browser-checks.mjs';
+import { checkReadonlyPortalGridRichTextBrowser } from './readonly-portal-grid-rich-text-checks.mjs';
 import { checkLoginExistingValuesBrowser } from './login-existing-values-browser-checks.mjs';
 import { checkImageAnnotationBrowser } from './image-annotation-browser-checks.mjs';
 import { checkPortalMapBrowser } from './portal-map-browser-checks.mjs';
@@ -2538,6 +2541,14 @@ try {
             evidence: report.completeVerification,
             output,
         });
+        report.completeExtensionPassword = {};
+        await checkCompleteExtensionPasswordBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeExtensionPassword,
+            output,
+            expectedReactVersion: nativeReactVersion,
+        });
         report.loginExistingValues = {};
         await checkLoginExistingValuesBrowser({
             browser,
@@ -2654,8 +2665,15 @@ try {
             report.portalMap.profiles.map(({ format }) => format),
             ['esm', 'cjs']
         );
-        for (const profile of report.portalMap.profiles)
-            assert.equal(profile.cases.length, 11);
+        for (const profile of report.portalMap.profiles) {
+            assert.equal(profile.cases.length, 12);
+            assert.equal(
+                profile.cases.filter(
+                    ({ name }) => name === 'held-open-owner-replacement'
+                ).length,
+                1
+            );
+        }
         assert.equal(report.portalMap.externalProviderEgress, 0);
         assert.equal(report.portalMap.cleanup.context, 'completed');
         assert.equal(report.portalMap.cleanup.server, 'completed');
@@ -3273,12 +3291,25 @@ try {
                 origin,
                 evidence: report.readonlyPortalGrid,
             });
+            await checkReadonlyPortalGridRichTextBrowser({
+                browser,
+                origin,
+                evidence: report.readonlyPortalGrid,
+                output,
+            });
         });
         await run('portal-gallery-layout', async (page, origin) => {
             await page.goto(origin + '/portal-gallery-layout.html');
             await checkPortalGalleryBrowser({
                 page,
                 evidence: report.portalGallery,
+                output,
+            });
+            await checkPortalGalleryPagingAppearance({
+                browser,
+                origin,
+                evidence: report.portalGallery,
+                output,
             });
         });
         await run('printable-form-layout', async (page, origin) => {

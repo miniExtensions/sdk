@@ -3540,10 +3540,20 @@ export const summary = createElement(FormValidationSummary, {
 
 Supply already-authorized field diagnostics in display order and a localized
 heading. The SDK renders the complete error Alert and list. It renders each
-semantic field title as a literal `#fieldId` anchor followed by a space and the
-parenthesized message. Keep semantic titles even when inline field labels are
-hidden. Field IDs must be unique; items retain their React identity by field ID.
-Text is rendered literally, without HTML interpretation.
+semantic field title as an anchor followed by a space and the parenthesized
+message. Keep semantic titles even when inline field labels are hidden. Use
+unique field IDs within the summary because React keys items by field ID. Text
+is rendered literally, without HTML interpretation.
+
+When parent and linked child Forms share a field ID, set `resolveFieldTarget`
+on the child summary or on `CompleteFormComposition`'s `validation` prop. Return
+the child's current focusable control for the supplied field ID. For example,
+pass a ref to the child's `CompleteDateField` through `inputRef` and return
+`childDateInput.current` for that Date field. Activation moves focus and scroll
+to the returned control. Return `null` when the child's field is unavailable.
+Mounted scoped links use a neutral `#` href and cancel fragment navigation even
+when the target is gone. Summaries without a resolver use literal `#fieldId`
+links for native fragment navigation.
 
 Replace the diagnostics prop when existing host validation changes. An empty
 array renders nothing. The component does not calculate validation, retain error
@@ -3555,8 +3565,8 @@ For native adoption, retain the existing `loadingState.type === 'error'` and
 `FormValidationSummary`, mapping `error.errors` to `diagnostics` and the existing
 localized `please_correct_the_following_fields()` string to `heading`. Keep the
 existing generic `AdminOnlyErrorMessage` branch. Clearing remains governed by the
-host's existing validation/loading-state transition. No expansion or focus
-behavior is added.
+host's existing validation/loading-state transition. This mapping uses native
+fragment navigation and preserves the host's existing disclosure behavior.
 
 The CSS is independent of Tailwind and carries the native red error palette,
 scrolling/flex layout, zero corner radius, list spacing and underlined links.

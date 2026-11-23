@@ -426,7 +426,13 @@ export function CompleteLocalizedNumericField({
 
     return h(
         'div',
-        { className: classes('mx-sdk-localized-numeric', options.className) },
+        {
+            className: classes(
+                'mx-sdk-localized-numeric',
+                field.context === 'form' && 'mx-sdk-localized-numeric-form',
+                options.className
+            ),
+        },
         showLabel ? h('label', { htmlFor: id }, title) : null,
         h(
             'div',

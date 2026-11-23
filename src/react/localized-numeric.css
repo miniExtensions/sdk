@@ -37,6 +37,19 @@
     outline-color: var(--mx-sdk-accent, #2563eb);
     border-color: var(--mx-sdk-accent, #2563eb);
 }
+:where(.mx-sdk-localized-numeric-form) .mx-sdk-localized-numeric-input:focus {
+    --mx-sdk-numeric-form-ring: var(
+        --mx-sdk-numeric-focus,
+        var(--mx-sdk-accent, #2563eb)
+    );
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: var(--mx-sdk-numeric-form-ring);
+    box-shadow:
+        0 0 0 0 white,
+        0 0 0 1px var(--mx-sdk-numeric-form-ring),
+        0 1px 2px rgb(0 0 0 / 0.05);
+}
 .mx-sdk-localized-numeric-input:disabled {
     background: #f3f4f6;
     color: #4b5563;
@@ -163,6 +176,10 @@
     .mx-sdk-localized-numeric-input,
     .mx-sdk-localized-numeric-symbol {
         font-size: 0.875rem;
+    }
+    .mx-sdk-localized-numeric-form .mx-sdk-localized-numeric-input,
+    .mx-sdk-localized-numeric-form .mx-sdk-localized-numeric-symbol {
+        line-height: 1.25rem;
     }
 }
 @media (forced-colors: active) {

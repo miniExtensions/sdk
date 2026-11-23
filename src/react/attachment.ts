@@ -1,5 +1,5 @@
 import { Options as LinkifyOptions, tokenize } from 'linkifyjs';
-import { createElement as h } from 'react';
+import { createElement as h, type ReactElement } from 'react';
 import {
     AttachmentDeviceInput,
     type AttachmentDeviceInputProps,
@@ -139,7 +139,7 @@ export function AttachmentField<Upload>({
     upload,
     error,
     emptyLabel,
-}: AttachmentFieldProps<Upload>) {
+}: AttachmentFieldProps<Upload>): ReactElement {
     return h(
         'div',
         { className: 'mx-sdk-attachment-field' },

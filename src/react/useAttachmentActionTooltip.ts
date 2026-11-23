@@ -8,12 +8,26 @@ import {
     useState,
     type FocusEventHandler,
     type PointerEventHandler,
+    type ReactPortal,
 } from 'react';
 
 const opened = 'tooltip.open';
 const offset = 8;
 const className = 'mx-sdk-attachment-action-tooltip';
 type Portal = (typeof import('react-dom'))['createPortal'];
+type AttachmentActionTooltip = {
+    triggerRef(node: HTMLElement | null): void;
+    show(): void;
+    tooltip: ReactPortal | null;
+    triggerProps: {
+        'aria-describedby': string | undefined;
+        onFocus: FocusEventHandler<HTMLElement>;
+        onBlur(): void;
+        onPointerMove: PointerEventHandler<HTMLElement>;
+        onPointerLeave: PointerEventHandler<HTMLElement>;
+        onPointerDown: PointerEventHandler<HTMLElement>;
+    };
+};
 
 function containsEventTarget(
     container: HTMLElement | null,
@@ -27,7 +41,10 @@ function containsEventTarget(
     );
 }
 
-export function useAttachmentActionTooltip(label: string, suspended = false) {
+export function useAttachmentActionTooltip(
+    label: string,
+    suspended = false
+): AttachmentActionTooltip {
     const id = useId();
     const trigger = useRef<HTMLElement | null>(null);
     const popup = useRef<HTMLDivElement>(null);

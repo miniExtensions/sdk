@@ -1,4 +1,4 @@
-import { createElement, useCallback, useRef } from 'react';
+import { createElement, useCallback, useRef, type ReactElement } from 'react';
 import { ActionButton } from './ActionButton.js';
 
 export type AttachmentTileOpenButtonProps = {
@@ -13,7 +13,7 @@ export function AttachmentTileOpenButton({
     resourceKey,
     label,
     onOpen,
-}: AttachmentTileOpenButtonProps) {
+}: AttachmentTileOpenButtonProps): ReactElement {
     const button = useRef<HTMLButtonElement | null>(null);
     const restoreFocus = useRef(false);
     const attachButton = useCallback((node: HTMLButtonElement | null) => {

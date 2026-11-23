@@ -13,6 +13,8 @@ import { build } from 'esbuild';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
+const attachmentSliderRuntime = 'attachmentSliderDialogRuntime';
+const attachmentSliderReceipt = 'attachment-slider';
 const localImports = [
     './CompleteCollaboratorField.js',
     './PersonBadge.js',
@@ -95,6 +97,61 @@ export async function bundleScannerDialog(root = process.cwd()) {
         [],
         []
     );
+}
+
+/** Keep the attachment slider's portal and focus trap behind its client import. */
+export async function bundleAttachmentSliderDialog(root = process.cwd()) {
+    return bundleHeadlessRuntime(
+        root,
+        attachmentSliderRuntime,
+        attachmentSliderReceipt,
+        [],
+        []
+    );
+}
+
+/** Check the exact licensed runtime installed from the consumer tarball. */
+export function assertAttachmentSliderDialogBundle(root) {
+    const provenance = new URL(
+        '../vendor/collaborator-picker/',
+        import.meta.url
+    );
+    const upstream = json(new URL('UPSTREAM.json', provenance));
+    const expectedHeadless = upstream.allowedPackages['@headlessui/react'];
+    const licensesSha256 = hash(
+        readFileSync(new URL('LICENSES.txt', provenance))
+    );
+    for (const format of ['esm', 'cjs']) {
+        const directory = `dist/${format}/react`;
+        const child = `${directory}/${attachmentSliderRuntime}.js`;
+        const receipt = json(
+            join(
+                root,
+                `${directory}/${attachmentSliderReceipt}.provenance.json`
+            )
+        );
+        assert.equal(receipt.schemaVersion, 1);
+        assert.equal(receipt.child, child);
+        assert.equal(receipt.sha256, hash(readFileSync(join(root, child))));
+        assert.deepEqual(receipt.external, ['react', 'react-dom']);
+        const headless = receipt.packages.find(
+            ({ name }) => name === '@headlessui/react'
+        );
+        assert(headless, 'Attachment slider Headless UI receipt missing');
+        assert.equal(headless.version, expectedHeadless.version);
+        assert.equal(headless.integrity, expectedHeadless.integrity);
+        assert.equal(
+            hash(
+                readFileSync(
+                    join(
+                        root,
+                        `${directory}/${attachmentSliderReceipt}.LICENSES.txt`
+                    )
+                )
+            ),
+            licensesSha256
+        );
+    }
 }
 
 async function bundleHeadlessRuntime(
@@ -245,6 +302,26 @@ async function bundleHeadlessRuntime(
                 'A dev-only picker package escaped the bundled closure'
             );
         assert.equal(result.outputFiles.length, 1);
+        if (runtime === attachmentSliderRuntime) {
+            const imports = Object.values(result.metafile.outputs).flatMap(
+                ({ imports }) => imports
+            );
+            for (const name of ['react', 'react-dom'])
+                assert(
+                    imports.some(
+                        (entry) => entry.external && entry.path === name
+                    ),
+                    `Attachment slider must use consumer-owned ${name}`
+                );
+            assert(
+                imports.every(
+                    (entry) =>
+                        entry.external &&
+                        /^react(?:-dom)?(?:\/|$)/.test(entry.path)
+                ),
+                'Attachment slider runtime must depend only on React peers'
+            );
+        }
         const bytes = result.outputFiles[0].contents;
         writeFileSync(path, bytes);
         const receipt = {
@@ -286,7 +363,9 @@ async function bundleHeadlessRuntime(
     console.error(
         runtime === 'completeCollaboratorPickerRuntime'
             ? '[sdk-collaborator-picker-bundle]'
-            : '[sdk-barcode-dialog-bundle]',
+            : runtime === attachmentSliderRuntime
+              ? '[sdk-attachment-slider-dialog-bundle]'
+              : '[sdk-barcode-dialog-bundle]',
         JSON.stringify(receipts)
     );
 }

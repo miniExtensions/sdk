@@ -30,6 +30,7 @@ export type AttachmentSliderBodyProps = {
     labels: AttachmentPreviewLabels & { previous: string; next: string };
     presentationOwner?: { isCurrent(): boolean };
     navigationOwner?: string;
+    covered?: boolean;
     /** The rail is the surrounding dialog's initial focus target. */
     thumbnailRailRef: { readonly current: HTMLDivElement | null };
 };
@@ -47,7 +48,7 @@ const ownsPresentation = (
 
 type AttachmentSliderFocusProps = Pick<
     AttachmentSliderBodyProps,
-    'navigationOwner' | 'presentationOwner' | 'thumbnailRailRef'
+    'navigationOwner' | 'presentationOwner' | 'thumbnailRailRef' | 'covered'
 > & {
     sdkNavigation: AttachmentSliderBodyProps['thumbnailRailRef'];
     children: ReactNode;
@@ -112,9 +113,9 @@ class AttachmentSliderFocus extends Component<AttachmentSliderFocusProps> {
     }
 
     private syncKeyboardDialog() {
-        const { navigationOwner, thumbnailRailRef } = this.props;
+        const { navigationOwner, thumbnailRailRef, covered } = this.props;
         this.setKeyboardDialog(
-            navigationOwner == null
+            covered || navigationOwner == null
                 ? null
                 : (thumbnailRailRef.current?.closest<HTMLElement>(
                       '[role="dialog"]'
@@ -127,8 +128,14 @@ class AttachmentSliderFocus extends Component<AttachmentSliderFocusProps> {
     }
 
     getSnapshotBeforeUpdate(previous: AttachmentSliderFocusProps) {
-        const { navigationOwner, sdkNavigation, thumbnailRailRef } = this.props;
-        if (navigationOwner == null || previous.navigationOwner == null)
+        const { navigationOwner, sdkNavigation, thumbnailRailRef, covered } =
+            this.props;
+        if (
+            covered ||
+            previous.covered ||
+            navigationOwner == null ||
+            previous.navigationOwner == null
+        )
             return null;
 
         // Capture focus before React removes controls on replacement or shrink.
@@ -211,6 +218,7 @@ export function AttachmentSliderBody({
     presentationOwner,
     navigationOwner,
     thumbnailRailRef,
+    covered,
 }: AttachmentSliderBodyProps): ReactNode {
     const sdkNavigation = useRef<HTMLDivElement>(null);
     const showSdkNavigation = navigationOwner != null && rows.length > 1;
@@ -218,7 +226,7 @@ export function AttachmentSliderBody({
         typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
     useCommitEffect(() => {
-        if (rows.length === 0) return;
+        if (covered || rows.length === 0) return;
         const handler = (event: KeyboardEvent) => {
             const { key } = event;
             if (key !== 'ArrowRight' && key !== 'ArrowLeft') return;
@@ -261,16 +269,18 @@ export function AttachmentSliderBody({
         navigationOwner,
         showSdkNavigation,
         thumbnailRailRef,
+        covered,
     ]);
 
     const attachment = rows[currentIndex];
     if (attachment == null) return null;
 
     const selectAttachment = (index: number) => {
-        if (ownsPresentation(presentationOwner)) setCurrentIndex(index);
+        if (!covered && ownsPresentation(presentationOwner))
+            setCurrentIndex(index);
     };
     const move = (step: -1 | 1) => {
-        if (ownsPresentation(presentationOwner))
+        if (!covered && ownsPresentation(presentationOwner))
             setCurrentIndex((index) => index + step);
     };
     const preview = h(
@@ -280,6 +290,7 @@ export function AttachmentSliderBody({
     );
 
     return h(AttachmentSliderFocus, {
+        covered,
         navigationOwner,
         presentationOwner,
         sdkNavigation,

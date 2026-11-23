@@ -27,12 +27,13 @@ function containsEventTarget(
     );
 }
 
-export function useAttachmentActionTooltip(label: string) {
+export function useAttachmentActionTooltip(label: string, suspended = false) {
     const id = useId();
     const trigger = useRef<HTMLElement | null>(null);
     const popup = useRef<HTMLDivElement>(null);
     const pointerDown = useRef<(() => void) | null>(null);
     const pointerMoved = useRef(false);
+    const restoringFocus = useRef(false);
     const [open, setOpen] = useState(false);
     const [portal, setPortal] = useState<Portal | null>(null);
     const [position, setPosition] = useState<{
@@ -47,12 +48,23 @@ export function useAttachmentActionTooltip(label: string) {
         setOpen(false);
         setPosition(null);
     }, []);
-    const show = useCallback(() => setOpen(true), []);
+    const show = useCallback(() => {
+        if (!suspended) setOpen(true);
+    }, [suspended]);
     const triggerRef = useCallback((node: HTMLElement | null) => {
         trigger.current = node;
     }, []);
 
     useEffect(() => () => pointerDown.current?.(), []);
+    useCommitEffect(() => {
+        if (!suspended) return;
+        const anchor = trigger.current;
+        // The higher dialog returns to this control when it closes. That
+        // restoration is not a new tooltip activation.
+        restoringFocus.current =
+            anchor != null && anchor.ownerDocument.activeElement === anchor;
+        close();
+    }, [suspended, close]);
     useEffect(() => {
         if (!open || portal != null) return;
         let current = true;
@@ -70,7 +82,7 @@ export function useAttachmentActionTooltip(label: string) {
     }, [open, portal, close]);
 
     useCommitEffect(() => {
-        if (!open || trigger.current == null) return;
+        if (!open || suspended || trigger.current == null) return;
         const anchor = trigger.current;
         const document = anchor.ownerDocument;
         const view = document.defaultView;
@@ -103,13 +115,13 @@ export function useAttachmentActionTooltip(label: string) {
             document.removeEventListener('pointerdown', outsidePointer);
             view.removeEventListener('scroll', scroll, true);
         };
-    }, [open, close]);
+    }, [open, suspended, close]);
 
     useCommitEffect(() => {
         const anchor = trigger.current;
         const box = popup.current;
         const view = anchor?.ownerDocument.defaultView;
-        if (!open || !portal || !anchor || !box || !view) return;
+        if (!open || suspended || !portal || !anchor || !box || !view) return;
         const measure = () => {
             const target = anchor.getBoundingClientRect();
             const { width, height } = box.getBoundingClientRect();
@@ -131,9 +143,13 @@ export function useAttachmentActionTooltip(label: string) {
         measure();
         view.addEventListener('resize', measure);
         return () => view.removeEventListener('resize', measure);
-    }, [open, portal, label]);
+    }, [open, suspended, portal, label]);
 
     const onFocus: FocusEventHandler<HTMLElement> = () => {
+        if (restoringFocus.current) {
+            restoringFocus.current = false;
+            return;
+        }
         if (pointerDown.current == null) show();
     };
     const onPointerDown: PointerEventHandler<HTMLElement> = (event) => {
@@ -153,7 +169,8 @@ export function useAttachmentActionTooltip(label: string) {
         view.addEventListener('blur', release);
     };
     const onPointerMove: PointerEventHandler<HTMLElement> = (event) => {
-        if (event.pointerType === 'touch' || pointerMoved.current) return;
+        if (suspended || event.pointerType === 'touch' || pointerMoved.current)
+            return;
         pointerMoved.current = true;
         show();
     };
@@ -163,7 +180,7 @@ export function useAttachmentActionTooltip(label: string) {
     };
     const document = trigger.current?.ownerDocument;
     const tooltip =
-        open && portal && document
+        open && !suspended && portal && document
             ? portal(
                   h(
                       'div',

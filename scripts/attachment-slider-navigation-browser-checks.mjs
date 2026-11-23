@@ -2,19 +2,26 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
-const hostSource = (format) => `
+const hostSource = (format, nativeConfirm) => `
 ${
     format === 'esm'
         ? `import {createElement as h, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSlider, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useRef, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSlider, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
+}
+${
+    nativeConfirm
+        ? format === 'esm'
+            ? "import {Dialog as NativeDialog} from 'native-dialog';"
+            : "const {Dialog:NativeDialog}=require('native-dialog');"
+        : 'const NativeDialog=null;'
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
@@ -128,10 +135,58 @@ function Host(){
             labels:{attachments:'Aperçu des pièces jointes',previewNotAvailable:'Aucun aperçu',previous:'Précédent',next:'Suivant'},
         })));
 }
+
+const fullscreenStats={dismissals:[],deleteRequests:0,confirmed:0,confirmDismissals:0,selections:0};
+const fullscreenRows=[
+    {...first,id:'fullscreen-front',thumbnailUrl:first.url},
+    {...second,id:'fullscreen-rear',thumbnailUrl:second.url},
+];
+const fullscreenLabels={
+    attachments:'Pièces jointes plein écran',previewNotAvailable:'Aucun aperçu',
+    previous:'Précédent',next:'Suivant',delete:'Effacer la pièce jointe',
+    download:'Télécharger la pièce jointe',open:'Ouvrir la pièce jointe',
+    close:'Fermer la visionneuse',
+};
+function FullscreenHost(){
+    const [mode,setMode]=useState(null);
+    const [index,setIndex]=useState(0);
+    const [intercomOpen,setIntercomOpen]=useState(false);
+    const [confirm,setConfirm]=useState(false);
+    const cancel=useRef(null);
+    function open(nextMode){setIndex(0);setMode(nextMode);}
+    window.fullscreenProbe={
+        intercom:setIntercomOpen,
+        stats:()=>({...fullscreenStats,dismissals:[...fullscreenStats.dismissals]}),
+    };
+    return h('section',{className:'attachment-fullscreen-host'},
+        h('button',{type:'button',onClick:()=>open('standalone')},'Ouvrir le plein écran'),
+        NativeDialog&&h('button',{type:'button',onClick:()=>open('native')},'Ouvrir avec confirmation native'),
+        mode&&h(AttachmentSlider,{
+            rows:fullscreenRows,currentIndex:index,
+            setCurrentIndex(next){fullscreenStats.selections++;setIndex(next);},
+            navigationOwner:mode,downloadIdentity:index,
+            canDownload:true,canOpen:true,
+            readDownload(){calls.fetch++;throw Error('Unexpected fullscreen download');},
+            onDelete(){fullscreenStats.deleteRequests++;if(mode==='native')setConfirm(true);},
+            onDismiss(){fullscreenStats.dismissals.push(mode);setMode(null);},
+            covered:confirm,intercomOpen,labels:fullscreenLabels,
+        }),
+        confirm&&NativeDialog&&h(NativeDialog,{
+            open:true,initialFocus:cancel,className:'attachment-native-confirm-proof',
+            onClose(){fullscreenStats.confirmDismissals++;setConfirm(false);},
+        },h(NativeDialog.Panel,{className:'attachment-native-confirm-panel'},
+            h(NativeDialog.Title,null,'Confirmer la suppression'),
+            h('button',{type:'button',onClick(){
+                fullscreenStats.confirmed++;setConfirm(false);
+            }},'Confirmer'),
+            h('button',{type:'button',ref:cancel,onClick(){setConfirm(false);}},'Annuler'),
+        )),
+    );
+}
 window.addEventListener('keydown',(event)=>{
     if(event.key==='Escape'&&!event.defaultPrevented) headerCalls.escapes++;
 });
-createRoot(document.querySelector('main')).render(h(Host));
+createRoot(document.querySelector('main')).render(h('div',null,h(Host),h(FullscreenHost)));
 `;
 
 const svg =
@@ -141,16 +196,32 @@ export async function checkAttachmentSliderNavigationBrowser({
     browser,
     consumer,
     evidence,
+    nativeConfirm = false,
 }) {
     evidence.formats = {};
     const staleGestures = [];
     const require = createRequire(join(consumer, 'package.json'));
+    if (nativeConfirm) {
+        assert.equal(require('react').version, '18.3.1');
+        const manifest = JSON.parse(
+            readFileSync(
+                join(
+                    dirname(require.resolve('native-dialog')),
+                    '..',
+                    'package.json'
+                ),
+                'utf8'
+            )
+        );
+        assert.equal(manifest.name, '@headlessui/react');
+        assert.equal(manifest.version, '1.7.2');
+    }
     const styles = readFileSync(
         require.resolve('@miniextensions/sdk/react/attachment-preview.css')
     );
     for (const format of ['esm', 'cjs']) {
         const entry = `attachment-slider-navigation-proof.${format === 'esm' ? 'mjs' : 'cjs'}`;
-        writeFileSync(join(consumer, entry), hostSource(format));
+        writeFileSync(join(consumer, entry), hostSource(format, nativeConfirm));
         const bundle = await build({
             absWorkingDir: consumer,
             entryPoints: [entry],
@@ -185,6 +256,12 @@ export async function checkAttachmentSliderNavigationBrowser({
             ),
             'The installed Attachment Slider Actions must be bundled'
         );
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/AttachmentSlider.js')
+            ),
+            'The installed fullscreen Attachment Slider must be bundled'
+        );
         const assets = new Map([
             [
                 '/',
@@ -198,7 +275,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 '/host.css',
                 [
                     'text/css',
-                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}',
+                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}.attachment-fullscreen-host{box-sizing:border-box;min-height:180vh;padding-top:180px}.attachment-fullscreen-scroll-probe{height:1200px}.attachment-native-confirm-proof{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:#0008}.attachment-native-confirm-panel{background:white;padding:24px}',
                 ],
             ],
             ['/attachment-preview.css', ['text/css', styles]],
@@ -497,6 +574,10 @@ export async function checkAttachmentSliderNavigationBrowser({
             ]);
             const sliderBody = await checkSliderBody(page);
             const sliderActions = await checkSliderActions(page);
+            const fullscreenSlider = await checkFullscreenSlider(
+                page,
+                nativeConfirm
+            );
             assert.equal(saves.length, 2);
             const { selection: _bodySelection, ...bodyOwnerCalls } =
                 await probe();
@@ -510,6 +591,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 tileOpen,
                 sliderBody,
                 sliderActions,
+                fullscreenSlider,
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
@@ -542,6 +624,275 @@ export async function checkAttachmentSliderNavigationBrowser({
         [],
         'A retired owner’s held gesture selected in its successor'
     );
+}
+
+const fullscreenClass = '.mx-sdk-attachment-slider';
+
+async function waitForSliderFocus(page, locator) {
+    const element = await locator.elementHandle();
+    assert.ok(element);
+    try {
+        await page.waitForFunction(
+            (node) => node.ownerDocument.activeElement === node,
+            element
+        );
+    } finally {
+        await element.dispose();
+    }
+}
+
+async function checkFullscreenSlider(page, nativeConfirm) {
+    const viewer = page.locator(fullscreenClass);
+    const panel = viewer.getByTestId('dialog-test-id');
+    const body = viewer.locator(fullscreenClass + '__body');
+    const backdrop = viewer.getByTestId('dialog-overlay-test-id');
+    const rail = viewer.locator('.mx-sdk-attachment-thumbnail-rail');
+    const opener = page.getByRole('button', { name: 'Ouvrir le plein écran' });
+    const close = viewer.getByRole('button', {
+        name: 'Fermer la visionneuse',
+    });
+    const remove = viewer.getByRole('button', {
+        name: 'Effacer la pièce jointe',
+    });
+    const stats = () => page.evaluate(() => window.fullscreenProbe.stats());
+    const scroll = () =>
+        page.evaluate(() => ({
+            y: window.scrollY,
+            overflow: document.documentElement.style.overflow,
+        }));
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const baseline = await page.evaluate(() => {
+        const root = document.documentElement;
+        const oldOverflow = root.style.overflow;
+        root.style.overflow = 'auto';
+        window.scrollTo(0, 80);
+        return {
+            oldOverflow,
+            y: window.scrollY,
+            overflow: root.style.overflow,
+        };
+    });
+    assert.equal(baseline.y, 80);
+    const restored = { y: baseline.y, overflow: baseline.overflow };
+    const locked = { ...restored, overflow: 'hidden' };
+    async function openViewer(trigger) {
+        await trigger.click();
+        await viewer.waitFor();
+        assert.equal(await viewer.getAttribute('role'), 'dialog');
+        assert.equal(await viewer.getAttribute('aria-modal'), 'true');
+        await waitForSliderFocus(page, rail);
+        assert.deepEqual(await scroll(), locked);
+    }
+    async function closedViewer(trigger, expectedDismissals) {
+        await viewer.waitFor({ state: 'detached' });
+        await waitForSliderFocus(page, trigger);
+        assert.deepEqual((await stats()).dismissals, expectedDismissals);
+        assert.deepEqual(await scroll(), restored);
+    }
+    const bounds = (node) => {
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return [x, y, width, height];
+    };
+    async function layout(width, intercom = false) {
+        await page.setViewportSize({ width, height: 720 });
+        await page.evaluate(
+            (openIntercom) => window.fullscreenProbe.intercom(openIntercom),
+            intercom
+        );
+        const right = intercom && width >= 1024 ? 440 : 16;
+        const bottom = width >= 640 ? 8 : 80;
+        const expectedPanel = [16, 16, width - 16 - right, 720 - 16 - bottom];
+        await page.waitForFunction(
+            ({ selector, expectedWidth }) =>
+                document.querySelector(selector)?.getBoundingClientRect()
+                    .width === expectedWidth,
+            {
+                selector: fullscreenClass + '__panel',
+                expectedWidth: expectedPanel[2],
+            }
+        );
+        const rootBox = await viewer.evaluate(bounds);
+        const panelBox = await panel.evaluate(bounds);
+        const bodyBox = await body.evaluate(bounds);
+        assert.deepEqual(rootBox, [0, 0, width, 720]);
+        assert.deepEqual(panelBox, expectedPanel);
+        assert.equal(bodyBox[0], panelBox[0]);
+        assert.equal(bodyBox[2], panelBox[2]);
+        assert.ok(bodyBox[1] > panelBox[1]);
+        assert.equal(bodyBox[1] + bodyBox[3], panelBox[1] + panelBox[3]);
+        assert.equal(
+            await body.evaluate((node) => getComputedStyle(node).overflowY),
+            'auto'
+        );
+        return { root: rootBox, panel: panelBox, body: bodyBox };
+    }
+
+    try {
+        await openViewer(opener);
+        const desktop = await layout(1280);
+        const narrow = await layout(375);
+        const narrowIntercom = await layout(375, true);
+        assert.deepEqual(narrowIntercom, narrow);
+        const desktopIntercom = await layout(1280, true);
+        await layout(1280);
+
+        await close.focus();
+        await page.keyboard.press('Tab');
+        await waitForSliderFocus(page, remove);
+        await page.keyboard.press('Shift+Tab');
+        await waitForSliderFocus(page, close);
+        assert.equal((await stats()).dismissals.length, 0);
+
+        // Supply overflow to the real viewer body so a trusted wheel can prove
+        // ownership even when the small image fits the viewport.
+        await body.evaluate((node) => {
+            const content = node.ownerDocument.createElement('div');
+            content.className = 'attachment-fullscreen-scroll-probe';
+            node.append(content);
+        });
+        const bodyBox = await body.boundingBox();
+        assert.ok(bodyBox);
+        await page.mouse.move(bodyBox.x + 5, bodyBox.y + bodyBox.height / 2);
+        await page.mouse.wheel(0, 240);
+        await page.waitForFunction(
+            (selector) => document.querySelector(selector)?.scrollTop > 0,
+            fullscreenClass + '__body'
+        );
+        assert.deepEqual(await scroll(), locked);
+        await body
+            .locator('.attachment-fullscreen-scroll-probe')
+            .evaluate((node) => node.remove());
+
+        await close.click();
+        await closedViewer(opener, ['standalone']);
+        await page.mouse.move(200, 620);
+        await page.mouse.wheel(0, 180);
+        await page.waitForFunction((y) => window.scrollY > y, baseline.y);
+        await page.evaluate((y) => window.scrollTo(0, y), baseline.y);
+
+        await openViewer(opener);
+        await backdrop.click({ position: { x: 4, y: 80 } });
+        await closedViewer(opener, ['standalone', 'standalone']);
+
+        await openViewer(opener);
+        await page.keyboard.press('Escape');
+        await closedViewer(opener, ['standalone', 'standalone', 'standalone']);
+
+        const legacyConfirm = nativeConfirm
+            ? await checkLegacySliderConfirm({
+                  page,
+                  viewer,
+                  rail,
+                  remove,
+                  close,
+                  stats,
+                  openViewer,
+                  closedViewer,
+                  locked,
+                  scroll,
+              })
+            : null;
+        return {
+            desktop,
+            narrow,
+            desktopIntercom,
+            narrowIntercom,
+            initialRailFocus: true,
+            tabWrap: true,
+            dismissals: ['close', 'backdrop', 'escape'],
+            openerFocusRestored: true,
+            viewerWheelOwned: true,
+            documentScrollRestored: true,
+            legacyConfirm,
+        };
+    } finally {
+        await page.evaluate((overflow) => {
+            document.documentElement.style.overflow = overflow;
+        }, baseline.oldOverflow);
+    }
+}
+
+async function checkLegacySliderConfirm({
+    page,
+    viewer,
+    rail,
+    remove,
+    close,
+    stats,
+    openViewer,
+    closedViewer,
+    locked,
+    scroll,
+}) {
+    const opener = page.getByRole('button', {
+        name: 'Ouvrir avec confirmation native',
+    });
+    const dialog = page.getByRole('dialog', {
+        name: 'Confirmer la suppression',
+    });
+    const cancel = dialog.getByRole('button', { name: 'Annuler' });
+    const confirm = dialog.getByRole('button', {
+        name: 'Confirmer',
+        exact: true,
+    });
+    const dismissals = ['standalone', 'standalone', 'standalone'];
+
+    await openViewer(opener);
+    await remove.click();
+    await waitForSliderFocus(page, cancel);
+    assert.equal(await dialog.getAttribute('aria-modal'), 'true');
+    await page.mouse.move(6, 120);
+    assert.deepEqual(await scroll(), locked);
+    const selections = (await stats()).selections;
+    await page.keyboard.press('Tab');
+    await waitForSliderFocus(page, confirm);
+    await page.keyboard.press('Shift+Tab');
+    await waitForSliderFocus(page, cancel);
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowLeft');
+    await waitForSliderFocus(page, cancel);
+    assert.equal((await stats()).selections, selections);
+    assert.equal(
+        await rail.locator('button[data-selected="true"]').textContent(),
+        'Vue avant'
+    );
+
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    await waitForSliderFocus(page, remove);
+    assert.equal(await viewer.isVisible(), true);
+    assert.deepEqual((await stats()).dismissals, dismissals);
+    assert.equal((await stats()).confirmed, 0);
+    assert.equal((await stats()).confirmDismissals, 1);
+    assert.deepEqual(await scroll(), locked);
+    await page.keyboard.press('Escape');
+    await closedViewer(opener, [...dismissals, 'native']);
+
+    await openViewer(opener);
+    await remove.click();
+    await waitForSliderFocus(page, cancel);
+    await confirm.click();
+    await dialog.waitFor({ state: 'detached' });
+    await waitForSliderFocus(page, remove);
+    assert.deepEqual(await stats(), {
+        dismissals: [...dismissals, 'native'],
+        deleteRequests: 2,
+        confirmed: 1,
+        confirmDismissals: 1,
+        selections,
+    });
+    await close.click();
+    await closedViewer(opener, [...dismissals, 'native', 'native']);
+    return {
+        headlessUi: '1.7.2',
+        confirmFocusTrapped: true,
+        coveredArrowsIgnored: true,
+        firstEscapeRestoredDelete: true,
+        secondEscapeRestoredOpener: true,
+        confirmedCallbacks: 1,
+        documentScrollRestored: true,
+    };
 }
 
 async function checkSliderActions(page) {

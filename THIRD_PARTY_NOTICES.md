@@ -1142,6 +1142,14 @@ existing verified input and license policy. React and React DOM remain optional
 external peers. Each format ships complete-barcode-scanner.provenance.json and
 complete-barcode-scanner.LICENSES.txt beside the private dialog runtime.
 
+### Attachment slider
+
+The attachment slider loads a private client bundle of the Headless UI 2.2.9
+Portal and FocusTrap (MIT). React and React DOM remain external optional peers.
+Each module format ships `attachment-slider.provenance.json` with the input
+and runtime digests, and `attachment-slider.LICENSES.txt` with the upstream
+license texts beside the private runtime.
+
 ## Complete Date picker
 
 The complete native-compatible Date picker includes the unchanged compiled

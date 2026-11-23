@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
 import { bundleCalendar } from './calendar-vendor-checks.mjs';
 import {
+    bundleAttachmentSliderDialog,
     bundleCollaboratorPicker,
     bundleScannerDialog,
 } from './collaborator-picker-vendor-checks.mjs';
@@ -170,6 +171,7 @@ await bundleCalendar();
 await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
+await bundleAttachmentSliderDialog();
 await bundleKanban();
 await bundlePortalMap();
 if (process.argv.includes('--capture-date-popover'))

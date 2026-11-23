@@ -29,6 +29,7 @@ export type AttachmentSliderActionsProps = {
     canDownload: boolean;
     canOpen: boolean;
     presentationOwner?: ReadonlyResourceOwner;
+    tooltipsSuspended?: boolean;
     readDownload(url: string): Promise<Response>;
     onDownloadError?(error: unknown): void;
 };
@@ -48,6 +49,7 @@ function AttachmentSliderAction({
     isCurrent,
     onClick,
     disabled,
+    tooltipsSuspended,
 }: {
     icon: keyof typeof iconPaths;
     label: string;
@@ -55,10 +57,11 @@ function AttachmentSliderAction({
     isCurrent?(): boolean;
     onClick?(): void;
     disabled?: boolean;
+    tooltipsSuspended?: boolean;
 }) {
     const anchor = useRef<HTMLAnchorElement | null>(null);
     const { triggerRef, triggerProps, show, tooltip } =
-        useAttachmentActionTooltip(label);
+        useAttachmentActionTooltip(label, tooltipsSuspended);
     const attachAnchor = useCallback(
         (node: HTMLAnchorElement | null) => {
             anchor.current = node;
@@ -151,6 +154,7 @@ export function AttachmentSliderActions({
     canDownload,
     canOpen,
     presentationOwner,
+    tooltipsSuspended,
     readDownload,
     onDownloadError,
 }: AttachmentSliderActionsProps): ReactNode {
@@ -201,6 +205,7 @@ export function AttachmentSliderActions({
                       label: labels.delete,
                       onClick: onDelete,
                       isCurrent,
+                      tooltipsSuspended,
                   }),
             canDownload
                 ? h(AttachmentSliderAction, {
@@ -212,6 +217,7 @@ export function AttachmentSliderActions({
                       onClick: start,
                       disabled: progress != null,
                       isCurrent,
+                      tooltipsSuspended,
                   })
                 : null,
             canOpen
@@ -220,6 +226,7 @@ export function AttachmentSliderActions({
                       label: labels.open,
                       href: attachment.url,
                       isCurrent,
+                      tooltipsSuspended,
                   })
                 : null
         )

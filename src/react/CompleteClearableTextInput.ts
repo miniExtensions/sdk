@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { UAParser } from 'ua-parser-js';
 import { TextInput } from './TextInput.js';
-import { InputClearButton } from './InputClearButton.js';
+import { NativeTextInputClearButton } from './InputClearButton.js';
 
 export type CompleteDeferredClearableTextInputProps = Omit<
     InputHTMLAttributes<HTMLInputElement>,
@@ -60,7 +60,7 @@ const clearButton = (
     disabled: boolean | undefined,
     onClear: () => void
 ) =>
-    createElement(InputClearButton, {
+    createElement(NativeTextInputClearButton, {
         onClick: onClear,
         disabled,
         label,

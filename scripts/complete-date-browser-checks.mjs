@@ -116,6 +116,181 @@ export async function prepareCompleteDateBrowser(consumer) {
     }
 }
 
+// Heroicons 2.1.1 solid Calendar used by the app at bc9794bf.
+const nativeCalendarPath =
+    'M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Zm13.5 9a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5Z';
+
+async function compareNativeCalendarIcon(icon, output, label) {
+    const actual = await icon.screenshot({
+        path: join(output, `date-${label}-installed-glyph.png`),
+        animations: 'disabled',
+    });
+    const pair = await icon.evaluateHandle((original, d) => {
+        const doc = original.ownerDocument;
+        const svg = doc.createElementNS(original.namespaceURI, 'svg');
+        svg.setAttribute('class', original.getAttribute('class'));
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'currentColor');
+        svg.setAttribute('aria-hidden', 'true');
+        const path = doc.createElementNS(original.namespaceURI, 'path');
+        path.setAttribute('fill-rule', 'evenodd');
+        path.setAttribute('clip-rule', 'evenodd');
+        path.setAttribute('d', d);
+        svg.append(path);
+        original.replaceWith(svg);
+        return { original, svg };
+    }, nativeCalendarPath);
+    try {
+        const native = await icon.screenshot({
+            path: join(output, `date-${label}-native-glyph.png`),
+            animations: 'disabled',
+        });
+        return actual.equals(native);
+    } finally {
+        try {
+            await pair.evaluate(({ original, svg }) =>
+                svg.replaceWith(original)
+            );
+        } finally {
+            await pair.dispose();
+        }
+    }
+}
+
+async function checkCompleteDatePresentation({
+    page,
+    open,
+    snapshot,
+    output,
+    evidence,
+}) {
+    const profiles = [
+        { name: 'empty', populated: false },
+        { name: 'populated', populated: true },
+        { name: 'empty-focus', populated: false, focus: true },
+        { name: 'populated-focus', populated: true, focus: true },
+        { name: 'disabled', populated: true, disabled: true },
+    ];
+    const observations = (evidence.presentation = []);
+    for (const width of [375, 1280]) {
+        await page.setViewportSize({ width, height: 860 });
+        for (const mode of ['date', 'datetime']) {
+            const dateTime = mode === 'datetime';
+            const seed = dateTime ? '2024-07-01T14:30:00.000Z' : '2025-02-01';
+            const display = dateTime ? '2024-07-01 10:30' : '2025-02-01';
+            for (const profile of profiles) {
+                const input = await open(mode);
+                const readonly = profile.disabled === true;
+                const value = profile.populated ? seed : null;
+                await page.evaluate((state) => window.dateProof.change(state), {
+                    value,
+                    readonly,
+                });
+                await page.waitForFunction(
+                    ({ expected, readonly }) => {
+                        const field = document.querySelector(
+                            '.mx-sdk-complete-date-input'
+                        );
+                        return (
+                            field?.value === expected &&
+                            field.disabled === readonly
+                        );
+                    },
+                    { expected: profile.populated ? display : '', readonly }
+                );
+                if (profile.focus || readonly) {
+                    await page
+                        .getByRole('button', { name: 'Remove field' })
+                        .focus();
+                    await page.keyboard.press('Tab');
+                }
+                if (readonly) {
+                    assert.equal(
+                        await page
+                            .getByRole('textbox', { name: 'Adjacent draft' })
+                            .evaluate(
+                                (node) => document.activeElement === node
+                            ),
+                        true
+                    );
+                }
+                const control = page.locator('.mx-sdk-complete-date-control');
+                const icon = control.locator('.mx-sdk-complete-date-icon');
+                const appearance = await control.evaluate((controlNode) => {
+                    const field = controlNode.querySelector('input');
+                    const icon = controlNode.querySelector('svg');
+                    const input = field.getBoundingClientRect();
+                    const glyph = icon.getBoundingClientRect();
+                    const style = getComputedStyle(field);
+                    const iconStyle = getComputedStyle(icon);
+                    return {
+                        width: innerWidth,
+                        dpr: devicePixelRatio,
+                        height: input.height,
+                        font: style.fontFamily,
+                        size: style.fontSize,
+                        lineHeight: style.lineHeight,
+                        focused: field.matches(':focus-visible'),
+                        disabled: field.disabled,
+                        outline: style.outlineStyle,
+                        glyph: [glyph.width, glyph.height],
+                        inset: glyph.left - input.left,
+                        color: iconStyle.color,
+                        ariaHidden: icon.getAttribute('aria-hidden'),
+                        pointerEvents: iconStyle.pointerEvents,
+                    };
+                });
+                assert.equal(appearance.width, width);
+                assert.equal(appearance.dpr, 1);
+                assert.equal(appearance.focused, profile.focus === true);
+                assert.equal(appearance.disabled, readonly);
+                assert.deepEqual(appearance.glyph, [20, 20]);
+                assert.equal(appearance.inset, 12);
+                assert.equal(appearance.ariaHidden, 'true');
+                assert.equal(appearance.pointerEvents, 'none');
+                assert.equal(
+                    appearance.color,
+                    profile.focus ? 'rgb(59, 130, 246)' : 'rgb(156, 163, 175)'
+                );
+                if (profile.focus) assert.equal(appearance.outline, 'solid');
+                const label = `${mode}-${width}-${profile.name}`;
+                await control.screenshot({
+                    path: join(output, `date-${label}-control.png`),
+                    animations: 'disabled',
+                });
+                const glyphMatches = await compareNativeCalendarIcon(
+                    icon,
+                    output,
+                    label
+                );
+                const state = await snapshot();
+                assert.equal(state.value, value);
+                assert.equal(
+                    await input.inputValue(),
+                    profile.populated ? display : ''
+                );
+                assert.deepEqual(state.writes, []);
+                assert.deepEqual(state.saves, []);
+                observations.push({ label, appearance, glyphMatches });
+            }
+        }
+    }
+    const differences = observations.filter(({ appearance, glyphMatches }) => {
+        const mobile = appearance.width === 375;
+        return (
+            !glyphMatches ||
+            appearance.height !== (mobile ? 42 : 38) ||
+            appearance.size !== (mobile ? '16px' : '14px') ||
+            appearance.lineHeight !== (mobile ? '24px' : '20px')
+        );
+    });
+    assert.equal(
+        differences.length,
+        0,
+        `Native Date presentation differs in ${differences.length} of ${observations.length} cases.`
+    );
+}
+
 export async function checkCompleteDateBrowser({
     browser,
     consumer,
@@ -162,6 +337,7 @@ export async function checkCompleteDateBrowser({
         const origin = `http://127.0.0.1:${server.address().port}`;
         context = await browser.newContext({
             viewport: { width: 900, height: 780 },
+            deviceScaleFactor: 1,
         });
         await context.route('**/*', (route) => {
             const url = new URL(route.request().url());
@@ -305,6 +481,13 @@ export async function checkCompleteDateBrowser({
         assert.equal(await input.inputValue(), '2025-02-01');
         assert.deepEqual((await snapshot()).writes, []);
         await finish('readonly-existing-range');
+        await checkCompleteDatePresentation({
+            page,
+            open,
+            snapshot,
+            output,
+            evidence,
+        });
         evidence.status = 'passed';
         evidence.scope =
             'Installed public Date picker in synthetic localhost browser; trusted pointer/keyboard, popup/modal and explicit Save; no provider/native backend or OS IME claim.';

@@ -193,7 +193,10 @@ function EmailController(props: ControllerProps): ReactNode {
                         className: 'h-5 w-5 transition-colors duration-100',
                     },
                     h('path', {
-                        d: 'M3 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H3Zm0 2h18l-9 6L3 7Zm18 10H3V9.4l8.45 5.63a1 1 0 0 0 1.1 0L21 9.4V17Z',
+                        d: 'M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z',
+                    }),
+                    h('path', {
+                        d: 'M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z',
                     })
                 )
             )

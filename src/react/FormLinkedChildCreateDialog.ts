@@ -385,6 +385,7 @@ type DialogChromeProps = {
     keepEditing: Ref<HTMLButtonElement>;
     fields: ReactNode;
     error: string | null;
+    errorAction?: ReactNode;
     confirm: boolean;
     closeDisabled: boolean;
     saveDisabled: boolean;
@@ -407,6 +408,7 @@ function LinkedChildDialogChrome({
     keepEditing,
     fields,
     error,
+    errorAction,
     confirm,
     closeDisabled,
     saveDisabled,
@@ -443,7 +445,8 @@ function LinkedChildDialogChrome({
         null,
         form,
         fields,
-        error != null && h('p', { role: 'alert' }, error)
+        error != null && h('p', { role: 'alert' }, error),
+        errorAction
     );
     let primary: ReactElement;
     if (primaryFormId && primaryMode === 'next') {
@@ -643,6 +646,8 @@ export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     opening: BorrowedFormLinkedChildCreateOpening;
     /** Render fields without a separate editor dialog, form, or submit footer. */
     renderFields(fields: View): ReactNode;
+    /** Supply an optional host-owned action for the current recoverable error. */
+    renderErrorAction?(message: string): ReactNode;
     labels?: BorrowedCreateLabels;
     /** Opt in to named layout hooks on the dialog's presentation. */
     className?: string;
@@ -731,6 +736,7 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
                         ? null
                         : props.renderFields(state.fields),
                 labels: props.labels,
+                renderErrorAction: props.renderErrorAction,
                 className: props.className,
                 closeIcon: props.closeIcon,
                 primaryAction: props.primaryAction,
@@ -745,6 +751,7 @@ function BorrowedCreatePresentation<View>({
     state,
     content,
     labels: suppliedLabels,
+    renderErrorAction,
     className,
     closeIcon,
     primaryAction,
@@ -754,6 +761,7 @@ function BorrowedCreatePresentation<View>({
     state: BorrowedFormLinkedChildCreateSnapshot<View>;
     content: ReactNode;
     labels?: BorrowedCreateLabels;
+    renderErrorAction?: BorrowedFormLinkedChildCreateDialogProps<View>['renderErrorAction'];
     className?: string;
     closeIcon?: ReactNode;
     primaryAction?: BorrowedFormLinkedChildCreateDialogProps<View>['primaryAction'];
@@ -953,6 +961,13 @@ function BorrowedCreatePresentation<View>({
             ? (suppliedLabels?.savedWithoutLink ??
               'The record was saved but could not be linked to this Form.')
             : state.error,
+        errorAction:
+            state.phase === 'ready' &&
+            localPhase == null &&
+            !confirm &&
+            state.error != null
+                ? renderErrorAction?.(state.error)
+                : null,
         confirm,
         closeDisabled: saving || (localPhase === 'saved' && !unlinked),
         saveDisabled: state.phase !== 'ready' || localPhase != null,

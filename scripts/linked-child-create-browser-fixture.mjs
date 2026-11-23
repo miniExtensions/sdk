@@ -166,6 +166,7 @@ const nativeCalls = {
     dismisses: 0,
     parentSubmits: 0,
     openerFocuses: 0,
+    permissionHelpOpens: 0,
 };
 const subscriptions = new Set();
 function publishNative(snapshot) {
@@ -233,6 +234,19 @@ const nativeOwner = {
             await new Promise((resolve) => {
                 window.releaseBorrowedSave = resolve;
             });
+        }
+        const error = window.nextBorrowedSaveError;
+        window.nextBorrowedSaveError = undefined;
+        if (error != null) {
+            const outcome = { type: 'rejected' };
+            if (opening.isCurrent())
+                publishNative({
+                    ...nativeSnapshot,
+                    phase: 'ready',
+                    error,
+                    outcome,
+                });
+            return outcome;
         }
         if (window.nextBorrowedSaveUnknown) {
             window.nextBorrowedSaveUnknown = false;
@@ -310,6 +324,18 @@ function NativeParent() {
                 owner: nativeOwner,
                 // Cosmetic renders intentionally create a new descriptor for the same identity.
                 opening: { ...nativeOpening },
+                renderErrorAction: (error) =>
+                    error.includes(fixture.permissionError)
+                        ? h(
+                              'button',
+                              {
+                                  type: 'button',
+                                  onClick: () =>
+                                      nativeCalls.permissionHelpOpens++,
+                              },
+                              'How can I fix permissions-related issues?'
+                          )
+                        : null,
                 renderFields: (fields) =>
                     h(
                         'label',

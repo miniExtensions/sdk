@@ -375,6 +375,111 @@ it('moves listbox focus with ArrowDown and toggles only the focused record with 
     assert.deepEqual(f.native.state.events, expectedEvents);
 });
 
+it('tabs between a controlled link and genuine URL Button without activating the option', async (t) => {
+    const f = await fixture(t);
+    const owner = { token: {}, isCurrent: () => true };
+    await f.update({
+        frame: f.native.frame({
+            presentationByRecordId: {
+                first: {
+                    type: 'list',
+                    primary: 'First event',
+                    showPreviewFieldTitle: false,
+                    details: [
+                        {
+                            key: 'controlled-link',
+                            title: null,
+                            leaf: {
+                                kind: 'button',
+                                accepted: {
+                                    mode: 'controlled',
+                                    value: {
+                                        label: 'Controlled Calendar link',
+                                        url: 'https://example.test/calendar-action',
+                                    },
+                                    config: { openLinkType: '_blank' },
+                                    owner,
+                                },
+                            },
+                        },
+                        {
+                            key: 'trailing',
+                            title: null,
+                            leaf: {
+                                kind: 'urlButton',
+                                display: {
+                                    href: 'https://example.test/calendar-link',
+                                    buttonLabel: 'Open Calendar link',
+                                    owner,
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+        }),
+    });
+    const row = f.option();
+    const document = row.ownerDocument;
+    const window = document.defaultView;
+    assert.ok(window && row instanceof window.HTMLElement);
+    const [action, link] = Array.from(row.querySelectorAll('a'));
+    assert.ok(action && link);
+    assert.equal(action.textContent, 'Controlled Calendar link');
+    assert.equal(link.textContent, 'Open Calendar link');
+    for (const control of [action, link]) {
+        // Happy DOM does not calculate layout for visible controls.
+        Object.defineProperty(control, 'getClientRects', { value: () => [{}] });
+        control.style.visibility = 'visible';
+    }
+    const press = async (key: string, shiftKey = false) => {
+        await act(async () => {
+            for (const type of ['keydown', 'keyup']) {
+                document.activeElement?.dispatchEvent(
+                    new window.KeyboardEvent(type, {
+                        key,
+                        shiftKey,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+            }
+        });
+    };
+
+    const expectFocus = (element: typeof row) => {
+        assert.ok(
+            document.activeElement === element,
+            `Expected focus on ${element.tagName} ${element.textContent}; found ${document.activeElement?.tagName} ${document.activeElement?.textContent?.slice(0, 80)}`
+        );
+    };
+
+    await act(async () => row.focus());
+    await press('Tab');
+    expectFocus(action);
+    await press('Enter');
+    await press(' ');
+    let linkActivations = 0;
+    action.addEventListener('click', (event) => {
+        event.preventDefault();
+        linkActivations += 1;
+    });
+    await f.click(action);
+    assert.equal(linkActivations, 1);
+    assert.deepEqual(f.native.state.events, []);
+    await press('Tab');
+    expectFocus(link);
+    // The browser-pack test verifies where the subsequent native Tab lands.
+    await press('Tab');
+    expectFocus(link);
+    await press('Tab', true);
+    expectFocus(action);
+    await press('Tab', true);
+    expectFocus(row);
+    assert.equal(row.getAttribute('aria-selected'), 'false');
+    assert.deepEqual(f.native.state.events, []);
+});
+
 it('Calendar error precedes loading, metadata repair is immediate, and missing displays use no hidden fallback', async (t) => {
     const f = await fixture(t);
     assert.ok(f.container.querySelector('.mx-sdk-calendar__badge'));

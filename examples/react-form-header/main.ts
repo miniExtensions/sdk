@@ -22,6 +22,20 @@ const field: AirtableField = {
     isPrimaryField: false,
     config: { type: AirtableFieldType.SINGLE_LINE_TEXT, options: null },
 };
+const formulaField: AirtableField = {
+    ...field,
+    id: 'fld_formula_title_demo',
+    name: 'Formula title',
+    isComputed: true,
+    config: {
+        type: AirtableFieldType.FORMULA,
+        options: {
+            isValid: true,
+            result: { type: AirtableFieldType.SINGLE_LINE_TEXT, options: null },
+        },
+    },
+};
+const formulaTitle = '**First**\nSecond\nThird\nFourth\nFifth\nLast';
 const details = [
     '<p>Small observations lead to better projects. Share what you noticed, what surprised you, and where you would like to go next.</p>',
     '<p><strong>Before you begin</strong>, take a moment to review your notes. Every detail helps the team see the complete picture.</p>',
@@ -30,7 +44,15 @@ const details = [
     '<p>Public consumers receive the same complete presentation without builder actions. Selected content still passes through the shared safe HTML renderer.</p>',
     '<p>Thanks for making space for thoughtful work.</p>',
 ].join('');
-type Mode = 'static' | 'field' | 'missing' | 'blank' | 'none';
+const modes = [
+    'static',
+    'field',
+    'missing',
+    'blank',
+    'none',
+    'formula',
+] as const;
+type Mode = (typeof modes)[number];
 function source(mode: Mode, text: string): FormDisplaySource {
     switch (mode) {
         case 'none':
@@ -45,9 +67,14 @@ function source(mode: Mode, text: string): FormDisplaySource {
                 field: { status: 'resolved', field, value: '' },
             };
         case 'field':
+        case 'formula':
             return {
                 type: 'field',
-                field: { status: 'resolved', field, value: text },
+                field: {
+                    status: 'resolved',
+                    field: mode === 'formula' ? formulaField : field,
+                    value: text,
+                },
             };
     }
 }
@@ -58,6 +85,7 @@ function App() {
     const [enabled, setEnabled] = useState(true);
     const [truncate, setTruncate] = useState(true);
     const [preview, setPreview] = useState(false);
+    const [showPlaceholders, setShowPlaceholders] = useState(true);
     const [media, setMedia] = useState(false);
     const [events, setEvents] = useState<string[]>([]);
     const [title, setTitle] = useState('A new perspective');
@@ -75,14 +103,15 @@ function App() {
     };
     const capability = preview
         ? {
-              showPlaceholders: true,
+              showPlaceholders,
               showFieldSources: true,
               onOpenSettings: (target: string) =>
                   setEvents((items) => [...items, target]),
           }
         : undefined;
+    const descriptionMode = mode === 'formula' ? 'field' : mode;
     const description = source(
-        mode,
+        descriptionMode,
         media ? `<p><img src="${image}" alt="" /></p>` : details
     );
     const checkbox = (label: string, checked: boolean, toggle: () => void) =>
@@ -121,19 +150,15 @@ function App() {
                             event: import('react').ChangeEvent<HTMLSelectElement>
                         ) => {
                             const value = event.currentTarget.value;
-                            if (
-                                value === 'static' ||
-                                value === 'field' ||
-                                value === 'missing' ||
-                                value === 'blank' ||
-                                value === 'none'
-                            )
-                                setMode(value);
+                            const matchedMode = modes.find(
+                                (mode) => mode === value
+                            );
+                            if (matchedMode) setMode(matchedMode);
                         },
                     },
-                    ...(
-                        ['static', 'field', 'missing', 'blank', 'none'] as const
-                    ).map((value) => h('option', { key: value, value }, value))
+                    ...modes.map((value) =>
+                        h('option', { key: value, value }, value)
+                    )
                 )
             ),
             h(
@@ -164,6 +189,10 @@ function App() {
                 setTruncate(!truncate)
             ),
             checkbox('Config preview', preview, () => setPreview(!preview)),
+            preview &&
+                checkbox('Show placeholders', showPlaceholders, () =>
+                    setShowPlaceholders(!showPlaceholders)
+                ),
             checkbox('Media-only description', media, () => setMedia(!media)),
             h(
                 'label',
@@ -171,6 +200,7 @@ function App() {
                 'Current title',
                 h('input', {
                     type: 'text',
+                    disabled: mode === 'formula',
                     value: title,
                     onChange: (
                         event: import('react').ChangeEvent<HTMLInputElement>
@@ -197,11 +227,17 @@ function App() {
                 },
                 h(CompleteFormHeader, {
                     identity,
-                    title: source(mode, `${title} · Record ${record}`),
+                    title: source(
+                        mode,
+                        mode === 'formula'
+                            ? formulaTitle
+                            : `${title} · Record ${record}`
+                    ),
                     extensionName: 'Project fieldnotes',
                     logo: { type: 'static', value: logo },
                     description: { enabled, source: description, truncate },
                     isChildForm: child,
+                    isRootPublicForm: !preview && !child,
                     language: 'en',
                     preview: capability,
                     testId: 'example-header',
@@ -220,7 +256,7 @@ function App() {
                     identity,
                     enabled,
                     source: source(
-                        mode,
+                        descriptionMode,
                         '<p>Thank you for sharing your perspective. <strong>Your observations matter.</strong></p>'
                     ),
                     preview: capability,

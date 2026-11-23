@@ -28,6 +28,7 @@ export async function checkControlledSelectBrowser({
         cleanup: {},
     });
     let directory, server, context, page, failure;
+    const longLabel = 'SelectedOption' + 'WithoutSpaces'.repeat(11);
     const bounded = async (operation) => {
         let timer;
         try {
@@ -78,6 +79,11 @@ function App(){
  const singleOwner={token:scope,isCurrent:()=>owner.isCurrent()&&canonicalSingle.current===state.single};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
+ if(new URLSearchParams(location.search).has('long-badge')){
+    const dropdownChoices=[{...choices[0],displayName:${JSON.stringify(longLabel)}},{...choices[1],displayName:'Short'},choices[2]];
+    return h('form',{id:'select-form',style:{maxWidth:'42rem',fontFamily:'system-ui, sans-serif'},onSubmit:event=>{event.preventDefault();submits++;}},
+       h(MultipleSelectsField,{...common,choices:dropdownChoices,availableChoices:[dropdownChoices[2]],ariaLabel:'Many dropdown',presentation:'dropdown',value:state.multi,onValueChange:value=>change('multi',value)}));
+ }
  return h('form',{id:'select-form',style:{'--mx-sdk-field-theme-color':'#7c3aed'},onSubmit:event=>{event.preventDefault();submits++;}},
  h('label',{htmlFor:'single'},'Decision'),h('p',{id:'select-help'},'Choice help'),
  h(SingleSelectField,{...common,owner:singleOwner,inputId:'single',ariaLabel:'Decision',describedBy:'select-help',presentation:'dropdown',value:state.single,onValueChange:value=>change('single',value),allowAddingNewOptions:true,publishMetadata:choice=>{if(!owner.isCurrent())return false;writes.push({kind:'metadata',choice});setState(old=>({...old,choices:[...old.choices,choice]}));return true;}}),
@@ -504,12 +510,82 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 path: join(output, 'controlled-select-' + format + '.png'),
                 fullPage: true,
             });
+            const otherControls = await snapshot();
+            presentation.longSelectedLabel = [];
+            for (const width of [375, 1280]) {
+                await page.setViewportSize({ width, height: 844 });
+                await page.goto(
+                    origin + '/?format=' + format + '&long-badge=' + width
+                );
+                const remove = page.getByRole('button', {
+                    name: 'Remove ' + longLabel,
+                    exact: true,
+                });
+                await remove.waitFor();
+                await page.keyboard.press('Tab');
+                const badge = await remove.evaluate((button) => {
+                    const parent = button.closest('.mx-sdk-select-badge');
+                    const row = parent.closest('.mx-sdk-select-selected');
+                    const short = row.querySelectorAll(
+                        '.mx-sdk-select-badge'
+                    )[1];
+                    const label = parent.querySelector(
+                        '.mx-sdk-select-selected-label'
+                    );
+                    const rect = button.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                        rect.x + rect.width / 2,
+                        rect.y + rect.height / 2
+                    );
+                    const style = getComputedStyle(label);
+                    return {
+                        fullLabel: parent.title,
+                        whiteSpace: style.whiteSpace,
+                        textOverflow: style.textOverflow,
+                        clipsHorizontally:
+                            label.scrollWidth > label.clientWidth &&
+                            label.scrollHeight === label.clientHeight,
+                        wrapsBadges:
+                            getComputedStyle(row).flexWrap === 'wrap' &&
+                            short.getBoundingClientRect().top >
+                                parent.getBoundingClientRect().top,
+                        focusVisible:
+                            button === document.activeElement &&
+                            button.matches(':focus-visible'),
+                        removeHit: button.contains(hit),
+                        removeWidth: rect.width,
+                        removeHeight: rect.height,
+                    };
+                });
+                assert.deepEqual(badge, {
+                    fullLabel: longLabel,
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
+                    clipsHorizontally: true,
+                    wrapsBadges: true,
+                    focusVisible: true,
+                    removeHit: true,
+                    removeWidth: 16,
+                    removeHeight: 16,
+                });
+                const observed = await snapshot();
+                assert.deepEqual(observed.multi, ['Alpha', 'Beta']);
+                assert.deepEqual(observed.writes, []);
+                assert.equal(observed.submits, 0);
+                presentation.longSelectedLabel.push({ width, ...badge });
+                await page.screenshot({
+                    path: join(
+                        output,
+                        `controlled-select-long-${format}-${width}.png`
+                    ),
+                });
+            }
             evidence.results.push({
                 format,
                 synchronousCanonicalEcho,
                 presentation,
                 dialogs,
-                ...(await snapshot()),
+                ...otherControls,
             });
             await context.close();
             context = null;

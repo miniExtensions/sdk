@@ -461,18 +461,25 @@ function SelectControl(props: ControlProps): ReactNode {
                 (value) => value.trim().toLowerCase() === normalized
             )
         );
-    const badge = (choice: ControlledSelectChoice, removable: boolean) =>
-        h(
+    const badge = (choice: ControlledSelectChoice, removable: boolean) => {
+        const choiceLabel = label(choice);
+        return h(
             'span',
             {
                 className: 'mx-sdk-select-badge',
-                title: label(choice),
+                title: choiceLabel,
                 style: {
                     color: choice.color,
                     backgroundColor: choice.backgroundColor,
                 },
             },
-            label(choice),
+            removable && props.multiple
+                ? h(
+                      'span',
+                      { className: 'mx-sdk-select-selected-label' },
+                      choiceLabel
+                  )
+                : choiceLabel,
             removable
                 ? h(
                       'button',
@@ -480,8 +487,8 @@ function SelectControl(props: ControlProps): ReactNode {
                           type: 'button',
                           form: props.formId,
                           'aria-label':
-                              props.labels?.remove?.(label(choice)) ??
-                              `Remove ${label(choice)}`,
+                              props.labels?.remove?.(choiceLabel) ??
+                              `Remove ${choiceLabel}`,
                           'data-select-remove': choice.name,
                           onClick: (
                               event: import('react').MouseEvent<HTMLButtonElement>
@@ -491,6 +498,7 @@ function SelectControl(props: ControlProps): ReactNode {
                   )
                 : null
         );
+    };
     if (props.visible === false) return null;
     return h(
         'div',
@@ -575,7 +583,13 @@ function SelectControl(props: ControlProps): ReactNode {
                       ...selected.map((choice, index) =>
                           h(
                               'li',
-                              { key: `${key(choice)}-${index}` },
+                              {
+                                  key: `${key(choice)}-${index}`,
+                                  className:
+                                      props.multiple && !disabled
+                                          ? 'mx-sdk-select-removable-selection'
+                                          : undefined,
+                              },
                               badge(choice, !disabled)
                           )
                       )

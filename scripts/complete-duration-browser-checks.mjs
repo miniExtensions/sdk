@@ -162,6 +162,16 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                 })
         );
         const origin = `http://127.0.0.1:${server.address().port}`;
+        const visit = async (mode) => {
+            evidence.phase = mode;
+            await page.goto(`${origin}?mode=${mode}`);
+            const input = page.getByRole('textbox', {
+                name: 'Synthetic duration',
+                exact: true,
+            });
+            await input.waitFor();
+            return input;
+        };
         const open = async (mode, mobile = false, width) => {
             if (context) await context.close();
             context = await browser.newContext({
@@ -193,18 +203,7 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                 evidence.unexpectedRequests.push(url.origin + url.pathname);
                 return route.abort();
             });
-            evidence.phase = mode;
-            await page.goto(origin + '?mode=' + mode);
-            await page
-                .getByRole('textbox', {
-                    name: 'Synthetic duration',
-                    exact: true,
-                })
-                .waitFor();
-            return page.getByRole('textbox', {
-                name: 'Synthetic duration',
-                exact: true,
-            });
+            return visit(mode);
         };
         const snapshot = () =>
             page.evaluate(() => window.durationProof.snapshot());
@@ -481,7 +480,10 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
 
         evidence.appearance = [];
         const appearanceDifferences = [];
+        // Load a fresh controlled document for each state, without repeatedly
+        // starting a browser context for the same viewport.
         for (const width of [375, 639, 640, 1280]) {
+            input = await open('appearance-populated', false, width);
             for (const state of [
                 'populated',
                 'empty',
@@ -489,7 +491,8 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                 'focused-populated',
                 'focused-empty',
             ]) {
-                input = await open(`appearance-${state}`, false, width);
+                if (state !== 'populated')
+                    input = await visit(`appearance-${state}`);
                 const focused = state.startsWith('focused-');
                 const empty = state.endsWith('empty');
                 const disabled = state === 'disabled';
@@ -637,7 +640,8 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
             [],
             'Native Duration appearance'
         );
-        input = await open('appearance-local-accent', false, 640);
+        await page.setViewportSize({ width: 640, height: 720 });
+        input = await visit('appearance-local-accent');
         await page.keyboard.press('Tab');
         evidence.inputAccent = await input.evaluate(async (node) => {
             const control = node.parentElement;

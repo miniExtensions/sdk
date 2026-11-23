@@ -575,11 +575,13 @@
     line-height: 1rem;
 }
 .mx-sdk-attachment-gallery-thumbnail__document {
+    --mx-sdk-attachment-gallery-loading-visibility: hidden;
     position: relative;
     height: 100%;
     box-sizing: border-box;
     overflow: hidden;
     background: #fff;
+    animation: mx-sdk-attachment-gallery-thumbnail-show-loading 0s 0.5s forwards;
 }
 .mx-sdk-attachment-gallery-thumbnail__visual--thumbnail
     .mx-sdk-attachment-gallery-thumbnail__document {
@@ -625,8 +627,7 @@
     align-items: center;
     justify-content: center;
     margin-block: 1rem;
-    visibility: hidden;
-    animation: mx-sdk-attachment-gallery-thumbnail-show-loading 0s 0.5s forwards;
+    visibility: var(--mx-sdk-attachment-gallery-loading-visibility, hidden);
 }
 .mx-sdk-attachment-gallery-thumbnail__loading > svg {
     display: block;
@@ -663,7 +664,7 @@
 }
 @keyframes mx-sdk-attachment-gallery-thumbnail-show-loading {
     to {
-        visibility: visible;
+        --mx-sdk-attachment-gallery-loading-visibility: visible;
     }
 }
 

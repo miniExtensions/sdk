@@ -331,6 +331,7 @@ function documentThumbnail(
     return h(
         'div',
         {
+            key: uri,
             className: `${thumbnail}__document${inGrid ? ' object-cover' : ''}`,
         },
         preview,

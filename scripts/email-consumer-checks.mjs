@@ -5,6 +5,12 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
+// Heroicons 2.1.1 solid Envelope used by the native Form at 14539afb.
+export const nativeEnvelopePaths = [
+    'M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z',
+    'M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z',
+];
+
 export const emailReactTypedConsumer = `
 import type { ReactNode } from 'react';
 import {
@@ -388,7 +394,16 @@ export async function checkEmailConsumer({
                 assert.equal(input().type, 'email');
                 assert.equal(input().autocomplete, 'off');
                 assert.equal(input().getAttribute('form'), 'controlled-form');
-                assert.ok(container.querySelector('.mx-sdk-email-icon'));
+                const envelope = container.querySelector('.mx-sdk-email-icon');
+                const glyph = envelope?.querySelector('svg');
+                assert.equal(envelope?.getAttribute('aria-hidden'), 'true');
+                assert.equal(glyph?.getAttribute('fill'), 'currentColor');
+                assert.deepEqual(
+                    Array.from(glyph?.querySelectorAll('path') ?? [], (path) =>
+                        path.getAttribute('d')
+                    ),
+                    nativeEnvelopePaths
+                );
                 await edit('MiXeD+Tag@Example.TEST');
                 assert.deepEqual(controlledWrites, ['MiXeD+Tag@Example.TEST']);
                 checks++;

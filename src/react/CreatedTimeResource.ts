@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { checkIfPageUrlIsValid } from '../forms/pageUrlValidation.js';
 import { ActionButton } from './ActionButton.js';
-import { RecoverableImage } from './RecoverableImage.js';
+import { ResourceRecoverableImage } from './RecoverableImage.js';
 import { CompleteHTMLRenderer } from './html/CompleteHTMLRenderer.js';
 import { readResourceResponse } from './resourceResponse.js';
 import { DocumentThumbnail } from './document-preview/DocumentThumbnail.js';
@@ -82,6 +82,7 @@ const defaultLabels: CreatedTimeResourceLabels = {
 type TrackedNode = {
     node: Element;
     attributes: Record<string, string>;
+    canActivateSource?: () => boolean;
 };
 type Download = {
     controller: AbortController;
@@ -137,31 +138,54 @@ function clearNode(record: TrackedNode) {
         record.node.removeAttribute(attribute);
 }
 
-/** Stable refs also clear detached nodes, including React 19 ref replay. */
+function activateNode(lease: Lease, record: TrackedNode) {
+    if (
+        record.canActivateSource?.() === false ||
+        !lease.active ||
+        !lease.nodes.has(record)
+    )
+        return;
+    for (const [name, value] of Object.entries(record.attributes)) {
+        if (record.node.getAttribute(name) !== value)
+            record.node.setAttribute(name, value);
+    }
+}
+
+/** Stable refs clear detached nodes synchronously, including React 19 ref replay. */
 function trackedRef<T extends Element>(
     lease: Lease,
     attributes: Record<string, string>,
-    descendants?: string
+    options?: { descendants?: string; canActivateSource?: () => boolean }
 ) {
     let records: TrackedNode[] = [];
-    return (node: T | null) => {
+    const attach = (node: T | null) => {
         for (const record of records) {
             clearNode(record);
             lease.nodes.delete(record);
         }
         records = [];
         if (node === null) return;
-        const targets = descendants
-            ? Array.from(node.querySelectorAll(descendants))
+        const targets = options?.descendants
+            ? Array.from(node.querySelectorAll(options.descendants))
             : [node];
-        records = targets.map((target) => ({ node: target, attributes }));
+        records = targets.map((target) => ({
+            node: target,
+            attributes,
+            canActivateSource: options?.canActivateSource,
+        }));
         for (const record of records) {
             lease.nodes.add(record);
-            if (lease.active)
-                for (const [name, value] of Object.entries(attributes))
-                    record.node.setAttribute(name, value);
+            if (!record.canActivateSource) activateNode(lease, record);
         }
     };
+    return Object.assign(attach, {
+        activateSource() {
+            // The image's passive effect can replay with its ref. Only a
+            // registration still current after that flush may start transport.
+            for (const record of records)
+                queueMicrotask(() => activateNode(lease, record));
+        },
+    });
 }
 
 function cleanDownload(download: Download) {
@@ -299,11 +323,23 @@ export function CreatedTimeResource(
         [lease]
     );
     const thumbnailRef = useMemo(
-        () => trackedRef<HTMLImageElement>(lease, { src: href ?? '' }),
-        [lease]
+        () =>
+            trackedRef<HTMLImageElement>(
+                lease,
+                { src: href ?? '' },
+                iconMode
+                    ? undefined
+                    : { canActivateSource: () => current() !== null }
+            ),
+        [lease, iconMode]
     );
     const previewRef = useMemo(
-        () => trackedRef<HTMLImageElement>(lease, { src: href ?? '' }),
+        () =>
+            trackedRef<HTMLImageElement>(
+                lease,
+                { src: href ?? '' },
+                { canActivateSource: () => current() !== null }
+            ),
         [lease]
     );
     const pdfRef = useMemo(
@@ -311,7 +347,7 @@ export function CreatedTimeResource(
             trackedRef<HTMLDivElement>(
                 lease,
                 { src: `${href ?? ''}#toolbar=0` },
-                'iframe'
+                { descendants: 'iframe' }
             ),
         [lease]
     );
@@ -357,9 +393,9 @@ export function CreatedTimeResource(
         accepted.current = { lease, props, href };
         lease.active = allowed && currentOwner(props.owner);
         if (lease.active)
-            for (const record of lease.nodes)
-                for (const [name, value] of Object.entries(record.attributes))
-                    record.node.setAttribute(name, value);
+            for (const record of lease.nodes) {
+                if (!record.canActivateSource) activateNode(lease, record);
+            }
         else retire(lease);
         return () => {
             if (accepted.current?.lease === lease) accepted.current = null;
@@ -643,9 +679,10 @@ export function CreatedTimeResource(
     const pdfHTML = `<iframe src="${escapeAttribute(href + '#toolbar=0')}" title="${escapeAttribute(labels.attachments)}" width="100%" height="100%" frameborder="0"></iframe>`;
     const ownedPDF = modalPDFOptions(options?.documentPreview);
     const preview = image
-        ? h(RecoverableImage, {
+        ? h(ResourceRecoverableImage, {
               key: lease.id,
               ref: previewRef,
+              activateSource: previewRef.activateSource,
               sources: [href],
               alt: '',
               style: {
@@ -738,9 +775,13 @@ export function CreatedTimeResource(
                     !thumbnailVisible
                         ? null
                         : image
-                          ? h(RecoverableImage, {
+                          ? h(ResourceRecoverableImage, {
                                 key: lease.id,
                                 ref: thumbnailRef,
+                                // The icon's src is also part of its SSR markup.
+                                activateSource: iconMode
+                                    ? undefined
+                                    : thumbnailRef.activateSource,
                                 sources: [href],
                                 alt: '',
                                 loading: 'lazy',

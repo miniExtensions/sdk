@@ -74,6 +74,8 @@ const fields=createFormFieldBindings({loaded:${JSON.stringify(loaded)},client:{g
 const binding=fields.field('created');binding.setValue=()=>{writes++;throw Error('No Created-time writer');};
 const neighbor=fields.field('neighbor');
 const dateConfig={type:'dateTime',options:{dateFormat:{format:'YYYY-MM-DD'},timeFormat:{format:'HH:mm'},timeZone:'America/New_York'}};
+const pending=new Promise(()=>{});
+function Suspend({active}){if(active)throw pending;return null;}
 function App(){
  const [state,setState]=useState({mode:'text',value:'2026-11-12T12:30:00Z',identity:'a',current:true,mounted:true,far:false});
  const latest=useRef(state);useLayoutEffect(()=>{latest.current=state;});observed=state;change=patch=>setState(old=>({...old,...patch}));
@@ -86,7 +88,9 @@ function App(){
   h('nav',{'aria-label':'Fixture controls'},action('Text',{mode:'text',value:'2026-11-12T12:30:00Z',far:false}),action('Attachment',{mode:'attachment',value:location.origin+'/image.jpg',far:false}),action('Offscreen attachment',{mode:'attachment',value:location.origin+'/offscreen.jpg',far:true}),action('Icon',{mode:'icon',value:location.origin+'/image.jpg',far:false}),action('Retry image',{mode:'attachment',value:location.origin+'/retry.jpg',far:false}),action('HTTP PDF',{mode:'attachment',value:location.origin+'/fixture.pdf',far:false}),action('URL button',{mode:'button',value:location.origin+'/a',far:false}),action('Replace URL',{value:location.origin+'/b',identity:'b'}),action('Restore URL',{mode:'button',value:location.origin+'/a',identity:'a'}),action('Inert',{mode:'inert',value:location.origin+'/image.jpg',far:false}),action('Retire',{current:false}),action('Remove',{mounted:false})),
   h('section',{className:'binding-natural'},h(CreatedTimeField,{binding})),h('section',{className:'binding-explicit'},h(BindingCreatedTimeField,{binding})),h(TextField,{binding:neighbor}),
   h('span',{id:'created-title'},'Created display'),h('p',{id:'created-help'},'Created help'),h('p',{id:'created-error'},'Created feedback'),
-  h('div',{id:'display-container',style:{marginTop:state.far?'1800px':0}},state.mounted?h(CreatedTimeField,props):null),h('button',{type:'submit'},'Explicit Save'));
+  h(React.Suspense,{fallback:h('p',null,'Field suspended')},
+   h('div',{id:'display-container',style:{marginTop:state.far?'1800px':0}},state.mounted?h(CreatedTimeField,props):null,h(Suspend,{active:state.suspended}))),
+  h('button',{type:'submit'},'Explicit Save'));
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.createdBrowser={snapshot:()=>({react:React.version,requests,writes,submits,downloadIntents:[...downloadIntents],value:binding.getSnapshot().value,neighbor:neighbor.getSnapshot().value,state:observed}),change:patch=>change(patch),destroy:()=>fields.destroy()};
@@ -508,18 +512,124 @@ export async function checkCreatedTimeControlledBrowser({
         await page
             .getByRole('button', { name: 'Retry image', exact: true })
             .scrollIntoViewIfNeeded();
+        const retryObservation = await display().evaluateHandle(
+            (field, source) => {
+                let connectedRewrites = 0;
+                let firstImage;
+                const observer = new MutationObserver((records) => {
+                    for (const { target, oldValue } of records) {
+                        if (!(target instanceof HTMLImageElement)) continue;
+                        if (
+                            !firstImage &&
+                            target.getAttribute('src') === source
+                        )
+                            firstImage = target;
+                        if (target.isConnected && oldValue === source)
+                            connectedRewrites++;
+                    }
+                });
+                observer.observe(field, {
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['src'],
+                    attributeOldValue: true,
+                });
+                return {
+                    stop() {
+                        observer.disconnect();
+                        return {
+                            connectedRewrites,
+                            failedImageRetired:
+                                firstImage?.isConnected === false &&
+                                !firstImage.hasAttribute('src'),
+                        };
+                    },
+                };
+            },
+            origin + '/retry.jpg'
+        );
         await click('Retry image');
-        await display()
-            .getByRole('button', { name: 'Try again', exact: true })
-            .waitFor();
-        await display()
-            .getByRole('button', { name: 'Try again', exact: true })
-            .click();
+        await page.waitForFunction(() => {
+            const field = document.querySelector('#created-display');
+            return (
+                field?.querySelector('[role="status"]') ||
+                field?.querySelector('img')?.naturalWidth > 0
+            );
+        });
+        const imageAttempt = await retryObservation.evaluate((probe) =>
+            probe.stop()
+        );
+        await retryObservation.dispose();
+        const retryGets = () =>
+            evidence.resources.filter(
+                (resource) =>
+                    resource.path === '/retry.jpg' && resource.method === 'GET'
+            ).length;
+        evidence.imageRetry = { ...imageAttempt, beforeClick: retryGets() };
+        assert.equal(
+            imageAttempt.connectedRewrites,
+            0,
+            'Live image source was rewritten'
+        );
+        assert.equal(
+            evidence.imageRetry.beforeClick,
+            1,
+            'Duplicate GET before retry'
+        );
+        assert.equal(
+            imageAttempt.failedImageRetired,
+            true,
+            'Failed image kept its source'
+        );
+        const retry = display().getByRole('button', {
+            name: 'Try again',
+            exact: true,
+        });
+        assert(await retry.isVisible());
+        await retry.click();
         await page.waitForFunction(
             () =>
                 document.querySelector('#created-display img')?.naturalWidth > 0
         );
+        evidence.imageRetry.afterClick = retryGets();
+        assert.equal(
+            evidence.imageRetry.afterClick,
+            2,
+            'Expected one explicit retry GET'
+        );
         await finish('actual-image-failure-and-explicit-retry');
+        if (
+            field === 'lastModifiedTime' &&
+            (await snapshot()).react.startsWith('19.')
+        ) {
+            const image = await display().locator('img').elementHandle();
+            assert(image);
+            try {
+                const suspended = page.getByText('Field suspended', {
+                    exact: true,
+                });
+                await page.evaluate(() =>
+                    window.createdBrowser.change({ suspended: true })
+                );
+                await suspended.waitFor();
+                assert.equal(await image.getAttribute('src'), null);
+                await page.evaluate(() =>
+                    window.createdBrowser.change({ suspended: false })
+                );
+                await suspended.waitFor({ state: 'detached' });
+                await page.waitForFunction(
+                    (node) =>
+                        node ===
+                            document.querySelector('#created-display img') &&
+                        node.hasAttribute('src') &&
+                        node.naturalWidth > 0,
+                    image
+                );
+                await finish('suspense-reveal-reactivates-the-same-image');
+            } finally {
+                await image.dispose();
+            }
+        }
         await click('URL button');
         const held = await display().locator('a').elementHandle();
         assert(held);

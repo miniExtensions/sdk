@@ -4,8 +4,12 @@ import {
     createElement as h,
     useMemo,
     useRef,
+    type FocusEvent,
+    type KeyboardEvent,
+    type KeyboardEventHandler,
     type ReactElement,
     type ReactNode,
+    type SyntheticEvent,
 } from 'react';
 import moment from 'moment-timezone';
 import type { RuntimeAirtableField } from '../runtime/types.js';
@@ -359,6 +363,75 @@ type PickerRow = {
     presentation: CalendarPickerRecordPresentation | undefined;
 };
 
+const pickerActionSelector =
+    '[data-calendar-picker-action] button:enabled, [data-calendar-picker-action] a[href]';
+
+function isTabbablePickerAction(element: HTMLElement): boolean {
+    return (
+        element.matches(pickerActionSelector) &&
+        element.tabIndex >= 0 &&
+        element.getAttribute('aria-disabled') !== 'true' &&
+        !element.closest('[hidden], [inert]') &&
+        element.getClientRects().length > 0 &&
+        element.ownerDocument.defaultView?.getComputedStyle(element)
+            .visibility === 'visible'
+    );
+}
+
+function focusPickerActionOnTab(
+    event: KeyboardEvent<HTMLUListElement>,
+    onListKeyDown: KeyboardEventHandler<HTMLUListElement> | undefined
+): void {
+    if (
+        event.key !== 'Tab' ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.defaultPrevented
+    )
+        return;
+    const { currentTarget: list, target } = event;
+    const view = list.ownerDocument.defaultView;
+    if (!view || !(target instanceof view.HTMLElement)) return;
+    const row = target.closest<HTMLLIElement>('li[role="option"]');
+    if (row?.parentElement !== list) return;
+    if (target === row && event.shiftKey) return;
+
+    // React Aria treats the option as one tab stop. Enter its actions in
+    // DOM order, then let the listbox handle exit from the final control.
+    const actions = Array.from(
+        row.querySelectorAll<HTMLElement>(pickerActionSelector)
+    ).filter(isTabbablePickerAction);
+    const index = actions.findIndex((action) => action === target);
+    if (target !== row && index === -1) return;
+    const next = event.shiftKey
+        ? (actions[index - 1] ?? row)
+        : actions[index + 1];
+    if (!next) {
+        // Model Buttons and URL resources stop bubbling key events. Give the
+        // listbox its normal forward exit before the action handles this Tab.
+        if (target.closest('[data-calendar-picker-action="contains-tab"]'))
+            onListKeyDown?.(event);
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    next.focus();
+}
+
+const stopPickerAction = (event: SyntheticEvent) => event.stopPropagation();
+const stopPickerActivation = (event: KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+};
+const pickerActionBoundary = {
+    onPointerDown: stopPickerAction,
+    onMouseDown: stopPickerAction,
+    onTouchStart: stopPickerAction,
+    onClick: stopPickerAction,
+    onKeyDown: stopPickerActivation,
+    onKeyUp: stopPickerActivation,
+};
+
 function PickerRecords(props: {
     rows: readonly PickerRow[];
     selectedIds: readonly string[];
@@ -427,6 +500,30 @@ function PickerRecords(props: {
             'ul',
             {
                 ...listBoxProps,
+                onKeyDownCapture: (event: KeyboardEvent<HTMLUListElement>) =>
+                    focusPickerActionOnTab(event, listBoxProps.onKeyDown),
+                onFocus: (event: FocusEvent<HTMLUListElement>) => {
+                    const { currentTarget, relatedTarget, target } = event;
+                    const view = currentTarget.ownerDocument.defaultView;
+                    // Reverse Tab can enter on a trailing action. Keep roving
+                    // option focus from taking over while moving among actions.
+                    if (
+                        view &&
+                        relatedTarget instanceof view.Node &&
+                        (currentTarget.contains(relatedTarget) ||
+                            (currentTarget.compareDocumentPosition(
+                                relatedTarget
+                            ) &
+                                view.Node.DOCUMENT_POSITION_FOLLOWING) !==
+                                0) &&
+                        target instanceof view.HTMLElement &&
+                        currentTarget.contains(target) &&
+                        target.matches(':focus-visible') &&
+                        isTabbablePickerAction(target)
+                    )
+                        return;
+                    listBoxProps.onFocus?.(event);
+                },
                 ref,
                 className: 'mx-sdk-calendar-picker__records',
             },
@@ -464,7 +561,21 @@ function presentDetails(
                 presentation.showPreviewFieldTitle && detail.title !== null
                     ? h('dt', null, detail.title)
                     : null,
-                h('dd', null, h(LinkedFinderRichLeaf, { leaf: detail.leaf }))
+                h(
+                    'dd',
+                    detail.leaf.kind === 'button' ||
+                        detail.leaf.kind === 'urlButton'
+                        ? {
+                              ...pickerActionBoundary,
+                              'data-calendar-picker-action':
+                                  detail.leaf.kind === 'urlButton' ||
+                                  detail.leaf.accepted.mode !== 'controlled'
+                                      ? 'contains-tab'
+                                      : '',
+                          }
+                        : null,
+                    h(LinkedFinderRichLeaf, { leaf: detail.leaf })
+                )
             )
         )
     );

@@ -55,7 +55,10 @@ const clock={utcDay:()=> '2026-02-15',localDay:()=> '2026-02-15',localMonth:()=>
 const date=id=>({id,name:id,description:null,isComputed:false,isPrimaryField:false,config:{type:'date',options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}}});
 const admitted=()=>({type:'admitted'}),refused=reason=>({type:'refused',reason});
 const canonical=['off-day'],attempts=[],writes=[],pickerReads=[],portalReads=[],opens=[],removals=[];
-const holdPickerEcho=new URLSearchParams(window.location.search).has('hold-picker-echo');
+const scenario=new URLSearchParams(window.location.search);
+const holdPickerEcho=scenario.has('hold-picker-echo');
+const nestedPickerActions=scenario.has('nested-picker-actions');
+const pickerActions=[];
 const visiblePublications=[];
 let activeVisiblePublication=null;
 let pickerOwner={},pickerLive=true,pickerControlLive=true,capped=false,refuseReads=false;
@@ -64,6 +67,24 @@ let setPickerFrame=null,setPortalFrame=null,observed=null;
 const pickerControl={owner:{},isCurrent:()=>pickerControlLive,scheduleRead(request){pickerReads.push(request);return refuseReads?refused('native-read-refusal'):admitted();}};
 const pickerRecords=[{id:'one',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'two',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'off-day',fields:{start:'2026-02-21',end:'2026-02-21'}}];
 const presentations={one:{type:'list',primary:'Rich appointment',showPreviewFieldTitle:true,details:[{key:'notes',title:'Notes',leaf:{kind:'text',display:{value:'Rich https://example.test/calendar',language:'en',layout:'linked-list'}}},{key:'tag',title:'Tag',leaf:{kind:'pills',items:[{label:'Accepted tag'}]}}]},two:{type:'calendar',primary:'Second appointment',subtitle:'Native compact detail'},'off-day':{type:'calendar',primary:'Off-day selection',subtitle:''}};
+if(nestedPickerActions){
+ const target='/calendar-picker-link-target';
+ const owner={isCurrent:()=>pickerLive&&pickerControlLive};
+ const webhook=(label,disabled=false)=>({kind:'button',accepted:{mode:'controlled',value:{label,url:target},config:{openLinkType:'triggerWebhookPOST'},disabled,owner,onTriggerWebhook:()=>pickerActions.push(label)}});
+ presentations.one.details=[
+  {key:'action',title:'Action',leaf:webhook('Nested Calendar action')},
+  {key:'link',title:'Link',leaf:{kind:'button',accepted:{mode:'controlled',value:{label:'Nested Calendar link',url:target},config:{openLinkType:'_blank'},owner}}},
+  {key:'disabled',title:'Disabled',leaf:webhook('Disabled Calendar action',true)},
+ ];
+ if(scenario.has('picker-model-action')||scenario.has('picker-url-action')){
+  const link=(label)=>({label,url:new URL(target,window.location.origin).href});
+  const trailingLink=scenario.has('picker-url-action')
+   ? {kind:'urlButton',display:{href:link('URL Calendar link').url,buttonLabel:'URL Calendar link',owner}}
+   : {kind:'button',accepted:{mode:'model',phase:'idle',field:{id:'model',name:'Model Calendar link'},value:link('Model Calendar link'),config:{openLinkType:'_blank'},feedback:null,busy:false,canLink:true,prepareLink:()=>({href:link('Model Calendar link').url,target:'_blank',rel:'noreferrer'})}};
+  presentations.one.details=[{key:'trailing',title:'Link',leaf:trailingLink}];
+  presentations.two={type:'list',primary:'Second appointment',showPreviewFieldTitle:true,details:[{key:'later',title:'Later link',leaf:{kind:'button',accepted:{mode:'controlled',value:link('Later row link'),config:{openLinkType:'_blank'},owner}}}]};
+ }
+}
 function makePicker(patch={}){const expected=pickerOwner;return Object.freeze({control:pickerControl,presentationOwner:{owner:expected,isCurrent:()=>pickerLive&&pickerOwner===expected},records:pickerRecords,startField:date('start'),endField:date('end'),selectedRecordIds:[...canonical],presentationByRecordId:presentations,selectionEnabled:true,errorMessage:null,isLoading:false,isLoadingMore:false,canLoadMore:true,toggleRecord(id){attempts.push(id);if(!pickerControlLive||!pickerLive||pickerOwner!==expected)return refused('stale-host');if(capped&&!canonical.includes(id))return refused('native-cap');const index=canonical.indexOf(id);if(index>=0)canonical.splice(index,1);else canonical.push(id);writes.push(id);if(!holdPickerEcho)publishPicker();return admitted();},...patch});}
 function publishPicker(patch={}){pickerOwner={};setPickerFrame?.(makePicker(patch));}
 const portalControl={owner:{},isCurrent:()=>portalControlLive,retainMonth(month){if(!portalControlLive)return refused('stale-control');portalReads.push(['retain',month]);retainedMonth=month;publishPortal();return admitted();},readFirstPage(request){if(!portalControlLive)return refused('stale-control');portalReads.push(['read',request]);return admitted();}};
@@ -101,10 +122,11 @@ function App(){
   h('button',{type:'button','data-complete-calendar':'retire-portal',onClick:()=>{portalLive=false;}},'Retire Portal display'),
   h('button',{type:'button','data-complete-calendar':'retire-portal-control',onClick:()=>{portalControlLive=false;}},'Retire Portal controls'),
   h('button',{type:'button','data-complete-calendar':'unmount',onClick:()=>setMounted(false)},'Unmount complete Calendar')),
-  mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null);
+  mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null,
+  nestedPickerActions?h('button',{type:'button'},'After picker'):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.completeCalendarProof={publishPickerEcho:()=>publishPicker(),snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],portalReads:[...portalReads],opens:[...opens],removals:[...removals],visibleRecordIds:activeVisiblePublication?.isCurrent()?[...activeVisiblePublication.recordIds]:null,visiblePublications:visiblePublications.length,retiredVisiblePublications:visiblePublications.filter(value=>!value.isCurrent()).length})};
+window.completeCalendarProof={publishPickerEcho:()=>publishPicker(),snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],pickerActions:[...pickerActions],portalReads:[...portalReads],opens:[...opens],removals:[...removals],visibleRecordIds:activeVisiblePublication?.isCurrent()?[...activeVisiblePublication.recordIds]:null,visiblePublications:visiblePublications.length,retiredVisiblePublications:visiblePublications.filter(value=>!value.isCurrent()).length})};
 `;
 
 const fixtureStyle = `
@@ -223,6 +245,16 @@ export async function prepareCalendarBrowser(
                 [complete ? '/complete' : '/', html],
                 [scriptPath, script],
                 [complete ? '/calendar-fixture.css' : '/calendar.css', style],
+                ...(complete
+                    ? [
+                          [
+                              '/calendar-picker-link-target',
+                              Buffer.from(
+                                  '<!doctype html><title>Calendar link target</title>'
+                              ),
+                          ],
+                      ]
+                    : []),
                 ...[...(fullStyles?.assets ?? new Map())],
                 ['/favicon.ico', Buffer.alloc(0)],
             ]),
@@ -886,6 +918,176 @@ export async function checkCalendarBrowser({
             offDaySelected,
             canonical: afterOffDay.canonical,
             reads: afterOffDay.pickerReads,
+        });
+
+        await page.goto(origin + '/complete?nested-picker-actions');
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const beforePicker = page.getByRole('button', { name: 'Load more' });
+        const afterPicker = page.getByRole('button', { name: 'After picker' });
+        const action = page.getByRole('button', {
+            name: 'Nested Calendar action',
+        });
+        const link = page.getByRole('link', { name: 'Nested Calendar link' });
+        const disabled = page.getByRole('button', {
+            name: 'Disabled Calendar action',
+        });
+        assert.equal(await disabled.isDisabled(), true);
+        const tabTo = async (key, element, label) => {
+            await page.keyboard.press(key);
+            const reached = await element.evaluate((node) => ({
+                focused: node === document.activeElement,
+                activeText: document.activeElement?.textContent?.trim(),
+            }));
+            assert.equal(
+                reached.focused,
+                true,
+                `${label} (actual focus: ${reached.activeText ?? 'none'})`
+            );
+        };
+        await beforePicker.focus();
+        await tabTo('Tab', option(0), 'Enter the first row');
+        await tabTo('Tab', action, 'Enter the enabled row Button');
+        await saveScreenshot('complete-picker-nested-action-focus');
+        await page.keyboard.press('Enter');
+        assert.deepEqual((await completeSnapshot()).pickerActions, [
+            'Nested Calendar action',
+        ]);
+        await page.keyboard.press('Space');
+        assert.deepEqual((await completeSnapshot()).pickerActions, [
+            'Nested Calendar action',
+            'Nested Calendar action',
+        ]);
+        await tabTo('Tab', link, 'Move from Button to link');
+        await page.keyboard.press('Space');
+        assert.equal(context.pages().length, 1, 'Link Space does not open');
+        await tabTo('Tab', afterPicker, 'Skip the disabled Button and exit');
+        await tabTo('Shift+Tab', link, 'Re-enter at the last enabled action');
+        await tabTo('Shift+Tab', action, 'Move backward between actions');
+        await tabTo('Shift+Tab', option(0), 'Return to the owning row');
+        await tabTo('Shift+Tab', beforePicker, 'Exit backward from the row');
+
+        const openNestedLink = async (activate) => {
+            const [popup] = await Promise.all([
+                page.waitForEvent('popup'),
+                activate(),
+            ]);
+            try {
+                await popup.waitForURL(origin + '/calendar-picker-link-target');
+            } finally {
+                await popup.close();
+            }
+        };
+        await afterPicker.focus();
+        await tabTo('Shift+Tab', link, 'Reach the link before Enter');
+        await openNestedLink(() => page.keyboard.press('Enter'));
+        await action.click();
+        await openNestedLink(() => link.click());
+        const nested = await completeSnapshot();
+        assert.deepEqual(nested.pickerActions, [
+            'Nested Calendar action',
+            'Nested Calendar action',
+            'Nested Calendar action',
+        ]);
+        assert.deepEqual(nested.attempts, []);
+        assert.deepEqual(nested.writes, []);
+        assert.deepEqual(nested.pickerReads, []);
+        assert.deepEqual(nested.canonical, ['off-day']);
+        assert.equal(await option(0).getAttribute('aria-selected'), 'false');
+        evidence.results.push({
+            name: 'complete-picker-nested-action-keyboard',
+            forward: ['row', 'button', 'link', 'after'],
+            reverse: ['link', 'button', 'row', 'before'],
+            actions: nested.pickerActions,
+            linkOpens: 2,
+            attempts: nested.attempts,
+            writes: nested.writes,
+            reads: nested.pickerReads,
+            canonical: nested.canonical,
+        });
+
+        await page.goto(
+            origin + '/complete?nested-picker-actions&picker-model-action'
+        );
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const modelLink = page.getByRole('link', {
+            name: 'Model Calendar link',
+        });
+        const laterLink = page.getByRole('link', { name: 'Later row link' });
+        assert.equal(await laterLink.count(), 1);
+        await beforePicker.focus();
+        await tabTo('Tab', option(0), 'Enter the row with a model action');
+        await tabTo('Tab', modelLink, 'Reach the model link');
+        await tabTo('Tab', afterPicker, 'A model action exits the list');
+        await tabTo(
+            'Shift+Tab',
+            laterLink,
+            'Reverse entry reaches the trailing row action'
+        );
+        await tabTo(
+            'Shift+Tab',
+            option(1),
+            'Reverse traversal returns to the trailing action row'
+        );
+        const model = await completeSnapshot();
+        assert.deepEqual(model.attempts, []);
+        assert.deepEqual(model.writes, []);
+        assert.deepEqual(model.pickerReads, []);
+        assert.deepEqual(model.canonical, ['off-day']);
+        evidence.results.push({
+            name: 'complete-picker-model-action-exit',
+            forward: ['row', 'model link', 'after'],
+            reverse: ['later link', 'later row'],
+            attempts: model.attempts,
+            writes: model.writes,
+            reads: model.pickerReads,
+        });
+
+        await page.goto(
+            origin + '/complete?nested-picker-actions&picker-url-action'
+        );
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const urlLink = page.getByRole('link', { name: 'URL Calendar link' });
+        assert.match(
+            await urlLink.getAttribute('class'),
+            /\bmx-sdk-created-time-url-button\b/
+        );
+        assert.equal(
+            await urlLink.getAttribute('href'),
+            origin + '/calendar-picker-link-target'
+        );
+        assert.equal(await laterLink.count(), 1);
+        await beforePicker.focus();
+        await tabTo('Tab', option(0), 'Enter the row with a URL Button');
+        await tabTo('Tab', urlLink, 'Reach the genuine URL Button');
+        await tabTo('Tab', afterPicker, 'A URL Button exits the list');
+        await tabTo(
+            'Shift+Tab',
+            laterLink,
+            'Reverse entry reaches the trailing row action'
+        );
+        await tabTo(
+            'Shift+Tab',
+            option(1),
+            'Reverse traversal returns to the trailing action row'
+        );
+        const url = await completeSnapshot();
+        assert.deepEqual(url.attempts, []);
+        assert.deepEqual(url.writes, []);
+        assert.deepEqual(url.pickerReads, []);
+        assert.deepEqual(url.canonical, ['off-day']);
+        evidence.results.push({
+            name: 'complete-picker-url-button-exit',
+            forward: ['row', 'URL Button', 'after'],
+            reverse: ['later link', 'later row'],
+            attempts: url.attempts,
+            writes: url.writes,
+            reads: url.pickerReads,
         });
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);

@@ -402,7 +402,7 @@
     box-sizing: border-box;
     align-items: center;
     overflow: hidden;
-    border: 2px solid #e5e7eb;
+    border: 2px solid hsl(var(--border, 214.3 31.8% 91.4%));
     border-radius: var(--radius, 0.5rem);
     cursor: pointer;
 }
@@ -579,6 +579,7 @@
     height: 100%;
     box-sizing: border-box;
     overflow: hidden;
+    background: #fff;
 }
 .mx-sdk-attachment-gallery-thumbnail__visual--thumbnail
     .mx-sdk-attachment-gallery-thumbnail__document {
@@ -624,6 +625,8 @@
     align-items: center;
     justify-content: center;
     margin-block: 1rem;
+    visibility: hidden;
+    animation: mx-sdk-attachment-gallery-thumbnail-show-loading 0s 0.5s forwards;
 }
 .mx-sdk-attachment-gallery-thumbnail__loading > svg {
     display: block;
@@ -656,6 +659,11 @@
 @keyframes mx-sdk-attachment-gallery-thumbnail-spin {
     to {
         transform: rotate(360deg);
+    }
+}
+@keyframes mx-sdk-attachment-gallery-thumbnail-show-loading {
+    to {
+        visibility: visible;
     }
 }
 

@@ -16,8 +16,10 @@ import { assertBrowserInputs } from './package-checks.mjs';
 const nativeClock =
     'M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z';
 const formAccent = 'rgb(16, 185, 129)';
+const inputAccent = 'rgb(124, 58, 237)';
 const nativeShadow = 'rgba(0, 0, 0, 0.05) 0px 1px 2px 0px';
-const nativeFocusRing = `rgb(255, 255, 255) 0px 0px 0px 0px, ${formAccent} 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px`;
+const nativeFocusRing = (accent) =>
+    `rgb(255, 255, 255) 0px 0px 0px 0px, ${accent} 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px`;
 
 // Installed public UI and trusted keyboard/pointer input. The controlled host
 // supplies canonical values and guarded writes; it is not a native Form binding.
@@ -73,7 +75,7 @@ function App(){
  return h(React.Fragment,null,
   h('form',{id:'native-form',style:visual?{'--mx-sdk-accent':${JSON.stringify(formAccent)},fontSize:'16px',lineHeight:'24px'}:undefined,onSubmit:event=>{event.preventDefault();submits++;},onFocusCapture:()=>{focuses++;},onInputCapture:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.target.value})},
    h('label',{htmlFor:'native-duration'},'Synthetic duration'),h('p',{id:'external-help'},'External timing help'),
-   state.mounted?h(DurationField,{fieldId:'duration',sessionId:'duration-session',format:state.format,value:state.value,readOnly:state.readonly,owner:{token:scope,isCurrent:()=>latest.current.active&&latest.current.owner===scope},onChange(value){if(!latest.current.active||latest.current.readonly||latest.current.owner!==scope)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},inputId:'native-duration',formId:'native-form',title:'Synthetic duration',showLabel:false,description:visual?undefined:'Synthetic timing note',error:visual?undefined:'Synthetic duration error',describedBy:'external-help',clearLabel:mode==='clear'?'Clear synthetic duration':undefined}):null,
+   state.mounted?h(DurationField,{fieldId:'duration',sessionId:'duration-session',format:state.format,value:state.value,readOnly:state.readonly,owner:{token:scope,isCurrent:()=>latest.current.active&&latest.current.owner===scope},onChange(value){if(!latest.current.active||latest.current.readonly||latest.current.owner!==scope)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},inputId:'native-duration',formId:'native-form',title:'Synthetic duration',showLabel:false,description:visual?undefined:'Synthetic timing note',error:visual?undefined:'Synthetic duration error',describedBy:'external-help',inputClassName:mode==='appearance-local-accent'?'duration-local-accent':undefined,clearLabel:mode==='clear'?'Clear synthetic duration':undefined}):null,
    visual?h('div',{'data-duration-following':''},'Following field'):null),
   h('output',{'aria-label':'Canonical seconds'},JSON.stringify(state.value)),
   h('div',{'data-duration-readonly':''},h(ReadOnlyDurationField,{value:state.value,format:state.format,language:'en'})),
@@ -144,7 +146,7 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
             } else if (path === '/') {
                 response.setHeader('Content-Type', 'text/html');
                 response.end(
-                    '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Complete native Duration proof</title><link rel="stylesheet" href="/duration.css"><main></main><script type="module" src="/proof.js"></script>'
+                    `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Complete native Duration proof</title><link rel="stylesheet" href="/duration.css"><style>.duration-local-accent{--mx-sdk-accent:${inputAccent}}</style><main></main><script type="module" src="/proof.js"></script>`
                 );
             } else {
                 response.statusCode = 404;
@@ -576,7 +578,7 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                         ? 'rgb(243, 244, 246)'
                         : 'rgb(255, 255, 255)',
                     textColor: disabled ? 'rgb(75, 85, 99)' : 'rgb(0, 0, 0)',
-                    inputShadow: focused ? nativeFocusRing : 'none',
+                    inputShadow: focused ? nativeFocusRing(formAccent) : 'none',
                     hostShadow: nativeShadow,
                     hostMargin: '4px',
                     borderColor: focused ? formAccent : 'rgb(209, 213, 219)',
@@ -630,13 +632,41 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                 }
             }
         }
-        assert.deepEqual(evidence.pageErrors, []);
-        assert.deepEqual(evidence.unexpectedRequests, []);
         assert.deepEqual(
             appearanceDifferences,
             [],
             'Native Duration appearance'
         );
+        input = await open('appearance-local-accent', false, 640);
+        await page.keyboard.press('Tab');
+        evidence.inputAccent = await input.evaluate(async (node) => {
+            const control = node.parentElement;
+            const clock = control.querySelector('svg');
+            const style = getComputedStyle(node);
+            void style.borderTopColor;
+            void getComputedStyle(clock).color;
+            await Promise.all(
+                control
+                    .getAnimations({ subtree: true })
+                    .map((animation) => animation.finished)
+            );
+            return {
+                focusVisible: node.matches(':focus-visible'),
+                border: style.borderTopColor,
+                ring: style.boxShadow,
+                clock: getComputedStyle(clock).color,
+            };
+        });
+        assert.deepEqual(evidence.inputAccent, {
+            focusVisible: true,
+            border: inputAccent,
+            ring: nativeFocusRing(inputAccent),
+            clock: formAccent,
+        });
+        assert.deepEqual((await snapshot()).writes, []);
+        assert.equal((await snapshot()).submits, 0);
+        assert.deepEqual(evidence.pageErrors, []);
+        assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
             'Installed complete Duration with trusted input; no native Form/backend/clipboard/live-device claim.';
         evidence.status = 'passed';

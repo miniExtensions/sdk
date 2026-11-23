@@ -4,8 +4,11 @@
     width: 100%;
     font: inherit;
 }
-.mx-sdk-complete-duration-control {
+.mx-sdk-complete-duration-control,
+.mx-sdk-complete-duration-input {
     --mx-sdk-duration-focus: var(--mx-sdk-accent, #3b82f6);
+}
+.mx-sdk-complete-duration-control {
     position: relative;
     margin-top: 0.25rem;
     width: 100%;

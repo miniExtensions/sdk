@@ -1,5 +1,6 @@
 import {
     createElement as h,
+    Fragment,
     lazy,
     Suspense,
     useEffect,
@@ -22,6 +23,9 @@ import type {
     FormLinkedChildSnapshot,
 } from '../forms/linkedChild.js';
 import type { FormPageOwner } from '../forms/pages.js';
+import { FormPageNavigationButton } from './CompleteFormPageNavigation.js';
+import { FormSubmitButton } from './FormSubmitButton.js';
+import { getThemePortalProps, useThemeSnapshot } from './ThemeBoundary.js';
 
 export type FormLinkedChildCreateOpening = Readonly<{
     /** The exact button that began this explicit Create. */
@@ -374,6 +378,8 @@ function LinkedChildDialog({
 
 type DialogChromeProps = {
     labels: typeof defaultLabels;
+    className?: string;
+    closeIcon?: ReactNode;
     dialogRef: Ref<HTMLDialogElement>;
     closeButton: Ref<HTMLButtonElement>;
     keepEditing: Ref<HTMLButtonElement>;
@@ -383,6 +389,9 @@ type DialogChromeProps = {
     closeDisabled: boolean;
     saveDisabled: boolean;
     primaryFormId?: string;
+    primaryMode?: 'next' | 'review';
+    primarySaving?: boolean;
+    beforePrimary?: ReactNode;
     dismiss(): void;
     keep(): void;
     discard(): void;
@@ -391,6 +400,8 @@ type DialogChromeProps = {
 
 function LinkedChildDialogChrome({
     labels,
+    className,
+    closeIcon,
     dialogRef,
     closeButton,
     keepEditing,
@@ -400,17 +411,82 @@ function LinkedChildDialogChrome({
     closeDisabled,
     saveDisabled,
     primaryFormId,
+    primaryMode,
+    primarySaving = false,
+    beforePrimary,
     dismiss,
     keep,
     discard,
     save,
 }: DialogChromeProps): ReactElement {
     const titleId = useId();
+    const themeSnapshot = useThemeSnapshot();
+    const customized = Boolean(
+        className || closeIcon != null || primaryMode || beforePrimary != null
+    );
+    const theme = customized ? getThemePortalProps(themeSnapshot) : undefined;
+    const form =
+        primaryFormId &&
+        h('form', {
+            id: primaryFormId,
+            noValidate: true,
+            onSubmit: (event: FormEvent<HTMLFormElement>) => {
+                const admitted =
+                    !event.defaultPrevented && !confirm && !saveDisabled;
+                event.preventDefault();
+                event.stopPropagation();
+                if (admitted) save();
+            },
+        });
+    const body = h(
+        Fragment,
+        null,
+        form,
+        fields,
+        error != null && h('p', { role: 'alert' }, error)
+    );
+    let primary: ReactElement;
+    if (primaryFormId && primaryMode === 'next') {
+        primary = h(FormPageNavigationButton, {
+            direction: 'next',
+            type: 'submit',
+            form: primaryFormId,
+            label: labels.save,
+            loading: primarySaving,
+            disabled: saveDisabled,
+        });
+    } else if (primaryFormId && primaryMode === 'review') {
+        primary = h(FormSubmitButton, {
+            formId: primaryFormId,
+            label: labels.save,
+            mode: 'review',
+            saving: primarySaving,
+            canSubmit: !saveDisabled,
+        });
+    } else {
+        primary = h(
+            'button',
+            {
+                type: primaryFormId ? 'submit' : 'button',
+                form: primaryFormId || undefined,
+                disabled: saveDisabled,
+                onClick: primaryFormId ? undefined : save,
+            },
+            labels.save
+        );
+    }
+    const actions = h(Fragment, null, beforePrimary, primary);
     return h(
         'dialog',
         {
             ref: dialogRef,
             'aria-labelledby': titleId,
+            ...(theme && {
+                ...theme,
+                className:
+                    [theme.className, className].filter(Boolean).join(' ') ||
+                    undefined,
+            }),
             onCancel: (event: SyntheticEvent<HTMLDialogElement>) => {
                 if (event.target !== event.currentTarget) return;
                 event.preventDefault();
@@ -440,7 +516,16 @@ function LinkedChildDialogChrome({
                 (event.shiftKey ? last : first).focus();
             },
         },
-        h('h2', { id: titleId }, labels.title),
+        h(
+            'h2',
+            {
+                id: titleId,
+                className: customized
+                    ? 'mx-sdk-linked-child-create__title'
+                    : undefined,
+            },
+            labels.title
+        ),
         h(
             'div',
             { hidden: confirm },
@@ -451,35 +536,27 @@ function LinkedChildDialogChrome({
                     ref: closeButton,
                     disabled: closeDisabled,
                     onClick: dismiss,
+                    className: customized
+                        ? 'mx-sdk-linked-child-create__close'
+                        : undefined,
+                    'aria-label': closeIcon != null ? labels.close : undefined,
                 },
-                labels.close
+                closeIcon ?? labels.close
             ),
-            primaryFormId &&
-                h('form', {
-                    id: primaryFormId,
-                    noValidate: true,
-                    onSubmit: (event: FormEvent<HTMLFormElement>) => {
-                        const admitted =
-                            !event.defaultPrevented &&
-                            !confirm &&
-                            !saveDisabled;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (admitted) save();
-                    },
-                }),
-            fields,
-            error != null && h('p', { role: 'alert' }, error),
-            h(
-                'button',
-                {
-                    type: primaryFormId ? 'submit' : 'button',
-                    form: primaryFormId || undefined,
-                    disabled: saveDisabled,
-                    onClick: primaryFormId ? undefined : save,
-                },
-                labels.save
-            )
+            customized
+                ? h(
+                      'div',
+                      { className: 'mx-sdk-linked-child-create__body' },
+                      body
+                  )
+                : body,
+            customized
+                ? h(
+                      'div',
+                      { className: 'mx-sdk-linked-child-create__actions' },
+                      actions
+                  )
+                : actions
         ),
         confirm &&
             h(
@@ -567,11 +644,18 @@ export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     /** Render fields without a separate editor dialog, form, or submit footer. */
     renderFields(fields: View): ReactNode;
     labels?: BorrowedCreateLabels;
+    /** Opt in to named layout hooks on the dialog's presentation. */
+    className?: string;
+    /** Presented in the existing Close button and described by its label. */
+    closeIcon?: ReactNode;
     /** A native navigation or Review action that can defer Save until confirmation. */
     primaryAction?: Readonly<{
         label: string;
         /** Uses the same form ID as the native inputs to enable implicit submission. */
         formId?: string;
+        /** Uses the standard Form control for the associated form. */
+        mode?: 'next' | 'review';
+        beforePrimary?: ReactNode;
         /** Return false when declining the action so an admitted Review stays current. */
         onAction(save: () => Promise<void>): boolean | void;
     }>;
@@ -647,6 +731,8 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
                         ? null
                         : props.renderFields(state.fields),
                 labels: props.labels,
+                className: props.className,
+                closeIcon: props.closeIcon,
                 primaryAction: props.primaryAction,
             })
         )
@@ -659,6 +745,8 @@ function BorrowedCreatePresentation<View>({
     state,
     content,
     labels: suppliedLabels,
+    className,
+    closeIcon,
     primaryAction,
 }: {
     owner: BorrowedFormLinkedChildCreateOwner<View>;
@@ -666,6 +754,8 @@ function BorrowedCreatePresentation<View>({
     state: BorrowedFormLinkedChildCreateSnapshot<View>;
     content: ReactNode;
     labels?: BorrowedCreateLabels;
+    className?: string;
+    closeIcon?: ReactNode;
     primaryAction?: BorrowedFormLinkedChildCreateDialogProps<View>['primaryAction'];
 }): ReactElement {
     const labels = { ...defaultLabels, ...suppliedLabels };
@@ -848,10 +938,13 @@ function BorrowedCreatePresentation<View>({
 
     const localPhase =
         actionStatus?.session === session ? actionStatus.phase : null;
+    const saving = state.phase === 'saving' || localPhase === 'saving';
     return h(LinkedChildDialogChrome, {
         labels: primaryAction
             ? { ...labels, save: primaryAction.label }
             : labels,
+        className,
+        closeIcon,
         dialogRef,
         closeButton,
         keepEditing,
@@ -861,12 +954,12 @@ function BorrowedCreatePresentation<View>({
               'The record was saved but could not be linked to this Form.')
             : state.error,
         confirm,
-        closeDisabled:
-            state.phase === 'saving' ||
-            localPhase === 'saving' ||
-            (localPhase === 'saved' && !unlinked),
+        closeDisabled: saving || (localPhase === 'saved' && !unlinked),
         saveDisabled: state.phase !== 'ready' || localPhase != null,
         primaryFormId: primaryAction?.formId,
+        primaryMode: primaryAction?.mode,
+        primarySaving: saving,
+        beforePrimary: primaryAction?.beforePrimary,
         dismiss,
         keep,
         discard: () => {

@@ -3679,6 +3679,11 @@ export {
     type AttachmentSliderThumbnail,
 } from './AttachmentSliderThumbnailRail.js';
 export {
+    useAttachmentGalleryNavigation,
+    type AttachmentGalleryNavigation,
+    type AttachmentGalleryRowIdentity,
+} from './useAttachmentGalleryNavigation.js';
+export {
     useAttachmentDownload,
     type AttachmentDownload,
     type AttachmentDownloadOptions,

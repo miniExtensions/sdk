@@ -544,6 +544,103 @@ const iphone =
 const desktop =
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+// Frozen from app a0ac3f26 and its Heroicons 2.1.1 /24/solid XMark.
+const nativeClearPath =
+    'M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z';
+
+async function checkMobileClearGlyph({ page, reset, clear, flush }) {
+    const viewport = page.viewportSize();
+    assert(viewport);
+    const button = clear('sdk');
+    const icon = button.locator('svg');
+    const profiles = [];
+    try {
+        await page.setViewportSize({ width: 375, height: viewport.height });
+        await page.evaluate(
+            (ua) => window.__clearableFixture.device({ ua, hint: true }),
+            iphone
+        );
+        for (const inline of [false, true]) {
+            await reset({ inline, mobileOverride: null });
+            const layout = await button.evaluate((element) => {
+                const circle = element
+                    .querySelector('span')
+                    .getBoundingClientRect();
+                const glyph = element
+                    .querySelector('svg')
+                    .getBoundingClientRect();
+                return {
+                    width: innerWidth,
+                    dpr: devicePixelRatio,
+                    circle: [circle.width, circle.height],
+                    glyph: [glyph.width, glyph.height],
+                    inset:
+                        element.parentElement.getBoundingClientRect().right -
+                        circle.right,
+                };
+            });
+            assert.deepEqual(layout, {
+                width: 375,
+                dpr: 1,
+                circle: [20, 20],
+                glyph: [12, 12],
+                inset: 12,
+            });
+            const actual = await icon.screenshot();
+            const original = await icon.evaluateHandle((element, d) => {
+                const doc = element.ownerDocument;
+                const svg = doc.createElementNS(element.namespaceURI, 'svg');
+                svg.setAttribute('class', element.getAttribute('class'));
+                svg.setAttribute('width', '12');
+                svg.setAttribute('height', '12');
+                svg.setAttribute('viewBox', '0 0 24 24');
+                svg.setAttribute('fill', 'currentColor');
+                const shape = doc.createElementNS(element.namespaceURI, 'path');
+                shape.setAttribute('d', d);
+                shape.setAttribute('fill-rule', 'evenodd');
+                shape.setAttribute('clip-rule', 'evenodd');
+                svg.append(shape);
+                element.replaceWith(svg);
+                return { element, svg };
+            }, nativeClearPath);
+            try {
+                const expected = await icon.screenshot();
+                assert(
+                    actual.equals(expected),
+                    `Native mobile Clear pixels differ (deferred=${inline})`
+                );
+            } finally {
+                await original.evaluate(({ element, svg }) =>
+                    svg.replaceWith(element)
+                );
+                await original.dispose();
+            }
+            await button.click();
+            const value = await flush();
+            assert.deepEqual(value.models.sdk.events, [
+                { type: 'clear', writer: 'A', value: '' },
+            ]);
+            assert.equal(value.models.sdk.displayed, '');
+            assert.equal(value.models.sdk.clearVisible, false);
+            assert.equal(value.requests, 0);
+            assert.equal(value.submits, 0);
+            profiles.push({ ...layout, deferred: inline, pixelsMatch: true });
+        }
+        await reset({ value: '', mobileOverride: null });
+        assert.equal(await button.count(), 0);
+        await page.setViewportSize({ width: 1280, height: viewport.height });
+        await page.evaluate(
+            (ua) => window.__clearableFixture.device({ ua }),
+            desktop
+        );
+        await reset({ mobileOverride: null });
+        assert.equal(await button.count(), 0);
+        return { profiles, emptyMobileVisible: false, desktopVisible: false };
+    } finally {
+        await page.setViewportSize(viewport);
+    }
+}
+
 /** Existing normal harness owns the page, browser, CSP, route map and cleanup. */
 export async function checkCompleteClearableInputBrowser({ page, evidence }) {
     await page.waitForFunction(
@@ -973,10 +1070,17 @@ export async function checkCompleteClearableInputBrowser({ page, evidence }) {
     );
     await equal('attributes refs autocomplete and scoped standalone CSS');
     assert.equal(groups.length, 15);
+    const mobileClearGlyph = await checkMobileClearGlyph({
+        page,
+        reset,
+        clear,
+        flush,
+    });
     Object.assign(evidence, {
         groups,
         device: observations,
         geometry,
+        mobileClearGlyph,
         oracle: {
             immediate: 'b91b4eb045502f4a1e574658ba4dc53aca8bbfeb',
             deferred: '3fd226d290eb8eba86a49d716280406c642dd97a',

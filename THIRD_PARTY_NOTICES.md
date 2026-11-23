@@ -357,6 +357,8 @@ The Form section disclosure retains the native solid ChevronUp and ChevronDown i
 
 The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.
 
+The Form text Clear button retains the native solid XMark icon from Heroicons 2.1.1.
+
 ```text
 MIT License
 

@@ -267,6 +267,36 @@ it('server-renders both complete inputs from explicit mobile data without browse
 });
 
 for (const enableInlineEdit of [false, true]) {
+    it(`renders the native filled mobile Clear glyph (deferred=${enableInlineEdit})`, async (t) => {
+        const mounted = await fixture(t);
+        await mounted.render(view('sdk', props({ enableInlineEdit })));
+        const button = mounted.button();
+        assert.equal(button.type, 'button');
+        assert.equal(button.getAttribute('aria-label'), 'Clear answer');
+        const indicator = button.querySelector('span');
+        assert.ok(indicator);
+        assert(indicator.classList.contains('h-5'));
+        assert(indicator.classList.contains('w-5'));
+        const icon = indicator.querySelector('svg');
+        assert.ok(icon);
+        assert.equal(icon.getAttribute('width'), '12');
+        assert.equal(icon.getAttribute('height'), '12');
+        assert.equal(icon.getAttribute('viewBox'), '0 0 24 24');
+        assert.equal(icon.getAttribute('aria-hidden'), 'true');
+        assert.equal(icon.getAttribute('fill'), 'currentColor');
+        assert.equal(icon.hasAttribute('stroke'), false);
+        const path = icon.querySelector('path');
+        assert.ok(path);
+        assert.equal(path.getAttribute('fill-rule'), 'evenodd');
+        assert.equal(path.getAttribute('clip-rule'), 'evenodd');
+        assert.equal(
+            path.getAttribute('d'),
+            'M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z'
+        );
+    });
+}
+
+for (const enableInlineEdit of [false, true]) {
     for (const autoComplete of [
         undefined,
         'off',

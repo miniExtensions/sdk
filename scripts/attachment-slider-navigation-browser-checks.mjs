@@ -18,12 +18,14 @@ ${
     format === 'esm'
         ? `import {createElement as h, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {AttachmentField} from '@miniextensions/sdk/react/attachment';
 import {AttachmentGallery, AttachmentSlider} from '@miniextensions/sdk/react/attachment-slider';
-import {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, ThemeBoundary, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useRef, useState}=require('react');
 const {createRoot}=require('react-dom/client');
+const {AttachmentField}=require('@miniextensions/sdk/react/attachment');
 const {AttachmentGallery, AttachmentSlider}=require('@miniextensions/sdk/react/attachment-slider');
-const {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, ThemeBoundary, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
 }
 ${
     nativeConfirm
@@ -283,7 +285,77 @@ function GalleryHost(){
     ));
 }
 
-createRoot(document.querySelector('main')).render(h('div',null,h(Host),h(GalleryHost),h(FullscreenHost)));
+
+const fieldStats={files:[],urls:[],helps:0,submits:0,cancels:0,confirmEscapes:0,confirmed:0,uploadEscapes:0};
+const fieldUrlOwner={token:'owned-attachment-url',isCurrent:()=>true};
+window.addEventListener('keydown',(event)=>{
+    if (event.key==='Escape' && !event.defaultPrevented &&
+        document.querySelector('.mx-sdk-attachment-upload-dialog[aria-modal]')) fieldStats.uploadEscapes++;
+});
+function AttachmentFieldHost(){
+    const [config,setConfig]=useState(null);
+    const [percentage,setPercentage]=useState(null);
+    const [intercomOpen,setIntercomOpen]=useState(false);
+    const [confirm,setConfirm]=useState(false);
+    const confirmCancel=useRef(null);
+    window.attachmentFieldProbe={
+        configure:setConfig,update:setPercentage,intercom:setIntercomOpen,
+        stats:()=>({...fieldStats,files:[...fieldStats.files],urls:[...fieldStats.urls]}),
+    };
+    if (!config) return null;
+    const {scene,legacy}=config;
+    const input=scene==='device' ? {kind:'device',props:{
+        id:'local-attachment-field-device',
+        form:'attachment-field-proof',
+        accept:'text/plain',
+        describedBy:'attachment-device-proof-description',
+        labels:{chooseFiles:'Choisir un fichier pour la preuve',dragAndDrop:'Déposer le fichier ici'},
+        onFiles(files){fieldStats.files.push(files.map(({name,type,size})=>({name,type,size})));},
+    }} : scene==='url' ? {kind:'url',props:{
+        id:'local-attachment-field-url',owner:fieldUrlOwner,
+        labels:{url:'Adresse de la pièce jointe',add:'Ajouter l’adresse',invalidUrl:'Adresse refusée',appendRefused:'Réessayer l’adresse'},
+        appendCurrent(attachment){fieldStats.urls.push(attachment);return true;},
+    }} : undefined;
+    const error=scene==='error' ? {
+        message:'Permission locale requise. https://fixture.invalid/permission',
+        help:{label:'Aide sur la permission',onClick(){fieldStats.helps++;}},
+    } : undefined;
+    const upload=percentage==null ? undefined : {
+        percentage,
+        labels:{uploading:'Transfert synthétique en cours',cancel:'Annuler le transfert'},
+        covered:confirm,intercomOpen,
+        onCancel(){
+            fieldStats.cancels++;
+            if (legacy) setConfirm(true);
+            else setPercentage(null);
+        },
+    };
+    return h(ThemeBoundary,{theme:'purple'},h('form',{
+        id:'attachment-field-proof','data-field-scene':scene,'data-field-legacy':legacy===true,
+        onSubmit(event){event.preventDefault();fieldStats.submits++;},
+    },
+        scene==='device'&&h('p',{id:'attachment-device-proof-description'},'Document texte seulement'),
+        h(AttachmentField,{
+            input,error,upload,
+            emptyLabel:scene==='readonly'||scene==='readonly-rows'?'Aucune pièce jointe':undefined,
+            gallery:{
+                rows:scene==='readonly-rows'?[galleryPhoto]:[],layout:'thumbnail',columns:3,
+                fit:'cover',showNames:true,showOpen:false,labels:galleryLabels,tileTestId:'field-proof-tile',
+                readDownload(){calls.fetch++;throw Error('Unexpected attachment field download');},
+            },
+        }),
+        scene==='upload'&&h('button',{type:'button',onClick:()=>setPercentage(37)},'Démarrer le transfert synthétique'),
+        confirm&&NativeDialog&&h(NativeDialog,{
+            open:true,initialFocus:confirmCancel,className:'attachment-native-confirm-proof',
+            onClose(){fieldStats.confirmEscapes++;setConfirm(false);},
+        },h(NativeDialog.Panel,{className:'attachment-native-confirm-panel'},
+            h(NativeDialog.Title,null,'Confirmer l’annulation du transfert'),
+            h('button',{type:'button',onClick(){fieldStats.confirmed++;setConfirm(false);}},'Confirmer l’annulation'),
+            h('button',{type:'button',ref:confirmCancel,onClick:()=>setConfirm(false)},'Poursuivre le transfert'),
+        )),
+    ));
+}
+createRoot(document.querySelector('main')).render(h('div',null,h(Host),h(GalleryHost),h(AttachmentFieldHost),h(FullscreenHost)));
 `;
 
 const svg =
@@ -316,6 +388,22 @@ export async function checkAttachmentSliderNavigationBrowser({
     const styles = readFileSync(
         require.resolve('@miniextensions/sdk/react/attachment-preview.css')
     );
+    const fieldStyleNames = [
+        'attachment-device-input.css',
+        'attachment-url-input.css',
+        'attachment-upload-progress.css',
+        'theme.css',
+    ];
+    const fieldStyles = fieldStyleNames.map((name) => [
+        '/' + name,
+        [
+            'text/css',
+            readFileSync(require.resolve('@miniextensions/sdk/react/' + name)),
+        ],
+    ]);
+    const fieldStyleLinks = fieldStyleNames
+        .map((name) => '<link rel="stylesheet" href="/' + name + '">')
+        .join('');
     for (const format of ['esm', 'cjs']) {
         const entry = `attachment-slider-navigation-proof.${format === 'esm' ? 'mjs' : 'cjs'}`;
         writeFileSync(join(consumer, entry), hostSource(format, nativeConfirm));
@@ -371,12 +459,22 @@ export async function checkAttachmentSliderNavigationBrowser({
             ),
             'The Attachment Gallery must reuse the installed Document Thumbnail'
         );
+        for (const leaf of ['attachment', 'AttachmentUploadDialog']) {
+            assert(
+                Object.keys(bundle.metafile.inputs).some((name) =>
+                    name.endsWith('/react/' + leaf + '.js')
+                ),
+                'The installed Attachment Field must bundle ' + leaf
+            );
+        }
         const assets = new Map([
             [
                 '/',
                 [
                     'text/html',
-                    '<!doctype html><html lang="fr"><meta charset="utf-8"><link rel="stylesheet" href="/attachment-preview.css"><link rel="stylesheet" href="/host.css"><main></main><script type="module" src="/host.js"></script></html>',
+                    '<!doctype html><html lang="fr"><meta charset="utf-8"><link rel="stylesheet" href="/attachment-preview.css">' +
+                        fieldStyleLinks +
+                        '<link rel="stylesheet" href="/host.css"><main></main><script type="module" src="/host.js"></script></html>',
                 ],
             ],
             ['/host.js', ['text/javascript', bundle.outputFiles[0].text]],
@@ -384,10 +482,11 @@ export async function checkAttachmentSliderNavigationBrowser({
                 '/host.css',
                 [
                     'text/css',
-                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}.attachment-fullscreen-host{box-sizing:border-box;min-height:180vh;padding-top:180px}.attachment-fullscreen-scroll-probe{height:1200px}.attachment-native-confirm-proof{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:#0008}.attachment-native-confirm-panel{background:white;padding:24px}#attachment-gallery-proof{width:min(620px,100vw - 32px)}.attachment-gallery-grid-frame{height:48px}',
+                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}.attachment-fullscreen-host{box-sizing:border-box;min-height:180vh;padding-top:180px}.attachment-fullscreen-scroll-probe{height:1200px}.attachment-native-confirm-proof{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:#0008}.attachment-native-confirm-panel{background:white;padding:24px}#attachment-gallery-proof{width:min(620px,100vw - 32px)}.attachment-gallery-grid-frame{height:48px}#attachment-field-proof{width:min(620px,100vw - 32px)}#attachment-field-proof[data-field-scene="upload"]{padding-top:160px}',
                 ],
             ],
             ['/attachment-preview.css', ['text/css', styles]],
+            ...fieldStyles,
             ['/favicon.ico', ['image/svg+xml', svg]],
             ['/front.svg', ['image/svg+xml', svg]],
             ['/rear.svg', ['image/svg+xml', svg]],
@@ -760,6 +859,10 @@ export async function checkAttachmentSliderNavigationBrowser({
                 page,
                 galleryRequests
             );
+            const attachmentField = await checkAttachmentField(
+                page,
+                nativeConfirm
+            );
             assert.equal(saves.length, 2);
             const { selection: _bodySelection, ...bodyOwnerCalls } =
                 await probe();
@@ -775,6 +878,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 sliderActions,
                 fullscreenSlider,
                 attachmentGallery,
+                attachmentField,
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
@@ -807,6 +911,403 @@ export async function checkAttachmentSliderNavigationBrowser({
         [],
         'A retired owner’s held gesture selected in its successor'
     );
+}
+
+async function checkAttachmentField(page, nativeConfirm) {
+    const form = page.locator('#attachment-field-proof');
+    const field = form.locator('.mx-sdk-attachment-field');
+    const probe = () =>
+        page.evaluate(() => window.attachmentFieldProbe.stats());
+    async function configure(scene, legacy = false) {
+        await page.evaluate(
+            (config) => window.attachmentFieldProbe.configure(config),
+            { scene, legacy }
+        );
+        await form
+            .and(
+                page.locator(
+                    '[data-field-scene="' +
+                        scene +
+                        '"][data-field-legacy="' +
+                        legacy +
+                        '"]'
+                )
+            )
+            .waitFor();
+    }
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await configure('device');
+    const picker = field.locator('input[type="file"]');
+    assert.equal(
+        await picker.getAttribute('id'),
+        'local-attachment-field-device'
+    );
+    assert.equal(await picker.getAttribute('form'), 'attachment-field-proof');
+    assert.equal(await picker.getAttribute('accept'), 'text/plain');
+    assert.equal(
+        await picker.getAttribute('aria-label'),
+        'Choisir un fichier pour la preuve'
+    );
+    assert.equal(
+        await picker.getAttribute('aria-describedby'),
+        'attachment-device-proof-description'
+    );
+    assert.equal(await picker.getAttribute('multiple'), '');
+    assert.equal(
+        await field
+            .locator('.mx-sdk-attachment-device')
+            .evaluate((node) => getComputedStyle(node).borderTopStyle),
+        'dashed'
+    );
+    await picker.setInputFiles({
+        name: 'owned-upload.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('file'),
+    });
+    const files = [[{ name: 'owned-upload.txt', type: 'text/plain', size: 4 }]];
+    assert.deepEqual((await probe()).files, files);
+
+    await configure('url');
+    assert.equal(await picker.count(), 0);
+    const url = field.getByRole('textbox', {
+        name: 'Adresse de la pièce jointe',
+    });
+    const add = field.getByRole('button', { name: 'Ajouter l’adresse' });
+    assert.equal(await url.getAttribute('inputmode'), 'url');
+    assert.equal(await add.getAttribute('type'), 'button');
+    await url.fill('ftp://fixture.invalid/refused.txt');
+    await url.press('Enter');
+    await field.getByText('Adresse refusée', { exact: true }).waitFor();
+    assert.deepEqual((await probe()).urls, []);
+    await url.fill('  https://fixture.invalid/owned%20document.txt  ');
+    await url.press('Enter');
+    assert.equal(await url.inputValue(), '');
+    assert.equal(
+        await field.getByText('Adresse refusée', { exact: true }).count(),
+        0
+    );
+    const urls = [
+        {
+            id: null,
+            url: 'https://fixture.invalid/owned%20document.txt',
+            filename: 'owned document.txt',
+        },
+    ];
+    assert.deepEqual((await probe()).urls, urls);
+
+    await configure('readonly');
+    const empty = field.getByTestId('no-value-test-id');
+    assert.equal(await empty.textContent(), 'Aucune pièce jointe');
+    assert.equal(await field.locator('input,button').count(), 0);
+    await configure('readonly-rows');
+    assert.equal(await empty.count(), 0);
+    assert.equal(await field.getByTestId('field-proof-tile').count(), 1);
+    assert.equal(await field.locator('input,button').count(), 0);
+
+    await configure('error');
+    const error = field.getByRole('alert');
+    const message = error.locator('[aria-label="error-message"]');
+    assert.match(await message.textContent(), /^Permission locale requise\./);
+    const helpLink = message.getByRole('link', { name: 'Learn more' });
+    assert.equal(
+        await helpLink.getAttribute('href'),
+        'https://fixture.invalid/permission'
+    );
+    assert.equal(await helpLink.getAttribute('target'), '_blank');
+    const help = error.getByRole('button', { name: 'Aide sur la permission' });
+    assert.equal(await help.getAttribute('type'), 'button');
+    await help.click();
+    assert.equal((await probe()).helps, 1);
+
+    const upload = await checkFieldUploadDialog(
+        page,
+        form,
+        configure,
+        probe,
+        nativeConfirm
+    );
+    const final = await probe();
+    assert.deepEqual(final.files, files);
+    assert.deepEqual(final.urls, urls);
+    assert.equal(final.submits, 0);
+    assert.equal(final.uploadEscapes, 0);
+    await page.evaluate(() => window.attachmentFieldProbe.configure(null));
+    await form.waitFor({ state: 'detached' });
+    return {
+        device: {
+            acceptedFiles: files[0],
+            associatedForm: true,
+            described: true,
+        },
+        url: { refusedNonHttp: true, drafts: urls },
+        readonlyEmpty: true,
+        readonlyAcceptedRows: true,
+        errorAlert: true,
+        errorHelpCalls: final.helps,
+        formSubmits: 0,
+        upload,
+    };
+}
+
+const uploadDialogClass = '.mx-sdk-attachment-upload-dialog';
+
+async function checkFieldUploadDialog(
+    page,
+    form,
+    configure,
+    probe,
+    nativeConfirm
+) {
+    const viewer = page.locator(uploadDialogClass);
+    const panel = viewer.getByTestId('dialog-test-id');
+    const backdrop = viewer.getByTestId('dialog-overlay-test-id');
+    const opener = form.getByRole('button', {
+        name: 'Démarrer le transfert synthétique',
+    });
+    const cancel = viewer.getByRole('button', { name: 'Annuler le transfert' });
+    const progress = viewer.getByRole('progressbar', {
+        name: 'Transfert synthétique en cours',
+    });
+    const scroll = () =>
+        page.evaluate(() => ({
+            top: window.scrollY,
+            overflow: document.documentElement.style.overflow,
+        }));
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await configure('upload');
+    const initial = await page.evaluate(() => {
+        const root = document.documentElement;
+        const oldOverflow = root.style.overflow;
+        root.style.overflow = 'auto';
+        window.scrollTo(0, 80);
+        return { oldOverflow, top: window.scrollY };
+    });
+    assert.equal(initial.top, 80);
+    const locked = { top: initial.top, overflow: 'hidden' };
+    const released = { top: initial.top, overflow: 'auto' };
+
+    async function open() {
+        await opener.click();
+        await waitForSliderFocus(page, cancel);
+        assert.equal(await viewer.getAttribute('role'), 'dialog');
+        assert.equal(
+            await viewer.getAttribute('aria-label'),
+            'Transfert synthétique en cours'
+        );
+        assert.equal(await viewer.getAttribute('aria-modal'), 'true');
+        assert.equal(await viewer.getByTestId('close-dialog').count(), 0);
+        assert.equal(await viewer.getByRole('button').count(), 1);
+        assert.equal(await cancel.getAttribute('type'), 'button');
+        assert.equal(await progress.getAttribute('value'), '37');
+        assert.equal(await progress.getAttribute('max'), '100');
+        assert.deepEqual(await scroll(), locked);
+    }
+    async function close() {
+        await viewer.waitFor({ state: 'detached' });
+        await waitForSliderFocus(page, opener);
+        assert.deepEqual(await scroll(), released);
+    }
+    async function layout(width, intercom = false) {
+        await page.setViewportSize({ width, height: 720 });
+        await page.evaluate(
+            (openIntercom) =>
+                window.attachmentFieldProbe.intercom(openIntercom),
+            intercom
+        );
+        const right = intercom && width >= 1024 ? 440 : 16;
+        const usable = width - 16 - right;
+        const panelWidth = Math.min(512, usable);
+        const x = 16 + (usable - panelWidth) / 2;
+        await page.waitForFunction(
+            ({ expectedX, expectedWidth }) => {
+                const node = document.querySelector(
+                    '.mx-sdk-attachment-upload-dialog__panel'
+                );
+                const rect = node?.getBoundingClientRect();
+                return (
+                    rect?.x === expectedX &&
+                    rect.width === expectedWidth &&
+                    node
+                        .getAnimations()
+                        .every(
+                            (animation) =>
+                                !animation.pending &&
+                                animation.playState !== 'running'
+                        )
+                );
+            },
+            { expectedX: x, expectedWidth: panelWidth }
+        );
+        const rootBox = await viewer.boundingBox();
+        const panelBox = await panel.boundingBox();
+        const progressBox = await progress.boundingBox();
+        assert.deepEqual(rootBox, { x: 0, y: 0, width, height: 720 });
+        assert.ok(panelBox && progressBox);
+        const y = width >= 640 ? (720 + 16 - 24 - panelBox.height) / 2 : 16;
+        assert.deepEqual(
+            [panelBox.x, panelBox.y, panelBox.width],
+            [x, y, panelWidth]
+        );
+        assert.equal(progressBox.height, 8);
+        assert.equal(progressBox.width, panelWidth - 32);
+        assert.equal(
+            await backdrop.evaluate(
+                (node) => getComputedStyle(node).backgroundColor
+            ),
+            'rgba(107, 114, 128, 0.4)'
+        );
+        assert.equal(
+            await viewer
+                .locator(uploadDialogClass + '__viewport')
+                .getAttribute('data-mx-theme'),
+            'purple'
+        );
+        assert.equal(
+            await progress.evaluate(
+                (node) => getComputedStyle(node).accentColor
+            ),
+            'rgb(147, 51, 234)'
+        );
+        return {
+            panel: panelBox,
+            progress: [progressBox.width, progressBox.height],
+        };
+    }
+
+    try {
+        await open();
+        const desktop = await layout(1280);
+        const mobile = await layout(375);
+        const mobileIntercom = await layout(375, true);
+        assert.deepEqual(mobileIntercom, mobile);
+        const desktopIntercom = await layout(1280, true);
+        await layout(1280);
+
+        await page.keyboard.press('Tab');
+        await waitForSliderFocus(page, cancel);
+        await page.keyboard.press('Shift+Tab');
+        await waitForSliderFocus(page, cancel);
+        await page.keyboard.press('Escape');
+        await backdrop.click({ position: { x: 4, y: 80 } });
+        assert.equal(await viewer.isVisible(), true);
+        assert.equal((await probe()).cancels, 0);
+        assert.equal((await probe()).uploadEscapes, 0);
+        await page.mouse.move(4, 600);
+        await page.mouse.wheel(0, 220);
+        await page.evaluate(
+            () =>
+                new Promise((resolve) =>
+                    requestAnimationFrame(() => requestAnimationFrame(resolve))
+                )
+        );
+        assert.deepEqual(await scroll(), locked);
+        await page.evaluate(() => window.attachmentFieldProbe.update(63));
+        await viewer.locator('progress[value="63"]').waitFor();
+        await cancel.click();
+        await close();
+        assert.equal((await probe()).cancels, 1);
+        assert.equal((await probe()).submits, 0);
+        await page.mouse.move(200, 620);
+        await page.mouse.wheel(0, 180);
+        await page.waitForFunction((y) => window.scrollY > y, initial.top);
+        await page.evaluate((y) => window.scrollTo(0, y), initial.top);
+
+        const legacy = nativeConfirm
+            ? await checkUploadLegacyConfirm({
+                  page,
+                  viewer,
+                  cancel,
+                  configure,
+                  open,
+                  close,
+                  probe,
+                  scroll,
+                  locked,
+              })
+            : null;
+        return {
+            desktop,
+            mobile,
+            desktopIntercom,
+            theme: 'purple',
+            progressValues: [37, 63],
+            escapeCancelCalls: 0,
+            backdropCancelCalls: 0,
+            explicitCancelCalls: 1,
+            tabContained: true,
+            openerRestored: true,
+            documentScrollRestored: true,
+            legacy,
+        };
+    } finally {
+        await page.evaluate((value) => {
+            document.documentElement.style.overflow = value;
+        }, initial.oldOverflow);
+    }
+}
+
+async function checkUploadLegacyConfirm({
+    page,
+    viewer,
+    cancel,
+    configure,
+    open,
+    close,
+    probe,
+    scroll,
+    locked,
+}) {
+    const confirm = page.getByRole('dialog', {
+        name: 'Confirmer l’annulation du transfert',
+    });
+    const keep = confirm.getByRole('button', {
+        name: 'Poursuivre le transfert',
+    });
+    const accept = confirm.getByRole('button', {
+        name: 'Confirmer l’annulation',
+        exact: true,
+    });
+
+    await configure('upload', true);
+    await open();
+    await cancel.click();
+    await waitForSliderFocus(page, keep);
+    assert.deepEqual(await scroll(), locked);
+    await page.keyboard.press('Tab');
+    await waitForSliderFocus(page, accept);
+    await page.keyboard.press('Shift+Tab');
+    await waitForSliderFocus(page, keep);
+    await page.keyboard.press('Escape');
+    await confirm.waitFor({ state: 'detached' });
+    await waitForSliderFocus(page, cancel);
+    assert.equal(await viewer.isVisible(), true);
+    assert.deepEqual(await scroll(), locked);
+    await page.keyboard.press('Escape');
+    assert.equal(await viewer.isVisible(), true);
+    assert.equal((await probe()).cancels, 2);
+    assert.equal((await probe()).confirmEscapes, 1);
+    assert.equal((await probe()).confirmed, 0);
+
+    await cancel.click();
+    await waitForSliderFocus(page, keep);
+    await accept.click();
+    await confirm.waitFor({ state: 'detached' });
+    await waitForSliderFocus(page, cancel);
+    assert.deepEqual(await scroll(), locked);
+    assert.equal((await probe()).cancels, 3);
+    assert.equal((await probe()).confirmed, 1);
+    await page.evaluate(() => window.attachmentFieldProbe.update(null));
+    await close();
+    return {
+        headlessUi: '1.7.2',
+        trapped: true,
+        escapeRestoredCancel: true,
+        uploadIgnoredSubsequentEscape: true,
+        committedConfirmCalls: 1,
+        hostCompletionRestoredOpener: true,
+    };
 }
 
 const galleryClass = '.mx-sdk-attachment-gallery';

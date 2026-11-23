@@ -49,7 +49,7 @@ const scrollLocks = new WeakMap<Document, { users: number; restore(): void }>();
 const useCommitEffect =
     typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-function useSliderReturnFocus() {
+export function useAttachmentDialogReturnFocus() {
     const opener = useRef<HTMLElement | null>();
     const scope = useRef<{ owner: Document; epoch: number }>();
     useCommitEffect(() => {
@@ -127,7 +127,7 @@ function startDocumentScrollLock(owner: Document, view: Window) {
     };
 }
 
-function lockDocumentScroll(owner: Document, view: Window) {
+export function lockDocumentScroll(owner: Document, view: Window) {
     const lock = scrollLocks.get(owner) ?? {
         users: 0,
         restore: startDocumentScrollLock(owner, view),
@@ -170,7 +170,7 @@ function FullscreenAttachmentSlider({
     const activated = useRef(false);
     const resumed = useRef(false);
     const theme = getThemePortalProps(useThemeSnapshot());
-    useSliderReturnFocus();
+    useAttachmentDialogReturnFocus();
 
     useEffect(() => {
         if (suppliedPortal) return;

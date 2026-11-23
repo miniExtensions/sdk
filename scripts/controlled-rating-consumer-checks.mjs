@@ -112,6 +112,10 @@ export async function checkControlledRatingReactMatrix({
             assert.match(css.toString(), /\.mx-sdk-rating-icon/);
             assert.match(
                 css.toString(),
+                /\.mx-sdk-rating-warning\s*\{[^}]*line-height:\s*1\.25rem\s*;/
+            );
+            assert.match(
+                css.toString(),
                 /\.mx-sdk-rating-empty\s*\{[^}]*line-height:\s*1\.25rem\s*;/
             );
             assert.match(css.toString(), /@media print/);

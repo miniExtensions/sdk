@@ -23,6 +23,7 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
             name: 'wrapped-permission',
             error: 'Airtable API Error: ' + permissionError,
             hasHelp: true,
+            unknown: true,
         },
         { name: 'provider', error: 'Synthetic provider unavailable' },
         { name: 'invalid-json', error: 'Response is not valid JSON' },
@@ -34,7 +35,7 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
         { width: 1280, height: 720 },
     ]) {
         await page.setViewportSize(viewport);
-        for (const { name, error, hasHelp } of cases) {
+        for (const { name, error, hasHelp, unknown } of cases) {
             await page.goto(origin + '/?borrowed');
             await page
                 .getByRole('button', { name: 'Open native child' })
@@ -42,8 +43,12 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
             const dialog = page.getByRole('dialog', {
                 name: 'Create linked record',
             });
-            const input = dialog.getByRole('textbox', {
-                name: 'Native child title',
+            const input = dialog.locator(
+                'input[aria-label="Native child title"]'
+            );
+            const close = dialog.getByRole('button', {
+                name: 'Close',
+                exact: true,
             });
             const save = dialog.getByRole('button', {
                 name: 'Save',
@@ -56,9 +61,13 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
             const read = () => page.evaluate(() => window.readBorrowedCreate());
             const draft = 'Keep child draft after opening Help';
             await input.fill(draft);
-            await page.evaluate((message) => {
-                window.nextBorrowedSaveError = message;
-            }, error);
+            await page.evaluate(
+                ({ message, unknown }) => {
+                    window.nextBorrowedSaveError = message;
+                    window.nextBorrowedSaveUnknown = unknown;
+                },
+                { message: error, unknown }
+            );
             await save.press('Enter');
             const alert = dialog.getByRole('alert');
             await alert.waitFor();
@@ -66,8 +75,12 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
             const rejected = await read();
             assert.deepEqual(rejected.saves, [draft]);
             assert.deepEqual(rejected.links, ['rec_initial']);
-            assert.deepEqual(rejected.outcome, { type: 'rejected' });
-            await input.focus();
+            assert.equal(
+                rejected.outcome.type,
+                unknown ? 'unknown' : 'rejected'
+            );
+            assert.equal(await save.isDisabled(), Boolean(unknown));
+            await (unknown ? close : input).focus();
             await page.keyboard.press('Tab');
             const focus = (locator) =>
                 locator.evaluate((node) => node === document.activeElement);
@@ -125,7 +138,9 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
                 await page.waitForFunction(
                     () => window.readBorrowedCreate().phase === 'unknown'
                 );
-                assert.equal(await helpInDom.count(), 0);
+                await help.waitFor();
+                assert.equal(await helpInDom.count(), 1);
+                assert(await save.isDisabled());
                 assert.equal(await input.inputValue(), draft);
                 const unresolved = await read();
                 assert.equal(unresolved.permissionHelpOpens, 1);
@@ -137,6 +152,7 @@ async function checkBorrowedErrorHelp(page, origin, output, react) {
                 width: viewport.width,
                 name,
                 helpOpens: hasHelp ? 1 : 0,
+                outcome: unknown ? 'unknown' : 'rejected',
                 ...(checkRetainedError && { retainedErrorLifecycle: true }),
             });
         }

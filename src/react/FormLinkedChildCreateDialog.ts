@@ -646,7 +646,7 @@ export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     opening: BorrowedFormLinkedChildCreateOpening;
     /** Render fields without a separate editor dialog, form, or submit footer. */
     renderFields(fields: View): ReactNode;
-    /** Supply an optional host-owned action for the current recoverable error. */
+    /** Supply an optional non-submitting host action for the current error, including an unresolved Save. */
     renderErrorAction?(message: string): ReactNode;
     labels?: BorrowedCreateLabels;
     /** Opt in to named layout hooks on the dialog's presentation. */
@@ -962,8 +962,9 @@ function BorrowedCreatePresentation<View>({
               'The record was saved but could not be linked to this Form.')
             : state.error,
         errorAction:
-            state.phase === 'ready' &&
-            localPhase == null &&
+            !unlinked &&
+            !saving &&
+            localPhase !== 'saved' &&
             !confirm &&
             state.error != null
                 ? renderErrorAction?.(state.error)

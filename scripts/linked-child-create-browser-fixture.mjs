@@ -238,11 +238,15 @@ const nativeOwner = {
         const error = window.nextBorrowedSaveError;
         window.nextBorrowedSaveError = undefined;
         if (error != null) {
-            const outcome = { type: 'rejected' };
+            const unknown = window.nextBorrowedSaveUnknown === true;
+            window.nextBorrowedSaveUnknown = false;
+            const outcome = unknown
+                ? { type: 'unknown', attemptId: id }
+                : { type: 'rejected' };
             if (opening.isCurrent())
                 publishNative({
                     ...nativeSnapshot,
-                    phase: 'ready',
+                    phase: unknown ? 'unknown' : 'ready',
                     error,
                     outcome,
                 });
@@ -339,7 +343,14 @@ function NativeParent() {
                 renderFields: (fields) =>
                     h(
                         'label',
-                        null,
+                        {
+                            ref: (element) => {
+                                element?.toggleAttribute(
+                                    'inert',
+                                    nativeSnapshot.phase !== 'ready'
+                                );
+                            },
+                        },
                         'Native child title',
                         h('input', {
                             'aria-label': 'Native child title',

@@ -6,16 +6,23 @@ import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+const galleryDocumentPath = '/gallery-owned.txt';
+const galleryDocumentText = 'Synthetic gallery document owned bytes';
+const galleryRetryImagePath = '/gallery-retry.svg';
+const galleryOfficePath = '/gallery-office-original';
+const galleryOfficeOrigin = 'https://view.officeapps.live.com';
+const galleryOfficeFrameText = 'Synthetic Office iframe';
+
 const hostSource = (format, nativeConfirm) => `
 ${
     format === 'esm'
         ? `import {createElement as h, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentSlider} from '@miniextensions/sdk/react/attachment-slider';
+import {AttachmentGallery, AttachmentSlider} from '@miniextensions/sdk/react/attachment-slider';
 import {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useRef, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentSlider}=require('@miniextensions/sdk/react/attachment-slider');
+const {AttachmentGallery, AttachmentSlider}=require('@miniextensions/sdk/react/attachment-slider');
 const {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
 }
 ${
@@ -43,7 +50,18 @@ const downloadOwner={token:0,isCurrent:()=>true,subscribe(listener){
     downloadListeners.add(listener);
     return ()=>downloadListeners.delete(listener);
 }};
-window.fetch=()=>{calls.fetch++;return Promise.reject(Error('Unexpected I/O'));};
+const galleryDocumentPath=${JSON.stringify(galleryDocumentPath)};
+const galleryRetryImagePath=${JSON.stringify(galleryRetryImagePath)};
+const galleryOfficeUri=location.origin+${JSON.stringify(galleryOfficePath)};
+const localGalleryFetch=window.fetch.bind(window);
+window.fetch=(input,init)=>{
+    if (input===galleryOfficeUri && init?.method==='HEAD' && init.credentials==='omit' && init.signal instanceof AbortSignal) {
+        galleryStats.officeHeads++;
+        return localGalleryFetch(input,init);
+    }
+    calls.fetch++;
+    return Promise.reject(Error('Unexpected I/O'));
+};
 function Host(){
     const [rows,setRows]=useState([first,second]);
     const [selectedIndex,setSelectedIndex]=useState(0);
@@ -188,7 +206,84 @@ function FullscreenHost(){
 window.addEventListener('keydown',(event)=>{
     if(event.key==='Escape'&&!event.defaultPrevented) headerCalls.escapes++;
 });
-createRoot(document.querySelector('main')).render(h('div',null,h(Host),h(FullscreenHost)));
+
+const galleryStats={submits:0,removals:[],annotations:[],documentReads:0,officeHeads:0,downloads:0};
+const galleryPhoto={
+    ...first,id:'gallery-photo',filename:'Image galerie',resourceUrl:'/front.svg',
+    imageSources:['/front.svg'],icon:'document',annotationAllowed:true,removeTestId:'gallery-remove-front',
+    canOpenInSlider:true,canDownloadInSlider:true,
+};
+const galleryRows=[
+    galleryPhoto,
+    {...galleryPhoto,id:'gallery-second',filename:'Image arrière',url:'/rear.svg',resourceUrl:'/rear.svg',imageSources:['/rear.svg'],annotationAllowed:false,removeTestId:undefined},
+    {id:'gallery-play',filename:'Vidéo galerie',url:'/rear.svg',resourceUrl:'/rear.svg#video',imageSources:[],icon:'play',type:'video/mp4',canOpenInSlider:false,canDownloadInSlider:false},
+    {id:'gallery-file',filename:'Fichier galerie',url:'/rear.svg',resourceUrl:'/rear.svg#file',imageSources:[],icon:'document',type:'application/octet-stream',canOpenInSlider:false,canDownloadInSlider:false},
+    {...galleryPhoto,id:'gallery-fifth',filename:'Image cinq',resourceUrl:'/front.svg#five',annotationAllowed:false,removeTestId:undefined},
+    {...galleryPhoto,id:'gallery-sixth',filename:'Image six',resourceUrl:'/front.svg#six',annotationAllowed:false,removeTestId:undefined},
+];
+const galleryRetryRow={
+    ...galleryPhoto,id:'gallery-retry',filename:'Image à réessayer',
+    resourceUrl:'/front.svg#retry',imageSources:[galleryRetryImagePath],
+    annotationAllowed:false,removeTestId:undefined,
+};
+const galleryDocumentRow={
+    id:'gallery-doc',filename:'Document de la galerie',url:galleryDocumentPath,
+    resourceUrl:galleryDocumentPath,imageSources:[],icon:'document',type:'text/plain',canOpenInSlider:false,canDownloadInSlider:false,
+    document:{
+        uri:location.origin+galleryDocumentPath,
+        options:{source:{kind:'uri',mimeType:'text/plain',revision:'gallery-doc'}},
+        async readLocal(signal){
+            if (signal.aborted) throw signal.reason;
+            galleryStats.documentReads++;
+            const response=await localGalleryFetch(galleryDocumentPath,{
+                method:'GET',credentials:'omit',redirect:'error',signal,
+            });
+            if (!response.ok) throw Error('Unable to read synthetic gallery document');
+            return response;
+        },
+    },
+};
+const galleryOfficeRow={
+    id:'gallery-office',filename:'Document Office opaque',url:galleryOfficeUri,
+    resourceUrl:galleryOfficeUri,imageSources:[],icon:'document',type:'application/octet-stream',
+    canOpenInSlider:false,canDownloadInSlider:false,
+    document:{uri:galleryOfficeUri,options:{source:{kind:'uri'}},legacyOfficePreview:true},
+};
+const galleryRemovalOwner={};
+const galleryLabels={
+    ...fullscreenLabels,remove:'Retirer la tuile',retry:'Réessayer la tuile',annotate:'Annoter la tuile',
+};
+function GalleryHost(){
+    const [config,setConfig]=useState(null);
+    window.galleryProbe={
+        configure:setConfig,
+        stats:()=>({
+            ...galleryStats,removals:[...galleryStats.removals],annotations:[...galleryStats.annotations],
+        }),
+    };
+    if (!config) return null;
+    const {layout,columns,fit,showNames,scene}=config;
+    const rows=scene==='retry'?[galleryRetryRow]:scene==='document'?[galleryDocumentRow]:
+        scene==='office'?[galleryOfficeRow]:galleryRows;
+    const actions=scene==='actions';
+    return h('form',{
+        id:'attachment-gallery-proof','data-gallery-scene':scene,'data-gallery-fit':fit,
+        'data-gallery-columns':columns,'data-gallery-names':showNames,'data-gallery-layout':layout,
+        onSubmit(event){event.preventDefault();galleryStats.submits++;},
+    },h('div',{className:layout==='grid'?'attachment-gallery-grid-frame':undefined},
+        h(AttachmentGallery,{
+            rows,layout,columns,fit,showNames,prepareImagesForPrint:false,
+            labels:galleryLabels,showOpen:scene!=='document'&&scene!=='office',tileTestId:'gallery-proof-tile',
+            formRemovalOwner:galleryRemovalOwner,
+            canRemoveFromTile:(index)=>actions&&index===0,
+            onRemove:actions?(index)=>galleryStats.removals.push(index):undefined,
+            onAnnotate:actions?(index)=>galleryStats.annotations.push(index):undefined,
+            readDownload(){galleryStats.downloads++;throw Error('Unexpected gallery download');},
+        })
+    ));
+}
+
+createRoot(document.querySelector('main')).render(h('div',null,h(Host),h(GalleryHost),h(FullscreenHost)));
 `;
 
 const svg =
@@ -264,6 +359,18 @@ export async function checkAttachmentSliderNavigationBrowser({
             ),
             'The installed fullscreen Attachment Slider must be bundled'
         );
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/AttachmentGallery.js')
+            ),
+            'The installed Attachment Gallery must be bundled'
+        );
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/document-preview/DocumentThumbnail.js')
+            ),
+            'The Attachment Gallery must reuse the installed Document Thumbnail'
+        );
         const assets = new Map([
             [
                 '/',
@@ -277,30 +384,62 @@ export async function checkAttachmentSliderNavigationBrowser({
                 '/host.css',
                 [
                     'text/css',
-                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}.attachment-fullscreen-host{box-sizing:border-box;min-height:180vh;padding-top:180px}.attachment-fullscreen-scroll-probe{height:1200px}.attachment-native-confirm-proof{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:#0008}.attachment-native-confirm-panel{background:white;padding:24px}',
+                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}.attachment-fullscreen-host{box-sizing:border-box;min-height:180vh;padding-top:180px}.attachment-fullscreen-scroll-probe{height:1200px}.attachment-native-confirm-proof{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:#0008}.attachment-native-confirm-panel{background:white;padding:24px}#attachment-gallery-proof{width:min(620px,100vw - 32px)}.attachment-gallery-grid-frame{height:48px}',
                 ],
             ],
             ['/attachment-preview.css', ['text/css', styles]],
             ['/favicon.ico', ['image/svg+xml', svg]],
             ['/front.svg', ['image/svg+xml', svg]],
             ['/rear.svg', ['image/svg+xml', svg]],
+            [
+                galleryDocumentPath,
+                ['text/plain; charset=utf-8', galleryDocumentText],
+            ],
+            [galleryRetryImagePath, ['image/svg+xml', svg]],
         ]);
         const unexpectedRequests = [];
         const pageErrors = [];
+        const galleryRequests = {
+            document: 0,
+            retry: 0,
+            officeHeads: 0,
+            officeOriginalGets: 0,
+            officeFrames: 0,
+        };
         const server = createServer((request, response) => {
+            if (
+                request.method === 'HEAD' &&
+                request.url === galleryOfficePath
+            ) {
+                galleryRequests.officeHeads++;
+                response
+                    .writeHead(200, {
+                        'content-type': 'application/octet-stream',
+                        'cache-control': 'no-store',
+                    })
+                    .end();
+                return;
+            }
             const asset = request.method === 'GET' && assets.get(request.url);
             if (!asset) {
                 unexpectedRequests.push(request.url);
                 response.writeHead(404).end();
                 return;
             }
+            const documentRead = request.url === galleryDocumentPath;
+            const retryRead = request.url === galleryRetryImagePath;
+            if (documentRead) galleryRequests.document++;
+            const faultyImage = retryRead && ++galleryRequests.retry === 1;
             response
                 .writeHead(200, {
                     'content-type': asset[0],
                     'content-security-policy':
-                        "default-src 'self'; connect-src 'none'; form-action 'none'",
+                        "default-src 'self'; connect-src 'self'; frame-src 'self' https://view.officeapps.live.com; form-action 'none'",
+                    ...(documentRead || retryRead
+                        ? { 'cache-control': 'no-store' }
+                        : {}),
                 })
-                .end(asset[1]);
+                .end(faultyImage ? '<invalid synthetic image>' : asset[1]);
         });
         let context;
         try {
@@ -309,10 +448,47 @@ export async function checkAttachmentSliderNavigationBrowser({
                 server.listen(0, '127.0.0.1', resolve);
             });
             const origin = `http://127.0.0.1:${server.address().port}`;
+            const officeUri = origin + galleryOfficePath;
+            const officeEmbed =
+                galleryOfficeOrigin +
+                '/op/embed.aspx?src=' +
+                encodeURIComponent(officeUri);
             context = await browser.newContext({ serviceWorkers: 'block' });
             await context.route('**/*', (route) => {
-                const url = new URL(route.request().url());
-                if (url.origin === origin && assets.has(url.pathname))
+                const request = route.request();
+                const url = new URL(request.url());
+                if (url.href === officeUri) {
+                    if (request.method() === 'HEAD') return route.continue();
+                    if (request.method() === 'GET')
+                        galleryRequests.officeOriginalGets++;
+                }
+                if (
+                    url.href === officeEmbed &&
+                    request.method() === 'GET' &&
+                    request.isNavigationRequest() &&
+                    request.resourceType() === 'document'
+                ) {
+                    galleryRequests.officeFrames++;
+                    return route.fulfill({
+                        status: 200,
+                        contentType: 'text/html',
+                        body:
+                            '<!doctype html><title>Office fixture</title><p>' +
+                            galleryOfficeFrameText +
+                            '</p>',
+                    });
+                }
+                const isDocumentRead =
+                    request.resourceType() === 'fetch' ||
+                    request.resourceType() === 'xhr';
+                if (
+                    url.origin === origin &&
+                    assets.has(url.pathname) &&
+                    (!isDocumentRead ||
+                        (url.pathname === galleryDocumentPath &&
+                            request.method() === 'GET' &&
+                            url.search === ''))
+                )
                     return route.continue();
                 unexpectedRequests.push(url.href);
                 return route.abort();
@@ -580,6 +756,10 @@ export async function checkAttachmentSliderNavigationBrowser({
                 page,
                 nativeConfirm
             );
+            const attachmentGallery = await checkAttachmentGallery(
+                page,
+                galleryRequests
+            );
             assert.equal(saves.length, 2);
             const { selection: _bodySelection, ...bodyOwnerCalls } =
                 await probe();
@@ -594,6 +774,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 sliderBody,
                 sliderActions,
                 fullscreenSlider,
+                attachmentGallery,
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
@@ -626,6 +807,300 @@ export async function checkAttachmentSliderNavigationBrowser({
         [],
         'A retired owner’s held gesture selected in its successor'
     );
+}
+
+const galleryClass = '.mx-sdk-attachment-gallery';
+
+async function checkAttachmentGallery(page, requests) {
+    const scope = page.locator('#attachment-gallery-proof');
+    const list = scope.locator(galleryClass);
+    const tiles = scope.getByTestId('gallery-proof-tile');
+    const viewer = page.locator(fullscreenClass);
+    const frontImage = tiles.first().locator('img[src="/front.svg"]');
+    const stats = () => page.evaluate(() => window.galleryProbe.stats());
+    const configure = async (options) => {
+        const config = {
+            scene: 'layout',
+            layout: 'thumbnail',
+            columns: 3,
+            fit: 'cover',
+            showNames: true,
+            ...options,
+        };
+        await page.evaluate(
+            (next) => window.galleryProbe.configure(next),
+            config
+        );
+        await scope
+            .and(
+                page.locator(
+                    '[data-gallery-scene="' +
+                        config.scene +
+                        '"][data-gallery-layout="' +
+                        config.layout +
+                        '"][data-gallery-columns="' +
+                        config.columns +
+                        '"][data-gallery-fit="' +
+                        config.fit +
+                        '"][data-gallery-names="' +
+                        config.showNames +
+                        '"]'
+                )
+            )
+            .waitFor();
+        await scope.locator(galleryClass + '--' + config.layout).waitFor();
+    };
+    const boxes = () =>
+        tiles.evaluateAll((nodes) =>
+            nodes.map((node) => {
+                const { x, y, width, height } = node.getBoundingClientRect();
+                return { x, y, width, height };
+            })
+        );
+    const captions = {
+        photo: scope.getByText('Image galerie', { exact: true }),
+        video: scope.getByText('Vidéo galerie', { exact: true }),
+    };
+    const result = {};
+    await page.evaluate(() => window.scrollTo(0, 0));
+    for (const width of [1280, 375]) {
+        await page.setViewportSize({ width, height: 720 });
+
+        await configure({ layout: 'grid' });
+        await frontImage.waitFor();
+        const grid = await boxes();
+        assert.equal(grid.length, 6);
+        assert.deepEqual(
+            grid.map(({ y, width, height }) => [y - grid[0].y, width, height]),
+            Array.from({ length: 6 }, () => [0, 48, 48])
+        );
+        assert.equal(grid[1].x - grid[0].x - grid[0].width, 4);
+        assert.equal(await captions.photo.count(), 0);
+
+        await configure({ layout: 'icon' });
+        await captions.photo.waitFor();
+        await captions.video.waitFor();
+        const icon = await boxes();
+        assert.equal(icon.length, 6);
+        assert.deepEqual(
+            icon.map(({ x, height }) => [x, height]),
+            Array.from({ length: 6 }, () => [icon[0].x, 56])
+        );
+        assert.equal(icon[1].y - icon[0].y - icon[0].height, 4);
+        const fallbackPaths = (index) =>
+            tiles.nth(index).locator('svg[aria-hidden="true"] path').count();
+        assert.equal(await fallbackPaths(2), 1);
+        assert.equal(await fallbackPaths(3), 2);
+
+        const thumbnail = {};
+        for (const columns of [2, 3, 4]) {
+            await configure({ columns });
+            await captions.photo.waitFor();
+            await frontImage.waitFor();
+            const cell = await boxes();
+            assert.equal(cell.length, 6);
+            const firstLine = cell.filter(({ y }) => y === cell[0].y);
+            assert.equal(firstLine.length, columns);
+            assert.equal(
+                Math.round(
+                    firstLine[1].x - firstLine[0].x - firstLine[0].width
+                ),
+                4
+            );
+            const image = await frontImage.boundingBox();
+            assert.ok(image);
+            assert.equal(image.width, image.height);
+            assert.equal(
+                await frontImage.evaluate(
+                    (node) => getComputedStyle(node).objectFit
+                ),
+                'cover'
+            );
+            thumbnail[columns] = {
+                visibleColumns: firstLine.length,
+                tileWidth: image.width,
+                squareThumbnail: true,
+            };
+        }
+        await configure({ columns: 4, fit: 'contain', showNames: false });
+        await frontImage.waitFor();
+        assert.equal(await captions.photo.count(), 0);
+        assert.equal(
+            await frontImage.evaluate(
+                (node) => getComputedStyle(node).objectFit
+            ),
+            'contain'
+        );
+        result[width] = {
+            listWidth: (await list.boundingBox()).width,
+            grid: {
+                tilesInLine: grid.length,
+                tile: [48, 48],
+                gap: 4,
+                names: false,
+            },
+            icon: {
+                rows: icon.length,
+                rowHeight: 56,
+                gap: 4,
+                names: true,
+                playAndDocument: true,
+            },
+            thumbnail,
+            containAndNamesHidden: true,
+        };
+    }
+    assert.ok(result[1280].listWidth > result[375].listWidth);
+
+    await configure({ scene: 'retry', columns: 3, showNames: false });
+    const retry = tiles
+        .first()
+        .getByRole('button', { name: 'Réessayer la tuile' });
+    await retry.waitFor();
+    assert.equal(await retry.getAttribute('type'), 'button');
+    assert.equal(requests.retry, 1);
+    await retry.click();
+    const recovered = tiles
+        .first()
+        .locator('img[src="' + galleryRetryImagePath + '"]');
+    await recovered.waitFor();
+    const image = await recovered.elementHandle();
+    assert.ok(image);
+    try {
+        await page.waitForFunction(
+            (node) => node.complete && node.naturalWidth > 0,
+            image
+        );
+    } finally {
+        await image.dispose();
+    }
+    assert.equal(requests.retry, 2);
+    assert.equal(await retry.count(), 0);
+    assert.equal((await stats()).submits, 0);
+    assert.equal(await viewer.count(), 0);
+
+    const open = tiles.first().locator('.mx-sdk-attachment-tile__open');
+    await open.click();
+    await viewer.waitFor();
+    await viewer.locator('img[src="/front.svg"]').first().waitFor();
+    await viewer.getByRole('button', { name: 'Fermer la visionneuse' }).click();
+    await viewer.waitFor({ state: 'detached' });
+    await waitForSliderFocus(page, open);
+
+    await configure({ scene: 'actions' });
+    await tiles.first().hover();
+    assert.equal(await scope.getByTestId('gallery-remove-front').count(), 1);
+    assert.equal(
+        await scope.getByRole('button', { name: 'Retirer la tuile' }).count(),
+        1
+    );
+    assert.equal(
+        await scope.getByRole('button', { name: 'Annoter la tuile' }).count(),
+        1
+    );
+    await scope.getByTestId('gallery-remove-front').click();
+    assert.equal(await viewer.count(), 0);
+    await tiles
+        .first()
+        .getByRole('button', { name: 'Annoter la tuile' })
+        .click();
+    assert.equal(await viewer.count(), 0);
+
+    assert.equal(requests.document, 0);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await configure({ scene: 'document', columns: 3, showNames: false });
+    await page.evaluate(
+        () =>
+            new Promise((resolve) =>
+                requestAnimationFrame(() => requestAnimationFrame(resolve))
+            )
+    );
+    assert.equal(requests.document, 0);
+    await tiles.first().scrollIntoViewIfNeeded();
+    await tiles
+        .first()
+        .locator('[data-document-thumbnail="text"]')
+        .getByText(galleryDocumentText, { exact: true })
+        .waitFor();
+    assert.equal(requests.document, 1);
+
+    const office = await checkGalleryOffice({
+        page,
+        tiles,
+        configure,
+        requests,
+    });
+    assert.deepEqual(await stats(), {
+        submits: 0,
+        removals: [0],
+        annotations: [0],
+        documentReads: 1,
+        officeHeads: 1,
+        downloads: 0,
+    });
+
+    await page.evaluate(() => window.galleryProbe.configure(null));
+    await scope.waitFor({ state: 'detached' });
+    assert.equal(await viewer.count(), 0);
+    return {
+        layouts: result,
+        recoveredImageRequests: requests.retry,
+        retrySubmits: 0,
+        openedFullscreen: true,
+        restoredGalleryOpener: true,
+        removeCalls: 1,
+        annotateCalls: 1,
+        actionsOpenedSlider: false,
+        office,
+        document: {
+            ownedReads: requests.document,
+            offscreenReads: 0,
+            renderedText: galleryDocumentText,
+        },
+    };
+}
+
+async function checkGalleryOffice({ page, tiles, configure, requests }) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await configure({ scene: 'office', showNames: false });
+    await tiles.first().scrollIntoViewIfNeeded();
+    const frameSelector = 'iframe#msdoc-iframe';
+    const frame = tiles.first().locator(frameSelector);
+    await frame.waitFor();
+    assert.equal(await frame.getAttribute('title'), 'msdoc-iframe');
+    assert.equal(
+        await frame.getAttribute('src'),
+        galleryOfficeOrigin +
+            '/op/embed.aspx?src=' +
+            encodeURIComponent(new URL(galleryOfficePath, page.url()).href)
+    );
+    await page
+        .frameLocator(frameSelector)
+        .getByText(galleryOfficeFrameText, { exact: true })
+        .waitFor();
+    const sizes = {};
+    for (const width of [1280, 375]) {
+        await page.setViewportSize({ width, height: 720 });
+        const bounds = await frame.boundingBox();
+        assert.ok(bounds && bounds.width > 0 && bounds.height > 0);
+        sizes[width] = [bounds.width, bounds.height];
+    }
+    assert.ok(sizes[1280][0] > sizes[375][0]);
+    assert.deepEqual(
+        [
+            requests.officeHeads,
+            requests.officeOriginalGets,
+            requests.officeFrames,
+        ],
+        [1, 0, 1]
+    );
+    return {
+        head: 1,
+        originalGet: 0,
+        mockedFrameLoads: 1,
+        title: 'msdoc-iframe',
+        sizes,
+    };
 }
 
 const fullscreenClass = '.mx-sdk-attachment-slider';

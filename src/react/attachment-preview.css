@@ -302,6 +302,7 @@
     animation: mx-sdk-attachment-slider-backdrop-in 100ms ease-out;
 }
 .mx-sdk-attachment-slider__panel {
+    --mx-sdk-attachment-slider-panel-start: translateY(1rem);
     position: relative;
     z-index: 10;
     display: flex;
@@ -370,17 +371,7 @@
 }
 @keyframes mx-sdk-attachment-slider-panel-in {
     from {
-        transform: translateY(1rem);
-        opacity: 0;
-    }
-    to {
-        transform: none;
-        opacity: 1;
-    }
-}
-@keyframes mx-sdk-attachment-slider-panel-in-wide {
-    from {
-        transform: scale(0.95);
+        transform: var(--mx-sdk-attachment-slider-panel-start);
         opacity: 0;
     }
     to {
@@ -396,7 +387,7 @@
         align-items: center;
     }
     .mx-sdk-attachment-slider__panel {
-        animation-name: mx-sdk-attachment-slider-panel-in-wide;
+        --mx-sdk-attachment-slider-panel-start: scale(0.95);
     }
 }
 @media (min-width: 1024px) {

@@ -141,7 +141,9 @@ export const CompleteMultilineTextField = forwardRef<
                       ].join(' '),
                       title: 'Character Limit',
                   },
-                  `${value?.length ?? 0}/${characterLimit}`
+                  value?.length ?? 0,
+                  '/',
+                  characterLimit
               )
             : null
     );

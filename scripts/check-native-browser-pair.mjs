@@ -35,6 +35,7 @@ const commonCases = [
     'complete-readonly-text',
     'complete-clearable-input',
     'complete-multiline',
+    'complete-multiline-counter',
     'field-presentation',
     'kanban',
     'readonly-portal-grid',

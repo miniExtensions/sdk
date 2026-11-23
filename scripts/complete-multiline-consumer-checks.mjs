@@ -1,9 +1,11 @@
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 export const completeMultilineTypedConsumer = String.raw`import { createElement, createRef } from 'react';
 import {
@@ -84,7 +86,7 @@ const frozenNativeSource = String.raw`function nativeMultilineOracle(React, Text
             limit != null ? React.createElement('p', {
                 className: 'ml-auto mt-1 w-fit text-xs ' + (reached ? 'text-red-500' : 'text-gray-500'),
                 title: 'Character Limit',
-            }, String(props.value?.length ?? 0) + '/' + limit) : null);
+            }, props.value?.length ?? 0, '/', limit) : null);
     });
 }
 `;
@@ -390,7 +392,13 @@ export function checkCompleteMultilineReactMatrix({
     }
 }
 
-export const completeMultilineBrowserStyle = String.raw`body {font-family:monospace;font-size:16px;line-height:24px;color:#111827;margin:16px}
+export const completeMultilineInterSha256 =
+    '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62';
+
+export const completeMultilineBrowserStyle = String.raw`@font-face {font-family:Inter;src:url('/complete-multiline-inter.woff2') format('woff2');font-weight:100 900;font-style:normal}
+body {font-family:monospace;font-size:16px;line-height:24px;color:#111827;margin:16px}
+.counter-proof body {font-family:Inter,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.counter-proof .fixture-row {width:100%}
 .fixture-row {width:360px;margin-bottom:20px}
 .fixture-row label {display:block}
 #paste-source {width:360px;height:72px}
@@ -412,6 +420,8 @@ import {CompleteMultilineTextField,TextareaInput} from '@miniextensions/sdk/reac
     frozenNativeSource +
     String.raw`
 const Native = nativeMultilineOracle(React,TextareaInput);
+const counterKind = new URLSearchParams(location.search).get('counter');
+if (counterKind) document.documentElement.classList.add('counter-proof');
 const state = {errors:[],requests:0,submits:0,revision:0,committed:0};
 let models,root,serial = 0;
 const pending = new Map();
@@ -453,7 +463,8 @@ function App({revision}) {
         for (const [key,resolve] of pending) if (key <= revision) {pending.delete(key);resolve();}
     },[revision]);
     return React.createElement('main',null,
-        ...Object.entries(models).map(([kind,model]) => {
+        counterKind ? React.createElement('button',{id:'counter-start',type:'button'},'Start keyboard check') : null,
+        ...Object.entries(models).filter(([kind]) => !counterKind || counterKind === kind).map(([kind,model]) => {
             const callback = model.callback;
             const Component = kind === 'sdk' ? CompleteMultilineTextField : Native;
             return React.createElement('form',{
@@ -916,4 +927,207 @@ export async function checkCompleteMultilineBrowser({ page, evidence }) {
         cleanup:
             'Existing shared harness owns page/context/browser and same-origin resource cleanup.',
     });
+}
+
+export async function checkCompleteMultilineCounterBrowser({
+    page,
+    origin,
+    evidence,
+    output,
+}) {
+    const cases = [];
+    evidence.counterParity = { cases };
+    for (const width of [375, 1280]) {
+        await page.setViewportSize({ width, height: 700 });
+        const pairs = {};
+        for (const kind of ['native', 'sdk']) {
+            await page.goto(
+                `${origin}/complete-multiline.html?counter=${kind}`
+            );
+            await page.waitForFunction(
+                () => window.__nativeProbe?.snapshot().committed > 0
+            );
+            assert.equal(
+                await page.evaluate(async () => {
+                    const [font] = await document.fonts.load('12px Inter');
+                    return font?.status;
+                }),
+                'loaded'
+            );
+            const input = page.locator(`#answer-${kind}`);
+            const initial = 'abcdefghijklmnopqrstuvw';
+            const reset = (characterLimit, readOnly = false) =>
+                page.evaluate(
+                    (patch) => window.__multilineFixture.reset(patch),
+                    { value: initial, characterLimit, readOnly }
+                );
+            const tabToField = async () => {
+                await page.locator('#counter-start').focus();
+                await page.keyboard.press('Tab');
+            };
+            const capture = async (state, value, counter, writes, focused) => {
+                const snapshot = await page.evaluate(() =>
+                    window.__multilineFixture.flush()
+                );
+                const model = snapshot.models[kind];
+                assert.equal(model.value, value);
+                assert.equal(model.displayed, value);
+                assert.equal(model.counter, counter);
+                assert.deepEqual(
+                    model.events,
+                    writes.map((value) => ({ callback: 'A', value }))
+                );
+                assert.equal(model.adjacent, 'Keep adjacent');
+                assert.equal(model.focused, focused);
+                assert.equal(model.disabled, state === 'read-only');
+                assert.equal(model.maxLength, counter == null ? null : '24');
+                assert.deepEqual(snapshot.errors, []);
+                assert.equal(snapshot.requests, 0);
+                assert.equal(snapshot.submits, 0);
+
+                const observation = await input.evaluate((textarea) => {
+                    const row = textarea.closest('section');
+                    const counter = row.querySelector(
+                        '[title="Character Limit"]'
+                    );
+                    const following = row.querySelector('input');
+                    const box = textarea.getBoundingClientRect();
+                    const counterBox = counter?.getBoundingClientRect();
+                    return {
+                        clip: {
+                            x: Math.floor(box.right) - 64,
+                            y: Math.ceil(box.bottom) + 2,
+                            width: 64,
+                            height: 22,
+                        },
+                        input: { width: box.width, height: box.height },
+                        followingTop:
+                            following.getBoundingClientRect().top - box.bottom,
+                        focusVisible: textarea.matches(':focus-visible'),
+                        counter: counterBox && {
+                            width: counterBox.width,
+                            height: counterBox.height,
+                            rightInset: box.right - counterBox.right,
+                            topOffset: counterBox.top - box.bottom,
+                            color: getComputedStyle(counter).color,
+                            family: getComputedStyle(counter).fontFamily,
+                        },
+                        textRuns:
+                            counter &&
+                            Array.from(
+                                counter.childNodes,
+                                (node) => node.textContent
+                            ),
+                    };
+                });
+                assert.equal(observation.focusVisible, focused);
+                if (counter != null) {
+                    assert(observation.counter.family.startsWith('Inter'));
+                    assert.equal(
+                        observation.counter.color,
+                        value.length === 24
+                            ? 'rgb(239, 68, 68)'
+                            : 'rgb(107, 114, 128)'
+                    );
+                    if (kind === 'native')
+                        assert.deepEqual(observation.textRuns, [
+                            String(value.length),
+                            '/',
+                            '24',
+                        ]);
+                }
+
+                const name = `complete-multiline-counter-${width}-${state}-${kind}.png`;
+                const png = await page.screenshot({
+                    path: join(output, name),
+                    clip: observation.clip,
+                    animations: 'disabled',
+                    caret: 'hide',
+                });
+                const focusStyle = await input.evaluate((element) => {
+                    const { borderColor, boxShadow } =
+                        getComputedStyle(element);
+                    return { borderColor, boxShadow };
+                });
+                const focusColor =
+                    value.length === 24 && counter != null
+                        ? 'rgb(239, 68, 68)'
+                        : 'rgb(59, 130, 246)';
+                assert.equal(
+                    focusStyle.borderColor,
+                    focused ? focusColor : 'rgb(209, 213, 219)'
+                );
+                if (focused) {
+                    assert(
+                        focusStyle.boxShadow.includes(
+                            `${focusColor} 0px 0px 0px 1px`
+                        )
+                    );
+                }
+                pairs[state] ??= {};
+                pairs[state][kind] = {
+                    name,
+                    sha256: createHash('sha256').update(png).digest('hex'),
+                    observation,
+                    focusStyle,
+                };
+            };
+
+            await reset(24);
+            await capture('23-rest', initial, '23/24', [], false);
+            await tabToField();
+            await capture('23-tab', initial, '23/24', [], true);
+            await page.keyboard.press('End');
+            await page.keyboard.press('x');
+            await capture(
+                '24-limit',
+                initial + 'x',
+                '24/24',
+                [initial + 'x'],
+                true
+            );
+            await page.keyboard.press('y');
+            await capture(
+                '25-blocked',
+                initial + 'x',
+                '24/24',
+                [initial + 'x'],
+                true
+            );
+
+            await reset(null);
+            await tabToField();
+            await page.keyboard.press('End');
+            await page.keyboard.press('x');
+            await page.keyboard.press('y');
+            await capture(
+                'unlimited',
+                initial + 'xy',
+                null,
+                [initial + 'x', initial + 'xy'],
+                true
+            );
+
+            await reset(24, true);
+            await tabToField();
+            assert.equal(
+                await page.evaluate(() => document.activeElement?.id),
+                `adjacent-${kind}`
+            );
+            await capture('read-only', initial, null, [], false);
+        }
+        for (const [state, { native, sdk }] of Object.entries(pairs)) {
+            cases.push({ width, state, native, sdk });
+        }
+    }
+    const mismatches = cases.filter(
+        ({ native, sdk }) =>
+            native.sha256 !== sdk.sha256 ||
+            !isDeepStrictEqual(native.observation, sdk.observation) ||
+            !isDeepStrictEqual(native.focusStyle, sdk.focusStyle)
+    );
+    assert.deepEqual(
+        mismatches.map(({ width, state }) => `${width} ${state}`),
+        []
+    );
 }

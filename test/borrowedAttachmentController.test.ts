@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { File as NodeFile } from 'node:buffer';
 import {
+    claimBorrowedAttachmentBatch,
     createBorrowedAttachmentController,
     type BorrowedAttachmentBatchResult,
     type BorrowedAttachmentField,
@@ -95,6 +96,119 @@ const detachedSnapshot = {
     progress: null,
     result: null,
 };
+
+it('keeps the same Form field claimed across remount and pending partial settlement', async () => {
+    const scope = { source: {}, sessionId: 'form', fieldId: 'attachments' };
+    const release = claimBorrowedAttachmentBatch(scope, () => true);
+    assert.ok(release);
+    const held = deferred<object>();
+    const settling = deferred<BorrowedAttachmentBatchResult<object>>();
+    const acknowledged = deferred<void>();
+    const accepted = {};
+    const first = file('first');
+    const second = file('failed');
+    const third = file('unstarted');
+    const failure = new Error('provider failed');
+    const allocated: File[] = [];
+    let settlements = 0;
+    const f = fixture({
+        allocate(nativeFile) {
+            allocated.push(nativeFile);
+            return {
+                completion:
+                    nativeFile === first
+                        ? held.promise
+                        : Promise.reject(failure),
+            };
+        },
+        settleCompleted(receipt, result) {
+            assert.equal(receipt, f.receipt);
+            settlements++;
+            settling.resolve(result);
+            return acknowledged.promise;
+        },
+    });
+    const pending = f.controller.start([first, second, third]).finally(release);
+    f.field = { ...f.field, visible: false, presentation: 'detached' };
+    f.notify();
+    assert.equal(
+        claimBorrowedAttachmentBatch({ ...scope }, () => true),
+        null
+    );
+    held.resolve(accepted);
+    const prefix = await settling.promise;
+    assert.deepEqual(allocated, [first, second]);
+    assert.deepEqual(prefix.completed, [
+        { file: first, index: 0, attachment: accepted },
+    ]);
+    assert.equal(prefix.failure?.error, failure);
+    assert.equal(
+        claimBorrowedAttachmentBatch({ ...scope }, () => true),
+        null
+    );
+    acknowledged.resolve();
+    assert.deepEqual(await pending, prefix);
+    assert.equal(settlements, 1);
+    const next = claimBorrowedAttachmentBatch(scope, () => true);
+    assert.ok(next);
+    next();
+    f.controller.dispose();
+});
+
+it('keeps replacement claims distinct from stale releases and from other scopes', () => {
+    const scope = { source: {}, sessionId: 'form', fieldId: 'attachments' };
+    let retained = true;
+    const isRetained = () => retained;
+    const releaseOriginal = claimBorrowedAttachmentBatch(scope, isRetained);
+    assert.ok(releaseOriginal);
+    for (const other of [
+        { ...scope, source: {} },
+        { ...scope, sessionId: 'other-form' },
+        { ...scope, fieldId: 'other-field' },
+    ]) {
+        const release = claimBorrowedAttachmentBatch(other, () => true);
+        assert.ok(release);
+        release();
+    }
+    retained = false;
+    const releaseReplacement = claimBorrowedAttachmentBatch(scope, isRetained);
+    assert.ok(releaseReplacement);
+    retained = true;
+    releaseOriginal();
+    releaseOriginal();
+    assert.equal(
+        claimBorrowedAttachmentBatch(scope, () => true),
+        null
+    );
+    releaseReplacement();
+    const releaseNext = claimBorrowedAttachmentBatch(scope, () => true);
+    assert.ok(releaseNext);
+    releaseNext();
+});
+
+it('preserves a successor admitted reentrantly after an incumbent releases', () => {
+    const scope = { source: {}, sessionId: 'form', fieldId: 'attachments' };
+    let releaseReplacement: (() => void) | null = null;
+    const original = claimBorrowedAttachmentBatch(scope, () => {
+        assert.equal(
+            claimBorrowedAttachmentBatch(scope, () => true),
+            null
+        );
+        original?.();
+        releaseReplacement = claimBorrowedAttachmentBatch(scope, () => true);
+        return false;
+    });
+    assert.ok(original);
+    assert.equal(
+        claimBorrowedAttachmentBatch(scope, () => true),
+        null
+    );
+    assert.equal(
+        claimBorrowedAttachmentBatch(scope, () => true),
+        null
+    );
+    assert.ok(releaseReplacement);
+});
 
 it('borrows native identity and original occurrence order, without implicit dispatch', async () => {
     const f = fixture();

@@ -1,5 +1,46 @@
 import type { OrderedAttachmentUpload } from './orderedAttachmentUploads.js';
 
+export type BorrowedAttachmentBatchScope = {
+    /** Stable host state source shared by every mount of this Form. */
+    source: object;
+    sessionId: string;
+    fieldId: string;
+};
+
+type BatchClaim = { isRetained(): boolean; checking: boolean };
+const batchClaims = new WeakMap<object, Map<string, BatchClaim>>();
+
+/** Reserve one native field batch across mounts until its captured owner retires or releases. */
+export function claimBorrowedAttachmentBatch(
+    { source, sessionId, fieldId }: BorrowedAttachmentBatchScope,
+    isRetained: () => boolean
+): (() => void) | null {
+    let claims = batchClaims.get(source);
+    if (claims == null) {
+        claims = new Map();
+        batchClaims.set(source, claims);
+    }
+    const key = JSON.stringify([sessionId, fieldId]);
+    const incumbent = claims.get(key);
+    if (incumbent != null) {
+        if (incumbent.checking) return null;
+        incumbent.checking = true;
+        try {
+            if (incumbent.isRetained()) return null;
+        } finally {
+            incumbent.checking = false;
+        }
+        // A host callback can release the old claim and admit a new one.
+        const latest = claims.get(key);
+        if (latest != null && latest !== incumbent) return null;
+    }
+    const batch = { isRetained, checking: false };
+    claims.set(key, batch);
+    return () => {
+        if (claims.get(key) === batch) claims.delete(key);
+    };
+}
+
 /** Host-private identity, never server authorization or a loaded SDK Form. */
 export type BorrowedAttachmentField<T> = {
     owner: object | string | number;

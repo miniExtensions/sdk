@@ -129,7 +129,7 @@ export function FormPageNavigationButton({
     const chevron = h(
         'svg',
         {
-            viewBox: '0 0 20 20',
+            viewBox: '0 0 24 24',
             fill: 'currentColor',
             className: 'mx-sdk-form-page-button-icon',
             'aria-hidden': true,
@@ -138,8 +138,8 @@ export function FormPageNavigationButton({
             fillRule: 'evenodd',
             d:
                 direction === 'back'
-                    ? 'M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z'
-                    : 'M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 1 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z',
+                    ? 'M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z'
+                    : 'M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 1 1 1.06-1.06l7.5 7.5Z',
             clipRule: 'evenodd',
         })
     );

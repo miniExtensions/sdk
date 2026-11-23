@@ -357,6 +357,8 @@ The editable Date and DateTime fields use the native solid Calendar icon from He
 
 The Form section disclosure retains the native solid ChevronUp and ChevronDown icons from Heroicons 2.1.1.
 
+The editable Form Back and Next actions retain the native solid ChevronLeft and ChevronRight icons from Heroicons 2.1.1.
+
 The editable collaborator picker uses the native solid ChevronDown icon from Heroicons 2.1.1.
 
 The editable Phone field uses the native solid Phone icon from Heroicons 2.1.1.

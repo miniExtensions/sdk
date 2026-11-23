@@ -300,8 +300,12 @@ export {
     type AttachmentRowActions,
 } from './attachmentRowActions.js';
 
-export { createBorrowedAttachmentController } from './borrowedAttachmentController.js';
+export {
+    claimBorrowedAttachmentBatch,
+    createBorrowedAttachmentController,
+} from './borrowedAttachmentController.js';
 export type {
+    BorrowedAttachmentBatchScope,
     BorrowedAttachmentField,
     BorrowedAttachmentProgress,
     BorrowedAttachmentAllocation,

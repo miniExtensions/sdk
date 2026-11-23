@@ -235,18 +235,24 @@ it('live Review updates preserve the captured one-shot callback and close before
     const pages = createNativeFormPages(f.publication());
     const result = Promise.resolve('native settlement');
     const calls: string[] = [];
-    pages.openReview(() => {
-        assert.equal(pages.getSnapshot().reviewing, false);
-        calls.push('original');
-        return result;
-    });
+    assert.equal(
+        pages.openReview(() => {
+            assert.equal(pages.getSnapshot().reviewing, false);
+            calls.push('original');
+            return result;
+        }),
+        true
+    );
     const confirm = pages.getSnapshot().actions.confirmReview;
     pages.update(f.publication({ reviewItems: ['new live value'] }));
     assert.equal(pages.getSnapshot().reviewing, true);
     assert.deepEqual(pages.getSnapshot().reviewItems, ['new live value']);
-    pages.openReview(() => {
-        calls.push('replacement');
-    });
+    assert.equal(
+        pages.openReview(() => {
+            calls.push('replacement');
+        }),
+        false
+    );
     assert.equal(confirm(), result);
     confirm();
     pages.confirmReview();

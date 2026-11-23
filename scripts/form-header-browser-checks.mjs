@@ -284,16 +284,77 @@ export async function checkFormHeaderBrowser({
     assert.equal(await page.locator(titleClass).count(), 0);
     await preview.check();
     await source.selectOption('static');
-    await page
-        .getByRole('heading', {
-            name: 'A new perspective · Record A',
-            exact: true,
-        })
-        .waitFor();
+    const staticTitle = page.getByRole('heading', {
+        name: 'A new perspective · Record A',
+        exact: true,
+    });
+    await staticTitle.waitFor();
+    assert.equal(
+        await staticTitle.evaluate((node) => getComputedStyle(node).whiteSpace),
+        'pre-line'
+    );
     await source.selectOption('none');
     await preview.uncheck();
     await title.waitFor({ state: 'detached' });
     assert.equal(await page.locator(titleClass).count(), 0);
     assert.equal(await commands.textContent(), 'No commands');
     evidence.controls = await verify([]);
+
+    await source.selectOption('formula');
+    const formula = page.getByTestId('example-header').getByRole('heading');
+    const formulaText = [
+        'First',
+        'Second',
+        'Third',
+        'Fourth',
+        'Fifth',
+        'Last',
+    ].join('\n\n');
+    await formula.waitFor();
+    const formulaPaint = () =>
+        formula.evaluate((node) => {
+            const style = getComputedStyle(node);
+            return {
+                text: node.textContent,
+                whiteSpace: style.whiteSpace,
+                lineHeight: parseFloat(style.lineHeight),
+                height: node.getBoundingClientRect().height,
+                strongCount: node.querySelectorAll('strong').length,
+            };
+        });
+    const child = page.getByRole('checkbox', { name: 'Child Form' });
+    evidence.formulaTitle = [];
+    for (const viewport of [
+        { width: 1280, height: 720 },
+        { width: 375, height: 780 },
+    ]) {
+        await page.setViewportSize(viewport);
+        const publicRoot = await formulaPaint();
+        assert.equal(publicRoot.text, formulaText);
+        assert.equal(publicRoot.strongCount, 0);
+        assert.equal(publicRoot.whiteSpace, 'normal');
+        assert.equal(publicRoot.lineHeight, 36);
+        assert(publicRoot.height <= 2 * publicRoot.lineHeight);
+        await child.check();
+        const childTitle = await formulaPaint();
+        await child.uncheck();
+        await preview.check();
+        const builderTitle = await formulaPaint();
+        await preview.uncheck();
+        for (const scoped of [childTitle, builderTitle]) {
+            assert.equal(scoped.text, formulaText);
+            assert.equal(scoped.whiteSpace, 'pre-line');
+            assert.equal(scoped.height, 11 * scoped.lineHeight);
+        }
+        await formula.screenshot({
+            path: join(output, `form-formula-title-${viewport.width}.png`),
+        });
+        evidence.formulaTitle.push({
+            viewport,
+            publicRoot,
+            childTitle,
+            builderTitle,
+        });
+    }
+    await verify([]);
 }

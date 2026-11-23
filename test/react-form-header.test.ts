@@ -169,20 +169,44 @@ it('renders Formula multiline titles as plain text using the complete SDK header
             options: { isValid: true, result: textField.config },
         },
     };
+    const words = ['**First**', 'Second', 'Third', 'Fourth', 'Fifth', 'Last'];
+    const expected = 'First\n\nSecond\n\nThird\n\nFourth\n\nFifth\n\nLast';
+    const formulaClass = 'mx-sdk-form-title--formula';
+    for (const separator of ['\n', '\n\n']) {
+        await f.render(
+            h(CompleteFormHeader, {
+                ...defaults,
+                title: dynamicSource(words.join(separator), field),
+            })
+        );
+        const heading = f.container.querySelector('h1');
+        assert.ok(heading);
+        assert.equal(heading.textContent, expected);
+        assert(heading.classList.contains(formulaClass));
+        assert.equal(heading.querySelector('strong'), null);
+    }
+    for (const props of [
+        { title: staticSource(expected) },
+        { title: dynamicSource(expected) },
+        { title: missing, extensionName: expected },
+        { title: dynamicSource(words.join('\n'), field), isChildForm: true },
+        { title: dynamicSource(words.join('\n'), field), preview },
+    ]) {
+        await f.render(h(CompleteFormHeader, { ...defaults, ...props }));
+        const heading = f.container.querySelector('h1');
+        assert.ok(heading);
+        assert.equal(heading.textContent, expected);
+        assert(!heading.classList.contains(formulaClass));
+    }
     await f.render(
         h(CompleteFormHeader, {
             ...defaults,
-            title: dynamicSource(
-                '**First**\nSecond\nThird\nFourth\nFifth\nLast',
-                field
-            ),
+            title: dynamicSource('', field),
+            preview,
         })
     );
-    assert.equal(
-        f.container.querySelector('h1')?.textContent,
-        'First\n\nSecond\n\nThird\n\nFourth\n\nFifth\n\nLast'
-    );
-    assert.equal(f.container.querySelector('strong'), null);
+    assert.equal(f.container.querySelector('h1'), null);
+    assert.ok(button(f, 'Title from Airtable: Formula title'));
     await f.render(
         h(CompleteFormHeader, {
             ...defaults,

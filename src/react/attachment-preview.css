@@ -29,6 +29,16 @@
     color: #6b7280;
 }
 
+.mx-sdk-attachment-tile__open {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
 .mx-sdk-attachment-thumbnail-rail {
     position: relative;
     width: 100%;
@@ -92,6 +102,7 @@
     border-color: #e5e7eb;
     background-color: transparent;
 }
+.mx-sdk-attachment-tile__open-label,
 .mx-sdk-attachment-thumbnail-rail__label {
     position: absolute;
     width: 1px;

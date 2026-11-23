@@ -11,14 +11,15 @@ ${
     format === 'esm'
         ? `import {createElement as h, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, useAttachmentDownload} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, useAttachmentDownload}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload}=require('@miniextensions/sdk/react');`
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
 const calls={selection:[],save:0,upload:0,delete:0,fetch:0};
+const tileOpens=[];
 const downloads={pending:[],finished:0};
 const downloadListeners=new Set();
 const downloadOwner={token:0,isCurrent:()=>true,subscribe(listener){
@@ -32,6 +33,7 @@ function Host(){
     const [acceptsIntent,setAcceptsIntent]=useState(false);
     const [collectionOwner,setCollectionOwner]=useState('initial');
     const [publication,setPublication]=useState('initial');
+    const [tile,setTile]=useState({resourceKey:'initial',label:'Pièce jointe'});
     function replace(owner){
         setRows([first,second]);
         setSelectedIndex(0);
@@ -39,6 +41,7 @@ function Host(){
         setPublication(owner);
     }
     window.sliderProbe={calls,downloads,setSelectedIndex,setAcceptsIntent,
+        tileOpens,publishTile(resourceKey,label){setTile({resourceKey,label});},
         replace,
         rotateDownloadOwner(){downloadOwner.token++;for(const listener of [...downloadListeners])listener();},
         reset(owner){calls.selection.length=0;replace(owner);},
@@ -73,7 +76,10 @@ function Host(){
             download.progress==null?'Télécharger la pièce jointe':download.progress+'%'),
         h('button',{type:'submit'},'Enregistrer'),
         h('button',{type:'button',onClick(){calls.upload++;}},'Téléverser'),
-        h('button',{type:'button',onClick(){calls.delete++;}},'Supprimer'));
+        h('button',{type:'button',onClick(){calls.delete++;}},'Supprimer'),
+        h('div',{className:'attachment-tile-proof'},h(AttachmentTileOpenButton,{
+            ...tile,onOpen(){tileOpens.push(tile.label);},
+        })));
 }
 createRoot(document.querySelector('main')).render(h(Host));
 `;
@@ -111,15 +117,28 @@ export async function checkAttachmentSliderNavigationBrowser({
             ),
             'The installed Slider Thumbnail Rail must be bundled'
         );
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/AttachmentTileOpenButton.js')
+            ),
+            'The installed Attachment Tile Open Button must be bundled'
+        );
         const assets = new Map([
             [
                 '/',
                 [
                     'text/html',
-                    '<!doctype html><html lang="fr"><meta charset="utf-8"><link rel="stylesheet" href="/attachment-preview.css"><main></main><script type="module" src="/host.js"></script></html>',
+                    '<!doctype html><html lang="fr"><meta charset="utf-8"><link rel="stylesheet" href="/attachment-preview.css"><link rel="stylesheet" href="/host.css"><main></main><script type="module" src="/host.js"></script></html>',
                 ],
             ],
             ['/host.js', ['text/javascript', bundle.outputFiles[0].text]],
+            [
+                '/host.css',
+                [
+                    'text/css',
+                    '.attachment-tile-proof{position:relative;width:96px;height:48px}',
+                ],
+            ],
             ['/attachment-preview.css', ['text/css', styles]],
             ['/favicon.ico', ['image/svg+xml', svg]],
             ['/front.svg', ['image/svg+xml', svg]],
@@ -278,6 +297,8 @@ export async function checkAttachmentSliderNavigationBrowser({
                 remappedPointer: await heldGesture('pointer', false),
                 remappedSpace: await heldGesture('space', false),
             };
+            const tileOpen = await checkTileOpen(page);
+            assert.equal((await probe()).save, 0);
             await page.evaluate(() =>
                 window.sliderProbe.reset('thumbnail-rail')
             );
@@ -418,6 +439,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 selection: calls.selection,
                 ownerCalls: calls,
                 gestures,
+                tileOpen,
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
@@ -450,4 +472,118 @@ export async function checkAttachmentSliderNavigationBrowser({
         [],
         'A retired owner’s held gesture selected in its successor'
     );
+}
+
+async function checkTileOpen(page) {
+    const tile = page.locator('.attachment-tile-proof');
+    const button = (label) =>
+        tile.getByRole('button', { name: label, exact: true });
+    const publish = (resourceKey, label) =>
+        page.evaluate(
+            ([key, text]) => window.sliderProbe.publishTile(key, text),
+            [resourceKey, label]
+        );
+    const opened = () => page.evaluate(() => window.sliderProbe.tileOpens);
+    const signature = await button('Pièce jointe').evaluate((control) => {
+        const style = getComputedStyle(control);
+        const bounds = control.getBoundingClientRect();
+        const tileBounds = control.parentElement.getBoundingClientRect();
+        const label = control.firstElementChild;
+        const labelStyle = getComputedStyle(label);
+        return {
+            type: control.type,
+            position: style.position,
+            inset: style.inset,
+            zIndex: style.zIndex,
+            cursor: style.cursor,
+            background: style.backgroundColor,
+            padding: style.padding,
+            borderWidth: style.borderWidth,
+            geometry: [
+                bounds.x - tileBounds.x,
+                bounds.y - tileBounds.y,
+                bounds.width,
+                bounds.height,
+            ],
+            hiddenLabel: [
+                label.textContent,
+                labelStyle.width,
+                labelStyle.height,
+                labelStyle.overflow,
+            ],
+        };
+    });
+    assert.deepEqual(signature, {
+        type: 'button',
+        position: 'absolute',
+        inset: '0px',
+        zIndex: '10',
+        cursor: 'pointer',
+        background: 'rgba(0, 0, 0, 0)',
+        padding: '0px',
+        borderWidth: '0px',
+        geometry: [0, 0, 96, 48],
+        hiddenLabel: ['Open attachment', '1px', '1px', 'hidden'],
+    });
+
+    async function gesture(input, replaceResource) {
+        const resource = `${input}-${replaceResource ? 'replace' : 'relabel'}`;
+        const before = `${resource} initial`;
+        const after = `${resource} courant`;
+        await publish(resource, before);
+        const original = await button(before).elementHandle();
+        assert.ok(original);
+        const count = (await opened()).length;
+        if (input === 'pointer') {
+            const bounds = await original.boundingBox();
+            assert.ok(bounds);
+            await page.mouse.move(
+                bounds.x + bounds.width / 2,
+                bounds.y + bounds.height / 2
+            );
+            await page.mouse.down();
+        } else {
+            await original.focus();
+            await page.keyboard.down('Space');
+        }
+        await publish(
+            replaceResource ? `${resource}-successor` : resource,
+            after
+        );
+        const current = button(after);
+        const state = await current.evaluate(
+            (control, previous) => ({
+                sameControl: control === previous,
+                focused: control.ownerDocument.activeElement === control,
+            }),
+            original
+        );
+        await original.dispose();
+        assert.deepEqual(state, {
+            sameControl: !replaceResource,
+            focused: true,
+        });
+        if (input === 'pointer') await page.mouse.up();
+        else {
+            if (replaceResource) await page.keyboard.down('Space');
+            await page.keyboard.up('Space');
+        }
+        const held = (await opened()).slice(count);
+        assert.deepEqual(held, replaceResource ? [] : [after]);
+        if (!replaceResource) return { ...state, held };
+
+        if (input === 'pointer') await current.click();
+        else await current.press('Space');
+        const fresh = (await opened()).slice(count);
+        assert.deepEqual(fresh, [after]);
+        return { ...state, held, fresh };
+    }
+
+    return {
+        signature,
+        replacedPointer: await gesture('pointer', true),
+        replacedSpace: await gesture('space', true),
+        relabeledPointer: await gesture('pointer', false),
+        relabeledSpace: await gesture('space', false),
+    };
 }

@@ -3666,6 +3666,10 @@ export {
 } from './AttachmentPreview.js';
 export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
 export {
+    AttachmentTileOpenButton,
+    type AttachmentTileOpenButtonProps,
+} from './AttachmentTileOpenButton.js';
+export {
     AttachmentSliderNavigation,
     type AttachmentSliderNavigationProps,
 } from './AttachmentSliderNavigation.js';

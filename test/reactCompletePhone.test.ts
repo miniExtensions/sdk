@@ -324,6 +324,13 @@ it('plain input keeps literal values and native form/ref/ARIA associations', asy
     assert.equal(input.getAttribute('aria-describedby'), 'phone-help');
     assert.equal(f.inputRef.current, input);
     assert.equal(f.container.querySelector('select'), null);
+    const handset = f.container.querySelector('.mx-sdk-phone-icon svg');
+    assert.equal(handset?.getAttribute('fill'), 'currentColor');
+    assert.equal(handset?.getAttribute('stroke'), null);
+    assert.equal(
+        handset?.querySelector('path')?.getAttribute('fill-rule'),
+        'evenodd'
+    );
     for (const value of [
         '  +33 (0)1 23 45 67 89  ',
         'tel:+1202;ext=42',
@@ -344,6 +351,7 @@ it('country inference/default and metadata-only rerenders retain the real input/
         value: '+14155552671',
         defaultCountry: 'GH',
     });
+    assert.equal(f.container.querySelector('.mx-sdk-phone-icon'), null);
     const input = f.input();
     assert.equal(f.select().value, 'US');
     assert.equal(input.value, '+1 415 555 2671');

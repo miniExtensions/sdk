@@ -328,15 +328,13 @@ function PhoneIcon() {
         'svg',
         {
             viewBox: '0 0 24 24',
-            fill: 'none',
-            stroke: 'currentColor',
-            strokeWidth: 1.8,
+            fill: 'currentColor',
             'aria-hidden': true,
         },
         h('path', {
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
-            d: 'M4 3h4l2 5-2.5 1.5a16 16 0 0 0 7 7L16 14l5 2v4a1 1 0 0 1-1 1C10.6 21 3 13.4 3 4a1 1 0 0 1 1-1Z',
+            fillRule: 'evenodd',
+            clipRule: 'evenodd',
+            d: 'M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z',
         })
     );
 }

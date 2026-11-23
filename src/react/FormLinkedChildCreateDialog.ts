@@ -382,6 +382,7 @@ type DialogChromeProps = {
     confirm: boolean;
     closeDisabled: boolean;
     saveDisabled: boolean;
+    primaryFormId?: string;
     dismiss(): void;
     keep(): void;
     discard(): void;
@@ -398,6 +399,7 @@ function LinkedChildDialogChrome({
     confirm,
     closeDisabled,
     saveDisabled,
+    primaryFormId,
     dismiss,
     keep,
     discard,
@@ -452,14 +454,29 @@ function LinkedChildDialogChrome({
                 },
                 labels.close
             ),
+            primaryFormId &&
+                h('form', {
+                    id: primaryFormId,
+                    noValidate: true,
+                    onSubmit: (event: FormEvent<HTMLFormElement>) => {
+                        const admitted =
+                            !event.defaultPrevented &&
+                            !confirm &&
+                            !saveDisabled;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (admitted) save();
+                    },
+                }),
             fields,
             error != null && h('p', { role: 'alert' }, error),
             h(
                 'button',
                 {
-                    type: 'button',
+                    type: primaryFormId ? 'submit' : 'button',
+                    form: primaryFormId || undefined,
                     disabled: saveDisabled,
-                    onClick: save,
+                    onClick: primaryFormId ? undefined : save,
                 },
                 labels.save
             )
@@ -553,6 +570,8 @@ export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     /** A native navigation or Review action that can defer Save until confirmation. */
     primaryAction?: Readonly<{
         label: string;
+        /** Uses the same form ID as the native inputs to enable implicit submission. */
+        formId?: string;
         /** Return false when declining the action so an admitted Review stays current. */
         onAction(save: () => Promise<void>): boolean | void;
     }>;
@@ -847,6 +866,7 @@ function BorrowedCreatePresentation<View>({
             localPhase === 'saving' ||
             (localPhase === 'saved' && !unlinked),
         saveDisabled: state.phase !== 'ready' || localPhase != null,
+        primaryFormId: primaryAction?.formId,
         dismiss,
         keep,
         discard: () => {

@@ -100,6 +100,7 @@ async function fixture(
                 renderFields: (value) =>
                     h('input', {
                         value,
+                        form: primaryAction?.formId,
                         readOnly: true,
                         'aria-label': 'Native child',
                     }),
@@ -310,6 +311,64 @@ it('keeps the admitted Save when native Review declines a second activation', as
         await pages.confirmReview();
     });
     assert.deepEqual(f.saves, [expected]);
+    assert.equal(f.dialog(), null);
+    assert.equal(f.doc.activeElement, f.opener);
+});
+
+it('associates the native field and primary with one guarded form submit', async (t) => {
+    let settle!: () => void;
+    const heldSave = new Promise<void>((resolve) => {
+        settle = resolve;
+    });
+    const confirmations: Array<() => Promise<void>> = [];
+    const f = await fixture(
+        t,
+        async () => {
+            await heldSave;
+            return saved;
+        },
+        {
+            label: 'Review',
+            formId: 'native-child-form',
+            onAction(confirm) {
+                confirmations.push(confirm);
+            },
+        }
+    );
+    await f.render();
+    const dialog = f.dialog();
+    assert(dialog);
+    const form = dialog.querySelector('form');
+    const input = dialog.querySelector('input');
+    const primary = f.button('Review');
+    assert(form);
+    assert(input);
+    assert.equal(dialog.querySelectorAll('form').length, 1);
+    assert.equal(form.childElementCount, 0);
+    assert.equal(form.noValidate, true);
+    assert.equal(input.form, form);
+    assert.equal(primary.form, form);
+    assert.equal(primary.type, 'submit');
+
+    const submits: Array<{ defaultPrevented: boolean }> = [];
+    form.addEventListener('submit', (event) => submits.push(event));
+    await f.click(primary);
+    await act(async () => form.requestSubmit(primary));
+    assert.equal(confirmations.length, 2);
+    assert.equal(submits.length, 2);
+    assert(submits.every((event) => event.defaultPrevented));
+    assert.deepEqual(f.saves, []);
+    const confirm = confirmations[1];
+    assert(confirm);
+    const expected = f.read().ref;
+    await act(async () => {
+        void confirm();
+    });
+    assert.equal(primary.disabled, true);
+    await act(async () => form.requestSubmit());
+    assert.equal(confirmations.length, 2);
+    assert.deepEqual(f.saves, [expected]);
+    await act(async () => settle());
     assert.equal(f.dialog(), null);
     assert.equal(f.doc.activeElement, f.opener);
 });

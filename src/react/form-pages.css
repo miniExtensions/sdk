@@ -94,7 +94,7 @@
 .mx-sdk-form-page-button--back:hover {
     background: #f9fafb;
 }
-.mx-sdk-form-page-button:focus-visible,
+.mx-sdk-form-page-button--next:focus-visible,
 .mx-sdk-form-review-edit:focus-visible,
 .mx-sdk-form-review-confirm:focus-visible {
     outline: 2px solid

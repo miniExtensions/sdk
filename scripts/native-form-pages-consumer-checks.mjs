@@ -369,12 +369,18 @@ export async function checkNativeFormPagesReactMatrix({
             for (const token of [
                 'mx-sdk-form-pages-progress',
                 'mx-sdk-form-page-button',
+                '.mx-sdk-form-page-button--next:focus-visible',
                 'mx-sdk-form-review-dialog',
                 'mx-sdk-form-review-label--hidden',
                 '32rem',
                 '80vh',
             ])
                 assert(css.includes(token), `Missing public CSS: ${token}`);
+            assert.doesNotMatch(
+                css,
+                /\.mx-sdk-form-page-button(?:--back)?:focus-visible\b/,
+                'Back uses the native browser focus outline'
+            );
             for (const format of ['esm', 'cjs']) {
                 const contents =
                     format === 'esm'

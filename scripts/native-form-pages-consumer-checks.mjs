@@ -114,11 +114,39 @@ const original=container.firstChild,errors=[];
 const {hydrateRoot}=await import('react-dom/client');let root;
 const button=label=>{const node=Array.from(container.querySelectorAll('button')).find(node=>node.getAttribute('aria-label')===label||node.textContent===label);assert(node,'Missing '+label);return node;};
 const click=async label=>React.act(async()=>{const control=button(label);control.focus();control.click();});
+// Heroicons 2.1.1 24-solid, used by the archived native Form at 0d1c7057.
+const nativeChevronPaths={
+ back:'M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z',
+ next:'M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 1 1 1.06-1.06l7.5 7.5Z',
+};
+function assertNativeChevron(control,direction){
+ const glyph=direction==='back'?control.firstElementChild:control.lastElementChild;
+ assert.equal(glyph.localName,'svg');
+ assert.equal(glyph.getAttribute('viewBox'),'0 0 24 24',direction+' uses the archived native viewBox');
+ assert.equal(glyph.getAttribute('aria-hidden'),'true');
+ assert.equal(glyph.getAttribute('fill'),'currentColor');
+ assert.equal(glyph.querySelector('path').getAttribute('d'),nativeChevronPaths[direction]);
+ assert.equal(glyph.querySelector('path').getAttribute('fill-rule'),'evenodd');
+}
+function renderNavigationButton(props){
+ const scratch=domWindow.document.createElement('div');
+ scratch.innerHTML=renderToString(React.createElement(view.FormPageNavigationButton,props));
+ return scratch.firstElementChild;
+}
 try{
  await React.act(async()=>{root=hydrateRoot(container,tree(),{onRecoverableError:error=>errors.push(error.message)});});
  assert.deepEqual(errors,[]);assert.ok(container.firstChild===original,'Hydration must preserve the original first node');assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(saveCallbacks,0);checks++;
+ assertNativeChevron(button('Next'),'next');
+ for(const [direction,label] of [['back','Back'],['next','Next']]){
+  const disabled=renderNavigationButton({direction,label,disabled:true});
+  assert.equal(disabled.disabled,true);assertNativeChevron(disabled,direction);
+  const loading=renderNavigationButton({direction,label,loading:true});
+  assert.equal(loading.disabled,true);assert.equal(loading.getAttribute('aria-busy'),'true');
+  assert.ok(loading.querySelector('.mx-sdk-form-page-button-spinner circle'));
+ }
  await click('Next');assert.equal(nextRequests.length,1);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(button('Next').type,'submit');assert.equal(button('Next').form.id,'live-form');checks++;
  await React.act(async()=>nextRequests[0].advance());assert.equal(controller.getSnapshot().activePageIndex,2);assert.equal(container.querySelector('h2').textContent,'Final page');assert.equal(container.querySelectorAll('[data-testid="form-page-progress-item"]').length,2);checks++;
+ assertNativeChevron(button('Back'),'back');
  await click('Back');assert.deepEqual(backRequests,[0]);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(button('Next').textContent,'Next');checks++;
  await click('Next');await React.act(async()=>nextRequests[1].advance());await click('Review');assert.equal(controller.getSnapshot().reviewing,true);assert.equal(container.querySelectorAll('dialog[open]').length,1);assert.equal(saveCallbacks,0);checks++;
  const oldReview=controller.getSnapshot().actions;
@@ -341,12 +369,18 @@ export async function checkNativeFormPagesReactMatrix({
             for (const token of [
                 'mx-sdk-form-pages-progress',
                 'mx-sdk-form-page-button',
+                '.mx-sdk-form-page-button--next:focus-visible',
                 'mx-sdk-form-review-dialog',
                 'mx-sdk-form-review-label--hidden',
                 '32rem',
                 '80vh',
             ])
                 assert(css.includes(token), `Missing public CSS: ${token}`);
+            assert.doesNotMatch(
+                css,
+                /\.mx-sdk-form-page-button(?:--back)?:focus-visible\b/,
+                'Back uses the native browser focus outline'
+            );
             for (const format of ['esm', 'cjs']) {
                 const contents =
                     format === 'esm'

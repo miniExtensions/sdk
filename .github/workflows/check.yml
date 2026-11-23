@@ -88,7 +88,8 @@ jobs:
               env:
                   SDK_FORM_VALIDATION_CHROMIUM: /usr/bin/google-chrome
             - name: Execute packed native Chromium proofs with React 19 and 18
-              timeout-minutes: 10
+              # The slower lane must finish its receipt and cleanup after all browser cases.
+              timeout-minutes: 12
               run: node scripts/check-native-browser-pair.mjs
               env:
                   SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit

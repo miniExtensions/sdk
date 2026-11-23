@@ -369,6 +369,8 @@ The Form text Clear button retains the native solid XMark icon from Heroicons 2.
 
 The editable Email field uses the native solid Envelope icon from Heroicons 2.1.1.
 
+The editable Duration field uses the native solid Clock icon from Heroicons 2.1.1.
+
 ```text
 MIT License
 

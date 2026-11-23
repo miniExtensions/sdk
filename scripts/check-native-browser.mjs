@@ -4328,7 +4328,7 @@ try {
             // Include complete fields, layouts, CSV, section groups and the Form header.
             32 +
                 portalChartFixtures.formats.length +
-                collaboratorFixtures.formats.length +
+                2 * collaboratorFixtures.formats.length +
                 storageEventCases.length +
                 Number(htmlDescriptionNative.referenceEnabled)
         );

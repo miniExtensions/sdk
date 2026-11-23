@@ -393,6 +393,244 @@ export async function prepareCompleteCollaboratorFixtures({
     return { formats: [...formats], routes };
 }
 
+// Archived editable Form Select at app 6958bb1d used Heroicons 2.1.1 24-solid.
+const nativeCollaboratorChevron =
+    'M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z';
+
+export async function checkCompleteCollaboratorChevronBrowser({
+    page,
+    evidence,
+    output,
+}) {
+    const toggle = page.getByRole('button', {
+        name: 'Open supplied choices',
+        exact: true,
+    });
+    const input = page.getByRole('combobox', {
+        name: 'Synthetic collaborator',
+    });
+    const options = page.getByRole('listbox');
+    const configure = (patch) =>
+        page.evaluate(
+            (patch) => window.__collaboratorFixture.configure(patch),
+            patch
+        );
+    const profiles = [];
+    evidence.chevron = { profiles };
+    await page.waitForFunction(
+        () => window.__nativeProbe?.snapshot().committed > 0
+    );
+
+    for (const [width, height] of [
+        [375, 780],
+        [1280, 720],
+    ]) {
+        await page.setViewportSize({ width, height });
+        for (const [mode, valueTags] of [
+            ['single', null],
+            ['multiple', ['A']],
+        ]) {
+            await configure({
+                mode,
+                valueTags,
+                readOnly: false,
+                images: 'none',
+            });
+            await toggle.waitFor();
+            await input.waitFor();
+            assert.equal(await toggle.getAttribute('type'), 'button');
+            assert.equal(
+                await toggle.locator('svg').getAttribute('aria-hidden'),
+                'true'
+            );
+            await page.evaluate(() => document.activeElement?.blur());
+            for (const state of ['rest', 'tab']) {
+                if (state === 'tab') {
+                    await page.locator('#adjacent').focus();
+                    await page.keyboard.press('Shift+Tab');
+                }
+                const geometry = await toggle.evaluate((button, nativePath) => {
+                    const svg = button.querySelector('svg');
+                    const path = svg?.querySelector('path');
+                    if (!svg || !path)
+                        throw Error('Mounted collaborator glyph required');
+                    const box = svg.getBoundingClientRect();
+                    const target = button.getBoundingClientRect();
+                    const view = svg.viewBox.baseVal;
+                    const style = getComputedStyle(path);
+                    const color = style.color;
+                    function raster(
+                        size,
+                        viewBox,
+                        d,
+                        fill,
+                        stroke,
+                        strokeWidth,
+                        fillRule
+                    ) {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = canvas.height = 28;
+                        const context = canvas.getContext('2d');
+                        context.translate(
+                            (28 - size.width) / 2,
+                            (28 - size.height) / 2
+                        );
+                        context.scale(
+                            size.width / viewBox.width,
+                            size.height / viewBox.height
+                        );
+                        context.translate(-viewBox.x, -viewBox.y);
+                        const shape = new Path2D(d);
+                        if (fill !== 'none') {
+                            context.fillStyle = fill;
+                            context.fill(shape, fillRule);
+                        }
+                        if (stroke !== 'none') {
+                            context.strokeStyle = stroke;
+                            context.lineWidth = parseFloat(strokeWidth);
+                            context.stroke(shape);
+                        }
+                        return context.getImageData(0, 0, 28, 28).data;
+                    }
+                    const actual = raster(
+                        box,
+                        view,
+                        path.getAttribute('d'),
+                        style.fill,
+                        style.stroke,
+                        style.strokeWidth,
+                        style.fillRule
+                    );
+                    const native = raster(
+                        { width: 16, height: 16 },
+                        { width: 24, height: 24, x: 0, y: 0 },
+                        nativePath,
+                        color,
+                        'none',
+                        '0px',
+                        'evenodd'
+                    );
+                    let differentPixels = 0;
+                    for (let index = 0; index < actual.length; index += 4) {
+                        if (
+                            actual
+                                .subarray(index, index + 4)
+                                .some(
+                                    (channel, offset) =>
+                                        channel !== native[index + offset]
+                                )
+                        ) {
+                            differentPixels++;
+                        }
+                    }
+                    function paintedExtent(data) {
+                        const x = [],
+                            y = [];
+                        for (let pixel = 0; pixel < 28 * 28; pixel++) {
+                            if (data[pixel * 4 + 3] === 0) continue;
+                            x.push(pixel % 28);
+                            y.push(Math.floor(pixel / 28));
+                        }
+                        return x.length
+                            ? [
+                                  Math.max(...x) - Math.min(...x) + 1,
+                                  Math.max(...y) - Math.min(...y) + 1,
+                              ]
+                            : [0, 0];
+                    }
+                    const field = button.closest('#field');
+                    const active = field?.querySelector(
+                        'input[role="combobox"]'
+                    );
+                    return {
+                        width: innerWidth,
+                        dpr: devicePixelRatio,
+                        glyph: [box.width, box.height],
+                        hitTarget: [target.width, target.height],
+                        color,
+                        stroke: style.stroke,
+                        centered: [
+                            box.left +
+                                box.width / 2 -
+                                target.left -
+                                target.width / 2,
+                            box.top +
+                                box.height / 2 -
+                                target.top -
+                                target.height / 2,
+                        ],
+                        focused:
+                            active === document.activeElement &&
+                            active?.matches(':focus-visible'),
+                        viewBox: svg.getAttribute('viewBox'),
+                        d: path.getAttribute('d'),
+                        painted: paintedExtent(actual),
+                        nativePainted: paintedExtent(native),
+                        differentPixels,
+                        center: [
+                            box.left + box.width / 2,
+                            box.top + box.height / 2,
+                        ],
+                    };
+                }, nativeCollaboratorChevron);
+                assert.equal(geometry.width, width);
+                assert.equal(geometry.dpr, 1);
+                assert.equal(geometry.focused, state === 'tab');
+                assert.deepEqual(geometry.hitTarget, [36, 36]);
+                assert.deepEqual(geometry.centered, [0, 0]);
+                assert.equal(geometry.color, 'rgb(107, 114, 128)');
+                const name =
+                    'collaborator-chevron-' +
+                    evidence.format +
+                    '-' +
+                    mode +
+                    '-' +
+                    width +
+                    '-' +
+                    state +
+                    '.png';
+                const [x, y] = geometry.center;
+                await page.screenshot({
+                    path: join(output, name),
+                    animations: 'disabled',
+                    clip: { x: x - 14, y: y - 14, width: 28, height: 28 },
+                });
+                profiles.push({ mode, state, name, ...geometry });
+            }
+            await input.press('ArrowDown');
+            await options.waitFor({ state: 'visible' });
+            await input.press('Escape');
+            await options.waitFor({ state: 'hidden' });
+            await toggle.click();
+            await options.waitFor({ state: 'visible' });
+            await input.press('Escape');
+            await options.waitFor({ state: 'hidden' });
+            const state = await configure({ readOnly: true });
+            assert.deepEqual(state.valueTags, valueTags);
+            assert.equal(state.writes.length, 0);
+            assert.equal(state.submits, 0);
+            assert.equal(state.requests, 0);
+            assert.equal(await toggle.count(), 0);
+        }
+    }
+    evidence.chevron.cleanup = await page.evaluate(() =>
+        window.__collaboratorFixture.unmount()
+    );
+    assert.equal(
+        evidence.chevron.cleanup.mounts,
+        evidence.chevron.cleanup.cleanups
+    );
+    assert.equal(await page.locator('#field').count(), 0);
+    assert.equal(profiles.length, 8);
+    for (const profile of profiles) {
+        assert.equal(profile.differentPixels, 0, JSON.stringify(profile));
+        assert.deepEqual(profile.glyph, [16, 16]);
+        assert.equal(profile.viewBox, '0 0 24 24');
+        assert.equal(profile.d, nativeCollaboratorChevron);
+        assert.equal(profile.stroke, 'none');
+    }
+}
+
 /** Existing run() owns navigation, page errors, network policy and teardown. */
 export async function checkCompleteCollaboratorBrowser({
     page,

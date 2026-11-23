@@ -135,6 +135,7 @@ import {
 import {
     prepareCompleteCollaboratorFixtures,
     checkCompleteCollaboratorBrowser,
+    checkCompleteCollaboratorChevronBrowser,
 } from './complete-collaborator-browser-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
@@ -3361,6 +3362,19 @@ try {
                         page,
                         evidence: report.completeCollaborators[format],
                         format,
+                        output,
+                    });
+                }
+            );
+            await run(
+                'complete-collaborator-chevron-' + format,
+                async (page, origin) => {
+                    await page.goto(
+                        origin + collaboratorFixtures.routes[format]
+                    );
+                    await checkCompleteCollaboratorChevronBrowser({
+                        page,
+                        evidence: report.completeCollaborators[format],
                         output,
                     });
                 }

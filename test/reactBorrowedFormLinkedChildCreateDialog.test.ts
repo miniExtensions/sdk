@@ -3,6 +3,7 @@ import { it, type TestContext } from 'node:test';
 import { act, createElement as h } from 'react';
 import {
     BorrowedFormLinkedChildCreateDialog,
+    type BorrowedFormLinkedChildCreateDialogProps,
     type BorrowedFormLinkedChildCreateOwner,
     type BorrowedFormLinkedChildCreateRef,
     type BorrowedFormLinkedChildCreateSaveOutcome,
@@ -20,7 +21,8 @@ async function fixture(
     t: TestContext,
     send: (
         ref: BorrowedFormLinkedChildCreateRef
-    ) => Promise<BorrowedFormLinkedChildCreateSaveOutcome> = async () => saved
+    ) => Promise<BorrowedFormLinkedChildCreateSaveOutcome> = async () => saved,
+    initialPrimaryAction?: BorrowedFormLinkedChildCreateDialogProps<string>['primaryAction']
 ) {
     const dom = await htmlPresentationFixture(t);
     const doc = dom.window.document;
@@ -84,7 +86,7 @@ async function fixture(
             return 'closed';
         },
     };
-    const render = () => {
+    const render = (primaryAction = initialPrimaryAction) => {
         const opening = identity;
         return dom.render(
             h(BorrowedFormLinkedChildCreateDialog<string>, {
@@ -100,6 +102,7 @@ async function fixture(
                         readOnly: true,
                         'aria-label': 'Native child',
                     }),
+                primaryAction,
             })
         );
     };
@@ -186,6 +189,92 @@ it('retires a captured confirmation and Save control when the opening changes', 
     await f.click(f.button('Save'));
     assert.deepEqual(f.saves, [expected]);
     assert.equal(f.doc.activeElement, f.opener);
+});
+
+it('keeps navigation and Review idle until the latest explicit confirmation', async (t) => {
+    let settle!: () => void;
+    const heldSave = new Promise<void>((resolve) => {
+        settle = resolve;
+    });
+    const f = await fixture(t, async () => {
+        await heldSave;
+        return saved;
+    });
+    let nextClicks = 0;
+    await f.render({
+        label: 'Next',
+        onAction() {
+            nextClicks++;
+        },
+    });
+    await f.click(f.button('Next'));
+    assert.equal(nextClicks, 1);
+    assert.deepEqual(f.saves, []);
+
+    const confirmations: Array<() => Promise<void>> = [];
+    const review = {
+        label: 'Review',
+        onAction(confirm: () => Promise<void>) {
+            confirmations.push(confirm);
+        },
+    };
+    await f.render(review);
+    await f.edit('Keep these native answers');
+    await f.click(f.button('Review'));
+    await f.click(f.button('Review'));
+    const [superseded, confirm] = confirmations;
+    assert(superseded);
+    assert(confirm);
+    await f.render({ ...review, onAction: (save) => review.onAction(save) });
+    await act(superseded);
+    assert.equal(f.button('Close').disabled, false);
+    assert.equal(
+        f.dialog()?.querySelector('input')?.value,
+        'Keep these native answers'
+    );
+    assert.deepEqual(f.saves, []);
+
+    const expected = f.read().ref;
+    await act(async () => {
+        void confirm();
+        void confirm();
+    });
+    assert.deepEqual(f.saves, [expected]);
+    assert.equal(f.button('Close').disabled, true);
+    assert.equal(f.button('Review').disabled, true);
+    await act(async () => settle());
+    assert.equal(f.dialog(), null);
+    assert.equal(f.doc.activeElement, f.opener);
+});
+
+it('refuses deferred Save after the native draft or opening changes', async (t) => {
+    const confirmations: Array<() => Promise<void>> = [];
+    const f = await fixture(t, undefined, {
+        label: 'Review',
+        onAction: (confirm) => {
+            confirmations.push(confirm);
+        },
+    });
+    await f.render();
+    await f.click(f.button('Review'));
+    await f.edit('The draft changed');
+    const [oldDraft] = confirmations;
+    assert(oldDraft);
+    await act(oldDraft);
+    await f.click(f.button('Review'));
+    const [, oldOpening] = confirmations;
+    assert(oldOpening);
+    await f.replace();
+    await act(oldOpening);
+    assert.deepEqual(f.saves, []);
+    assert.equal(f.dialog()?.querySelector('input')?.value, 'Successor draft');
+
+    await f.click(f.button('Review'));
+    const [, , current] = confirmations;
+    assert(current);
+    const expected = f.read().ref;
+    await act(current);
+    assert.deepEqual(f.saves, [expected]);
 });
 
 it('keeps a held Save with its original opening and releases the successor latch', async (t) => {

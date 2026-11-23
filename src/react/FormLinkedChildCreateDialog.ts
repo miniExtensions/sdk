@@ -510,7 +510,7 @@ export type BorrowedFormLinkedChildCreateDismissOutcome =
 export type BorrowedFormLinkedChildCreateSnapshot<View> = Readonly<{
     ref: BorrowedFormLinkedChildCreateRef;
     phase: 'ready' | 'saving' | 'unknown' | 'saved' | 'closed' | 'retired';
-    /** Accepted, one-page native fields. Null when there is no accepted view. */
+    /** Accepted native fields. Null when there is no accepted view. */
     fields: View | null;
     dirty: boolean;
     error: string | null;
@@ -546,9 +546,14 @@ type BorrowedCreateLabels = Partial<typeof defaultLabels> & {
 export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     owner: BorrowedFormLinkedChildCreateOwner<View>;
     opening: BorrowedFormLinkedChildCreateOpening;
-    /** Render fields without a separate modal, form element, or submit footer. */
+    /** Render fields without a separate editor dialog, form, or submit footer. */
     renderFields(fields: View): ReactNode;
     labels?: BorrowedCreateLabels;
+    /** A native navigation or Review action that can defer Save until confirmation. */
+    primaryAction?: Readonly<{
+        label: string;
+        onAction(save: () => Promise<void>): void;
+    }>;
 }>;
 
 function isSavedUnlinked(
@@ -621,6 +626,7 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
                         ? null
                         : props.renderFields(state.fields),
                 labels: props.labels,
+                primaryAction: props.primaryAction,
             })
         )
     );
@@ -632,12 +638,14 @@ function BorrowedCreatePresentation<View>({
     state,
     content,
     labels: suppliedLabels,
+    primaryAction,
 }: {
     owner: BorrowedFormLinkedChildCreateOwner<View>;
     opening: BorrowedFormLinkedChildCreateOpening;
     state: BorrowedFormLinkedChildCreateSnapshot<View>;
     content: ReactNode;
     labels?: BorrowedCreateLabels;
+    primaryAction?: BorrowedFormLinkedChildCreateDialogProps<View>['primaryAction'];
 }): ReactElement {
     const labels = { ...defaultLabels, ...suppliedLabels };
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -656,6 +664,7 @@ function BorrowedCreatePresentation<View>({
             closed: false,
             saved: null as null | 'linked' | 'unlinked' | 'superseded',
             unresolved: false,
+            pendingPrimarySave: null as (() => Promise<void>) | null,
         }),
         [owner, opening.identity, opening.opener]
     );
@@ -677,7 +686,12 @@ function BorrowedCreatePresentation<View>({
         expected: BorrowedFormLinkedChildCreateRef,
         action: 'save' | 'dismiss'
     ) => {
-        if (!session.live || !dialogRef.current?.open || !opening.isCurrent())
+        if (
+            !session.live ||
+            !dialogRef.current?.open ||
+            committedOpening.current.identity !== expected.opening ||
+            !committedOpening.current.isCurrent()
+        )
             return false;
         const actual = owner.getSnapshot();
         if (
@@ -706,6 +720,7 @@ function BorrowedCreatePresentation<View>({
         closeButton.current?.focus({ preventScroll: true });
         return () => {
             session.live = false;
+            session.pendingPrimarySave = null;
             pendingDecision.current = null;
             const active = document.activeElement;
             const next = owner.getSnapshot();
@@ -747,6 +762,7 @@ function BorrowedCreatePresentation<View>({
     };
     const dismiss = () => {
         if (!current(state.ref, 'dismiss')) return;
+        session.pendingPrimarySave = null;
         if (state.dirty && !unlinked) {
             pendingDecision.current = state.ref;
             setQuestion(state.ref);
@@ -760,12 +776,12 @@ function BorrowedCreatePresentation<View>({
                 closeButton.current?.focus({ preventScroll: true });
         });
     };
-    const save = async () => {
-        if (!current(state.ref, 'save')) return;
+    const save = async (expected: BorrowedFormLinkedChildCreateRef) => {
+        if (!current(expected, 'save')) return;
         session.saving = true;
         setActionStatus({ session, phase: 'saving' });
         try {
-            const outcome = await owner.save(state.ref);
+            const outcome = await owner.save(expected);
             session.saved = outcome.type === 'saved' ? outcome.link : null;
             session.unresolved = outcome.type === 'unknown';
         } catch {
@@ -785,10 +801,29 @@ function BorrowedCreatePresentation<View>({
         }
     };
 
+    const activatePrimary = () => {
+        const expected = state.ref;
+        if (!primaryAction) {
+            session.pendingPrimarySave = null;
+            void save(expected);
+            return;
+        }
+        if (!current(expected, 'save')) return;
+        const saveOnce = async () => {
+            if (session.pendingPrimarySave !== saveOnce) return;
+            session.pendingPrimarySave = null;
+            if (owner.getSnapshot()?.ref === expected) await save(expected);
+        };
+        session.pendingPrimarySave = saveOnce;
+        primaryAction.onAction(saveOnce);
+    };
+
     const localPhase =
         actionStatus?.session === session ? actionStatus.phase : null;
     return h(LinkedChildDialogChrome, {
-        labels,
+        labels: primaryAction
+            ? { ...labels, save: primaryAction.label }
+            : labels,
         dialogRef,
         closeButton,
         keepEditing,
@@ -811,6 +846,6 @@ function BorrowedCreatePresentation<View>({
             setQuestion(null);
             close(question);
         },
-        save,
+        save: activatePrimary,
     });
 }

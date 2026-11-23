@@ -28,6 +28,64 @@ const root=createRoot(document.querySelector('main'));root.render(h(React.Strict
 window.signatureProof={snapshot:()=>JSON.parse(JSON.stringify(stats)),patch:next=>patch(next),resolve:()=>resolveReceipt(),destroy:()=>root.unmount(),parity:()=>({adapter:adapterRef.current.toDataURL(),wrapper:referenceRef.current.toDataURL(),adapterEmpty,wrapperEmpty:referenceRef.current.isEmpty()})};
 `;
 
+async function checkSignatureTabs(page, field, width) {
+    const type = field.getByRole('tab', { name: 'Type', exact: true });
+    const upload = field.getByRole('tab', { name: 'Upload', exact: true });
+    const selected = field.getByRole('tab', { selected: true });
+    const read = (tab) =>
+        tab.evaluate((button) => {
+            const style = getComputedStyle(button);
+            return {
+                fontSize: style.fontSize,
+                fontWeight: style.fontWeight,
+                lineHeight: style.lineHeight,
+                color: style.color,
+                underline: style.borderBottomColor,
+                underlineWidth: style.borderBottomWidth,
+            };
+        });
+    await type.waitFor();
+    await field.evaluate((host) =>
+        host.style.setProperty('--mx-sdk-accent', 'rgb(123, 45, 67)')
+    );
+    const previous = await page.evaluate(() =>
+        window.signatureProof.snapshot()
+    );
+    assert.equal(await selected.count(), 1);
+    assert.equal(await selected.textContent(), 'Type');
+    assert.deepEqual(await read(type), {
+        fontSize: '14px',
+        fontWeight: '500',
+        lineHeight: '20px',
+        color: 'rgb(123, 45, 67)',
+        underline: 'rgb(123, 45, 67)',
+        underlineWidth: '2px',
+    });
+    assert.equal((await read(upload)).color, 'rgb(107, 114, 128)');
+    if (width === 1280) {
+        await upload.hover();
+        assert.equal((await read(upload)).color, 'rgb(55, 65, 81)');
+    }
+    await field.evaluate((host) =>
+        host.style.setProperty(
+            '--mx-sdk-signature-tab-underline',
+            'rgb(20, 184, 166)'
+        )
+    );
+    await upload.click();
+    assert.equal(await selected.count(), 1);
+    assert.equal(await selected.textContent(), 'Upload');
+    assert.equal((await read(upload)).color, 'rgb(123, 45, 67)');
+    assert.equal((await read(upload)).underline, 'rgb(20, 184, 166)');
+    assert.equal(await field.locator('input[type="file"]').count(), 1);
+    await type.click();
+    assert.equal(await selected.textContent(), 'Type');
+    assert.deepEqual(
+        await page.evaluate(() => window.signatureProof.snapshot()),
+        previous
+    );
+}
+
 /** Real raster, pointer, DPR, resize, and retired-engine isolation on packed bytes. */
 export async function checkSignatureBrowser({
     browser,
@@ -166,6 +224,30 @@ export async function checkSignatureBrowser({
                     evidence.unexpectedRequests.push(url.origin + url.pathname);
                     return route.abort();
                 });
+                const tabWidth = ratio === 1 ? 375 : 1280;
+                const tabPage = await context.newPage();
+                try {
+                    tabPage.on('pageerror', (error) =>
+                        evidence.pageErrors.push(error.message)
+                    );
+                    await tabPage.setViewportSize({
+                        width: tabWidth,
+                        height: 850,
+                    });
+                    await tabPage.goto(origin);
+                    await checkSignatureTabs(
+                        tabPage,
+                        tabPage.locator('#first'),
+                        tabWidth
+                    );
+                    evidence.results.push({
+                        ratio,
+                        tabWidth,
+                        methodTabs: 'passed',
+                    });
+                } finally {
+                    await tabPage.close();
+                }
                 const page = await context.newPage();
                 page.on('pageerror', (error) =>
                     evidence.pageErrors.push(error.message)

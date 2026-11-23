@@ -13,6 +13,49 @@ import { join } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+// Native solid Heroicons 2.1.1 Camera and Stop geometry.
+const nativeScannerPaths = {
+    camera: [
+        ['M12 9a3.75 3.75 0 1 0 0 7.5A3.75 3.75 0 0 0 12 9Z', null, null],
+        [
+            'M9.344 3.071a49.52 49.52 0 0 1 5.312 0c.967.052 1.83.585 2.332 1.39l.821 1.317c.24.383.645.643 1.11.71.386.054.77.113 1.152.177 1.432.239 2.429 1.493 2.429 2.909V18a3 3 0 0 1-3 3h-15a3 3 0 0 1-3-3V9.574c0-1.416.997-2.67 2.429-2.909.382-.064.766-.123 1.151-.178a1.56 1.56 0 0 0 1.11-.71l.822-1.315a2.942 2.942 0 0 1 2.332-1.39ZM6.75 12.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Zm12-1.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z',
+            'evenodd',
+            'evenodd',
+        ],
+    ],
+    stop: [
+        [
+            'M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z',
+            'evenodd',
+            'evenodd',
+        ],
+    ],
+};
+
+async function assertScannerGlyph(page, kind) {
+    const glyph = await page
+        .getByTestId('qr-scanner-button')
+        .locator('svg')
+        .evaluate((node) => ({
+            viewBox: node.getAttribute('viewBox'),
+            width: node.getAttribute('width'),
+            height: node.getAttribute('height'),
+            hidden: node.getAttribute('aria-hidden'),
+            paths: [...node.querySelectorAll('path')].map((path) =>
+                ['d', 'fill-rule', 'clip-rule'].map((attribute) =>
+                    path.getAttribute(attribute)
+                )
+            ),
+        }));
+    assert.deepEqual(glyph, {
+        viewBox: '0 0 24 24',
+        width: '20',
+        height: '20',
+        hidden: 'true',
+        paths: nativeScannerPaths[kind],
+    });
+}
+
 /** Real SDK dialog/video/controls, synthetic canvas media, decoder boundary only. */
 export async function checkCompleteBarcodeBrowser({
     browser,
@@ -284,11 +327,13 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
             const button = page.getByRole('button', {
                 name: 'Scan barcode or QR code',
             });
+            await assertScannerGlyph(page, 'camera');
             await button.click();
             await page.getByRole('dialog').waitFor();
             await page.waitForFunction(
                 () => window.barcodeProof.snapshot().acquisitions === 1
             );
+            await assertScannerGlyph(page, 'stop');
             await page
                 .getByRole('button', { name: 'Close', exact: true })
                 .focus();
@@ -309,6 +354,7 @@ window.barcodeProof={mode:value=>{mode=value;},patch:change=>patch(change),relea
             assert(
                 await button.evaluate((node) => node === document.activeElement)
             );
+            await assertScannerGlyph(page, 'camera');
             assert(
                 (await snapshot()).tracks.every((state) => state === 'ended')
             );

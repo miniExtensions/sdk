@@ -11,10 +11,10 @@ ${
     format === 'esm'
         ? `import {createElement as h, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
+import {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useRef, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
@@ -22,6 +22,13 @@ const calls={selection:[],save:0,upload:0,delete:0,fetch:0};
 const tileOpens=[];
 const downloads={pending:[],finished:0};
 let bodySelections=0;
+const headerCalls={deletes:0, reads:[], errors:0, escapes:0};
+const headerListeners=new Set();
+let headerCurrent=true;
+const headerOwner={isCurrent:()=>headerCurrent,subscribe(listener){
+    headerListeners.add(listener);
+    return ()=>headerListeners.delete(listener);
+}};
 const downloadListeners=new Set();
 const downloadOwner={token:0,isCurrent:()=>true,subscribe(listener){
     downloadListeners.add(listener);
@@ -41,6 +48,7 @@ function Host(){
     ]);
     const bodyNav=useAttachmentGalleryNavigation(bodyRows);
     const bodyRail=useRef(null);
+    const [header,setHeader]=useState('closed');
     function replace(owner){
         setRows([first,second]);
         setSelectedIndex(0);
@@ -53,6 +61,14 @@ function Host(){
         shrinkBody(){setBodyRows((items)=>items.slice(0,1));},
         emptyBody(){setBodyRows([]);},
         bodySelections:()=>bodySelections,
+        showHeader:()=>setHeader('active'),
+        closeHeader:()=>setHeader('closed'),
+        revokeHeader:()=>{headerCurrent=false;},
+        settleHeader(){
+            for (const notify of [...headerListeners]) notify();
+            headerCalls.reads[0].resolve(new Response('retired header bytes'));
+        },
+        headerCalls:()=>({deletes:headerCalls.deletes,reads:headerCalls.reads.map(({url})=>url),errors:headerCalls.errors,escapes:headerCalls.escapes}),
         replace,
         rotateDownloadOwner(){downloadOwner.token++;for(const listener of [...downloadListeners])listener();},
         reset(owner){calls.selection.length=0;replace(owner);},
@@ -91,6 +107,15 @@ function Host(){
         h('div',{className:'attachment-tile-proof'},h(AttachmentTileOpenButton,{
             ...tile,onOpen(){tileOpens.push(tile.label);},
         })),
+        header==='active'&&h('section',{'aria-label':'Commandes de la pièce jointe'},
+            h(AttachmentSliderActions,{
+                attachment:second,downloadIdentity:'selected-row',
+                labels:{delete:'Effacer',download:'Télécharger',open:'Ouvrir'},
+                canDownload:true,canOpen:true,presentationOwner:headerOwner,
+                onDelete(){headerCalls.deletes++;},
+                readDownload(url){return new Promise((resolve)=>headerCalls.reads.push({url,resolve}));},
+                onDownloadError(){headerCalls.errors++;},
+            })),
         bodyNav.navigationOwner&&h('div',{
             role:'dialog','aria-label':'Visionneuse','data-body-owner':bodyNav.navigationOwner,
             className:'attachment-body-proof',
@@ -103,6 +128,9 @@ function Host(){
             labels:{attachments:'Aperçu des pièces jointes',previewNotAvailable:'Aucun aperçu',previous:'Précédent',next:'Suivant'},
         })));
 }
+window.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'&&!event.defaultPrevented) headerCalls.escapes++;
+});
 createRoot(document.querySelector('main')).render(h(Host));
 `;
 
@@ -150,6 +178,12 @@ export async function checkAttachmentSliderNavigationBrowser({
                 name.endsWith('/react/AttachmentSliderBody.js')
             ),
             'The installed Attachment Slider Body must be bundled'
+        );
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/AttachmentSliderActions.js')
+            ),
+            'The installed Attachment Slider Actions must be bundled'
         );
         const assets = new Map([
             [
@@ -462,6 +496,8 @@ export async function checkAttachmentSliderNavigationBrowser({
                 '/rear.svg',
             ]);
             const sliderBody = await checkSliderBody(page);
+            const sliderActions = await checkSliderActions(page);
+            assert.equal(saves.length, 2);
             const { selection: _bodySelection, ...bodyOwnerCalls } =
                 await probe();
             assert.deepEqual(bodyOwnerCalls, otherCalls);
@@ -473,6 +509,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 gestures,
                 tileOpen,
                 sliderBody,
+                sliderActions,
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
@@ -505,6 +542,73 @@ export async function checkAttachmentSliderNavigationBrowser({
         [],
         'A retired owner’s held gesture selected in its successor'
     );
+}
+
+async function checkSliderActions(page) {
+    const scope = page.getByRole('region', {
+        name: 'Commandes de la pièce jointe',
+    });
+    const remove = scope.getByRole('button', { name: 'Effacer', exact: true });
+    const download = (name) => scope.getByRole('button', { name, exact: true });
+    const open = scope.getByRole('link', { name: 'Ouvrir', exact: true });
+    const tooltip = page.getByRole('tooltip');
+    const calls = () => page.evaluate(() => window.sliderProbe.headerCalls());
+    await page.evaluate(() => window.sliderProbe.showHeader());
+    await open.waitFor();
+    assert.equal(await open.getAttribute('href'), '/rear.svg');
+    assert.equal(await open.getAttribute('target'), '_blank');
+    const widths = {};
+    for (const width of [1280, 375]) {
+        await page.setViewportSize({ width, height: 720 });
+        const removeBox = await remove.boundingBox();
+        const downloadBox = await download('Télécharger').boundingBox();
+        assert.ok(removeBox && downloadBox);
+        widths[width] = {
+            control: [removeBox.width, removeBox.height],
+            gap: downloadBox.x - removeBox.x - removeBox.width,
+        };
+        assert.deepEqual(widths[width], { control: [20, 20], gap: 16 });
+    }
+    await open.hover();
+    await tooltip.waitFor();
+    assert.equal(await tooltip.innerText(), 'Ouvrir');
+    assert.equal(
+        await open.getAttribute('aria-describedby'),
+        await tooltip.getAttribute('id')
+    );
+    const openBox = await open.boundingBox();
+    const tipBox = await tooltip.boundingBox();
+    assert.ok(openBox && tipBox);
+    assert.equal(tipBox.y - openBox.y - openBox.height, 8);
+    await page.keyboard.press('Escape');
+    await tooltip.waitFor({ state: 'detached' });
+    assert.equal((await calls()).escapes, 0);
+
+    await remove.click();
+    assert.equal((await calls()).deletes, 1);
+    await download('Télécharger').click();
+    await download('0%').waitFor();
+    assert.equal(await download('0%').isDisabled(), true);
+    await page.evaluate(() => window.sliderProbe.revokeHeader());
+    await scope.locator('a').click({ button: 'right' });
+    assert.equal(await scope.locator('a').getAttribute('href'), null);
+    await page.evaluate(() => window.sliderProbe.settleHeader());
+    await download('Télécharger').waitFor();
+    assert.deepEqual(await calls(), {
+        deletes: 1,
+        reads: ['/rear.svg'],
+        errors: 0,
+        escapes: 0,
+    });
+    await page.evaluate(() => window.sliderProbe.closeHeader());
+    await scope.waitFor({ state: 'detached' });
+    await tooltip.waitFor({ state: 'detached' });
+    return {
+        widths,
+        tooltipOffset: 8,
+        staleOpenRetired: true,
+        retiredDownloadSaved: false,
+    };
 }
 
 async function checkSliderBody(page) {

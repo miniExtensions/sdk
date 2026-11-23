@@ -3679,6 +3679,10 @@ export {
     type AttachmentSliderBodyRow,
 } from './AttachmentSliderBody.js';
 export {
+    AttachmentSliderActions,
+    type AttachmentSliderActionsProps,
+} from './AttachmentSliderActions.js';
+export {
     AttachmentSliderThumbnailRail,
     type AttachmentSliderThumbnailRailProps,
     type AttachmentSliderThumbnail,

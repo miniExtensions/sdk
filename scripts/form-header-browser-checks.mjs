@@ -5,6 +5,12 @@ import { join, resolve } from 'node:path';
 const route = '/form-header-title-hover';
 const paths = [`${route}.html`, `${route}.js`, `${route}.css`];
 const titleClass = '.mx-sdk-form-placeholder--title';
+const descriptionThemeStyles = `
+/* Mirror the native Form host's border token and preflight cascade. */
+body.description-border-proof { --border: 214.3 31.8% 91.4%; }
+body.description-border-proof.miniextensions-admin { --border: 240 6% 90%; }
+:where(body.description-border-proof) :where(*) { border-color: hsl(var(--border)); }
+`;
 
 export async function prepareFormHeaderBrowserFixture({
     temporary,
@@ -68,7 +74,11 @@ export async function prepareFormHeaderBrowserFixture({
     );
     assert(javascript && css, 'Expected the stock example JS and CSS bundles');
     allowed.set(paths[1], javascript.contents);
-    allowed.set(paths[2], css.contents);
+    const styledFixture = Buffer.concat([
+        Buffer.from(css.contents),
+        Buffer.from(descriptionThemeStyles),
+    ]);
+    allowed.set(paths[2], styledFixture);
     // Supply an enclosing form so an accidental submit button is observable.
     allowed.set(
         paths[0],
@@ -81,7 +91,7 @@ export async function prepareFormHeaderBrowserFixture({
     return {
         inputs,
         bundleSha256: hash(javascript.contents),
-        cssSha256: hash(css.contents),
+        cssSha256: hash(styledFixture),
     };
 }
 
@@ -383,4 +393,103 @@ export async function checkFormHeaderBrowser({
         });
     }
     await verify([]);
+
+    await page.setViewportSize({ width: 640, height: 640 });
+    const header = page.getByTestId('example-header');
+    const manual = header.getByRole('button', {
+        name: 'Add form description',
+        exact: true,
+    });
+    const sourced = header.getByRole('button', {
+        name: /^Description from Airtable/,
+    });
+    const readBorder = (button) =>
+        button.evaluate((node) => {
+            const style = getComputedStyle(node);
+            return {
+                color: style.borderTopColor,
+                style: style.borderTopStyle,
+                width: style.borderTopWidth,
+                radius: style.borderTopLeftRadius,
+                padding: style.padding,
+                focused: node.matches(':focus-visible'),
+            };
+        });
+    evidence.descriptionBorders = [];
+    for (const [theme, admin, expectedColor] of [
+        ['public', false, 'rgb(226, 232, 240)'],
+        ['admin', true, 'rgb(228, 228, 231)'],
+    ]) {
+        await page.goto(origin + paths[0]);
+        await source.selectOption('none');
+        await preview.check();
+        await manual.waitFor();
+        if (!admin) {
+            evidence.descriptionStandalone = await readBorder(manual);
+            assert.equal(
+                evidence.descriptionStandalone.color,
+                'rgb(209, 213, 219)'
+            );
+        }
+        await page.evaluate((admin) => {
+            document.body.classList.add('description-border-proof');
+            document.body.classList.toggle('miniextensions-admin', admin);
+        }, admin);
+        await page.mouse.move(0, 0);
+
+        const capture = async (button, state) => {
+            const metrics = await readBorder(button);
+            await button.screenshot({
+                path: join(output, `form-description-${theme}-${state}.png`),
+            });
+            return metrics;
+        };
+        const rest = await capture(manual, 'rest');
+        await manual.press('Shift+Tab');
+        await page.keyboard.press('Tab');
+        const focus = await capture(manual, 'tab');
+        assert.equal(focus.focused, true);
+        await page.keyboard.press('Enter');
+        assert.equal(await commands.textContent(), 'description');
+        await page.keyboard.press('Shift+Tab');
+        await manual.hover();
+        const hover = await capture(manual, 'hover');
+        const manualTitle = await readBorder(title);
+        assert.equal(manualTitle.radius, '0px');
+        assert.equal(manualTitle.width, '0px');
+
+        await source.selectOption('blank');
+        await sourced.waitFor();
+        const sourceBorder = await capture(sourced, 'source');
+        assert.equal(sourceBorder.color, 'rgb(125, 211, 252)');
+        await preview.uncheck();
+        await sourced.waitFor({ state: 'detached' });
+        assert.equal(await manual.count(), 0);
+        await verify([]);
+        evidence.descriptionBorders.push({
+            theme,
+            expectedColor,
+            rest,
+            focus,
+            hover,
+            sourceBorder,
+        });
+    }
+    for (const {
+        expectedColor,
+        rest,
+        focus,
+        hover,
+    } of evidence.descriptionBorders) {
+        const expected = {
+            color: expectedColor,
+            style: 'dashed',
+            width: '1px',
+            radius: '6px',
+            padding: '8px 12px',
+        };
+        assert.deepEqual(rest, { ...expected, focused: false });
+        assert.deepEqual(focus, { ...expected, focused: true });
+        assert.deepEqual(hover, { ...expected, focused: false });
+    }
 }

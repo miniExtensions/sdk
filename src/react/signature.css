@@ -14,14 +14,21 @@
 }
 .mx-sdk-signature-tabs button {
     font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
     padding: 0.5rem 1rem;
     background: none;
     border: 0;
     color: #6b7280;
     cursor: pointer;
 }
+.mx-sdk-signature-tabs button[aria-selected='false']:hover {
+    color: #374151;
+}
 .mx-sdk-signature-tabs button[aria-selected='true'] {
-    border-bottom: 2px solid var(--mx-sdk-signature-accent);
+    border-bottom: 2px solid
+        var(--mx-sdk-signature-tab-underline, var(--mx-sdk-signature-accent));
     color: var(--mx-sdk-signature-accent);
 }
 .mx-sdk-signature input[type='text'] {

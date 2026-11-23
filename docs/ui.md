@@ -6638,6 +6638,23 @@ completion uses only `onScheduled`, ordinary edits only `onChange`; neither
 implicitly saves. Readonly forces the ordinary disabled checkbox (or static grid
 value). Existing `CompleteCheckboxField` remains compatible.
 
+### Controlled Form and Portal Attachment field
+
+`AttachmentField` from `@miniextensions/sdk/react/attachment` composes the
+native device, URL, signature and annotation controls with the thumbnail,
+icon or Grid gallery and fullscreen viewer. Pass accepted gallery rows and
+their current action callbacks. Select a producer with the typed `input`
+prop, and supply `upload` progress and the Cancel callback during an active
+upload. For a read-only field, pass the permitted gallery viewing actions
+and a localized `emptyLabel`.
+
+The host admits each resource, owns uploads and authorization, and commits
+accepted values through its current writer. Import `attachment-preview.css`,
+`attachment-device-input.css`, `attachment-url-input.css` and
+`attachment-upload-progress.css` from `@miniextensions/sdk/react/` for the
+stock attachment styles. Signature and annotation use `signature.css` and
+`complete-image-annotation.css` respectively.
+
 ### Explicit attachment media preview
 
 `AttachmentPreview` from `@miniextensions/sdk/react` renders the complete media

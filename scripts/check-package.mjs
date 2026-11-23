@@ -447,6 +447,7 @@ import { checkBrowserChildQueryExample } from './browser-child-query-example-che
 import assert from 'node:assert/strict';
 import { checkCompletePortalChartReactMatrix } from './complete-portal-chart-consumer-checks.mjs';
 import { checkCompleteCollaboratorReactMatrix } from './complete-collaborator-consumer-checks.mjs';
+import { assertAttachmentSliderDialogBundle } from './collaborator-picker-vendor-checks.mjs';
 import { execPackageFileSync } from './package-manager-launch.mjs';
 import {
     cpSync,
@@ -914,6 +915,18 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/attachment-preview.css',
         'dist/cjs/react/attachment-preview.css',
+        ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/attachment.js`,
+            `dist/${format}/react/attachment.d.ts`,
+            `dist/${format}/react/attachment-slider.js`,
+            `dist/${format}/react/attachment-slider.d.ts`,
+            `dist/${format}/react/AttachmentSlider.js`,
+            `dist/${format}/react/AttachmentSlider.d.ts`,
+            `dist/${format}/react/attachmentSliderDialogRuntime.js`,
+            `dist/${format}/react/attachmentSliderDialogRuntime.d.ts`,
+            `dist/${format}/react/attachment-slider.provenance.json`,
+            `dist/${format}/react/attachment-slider.LICENSES.txt`,
+        ]),
         'dist/esm/react/readonly-url-gallery.css',
         'dist/cjs/react/readonly-url-gallery.css',
         ...['esm', 'cjs'].flatMap((format) => [
@@ -925,6 +938,8 @@ try {
             `dist/${format}/react/attachment-url-input.css`,
             `dist/${format}/react/AttachmentUploadProgress.js`,
             `dist/${format}/react/AttachmentUploadProgress.d.ts`,
+            `dist/${format}/react/AttachmentUploadDialog.js`,
+            `dist/${format}/react/AttachmentUploadDialog.d.ts`,
             `dist/${format}/react/attachment-upload-progress.css`,
         ]),
         ...['esm', 'cjs'].flatMap((format) => [
@@ -1094,6 +1109,7 @@ try {
         'node_modules/@miniextensions/sdk'
     );
     await assertInstalledArchive(temporaryDirectory, packedArchive, packed);
+    assertAttachmentSliderDialogBundle(installedPackage);
     const splitDurationDirectory = mkdtempSync(
         join(tmpdir(), 'miniextensions-duration-split-')
     );
@@ -2324,7 +2340,11 @@ new Parser([]).parse({maxDepth:'48'});
         join(temporaryDirectory, 'field-bindings-react.tsx'),
         `
 import { TextField, NumberField, CheckboxField, SelectField, LinkedField, AttachmentField, AttachmentDialog } from '@miniextensions/sdk/react';
+import { AttachmentField as NativeAttachmentField, type AttachmentFieldProps as NativeAttachmentFieldProps } from '@miniextensions/sdk/react/attachment';
 import type { FormFieldBinding, FormAttachmentController } from '@miniextensions/sdk/forms';
+export function NativeAttachment<Upload>(props: NativeAttachmentFieldProps<Upload>) {
+    return <NativeAttachmentField {...props} />;
+}
 export function Fields({binding, attachment}: {binding: FormFieldBinding; attachment: FormAttachmentController}) {
     return <AttachmentDialog onClose={() => {}}>
         <TextField binding={binding} render={({snapshot, binding}) => <input value={typeof snapshot.value === 'string' ? snapshot.value : ''} onChange={e => binding.setValue(e.currentTarget.value)} />} />

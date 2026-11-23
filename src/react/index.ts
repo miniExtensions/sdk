@@ -3666,14 +3666,36 @@ export {
 } from './AttachmentPreview.js';
 export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
 export {
+    AttachmentTileOpenButton,
+    type AttachmentTileOpenButtonProps,
+} from './AttachmentTileOpenButton.js';
+export {
     AttachmentSliderNavigation,
     type AttachmentSliderNavigationProps,
 } from './AttachmentSliderNavigation.js';
+export {
+    AttachmentSliderBody,
+    type AttachmentSliderBodyProps,
+    type AttachmentSliderBodyRow,
+} from './AttachmentSliderBody.js';
+export {
+    AttachmentSlider,
+    type AttachmentSliderProps,
+} from './AttachmentSlider.js';
+export {
+    AttachmentSliderActions,
+    type AttachmentSliderActionsProps,
+} from './AttachmentSliderActions.js';
 export {
     AttachmentSliderThumbnailRail,
     type AttachmentSliderThumbnailRailProps,
     type AttachmentSliderThumbnail,
 } from './AttachmentSliderThumbnailRail.js';
+export {
+    useAttachmentGalleryNavigation,
+    type AttachmentGalleryNavigation,
+    type AttachmentGalleryRowIdentity,
+} from './useAttachmentGalleryNavigation.js';
 export {
     useAttachmentDownload,
     type AttachmentDownload,

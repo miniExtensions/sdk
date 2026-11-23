@@ -122,6 +122,10 @@ export function copyDocumentSource(
     return { ...type, bytes: new Uint8Array(source.bytes) };
 }
 
+export function isAdmittedDocumentUri(uri: string): boolean {
+    return /^https?:\/\//i.test(uri) && checkIfPageUrlIsValid(uri);
+}
+
 export async function loadDocumentSource(
     uri: string,
     source: DocumentThumbnailSource,
@@ -129,8 +133,7 @@ export async function loadDocumentSource(
     isCurrent: () => boolean
 ): Promise<AdmittedDocument | null> {
     const current = () => !controller.signal.aborted && isCurrent();
-    if (!current() || !/^https?:\/\//i.test(uri) || !checkIfPageUrlIsValid(uri))
-        return null;
+    if (!current() || !isAdmittedDocumentUri(uri)) return null;
     if (source.kind === 'bytes') return copyDocumentSource(source);
     if (source.kind !== 'uri') return null;
     let type = documentMedia(source.mimeType);

@@ -211,6 +211,26 @@
         "./react/csv-export.css": "./dist/esm/react/csv-export.css",
         "./react/kanban.css": "./dist/esm/react/kanban.css",
         "./react/portal-map.css": "./dist/esm/react/portal-map.css",
+        "./react/attachment": {
+            "import": {
+                "types": "./dist/esm/react/attachment.d.ts",
+                "default": "./dist/esm/react/attachment.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/attachment.d.ts",
+                "default": "./dist/cjs/react/attachment.js"
+            }
+        },
+        "./react/attachment-slider": {
+            "import": {
+                "types": "./dist/esm/react/attachment-slider.d.ts",
+                "default": "./dist/esm/react/attachment-slider.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/attachment-slider.d.ts",
+                "default": "./dist/cjs/react/attachment-slider.js"
+            }
+        },
         "./react/attachment-preview.css": "./dist/esm/react/attachment-preview.css",
         "./react/attachment-device-input.css": "./dist/esm/react/attachment-device-input.css",
         "./react/attachment-url-input.css": "./dist/esm/react/attachment-url-input.css",

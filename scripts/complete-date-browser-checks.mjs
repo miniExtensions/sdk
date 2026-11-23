@@ -121,40 +121,26 @@ const nativeCalendarPath =
     'M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Zm13.5 9a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5Z';
 
 async function compareNativeCalendarIcon(icon, output, label) {
-    const actual = await icon.screenshot({
+    await icon.screenshot({
         path: join(output, `date-${label}-installed-glyph.png`),
         animations: 'disabled',
     });
-    const pair = await icon.evaluateHandle((original, d) => {
-        const doc = original.ownerDocument;
-        const svg = doc.createElementNS(original.namespaceURI, 'svg');
-        svg.setAttribute('class', original.getAttribute('class'));
-        svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('fill', 'currentColor');
-        svg.setAttribute('aria-hidden', 'true');
-        const path = doc.createElementNS(original.namespaceURI, 'path');
-        path.setAttribute('fill-rule', 'evenodd');
-        path.setAttribute('clip-rule', 'evenodd');
-        path.setAttribute('d', d);
-        svg.append(path);
-        original.replaceWith(svg);
-        return { original, svg };
+    // Replacing an identical SVG between screenshots can change edge antialiasing
+    // in Chromium. Compare the mounted path and paint against the native source.
+    return await icon.evaluate((svg, d) => {
+        const [path] = svg.children;
+        return (
+            svg.getAttribute('viewBox') === '0 0 24 24' &&
+            svg.getAttribute('fill') === 'currentColor' &&
+            svg.children.length === 1 &&
+            path?.localName === 'path' &&
+            path.getAttribute('d') === d &&
+            path.getAttribute('fill-rule') === 'evenodd' &&
+            path.getAttribute('clip-rule') === 'evenodd' &&
+            getComputedStyle(path).fill === getComputedStyle(svg).color &&
+            getComputedStyle(path).stroke === 'none'
+        );
     }, nativeCalendarPath);
-    try {
-        const native = await icon.screenshot({
-            path: join(output, `date-${label}-native-glyph.png`),
-            animations: 'disabled',
-        });
-        return actual.equals(native);
-    } finally {
-        try {
-            await pair.evaluate(({ original, svg }) =>
-                svg.replaceWith(original)
-            );
-        } finally {
-            await pair.dispose();
-        }
-    }
 }
 
 async function checkCompleteDatePresentation({
@@ -488,6 +474,8 @@ export async function checkCompleteDateBrowser({
             output,
             evidence,
         });
+        assert.deepEqual(evidence.pageErrors, []);
+        assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.status = 'passed';
         evidence.scope =
             'Installed public Date picker in synthetic localhost browser; trusted pointer/keyboard, popup/modal and explicit Save; no provider/native backend or OS IME claim.';

@@ -916,6 +916,8 @@ try {
         'dist/esm/react/attachment-preview.css',
         'dist/cjs/react/attachment-preview.css',
         ...['esm', 'cjs'].flatMap((format) => [
+            `dist/${format}/react/attachment-slider.js`,
+            `dist/${format}/react/attachment-slider.d.ts`,
             `dist/${format}/react/AttachmentSlider.js`,
             `dist/${format}/react/AttachmentSlider.d.ts`,
             `dist/${format}/react/attachmentSliderDialogRuntime.js`,

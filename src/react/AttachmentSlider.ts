@@ -42,6 +42,8 @@ export type AttachmentSliderProps = Omit<
     };
 
 const slider = 'mx-sdk-attachment-slider';
+type SliderPortal =
+    (typeof import('./attachmentSliderDialogRuntime.js'))['AttachmentSliderPortal'];
 const focusEpochs = new WeakMap<Document, number>();
 const scrollLocks = new WeakMap<Document, { users: number; restore(): void }>();
 const useCommitEffect =
@@ -154,7 +156,10 @@ function hasOpenTooltip(dialog: HTMLElement) {
     );
 }
 
-function FullscreenAttachmentSlider(props: AttachmentSliderProps) {
+function FullscreenAttachmentSlider({
+    portal: suppliedPortal,
+    ...props
+}: AttachmentSliderProps & { portal?: SliderPortal }) {
     const { labels, covered = false, onDismiss } = props;
     const [runtime, setRuntime] =
         useState<typeof import('./attachmentSliderDialogRuntime.js')>();
@@ -168,6 +173,7 @@ function FullscreenAttachmentSlider(props: AttachmentSliderProps) {
     useSliderReturnFocus();
 
     useEffect(() => {
+        if (suppliedPortal) return;
         let current = true;
         void import('./attachmentSliderDialogRuntime.js').then(
             (loaded) => {
@@ -180,7 +186,7 @@ function FullscreenAttachmentSlider(props: AttachmentSliderProps) {
         return () => {
             current = false;
         };
-    }, []);
+    }, [suppliedPortal]);
 
     useCommitEffect(() => {
         if (!dialog) return;
@@ -220,8 +226,9 @@ function FullscreenAttachmentSlider(props: AttachmentSliderProps) {
         return lockDocumentScroll(owner, view);
     }, [dialog, covered]);
 
-    if (failure) throw failure.error;
-    if (!runtime) return null;
+    const Portal = suppliedPortal ?? runtime?.AttachmentSliderPortal;
+    if (failure && !Portal) throw failure.error;
+    if (!Portal) return null;
 
     const dismiss = () => {
         if (!covered) onDismiss();
@@ -344,7 +351,7 @@ function FullscreenAttachmentSlider(props: AttachmentSliderProps) {
             )
         )
     );
-    return h(runtime.AttachmentSliderPortal, {
+    return h(Portal, {
         children,
         initialFocus: rail,
         covered,
@@ -354,7 +361,14 @@ function FullscreenAttachmentSlider(props: AttachmentSliderProps) {
 
 /** Fullscreen viewer for the current host-admitted attachment collection. */
 export function AttachmentSlider(props: AttachmentSliderProps): ReactNode {
+    return renderAttachmentSlider(props);
+}
+
+export function renderAttachmentSlider(
+    props: AttachmentSliderProps,
+    portal?: SliderPortal
+): ReactNode {
     return props.rows[props.currentIndex] == null
         ? null
-        : h(FullscreenAttachmentSlider, props);
+        : h(FullscreenAttachmentSlider, { ...props, portal });
 }

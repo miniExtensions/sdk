@@ -11,10 +11,12 @@ ${
     format === 'esm'
         ? `import {createElement as h, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSlider, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
+import {AttachmentSlider} from '@miniextensions/sdk/react/attachment-slider';
+import {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
         : `const {createElement:h, useRef, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSlider, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
+const {AttachmentSlider}=require('@miniextensions/sdk/react/attachment-slider');
+const {AttachmentPreview, AttachmentSliderActions, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
 }
 ${
     nativeConfirm

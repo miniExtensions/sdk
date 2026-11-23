@@ -291,6 +291,7 @@ export function assertModuleFormats(root) {
                 subpath === './react/html' ||
                 subpath === './react/date' ||
                 subpath === './react/calendar' ||
+                subpath === './react/attachment-slider' ||
                 subpath === './customer-chat/react' ||
                 subpath === './customer-chat/intercom'
         );

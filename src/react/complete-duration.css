@@ -5,13 +5,15 @@
     font: inherit;
 }
 .mx-sdk-complete-duration-control {
+    --mx-sdk-duration-focus: var(--mx-sdk-accent, #3b82f6);
     position: relative;
     margin-top: 0.25rem;
     width: 100%;
     color: #9ca3af;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
 .mx-sdk-complete-duration-control:focus-within {
-    color: var(--mx-sdk-accent, #2563eb);
+    color: var(--mx-sdk-duration-focus);
 }
 .mx-sdk-complete-duration-input {
     box-sizing: border-box;
@@ -23,15 +25,25 @@
     border-radius: 0.375rem;
     background: white;
     color: black;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
     font: inherit;
-    transition:
-        border-color 100ms,
-        box-shadow 100ms;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    transition: border-color 100ms;
+}
+@media (min-width: 640px) {
+    .mx-sdk-complete-duration-input {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
 }
 .mx-sdk-complete-duration-input:focus {
-    outline-color: var(--mx-sdk-accent, #2563eb);
-    border-color: var(--mx-sdk-accent, #2563eb);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: var(--mx-sdk-duration-focus);
+    box-shadow:
+        0 0 0 0 white,
+        0 0 0 1px var(--mx-sdk-duration-focus),
+        0 0 transparent;
 }
 .mx-sdk-complete-duration-input:disabled {
     background: #f3f4f6;

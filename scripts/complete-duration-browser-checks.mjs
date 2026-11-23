@@ -12,6 +12,13 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+// Native Form uses the Heroicons 2.1.1 solid Clock in a 20px slot.
+const nativeClock =
+    'M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z';
+const formAccent = 'rgb(16, 185, 129)';
+const nativeShadow = 'rgba(0, 0, 0, 0.05) 0px 1px 2px 0px';
+const nativeFocusRing = `rgb(255, 255, 255) 0px 0px 0px 0px, ${formAccent} 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px`;
+
 // Installed public UI and trusted keyboard/pointer input. The controlled host
 // supplies canonical values and guarded writes; it is not a native Form binding.
 export async function checkCompleteDurationBrowser({
@@ -55,17 +62,19 @@ import {createRoot} from 'react-dom/client';
 import {DurationField,ReadOnlyDurationField} from '@miniextensions/sdk/react';
 import {getFormattedDuration} from '@miniextensions/sdk/formulas';
 const mode=new URLSearchParams(location.search).get('mode')||'minutes';
+const visual=mode.startsWith('appearance-');
 let writes=[],inputs=[],focuses=0,submits=0,observed;
 function App(){
- const [state,setState]=useState({value:mode==='minutes'?60:61.25,format:mode==='minutes'?'h:mm':'h:mm:ss.SSS',readonly:false,active:true,owner:{},mounted:true,writer:'initial'});
+ const [state,setState]=useState({value:mode.endsWith('-empty')?null:mode==='minutes'?60:61.25,format:mode==='minutes'?'h:mm':'h:mm:ss.SSS',readonly:mode==='appearance-disabled',active:true,owner:{},mounted:true,writer:'initial'});
  const initialOwner=useRef(state.owner);
  const latest=useRef(state);latest.current=state;observed=state;
  const scope=state.owner;
  const update=patch=>setState(old=>({...old,...patch}));
  return h(React.Fragment,null,
-  h('form',{id:'native-form',onSubmit:event=>{event.preventDefault();submits++;},onFocusCapture:()=>{focuses++;},onInputCapture:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.target.value})},
+  h('form',{id:'native-form',style:visual?{'--mx-sdk-accent':${JSON.stringify(formAccent)},fontSize:'16px',lineHeight:'24px'}:undefined,onSubmit:event=>{event.preventDefault();submits++;},onFocusCapture:()=>{focuses++;},onInputCapture:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.target.value})},
    h('label',{htmlFor:'native-duration'},'Synthetic duration'),h('p',{id:'external-help'},'External timing help'),
-   state.mounted?h(DurationField,{fieldId:'duration',sessionId:'duration-session',format:state.format,value:state.value,readOnly:state.readonly,owner:{token:scope,isCurrent:()=>latest.current.active&&latest.current.owner===scope},onChange(value){if(!latest.current.active||latest.current.readonly||latest.current.owner!==scope)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},inputId:'native-duration',formId:'native-form',title:'Synthetic duration',showLabel:false,description:'Synthetic timing note',error:'Synthetic duration error',describedBy:'external-help',clearLabel:mode==='clear'?'Clear synthetic duration':undefined}):null),
+   state.mounted?h(DurationField,{fieldId:'duration',sessionId:'duration-session',format:state.format,value:state.value,readOnly:state.readonly,owner:{token:scope,isCurrent:()=>latest.current.active&&latest.current.owner===scope},onChange(value){if(!latest.current.active||latest.current.readonly||latest.current.owner!==scope)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},inputId:'native-duration',formId:'native-form',title:'Synthetic duration',showLabel:false,description:visual?undefined:'Synthetic timing note',error:visual?undefined:'Synthetic duration error',describedBy:'external-help',clearLabel:mode==='clear'?'Clear synthetic duration':undefined}):null,
+   visual?h('div',{'data-duration-following':''},'Following field'):null),
   h('output',{'aria-label':'Canonical seconds'},JSON.stringify(state.value)),
   h('div',{'data-duration-readonly':''},h(ReadOnlyDurationField,{value:state.value,format:state.format,language:'en'})),
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>update({value:120})},'Echo canonical value'),
@@ -151,7 +160,7 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                 })
         );
         const origin = `http://127.0.0.1:${server.address().port}`;
-        const open = async (mode, mobile = false) => {
+        const open = async (mode, mobile = false, width) => {
             if (context) await context.close();
             context = await browser.newContext({
                 serviceWorkers: 'block',
@@ -163,7 +172,9 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
                           userAgent:
                               'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
                       }
-                    : {}),
+                    : width
+                      ? { viewport: { width, height: 720 } }
+                      : {}),
             });
             page = await context.newPage();
             page.setDefaultTimeout(5000);
@@ -465,6 +476,167 @@ window.durationProof={snapshot:()=>({readonlyText:mount.querySelector('[data-dur
         await page.emulateMedia({ forcedColors: 'active' });
         await finish('optional-clear-mobile-keyboard');
         assert.equal(evidence.results.length, 5);
+
+        evidence.appearance = [];
+        const appearanceDifferences = [];
+        for (const width of [375, 639, 640, 1280]) {
+            for (const state of [
+                'populated',
+                'empty',
+                'disabled',
+                'focused-populated',
+                'focused-empty',
+            ]) {
+                input = await open(`appearance-${state}`, false, width);
+                const focused = state.startsWith('focused-');
+                const empty = state.endsWith('empty');
+                const disabled = state === 'disabled';
+                if (focused) await page.keyboard.press('Tab');
+                const appearance = await input.evaluate(async (node, clock) => {
+                    const control = node.parentElement;
+                    const glyph = control.querySelector('svg');
+                    const path = glyph.querySelector('path');
+                    const next = node.form.querySelector(
+                        '[data-duration-following]'
+                    );
+                    getComputedStyle(node).boxShadow;
+                    getComputedStyle(glyph).color;
+                    await Promise.all(
+                        control
+                            .getAnimations({ subtree: true })
+                            .map((animation) => animation.finished)
+                    );
+                    const bounds = node.getBoundingClientRect();
+                    const wrapper = control.getBoundingClientRect();
+                    const icon = glyph.getBoundingClientRect();
+                    const style = getComputedStyle(node);
+                    const hostStyle = getComputedStyle(control);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = canvas.height = 20;
+                    const paint = canvas.getContext('2d');
+                    const alpha = (data, rule) => {
+                        paint.clearRect(0, 0, 20, 20);
+                        paint.setTransform(20 / 24, 0, 0, 20 / 24, 0, 0);
+                        paint.fill(new Path2D(data), rule);
+                        paint.resetTransform();
+                        return paint.getImageData(0, 0, 20, 20).data;
+                    };
+                    const actual = alpha(
+                        path.getAttribute('d'),
+                        path.getAttribute('fill-rule')
+                    );
+                    const native = alpha(clock, 'evenodd');
+                    return {
+                        fieldHeight: bounds.height,
+                        hostHeight: wrapper.height,
+                        nextOffset:
+                            next.getBoundingClientRect().top - bounds.top,
+                        fillsWidth: bounds.width === wrapper.width,
+                        fontSize: style.fontSize,
+                        lineHeight: style.lineHeight,
+                        padding: style.padding,
+                        backgroundColor: style.backgroundColor,
+                        textColor: style.color,
+                        inputShadow: style.boxShadow,
+                        hostShadow: hostStyle.boxShadow,
+                        hostMargin: hostStyle.marginTop,
+                        borderColor: style.borderTopColor,
+                        iconColor: getComputedStyle(glyph).color,
+                        outline: [
+                            style.outlineColor,
+                            style.outlineWidth,
+                            style.outlineOffset,
+                        ],
+                        clockSize: [icon.width, icon.height],
+                        clockInset: icon.left - bounds.left,
+                        clockCenterDelta:
+                            icon.top +
+                            icon.height / 2 -
+                            bounds.top -
+                            bounds.height / 2,
+                        maskDifferences: actual.filter(
+                            (value, index) =>
+                                index % 4 === 3 && value !== native[index]
+                        ).length,
+                        focusVisible: node.matches(':focus-visible'),
+                        disabled: node.disabled,
+                        value: node.value,
+                    };
+                }, nativeClock);
+                const height = width < 640 ? 42 : 38;
+                const expected = {
+                    fieldHeight: height,
+                    hostHeight: height,
+                    nextOffset: height,
+                    fillsWidth: true,
+                    fontSize: width < 640 ? '16px' : '14px',
+                    lineHeight: width < 640 ? '24px' : '20px',
+                    padding: '8px 12px 8px 40px',
+                    backgroundColor: disabled
+                        ? 'rgb(243, 244, 246)'
+                        : 'rgb(255, 255, 255)',
+                    textColor: disabled ? 'rgb(75, 85, 99)' : 'rgb(0, 0, 0)',
+                    inputShadow: focused ? nativeFocusRing : 'none',
+                    hostShadow: nativeShadow,
+                    hostMargin: '4px',
+                    borderColor: focused ? formAccent : 'rgb(209, 213, 219)',
+                    iconColor: focused ? formAccent : 'rgb(156, 163, 175)',
+                    ...(focused
+                        ? { outline: ['rgba(0, 0, 0, 0)', '2px', '2px'] }
+                        : {}),
+                    clockSize: [20, 20],
+                    clockInset: 12,
+                    clockCenterDelta: 0,
+                    maskDifferences: 0,
+                    focusVisible: focused,
+                    disabled,
+                    value: empty ? '' : '1:01.250',
+                };
+                const differences = Object.keys(expected).filter(
+                    (key) =>
+                        JSON.stringify(appearance[key]) !==
+                        JSON.stringify(expected[key])
+                );
+                if (differences.length)
+                    appearanceDifferences.push({ width, state, differences });
+                evidence.appearance.push({
+                    width,
+                    state,
+                    appearance,
+                    differences,
+                });
+                assert.deepEqual((await snapshot()).writes, []);
+                assert.deepEqual((await snapshot()).inputs, []);
+                assert.equal((await snapshot()).submits, 0);
+                await page.screenshot({
+                    path: join(
+                        output,
+                        `duration-appearance-${width}-${state}.png`
+                    ),
+                });
+                if (state === 'focused-empty') {
+                    await page.keyboard.type('7');
+                    assert.deepEqual((await snapshot()).writes, [
+                        { value: 7, writer: 'initial' },
+                    ]);
+                    assert.deepEqual((await snapshot()).inputs, [
+                        { trusted: true, value: '7' },
+                    ]);
+                    await page.keyboard.press('Tab');
+                    const typed = await snapshot();
+                    assert.equal(typed.submits, 0);
+                    assert.equal(typed.writes.length, 1);
+                    assert.equal(await input.inputValue(), typed.formatted);
+                }
+            }
+        }
+        assert.deepEqual(evidence.pageErrors, []);
+        assert.deepEqual(evidence.unexpectedRequests, []);
+        assert.deepEqual(
+            appearanceDifferences,
+            [],
+            'Native Duration appearance'
+        );
         evidence.scope =
             'Installed complete Duration with trusted input; no native Form/backend/clipboard/live-device claim.';
         evidence.status = 'passed';

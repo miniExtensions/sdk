@@ -6645,8 +6645,8 @@ native device, URL, signature and annotation controls with the thumbnail,
 icon or Grid gallery and fullscreen viewer. Pass accepted gallery rows and
 their current action callbacks. Select a producer with the typed `input`
 prop, and supply `upload` progress and the Cancel callback during an active
-upload. An omitted input gives a read-only presentation. Supply a localized
-`emptyLabel` for an empty read-only field.
+upload. For a read-only field, pass the permitted gallery viewing actions
+and a localized `emptyLabel`.
 
 The host admits each resource, owns uploads and authorization, and commits
 accepted values through its current writer. Import `attachment-preview.css`,

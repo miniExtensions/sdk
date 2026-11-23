@@ -9,18 +9,19 @@ import { assertBrowserInputs } from './package-checks.mjs';
 const hostSource = (format) => `
 ${
     format === 'esm'
-        ? `import {createElement as h, useState} from 'react';
+        ? `import {createElement as h, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload} from '@miniextensions/sdk/react';`
-        : `const {createElement:h, useState}=require('react');
+import {AttachmentPreview, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation} from '@miniextensions/sdk/react';`
+        : `const {createElement:h, useRef, useState}=require('react');
 const {createRoot}=require('react-dom/client');
-const {AttachmentPreview, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload}=require('@miniextensions/sdk/react');`
+const {AttachmentPreview, AttachmentSliderBody, AttachmentSliderNavigation, AttachmentSliderThumbnailRail, AttachmentTileOpenButton, useAttachmentDownload, useAttachmentGalleryNavigation}=require('@miniextensions/sdk/react');`
 }
 const first={filename:'Vue avant',url:'/front.svg',type:'image/svg+xml'};
 const second={filename:'Vue arrière',url:'/rear.svg',type:'image/svg+xml'};
 const calls={selection:[],save:0,upload:0,delete:0,fetch:0};
 const tileOpens=[];
 const downloads={pending:[],finished:0};
+let bodySelections=0;
 const downloadListeners=new Set();
 const downloadOwner={token:0,isCurrent:()=>true,subscribe(listener){
     downloadListeners.add(listener);
@@ -34,6 +35,12 @@ function Host(){
     const [collectionOwner,setCollectionOwner]=useState('initial');
     const [publication,setPublication]=useState('initial');
     const [tile,setTile]=useState({resourceKey:'initial',label:'Pièce jointe'});
+    const [bodyRows,setBodyRows]=useState([
+        {...first,id:'front',thumbnailUrl:first.url},
+        {...second,id:'rear',thumbnailUrl:second.url},
+    ]);
+    const bodyNav=useAttachmentGalleryNavigation(bodyRows);
+    const bodyRail=useRef(null);
     function replace(owner){
         setRows([first,second]);
         setSelectedIndex(0);
@@ -42,6 +49,10 @@ function Host(){
     }
     window.sliderProbe={calls,downloads,setSelectedIndex,setAcceptsIntent,
         tileOpens,publishTile(resourceKey,label){setTile({resourceKey,label});},
+        openBody(){bodyNav.handleAttachmentThumbnailClick(0);},
+        shrinkBody(){setBodyRows((items)=>items.slice(0,1));},
+        emptyBody(){setBodyRows([]);},
+        bodySelections:()=>bodySelections,
         replace,
         rotateDownloadOwner(){downloadOwner.token++;for(const listener of [...downloadListeners])listener();},
         reset(owner){calls.selection.length=0;replace(owner);},
@@ -79,6 +90,17 @@ function Host(){
         h('button',{type:'button',onClick(){calls.delete++;}},'Supprimer'),
         h('div',{className:'attachment-tile-proof'},h(AttachmentTileOpenButton,{
             ...tile,onOpen(){tileOpens.push(tile.label);},
+        })),
+        bodyNav.navigationOwner&&h('div',{
+            role:'dialog','aria-label':'Visionneuse','data-body-owner':bodyNav.navigationOwner,
+            className:'attachment-body-proof',
+        },h(AttachmentSliderBody,{
+            rows:bodyRows,
+            currentIndex:bodyNav.currentSliderIndex,
+            setCurrentIndex(next){bodySelections++;bodyNav.setCurrentSliderIndex(next);},
+            navigationOwner:bodyNav.navigationOwner,
+            thumbnailRailRef:bodyRail,
+            labels:{attachments:'Aperçu des pièces jointes',previewNotAvailable:'Aucun aperçu',previous:'Précédent',next:'Suivant'},
         })));
 }
 createRoot(document.querySelector('main')).render(h(Host));
@@ -123,6 +145,12 @@ export async function checkAttachmentSliderNavigationBrowser({
             ),
             'The installed Attachment Tile Open Button must be bundled'
         );
+        assert(
+            Object.keys(bundle.metafile.inputs).some((name) =>
+                name.endsWith('/react/AttachmentSliderBody.js')
+            ),
+            'The installed Attachment Slider Body must be bundled'
+        );
         const assets = new Map([
             [
                 '/',
@@ -136,7 +164,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 '/host.css',
                 [
                     'text/css',
-                    '.attachment-tile-proof{position:relative;width:96px;height:48px}',
+                    '.attachment-tile-proof{position:relative;width:96px;height:48px}.attachment-body-proof{width:min(640px,100vw - 32px);height:360px}',
                 ],
             ],
             ['/attachment-preview.css', ['text/css', styles]],
@@ -433,6 +461,10 @@ export async function checkAttachmentSliderNavigationBrowser({
                 '/rear.svg',
                 '/rear.svg',
             ]);
+            const sliderBody = await checkSliderBody(page);
+            const { selection: _bodySelection, ...bodyOwnerCalls } =
+                await probe();
+            assert.deepEqual(bodyOwnerCalls, otherCalls);
             assert.deepEqual(unexpectedRequests, []);
             assert.deepEqual(pageErrors, []);
             evidence.formats[format] = {
@@ -440,6 +472,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 ownerCalls: calls,
                 gestures,
                 tileOpen,
+                sliderBody,
                 thumbnailRail: {
                     geometry: railGeometry,
                     selection: railSelection,
@@ -472,6 +505,81 @@ export async function checkAttachmentSliderNavigationBrowser({
         [],
         'A retired owner’s held gesture selected in its successor'
     );
+}
+
+async function checkSliderBody(page) {
+    const body = page.getByRole('dialog', { name: 'Visionneuse' });
+    const navigation = body.getByRole('group', {
+        name: 'Aperçu des pièces jointes',
+    });
+    const rail = body.locator('.mx-sdk-attachment-thumbnail-rail');
+    const front = navigation.getByText('Vue avant', { exact: true });
+    const rear = navigation.getByText('Vue arrière', { exact: true });
+    const open = () => page.evaluate(() => window.sliderProbe.openBody());
+    const selections = () =>
+        page.evaluate(() => window.sliderProbe.bodySelections());
+
+    await open();
+    await front.waitFor();
+    const widths = {};
+    for (const width of [1280, 375]) {
+        await page.setViewportSize({ width, height: 720 });
+        const panel = await body.boundingBox();
+        const navigationBox = await navigation.boundingBox();
+        const railBox = await rail.boundingBox();
+        assert.ok(panel && navigationBox && railBox);
+        widths[width] = {
+            panel: [panel.width, panel.height],
+            navigation: [navigationBox.width, navigationBox.height],
+            rail: [railBox.width, railBox.height],
+        };
+        const expectedWidth = Math.min(640, width - 32);
+        assert.deepEqual(widths[width], {
+            panel: [expectedWidth, 360],
+            navigation: [expectedWidth, 316],
+            rail: [expectedWidth, 44],
+        });
+    }
+
+    const owner = await body.getAttribute('data-body-owner');
+    await rail.focus();
+    await page.keyboard.down('ArrowRight');
+    try {
+        await rear.waitFor();
+        assert.equal(await selections(), 1);
+        await open();
+        await front.waitFor();
+        assert.notEqual(await body.getAttribute('data-body-owner'), owner);
+        await page.keyboard.down('ArrowRight');
+        assert.equal(await selections(), 1);
+        assert.equal(await front.isVisible(), true);
+    } finally {
+        await page.keyboard.up('ArrowRight');
+    }
+    await page.keyboard.press('ArrowRight');
+    await rear.waitFor();
+    assert.equal(await selections(), 2);
+    await rail.getByRole('button', { name: 'Vue arrière' }).focus();
+    await page.evaluate(() => window.sliderProbe.shrinkBody());
+    await navigation.waitFor({ state: 'detached' });
+    await rail
+        .getByRole('button', { name: 'Vue avant' })
+        .waitFor({ state: 'visible' });
+    assert.equal(
+        await rail.evaluate(
+            (node) => node.ownerDocument.activeElement === node
+        ),
+        true
+    );
+    await page.evaluate(() => window.sliderProbe.emptyBody());
+    await body.waitFor({ state: 'detached' });
+    return {
+        widths,
+        retiredHeldArrow: true,
+        freshArrowSelected: true,
+        restoredRailFocus: true,
+        retiredEmptyGallery: true,
+    };
 }
 
 async function checkTileOpen(page) {

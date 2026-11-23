@@ -114,3 +114,95 @@
     border-width: 0;
     white-space: nowrap;
 }
+
+.mx-sdk-attachment-slider-body {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+}
+.mx-sdk-attachment-slider-body__preview {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.mx-sdk-attachment-slider-body__navigation,
+.mx-sdk-attachment-slider-body__navigation > [role='group'] {
+    display: flex;
+    flex: 1 1 0%;
+    min-height: 0;
+    flex-direction: column;
+}
+.mx-sdk-attachment-slider-body__name,
+.mx-sdk-attachment-slider-body__navigation > [role='group'] > [aria-live] {
+    margin: 0.5rem 0 0;
+    overflow: hidden;
+    color: #f3f4f6;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mx-sdk-attachment-slider-body__name {
+    width: 100%;
+    min-width: 0;
+}
+.mx-sdk-attachment-slider-body__legacy-navigation,
+.mx-sdk-attachment-slider-body__navigation > [role='group'] > div {
+    display: flex;
+    flex: 1 1 0%;
+    min-height: 0;
+    align-items: center;
+    padding-block: 0.5rem;
+}
+.mx-sdk-attachment-slider-body__navigation > [role='group'] > div > button {
+    flex-shrink: 0;
+    color: #e5e7eb;
+    padding: 0.375rem;
+}
+.mx-sdk-attachment-slider-body__navigation
+    > [role='group']
+    > div
+    > button[aria-disabled='true'] {
+    opacity: 0.5;
+}
+.mx-sdk-attachment-slider-body__legacy-navigation {
+    user-select: none;
+}
+.mx-sdk-attachment-slider-body__legacy-side {
+    width: 2rem;
+    flex-shrink: 0;
+}
+@media (min-width: 640px) {
+    .mx-sdk-attachment-slider-body__legacy-side {
+        width: 4rem;
+    }
+}
+.mx-sdk-attachment-slider-body__legacy-arrow {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #9ca3af;
+}
+.mx-sdk-attachment-slider-body__legacy-arrow:hover {
+    color: #e5e7eb;
+}
+.mx-sdk-attachment-slider-body__chevron {
+    display: block;
+    width: 100%;
+    vertical-align: middle;
+}
+.mx-sdk-attachment-slider-body__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border-width: 0;
+    white-space: nowrap;
+}

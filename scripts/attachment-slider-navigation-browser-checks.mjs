@@ -1280,6 +1280,11 @@ async function checkUploadLegacyConfirm({
     await page.keyboard.press('Shift+Tab');
     await waitForSliderFocus(page, keep);
     await page.keyboard.press('Escape');
+    assert.equal(await confirm.isVisible(), true);
+    assert.equal(await viewer.isVisible(), true);
+    await waitForSliderFocus(page, keep);
+    assert.equal((await probe()).confirmEscapes, 0);
+    await keep.click();
     await confirm.waitFor({ state: 'detached' });
     await waitForSliderFocus(page, cancel);
     assert.equal(await viewer.isVisible(), true);
@@ -1287,7 +1292,7 @@ async function checkUploadLegacyConfirm({
     await page.keyboard.press('Escape');
     assert.equal(await viewer.isVisible(), true);
     assert.equal((await probe()).cancels, 2);
-    assert.equal((await probe()).confirmEscapes, 1);
+    assert.equal((await probe()).confirmEscapes, 0);
     assert.equal((await probe()).confirmed, 0);
 
     await cancel.click();
@@ -1303,7 +1308,8 @@ async function checkUploadLegacyConfirm({
     return {
         headlessUi: '1.7.2',
         trapped: true,
-        escapeRestoredCancel: true,
+        coveredEscapeKeptConfirm: true,
+        keepRestoredCancel: true,
         uploadIgnoredSubsequentEscape: true,
         committedConfirmCalls: 1,
         hostCompletionRestoredOpener: true,

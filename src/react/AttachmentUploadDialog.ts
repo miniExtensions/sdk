@@ -40,6 +40,7 @@ export function AttachmentUploadDialog({
     const [dialog, setDialog] = useState<HTMLDivElement | null>(null);
     // The progress leaf's Cancel is the only focusable element in the dialog.
     const initialFocus = useRef<HTMLElement | null>(null);
+    const resumeFocus = useRef(false);
     const theme = getThemePortalProps(useThemeSnapshot());
 
     useAttachmentDialogReturnFocus();
@@ -47,7 +48,7 @@ export function AttachmentUploadDialog({
     useCommitEffect(() => {
         const document = dialog?.ownerDocument;
         const view = document?.defaultView;
-        if (!dialog || !document || !view || covered) return;
+        if (!dialog || !document || !view) return;
         const suppressEscape = (event: KeyboardEvent) => {
             if (
                 event.key !== 'Escape' ||
@@ -59,13 +60,34 @@ export function AttachmentUploadDialog({
                 ].at(-1) !== dialog
             )
                 return;
-            // An active upload has no dismiss action. Keep Escape from
-            // dismissing a native dialog beneath the upload.
+            // The native upload consumes Escape even under its confirmation.
+            // Keep the legacy parent and upload open until an explicit action.
             event.preventDefault();
             event.stopImmediatePropagation();
         };
         view.addEventListener('keydown', suppressEscape, true);
         return () => view.removeEventListener('keydown', suppressEscape, true);
+    }, [dialog]);
+
+    useCommitEffect(() => {
+        if (covered) {
+            resumeFocus.current = true;
+            return;
+        }
+        const owner = dialog?.ownerDocument;
+        const view = owner?.defaultView;
+        if (!dialog || !owner || !view || !resumeFocus.current) return;
+        const frame = view.requestAnimationFrame(() => {
+            resumeFocus.current = false;
+            // A legacy confirmation can finish restoring focus to its parent.
+            // Reclaim the still-open upload after those focus effects.
+            if (!dialog.isConnected || dialog.contains(owner.activeElement))
+                return;
+            dialog
+                .querySelector<HTMLButtonElement>('button:not(:disabled)')
+                ?.focus({ preventScroll: true });
+        });
+        return () => view.cancelAnimationFrame(frame);
     }, [dialog, covered]);
 
     useEffect(() => {

@@ -9,6 +9,7 @@ import {
     type BorrowedFormLinkedChildCreateSaveOutcome,
     type BorrowedFormLinkedChildCreateSnapshot,
 } from '../src/react/FormLinkedChildCreateDialog.js';
+import { createNativeFormPages } from '../src/ui/nativeFormPages.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
 const saved = {
@@ -275,6 +276,66 @@ it('refuses deferred Save after the native draft or opening changes', async (t) 
     const expected = f.read().ref;
     await act(current);
     assert.deepEqual(f.saves, [expected]);
+});
+
+it('keeps the admitted Save when native Review declines a second activation', async (t) => {
+    const pages = createNativeFormPages({
+        owner: {},
+        configuration: {},
+        pages: [
+            { title: null, description: null, fieldIds: [], hidden: false },
+        ],
+        multiple: false,
+        reviewItems: [],
+        isCurrent: () => true,
+        onNext() {},
+    });
+    const admissions: boolean[] = [];
+    const f = await fixture(t, undefined, {
+        label: 'Review',
+        onAction(save) {
+            const admitted = pages.openReview(save);
+            admissions.push(admitted);
+            return admitted;
+        },
+    });
+    await f.render();
+    await f.click(f.button('Review'));
+    await f.click(f.button('Review'));
+    assert.deepEqual(admissions, [true, false]);
+    assert.deepEqual(f.saves, []);
+    const expected = f.read().ref;
+    await act(async () => {
+        await pages.confirmReview();
+        await pages.confirmReview();
+    });
+    assert.deepEqual(f.saves, [expected]);
+    assert.equal(f.dialog(), null);
+    assert.equal(f.doc.activeElement, f.opener);
+});
+
+it('does not close the borrowed Create dialog on a descendant dialog cancel', async (t) => {
+    const f = await fixture(t);
+    await f.render();
+    const outer = f.dialog();
+    assert(outer);
+    const nested = f.doc.createElement('dialog');
+    outer.append(nested);
+    const nestedCancel = new f.window.Event('cancel', {
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => {
+        nested.dispatchEvent(nestedCancel);
+    });
+    assert.equal(nestedCancel.defaultPrevented, false);
+    assert.equal(outer.open, true);
+    assert.deepEqual(f.closes, []);
+    await act(async () => {
+        outer.dispatchEvent(new f.window.Event('cancel', { cancelable: true }));
+    });
+    assert.equal(f.closes.length, 1);
+    assert.equal(f.dialog(), null);
 });
 
 it('keeps a held Save with its original opening and releases the successor latch', async (t) => {

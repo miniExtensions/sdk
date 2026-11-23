@@ -24,7 +24,8 @@ export type NativeFormPagesPublication<T> = Readonly<{
 export type NativeFormPagesActions = Readonly<{
     back(): void;
     next(): void;
-    openReview(submit: () => unknown): void;
+    /** Reports whether this action opened a new Review. */
+    openReview(submit: () => unknown): boolean;
     dismissReview(): void;
     confirmReview(): unknown;
 }>;
@@ -223,10 +224,11 @@ export function createNativeFormPages<T>(
     };
 
     const open = (expectedNavigation: number, submit: () => unknown) => {
-        if (!allowed(expectedNavigation) || review != null) return;
+        if (!allowed(expectedNavigation) || review != null) return false;
         review = Object.freeze({ submit });
         navigation++;
         publish();
+        return true;
     };
 
     const back = (expectedNavigation: number) => {

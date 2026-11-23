@@ -410,6 +410,7 @@ function LinkedChildDialogChrome({
             ref: dialogRef,
             'aria-labelledby': titleId,
             onCancel: (event: SyntheticEvent<HTMLDialogElement>) => {
+                if (event.target !== event.currentTarget) return;
                 event.preventDefault();
                 event.stopPropagation();
                 if (confirm) keep();
@@ -552,7 +553,8 @@ export type BorrowedFormLinkedChildCreateDialogProps<View> = Readonly<{
     /** A native navigation or Review action that can defer Save until confirmation. */
     primaryAction?: Readonly<{
         label: string;
-        onAction(save: () => Promise<void>): void;
+        /** Return false when declining the action so an admitted Review stays current. */
+        onAction(save: () => Promise<void>): boolean | void;
     }>;
 }>;
 
@@ -809,13 +811,20 @@ function BorrowedCreatePresentation<View>({
             return;
         }
         if (!current(expected, 'save')) return;
+        const previousSave = session.pendingPrimarySave;
         const saveOnce = async () => {
             if (session.pendingPrimarySave !== saveOnce) return;
             session.pendingPrimarySave = null;
             if (owner.getSnapshot()?.ref === expected) await save(expected);
         };
         session.pendingPrimarySave = saveOnce;
-        primaryAction.onAction(saveOnce);
+        let admitted: boolean | void = false;
+        try {
+            admitted = primaryAction.onAction(saveOnce);
+        } finally {
+            if (admitted === false && session.pendingPrimarySave === saveOnce)
+                session.pendingPrimarySave = previousSave;
+        }
     };
 
     const localPhase =

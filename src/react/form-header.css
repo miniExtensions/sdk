@@ -71,6 +71,10 @@
 .mx-sdk-form-placeholder--description {
     margin-top: 1.25rem;
 }
+.mx-sdk-form-placeholder--description:not(.mx-sdk-form-placeholder--source) {
+    /* Use the builder's border token and keep the standalone default. */
+    border-color: hsl(var(--border, 216 12.2% 83.9%));
+}
 .mx-sdk-form-placeholder--footer:not(.mx-sdk-form-placeholder--source) {
     width: 100%;
 }

@@ -81,7 +81,7 @@ function App(){
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
  if(new URLSearchParams(location.search).has('long-badge')){
     const dropdownChoices=[{...choices[0],displayName:${JSON.stringify(longLabel)}},{...choices[1],displayName:'Short'},choices[2]];
-    return h('form',{id:'select-form',style:{maxWidth:'42rem',fontFamily:'system-ui, sans-serif'},onSubmit:event=>{event.preventDefault();submits++;}},
+    return h('form',{id:'select-form',style:{maxWidth:'42rem',fontFamily:'system-ui, sans-serif',lineHeight:'24px'},onSubmit:event=>{event.preventDefault();submits++;}},
        h(MultipleSelectsField,{...common,choices:dropdownChoices,availableChoices:[dropdownChoices[2]],ariaLabel:'Many dropdown',presentation:'dropdown',value:state.multi,onValueChange:value=>change('multi',value)}));
  }
  return h('form',{id:'select-form',style:{'--mx-sdk-field-theme-color':'#7c3aed'},onSubmit:event=>{event.preventDefault();submits++;}},
@@ -532,6 +532,8 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                     const label = parent.querySelector(
                         '.mx-sdk-select-selected-label'
                     );
+                    const badgeBounds = parent.getBoundingClientRect();
+                    const shortBounds = short.getBoundingClientRect();
                     const rect = button.getBoundingClientRect();
                     const hit = document.elementFromPoint(
                         rect.x + rect.width / 2,
@@ -540,6 +542,9 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                     const style = getComputedStyle(label);
                     return {
                         fullLabel: parent.title,
+                        labelLineHeight: style.lineHeight,
+                        badgeHeight: badgeBounds.height,
+                        shortBadgeHeight: shortBounds.height,
                         whiteSpace: style.whiteSpace,
                         textOverflow: style.textOverflow,
                         clipsHorizontally:
@@ -547,8 +552,7 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                             label.scrollHeight === label.clientHeight,
                         wrapsBadges:
                             getComputedStyle(row).flexWrap === 'wrap' &&
-                            short.getBoundingClientRect().top >
-                                parent.getBoundingClientRect().top,
+                            shortBounds.top >= badgeBounds.bottom,
                         focusVisible:
                             button === document.activeElement &&
                             button.matches(':focus-visible'),
@@ -559,6 +563,9 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 });
                 assert.deepEqual(badge, {
                     fullLabel: longLabel,
+                    labelLineHeight: '20px',
+                    badgeHeight: 24,
+                    shortBadgeHeight: 24,
                     whiteSpace: 'nowrap',
                     textOverflow: 'ellipsis',
                     clipsHorizontally: true,

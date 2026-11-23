@@ -120,6 +120,9 @@
     padding: 0.5rem;
     cursor: pointer;
 }
+.mx-sdk-collaborator-open > svg {
+    margin: 2px;
+}
 .mx-sdk-collaborator-options {
     position: absolute;
     z-index: 99;

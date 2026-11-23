@@ -128,14 +128,17 @@ export function CollaboratorPicker<T extends CompleteCollaborator>(
                 h(
                     'svg',
                     {
-                        viewBox: '0 0 20 20',
-                        width: 20,
-                        height: 20,
+                        viewBox: '0 0 24 24',
+                        width: 16,
+                        height: 16,
                         'aria-hidden': true,
-                        fill: 'none',
-                        stroke: 'currentColor',
+                        fill: 'currentColor',
                     },
-                    h('path', { d: 'm6 8 4 4 4-4' })
+                    h('path', {
+                        d: 'M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z',
+                        fillRule: 'evenodd',
+                        clipRule: 'evenodd',
+                    })
                 )
             ),
             h(

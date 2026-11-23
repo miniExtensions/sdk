@@ -359,6 +359,8 @@ The Form section disclosure retains the native solid ChevronUp and ChevronDown i
 
 The editable Form Back and Next actions retain the native solid ChevronLeft and ChevronRight icons from Heroicons 2.1.1.
 
+The editable collaborator picker uses the native solid ChevronDown icon from Heroicons 2.1.1.
+
 The editable Phone field uses the native solid Phone icon from Heroicons 2.1.1.
 
 The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.

@@ -25,6 +25,9 @@
     font-weight: 700;
     white-space: pre-line;
 }
+.mx-sdk-form-title--formula {
+    white-space: normal;
+}
 .mx-sdk-form-description {
     margin-top: 1.25rem;
     color: #374151;

@@ -12,6 +12,61 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+// Native Form #7920's first parent, 6463fb7f. Keep the Tailwind Forms
+// defaults and the historic NumberField utilities separate so the installed
+// comparison sees the same host reset and theme as the archived control.
+const nativeNumericAppearanceCss = `
+    :root {
+        --theme-500: 20 184 166;
+        --theme-600: 13 148 136;
+        font: 16px/24px Inter, system-ui, sans-serif;
+    }
+    form { margin: 16px; }
+    [data-numeric-following] { display: block; }
+    [type='text'] {
+        appearance: none;
+        padding: 8px 12px;
+        border: 1px solid #6b7280;
+        background: white;
+        font-family: inherit;
+        font-size: 16px;
+        line-height: 24px;
+    }
+    [type='text']:focus {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 0 white, 0 0 0 1px #2563eb, var(--native-shadow, 0 0 #0000);
+    }
+    .native-numeric-control { display: flex; gap: 8px; width: 100%; }
+    .native-numeric-control > .mx-sdk-complete-clearable-input { flex: 1; min-width: 0; }
+    .native-numeric-symbol { display: flex; align-items: center; color: #6b7280; }
+    .native-numeric-percent { order: 1; }
+    .native-numeric-input {
+        --native-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        box-sizing: border-box;
+        display: block;
+        width: 100%;
+        padding: 8px;
+        border-color: #d1d5db;
+        border-radius: 6px;
+        color: black;
+        box-shadow: var(--native-shadow);
+    }
+    .native-numeric-input:focus {
+        border-color: rgb(var(--theme-500));
+        box-shadow: 0 0 0 0 white, 0 0 0 1px rgb(var(--theme-500)), var(--native-shadow);
+    }
+    @media (min-width: 640px) {
+        .native-numeric-input, .native-numeric-symbol { font-size: 14px; line-height: 20px; }
+    }
+`;
+
+const numericAppearanceThemeCss = [
+    '.mx-sdk-localized-numeric { --mx-sdk-accent: rgb(var(--theme-600)); }',
+    '.mx-sdk-localized-numeric-form { --mx-sdk-numeric-focus: rgb(var(--theme-500)); }',
+].join('\n');
+
 // Installed public UI and trusted keyboard/pointer input. The controlled host
 // supplies canonical values and guarded writes; it is not a native Form binding.
 export async function checkCompleteLocalizedNumericBrowser({
@@ -52,21 +107,68 @@ export async function checkCompleteLocalizedNumericBrowser({
         const source = `
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {NumberField,CurrencyField,CompleteLocalizedNumericField} from '@miniextensions/sdk/react';
+import {NumberField,CurrencyField,CompleteLocalizedNumericField,CompleteClearableTextInput} from '@miniextensions/sdk/react';
 const mode=new URLSearchParams(location.search).get('mode')||'number';
+const appearance=/^appearance-(number|currency|percent)-(native|sdk)$/.exec(mode);
 let writes=[],inputs=[],submits=0;
 const defaults={number:1234.5,percent:0.425,currency:-1234.5,deferred:0.25,mobile:12.5};
+function NativeAppearance({kind}) {
+ const values={number:'1.234,50',currency:'-1.234,50',percent:'42,50'};
+ const [value,setValue]=useState(values[kind]);
+ const symbolClass=kind==='percent'
+   ? 'native-numeric-symbol native-numeric-percent'
+   : 'native-numeric-symbol';
+ return h('div',{className:'native-numeric-control'},
+  kind==='number'?null:h('span',{
+   className:symbolClass,
+   id:kind==='currency'?'native-symbol':undefined,
+  },kind==='currency'?'€':'%'),
+  h(CompleteClearableTextInput,{
+   id:'native-number',
+   type:'text',
+   inputMode:'decimal',
+   form:'native-form',
+   autoComplete:'off',
+   className:'native-numeric-input',
+   value,
+   clearLabel:'Clear synthetic amount',
+   initialMobile:false,
+   enableInlineEdit:false,
+   'aria-describedby':kind==='currency'?'native-symbol':undefined,
+   onChange:setValue,
+   onClear:()=>setValue(''),
+   onFocus:()=>setValue(value.replace(/\\./g,'')),
+   onBlur:()=>setValue(values[kind]),
+  }));
+}
 function App(){
- const [state,setState]=useState({value:defaults[mode],readonly:false,owner:{},mounted:true,display:false});
- const kind=mode==='deferred'?'percent':mode==='mobile'?'number':mode;
+ const kind=appearance?.[1]??(mode==='deferred'?'percent':mode==='mobile'?'number':mode);
+ const [state,setState]=useState({value:defaults[appearance?.[1]??mode],readonly:false,owner:{},mounted:true,display:false});
  const scope=state.owner;
- const metadata={type:kind,options:{precision:2,...(kind==='currency'?{symbol:'<img src=x> literal '}: {})}};
- const field={physicalKind:kind,presentation:{type:'physical',config:metadata},fieldId:'numeric',title:'Synthetic amount',field:{id:'numeric',name:'Synthetic amount',description:null,isComputed:false,isPrimaryField:false,config:metadata},displayConfig:{numberSeparator:'period-comma',showThousandsSeparator:true,allowNegativeNumbers:true,showAsProgressBar:kind==='percent',readOnly:state.readonly},value:state.value,context:'form',computed:false,dirty:false,pending:false,error:null,validation:[],capability:{type:'editable',setValue(value){if(scope!==state.owner||state.readonly)return{accepted:false,reason:'retired'};writes.push(value);setState(old=>({...old,value}));return{accepted:true};}}};
+ const metadata={type:kind,options:{precision:2,...(kind==='currency'?{symbol:appearance?'€':'<img src=x> literal '}: {})}};
+ const field={physicalKind:kind,presentation:{type:'physical',config:metadata},fieldId:'numeric',title:'Synthetic amount',field:{id:'numeric',name:'Synthetic amount',description:null,isComputed:false,isPrimaryField:false,config:metadata},displayConfig:{numberSeparator:'period-comma',showThousandsSeparator:true,allowNegativeNumbers:true,showAsProgressBar:kind==='percent'&&!appearance,readOnly:state.readonly},value:state.value,context:mode==='deferred'?'portal-cell':'form',computed:false,dirty:false,pending:false,error:null,validation:[],capability:{type:'editable',setValue(value){if(scope!==state.owner||state.readonly)return{accepted:false,reason:'retired'};writes.push(value);setState(old=>({...old,value}));return{accepted:true};}}};
  const Component=kind==='currency'?CurrencyField:kind==='number'?NumberField:CompleteLocalizedNumericField;
  const props=kind==='currency'?field:{...(kind==='number'?{mode:'controlled'}:{}),field};
+ const options={
+  owner:{token:scope,isCurrent:()=>!state.readonly},
+  showLabel:!appearance,
+  commit:mode==='deferred'?'deferred':'immediate',
+  presentation:state.display?'display':'editor',
+  input:{
+   id:'native-number',
+   form:'native-form',
+   onInput:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.currentTarget.value}),
+  },
+  clearLabel:'Clear synthetic amount',
+ };
+ const editor=appearance?.[2]==='native'
+  ?h(NativeAppearance,{kind})
+  :state.mounted?h(appearance?CompleteLocalizedNumericField:Component,{...(appearance?{field}:props),options}):null;
  return h(React.Fragment,null,
   h('form',{id:'native-form',onSubmit:event=>{event.preventDefault();submits++;}},
-   state.mounted?h(Component,{...props,options:{owner:{token:scope,isCurrent:()=>!state.readonly},commit:mode==='deferred'?'deferred':'immediate',presentation:state.display?'display':'editor',input:{id:'native-number',form:'native-form',onInput:event=>inputs.push({trusted:event.nativeEvent.isTrusted,value:event.currentTarget.value})},clearLabel:'Clear synthetic amount'}}):null),
+   appearance?h('label',{htmlFor:'native-number'},'Synthetic amount'):null,
+   editor,
+   appearance?h('button',{type:'button','data-numeric-following':''},'Following field'):null),
   h('output',{'aria-label':'Canonical value'},JSON.stringify(state.value)),
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>setState(old=>({...old,value:0.1}))},'Echo canonical value'),
   h('button',{type:'button',onClick:()=>setState(old=>({...old,value:12.345,display:true}))},'Show large readonly value'),
@@ -118,7 +220,8 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                 'Content-Security-Policy',
                 "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; form-action 'none'"
             );
-            const path = new URL(request.url, 'http://localhost').pathname;
+            const requestUrl = new URL(request.url, 'http://localhost');
+            const path = requestUrl.pathname;
             if (path === '/proof.js') {
                 response.setHeader('Content-Type', 'text/javascript');
                 response.end(bundle.outputFiles[0].text);
@@ -127,8 +230,21 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                 response.end(css);
             } else if (path === '/') {
                 response.setHeader('Content-Type', 'text/html');
+                const appearance = requestUrl.searchParams
+                    .get('mode')
+                    ?.startsWith('appearance-');
                 response.end(
-                    '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Complete localized numeric proof</title><link rel="stylesheet" href="/numeric.css"><main></main><script type="module" src="/proof.js"></script>'
+                    '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Complete localized numeric proof</title>' +
+                        (appearance
+                            ? '<style>' +
+                              nativeNumericAppearanceCss +
+                              '</style>'
+                            : '') +
+                        '<link rel="stylesheet" href="/numeric.css">' +
+                        (appearance
+                            ? '<style>' + numericAppearanceThemeCss + '</style>'
+                            : '') +
+                        '<main></main><script type="module" src="/proof.js"></script>'
                 );
             } else {
                 response.statusCode = 404;
@@ -144,7 +260,19 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                 })
         );
         const origin = `http://127.0.0.1:${server.address().port}`;
-        const open = async (mode, mobile = false) => {
+        const fieldLocator = () =>
+            page.getByRole('textbox', {
+                name: 'Synthetic amount',
+                exact: true,
+            });
+        const visit = async (mode) => {
+            evidence.phase = mode;
+            await page.goto(origin + '?mode=' + mode);
+            const field = fieldLocator();
+            await field.waitFor();
+            return field;
+        };
+        const open = async (mode, mobile = false, width) => {
             if (context) await context.close();
             context = await browser.newContext({
                 serviceWorkers: 'block',
@@ -156,7 +284,9 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                           userAgent:
                               'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
                       }
-                    : {}),
+                    : width == null
+                      ? {}
+                      : { viewport: { width, height: 720 } }),
             });
             page = await context.newPage();
             page.setDefaultTimeout(5000);
@@ -173,15 +303,7 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                 evidence.unexpectedRequests.push(url.origin + url.pathname);
                 return route.abort();
             });
-            evidence.phase = mode;
-            await page.goto(origin + '?mode=' + mode);
-            await page
-                .getByRole('textbox', { name: 'Synthetic amount', exact: true })
-                .waitFor();
-            return page.getByRole('textbox', {
-                name: 'Synthetic amount',
-                exact: true,
-            });
+            return visit(mode);
         };
         const snapshot = () =>
             page.evaluate(() => window.numericProof.snapshot());
@@ -253,6 +375,12 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         await finish('percent-canonical-progress');
 
         input = await open('deferred');
+        assert.equal(
+            await input.evaluate((node) =>
+                Boolean(node.closest('.mx-sdk-localized-numeric-form'))
+            ),
+            false
+        );
         await input.focus();
         await page.keyboard.press('ControlOrMeta+A');
         await input.pressSequentially('75,25');
@@ -313,8 +441,146 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         await page.emulateMedia({ forcedColors: 'active' });
         await finish('mobile-clear-forced-colors');
         assert.equal(evidence.results.length, 6);
+
+        evidence.appearance = [];
+        const appearanceDifferences = [];
+        for (const width of [375, 639, 640, 1280]) {
+            await open('appearance-number-native', false, width);
+            for (const kind of ['number', 'currency', 'percent']) {
+                const samples = {};
+                for (const renderer of ['native', 'sdk']) {
+                    input = await visit(`appearance-${kind}-${renderer}`);
+                    const states = {};
+                    for (const state of ['rest', 'tab']) {
+                        if (state === 'tab') await page.keyboard.press('Tab');
+                        const measured = await input.evaluate(async (node) => {
+                            const style = getComputedStyle(node);
+                            const clipPadding = 4;
+                            // Read the pending style change before waiting for
+                            // the actual input border/shadow transition.
+                            style.boxShadow;
+                            await Promise.all(
+                                node
+                                    .getAnimations()
+                                    .map((item) => item.finished)
+                            );
+                            const bounds = node.getBoundingClientRect();
+                            const following = node.form.querySelector(
+                                '[data-numeric-following]'
+                            );
+                            return {
+                                metrics: {
+                                    height: bounds.height,
+                                    followingOffset:
+                                        following.getBoundingClientRect().top -
+                                        bounds.top,
+                                    font: [
+                                        style.fontFamily,
+                                        style.fontSize,
+                                        style.lineHeight,
+                                    ],
+                                    border: style.borderTopColor,
+                                    outline: [
+                                        style.outlineColor,
+                                        style.outlineWidth,
+                                        style.outlineOffset,
+                                    ],
+                                    shadow: style.boxShadow,
+                                    focusVisible:
+                                        node.matches(':focus-visible'),
+                                    value: node.value,
+                                },
+                                clip: {
+                                    x: bounds.x - clipPadding,
+                                    y: bounds.y - clipPadding,
+                                    width: bounds.width + 2 * clipPadding,
+                                    height: bounds.height + 2 * clipPadding,
+                                },
+                            };
+                        });
+                        assert.equal(
+                            measured.metrics.focusVisible,
+                            state === 'tab'
+                        );
+                        states[state] = measured.metrics;
+                        await page.screenshot({
+                            path: join(
+                                output,
+                                `numeric-${width}-${kind}-${renderer}-${state}.png`
+                            ),
+                            clip: measured.clip,
+                            caret: 'hide',
+                        });
+                    }
+                    await page.keyboard.press('Tab');
+                    assert.equal(await input.inputValue(), states.rest.value);
+                    const interaction = await snapshot();
+                    assert.deepEqual(interaction.writes, []);
+                    assert.deepEqual(interaction.inputs, []);
+                    assert.equal(interaction.submits, 0);
+                    samples[renderer] = states;
+                }
+                const expectedHeight = width < 640 ? 42 : 38;
+                assert.equal(samples.native.rest.height, expectedHeight);
+                assert.equal(
+                    samples.native.rest.followingOffset,
+                    expectedHeight
+                );
+                assert.equal(samples.native.tab.border, 'rgb(20, 184, 166)');
+                for (const state of ['rest', 'tab']) {
+                    const properties = Object.keys(samples.native[state]);
+                    const differences = properties.filter(
+                        (key) =>
+                            JSON.stringify(samples.native[state][key]) !==
+                            JSON.stringify(samples.sdk[state][key])
+                    );
+                    if (differences.length)
+                        appearanceDifferences.push({
+                            width,
+                            kind,
+                            state,
+                            differences,
+                        });
+                }
+                evidence.appearance.push({ width, kind, samples });
+            }
+        }
+        assert.equal(evidence.appearance.length, 12);
+        assert.deepEqual(evidence.pageErrors, []);
+        assert.deepEqual(evidence.unexpectedRequests, []);
+        assert.deepEqual(
+            appearanceDifferences,
+            [],
+            'Installed Form numeric inputs must match historic native geometry and Tab focus'
+        );
+        input = await open('number');
+        await page.keyboard.press('Tab');
+        const inputFocusColor = (property, color) =>
+            input.evaluate(
+                async (node, { property, color }) => {
+                    node.style.setProperty(property, color);
+                    const style = getComputedStyle(node);
+                    style.borderTopColor;
+                    await Promise.all(
+                        node.getAnimations().map((item) => item.finished)
+                    );
+                    return style.borderTopColor;
+                },
+                { property, color }
+            );
+        assert.equal(
+            await inputFocusColor('--mx-sdk-accent', 'rgb(126, 34, 206)'),
+            'rgb(126, 34, 206)'
+        );
+        assert.equal(
+            await inputFocusColor(
+                '--mx-sdk-numeric-focus',
+                'rgb(20, 184, 166)'
+            ),
+            'rgb(20, 184, 166)'
+        );
         evidence.scope =
-            'Installed complete numeric UI with trusted input; no native Form/backend/clipboard/live-device claim.';
+            'Installed numeric UI, trusted input and archived Form appearance in a paired fixture. No backend or live-device interaction.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

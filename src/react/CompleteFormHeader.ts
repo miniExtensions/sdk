@@ -182,6 +182,8 @@ export type CompleteFormHeaderProps = PresentationProps & {
     };
     logo?: FormDisplaySource;
     isChildForm?: boolean;
+    /** The host is rendering a direct public root Form. */
+    isRootPublicForm?: boolean;
     language?: RuntimeLanguage;
     testId?: string;
 };
@@ -193,8 +195,8 @@ export function CompleteFormHeader(props: CompleteFormHeaderProps): ReactNode {
     const logoSource = props.logo ?? none;
     const { logo, title, description: html } = projectFormHeader(props);
     const rootFormulaTitle =
+        props.isRootPublicForm === true &&
         !props.isChildForm &&
-        !props.preview?.showPlaceholders &&
         props.title.type === 'field' &&
         props.title.field.status === 'resolved' &&
         props.title.field.field.config.type === 'formula';

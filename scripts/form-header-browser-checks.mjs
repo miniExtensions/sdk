@@ -323,6 +323,9 @@ export async function checkFormHeaderBrowser({
             };
         });
     const child = page.getByRole('checkbox', { name: 'Child Form' });
+    const placeholders = page.getByRole('checkbox', {
+        name: 'Show placeholders',
+    });
     evidence.formulaTitle = [];
     for (const viewport of [
         { width: 1280, height: 720 },
@@ -330,18 +333,39 @@ export async function checkFormHeaderBrowser({
     ]) {
         await page.setViewportSize(viewport);
         const publicRoot = await formulaPaint();
+        const collapsedTextHeight = await formula.evaluate(
+            (node, text) => {
+                // Measure ordinary wrapping with this browser's font and width.
+                const reference = node.cloneNode(false);
+                reference.classList.remove('mx-sdk-form-title--formula');
+                reference.textContent = text;
+                node.after(reference);
+                const height = reference.getBoundingClientRect().height;
+                reference.remove();
+                return height;
+            },
+            formulaText.replaceAll('\n\n', ' ')
+        );
         assert.equal(publicRoot.text, formulaText);
         assert.equal(publicRoot.strongCount, 0);
         assert.equal(publicRoot.whiteSpace, 'normal');
         assert.equal(publicRoot.lineHeight, 36);
-        assert(publicRoot.height <= 2 * publicRoot.lineHeight);
+        assert.equal(publicRoot.height, collapsedTextHeight);
+        assert(publicRoot.height < 11 * publicRoot.lineHeight);
         await child.check();
         const childTitle = await formulaPaint();
         await child.uncheck();
         await preview.check();
-        const builderTitle = await formulaPaint();
+        const builderWithPlaceholders = await formulaPaint();
+        await placeholders.uncheck();
+        const builderWithoutPlaceholders = await formulaPaint();
+        await placeholders.check();
         await preview.uncheck();
-        for (const scoped of [childTitle, builderTitle]) {
+        for (const scoped of [
+            childTitle,
+            builderWithPlaceholders,
+            builderWithoutPlaceholders,
+        ]) {
             assert.equal(scoped.text, formulaText);
             assert.equal(scoped.whiteSpace, 'pre-line');
             assert.equal(scoped.height, 11 * scoped.lineHeight);
@@ -352,8 +376,10 @@ export async function checkFormHeaderBrowser({
         evidence.formulaTitle.push({
             viewport,
             publicRoot,
+            collapsedTextHeight,
             childTitle,
-            builderTitle,
+            builderWithPlaceholders,
+            builderWithoutPlaceholders,
         });
     }
     await verify([]);

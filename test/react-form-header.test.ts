@@ -177,6 +177,8 @@ it('renders Formula multiline titles as plain text using the complete SDK header
             h(CompleteFormHeader, {
                 ...defaults,
                 title: dynamicSource(words.join(separator), field),
+                isRootPublicForm: true,
+                preview: { showPlaceholders: false, showFieldSources: false },
             })
         );
         const heading = f.container.querySelector('h1');
@@ -186,11 +188,20 @@ it('renders Formula multiline titles as plain text using the complete SDK header
         assert.equal(heading.querySelector('strong'), null);
     }
     for (const props of [
-        { title: staticSource(expected) },
-        { title: dynamicSource(expected) },
-        { title: missing, extensionName: expected },
-        { title: dynamicSource(words.join('\n'), field), isChildForm: true },
+        { title: staticSource(expected), isRootPublicForm: true },
+        { title: dynamicSource(expected), isRootPublicForm: true },
+        { title: missing, extensionName: expected, isRootPublicForm: true },
+        { title: dynamicSource(words.join('\n'), field) },
+        {
+            title: dynamicSource(words.join('\n'), field),
+            isRootPublicForm: true,
+            isChildForm: true,
+        },
         { title: dynamicSource(words.join('\n'), field), preview },
+        {
+            title: dynamicSource(words.join('\n'), field),
+            preview: { ...preview, showPlaceholders: false },
+        },
     ]) {
         await f.render(h(CompleteFormHeader, { ...defaults, ...props }));
         const heading = f.container.querySelector('h1');

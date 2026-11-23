@@ -85,6 +85,7 @@ function App() {
     const [enabled, setEnabled] = useState(true);
     const [truncate, setTruncate] = useState(true);
     const [preview, setPreview] = useState(false);
+    const [showPlaceholders, setShowPlaceholders] = useState(true);
     const [media, setMedia] = useState(false);
     const [events, setEvents] = useState<string[]>([]);
     const [title, setTitle] = useState('A new perspective');
@@ -102,7 +103,7 @@ function App() {
     };
     const capability = preview
         ? {
-              showPlaceholders: true,
+              showPlaceholders,
               showFieldSources: true,
               onOpenSettings: (target: string) =>
                   setEvents((items) => [...items, target]),
@@ -188,6 +189,10 @@ function App() {
                 setTruncate(!truncate)
             ),
             checkbox('Config preview', preview, () => setPreview(!preview)),
+            preview &&
+                checkbox('Show placeholders', showPlaceholders, () =>
+                    setShowPlaceholders(!showPlaceholders)
+                ),
             checkbox('Media-only description', media, () => setMedia(!media)),
             h(
                 'label',
@@ -232,6 +237,7 @@ function App() {
                     logo: { type: 'static', value: logo },
                     description: { enabled, source: description, truncate },
                     isChildForm: child,
+                    isRootPublicForm: !preview && !child,
                     language: 'en',
                     preview: capability,
                     testId: 'example-header',

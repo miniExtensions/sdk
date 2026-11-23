@@ -355,6 +355,8 @@ The Form completion banner retains the native solid CheckCircle icon, and the re
 
 The Form section disclosure retains the native solid ChevronUp and ChevronDown icons from Heroicons 2.1.1.
 
+The editable Phone field uses the native solid Phone icon from Heroicons 2.1.1.
+
 The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.
 
 The Form text Clear button retains the native solid XMark icon from Heroicons 2.1.1.

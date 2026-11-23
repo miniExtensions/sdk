@@ -11,6 +11,156 @@ import { createServer } from 'node:http';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { build } from 'esbuild';
 
+// Match the recognized native Form message, including its formatted wrapper.
+const permissionError =
+    'Could not complete the operation. Please verify that the correct permission levels are set in Airtable.';
+
+async function checkBorrowedErrorHelp(page, origin, output, react) {
+    const initialViewport = page.viewportSize();
+    const cases = [
+        { name: 'permission', error: permissionError, hasHelp: true },
+        {
+            name: 'wrapped-permission',
+            error: 'Airtable API Error: ' + permissionError,
+            hasHelp: true,
+            unknown: true,
+        },
+        { name: 'provider', error: 'Synthetic provider unavailable' },
+        { name: 'invalid-json', error: 'Response is not valid JSON' },
+        { name: 'child-limit', error: 'Connected child Form limit reached' },
+    ];
+    const results = [];
+    for (const viewport of [
+        { width: 375, height: 780 },
+        { width: 1280, height: 720 },
+    ]) {
+        await page.setViewportSize(viewport);
+        for (const { name, error, hasHelp, unknown } of cases) {
+            await page.goto(origin + '/?borrowed');
+            await page
+                .getByRole('button', { name: 'Open native child' })
+                .press('Enter');
+            const dialog = page.getByRole('dialog', {
+                name: 'Create linked record',
+            });
+            const input = dialog.locator(
+                'input[aria-label="Native child title"]'
+            );
+            const close = dialog.getByRole('button', {
+                name: 'Close',
+                exact: true,
+            });
+            const save = dialog.getByRole('button', {
+                name: 'Save',
+                exact: true,
+            });
+            const help = dialog.getByRole('button', {
+                name: 'How can I fix permissions-related issues?',
+                exact: true,
+            });
+            const read = () => page.evaluate(() => window.readBorrowedCreate());
+            const draft = 'Keep child draft after opening Help';
+            await input.fill(draft);
+            await page.evaluate(
+                ({ message, unknown }) => {
+                    window.nextBorrowedSaveError = message;
+                    window.nextBorrowedSaveUnknown = unknown;
+                },
+                { message: error, unknown }
+            );
+            await save.press('Enter');
+            const alert = dialog.getByRole('alert');
+            await alert.waitFor();
+            assert.equal(await alert.textContent(), error);
+            const rejected = await read();
+            assert.deepEqual(rejected.saves, [draft]);
+            assert.deepEqual(rejected.links, ['rec_initial']);
+            assert.equal(
+                rejected.outcome.type,
+                unknown ? 'unknown' : 'rejected'
+            );
+            assert.equal(await save.isDisabled(), Boolean(unknown));
+            await (unknown ? close : input).focus();
+            await page.keyboard.press('Tab');
+            const focus = (locator) =>
+                locator.evaluate((node) => node === document.activeElement);
+            if (hasHelp) {
+                await page.screenshot({
+                    path: join(
+                        output,
+                        `child-help-${react}-${viewport.width}-${name}.png`
+                    ),
+                });
+                assert.equal(
+                    await help.count(),
+                    1,
+                    `Missing Help for ${name} at ${viewport.width}px`
+                );
+                assert(await focus(help));
+                assert.equal(await help.getAttribute('type'), 'button');
+                await page.keyboard.press('Enter');
+                assert(await focus(help));
+            } else {
+                assert.equal(await help.count(), 0);
+                assert(await focus(save));
+            }
+            assert.equal(await input.inputValue(), draft);
+            assert.deepEqual(await read(), {
+                ...rejected,
+                permissionHelpOpens: hasHelp ? 1 : 0,
+            });
+            const checkRetainedError =
+                name === 'permission' && viewport.width === 375;
+            if (checkRetainedError) {
+                const helpInDom = dialog.locator('button').filter({
+                    hasText: 'How can I fix permissions-related issues?',
+                });
+                await dialog
+                    .getByRole('button', { name: 'Close', exact: true })
+                    .press('Enter');
+                const keep = dialog.getByRole('button', {
+                    name: 'Keep editing',
+                });
+                await keep.waitFor();
+                assert.equal(await helpInDom.count(), 0);
+                await keep.press('Enter');
+                await help.waitFor();
+                assert.equal(await input.inputValue(), draft);
+
+                await page.evaluate(() => {
+                    window.holdBorrowedSave = true;
+                    window.nextBorrowedSaveUnknown = true;
+                });
+                await save.press('Enter');
+                await page.waitForFunction(() => window.releaseBorrowedSave);
+                assert.equal(await helpInDom.count(), 0);
+                await page.evaluate(() => window.releaseBorrowedSave());
+                await page.waitForFunction(
+                    () => window.readBorrowedCreate().phase === 'unknown'
+                );
+                await help.waitFor();
+                assert.equal(await helpInDom.count(), 1);
+                assert(await save.isDisabled());
+                assert.equal(await input.inputValue(), draft);
+                const unresolved = await read();
+                assert.equal(unresolved.permissionHelpOpens, 1);
+                assert.deepEqual(unresolved.saves, [draft, draft]);
+                assert.deepEqual(unresolved.links, rejected.links);
+                assert.equal(unresolved.parentSubmits, 0);
+            }
+            results.push({
+                width: viewport.width,
+                name,
+                helpOpens: hasHelp ? 1 : 0,
+                outcome: unknown ? 'unknown' : 'rejected',
+                ...(checkRetainedError && { retainedErrorLifecycle: true }),
+            });
+        }
+    }
+    if (initialViewport) await page.setViewportSize(initialViewport);
+    return results;
+}
+
 async function checkBorrowedCreate(page, origin) {
     await page.goto(origin + '/?borrowed');
     const opener = page.getByRole('button', { name: 'Open native child' });
@@ -292,6 +442,7 @@ export async function checkLinkedChildCreateBrowser({
                     __LINKED_CHILD_CREATE_FIXTURES__: JSON.stringify({
                         parent,
                         child,
+                        permissionError,
                         saved: fixtures.childSaved('edit'),
                     }),
                 },
@@ -349,6 +500,12 @@ export async function checkLinkedChildCreateBrowser({
                 const page = await context.newPage();
                 page.setDefaultTimeout(10000);
                 page.on('pageerror', (error) => errors.push(String(error)));
+                const permissionHelp = await checkBorrowedErrorHelp(
+                    page,
+                    origin,
+                    output,
+                    react
+                );
                 const read = () =>
                     page.evaluate(() => window.readCreateProof());
                 const dialog = page.getByRole('dialog', {
@@ -696,6 +853,7 @@ export async function checkLinkedChildCreateBrowser({
                     freshCreateAfterRetiredLoad: true,
                     staleSavePreservedReplacementLinks: true,
                     borrowedCreate,
+                    permissionHelp,
                 });
                 console.log(
                     `Installed linked-child Create Chromium React ${react} passed`

@@ -109,7 +109,9 @@ import {
 import {
     completeMultilineBrowserSource,
     completeMultilineBrowserStyle,
+    completeMultilineInterSha256,
     checkCompleteMultilineBrowser,
+    checkCompleteMultilineCounterBrowser,
 } from './complete-multiline-consumer-checks.mjs';
 import {
     prepareFieldPresentationBrowserFixtures,
@@ -2190,6 +2192,10 @@ try {
             relative(installed, multilineCssPath).replaceAll('\\', '/');
         assert.deepEqual(multilineCss, readArchiveMember(multilineCssMember));
         const multilineCode = multilineBundle.outputFiles[0].contents;
+        // Exact Latin Inter bytes loaded by the native public Form.
+        // https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2
+        const multilineInter = regular('test/fixtures/inter/inter-latin.woff2');
+        assert.equal(hash(multilineInter), completeMultilineInterSha256);
         report.completeMultiline = {
             sourceSha256: hash(completeMultilineBrowserSource),
             fixtureCssSha256: hash(completeMultilineBrowserStyle),
@@ -2197,9 +2203,11 @@ try {
             packagedCssMember: multilineCssMember,
             bundleSha256: hash(multilineCode),
             bundleInputs: multilineProofInputs,
+            interSha256: completeMultilineInterSha256,
         };
         allowed.set('/complete-multiline.js', multilineCode);
         allowed.set('/complete-multiline.css', multilineCss);
+        allowed.set('/complete-multiline-inter.woff2', multilineInter);
         allowed.set(
             '/complete-multiline-fixture.css',
             Buffer.from(completeMultilineBrowserStyle)
@@ -2207,7 +2215,7 @@ try {
         allowed.set(
             '/complete-multiline.html',
             Buffer.from(
-                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete multiline</title><link rel="stylesheet" href="/complete-multiline.css"><link rel="stylesheet" href="/complete-multiline-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-multiline.js"></script></body></html>`
+                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete multiline</title><link rel="stylesheet" href="/complete-multiline.css"><link rel="stylesheet" href="/complete-multiline-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-multiline.js"></script></body></html>`
             )
         );
         allowed.set(
@@ -2261,7 +2269,9 @@ try {
                       ? 'text/css'
                       : url.pathname.endsWith('.svg')
                         ? 'image/svg+xml'
-                        : 'text/html'
+                        : url.pathname.endsWith('.woff2')
+                          ? 'font/woff2'
+                          : 'text/html'
             );
             response.end(bytes);
         });
@@ -3267,6 +3277,14 @@ try {
             await checkCompleteMultilineBrowser({
                 page,
                 evidence: report.completeMultiline,
+            });
+        });
+        await run('complete-multiline-counter', async (page, origin) => {
+            await checkCompleteMultilineCounterBrowser({
+                page,
+                origin,
+                evidence: report.completeMultiline,
+                output,
             });
         });
         await run('field-presentation', async (page, origin) => {

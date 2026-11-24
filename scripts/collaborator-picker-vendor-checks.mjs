@@ -99,6 +99,17 @@ export async function bundleScannerDialog(root = process.cwd()) {
     );
 }
 
+/** Portal header menu using the same tracked Headless UI dependency closure. */
+export async function bundleFormRecordActionsHeaderMenu(root = process.cwd()) {
+    return bundleHeadlessRuntime(
+        root,
+        'formRecordActionsHeaderMenuRuntime',
+        'form-record-actions-header',
+        [],
+        []
+    );
+}
+
 /** Keep the attachment slider's portal and focus trap behind its client import. */
 export async function bundleAttachmentSliderDialog(root = process.cwd()) {
     return bundleHeadlessRuntime(

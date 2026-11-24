@@ -3766,6 +3766,8 @@ export {
     FormRecordDeleteConfirmation,
     FormRecordActionsFooter,
     FormRecordActionsMenu,
+    FormRecordActionsHeaderMenu,
+    type FormRecordActionsHeaderMenuProps,
     type FormRecordActionsLabels,
     type FormRecordDeleteConfirmationProps,
     type FormRecordActionsProps,

@@ -58,6 +58,12 @@ and supply the localized labels, including any custom delete label.
 The menu can open beyond a clipping ancestor in browsers with the Popover API.
 Browsers without that API use the inline disclosure, subject to ancestor overflow.
 
+Use `FormRecordActionsHeaderMenu` for the right edge of a clipped Portal side
+panel. Supply the trigger, Comments and Delete icons through `icons`. The
+component labels the trigger, portals the action menu outside the panel, and
+supports ArrowDown to open and move through the actions. Pass `buttonRef` if the
+host comments surface should return focus to the same trigger.
+
 The host publishes visibility, disabled state and operation progress. When the
 visitor confirms, the controller closes the dialog and asks the host to admit
 deletion for the currently accepted scope. The host owns eligibility, the

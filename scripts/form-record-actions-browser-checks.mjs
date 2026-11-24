@@ -16,7 +16,7 @@ const host = String.raw`
 import React, { createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createFormRecordActionsController } from '@miniextensions/sdk/forms';
-import { FormRecordActionsMenu } from '@miniextensions/sdk/react';
+import { FormRecordActionsHeaderMenu, FormRecordActionsMenu } from '@miniextensions/sdk/react';
 
 const counts = { requests: [], writes: [], allocations: [], comments: [], settlements: [] };
 const labels = {
@@ -63,21 +63,50 @@ function makeRow(id) {
             frame = { ...frame, comments: { disabled, visible } };
             if (publish) for (const changed of listeners) changed();
         },
+        setDelete(disabled) {
+            frame = { ...frame, delete: { ...frame.delete, disabled } };
+            for (const changed of listeners) changed();
+        },
         settle() { settle(); },
     };
 }
 const root = createRoot(document.getElementById('panel'));
+const header = document.documentElement.dataset.presentation === 'header';
+const headerButton = React.createRef();
+const headerLabels = {
+    openMenu: 'Open record options', comments: 'Comments', deleteRecord: 'Delete record',
+    confirmationTitle: 'Are you sure you want to delete this record?',
+    irreversibleWarning: 'This action is irreversible.', confirmDelete: 'Delete', cancel: 'Cancel',
+};
+const svg = (size, path) => h('svg', { width: size, height: size, viewBox: '0 0 24 24', 'aria-hidden': true }, h('path', { fill: 'currentColor', d: path }));
+const icons = {
+    trigger: svg(24, 'M10 4h4v4h-4z M10 10h4v4h-4z M10 16h4v4h-4z'),
+    comments: svg(16, 'M3 4h18v12H10l-5 4v-4H3z'),
+    deleteRecord: svg(16, 'M4 6h16v2H4z M6 9h12l-1 11H7z M9 3h6v2H9z'),
+};
 const decoy = makeRow('decoy');
 let target = makeRow('target');
 const row = (id, host) => h('div', { id }, id, h(FormRecordActionsMenu, { controller: host.controller, labels }));
-const render = () => root.render(h(React.StrictMode, null, row('decoy', decoy), row('target', target)));
+const headerRow = () => h('div', { id: 'target' }, h(FormRecordActionsHeaderMenu, {
+        controller: target.controller,
+        labels: headerLabels,
+        icons,
+        buttonRef: headerButton,
+        buttonClassName: 'fixture-header-control',
+        buttonTestId: 'tooltip-open-menu-button',
+    }));
+const render = () => root.render(header
+    ? h(React.StrictMode, null, headerRow())
+    : h(React.StrictMode, null, row('decoy', decoy), row('target', target)));
 window.recordActionsProof = {
     counts,
+    ownsHeaderButton: (button) => headerButton.current === button,
     changeRecord: (record) => target.changeRecord(record),
     setComments: (disabled, visible, publish) => target.setComments(disabled, visible, publish),
+    setDelete: (disabled) => target.setDelete(disabled),
     settle: () => target.settle(),
-    replace() {
-        target = makeRow('replacement');
+    replace(record = 'replacement') {
+        target = makeRow(record);
         render();
     },
 };
@@ -93,12 +122,256 @@ body {font:16px system-ui;margin:0}
 </style><main id="panel" aria-label="Panneau latéral"></main>
 <button id="after" type="button">Après</button><script type="module" src="/proof.js"></script></html>`;
 
-/** Prove the packed disclosure inside the clipped panel with synthetic actions. */
+const headerHtml = `<!doctype html><html lang="en" data-presentation="header"><meta charset="utf-8">
+<link rel="stylesheet" href="/actions.css"><style>
+body {font:16px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;margin:0}
+#panel {position:absolute;top:148px;left:24px;width:342px;height:60px;overflow:hidden;border-radius:12px;background:#f8fafc}
+#target {position:absolute;top:16px;right:48px}
+</style><main id="panel" aria-label="Side panel"></main>
+<button id="after" type="button">After</button><script type="module" src="/proof.js"></script></html>`;
+
+async function checkHeaderMenu(page, viewport, output, hash) {
+    const opener = page.getByTestId('tooltip-open-menu-button');
+    await opener
+        .and(
+            page.getByRole('button', {
+                name: 'Open record options',
+                exact: true,
+            })
+        )
+        .waitFor();
+    const originalOpener = await opener.elementHandle();
+    const popup = page.getByRole('menu', {
+        name: 'Open record options',
+        exact: true,
+    });
+    const comments = popup.getByRole('menuitem', {
+        name: 'Comments',
+        exact: true,
+    });
+    const deletion = popup.getByRole('menuitem', {
+        name: 'Delete record',
+        exact: true,
+    });
+    const confirmation = page.getByRole('alertdialog', {
+        name: 'Are you sure you want to delete this record?',
+        exact: true,
+    });
+    const cancel = confirmation.getByRole('button', { name: 'Cancel' });
+    const confirm = confirmation.getByRole('button', { name: 'Delete' });
+    const focused = (element) =>
+        element.evaluate((node) => node.ownerDocument.activeElement === node);
+    const counts = () => page.evaluate(() => window.recordActionsProof.counts);
+    const noActions = {
+        requests: [],
+        writes: [],
+        allocations: [],
+        comments: [],
+        settlements: [],
+    };
+    const capture = async (state) => {
+        const file = `record-actions-header-${state}.png`;
+        const path = join(output, file);
+        await page.screenshot({ path, animations: 'disabled' });
+        return { file, sha256: hash(readFileSync(path)) };
+    };
+    const waitForActive = async (action) => {
+        const id = await action.getAttribute('id');
+        assert(id, 'The menu action must have an active-descendant ID');
+        await page.waitForFunction((activeId) => {
+            const menu = document.activeElement;
+            return (
+                menu.getAttribute('role') === 'menu' &&
+                menu.getAttribute('aria-activedescendant') === activeId
+            );
+        }, id);
+    };
+    const openDelete = async () => {
+        await opener.press('ArrowDown');
+        await waitForActive(comments);
+        await page.keyboard.press('ArrowDown');
+        await waitForActive(deletion);
+    };
+
+    await opener.locator('svg[aria-hidden="true"]').waitFor();
+    const trigger = await opener.evaluate((button) => {
+        const { width, height } = button.getBoundingClientRect();
+        return {
+            width,
+            height,
+            hasPopup: button.getAttribute('aria-haspopup'),
+            expanded: button.getAttribute('aria-expanded'),
+            forwardedClass: button.classList.contains('fixture-header-control'),
+            forwardedRef: window.recordActionsProof.ownsHeaderButton(button),
+        };
+    });
+    assert.deepEqual(trigger, {
+        width: 24,
+        height: 24,
+        hasPopup: 'menu',
+        expanded: 'false',
+        forwardedClass: true,
+        forwardedRef: true,
+    });
+    const resting = await capture('resting');
+    await opener.click();
+    await popup.waitFor();
+    await comments.locator('svg[aria-hidden="true"]').waitFor();
+    await deletion.locator('svg[aria-hidden="true"]').waitFor();
+    assert.equal(
+        await opener.getAttribute('aria-controls'),
+        await popup.getAttribute('id')
+    );
+    await page.waitForFunction(() => {
+        const anchor = document.querySelector(
+            '[data-testid="tooltip-open-menu-button"]'
+        );
+        const menu = document.getElementById(
+            anchor?.getAttribute('aria-controls')
+        );
+        return (
+            menu &&
+            Math.abs(
+                menu.getBoundingClientRect().top -
+                    anchor.getBoundingClientRect().bottom -
+                    4
+            ) <= 1
+        );
+    });
+    const geometry = await deletion.evaluate((action) => {
+        const doc = action.ownerDocument;
+        const card = doc.getElementById('panel');
+        const button = doc.querySelector(
+            '[data-testid="tooltip-open-menu-button"]'
+        );
+        const menu = action.closest('[role="menu"]');
+        const item = action.getBoundingClientRect();
+        const panel = menu.getBoundingClientRect();
+        const opener = button.getBoundingClientRect();
+        const y = (item.top + item.bottom) / 2;
+        const x = (item.left + item.right) / 2;
+        return {
+            opener: opener.toJSON(),
+            panel: panel.toJSON(),
+            deletion: item.toJSON(),
+            portaled: !card.contains(menu),
+            gap: panel.top - opener.bottom,
+            rightEdgeDifference: panel.right - opener.right,
+            outsideCard: y > card.getBoundingClientRect().bottom,
+            hit:
+                doc.elementFromPoint(x, y)?.closest('[role="menuitem"]') ===
+                action,
+            menuFocused: doc.activeElement === menu,
+        };
+    });
+    assert.equal(geometry.portaled, true);
+    assert(Math.abs(geometry.gap - 4) <= 1, 'Expected the native 4px gap');
+    assert(
+        Math.abs(geometry.rightEdgeDifference) <= 1,
+        'Expected right-aligned header menu'
+    );
+    assert.equal(geometry.outsideCard, true);
+    assert.equal(geometry.hit, true);
+    assert.equal(geometry.menuFocused, true);
+    const open = await capture('open');
+    await page.keyboard.press('Escape');
+    await popup.waitFor({ state: 'hidden' });
+    assert.equal(await focused(originalOpener), true);
+
+    await page.evaluate(() => window.recordActionsProof.setDelete(true));
+    await openDelete();
+    assert.equal(await deletion.getAttribute('data-unavailable'), 'true');
+    assert.equal(
+        await deletion.evaluate((action) => getComputedStyle(action).cursor),
+        'not-allowed'
+    );
+    await page.keyboard.press('Enter');
+    await popup.waitFor({ state: 'hidden' });
+    assert.equal(await confirmation.count(), 0);
+    assert.deepEqual(await counts(), noActions);
+    await page.evaluate(() => window.recordActionsProof.setDelete(false));
+
+    await openDelete();
+    const keyboardFocus = await capture('delete-keyboard-focus');
+    await page.keyboard.press('Enter');
+    await confirmation.waitFor();
+    assert.equal(await focused(cancel), true);
+    await page.keyboard.press('Enter');
+    await confirmation.waitFor({ state: 'hidden' });
+    assert.equal(await focused(originalOpener), true);
+    assert.deepEqual(await counts(), noActions);
+
+    await openDelete();
+    await page.keyboard.press('Enter');
+    await confirmation.waitFor();
+    const oldConfirm = await confirm.elementHandle();
+    await originalOpener.evaluate((button) => {
+        button.addEventListener('focus', () =>
+            button.setAttribute('data-retired-focus', 'true')
+        );
+    });
+    await page.evaluate(() => window.recordActionsProof.replace('fresh'));
+    await confirmation.waitFor({ state: 'hidden' });
+    await opener.waitFor();
+    assert.equal(
+        await originalOpener.evaluate((button) => button.isConnected),
+        false
+    );
+    assert.equal(await focused(opener), false);
+    const successor = page.locator('#after');
+    await successor.focus();
+    await oldConfirm.evaluate((button) => button.click());
+    await page.evaluate(
+        () =>
+            new Promise((done) =>
+                requestAnimationFrame(() => requestAnimationFrame(done))
+            )
+    );
+    assert.equal(await originalOpener.getAttribute('data-retired-focus'), null);
+    assert.equal(await focused(successor), true);
+    assert.deepEqual(await counts(), noActions);
+
+    await opener.press('ArrowDown');
+    await waitForActive(comments);
+    await page.keyboard.press('Enter');
+    await popup.waitFor({ state: 'hidden' });
+    assert.deepEqual(await counts(), { ...noActions, comments: ['fresh'] });
+
+    await openDelete();
+    await page.keyboard.press('Enter');
+    await confirmation.waitFor();
+    await confirm.click();
+    await confirmation.waitFor({ state: 'hidden' });
+    await page.evaluate(() => window.recordActionsProof.settle());
+    const finalActions = await counts();
+    assert.deepEqual(finalActions, {
+        ...noActions,
+        requests: ['fresh'],
+        writes: ['fresh'],
+        allocations: ['fresh'],
+        comments: ['fresh'],
+        settlements: ['fresh'],
+    });
+    return {
+        status: 'passed',
+        viewport,
+        trigger,
+        geometry,
+        cancelRestoredFocus: true,
+        staleReplacementFocus: false,
+        staleConfirmationRequests: 0,
+        finalActions,
+        screenshots: [resting, open, keyboardFocus],
+    };
+}
+
+/** Prove the packed disclosure and Portal header with synthetic actions. */
 export async function checkFormRecordActionsBrowser({
     browser,
     consumer,
     evidence,
     output,
+    headerOnly = false,
 }) {
     let directory, server, context;
     const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -135,6 +408,11 @@ export async function checkFormRecordActionsBrowser({
                 file.endsWith('/react/FormRecordActions.js')
             )
         );
+        assert(
+            sdkInputs.some((file) =>
+                file.endsWith('/react/formRecordActionsHeaderMenuRuntime.js')
+            )
+        );
         const css = readFileSync(
             join(sdk, 'dist/esm/react/form-record-actions.css')
         );
@@ -144,11 +422,13 @@ export async function checkFormRecordActionsBrowser({
             harnessSha256: hash(readFileSync(new URL(import.meta.url))),
             hostSha256: hash(host),
             htmlSha256: hash(html),
+            headerHtmlSha256: hash(headerHtml),
             bundleSha256: hash(bundle.contents),
             cssSha256: hash(css),
         });
         const routes = new Map([
             ['/', ['text/html; charset=utf-8', html]],
+            ['/header', ['text/html; charset=utf-8', headerHtml]],
             ['/proof.js', ['text/javascript', bundle.contents]],
             ['/actions.css', ['text/css', css]],
         ]);
@@ -168,26 +448,50 @@ export async function checkFormRecordActionsBrowser({
             server.listen(0, '127.0.0.1', resolve);
         });
         const origin = 'http://127.0.0.1:' + server.address().port;
-        context = await browser.newContext({
-            serviceWorkers: 'block',
-            viewport: { width: 640, height: 480 },
-        });
-        await context.route('**/*', (route) => {
-            const url = new URL(route.request().url());
-            if (
-                url.origin === origin &&
-                routes.has(url.pathname) &&
-                !url.search &&
-                route.request().method() === 'GET'
-            )
-                return route.continue();
-            unexpectedRequests.push(url.origin + url.pathname);
-            return route.abort();
-        });
-        const page = await context.newPage();
-        page.setDefaultTimeout(5000);
-        page.on('pageerror', (error) => pageErrors.push(error.message));
-        await page.goto(origin);
+        const openPage = async (pathname, viewport) => {
+            context = await browser.newContext({
+                serviceWorkers: 'block',
+                viewport,
+            });
+            await context.route('**/*', (route) => {
+                const url = new URL(route.request().url());
+                if (
+                    url.origin === origin &&
+                    routes.has(url.pathname) &&
+                    !url.search &&
+                    route.request().method() === 'GET'
+                )
+                    return route.continue();
+                unexpectedRequests.push(url.origin + url.pathname);
+                return route.abort();
+            });
+            const page = await context.newPage();
+            page.setDefaultTimeout(5000);
+            page.on('pageerror', (error) => pageErrors.push(error.message));
+            await page.goto(origin + pathname);
+            return page;
+        };
+        const checkHeader = async () => {
+            await context?.close();
+            const viewport = { width: 390, height: 480 };
+            const page = await openPage('/header', viewport);
+            evidence.header = await checkHeaderMenu(
+                page,
+                viewport,
+                output,
+                hash
+            );
+        };
+
+        if (headerOnly) {
+            await checkHeader();
+            assert.deepEqual(pageErrors, []);
+            assert.deepEqual(unexpectedRequests, []);
+            evidence.status = 'passed';
+            return;
+        }
+
+        const page = await openPage('/', { width: 640, height: 480 });
         const opener = page
             .locator('#target')
             .getByRole('button', { name: 'Options', exact: true });
@@ -520,6 +824,7 @@ export async function checkFormRecordActionsBrowser({
         assert.equal(await focused(fallbackOpener), true);
         assert.deepEqual(await counts(), noop);
 
+        await checkHeader();
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(unexpectedRequests, []);
         Object.assign(evidence, {

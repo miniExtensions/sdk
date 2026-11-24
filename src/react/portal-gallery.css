@@ -90,6 +90,12 @@
 .mx-sdk-portal-gallery-card-content .mx-sdk-finder-carousel > button {
     display: none;
 }
+.mx-sdk-portal-gallery-card-content
+    > .mx-sdk-finder-card-gallery
+    > .mx-sdk-finder-carousel
+    > .mx-sdk-finder-carousel-dots {
+    background-color: rgb(0 0 0 / 25%);
+}
 .mx-sdk-portal-gallery-review {
     position: absolute;
     left: -4px;

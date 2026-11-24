@@ -15,6 +15,11 @@ shared Finder delivery. There is no native JSX/render callback or unknown-field
 string fallback. The native Portal Calendar compact presentation is deliberately
 literal primary/optional subtitle, with no thumbnail or carousel.
 
+Published Form hosts can add `mx-sdk-calendar-picker--form-record-list` to
+`CalendarRecordPicker.className` for the native record inset and detail
+typography. The list keeps room for the picker’s keyboard outline. A labeled
+detail Button without a URL fits the Form’s 24px detail slot.
+
 `CalendarRecordPickerAcceptedFrame` separates a stable `control` owner/read port
 from its exact `presentationOwner`, accepted records/schema, rich projections,
 full canonical selected-ID array and semantic toggle. `selectionEnabled` is an

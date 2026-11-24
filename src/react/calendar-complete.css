@@ -219,6 +219,43 @@
     cursor: default;
     opacity: 0.6;
 }
+
+/* Restore the Form record inset with room for the 2px keyboard outline and offset. */
+.mx-sdk-calendar-picker--form-record-list
+    > .mx-sdk-calendar-picker__list
+    > .mx-sdk-calendar-picker__records {
+    margin-block-start: -0.25rem;
+    margin-inline-start: -0.25rem;
+    margin-inline-end: 1.75rem;
+    padding: 0.25rem 0.25rem 0;
+}
+
+.mx-sdk-calendar-picker--form-record-list .mx-sdk-calendar-picker__details {
+    line-height: 1.25rem;
+}
+
+.mx-sdk-calendar-picker--form-record-list
+    .mx-sdk-calendar-picker__rich-details {
+    font-size: 0.8125rem;
+}
+
+.mx-sdk-calendar-picker--form-record-list
+    .mx-sdk-calendar-picker__rich-details
+    dt {
+    height: 1rem;
+    color: #6b7280;
+    line-height: 1rem;
+}
+
+/* Fit a labeled Button with no URL into the Form detail row without clipping it. */
+.mx-sdk-calendar-picker--form-record-list
+    .mx-sdk-calendar-picker__rich-details
+    dd
+    > a.mx-sdk-button-controlled.cursor-not-allowed:not([href]) {
+    min-height: 1.5rem;
+    padding-block: 2px;
+}
+
 @media (min-width: 768px) {
     .mx-sdk-calendar-picker {
         flex-direction: row;

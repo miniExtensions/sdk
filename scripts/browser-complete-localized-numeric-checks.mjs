@@ -142,14 +142,14 @@ function NativeAppearance({kind}) {
   }));
 }
 function App(){
- const kind=appearance?.[1]??(mode==='deferred'?'percent':mode==='mobile'?'number':mode);
- const [state,setState]=useState({value:defaults[appearance?.[1]??mode],readonly:false,owner:{},mounted:true,display:false});
+ const readonlyPercent=mode==='readonly-percent';
+ const kind=appearance?.[1]??(mode==='deferred'||readonlyPercent?'percent':mode==='mobile'?'number':mode);
+ const [state,setState]=useState({value:defaults[appearance?.[1]??(readonlyPercent?'percent':mode)],readonly:false,owner:{},mounted:true,display:false});
  const scope=state.owner;
  const metadata={type:kind,options:{precision:2,...(kind==='currency'?{symbol:appearance?'€':'<img src=x> literal '}: {})}};
  const field={physicalKind:kind,presentation:{type:'physical',config:metadata},fieldId:'numeric',title:'Synthetic amount',field:{id:'numeric',name:'Synthetic amount',description:null,isComputed:false,isPrimaryField:false,config:metadata},displayConfig:{numberSeparator:'period-comma',showThousandsSeparator:true,allowNegativeNumbers:true,showAsProgressBar:kind==='percent'&&!appearance,readOnly:state.readonly},value:state.value,context:mode==='deferred'?'portal-cell':'form',computed:false,dirty:false,pending:false,error:null,validation:[],capability:{type:'editable',setValue(value){if(scope!==state.owner||state.readonly)return{accepted:false,reason:'retired'};writes.push(value);setState(old=>({...old,value}));return{accepted:true};}}};
- const percentDisplay=kind==='percent'&&state.display;
- const Component=kind==='currency'?CurrencyField:kind==='number'?NumberField:percentDisplay?PercentField:CompleteLocalizedNumericField;
- const props=kind==='currency'?field:{...(kind==='number'||percentDisplay?{mode:'controlled'}:{}),field};
+ const Component=kind==='currency'?CurrencyField:kind==='number'?NumberField:readonlyPercent?PercentField:CompleteLocalizedNumericField;
+ const props=kind==='currency'?field:{...(kind==='number'||readonlyPercent?{mode:'controlled'}:{}),field};
  const options={
   owner:{token:scope,isCurrent:()=>!state.readonly},
   showLabel:!appearance,
@@ -171,8 +171,8 @@ function App(){
    editor,
    appearance?h('button',{type:'button','data-numeric-following':''},'Following field'):null),
   h('output',{'aria-label':'Canonical value'},JSON.stringify(state.value)),
-  mode==='percent'?h('button',{type:'button',onClick:()=>setState(old=>({...old,value:0.079,display:true,readonly:true}))},'Show below threshold'):null,
-  mode==='percent'?h('button',{type:'button',onClick:()=>setState(old=>({...old,value:0.08,display:true,readonly:true}))},'Show at threshold'):null,
+  readonlyPercent?h('button',{type:'button',onClick:()=>setState(old=>({...old,value:0.079,display:true,readonly:true}))},'Show below threshold'):null,
+  readonlyPercent?h('button',{type:'button',onClick:()=>setState(old=>({...old,value:0.08,display:true,readonly:true}))},'Show at threshold'):null,
   h('button',{type:'button',onMouseDown:event=>event.preventDefault(),onClick:()=>setState(old=>({...old,value:0.1}))},'Echo canonical value'),
   h('button',{type:'button',onClick:()=>setState(old=>({...old,value:12.345,display:true}))},'Show large readonly value'),
   h('button',{type:'button',onClick:()=>setState(old=>({...old,readonly:true}))},'Make readonly'),
@@ -360,9 +360,18 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         await page.keyboard.press('ControlOrMeta+A');
         await input.pressSequentially('75,25');
         assert.equal((await snapshot()).writes.at(-1), 0.7525);
+        const percentRoot = await page
+            .locator('.mx-sdk-localized-numeric')
+            .elementHandle();
         await page
             .getByRole('button', { name: 'Show large readonly value' })
             .click();
+        assert(
+            await page
+                .locator('.mx-sdk-localized-numeric-display')
+                .evaluate((display, root) => display === root, percentRoot)
+        );
+        await percentRoot.dispose();
         assert.equal(
             await page
                 .locator('.mx-sdk-localized-numeric-progress-label')
@@ -447,7 +456,7 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
 
         evidence.readonlyPercent = [];
         for (const width of [375, 1280]) {
-            await open('percent', false, width);
+            await open('readonly-percent', false, width);
             const display = page.locator('.mx-sdk-localized-numeric-display');
             const states = [];
             for (const [action, text, fill, position] of [

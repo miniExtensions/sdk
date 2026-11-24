@@ -88,6 +88,7 @@ async function checkSidebarLogos(page, header, output, label) {
     }, logoUrl);
     const logo = header.locator('.mx-sdk-portal-logo');
     const cases = [];
+    const drawerCases = [];
     for (const width of titleWidths) {
         await page.setViewportSize({
             width,
@@ -178,9 +179,63 @@ async function checkSidebarLogos(page, header, output, label) {
                 });
             }
             cases.push({ width, mode, ...geometry });
+            if (mode === 'native' && width < 1024) {
+                const opener = header.getByRole('button', {
+                    name: open,
+                    exact: true,
+                });
+                await opener.press('Enter');
+                const drawer = page.getByRole('dialog', {
+                    name: 'Portal navigation',
+                    exact: true,
+                });
+                await drawer.waitFor();
+                await page.waitForFunction(() =>
+                    document.activeElement?.closest(
+                        '.mx-sdk-portal-navigation[role="dialog"]'
+                    )
+                );
+                const bounds = await drawer
+                    .locator('.mx-sdk-portal-logo')
+                    .evaluate(async (image) => {
+                        await image.decode();
+                        const logoBox = image.getBoundingClientRect();
+                        const panel = image
+                            .closest('[role="dialog"]')
+                            .getBoundingClientRect();
+                        return [
+                            logoBox.x - panel.x,
+                            logoBox.y - panel.y,
+                            logoBox.width,
+                            logoBox.height,
+                        ];
+                    });
+                assert.deepEqual(bounds.slice(2), [112, 56]);
+                assert(bounds[0] >= 0 && bounds[1] >= 0);
+                await drawer.screenshot({
+                    path: join(
+                        output,
+                        `${label}-sidebar-logo-drawer-${width}.png`
+                    ),
+                });
+                await page.keyboard.press('Escape');
+                await drawer.waitFor({ state: 'hidden' });
+                await page.waitForFunction(
+                    () =>
+                        document.activeElement ===
+                        document.querySelector(
+                            '.mx-sdk-portal-header > .mx-sdk-portal-toggle'
+                        )
+                );
+                assert.equal(
+                    await opener.getAttribute('aria-expanded'),
+                    'false'
+                );
+                drawerCases.push({ width, bounds, focusReturned: true });
+            }
         }
     }
-    return cases;
+    return { cases, drawerCases };
 }
 
 export async function checkNativeSidebarOpener(browser, origin, output, label) {
@@ -421,10 +476,18 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
                 ...titleLayout,
             });
         }
-        const logoCases = await checkSidebarLogos(page, header, output, label);
+        const { cases: logoCases, drawerCases: logoDrawerCases } =
+            await checkSidebarLogos(page, header, output, label);
         assert.deepEqual(errors, []);
         assert.deepEqual(refused, []);
-        return { cases, wrappedTitleCases, logoCases, errors, refused };
+        return {
+            cases,
+            wrappedTitleCases,
+            logoCases,
+            logoDrawerCases,
+            errors,
+            refused,
+        };
     } finally {
         await context.close();
     }

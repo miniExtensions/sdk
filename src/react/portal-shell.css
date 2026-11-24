@@ -101,6 +101,11 @@
 .mx-sdk-portal-shell--sidebar-icon-toggle.mx-sdk-portal-shell--layout-actions
     > .mx-sdk-portal-header
     > .mx-sdk-portal-brand
+    > .mx-sdk-portal-logo--only,
+.mx-sdk-portal-shell--sidebar-icon-toggle.mx-sdk-portal-shell--layout-actions
+    > .mx-sdk-portal-navigation-wrap
+    > .mx-sdk-portal-navigation[role='dialog']
+    > .mx-sdk-portal-brand
     > .mx-sdk-portal-logo--only {
     height: 3.5rem;
     width: auto;

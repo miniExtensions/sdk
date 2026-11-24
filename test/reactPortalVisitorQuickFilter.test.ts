@@ -220,6 +220,140 @@ test('mounted multi-value quick Filter sends only selected choice IDs and clears
     assert.equal(f.window.document.activeElement, f.labels);
 });
 
+test('the opt-in Quick combobox searches and shares the Advanced draft owner', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const host = quickFilterOwner(null, ['labels']);
+    const outcomes: PortalVisitorFilterOutcome[] = [];
+    const blueStyle = {
+        color: 'rgb(18, 52, 86)',
+        backgroundColor: 'rgb(219, 234, 254)',
+    };
+    await f.render(
+        h(PortalVisitorFilter, {
+            port: host.port,
+            showDropdowns: true,
+            quickFiltersPresentation: 'combobox',
+            quickFilterChoiceStyles: { labels: { blue: blueStyle } },
+            onOutcome: (outcome) => outcomes.push(outcome),
+        })
+    );
+    const quick = f.container.querySelector(
+        '[role="group"][aria-label="Quick filters"]'
+    );
+    assert.ok(quick);
+    const input = quick.querySelector('input[role="combobox"]');
+    assert.ok(input instanceof f.window.HTMLInputElement);
+    assert.equal(input.getAttribute('aria-label'), 'Labels');
+    const chevron = quick.querySelector('svg.mx-sdk-select-portal-chevron');
+    assert.ok(chevron);
+    assert.equal(chevron.getAttribute('width'), '16');
+    assert.equal(chevron.getAttribute('height'), '16');
+    const listbox = () => {
+        const menu = f.window.document.getElementById(
+            input.getAttribute('aria-controls') ?? ''
+        );
+        assert.equal(menu?.getAttribute('role'), 'listbox');
+        assert.ok(menu);
+        return menu;
+    };
+    const option = (label: string) => {
+        const item = [...listbox().querySelectorAll('[role="option"]')].find(
+            (node) => node.textContent === label
+        );
+        assert.ok(
+            item instanceof f.window.HTMLElement,
+            `Expected Quick option ${label}`
+        );
+        return item;
+    };
+    const press = async (key: string) => {
+        await act(async () => {
+            input.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        });
+    };
+
+    await act(async () => input.focus());
+    await f.click(input);
+    await press('ArrowDown');
+    assert.equal(input.getAttribute('aria-expanded'), 'true');
+    assert.equal(listbox().getAttribute('aria-multiselectable'), 'true');
+    assert.equal(option('Blue').getAttribute('aria-selected'), 'false');
+    assert.equal(host.calls.length, 0);
+
+    const setValue = Object.getOwnPropertyDescriptor(
+        f.window.HTMLInputElement.prototype,
+        'value'
+    )?.set;
+    assert.ok(setValue);
+    await act(async () => {
+        setValue.call(input, 'Blue');
+        input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+    });
+    assert.deepEqual(
+        [...listbox().querySelectorAll('[role="option"]')].map(
+            (node) => node.textContent
+        ),
+        ['Blue']
+    );
+    assert.equal(host.calls.length, 0);
+    await f.click(option('Blue'));
+    assert.equal(host.calls.length, 1);
+    const condition = host.calls[0].criteria?.conditions[0];
+    assert.equal(condition?.type, 'singleCondition');
+    assert.deepEqual(condition.setting, {
+        fieldType: 'multipleSelects',
+        type: 'hasAnyOf',
+        idOrName: { type: 'id', id: 'labels' },
+        value: ['blue'],
+    });
+    const accepted = host.port.read()?.criteria;
+    const chip = quick.querySelector(
+        '.mx-sdk-select-selected .mx-sdk-select-badge'
+    );
+    assert.ok(chip instanceof f.window.HTMLElement);
+    assert.match(chip.textContent ?? '', /Blue/);
+    assert.equal(chip.style.color, blueStyle.color);
+    assert.equal(chip.style.backgroundColor, blueStyle.backgroundColor);
+
+    await press('ArrowDown');
+    const selected = option('Blue');
+    assert.equal(selected.getAttribute('aria-selected'), 'true');
+    assert.notEqual(selected.getAttribute('aria-disabled'), 'true');
+    await press('Escape');
+    assert.equal(input.getAttribute('aria-expanded'), 'false');
+    assert.equal(f.window.document.activeElement, input);
+
+    const advanced = [...f.container.querySelectorAll('button')].find(
+        (node) => node.textContent === 'Filter'
+    );
+    assert.ok(advanced);
+    await f.click(advanced);
+    const dialog = f.container.querySelector('dialog[open]');
+    assert.ok(dialog);
+    await f.click(input);
+    await press('ArrowDown');
+    await press('Enter');
+    assert.equal(host.calls.length, 1);
+    assert.deepEqual(host.port.read()?.criteria, accepted);
+    const done = [...dialog.querySelectorAll('button')].find(
+        (node) => node.textContent === 'Done'
+    );
+    assert.ok(done);
+    await f.click(done);
+    assert.equal(host.calls.length, 1);
+    assert.deepEqual(
+        outcomes.map(({ type }) => type),
+        ['allocated', 'unchanged']
+    );
+    f.unchangedEffects();
+});
+
 test('mounted quick Filter leaves a renamed isExactly rule intact when the select returns the same members in DOM order', async (t) => {
     const effective = {
         fieldType: 'multipleSelects' as const,

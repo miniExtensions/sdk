@@ -181,3 +181,169 @@
 .mx-sdk-select [role='option'][data-active] {
     background: #e5e7eb;
 }
+
+.mx-sdk-select[data-portal-filter] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    width: auto;
+    max-inline-size: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    padding-block: 0.5rem;
+    padding-inline: 0.75rem 2rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    cursor: text;
+}
+
+.mx-sdk-select[data-portal-filter]:focus-within {
+    --mx-sdk-portal-filter-focus-color: rgb(var(--theme-500, 59 130 246));
+    border-color: var(--mx-sdk-portal-filter-focus-color);
+    box-shadow:
+        0 0 0 1px var(--mx-sdk-portal-filter-focus-color),
+        0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.mx-sdk-select[data-portal-filter] > .mx-sdk-select-dropdown {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+}
+
+.mx-sdk-select[data-portal-filter]
+    > .mx-sdk-select-dropdown:has(> .mx-sdk-select-selected:empty) {
+    display: none;
+}
+
+.mx-sdk-select[data-portal-filter] > .mx-sdk-select-search {
+    position: static;
+    flex: 1 1 9.625rem;
+    min-inline-size: 0;
+}
+
+.mx-sdk-select[data-portal-filter] > .mx-sdk-select-search > input {
+    display: block;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+}
+
+.mx-sdk-select[data-portal-filter] > .mx-sdk-select-search > input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.mx-sdk-select[data-portal-filter] .mx-sdk-select-badge {
+    min-inline-size: 0;
+    border-radius: 9999px;
+    padding-block: 0.125rem;
+    padding-inline: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    user-select: none;
+}
+
+.mx-sdk-select[data-portal-filter]
+    .mx-sdk-select-badge:has([data-select-remove]) {
+    padding-inline-end: 0.25rem;
+}
+
+.mx-sdk-select[data-portal-filter] [data-select-remove] {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    padding: 0;
+    transition: opacity 150ms;
+}
+
+.mx-sdk-select[data-portal-filter] [data-select-remove]:hover {
+    opacity: 0.5;
+}
+
+.mx-sdk-select[data-portal-filter] .mx-sdk-select-remove-icon {
+    display: block;
+    width: 0.5rem;
+    height: 0.5rem;
+}
+
+.mx-sdk-select[data-portal-filter] > .mx-sdk-select-portal-chevron {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 0.5rem;
+    width: 1rem;
+    height: 1rem;
+    color: #6b7280;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.mx-sdk-select[data-portal-filter] [role='listbox'] {
+    /* The positioning box starts inside the trigger border. */
+    inset-block-start: calc(100% + 5px);
+    inset-inline: -1px;
+    z-index: 99;
+    width: auto;
+    max-height: 24rem;
+    overflow-y: auto;
+    border: 0;
+    padding-block: 0.25rem;
+    padding-inline: 0;
+    color: #111827;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    box-shadow:
+        0 0 0 1px rgb(0 0 0 / 0.05),
+        0 10px 15px -3px rgb(0 0 0 / 0.1),
+        0 4px 6px -4px rgb(0 0 0 / 0.1);
+    cursor: default;
+}
+
+.mx-sdk-select[data-portal-filter] .mx-sdk-select-options-heading,
+.mx-sdk-select[data-portal-filter] [role='option'] {
+    padding-block: 0.5rem;
+    padding-inline: 1rem;
+}
+
+.mx-sdk-select[data-portal-filter] .mx-sdk-select-options-heading {
+    color: #6b7280;
+    font-size: 0.75rem;
+    line-height: 1rem;
+}
+
+.mx-sdk-select[data-portal-filter] [role='option'] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-block-size: 2.5rem;
+    box-sizing: border-box;
+    user-select: none;
+}
+
+.mx-sdk-select[data-portal-filter] [role='option']:hover,
+.mx-sdk-select[data-portal-filter] [role='option'][data-active] {
+    color: rgb(var(--theme-900, 30 58 138));
+    background: rgb(var(--theme-100, 219 234 254));
+}
+
+.mx-sdk-select[data-portal-filter] .mx-sdk-select-option-check {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-inline-start: 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .mx-sdk-select[data-portal-filter] [role='listbox'] {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
+}

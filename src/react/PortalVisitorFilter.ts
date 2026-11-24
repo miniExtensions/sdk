@@ -26,11 +26,17 @@ import type {
     RuntimeConditionsDefinition,
     RuntimeLanguage,
 } from '../runtime/types.js';
+import {
+    ControlledMultipleSelectsField,
+    type ControlledSelectChoice,
+} from './ControlledSelectField.js';
 
 const defaultLabels = {
     trigger: 'Filter',
     quickFilters: 'Quick filters',
     allValues: 'All values',
+    availableOptions: 'Available options',
+    removeChoice: (label: string) => `Remove option ${label}`,
     title: 'Filter records',
     done: 'Done',
     close: 'Close',
@@ -68,6 +74,19 @@ export type PortalVisitorFilterProps = {
     showDropdowns?: boolean;
     /** Mount the Quick row separately while retaining this Filter's draft owner. */
     quickFiltersContainer?: HTMLElement | null;
+    /** Match the native compact searchable Quick picker for multi-choice fields. */
+    quickFiltersPresentation?: 'combobox';
+    quickFilterChoiceStyles?: Readonly<
+        Record<
+            string,
+            Readonly<
+                Record<
+                    string,
+                    Pick<ControlledSelectChoice, 'color' | 'backgroundColor'>
+                >
+            >
+        >
+    >;
     labels?: PortalVisitorFilterLabels;
     /** Calendar locale for date operands. Defaults to English. */
     language?: RuntimeLanguage;
@@ -694,28 +713,31 @@ export function PortalVisitorFilter(
         if (props.disabled) shown.draft.retire();
         submit(shown);
     };
-    const applyDropdown = (fieldId: string, values: string[]) => {
-        const gesture = quickGesture.current;
-        quickGesture.current = null;
+    const submitDropdown = (
+        { fieldId, shown, held }: QuickGesture,
+        values: string[]
+    ) => {
         if (
-            !gesture ||
-            gesture.fieldId !== fieldId ||
-            gesture.shown.port !== owner.current ||
+            shown.port !== owner.current ||
             occupied.current ||
             inFlight.current ||
             props.disabled
         )
             return false;
-        const { shown } = gesture;
         if (!shown.draft.current()) {
-            if (gesture.held && heldQuickKey.current === gesture.held)
+            if (held && heldQuickKey.current === held)
                 heldQuickKey.current = null;
             setStatus({ type: 'stale' });
             return false;
         }
         if (!shown.draft.setDropdown(fieldId, values)) return false;
-        submit(shown, gesture.held);
+        submit(shown, held);
         return true;
+    };
+    const applyDropdown = (fieldId: string, values: string[]) => {
+        const gesture = quickGesture.current;
+        quickGesture.current = null;
+        return gesture?.fieldId === fieldId && submitDropdown(gesture, values);
     };
     const renderDropdowns = (shown: Open) => {
         const dropdowns = shown.draft.dropdowns();
@@ -729,6 +751,38 @@ export function PortalVisitorFilter(
             },
             dropdowns.map(({ fieldId, label, multiple, choices, selected }) => {
                 const selectId = `${quickId}-${fieldId}`;
+                if (multiple && props.quickFiltersPresentation === 'combobox') {
+                    const options = choices.map(({ value, label }) => ({
+                        id: value,
+                        name: value,
+                        displayName: label,
+                        ...props.quickFilterChoiceStyles?.[fieldId]?.[value],
+                    }));
+                    return h(ControlledMultipleSelectsField, {
+                        key: fieldId,
+                        inputId: selectId,
+                        ariaLabel: label,
+                        presentation: 'dropdown',
+                        dropdownStyle: 'portal-filter',
+                        disabled: props.disabled ?? false,
+                        choices: options,
+                        availableChoices: options,
+                        value: selected,
+                        owner: {
+                            token: shown.port,
+                            isCurrent: () =>
+                                shown.port === owner.current &&
+                                shown.draft.current(),
+                        },
+                        labels: {
+                            placeholder: label,
+                            availableOptions: labels.availableOptions,
+                            remove: labels.removeChoice,
+                        },
+                        onValueChange: (values) =>
+                            submitDropdown({ fieldId, shown }, values),
+                    });
+                }
                 const remember = () => {
                     quickGesture.current = { fieldId, shown };
                 };

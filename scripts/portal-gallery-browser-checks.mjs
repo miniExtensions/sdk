@@ -242,6 +242,37 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
     await patch({ width: 'full', columns: 5 });
     assert((await geometry()).width > 896);
     const first = page.locator('.mx-sdk-portal-gallery-row').first();
+    const media = first.locator('.mx-sdk-finder-carousel');
+    const readBacking = (carousel) =>
+        carousel.evaluate((node) => {
+            const card = node.closest('.mx-sdk-portal-gallery-card-content');
+            const placeholder = node.querySelector(
+                '.mx-sdk-finder-gallery-placeholder'
+            );
+            return {
+                media: getComputedStyle(node).backgroundColor,
+                card: getComputedStyle(card).backgroundColor,
+                placeholder: placeholder
+                    ? getComputedStyle(placeholder).backgroundColor
+                    : null,
+            };
+        });
+    const populated = {
+        media: 'rgba(0, 0, 0, 0)',
+        card: 'rgb(255, 255, 255)',
+        placeholder: null,
+    };
+    const fallback = {
+        media: 'rgb(243, 244, 246)',
+        card: 'rgb(255, 255, 255)',
+        placeholder: 'rgb(249, 250, 251)',
+    };
+    const initiallyEmpty = page
+        .locator('.mx-sdk-portal-gallery-row')
+        .nth(1)
+        .locator('.mx-sdk-finder-carousel');
+    const emptyBacking = await readBacking(initiallyEmpty);
+    assert.deepEqual(emptyBacking, fallback);
     await page.waitForFunction(() => {
         const n = document.querySelector(
             '.mx-sdk-finder-carousel img[data-visible="true"]'
@@ -257,6 +288,7 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         .getByRole('button', { name: 'View image 2', exact: true })
         .click();
     assert.equal((await snapshot()).opens, 0, 'Carousel dots do not Open');
+    let singleBacking;
     for (const phase of ['shrink', 'reorder']) {
         await patch({ phase });
         assert.equal(
@@ -265,6 +297,15 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
                 .getAttribute('alt'),
             'Image 2'
         );
+        if (phase === 'shrink') {
+            assert.equal(await media.locator('img').count(), 1);
+            assert.equal(
+                await media.locator('.mx-sdk-finder-carousel-dots').count(),
+                0
+            );
+            singleBacking = await readBacking(media);
+            assert.deepEqual(singleBacking, populated);
+        }
     }
     await first
         .locator('.mx-sdk-finder-carousel img[data-visible="true"]')
@@ -290,6 +331,8 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         0,
         'Seventh image is never promoted after first-six failures'
     );
+    const failedBacking = await readBacking(media);
+    assert.deepEqual(failedBacking, fallback);
     await patch({ phase: 'reorder' });
     for (const height of [112, 160, 240]) {
         await patch({ height, fit: 'contain' });
@@ -308,6 +351,7 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
     const previousViewport = page.viewportSize();
     assert(previousViewport);
     const indicatorStrip = [];
+    const populatedBacking = [];
     for (const width of [375, 1280]) {
         await page.setViewportSize({ ...previousViewport, width });
         const strip = first.locator('.mx-sdk-finder-carousel-dots');
@@ -327,6 +371,8 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         await firstIndicator.click();
         const before = await stripColor();
         assert.equal(before, 'rgba(0, 0, 0, 0.25)');
+        const restBacking = await readBacking(media);
+        assert.deepEqual(restBacking, populated);
         await secondIndicator.click();
         assert.equal(
             await secondIndicator.getAttribute('aria-current'),
@@ -334,8 +380,42 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         );
         const selected = await stripColor();
         assert.equal(selected, before);
+        const pointerBacking = await readBacking(media);
+        assert.deepEqual(pointerBacking, populated);
+        await firstIndicator.click();
+        await firstIndicator.focus();
+        await page.keyboard.press('Tab');
+        const keyboardFocus = await secondIndicator.evaluate(
+            (button) =>
+                button === document.activeElement &&
+                button.matches(':focus-visible')
+        );
+        assert(keyboardFocus);
+        await page.keyboard.press('Enter');
+        assert.equal(
+            await secondIndicator.getAttribute('aria-current'),
+            'true'
+        );
+        assert.equal(
+            await media.locator('img[data-visible="true"]').getAttribute('alt'),
+            'Image 1'
+        );
+        const keyboardBacking = await readBacking(media);
+        assert.deepEqual(keyboardBacking, populated);
+        assert.equal(await stripColor(), before);
+        await media.screenshot({
+            path: join(output, 'gallery-media-keyboard-' + width + '.png'),
+            animations: 'disabled',
+        });
         await firstIndicator.click();
         indicatorStrip.push({ width, before, selected });
+        populatedBacking.push({
+            width,
+            rest: restBacking,
+            pointer: pointerBacking,
+            keyboard: keyboardBacking,
+            keyboardFocus,
+        });
     }
     await page.setViewportSize(previousViewport);
     await page.waitForFunction(() =>
@@ -528,6 +608,12 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         },
         errors: end.errors,
         indicatorStrip,
+        mediaBacking: {
+            populated: populatedBacking,
+            single: singleBacking,
+            empty: emptyBacking,
+            failed: failedBacking,
+        },
         unlinkPresentation,
         limits: [
             'Portable installed SDK only; native ownership, child modal and transport acceptance are separately required.',

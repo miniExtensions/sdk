@@ -644,7 +644,12 @@ it('keeps native combobox focus on the input and commits exact duplicate and bla
         ui.native().rows.map((row) => row.textContent),
         ['', duplicate]
     );
+    assertActive(ui.native().rows[0].id);
     assert.deepEqual(ui.choices, [duplicate]);
+
+    await ui.edit('');
+    await act(async () => t.mock.timers.tick(500));
+    assertActive(ui.native().rows[0].id);
 
     await ui.edit('No results');
     await act(async () => t.mock.timers.tick(500));
@@ -653,9 +658,13 @@ it('keeps native combobox focus on the input and commits exact duplicate and bla
         'No matching values.'
     );
     assert.equal(ui.search().getAttribute('aria-expanded'), 'false');
+    assert.equal(active(), null);
     await ui.edit(raw);
     await act(async () => t.mock.timers.tick(500));
+    assertActive(ui.native().rows[0].id);
     assert(await ui.nativeKey('ArrowDown'));
+    assertActive(ui.native().rows[1].id);
+    assert(await ui.nativeKey('ArrowUp'));
     assertActive(ui.native().rows[0].id);
     assert.equal(await ui.nativeKey('Tab', { shiftKey: true }), false);
     assert.deepEqual(ui.choices, [duplicate, '']);

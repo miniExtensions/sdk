@@ -40,6 +40,7 @@ type NativeDialogProps = Pick<
 
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
+const firstMatch = Symbol('first matching option');
 
 export function NativeLoginExistingValuesDialog({
     id,
@@ -66,18 +67,19 @@ export function NativeLoginExistingValuesDialog({
         [attachDialog]
     );
     const input = useRef<HTMLInputElement>(null);
-    const [activeOccurrence, setActiveOccurrence] = useState<string | null>(
-        null
-    );
+    const [activeOccurrence, setActiveOccurrence] = useState<
+        string | typeof firstMatch | null
+    >(null);
     const optionsId = id + '-options';
     const titleId = id + '-title';
     const showLoading = debouncing || (state.loading && state.offset === null);
     const showOptions =
         !showLoading && state.error === null && state.options.length > 0;
     const options = showOptions ? state.options : [];
-    const activeIndex = options.findIndex(
-        ({ value }) => value === activeOccurrence
-    );
+    const activeIndex =
+        activeOccurrence === firstMatch
+            ? 0
+            : options.findIndex(({ value }) => value === activeOccurrence);
     const activeOption = options[activeIndex];
 
     useCommitEffect(() => {
@@ -168,9 +170,13 @@ export function NativeLoginExistingValuesDialog({
                     },
                     onPointerLeave: (event: PointerEvent<HTMLLIElement>) => {
                         if (event.pointerType !== 'touch') {
-                            setActiveOccurrence((current) =>
-                                current === value ? null : current
-                            );
+                            setActiveOccurrence((current) => {
+                                const hovered =
+                                    current === firstMatch
+                                        ? options[0]?.value
+                                        : current;
+                                return hovered === value ? null : current;
+                            });
                         }
                     },
                     onClick: () => choose(value),
@@ -263,7 +269,7 @@ export function NativeLoginExistingValuesDialog({
                     placeholder: searchPlaceholder,
                     value: state.searchTerm,
                     onChange: (event: ChangeEvent<HTMLInputElement>) => {
-                        setActiveOccurrence(null);
+                        setActiveOccurrence(firstMatch);
                         changeQuery(event.currentTarget.value);
                     },
                     onKeyDown: handleSearchKey,

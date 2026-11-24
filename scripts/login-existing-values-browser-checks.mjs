@@ -22,6 +22,9 @@ const nativeOverlayClicks = [];
 const nativeTabs = [];
 const nativeQuery = '  Native needle_*  ';
 const nativeQueryLabels = Array.from({ length: 40 }, (_, index) => 'Native result ' + (index + 1));
+const nativePairQuery = '  Native pair_*  ';
+const nativePairLabels = ['  First typed value  ', 'Second typed value'];
+const nativeEmptyQuery = 'No native matches';
 const signupDraft = 'masked-signup@example.invalid';
 const unmaskedDraft = 'visible-signup@example.invalid';
 let signupCancels = 0;
@@ -105,8 +108,11 @@ function App() {
             if (extensionSessionId === 'held') {
                 return new Promise(resolve => { release = resolve; });
             }
-            if (state.pickerAppearance === 'native' && searchTerm === nativeQuery)
-                return { labels: nativeQueryLabels, offset: null };
+            if (state.pickerAppearance === 'native') {
+                if (searchTerm === nativeQuery) return { labels: nativeQueryLabels, offset: null };
+                if (searchTerm === nativePairQuery) return { labels: nativePairLabels, offset: null };
+                if (searchTerm === nativeEmptyQuery) return { labels: [], offset: null };
+            }
             if (searchTerm) return { labels: ['Current query result'], offset: null };
             if (offset !== null) {
                 if (appendFailure) {
@@ -1180,6 +1186,116 @@ export async function checkLoginExistingValuesBrowser({
             ownerRetirement,
             credentialDraftPreserved: true,
             submits: (await read()).submits,
+        };
+
+        const previousNativeSelections =
+            evidence.nativeLoginCombobox.selections;
+        const nativePairQuery = '  Native pair_*  ';
+        const nativePairLabels = [
+            '  First typed value  ',
+            'Second typed value',
+        ];
+        const typeNativeQuery = async (query) => {
+            await focus(nativeSearch);
+            await page.keyboard.press('ControlOrMeta+A');
+            await page.keyboard.type(query);
+            assert.equal(await nativeSearch.inputValue(), query);
+            await page.waitForFunction(
+                (expected) =>
+                    window.pickerProof.snapshot().calls.at(-1)?.query ===
+                    expected,
+                query
+            );
+        };
+        const replaceWithPair = async () => {
+            await typeNativeQuery(nativePairQuery);
+            await nativeOptions
+                .filter({ hasText: 'Second typed value' })
+                .waitFor();
+            assert.deepEqual(
+                await nativeOptions.allTextContents(),
+                nativePairLabels
+            );
+            return activeNativeOption(0);
+        };
+        const openWithoutHighlight = async () => {
+            await openNative();
+            assert.deepEqual(await nativeOptions.allTextContents(), [
+                duplicate,
+                '',
+                duplicate,
+            ]);
+            assert.equal(
+                await nativeSearch.getAttribute('aria-activedescendant'),
+                null
+            );
+        };
+
+        await openWithoutHighlight();
+        const enterHighlighted = await replaceWithPair();
+        await readNativeSelection(previousNativeSelections);
+        await page.keyboard.press('Enter');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(nativeTrigger);
+        await readNativeSelection([
+            ...previousNativeSelections,
+            nativePairLabels[0],
+        ]);
+
+        await openWithoutHighlight();
+        const tabHighlighted = await replaceWithPair();
+        await page.keyboard.press('Tab');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(afterNativeTrigger);
+        const beforeEmptyRecovery = [
+            ...previousNativeSelections,
+            nativePairLabels[0],
+            nativePairLabels[0],
+        ];
+        await readNativeSelection(beforeEmptyRecovery);
+
+        await openWithoutHighlight();
+        await page.keyboard.press('ArrowDown');
+        const previousResult = await activeNativeOption(0);
+        const nativeEmptyQuery = 'No native matches';
+        await typeNativeQuery(nativeEmptyQuery);
+        await nativeDialog
+            .getByText('No matching values.', { exact: true })
+            .waitFor();
+        assert.equal(await nativeOptions.count(), 0);
+        assert.equal(
+            await nativeSearch.getAttribute('aria-activedescendant'),
+            null
+        );
+        await page.keyboard.press('Enter');
+        await focus(nativeSearch);
+        await readNativeSelection(beforeEmptyRecovery);
+
+        const recoveredFirst = await replaceWithPair();
+        assert.notEqual(recoveredFirst, previousResult);
+        await page.keyboard.press('ArrowDown');
+        const advancedSecond = await activeNativeOption(1);
+        assert.notEqual(advancedSecond, recoveredFirst);
+        await page.keyboard.press('Enter');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(nativeTrigger);
+        await readNativeSelection([
+            ...beforeEmptyRecovery,
+            nativePairLabels[1],
+        ]);
+        assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
+        evidence.nativeLoginCombobox.typedReplacement = {
+            query: nativePairQuery,
+            emptyQuery: nativeEmptyQuery,
+            highlighted: {
+                enter: enterHighlighted,
+                tab: tabHighlighted,
+                recovery: recoveredFirst,
+                afterArrowDown: advancedSecond,
+            },
+            selections: (await read()).selections.slice(
+                proof.selections.length + previousNativeSelections.length
+            ),
         };
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(unexpectedRequests, []);

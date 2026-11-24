@@ -6766,8 +6766,9 @@ the dialog's accessible name. Use `type="button"` for a host button inside a
 Login form.
 
 Set `appearance: 'native'` to use the responsive modal and editable
-combobox. Arrow navigation updates the active occurrence while the input
-keeps focus. Enter selects that occurrence. Tab and Shift+Tab select the
+combobox. A typed search activates the first match when its results arrive.
+Arrow navigation updates the active occurrence while the input keeps focus.
+Enter selects that occurrence. Tab and Shift+Tab select the
 active occurrence and continue through the login controls. Escape or a
 backdrop click dismisses the modal and returns focus to its trigger. When
 the trigger is in a form, the modal mounts beside the form, keeping its

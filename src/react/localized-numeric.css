@@ -169,6 +169,12 @@
     height: 1rem;
     color: #9ca3af;
 }
+.mx-sdk-localized-numeric-form-percent-display
+    .mx-sdk-localized-numeric-progress-label,
+.mx-sdk-localized-numeric-form-percent-display
+    > .mx-sdk-localized-numeric-empty {
+    line-height: 1.25rem;
+}
 .mx-sdk-localized-numeric-feedback {
     white-space: pre-wrap;
 }

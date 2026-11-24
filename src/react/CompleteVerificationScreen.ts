@@ -58,6 +58,8 @@ export type CompleteVerificationScreenProps<Result> = {
     /** Optional app-level timeout/help decoration, mounted only while pending. */
     pendingDetails?: ReactNode;
     inputId?: string;
+    /** Replaces the stock verification input classes when the host owns its styling. */
+    inputClassName?: string;
     className?: string;
     accentColor?: string;
 };
@@ -230,7 +232,7 @@ export function CompleteVerificationScreen<Result>(
             type: 'text',
             pattern: '\\d*',
             placeholder: props.labels.enterCode,
-            className: 'mx-sdk-verification-input',
+            className: props.inputClassName ?? 'mx-sdk-verification-input',
             value: code,
             onChange: (event) => setCode(event.target.value),
         }),

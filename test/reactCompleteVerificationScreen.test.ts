@@ -167,6 +167,36 @@ async function fixture(
     };
 }
 
+it('opts into host input classes without changing the verification field or Continue', async (t) => {
+    const f = await fixture(t, 'sdk', { inputId: 'fixture-code' });
+    const input = f.input();
+    const button = f.container.querySelector('button');
+    assert.ok(button);
+    assert.equal(input.className, 'mx-sdk-verification-input');
+    assert.equal(button.disabled, true);
+    await f.edit('482391');
+
+    await f.update({ inputClassName: 'host-verification-input' });
+    assert.equal(f.input(), input);
+    assert.equal(input.className, 'host-verification-input');
+    assert.equal(input.value, '482391');
+    assert.equal(input.type, 'text');
+    assert.equal(input.getAttribute('pattern'), '\\d*');
+    assert.equal(
+        f.container.querySelector('label[for="fixture-code"]')?.textContent,
+        labels.enterCode
+    );
+    assert.equal(f.container.querySelector('button'), button);
+    assert.equal(button.className, 'mx-sdk-verification-submit');
+    assert.equal(button.disabled, false);
+
+    await f.update({ inputClassName: undefined });
+    assert.equal(f.input(), input);
+    assert.equal(input.className, 'mx-sdk-verification-input');
+    assert.equal(input.value, '482391');
+    assert.equal(f.requests.length, 0);
+});
+
 for (const implementation of ['native', 'sdk'] as const) {
     it(`${implementation}: caches a confirmed result before failed continuation and retries only continuation`, async (t) => {
         let calls = 0;

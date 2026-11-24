@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
+import { UrlField, FieldRenderer, renderUrlField } from '../src/react/index.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { createFormPageOwner } from '../src/forms/pages.js';
 import {
@@ -19,11 +20,6 @@ import type {
 import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import { loadedForm, formSaveOptions } from './formsFixtures.js';
 import { portalFixture, portalListPage, portalPage } from './portalFixtures.js';
-
-type UrlRuntime = typeof import('../src/react/index.js');
-let UrlField: UrlRuntime['UrlField'];
-let FieldRenderer: UrlRuntime['FieldRenderer'];
-let renderUrlField: UrlRuntime['renderUrlField'];
 
 async function fixture(
     t: TestContext,
@@ -56,9 +52,6 @@ async function fixture(
                     : window[key as keyof Window],
         });
     const { createRoot } = await import('react-dom/client');
-    ({ UrlField, FieldRenderer, renderUrlField } = await import(
-        '../src/react/index.js'
-    ));
     const container = window.document.createElement('div');
     window.document.body.append(container);
     const root = createRoot(container as unknown as HTMLElement);

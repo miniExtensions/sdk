@@ -16,7 +16,6 @@ import {
     type AttachmentSliderProps,
 } from './AttachmentSlider.js';
 import type { AttachmentSliderBodyRow } from './AttachmentSliderBody.js';
-import { AttachmentSliderPortal } from './attachmentSliderDialogRuntime.js';
 import {
     AttachmentGalleryThumbnail,
     type AttachmentGalleryDocument,
@@ -350,28 +349,25 @@ export function AttachmentGallery(props: AttachmentGalleryProps): ReactNode {
         Fragment,
         null,
         list,
-        renderAttachmentSlider(
-            {
-                rows,
-                currentIndex: currentSliderIndex,
-                setCurrentIndex: setCurrentSliderIndex,
+        renderAttachmentSlider({
+            rows,
+            currentIndex: currentSliderIndex,
+            setCurrentIndex: setCurrentSliderIndex,
+            navigationOwner,
+            labels,
+            covered: props.covered,
+            intercomOpen: props.intercomOpen,
+            onDismiss: navigation.dismissSlider,
+            onDelete: removeSelected,
+            downloadIdentity: JSON.stringify([
                 navigationOwner,
-                labels,
-                covered: props.covered,
-                intercomOpen: props.intercomOpen,
-                onDismiss: navigation.dismissSlider,
-                onDelete: removeSelected,
-                downloadIdentity: JSON.stringify([
-                    navigationOwner,
-                    current.id,
-                    occurrence,
-                ]),
-                canOpen: current.canOpenInSlider,
-                canDownload: current.canDownloadInSlider,
-                readDownload: props.readDownload,
-                onDownloadError: props.onDownloadError,
-            },
-            AttachmentSliderPortal
-        )
+                current.id,
+                occurrence,
+            ]),
+            canOpen: current.canOpenInSlider,
+            canDownload: current.canDownloadInSlider,
+            readDownload: props.readDownload,
+            onDownloadError: props.onDownloadError,
+        })
     );
 }

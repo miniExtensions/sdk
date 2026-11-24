@@ -118,7 +118,7 @@
     flex: none;
     align-items: center;
     padding-inline: 1rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid hsl(var(--border, 214.3 31.8% 91.4%));
 }
 
 .mx-sdk-login-values-native__header h2 {

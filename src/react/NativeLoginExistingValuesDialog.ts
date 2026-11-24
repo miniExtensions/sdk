@@ -4,6 +4,7 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    type ChangeEvent,
     type KeyboardEvent,
     type MouseEvent,
     type PointerEvent,
@@ -200,7 +201,7 @@ export function NativeLoginExistingValuesDialog({
                 event.preventDefault();
                 dismiss();
             },
-            onKeyDown: (event) => {
+            onKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => {
                 if (
                     event.key !== 'Escape' ||
                     event.defaultPrevented ||
@@ -250,7 +251,7 @@ export function NativeLoginExistingValuesDialog({
                     autoComplete: 'off',
                     placeholder: searchPlaceholder,
                     value: state.searchTerm,
-                    onChange: (event) => {
+                    onChange: (event: ChangeEvent<HTMLInputElement>) => {
                         setActiveOccurrence(null);
                         changeQuery(event.currentTarget.value);
                     },

@@ -58,8 +58,10 @@ export type PortalVisitorQueryOutcome =
     | Readonly<{ type: 'stale' }>
     | Readonly<{
           type: 'refused' | 'uncertain';
-          /** A publication separately verified as belonging to this command. */
+          /** A term publication verified for this Search command. */
           committedPublication?: PortalVisitorSearchPublication;
+          /** A criteria publication verified for this Filter or Sort command. */
+          committedGeneration?: number;
       }>;
 
 export type PortalVisitorQueryPort = {
@@ -130,11 +132,11 @@ export function createPortalVisitorQueryControls(
             return { type: outcome.type, ...outcome.requestStart };
         if (
             (outcome.type === 'refused' || outcome.type === 'uncertain') &&
-            outcome.committedPublication
+            outcome.committedGeneration !== undefined
         )
             return {
                 type: outcome.type,
-                committedGeneration: outcome.committedPublication.generation,
+                committedGeneration: outcome.committedGeneration,
             };
         return { type: outcome.type };
     };
@@ -155,9 +157,17 @@ export function createPortalVisitorQueryControls(
                         ? { type, ...requestStart, committedPublication }
                         : { type, ...requestStart };
                 }
-                return outcome.type === 'unchanged'
-                    ? { type: 'uncertain' }
-                    : outcome;
+                if (outcome.type === 'unchanged') return { type: 'uncertain' };
+                if (
+                    (outcome.type === 'refused' ||
+                        outcome.type === 'uncertain') &&
+                    outcome.committedPublication
+                )
+                    return {
+                        type: outcome.type,
+                        committedPublication: outcome.committedPublication,
+                    };
+                return { type: outcome.type };
             },
         },
         filter: {

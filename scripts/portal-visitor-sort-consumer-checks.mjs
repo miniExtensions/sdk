@@ -77,7 +77,7 @@ void createElement(PortalVisitorSearch, { port });
 const typedFilter = `
 import { createElement } from 'react';
 import { PortalVisitorFilter, type PortalVisitorFilterProps } from '@miniextensions/sdk/react';
-import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterDropdown, type PortalVisitorFilterPort } from '@miniextensions/sdk/portals';
+import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterDropdown, type PortalVisitorFilterPort, type PortalVisitorQueryOutcome } from '@miniextensions/sdk/portals';
 const port: PortalVisitorFilterPort = {
     read: () => null,
     subscribe: () => () => undefined,
@@ -94,6 +94,8 @@ const quickFilters: readonly PortalVisitorFilterDropdown[] = draft?.dropdowns() 
 void quickFilters.map(({selected}) => selected);
 const props: PortalVisitorFilterProps = { port, showDropdowns: true };
 void createElement(PortalVisitorFilter, props);
+const queryOutcome: PortalVisitorQueryOutcome = { type: 'uncertain', committedGeneration: 2 };
+void queryOutcome;
 `;
 
 const typedViewButtons = `

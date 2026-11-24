@@ -73,7 +73,6 @@ it('separates accepted query criteria, native request starts, and explicit Retry
     const commands: QueryCommand[] = [];
     const criteriaPublications: {
         generation: number;
-        revision: number;
         criteria: QueryFrame['filter']['criteria'];
     }[] = [];
     const requestStarts: { requestId: string; generation: number }[] = [];
@@ -113,29 +112,35 @@ it('separates accepted query criteria, native request starts, and explicit Retry
                     assert.equal(command.searchTerm, frame.search.searchTerm);
                     return { type: 'allocated', requestStart: send('search') };
                 case 'filter': {
-                    const committedPublication = {
-                        generation: frame.stamp.generation + 1,
-                        revision: 5,
-                    };
+                    const generation = frame.stamp.generation + 1;
                     criteriaPublications.push({
-                        ...committedPublication,
+                        generation,
                         criteria: command.criteria,
                     });
                     publish({
                         ...frame,
                         stamp: {
                             ...frame.stamp,
-                            generation: committedPublication.generation,
+                            generation,
                         },
                         filter: { ...frame.filter, criteria: command.criteria },
                     });
                     sends.push('filter');
                     publish({ ...frame, retryId: 'failed-filter' });
-                    return { type: 'uncertain', committedPublication };
+                    return {
+                        type: 'uncertain',
+                        committedGeneration: generation,
+                    };
                 }
-                case 'sort':
-                    assert.deepEqual(command.criteria, frame.sort.criteria);
-                    return { type: 'unchanged' };
+                case 'sort': {
+                    const generation = frame.stamp.generation + 1;
+                    publish({
+                        ...frame,
+                        stamp: { ...frame.stamp, generation },
+                        sort: { ...frame.sort, criteria: command.criteria },
+                    });
+                    return { type: 'refused', committedGeneration: generation };
+                }
                 case 'view':
                     assert.equal(command.viewId, frame.stamp.viewId);
                     return { type: 'unchanged' };
@@ -194,15 +199,16 @@ it('separates accepted query criteria, native request starts, and explicit Retry
         ['status']
     );
     assert.equal(changed.setOperand('status-rule', 'closed'), true);
-    assert.deepEqual(await changed.commit(), {
+    const filterOutcome = await changed.commit();
+    assert.deepEqual(filterOutcome, {
         type: 'uncertain',
         committedGeneration: 8,
     });
+    assert.equal(changed.canReport(filterOutcome), true);
     await setImmediate();
     assert.deepEqual(criteriaPublications, [
         {
             generation: 8,
-            revision: 5,
             criteria: {
                 logicalOperator: 'and',
                 conditions: [
@@ -236,5 +242,17 @@ it('separates accepted query criteria, native request starts, and explicit Retry
     assert.deepEqual(sends, ['search', 'search', 'filter', 'retry']);
     assert.equal(criteriaPublications.length, 1);
     assert.deepEqual(await controls.retry(frame.stamp), { type: 'refused' });
+    assert.equal(sends.length, 4);
+
+    const sort = createPortalVisitorSortDraft(controls.sort);
+    assert.ok(sort);
+    const [rule] = sort.snapshot().rules;
+    assert.ok(rule);
+    assert.equal(sort.setDirection(rule.key, 'desc'), true);
+    const outcome = await sort.commit();
+    assert.deepEqual(outcome, { type: 'refused', committedGeneration: 9 });
+    assert.equal(sort.canReport(outcome), true);
+    assert.equal(frame.search.publicationRevision, 4);
+    assert.equal(requestStarts.length, 3);
     assert.equal(sends.length, 4);
 });

@@ -15,6 +15,7 @@ import {
     type AuthOwnerScope,
     type AuthPage,
     type AuthVerificationChallenge,
+    type PasswordAuthPort,
 } from '../src/auth/index.js';
 import {
     authFixture,
@@ -78,6 +79,71 @@ const typeContract = (
 void typeContract;
 
 describe('optional auth flow contracts', () => {
+    it('uses the password-only host port with the captured session and explicit view mode', async () => {
+        const fixture = authFixture();
+        const client: PasswordAuthPort = {
+            getSession: fixture.client.getSession,
+            setSession: fixture.client.setSession,
+            auth: {
+                verifyExtensionPassword:
+                    fixture.client.auth.verifyExtensionPassword,
+            },
+        };
+        const flow = createAuthFlow({
+            client,
+            page: passwordPage(),
+            getScope: scope,
+        });
+        const legacy = new AbortController();
+        Object.defineProperty(legacy.signal, 'throwIfAborted', {
+            value: undefined,
+        });
+        const result = await flow.verifyPassword(
+            {
+                extensionPassword: 'entered_example',
+                viewMode: 'draft',
+            },
+            { signal: legacy.signal }
+        );
+        assert.deepEqual(fixture.calls[0].input, {
+            extensionId: 'extension_example',
+            extensionPassword: 'entered_example',
+            viewMode: 'draft',
+        });
+        assert.deepEqual(fixture.calls[0].options?.session, {
+            previous: 'encrypted_previous',
+        });
+        assert.ok(fixture.calls[0].options?.signal instanceof AbortSignal);
+        if (result.type !== 'correct') assert.fail('Expected a password grant');
+        assertOpaque(result.grant);
+        flow.applySession(result.grant);
+        assert.equal(fixture.applied.length, 1);
+        assert.throws(
+            () => flow.applySession(result.grant),
+            hasCode('reload-required')
+        );
+    });
+
+    it('keeps the supplied abort reason without dispatching a verification', async () => {
+        const fixture = authFixture();
+        const flow = createAuthFlow({
+            client: fixture.client,
+            page: passwordPage(),
+            getScope: scope,
+        });
+        const beforeDispatch = new AbortController();
+        beforeDispatch.abort(null);
+        await assert.rejects(
+            flow.verifyPassword(
+                { extensionPassword: 'entered_example' },
+                { signal: beforeDispatch.signal }
+            ),
+            (error: unknown) => error === null
+        );
+        assert.equal(fixture.calls.length, 0);
+        assert.equal(flow.isCurrent(), true);
+    });
+
     it('uses only password operation and explicit canonical one-use session application', async () => {
         const fixture = authFixture();
         const page = passwordPage();

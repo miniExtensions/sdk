@@ -26,6 +26,7 @@ import {PortalGridMultilineTextCell,type PortalGridMultilineTextCellProps,type P
 import {PortalGridEmailCell,type PortalGridEmailCellProps,type PortalGridEmailCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridPhoneNumberCell,type PortalGridPhoneNumberCellProps,type PortalGridPhoneNumberCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridEmptyCell,type PortalGridEmptyCellProps} from '@miniextensions/sdk/react';
+import {PortalGridReadonlyLinkedPills,type PortalGridReadonlyLinkedPillsProps} from '@miniextensions/sdk/react';
 import {PortalGridRatingCell,type PortalGridRatingCellProps,type PortalGridRatingCellEditor,RatingField,type ControlledRatingFieldProps} from '@miniextensions/sdk/react';
 import {PortalGridCheckboxCell,type PortalGridCheckboxCellProps,type PortalGridCheckboxCellEditor} from '@miniextensions/sdk/react';
 import {PortalGridButtonCell,type PortalGridButtonCellProps} from '@miniextensions/sdk/react';
@@ -109,6 +110,11 @@ createElement(PortalGridEmptyCell,placeholder);
 // @ts-expect-error a blank column slot has no selection port
 const interactivePlaceholder:PortalGridEmptyCellProps={...placeholder,onSelect(){}};
 void interactivePlaceholder;
+const linkedPills:PortalGridReadonlyLinkedPillsProps={labels:['Admitted label',null,'Admitted label']};
+createElement(PortalGridReadonlyLinkedPills,linkedPills);
+// @ts-expect-error passive pills do not expose a write action
+const writablePills:PortalGridReadonlyLinkedPillsProps={...linkedPills,onChange(){}};
+void writablePills;
 const ratingEditor:PortalGridRatingCellEditor={owner:{token:Symbol(),isCurrent:()=>true},onChange(value){const native:number|null=value;void native;},id:'rating',form:'form',describedBy:'rating-help',labelledBy:'rating-title',invalid:false};
 const ratingCell:PortalGridRatingCellProps={value:2,displayText:'2',title:'Priority',max:5,icon:'star',color:'yellow',labels:{empty:'No priority',repair:'Repair priority'},cellIdentity:'row-rating',selected:true,onSelect(){},rowHeight:'medium',editor:ratingEditor};
 createElement(PortalGridRatingCell,ratingCell);
@@ -198,6 +204,13 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         'utf8'
     );
+    const linkedPillsSource = readFileSync(
+        new URL(
+            '../test/reactPortalGridReadonlyLinkedPills.test.ts',
+            import.meta.url
+        ),
+        'utf8'
+    );
     const ratingCellSource = readFileSync(
         fileURLToPath(
             new URL(
@@ -248,6 +261,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     const emailCellCases = 6;
     const phoneCellCases = 2;
     const emptyCellCases = 3;
+    const linkedPillsCases = 2;
     const ratingCellCases = 8;
     const checkboxCellCases = 16;
     const buttonCellCases = 2;
@@ -359,6 +373,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     ['grid-email-cell', emailCellSource, emailCellCases],
                     ['grid-phone-cell', phoneCellSource, phoneCellCases],
                     ['grid-empty-cell', emptyCellSource, emptyCellCases],
+                    ['grid-linked-pills', linkedPillsSource, linkedPillsCases],
                     ['grid-rating-cell', ratingCellSource, ratingCellCases],
                     [
                         'grid-checkbox-cell',
@@ -379,7 +394,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 ]) {
                     const installedSource = content
                         .replaceAll(
-                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridMultilineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell|PortalGridMultipleSelectCell)\.js/g,
+                            /\.\.\/src\/react\/(?:ReadonlyPortalGrid|PortalGridSingleLineTextCell|PortalGridMultilineTextCell|PortalGridEmailCell|PortalGridPhoneNumberCell|PortalGridEmptyCell|PortalGridReadonlyLinkedPills|PortalGridRatingCell|PortalGridCheckboxCell|PortalGridButtonCell|PortalGridSingleSelectCell|PortalGridMultipleSelectCell)\.js/g,
                             '@miniextensions/sdk/react'
                         )
                         .replaceAll(
@@ -447,6 +462,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                     emailCellTests: emailCellCases,
                     phoneCellTests: phoneCellCases,
                     emptyCellTests: emptyCellCases,
+                    linkedPillsTests: linkedPillsCases,
                     ratingCellTests: ratingCellCases,
                     checkboxCellTests: checkboxCellCases,
                     buttonCellTests: buttonCellCases,
@@ -486,6 +502,10 @@ export async function checkReadonlyPortalGridReactMatrix({
                 /mx-sdk-portal-grid-text-cell__selection/
             );
             assert.match(textCellCss, /mx-sdk-portal-grid-cell__guidance/);
+            assert.match(
+                textCellCss,
+                /\.mx-sdk-portal-grid-linked-pills__pill/
+            );
             assert.match(textCellCss, /field-presentation\.css/);
             const emptyCellCss = readFileSync(emptyCellCssPath, 'utf8');
             assert.equal(
@@ -605,6 +625,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 emailCellTests: emailCellCases * 2,
                 phoneCellTests: phoneCellCases * 2,
                 emptyCellTests: emptyCellCases * 2,
+                linkedPillsTests: linkedPillsCases * 2,
                 ratingCellTests: ratingCellCases * 2,
                 checkboxCellTests: checkboxCellCases * 2,
                 buttonCellTests: buttonCellCases * 2,
@@ -637,6 +658,10 @@ export async function checkReadonlyPortalGridReactMatrix({
         ),
         emptyCellTests: profiles.reduce(
             (total, profile) => total + profile.emptyCellTests,
+            0
+        ),
+        linkedPillsTests: profiles.reduce(
+            (total, profile) => total + profile.linkedPillsTests,
             0
         ),
         ratingCellTests: profiles.reduce(

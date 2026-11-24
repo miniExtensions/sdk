@@ -18,6 +18,7 @@ import {
 } from './LinkedFinderCard.js';
 import type { KanbanItems } from './kanban/Board.js';
 import { KanbanBoard } from './kanban/BoardLoader.js';
+import { createKanbanKeyboardFocus } from './kanban/keyboardFocus.js';
 import { useStateWithDeps } from './kanban/projectionState.js';
 
 export type KanbanCard = Readonly<{
@@ -149,6 +150,23 @@ export function Kanban<OriginalRecord, LoggedInRecord>(
         (previous) => (previous ?? -1) + 1,
         [projected, props.readOnly, props.modalOpen]
     );
+    const keyboardFocus = useMemo(createKanbanKeyboardFocus, [
+        source.categoryFieldId,
+    ]);
+    useEffect(() => keyboardFocus.clear, [keyboardFocus]);
+    useEffect(() => {
+        keyboardFocus.update(
+            epoch,
+            source.recordIds,
+            props.readOnly || props.modalOpen
+        );
+    }, [
+        keyboardFocus,
+        epoch,
+        source.recordIds,
+        props.readOnly,
+        props.modalOpen,
+    ]);
     const current = useRef<number | null>(epoch);
     current.current = epoch;
     useEffect(() => {
@@ -160,12 +178,16 @@ export function Kanban<OriginalRecord, LoggedInRecord>(
     return h(KanbanSurface<OriginalRecord, LoggedInRecord>, {
         ...props,
         key: epoch,
+        epoch,
+        keyboardFocus,
         projected,
         isCurrent: () => current.current === epoch,
     });
 }
 function KanbanSurface<OriginalRecord, LoggedInRecord>(
     props: KanbanProps<OriginalRecord, LoggedInRecord> & {
+        epoch: number;
+        keyboardFocus: ReturnType<typeof createKanbanKeyboardFocus>;
         projected: KanbanItems;
         isCurrent: () => boolean;
     }
@@ -186,6 +208,8 @@ function KanbanSurface<OriginalRecord, LoggedInRecord>(
             'aria-label': props.label,
         },
         h(KanbanBoard, {
+            epoch: props.epoch,
+            keyboardFocus: props.keyboardFocus,
             items,
             setItems,
             isCurrent: props.isCurrent,

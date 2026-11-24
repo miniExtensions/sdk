@@ -33,7 +33,11 @@ import {
     horizontalListSortingStrategy,
 } from './runtime.js';
 import { CSS } from './runtime.js';
-import { coordinateGetter as multipleContainersCoordinateGetter } from './keyboardCoordinates.js';
+import {
+    getKeyboardHorizontalCollision,
+    getKeyboardMove,
+    type KeyboardHorizontalTarget,
+} from './keyboardCoordinates.js';
 import { Container, ContainerProps } from './Container.js';
 import { Item } from './Item.js';
 import { RenderItemFunc } from './Item.js';
@@ -159,7 +163,7 @@ export function MultipleContainers({
     items,
     setItems,
     containerStyle,
-    coordinateGetter = multipleContainersCoordinateGetter,
+    coordinateGetter,
     getItemStyles = () => ({}),
     wrapperStyle = () => ({}),
     minimal = false,
@@ -176,6 +180,9 @@ export function MultipleContainers({
 }: KanbanBoardProps): React.ReactElement {
     const contextId = useId();
     const live = useRef(true);
+    const keyboardHorizontalTarget = useRef<KeyboardHorizontalTarget | null>(
+        null
+    );
     const touchMoveCleanup = useRef<(() => void) | null>(null);
     const releaseTouchMove = useCallback(() => {
         touchMoveCleanup.current?.();
@@ -185,11 +192,14 @@ export function MultipleContainers({
         live.current = true;
         return () => {
             live.current = false;
+            keyboardHorizontalTarget.current = null;
             releaseTouchMove();
         };
     }, [releaseTouchMove]);
-    const acceptsDrag = () =>
-        live.current && isCurrent() && !disabled && !modalOpen;
+    const acceptsDrag = useCallback(
+        () => live.current && isCurrent() && !disabled && !modalOpen,
+        [isCurrent, disabled, modalOpen]
+    );
     const isAnExtensionModalOpen = modalOpen;
     const theme = getThemePortalProps(useThemeSnapshot());
     const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
@@ -221,6 +231,13 @@ export function MultipleContainers({
                         (container) => isColumnId(items, container.id)
                     ),
                 });
+            }
+            if (acceptsDrag()) {
+                const keyboardCollision = getKeyboardHorizontalCollision(
+                    args,
+                    keyboardHorizontalTarget.current
+                );
+                if (keyboardCollision != null) return [keyboardCollision];
             }
             // Start by finding any intersecting droppable
             const pointerIntersections = pointerWithin(args);
@@ -261,7 +278,7 @@ export function MultipleContainers({
             // If no droppable is matched, return the last match
             return lastOverId.current ? [{ id: lastOverId.current }] : [];
         },
-        [activeId, items]
+        [acceptsDrag, activeId, items]
     );
     const [clonedItems, setClonedItems] = useState<KanbanItems | null>(null);
     const sensors = useSensors(
@@ -284,7 +301,19 @@ export function MultipleContainers({
             },
         }),
         useSensor(KeyboardSensor, {
-            coordinateGetter,
+            coordinateGetter:
+                coordinateGetter ??
+                ((event, options) => {
+                    if (!acceptsDrag()) return undefined;
+                    const move = getKeyboardMove(
+                        event,
+                        options,
+                        keyboardHorizontalTarget.current
+                    );
+                    if (move == null) return undefined;
+                    keyboardHorizontalTarget.current = move.horizontalTarget;
+                    return move.coordinates;
+                }),
         })
     );
     const findContainer = (id: UniqueIdentifier) => {
@@ -306,6 +335,7 @@ export function MultipleContainers({
         return index;
     };
     const onDragCancel = () => {
+        keyboardHorizontalTarget.current = null;
         releaseTouchMove();
         if (!acceptsDrag()) return;
         if (clonedItems) {
@@ -332,6 +362,7 @@ export function MultipleContainers({
             },
         },
         onDragStart: ({ active }) => {
+            keyboardHorizontalTarget.current = null;
             if (!acceptsDrag()) return;
             setActiveId(active.id);
             setClonedItems(items);
@@ -402,6 +433,7 @@ export function MultipleContainers({
             }
         },
         onDragEnd: ({ active, over }) => {
+            keyboardHorizontalTarget.current = null;
             releaseTouchMove();
             if (!acceptsDrag()) return;
             if (isColumnId(items, active.id) && over?.id) {

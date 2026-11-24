@@ -363,7 +363,22 @@ export async function prepareKanbanBrowserFixtures({
     allowed.set(
         '/kanban-fixture.css',
         Buffer.from(
-            'body{margin:20px;font:19px/1.7 Georgia,serif}main{max-width:1500px}textarea{display:block}'
+            'body{margin:20px;font:19px/1.7 Georgia,serif}main{max-width:1500px}textarea{display:block}' +
+                [4, 40]
+                    .map(
+                        (width) =>
+                            `body[data-empty-column-width="${width}"] section.mx-sdk-kanban .mx-sdk-kanban-column:has(> .mx-sdk-kanban-items:empty){flex:0 0 ${width}px;width:${width}px;min-width:0}`
+                    )
+                    .join('') +
+                [
+                    [2, 109],
+                    [3, 623],
+                ]
+                    .map(
+                        ([columnIndex, width]) =>
+                            `body[data-occupied-column-geometry] .mx-sdk-kanban-board>.mx-sdk-kanban-column:nth-child(${columnIndex}){flex:0 0 ${width}px;width:${width}px;min-width:0}`
+                    )
+                    .join('')
         )
     );
     for (const [index, color] of [
@@ -420,17 +435,21 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                     ),
                 id
             );
-        const moveKey = async (key, target, label) => {
+        const moveKey = async (key, target, label, recordId = 'a') => {
             await page.keyboard.press(key);
             if (label)
                 await page.waitForFunction(
-                    (label) =>
+                    ({ label, recordId }) =>
                         document
-                            .querySelector('section [data-kanban-record="a"]')
+                            .querySelector(
+                                'section [data-kanban-record="' +
+                                    recordId +
+                                    '"]'
+                            )
                             ?.closest('.mx-sdk-kanban-column')
                             ?.querySelector('.mx-sdk-kanban-column-label')
                             ?.textContent === label,
-                    label
+                    { label, recordId }
                 );
             else await keyboardReady(target);
         };
@@ -948,6 +967,101 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         );
         await verify('trusted-keyboard-empty-column-geometry');
 
+        try {
+            const previewNarrowEmpty = async (width) => {
+                await reset();
+                await page.evaluate((width) => {
+                    document.body.dataset.emptyColumnWidth = String(width);
+                }, width);
+                const empty = await column('Empty').boundingBox();
+                assert.equal(empty?.width, width);
+                await source('a').focus();
+                await page.keyboard.press('Space');
+                await overlay().waitFor();
+                await keyboardReady('a');
+                await moveKey('ArrowRight', 'c', 'Closed');
+                await moveKey('ArrowRight', 'empty', 'Empty');
+            };
+            const before = (await state()).calls.events.length;
+            for (const [key, target, label] of [
+                ['ArrowRight', 'legacy', 'Old choice'],
+                ['ArrowLeft', 'c', 'Closed'],
+            ]) {
+                await previewNarrowEmpty(4);
+                await moveKey(key, target, label);
+                await page.keyboard.press('Escape');
+                await overlay().waitFor({ state: 'detached' });
+                assert.deepEqual(await order('Open'), ['a', 'b']);
+                assert.equal((await state()).calls.events.length, before);
+            }
+
+            await previewNarrowEmpty(40);
+            await page.keyboard.press('Space');
+            await page.waitForFunction(
+                () =>
+                    window.__kanbanProbe.snapshot().records.a.fields.status ===
+                    'Empty'
+            );
+            const writes = (await state()).calls.events.slice(before);
+            assert.deepEqual(
+                writes.map(({ kind, recordId, value }) => ({
+                    kind,
+                    recordId,
+                    value,
+                })),
+                [
+                    { kind: 'optimistic', recordId: 'a', value: 'Empty' },
+                    { kind: 'mutate', recordId: 'a', value: 'Empty' },
+                ]
+            );
+            await verify(
+                'trusted-keyboard-narrow-empty-column-drop-and-cancel'
+            );
+        } finally {
+            await page.evaluate(() => {
+                delete document.body.dataset.emptyColumnWidth;
+            });
+        }
+
+        await reset();
+        await page.evaluate(() => {
+            document.body.dataset.occupiedColumnGeometry = '';
+        });
+        try {
+            assert.equal((await column('Open').boundingBox())?.width, 109);
+            assert.equal((await column('Closed').boundingBox())?.width, 623);
+            const before = (await state()).calls.events.length;
+            await source('c').focus();
+            await page.keyboard.press('Space');
+            await overlay().waitFor();
+            await keyboardReady('c');
+            await moveKey('ArrowLeft', 'a', 'Open', 'c');
+            await page.keyboard.press('Space');
+            await page.waitForFunction(
+                () =>
+                    window.__kanbanProbe.snapshot().records.c.fields.status ===
+                    'Open'
+            );
+            assert.deepEqual(
+                (await state()).calls.events
+                    .slice(before)
+                    .map(({ kind, recordId, value }) => ({
+                        kind,
+                        recordId,
+                        value,
+                    })),
+                [
+                    { kind: 'optimistic', recordId: 'c', value: 'Open' },
+                    { kind: 'mutate', recordId: 'c', value: 'Open' },
+                ]
+            );
+            await verify('trusted-keyboard-wide-to-short-occupied-column-drop');
+        } finally {
+            await page.evaluate(() => {
+                delete document.body.dataset.occupiedColumnGeometry;
+            });
+        }
+
         await reset();
         await source('a').focus();
         await page.keyboard.press('Space');
@@ -1355,7 +1469,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
 
         result.react = (await state()).react;
         result.platform = (await state()).platform;
-        assert.equal(result.groups.length, 21);
+        assert.equal(result.groups.length, 23);
     }
     return evidence;
 }

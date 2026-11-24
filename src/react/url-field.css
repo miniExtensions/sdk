@@ -37,6 +37,11 @@
     padding-inline-end: 2.5rem;
 }
 
+/* Keep Clear above the resting link when tapping it blurs the input. */
+.mx-sdk-url-control .mx-sdk-complete-clearable-button {
+    z-index: 1;
+}
+
 :where(.mx-sdk-url-input:disabled) {
     background: #f3f4f6;
     color: #4b5563;

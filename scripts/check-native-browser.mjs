@@ -77,6 +77,7 @@ import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
 import { checkCanonicalRichTextBrowser } from './canonical-rich-text-browser-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
+import { checkUrlClearBrowser } from './url-clear-browser-checks.mjs';
 import { checkThemeBrowser } from './theme-browser-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
@@ -1597,6 +1598,7 @@ try {
             'scripts/browser-textarea-input-checks.mjs',
             'scripts/browser-complete-rich-text-checks.mjs',
             'scripts/browser-complete-localized-numeric-checks.mjs',
+            'scripts/url-clear-browser-checks.mjs',
             'scripts/native-rating-fixture.css',
             'scripts/complete-readonly-text-consumer-checks.mjs',
             'scripts/complete-clearable-input-consumer-checks.mjs',
@@ -2334,6 +2336,13 @@ try {
             consumer: temporary,
             evidence: report.completeLocalizedNumeric,
             output,
+        });
+        report.urlClear = {};
+        await checkUrlClearBrowser({
+            browser,
+            consumer: temporary,
+            readArchiveMember,
+            evidence: report.urlClear,
         });
         report.completeDate = {};
         await checkCompleteDateBrowser({

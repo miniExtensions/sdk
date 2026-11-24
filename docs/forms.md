@@ -2742,9 +2742,10 @@ and pass the exact returned Form, the same
 client, `request.parent` and `request.saveContext` to the Project's Form
 bindings. Keep the Project owner's usual currentness check. The SDK checks the
 accepted Portal scope and selected record before and after the Related Form
-load. A copied response or a generic Form reload needs a fresh admitted Portal
-opening for this capability. Nested Create and further child actions remain
-unsupported.
+load. An already accepted Edit remains bound to its record if the Project
+selection changes, while its Portal and Project owners are current. A copied
+response or a generic Form reload needs a fresh admitted Portal opening for
+this capability. Nested Create and further child actions remain unsupported.
 
 `snapshot.intent` distinguishes Create from the captured exact Edit record.
 Create freezes its configured prefill. Edit uses an empty query and no dynamic

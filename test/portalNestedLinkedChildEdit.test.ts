@@ -551,6 +551,54 @@ for (const restore of [false, true]) {
     });
 }
 
+it('keeps an accepted Related Edit bound to its record after the Project selection changes', async (test) => {
+    const { calls, fields, owner, selection, waitForSaveRequest, releaseSave } =
+        await setup(test, 'portal', { holdSave: true });
+    const before = calls.length;
+    assert.equal(
+        await owner.openEdit(relatedId, owner.getSnapshot().revision),
+        true
+    );
+    const { child, pages } = owner.getSnapshot();
+    assert.ok(child && pages);
+    const title = child.field('fld_title');
+    assert.deepEqual(title.setValue(editedTitle), { accepted: true });
+
+    assert.deepEqual(fields.field(relatedFieldId).setValue([]), {
+        accepted: true,
+    });
+    const { draft, draftRevision } = fields.controller.getState();
+    assert.equal(draft?.data.fld_title, 'Unsaved Project');
+    assert.deepEqual(draft?.data[relatedFieldId], []);
+    assert.deepEqual(selection.getSnapshot().selectedRecords, []);
+    const ready = owner.getSnapshot();
+    assert.equal(ready.phase, 'ready');
+    assert.deepEqual(ready.editableRecordIds, []);
+    assert.equal(ready.child, child);
+    assert.equal(ready.pages, pages);
+    assert.deepEqual(ready.intent, { type: 'edit', recordId: relatedId });
+    assert.equal(
+        child.controller.getState().draft?.data.fld_title,
+        editedTitle
+    );
+    assert.deepEqual(calls.slice(before), ['load selected Related']);
+
+    const saving = owner.save(ready.revision);
+    await waitForSaveRequest(saving);
+    releaseSave();
+    const result = await saving;
+    assert.equal(result.type, 'saved');
+    assert.equal(result.raw.record.id, relatedId);
+    assert.equal(owner.getSnapshot().completion, 'reconciled');
+    assert.deepEqual(fields.controller.getState().draft, draft);
+    assert.equal(fields.controller.getState().draftRevision, draftRevision);
+    assert.deepEqual(selection.getSnapshot().selectedRecords, []);
+    assert.deepEqual(calls.slice(before), [
+        'load selected Related',
+        'save selected Related',
+    ]);
+});
+
 it('does not turn a successful Related Edit into authority for a further hop', async (test) => {
     const { calls, owner } = await setup(test, 'portal', {
         includeDeeperLink: true,

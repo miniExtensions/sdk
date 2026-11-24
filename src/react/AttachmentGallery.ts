@@ -209,7 +209,11 @@ function RemoveAttachmentTile({
 }
 
 /** The SDK renders the tile collection and viewer; storage and writes stay with its host. */
-export function AttachmentGallery(props: AttachmentGalleryProps): ReactNode {
+export function AttachmentGallery(
+    props: AttachmentGalleryProps & {
+        portal?: (typeof import('./attachmentSliderDialogRuntime.js'))['AttachmentSliderPortal'];
+    }
+): ReactNode {
     const { rows, onRemove, canRemoveFromSlider, labels } = props;
     const identityRows = useMemo(
         () => rows.map(({ id, resourceUrl }) => ({ id, url: resourceUrl })),
@@ -349,25 +353,28 @@ export function AttachmentGallery(props: AttachmentGalleryProps): ReactNode {
         Fragment,
         null,
         list,
-        renderAttachmentSlider({
-            rows,
-            currentIndex: currentSliderIndex,
-            setCurrentIndex: setCurrentSliderIndex,
-            navigationOwner,
-            labels,
-            covered: props.covered,
-            intercomOpen: props.intercomOpen,
-            onDismiss: navigation.dismissSlider,
-            onDelete: removeSelected,
-            downloadIdentity: JSON.stringify([
+        renderAttachmentSlider(
+            {
+                rows,
+                currentIndex: currentSliderIndex,
+                setCurrentIndex: setCurrentSliderIndex,
                 navigationOwner,
-                current.id,
-                occurrence,
-            ]),
-            canOpen: current.canOpenInSlider,
-            canDownload: current.canDownloadInSlider,
-            readDownload: props.readDownload,
-            onDownloadError: props.onDownloadError,
-        })
+                labels,
+                covered: props.covered,
+                intercomOpen: props.intercomOpen,
+                onDismiss: navigation.dismissSlider,
+                onDelete: removeSelected,
+                downloadIdentity: JSON.stringify([
+                    navigationOwner,
+                    current.id,
+                    occurrence,
+                ]),
+                canOpen: current.canOpenInSlider,
+                canDownload: current.canDownloadInSlider,
+                readDownload: props.readDownload,
+                onDownloadError: props.onDownloadError,
+            },
+            props.portal
+        )
     );
 }

@@ -250,6 +250,7 @@ function ReadOnlyUrlField(props: ReadOnlyUrlFieldProps): ReactNode {
     ) {
         return h(AttachmentGallery, {
             ...attachmentGallery,
+            portal: undefined,
             onRemove: undefined,
             onAnnotate: undefined,
         });

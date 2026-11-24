@@ -282,7 +282,7 @@ function deferredReload() {
     return { reload, attempts };
 }
 
-it('clears the latest draft and keeps a refresh-required owner locked', async (t) => {
+it('clears the latest draft and retries a fresh-page read while verification stays locked', async (t) => {
     const screen = await setup(t);
     const recoveryLabels = { ...labels, refreshRequired: 'Refresh this page' };
     const { reload, attempts } = deferredReload();
@@ -304,11 +304,34 @@ it('clears the latest draft and keeps a refresh-required owner locked', async (t
         recoveryLabels.refreshRequired
     );
     assert.equal(screen.button().disabled, true);
-    assert.equal(screen.reloadButton(), undefined);
+    assert.equal(screen.reloadButton()?.textContent, reload.label);
+    assert.equal(attempts.length, 0);
+    await act(async () => {
+        screen.clickReload();
+        screen.clickReload();
+        screen.submit();
+    });
+    assert.equal(attempts.length, 1);
+    assert.equal(screen.reloadButton()?.disabled, true);
+    assert.equal(
+        screen.feedback()?.textContent,
+        recoveryLabels.refreshRequired
+    );
+    await act(async () => attempts[0].resolve('retry'));
+    assert.equal(screen.reloadButton()?.disabled, false);
+    assert.equal(
+        screen.feedback()?.textContent,
+        recoveryLabels.refreshRequired
+    );
     await screen.edit('synthetic bypass attempt');
     await act(async () => screen.submit());
     assert.equal(screen.requests.length, 1);
-    assert.equal(attempts.length, 0);
+    assert.equal(screen.button().disabled, true);
+    await act(async () => screen.clickReload());
+    await act(async () => attempts[1].resolve('completed'));
+    assert.equal(screen.reloadButton(), undefined);
+    assert.equal(screen.feedback(), null);
+    assert.equal(screen.input().value, '');
     assert.equal(screen.button().disabled, true);
 });
 
@@ -414,7 +437,7 @@ it('ignores a late reload result across an owner replacement', async (t) => {
     assert.equal(screen.button().disabled, false);
 });
 
-it('turns reload into refresh-only or silent retirement without reopening verification', async (t) => {
+it('turns reload into refresh-required or silent retirement without reopening verification', async (t) => {
     const screen = await setup(t);
     const recoveryLabels = { ...labels, refreshRequired: 'Refresh this page' };
     const { reload, attempts } = deferredReload();
@@ -435,7 +458,10 @@ it('turns reload into refresh-only or silent retirement without reopening verifi
         );
         await act(async () => screen.clickReload());
         await act(async () => attempts[revision].resolve(result));
-        assert.equal(screen.reloadButton(), undefined);
+        assert.equal(
+            screen.reloadButton()?.textContent,
+            result === 'retired' ? undefined : reload.label
+        );
         assert.equal(screen.input().value, '');
         assert.equal(screen.input().readOnly, true);
         assert.equal(screen.button().disabled, true);

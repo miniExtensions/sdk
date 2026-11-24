@@ -53,6 +53,14 @@ type Attempt = {
     dispatched: boolean;
 };
 
+function requireNotAborted(signal?: AbortSignal): void {
+    if (signal?.aborted)
+        throw (
+            signal.reason ??
+            new DOMException('The request was aborted.', 'AbortError')
+        );
+}
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const requireString = (value: unknown, description: string): string => {
@@ -261,7 +269,7 @@ export function createAuthFlow(
             throw lifecycleError();
     };
     const requireAttempt = (attempt: Attempt) => {
-        attempt.controller.signal.throwIfAborted();
+        requireNotAborted(attempt.controller.signal);
         requireCurrent(attempt.generation);
         if (active !== attempt) throw lifecycleError();
     };
@@ -288,7 +296,7 @@ export function createAuthFlow(
                 'busy',
                 'An authentication request is already in progress.'
             );
-        requestOptions?.signal?.throwIfAborted();
+        requireNotAborted(requestOptions?.signal);
         const attempt: Attempt = {
             controller: new AbortController(),
             generation,

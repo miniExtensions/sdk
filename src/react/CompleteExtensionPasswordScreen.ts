@@ -36,7 +36,7 @@ export type CompleteExtensionPasswordScreenProps = {
     verifyPassword: (
         password: string
     ) => Promise<CompleteExtensionPasswordScreenResult>;
-    /** Reload the accepted screen without re-verifying its password. */
+    /** Read a fresh page without re-verifying the password. */
     reload?: {
         label: string;
         run(): Promise<'completed' | 'retry' | 'refresh-required' | 'retired'>;
@@ -58,15 +58,22 @@ export function CompleteExtensionPasswordScreen(
     });
 }
 
+type PasswordRecoveryStatus = 'refresh-required' | 'reload-required';
+
 type PasswordFormStatus =
     | 'ready'
     | 'pending'
     | 'accepted'
     | 'blocked'
-    | 'refresh-required'
-    | 'reload-required'
+    | PasswordRecoveryStatus
     | 'reloading'
     | 'waiting';
+
+function isRecoveryStatus(
+    status: PasswordFormStatus
+): status is PasswordRecoveryStatus {
+    return status === 'refresh-required' || status === 'reload-required';
+}
 
 function ExtensionPasswordForm({
     labels,
@@ -108,7 +115,7 @@ function ExtensionPasswordForm({
 
     function settleRecovery(
         currentOwner: NonNullable<typeof owner.current>,
-        result: 'reload-required' | 'refresh-required' | 'completed' | 'retired'
+        result: PasswordRecoveryStatus | 'completed' | 'retired'
     ) {
         clearDraft();
         if (result === 'reload-required') {
@@ -155,7 +162,9 @@ function ExtensionPasswordForm({
 
     async function reloadScreen() {
         const attemptOwner = owner.current;
-        if (attemptOwner?.status !== 'reload-required' || !reload) return;
+        if (!attemptOwner || !reload || !isRecoveryStatus(attemptOwner.status))
+            return;
+        const origin = attemptOwner.status;
         transition(attemptOwner, 'reloading');
 
         let result: Awaited<ReturnType<typeof reload.run>>;
@@ -166,18 +175,15 @@ function ExtensionPasswordForm({
         }
         if (owner.current !== attemptOwner) return;
 
-        if (result === 'retry') transition(attemptOwner, 'reload-required');
+        if (result === 'retry') transition(attemptOwner, origin);
         else settleRecovery(attemptOwner, result);
     }
 
     const reloadAction =
-        status === 'reload-required' || status === 'reloading'
-            ? reload
-            : undefined;
+        isRecoveryStatus(status) || status === 'reloading' ? reload : undefined;
     const lockedInput =
-        status === 'reload-required' ||
+        isRecoveryStatus(status) ||
         status === 'reloading' ||
-        status === 'refresh-required' ||
         status === 'waiting';
 
     return h(

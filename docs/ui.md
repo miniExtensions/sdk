@@ -6440,14 +6440,19 @@ After `correct`, the draft is cleared and Submit remains locked until the host
 replaces the screen.
 
 Return `{ type: 'error', recovery: 'refresh-required' }` when the visitor needs a
-new page before trying another password. The screen clears the draft, locks
+fresh page before trying another password. The screen clears the draft, locks
 Submit and shows `labels.refreshRequired`, falling back to `labels.error`.
 Use `recovery: 'reload-required'` for an accepted result whose next read can be
-retried. Supply `reload.label` and a guarded `reload.run` for that action.
-The action reopens after `retry` or an exception and stays locked after
-`completed`. Return `refresh-required` to require a fresh page or `retired`
-to dismiss feedback for an obsolete owner. A verification result can likewise
-request silent retirement with `{ type: 'error', recovery: 'retired' }`.
+retried. Either recovery state can offer the same explicit fresh-page read
+through `reload.label` and a guarded `reload.run`. Without that prop, the
+message remains visible while the screen waits for a fresh page.
+The action admits one attempt at a time. A `retry` result or exception restores
+the originating recovery state and message. A `completed` result waits for a
+successor scope.
+Return `refresh-required` when the current page must be refreshed, or
+`retired` to dismiss feedback for an obsolete owner. A verification result
+can likewise request silent retirement with
+`{ type: 'error', recovery: 'retired' }`.
 
 Advance the scope revision on accepted page, connection, session, or visitor
 changes. A scope change makes a fresh prompt and prevents earlier results from

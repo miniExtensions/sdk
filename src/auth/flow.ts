@@ -55,10 +55,9 @@ type Attempt = {
 
 function requireNotAborted(signal?: AbortSignal): void {
     if (signal?.aborted)
-        throw (
-            signal.reason ??
-            new DOMException('The request was aborted.', 'AbortError')
-        );
+        throw signal.reason === undefined
+            ? new DOMException('The request was aborted.', 'AbortError')
+            : signal.reason;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -151,7 +150,6 @@ export function createAuthFlow(
     options: AuthFlowOptions<AuthPage> | PasswordAuthFlowOptions
 ): AuthFlow {
     const client = options.client;
-    const auth = client.auth;
     const getScope = options.getScope;
     const metadata = readMetadata(options.page);
     let capturedSession: RuntimeSession | null = readSession(
@@ -419,7 +417,7 @@ export function createAuthFlow(
                     true,
                     requestOptions,
                     (signal, session) =>
-                        auth.verifyExtensionPassword(
+                        client.auth.verifyExtensionPassword(
                             {
                                 extensionId: metadata.extensionId,
                                 extensionPassword,
@@ -451,10 +449,14 @@ export function createAuthFlow(
             },
         } satisfies PasswordAuthFlow);
     }
-    if (!('login' in auth))
-        throw new TypeError(
-            'A login page requires the login client operations.'
-        );
+    const loginAuth = () => {
+        const auth = client.auth;
+        if (!('login' in auth))
+            throw new TypeError(
+                'A login page requires the login client operations.'
+            );
+        return auth;
+    };
     return Object.freeze({
         ...common,
         screen: 'login_page' as const,
@@ -487,7 +489,7 @@ export function createAuthFlow(
                 true,
                 requestOptions,
                 (signal, session) =>
-                    auth.login(
+                    loginAuth().login(
                         {
                             extensionId: metadata.extensionId,
                             loginCredentials,
@@ -552,7 +554,7 @@ export function createAuthFlow(
                 false,
                 requestOptions,
                 (signal, session) =>
-                    auth.confirmVerificationCode(
+                    loginAuth().confirmVerificationCode(
                         {
                             verificationId: challenge.verificationId,
                             verificationCode,
@@ -581,7 +583,7 @@ export function createAuthFlow(
                 true,
                 requestOptions,
                 (signal, session) =>
-                    auth.signUp(
+                    loginAuth().signUp(
                         {
                             extensionId: metadata.extensionId,
                             signUpCredentials,

@@ -94,10 +94,17 @@ describe('optional auth flow contracts', () => {
             page: passwordPage(),
             getScope: scope,
         });
-        const result = await flow.verifyPassword({
-            extensionPassword: 'entered_example',
-            viewMode: 'draft',
+        const legacy = new AbortController();
+        Object.defineProperty(legacy.signal, 'throwIfAborted', {
+            value: undefined,
         });
+        const result = await flow.verifyPassword(
+            {
+                extensionPassword: 'entered_example',
+                viewMode: 'draft',
+            },
+            { signal: legacy.signal }
+        );
         assert.deepEqual(fixture.calls[0].input, {
             extensionId: 'extension_example',
             extensionPassword: 'entered_example',
@@ -115,6 +122,26 @@ describe('optional auth flow contracts', () => {
             () => flow.applySession(result.grant),
             hasCode('reload-required')
         );
+    });
+
+    it('keeps the supplied abort reason without dispatching a verification', async () => {
+        const fixture = authFixture();
+        const flow = createAuthFlow({
+            client: fixture.client,
+            page: passwordPage(),
+            getScope: scope,
+        });
+        const beforeDispatch = new AbortController();
+        beforeDispatch.abort(null);
+        await assert.rejects(
+            flow.verifyPassword(
+                { extensionPassword: 'entered_example' },
+                { signal: beforeDispatch.signal }
+            ),
+            (error: unknown) => error === null
+        );
+        assert.equal(fixture.calls.length, 0);
+        assert.equal(flow.isCurrent(), true);
     });
 
     it('uses only password operation and explicit canonical one-use session application', async () => {

@@ -6765,6 +6765,19 @@ An optional `titleAction` renders beside the localized heading, which remains
 the dialog's accessible name. Use `type="button"` for a host button inside a
 Login form.
 
+Set `appearance: 'native'` to use the responsive modal and editable
+combobox. A typed search activates the first match when its results arrive.
+Arrow navigation updates the active occurrence while the input keeps focus.
+Enter selects that occurrence. Tab and Shift+Tab select the
+active occurrence and continue through the login controls. Escape or a
+backdrop click dismisses the modal and returns focus to its trigger. When
+the trigger is in a form, the modal mounts beside the form, keeping its
+controls separate from Login submission. Use `searchPlaceholder` for the visible hint and
+`labels.search` for the accessible field name. `triggerContent` can supply
+an icon while `labels.open` names the button. In this appearance,
+`renderError(message)` can display lookup errors and `renderLoading()` can
+display the initial loading state using host components.
+
 ### Navigate a linked record in a Portal side panel
 
 `PortalSidePanelNavigation` from `@miniextensions/sdk/react` renders the host's

@@ -1,5 +1,8 @@
 import {
     createElement as h,
+    lazy,
+    Suspense,
+    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -15,6 +18,20 @@ import type {
     SelectionRequest,
     SelectionState,
 } from '../ui/types.js';
+import { NativeLoginExistingValuesDialog } from './NativeLoginExistingValuesDialog.js';
+
+const LoginDialogPortal = lazy(async () => {
+    const { createPortal } = await import('react-dom');
+    return {
+        default: ({
+            children,
+            container,
+        }: {
+            children?: ReactNode;
+            container: HTMLElement;
+        }) => createPortal(children, container),
+    };
+});
 
 export type LoginExistingValuesOwner = Readonly<{
     extensionSessionId: string;
@@ -55,6 +72,18 @@ export type LoginExistingValuesPickerProps = {
     /** Receives the original data label, including whitespace or an empty string. */
     onSelect(label: string): void;
     labels?: Partial<LoginExistingValuesLabels>;
+    /** Presents the picker as a modal with an input-focused combobox. */
+    appearance?: 'native';
+    /** Optional visible hint for the native search input. */
+    searchPlaceholder?: string;
+    /** Replaces the trigger's visible label. Its accessible name remains labels.open. */
+    triggerContent?: ReactNode;
+    /** Native modal markers for host integration tests. */
+    testIds?: Readonly<{ dialog?: string; overlay?: string }>;
+    /** Formats a host-provided lookup error in the native modal. */
+    renderError?(message: string): ReactNode;
+    /** Optional host loading indicator displayed during an initial lookup. */
+    renderLoading?(): ReactNode;
     /** Host action rendered beside the dialog title. */
     titleAction?: ReactNode;
     className?: string;
@@ -100,15 +129,22 @@ function retire(active: { current: Lookup | null }, lookup: Lookup) {
 function Picker(props: LoginExistingValuesPickerProps) {
     const id = useId();
     const trigger = useRef<HTMLButtonElement>(null);
+    const dialog = useRef<HTMLDialogElement | null>(null);
     const search = useRef<HTMLInputElement>(null);
     const optionsList = useRef<HTMLUListElement>(null);
     const active = useRef<Lookup | null>(null);
     const callbacks = useRef(props);
     const [view, setView] = useState<LookupView | null>(null);
+    const [dialogAttached, setDialogAttached] = useState(false);
+    const attachDialog = useCallback((node: HTMLDialogElement | null) => {
+        dialog.current = node;
+        setDialogAttached(node !== null);
+    }, []);
     const labels = { ...defaultLabels, ...props.labels };
+    const native = props.appearance === 'native';
     const useCommittedEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
-    const openedLookup = view?.lookup;
+    const openedLookup = native ? undefined : view?.lookup;
     const loading =
         view !== null && (view.state.loading || view.lookup.timer !== null);
 
@@ -126,6 +162,9 @@ function Picker(props: LoginExistingValuesPickerProps) {
 
     function close(lookup: Lookup) {
         if (!retire(active, lookup)) return;
+        // A user close restores focus before native Tab traversal. An owner
+        // retirement removes the dialog with its trigger and skips this path.
+        if (dialog.current?.open) dialog.current.close();
         setView(null);
         trigger.current?.focus();
     }
@@ -238,7 +277,8 @@ function Picker(props: LoginExistingValuesPickerProps) {
         if (!event.repeat) close(view.lookup);
     }
 
-    const panel = view
+    const inlineView = native ? null : view;
+    const defaultPanel = inlineView
         ? h(
               'div',
               {
@@ -255,7 +295,10 @@ function Picker(props: LoginExistingValuesPickerProps) {
                   props.titleAction,
                   h(
                       'button',
-                      { type: 'button', onClick: () => close(view.lookup) },
+                      {
+                          type: 'button',
+                          onClick: () => close(inlineView.lookup),
+                      },
                       labels.close
                   )
               ),
@@ -264,9 +307,9 @@ function Picker(props: LoginExistingValuesPickerProps) {
                   type: 'search',
                   id: `${id}-search`,
                   ref: search,
-                  value: view.state.searchTerm,
+                  value: inlineView.state.searchTerm,
                   onChange: (event) =>
-                      changeQuery(view.lookup, event.currentTarget.value),
+                      changeQuery(inlineView.lookup, event.currentTarget.value),
                   onKeyDown: (event) => {
                       if (event.key === 'Enter') event.preventDefault();
                       else moveOptionFocus(event);
@@ -279,7 +322,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
                       ref: optionsList,
                       'aria-busy': loading,
                   },
-                  view.state.options.map((option) =>
+                  inlineView.state.options.map((option) =>
                       h(
                           'li',
                           { key: option.value },
@@ -291,7 +334,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
                                       ? { 'aria-label': labels.blank }
                                       : {}),
                                   onClick: () =>
-                                      choose(view.lookup, option.value),
+                                      choose(inlineView.lookup, option.value),
                                   onKeyDown: moveOptionFocus,
                               },
                               option.label
@@ -304,12 +347,12 @@ function Picker(props: LoginExistingValuesPickerProps) {
                   { role: 'status' },
                   loading
                       ? labels.loading
-                      : view.state.error === null &&
-                          view.state.options.length === 0
+                      : inlineView.state.error === null &&
+                          inlineView.state.options.length === 0
                         ? labels.empty
                         : null
               ),
-              view.state.error !== null
+              inlineView.state.error !== null
                   ? h(
                         'div',
                         null,
@@ -320,20 +363,20 @@ function Picker(props: LoginExistingValuesPickerProps) {
                                 type: 'button',
                                 onClick: () =>
                                     load(
-                                        view.lookup,
-                                        view.state.offset !== null
+                                        inlineView.lookup,
+                                        inlineView.state.offset !== null
                                     ),
                             },
                             labels.retry
                         )
                     )
-                  : view.state.offset !== null
+                  : inlineView.state.offset !== null
                     ? h(
                           'button',
                           {
                               type: 'button',
                               disabled: loading,
-                              onClick: () => load(view.lookup, true),
+                              onClick: () => load(inlineView.lookup, true),
                           },
                           labels.more
                       )
@@ -341,10 +384,42 @@ function Picker(props: LoginExistingValuesPickerProps) {
           )
         : null;
 
+    const panel =
+        view && native
+            ? h(NativeLoginExistingValuesDialog, {
+                  id,
+                  attachDialog,
+                  labels,
+                  state: view.state,
+                  debouncing: view.lookup.timer !== null,
+                  titleAction: props.titleAction,
+                  searchPlaceholder: props.searchPlaceholder,
+                  testIds: props.testIds,
+                  renderError: props.renderError,
+                  renderLoading: props.renderLoading,
+                  dismiss: () => close(view.lookup),
+                  changeQuery: (query) => changeQuery(view.lookup, query),
+                  choose: (value) => choose(view.lookup, value),
+                  load: (append) => load(view.lookup, append),
+              })
+            : defaultPanel;
+
+    // Keep browser form ownership with the host's Login fields. Mount next to
+    // its form so the picker still inherits the surrounding application theme.
+    const portalContainer =
+        native && panel
+            ? trigger.current?.closest('form')?.parentElement
+            : null;
+    const expanded = native ? dialogAttached : panel !== null;
+
     return h(
         'div',
         {
-            className: ['mx-sdk-login-values', props.className]
+            className: [
+                'mx-sdk-login-values',
+                native && 'mx-sdk-login-values--native',
+                props.className,
+            ]
                 .filter(Boolean)
                 .join(' '),
         },
@@ -354,10 +429,18 @@ function Picker(props: LoginExistingValuesPickerProps) {
                 type: 'button',
                 ref: trigger,
                 disabled: props.disabled,
+                'aria-label':
+                    props.triggerContent != null ? labels.open : undefined,
                 'aria-haspopup': 'dialog',
-                'aria-expanded': panel !== null,
-                'aria-controls': panel ? `${id}-panel` : undefined,
+                'aria-expanded': expanded,
+                'aria-controls': expanded ? `${id}-panel` : undefined,
                 onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+                    if (event.key === 'Escape' && native && active.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!event.repeat) close(active.current);
+                        return;
+                    }
                     // A held Enter can repeat after selection returns focus.
                     if (event.key === 'Enter' && event.repeat)
                         event.preventDefault();
@@ -367,9 +450,15 @@ function Picker(props: LoginExistingValuesPickerProps) {
                     else open();
                 },
             },
-            labels.open
+            props.triggerContent ?? labels.open
         ),
-        panel
+        portalContainer
+            ? h(
+                  Suspense,
+                  null,
+                  h(LoginDialogPortal, { container: portalContainer }, panel)
+              )
+            : panel
     );
 }
 
@@ -392,6 +481,7 @@ export function LoginExistingValuesPicker(
             fieldId,
             viewMode,
             props.disabled === true,
+            props.appearance,
         ]),
     });
 }

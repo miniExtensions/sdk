@@ -96,6 +96,7 @@
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
         "./react/text.css": "./dist/esm/react/text.css",
         "./react/single-line-text.css": "./dist/esm/react/single-line-text.css",
+        "./react/url-field.css": "./dist/esm/react/url-field.css",
         "./react/number.css": "./dist/esm/react/number.css",
         "./react/rating.css": "./dist/esm/react/rating.css",
         "./react/date.css": "./dist/esm/react/date.css",

@@ -247,10 +247,11 @@ The same natural `EmailField` also accepts `mode="controlled"` with
 scanner. Legacy binding props remain unchanged. Deferred editing requires an
 explicit current `EmailEditOwner`; the host still owns Save and persistence.
 
-[URL presentation](docs/ui.md#react-url-presentation) exports `UrlField`,
-`UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses
-the Text control and optional `@miniextensions/sdk/react/text.css` for manual
-single-line entry. URL text does not create links or grant navigation authority.
+[URL presentation](docs/ui.md#react-url-presentation) exports `UrlField` and the
+typed `renderUrlField` slot. Binding and slot callers keep literal text editing.
+The controlled Form modes support the resting link, editable URL input and
+read-only attachment, button or text presentation. They use
+`@miniextensions/sdk/react/url-field.css`.
 
 [Last Modified Time presentation](docs/ui.md#react-last-modified-time-presentation)
 exports `LastModifiedTimeField`, `LastModifiedTimeFieldProps`,

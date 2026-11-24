@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
-import { UrlField, FieldRenderer, renderUrlField } from '../src/react/index.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { createFormPageOwner } from '../src/forms/pages.js';
 import {
@@ -20,6 +19,11 @@ import type {
 import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import { loadedForm, formSaveOptions } from './formsFixtures.js';
 import { portalFixture, portalListPage, portalPage } from './portalFixtures.js';
+
+type UrlRuntime = typeof import('../src/react/index.js');
+let UrlField: UrlRuntime['UrlField'];
+let FieldRenderer: UrlRuntime['FieldRenderer'];
+let renderUrlField: UrlRuntime['renderUrlField'];
 
 async function fixture(
     t: TestContext,
@@ -52,6 +56,9 @@ async function fixture(
                     : window[key as keyof Window],
         });
     const { createRoot } = await import('react-dom/client');
+    ({ UrlField, FieldRenderer, renderUrlField } = await import(
+        '../src/react/index.js'
+    ));
     const container = window.document.createElement('div');
     window.document.body.append(container);
     const root = createRoot(container as unknown as HTMLElement);
@@ -176,6 +183,175 @@ async function fixture(
         },
     };
 }
+
+for (const enableInlineEdit of [false, true]) {
+    it(`controlled URL edits from its resting overlay without navigation (inline: ${enableInlineEdit})`, async (t) => {
+        const f = await fixture(t);
+        const writes: string[] = [];
+        let submits = 0;
+        const value = 'Example.test/Path?item=1';
+        const location = f.window.location.href;
+        await f.render(
+            h(
+                'section',
+                null,
+                h('form', {
+                    id: 'native-form',
+                    onSubmit: (event: { preventDefault(): void }) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                }),
+                h('label', { htmlFor: 'website' }, 'Website'),
+                h('p', { id: 'website-description' }, 'Use a site link.'),
+                h(UrlField, {
+                    mode: 'controlled',
+                    id: 'website',
+                    form: 'native-form',
+                    describedBy: 'website-description',
+                    invalid: true,
+                    value,
+                    enableInlineEdit,
+                    onChange: (next) => writes.push(next),
+                })
+            )
+        );
+
+        const input = f.input();
+        const overlay = f.container.querySelector('a');
+        assert.ok(overlay);
+        assert.equal(
+            overlay.getAttribute('href'),
+            'https://Example.test/Path?item=1'
+        );
+        assert.equal(overlay.getAttribute('aria-hidden'), 'true');
+        assert.equal(overlay.tabIndex, -1);
+        const click = new f.window.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            overlay.dispatchEvent(click);
+        });
+        assert.equal(click.defaultPrevented, true);
+        assert.equal(f.window.document.activeElement, input);
+        assert.equal(f.container.querySelector('a'), null);
+        assert.equal(input.type, 'url');
+        assert.equal(input.labels?.[0]?.textContent, 'Website');
+        assert.equal(input.form?.id, 'native-form');
+        assert.equal(input.getAttribute('aria-invalid'), 'true');
+        assert.equal(
+            input.getAttribute('aria-describedby'),
+            'website-description'
+        );
+        assert.equal(input.value, value);
+        assert.deepEqual(writes, []);
+        assert.equal(submits, 0);
+        assert.equal(f.window.location.href, location);
+
+        const next = 'https://example.test/Next';
+        await f.edit(next);
+        assert.deepEqual(writes, enableInlineEdit ? [] : [next]);
+        await act(async () => input.blur());
+        assert.deepEqual(writes, [next]);
+        if (!enableInlineEdit)
+            assert.ok(f.container.querySelector('a[aria-hidden="true"]'));
+        assert.equal(submits, 0);
+    });
+}
+
+it('a dirty URL writer settles only for the same generation and Clear writes one empty string', async (t) => {
+    const f = await fixture(t);
+    const previous: string[] = [];
+    const current: string[] = [];
+    const next = (owner: object, onChange: (value: string) => void) =>
+        h(UrlField, {
+            mode: 'controlled',
+            id: 'website',
+            value: 'https://example.test',
+            enableInlineEdit: true,
+            initialMobile: true,
+            owner: { token: owner, isCurrent: () => true },
+            onChange,
+        });
+    const owner = {};
+    const writeCurrent = (value: string) => current.push(value);
+    await f.render(next({}, (value) => previous.push(value)));
+    await act(async () => f.input().focus());
+    await f.edit('https://example.test/obsolete');
+    await f.render(next(owner, writeCurrent));
+    assert.deepEqual(previous, []);
+    assert.deepEqual(current, []);
+    assert.equal(f.input().value, 'https://example.test');
+
+    const clear = f.container.querySelector('button[aria-label="Clear"]');
+    assert.ok(clear instanceof f.window.HTMLButtonElement);
+    assert.equal(clear.getAttribute('type'), 'button');
+    await act(async () => clear.click());
+    assert.deepEqual(current, ['']);
+
+    await act(async () => f.input().focus());
+    await f.edit('https://example.test/retired');
+    await f.render(
+        h(UrlField, {
+            mode: 'readOnly',
+            value: 'Display value',
+            language: 'en',
+        })
+    );
+    assert.deepEqual(current, ['']);
+    assert.equal(f.container.textContent, 'Display value');
+
+    await f.render(next(owner, writeCurrent));
+    await act(async () => f.input().focus());
+    await f.edit('https://example.test/settled');
+    await f.render(null);
+    assert.deepEqual(current, ['', 'https://example.test/settled']);
+});
+
+it('read-only URL renders an HTTP attachment before a button and preserves invalid and text fallbacks', async (t) => {
+    const f = await fixture(t);
+    const readOnly = (
+        value: string | null,
+        displayAsAttachments: boolean,
+        displayAsButton: boolean
+    ) =>
+        h(UrlField, {
+            mode: 'readOnly',
+            language: 'en',
+            value,
+            displayAsAttachments,
+            displayAsButton,
+            validButtonLabel: 'Open the website',
+            invalidButtonLabel: 'URL unavailable',
+        });
+    await f.render(readOnly('https://example.invalid/report.pdf', true, true));
+    assert.equal(
+        f.container.querySelector('.mx-sdk-created-time-url-button'),
+        null
+    );
+    assert.ok(f.container.querySelector('ul[aria-label="Attachments"]'));
+    assert.equal(f.container.querySelector('input'), null);
+
+    await f.render(readOnly('mailto:qa@example.test', true, true));
+    const link = f.container.querySelector('a.mx-sdk-created-time-url-button');
+    assert.equal(link?.getAttribute('href'), 'mailto:qa@example.test');
+    assert.equal(link?.getAttribute('target'), '_blank');
+    assert.equal(link?.getAttribute('rel'), 'noreferrer');
+    assert.equal(link?.textContent, 'Open the website');
+
+    for (const value of [null, '', 'javascript:alert(1)']) {
+        await f.render(readOnly(value, true, true));
+        assert.equal(f.container.querySelector('a[href]'), null);
+        const button = f.container.querySelector('button');
+        assert.ok(button?.disabled);
+        assert.equal(button.textContent, 'URL unavailable');
+    }
+
+    await f.render(readOnly('A literal value', true, false));
+    assert.equal(f.container.textContent, 'A literal value');
+    assert.equal(f.container.querySelector('button,a[href],input'), null);
+});
 
 it('binding and Form slot preserve literal URL drafts without normalization, activation or native URL validation', async (t) => {
     const f = await fixture(t, {

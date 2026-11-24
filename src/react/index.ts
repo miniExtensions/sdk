@@ -68,6 +68,11 @@ import {
     type CompletePhoneNumberFieldProps,
 } from './CompletePhoneNumberField.js';
 import {
+    ConfiguredUrlField,
+    type ControlledUrlFieldProps,
+    type ReadOnlyUrlFieldProps,
+} from './ControlledUrlField.js';
+import {
     ControlledEmailField,
     type ControlledEmailFieldProps,
 } from './ControlledEmailField.js';
@@ -495,6 +500,11 @@ export {
     type PhoneNumberFieldOptions,
 } from './PhoneNumberField.js';
 export { renderUrlField, type UrlFieldOptions } from './UrlField.js';
+export type {
+    ControlledUrlFieldProps,
+    ReadOnlyUrlFieldProps,
+    UrlEditOwner,
+} from './ControlledUrlField.js';
 export { renderEmailField, type EmailFieldOptions } from './EmailField.js';
 import {
     CheckboxControl,
@@ -1647,10 +1657,25 @@ export function PhoneNumberField(props: PhoneNumberComponentProps): ReactNode {
         ? createElement(TextField, props)
         : createElement(CompletePhoneNumberField, props);
 }
-/** URL drafts stay literal text and grant no navigation authority. */
+/** Existing binding callers continue to edit literal text. */
 export type UrlFieldProps = TextFieldProps;
-export function UrlField(props: UrlFieldProps): ReactNode {
-    return createElement(TextField, props);
+type BoundUrlComponentProps = UrlFieldProps & { mode?: never };
+type UrlComponentProps =
+    | BoundUrlComponentProps
+    | ControlledUrlFieldProps
+    | ReadOnlyUrlFieldProps;
+
+export function UrlField(props: BoundUrlComponentProps): ReactNode;
+export function UrlField(props: ControlledUrlFieldProps): ReactNode;
+export function UrlField(props: ReadOnlyUrlFieldProps): ReactNode;
+export function UrlField(props: UrlComponentProps): ReactNode;
+export function UrlField(props: UrlComponentProps): ReactNode {
+    return createElement(
+        ConfiguredUrlField,
+        props.mode == null
+            ? { mode: 'binding', content: createElement(TextField, props) }
+            : props
+    );
 }
 /** Binding callers retain their literal text contract. Controlled callers use
  * the complete email input; page/server owners still validate and save. */

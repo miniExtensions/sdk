@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const title = 'Projects Portal';
+const wrappedTitle = 'Read-only Portal Chart voYrEfA8SQ_G 0 0';
+const nativeTitleFont = ['18px', '700', '28px'];
 const open = 'Open navigation menu';
 const legacyIcon =
     'M3 6.75A.75.75 0 0 1 3.75 6h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 6.75ZM3 12a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 12Zm0 5.25a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z';
@@ -99,7 +102,7 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
         await page
             .getByRole('heading', { name: '<Customer Portal>' })
             .waitFor();
-        const configure = (useIcon) =>
+        const configure = (useIcon, headingTitle = title) =>
             page
                 .evaluate(
                     ({ useIcon, title }) => {
@@ -116,7 +119,7 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
                             },
                         });
                     },
-                    { useIcon, title }
+                    { useIcon, title: headingTitle }
                 )
                 .then(() =>
                     page.waitForFunction(
@@ -151,8 +154,14 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
             if (width === 1024) {
                 assert.equal(after.button, null);
                 assert.equal(after.icon, null);
-                assert.deepEqual(after.header, before.header);
-                assert.deepEqual(after.heading, before.heading);
+                assert.deepEqual(
+                    after.header.slice(0, 3),
+                    before.header.slice(0, 3)
+                );
+                assert.equal(after.heading[0] - before.heading[0], 8);
+                assert.equal(after.heading[1], before.heading[1]);
+                assert.deepEqual(before.titleFont, ['20px', '700', 'normal']);
+                assert.deepEqual(after.titleFont, nativeTitleFont);
                 const nav = page.getByRole('navigation', {
                     name: 'Portal navigation',
                 });
@@ -240,9 +249,68 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
                 escapeReturnedFocus: true,
             });
         }
+        const inter = readFileSync(
+            new URL('../test/fixtures/inter/inter-latin.woff2', import.meta.url)
+        ).toString('base64');
+        await page.addStyleTag({
+            content: `@font-face{font-family:Inter;src:url(data:font/woff2;base64,${inter}) format('woff2');font-weight:100 900}body{font-family:Inter,sans-serif}`,
+        });
+        const loadedFaces = await page.evaluate(async () => {
+            const faces = await document.fonts.load('700 18px Inter');
+            return faces.map((face) => face.family);
+        });
+        assert.deepEqual(loadedFaces, ['Inter']);
+        const wrappedTitleCases = [];
+        for (const width of [375, 1023, 1024, 1280]) {
+            await page.setViewportSize({
+                width,
+                height: width === 375 ? 780 : 720,
+            });
+            await configure(true, wrappedTitle);
+            const heading = header.getByRole('heading', { name: wrappedTitle });
+            await heading.waitFor();
+            const measured = await measure(header);
+            assert.deepEqual(measured.titleFont, nativeTitleFont);
+            if (width >= 1024) {
+                // Native PortalHeader.tsx at 66e03254 uses a 24px
+                // inline inset inside the desktop sidebar divider.
+                assert.deepEqual(measured.heading, [24, 16, 239, 56]);
+            } else {
+                assert.deepEqual(measured.heading.slice(0, 2), [
+                    60,
+                    width === 375 ? 8 : 16,
+                ]);
+            }
+            const titleLayout = await heading.evaluate((node) => {
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                const lines = [...range.getClientRects()].map(
+                    ({ x, y, width, height }) => [x, y, width, height]
+                );
+                const style = getComputedStyle(node.closest('header'));
+                return {
+                    lines,
+                    headerPadding: [
+                        style.paddingTop,
+                        style.paddingInlineStart,
+                        style.paddingInlineEnd,
+                    ],
+                };
+            });
+            assert.equal(titleLayout.lines.length, width === 1023 ? 1 : 2);
+            await header.screenshot({
+                path: join(output, `${label}-sidebar-title-${width}.png`),
+            });
+            wrappedTitleCases.push({
+                width,
+                heading: measured.heading,
+                titleFont: measured.titleFont,
+                ...titleLayout,
+            });
+        }
         assert.deepEqual(errors, []);
         assert.deepEqual(refused, []);
-        return { cases, errors, refused };
+        return { cases, wrappedTitleCases, errors, refused };
     } finally {
         await context.close();
     }

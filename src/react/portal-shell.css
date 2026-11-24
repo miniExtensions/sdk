@@ -77,6 +77,22 @@
     margin: 0;
     font-size: 1.25rem;
 }
+.mx-sdk-portal-shell--sidebar-icon-toggle
+    > .mx-sdk-portal-header
+    .mx-sdk-portal-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.75rem;
+}
+@media (min-width: 1024px) {
+    .mx-sdk-portal-shell--sidebar-icon-toggle.mx-sdk-portal-shell--layout-actions
+        > .mx-sdk-portal-header
+        > .mx-sdk-portal-brand
+        > :only-child
+        > .mx-sdk-portal-title:only-child {
+        margin-inline: 0.5rem;
+    }
+}
 .mx-sdk-portal-logo {
     max-height: 4rem;
     max-width: 5rem;
@@ -321,13 +337,6 @@
         border-radius: 0;
         background: transparent;
         color: #374151;
-    }
-    .mx-sdk-portal-shell--sidebar-icon-toggle
-        > .mx-sdk-portal-header
-        .mx-sdk-portal-title {
-        font-size: 1.125rem;
-        font-weight: 700;
-        line-height: 1.75rem;
     }
     .mx-sdk-portal-navigation-wrap {
         display: none;

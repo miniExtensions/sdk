@@ -3904,6 +3904,10 @@ export {
     type PortalGridEmptyCellProps,
 } from './PortalGridEmptyCell.js';
 export {
+    PortalGridReadonlyLinkedPills,
+    type PortalGridReadonlyLinkedPillsProps,
+} from './PortalGridReadonlyLinkedPills.js';
+export {
     PortalGridRatingCell,
     type PortalGridRatingCellProps,
     type PortalGridRatingCellEditor,

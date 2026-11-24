@@ -12,6 +12,8 @@ import {
     useSyncExternalStore,
     type FormEvent,
     type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
     type ReactElement,
     type ReactNode,
     type Ref,
@@ -393,10 +395,17 @@ type DialogChromeProps = {
     primaryMode?: 'next' | 'review';
     primarySaving?: boolean;
     beforePrimary?: ReactNode;
+    hostForm?: boolean;
+    backdrop?: {
+        onPointerDown(event: PointerEvent<HTMLDialogElement>): void;
+        onPointerUp(event: PointerEvent<HTMLDialogElement>): void;
+        onPointerCancel(): void;
+        onClick(event: MouseEvent<HTMLDialogElement>): void;
+    };
     dismiss(): void;
     keep(): void;
     discard(): void;
-    save(): void;
+    save?(): void;
 };
 
 function LinkedChildDialogChrome({
@@ -416,6 +425,8 @@ function LinkedChildDialogChrome({
     primaryMode,
     primarySaving = false,
     beforePrimary,
+    hostForm = false,
+    backdrop,
     dismiss,
     keep,
     discard,
@@ -437,7 +448,7 @@ function LinkedChildDialogChrome({
                     !event.defaultPrevented && !confirm && !saveDisabled;
                 event.preventDefault();
                 event.stopPropagation();
-                if (admitted) save();
+                if (admitted) save?.();
             },
         });
     const body = h(
@@ -448,8 +459,10 @@ function LinkedChildDialogChrome({
         error != null && h('p', { role: 'alert' }, error),
         errorAction
     );
-    let primary: ReactElement;
-    if (primaryFormId && primaryMode === 'next') {
+    let primary: ReactElement | null;
+    if (hostForm) {
+        primary = null;
+    } else if (primaryFormId && primaryMode === 'next') {
         primary = h(FormPageNavigationButton, {
             direction: 'next',
             type: 'submit',
@@ -478,7 +491,7 @@ function LinkedChildDialogChrome({
             labels.save
         );
     }
-    const actions = h(Fragment, null, beforePrimary, primary);
+    const actions = hostForm ? null : h(Fragment, null, beforePrimary, primary);
     return h(
         'dialog',
         {
@@ -498,9 +511,10 @@ function LinkedChildDialogChrome({
                 else dismiss();
             },
             onSubmit: (event: FormEvent<HTMLDialogElement>) => {
-                event.preventDefault();
+                if (!hostForm) event.preventDefault();
                 event.stopPropagation();
             },
+            ...backdrop,
             onKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => {
                 if (
                     event.key !== 'Tab' ||
@@ -553,7 +567,7 @@ function LinkedChildDialogChrome({
                       body
                   )
                 : body,
-            customized
+            actions && customized
                 ? h(
                       'div',
                       { className: 'mx-sdk-linked-child-create__actions' },
@@ -676,11 +690,10 @@ function isSavedUnlinked(
     );
 }
 
-/** Presents an accepted native Create using the same dialog chrome and host-owned draft. */
-export function BorrowedFormLinkedChildCreateDialog<View>(
-    props: BorrowedFormLinkedChildCreateDialogProps<View>
-): ReactElement | null {
-    const { owner, opening } = props;
+function useBorrowedDialogControlGeneration(
+    owner: object,
+    opening: BorrowedFormLinkedChildCreateOpening
+): number {
     const activationOwner = useMemo(
         () => ({}),
         [owner, opening.identity, opening.opener]
@@ -694,6 +707,18 @@ export function BorrowedFormLinkedChildCreateDialog<View>(
         controlGeneration++;
         setControls({ owner: activationOwner, generation: controlGeneration });
     }
+    return controlGeneration;
+}
+
+/** Presents an accepted native Create using the same dialog chrome and host-owned draft. */
+export function BorrowedFormLinkedChildCreateDialog<View>(
+    props: BorrowedFormLinkedChildCreateDialogProps<View>
+): ReactElement | null {
+    const { owner, opening } = props;
+    const controlGeneration = useBorrowedDialogControlGeneration(
+        owner,
+        opening
+    );
     const store = useMemo(
         () => ({
             subscribe: (notify: () => void) => owner.subscribe(notify),
@@ -986,4 +1011,276 @@ function BorrowedCreatePresentation<View>({
         },
         save: activatePrimary,
     });
+}
+
+export type BorrowedFormLinkedChildEditOpening =
+    BorrowedFormLinkedChildCreateOpening;
+
+export type BorrowedFormLinkedChildEditRef = BorrowedFormLinkedChildCreateRef;
+
+export type BorrowedFormLinkedChildEditSnapshot =
+    | Readonly<{
+          ref: BorrowedFormLinkedChildEditRef;
+          phase: 'presented';
+          dirty: boolean;
+          canDismiss: boolean;
+      }>
+    | Readonly<{
+          ref: BorrowedFormLinkedChildEditRef;
+          /** Closed means the host acknowledged a terminal action for this opening. */
+          phase: 'closed' | 'retired';
+      }>;
+
+export type BorrowedFormLinkedChildEditOwner = Readonly<{
+    /** Keep the snapshot stable until the host publishes a change. */
+    getSnapshot(): BorrowedFormLinkedChildEditSnapshot | null;
+    subscribe(notify: () => void): () => void;
+    /** Commit the exact Close without presenting another confirmation. */
+    dismiss(
+        expected: BorrowedFormLinkedChildEditRef
+    ): BorrowedFormLinkedChildCreateDismissOutcome;
+}>;
+
+export type BorrowedFormLinkedChildEditDialogProps = Readonly<{
+    owner: BorrowedFormLinkedChildEditOwner;
+    opening: BorrowedFormLinkedChildEditOpening;
+    /** The native fields and their original form and Save footer. */
+    children: ReactNode;
+    labels?: Partial<Omit<typeof defaultLabels, 'save' | 'incomplete'>>;
+    className?: string;
+    closeIcon?: ReactNode;
+}>;
+
+/** Presents an accepted existing child without owning the host's read, draft or Save. */
+export function BorrowedFormLinkedChildEditDialog({
+    owner,
+    opening,
+    children,
+    labels,
+    className,
+    closeIcon,
+}: BorrowedFormLinkedChildEditDialogProps): ReactElement | null {
+    const controlGeneration = useBorrowedDialogControlGeneration(
+        owner,
+        opening
+    );
+    const store = useMemo(
+        () => ({
+            subscribe: (notify: () => void) => owner.subscribe(notify),
+            read: () => owner.getSnapshot(),
+        }),
+        [owner]
+    );
+    const view = useSyncExternalStore(store.subscribe, store.read, store.read);
+    if (
+        view?.phase !== 'presented' ||
+        view.ref.opening !== opening.identity ||
+        !opening.isCurrent()
+    )
+        return null;
+    return h(
+        Suspense,
+        { fallback: null },
+        h(
+            LinkedChildDialogPortal,
+            { container: opening.opener.ownerDocument.body },
+            h(BorrowedEditPresentation, {
+                key: controlGeneration,
+                owner,
+                opening,
+                view,
+                labels,
+                className,
+                closeIcon,
+                children,
+            })
+        )
+    );
+}
+
+function BorrowedEditPresentation({
+    owner,
+    opening,
+    view,
+    labels: suppliedLabels,
+    className,
+    closeIcon,
+    children,
+}: BorrowedFormLinkedChildEditDialogProps & {
+    view: Extract<BorrowedFormLinkedChildEditSnapshot, { phase: 'presented' }>;
+}): ReactElement {
+    const labels = {
+        ...defaultLabels,
+        title: 'Edit linked record',
+        discardQuestion:
+            'Close without saving? Reopen this record to continue editing.',
+        ...suppliedLabels,
+    };
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
+    const keepEditing = useRef<HTMLButtonElement>(null);
+    const [question, setQuestion] =
+        useState<BorrowedFormLinkedChildEditRef | null>(null);
+    const backdropPress = useRef<{
+        pointerId: number;
+        expected: BorrowedFormLinkedChildEditRef;
+        releasedOutside: boolean;
+    } | null>(null);
+    const { identity, opener } = opening;
+    const committedOpening = useRef(opening);
+    const session = useMemo(
+        () => ({ live: false, closing: false, closed: false }),
+        [identity, opener, owner]
+    );
+    const confirm =
+        question?.opening === identity &&
+        question.revision === view.ref.revision &&
+        view.canDismiss;
+
+    useCommitEffect(() => {
+        committedOpening.current = opening;
+    }, [opening]);
+
+    useCommitEffect(() => {
+        const node = dialogRef.current;
+        if (!node || !committedOpening.current.isCurrent()) return;
+        const document = node.ownerDocument;
+        if (document.activeElement === opener) opener.blur();
+        node.showModal();
+        session.live = true;
+        closeButton.current?.focus({ preventScroll: true });
+        return () => {
+            session.live = false;
+            const active = document.activeElement;
+            const latest = owner.getSnapshot();
+            node.close();
+            if (
+                (active === document.body || node.contains(active)) &&
+                latest?.phase === 'closed' &&
+                latest.ref.opening === identity &&
+                committedOpening.current.identity === identity &&
+                committedOpening.current.isCurrent() &&
+                opener.isConnected &&
+                !opener.matches(':disabled') &&
+                !opener.closest('[hidden],[inert]') &&
+                isVisible(opener)
+            )
+                opener.focus({ preventScroll: true });
+        };
+    }, [identity, opener, owner, session]);
+
+    const wasConfirming = useRef(false);
+    useCommitEffect(() => {
+        if (confirm) keepEditing.current?.focus({ preventScroll: true });
+        else if (wasConfirming.current && view.canDismiss)
+            closeButton.current?.focus({ preventScroll: true });
+        wasConfirming.current = confirm;
+    }, [confirm, view.canDismiss]);
+
+    const canDismiss = (expected: BorrowedFormLinkedChildEditRef): boolean => {
+        if (
+            !session.live ||
+            session.closing ||
+            session.closed ||
+            !dialogRef.current?.open ||
+            committedOpening.current.identity !== expected.opening ||
+            !committedOpening.current.isCurrent()
+        )
+            return false;
+        const actual = owner.getSnapshot();
+        return (
+            actual?.phase === 'presented' &&
+            actual.canDismiss &&
+            actual.ref.opening === expected.opening &&
+            actual.ref.revision === expected.revision
+        );
+    };
+
+    const close = (expected: BorrowedFormLinkedChildEditRef) => {
+        if (!canDismiss(expected)) return;
+        session.closing = true;
+        try {
+            session.closed = owner.dismiss(expected) === 'closed';
+        } finally {
+            session.closing = false;
+        }
+    };
+    const dismiss = () => {
+        if (confirm || !canDismiss(view.ref)) return;
+        if (view.dirty) setQuestion(view.ref);
+        else close(view.ref);
+    };
+    return h(LinkedChildDialogChrome, {
+        labels,
+        className,
+        closeIcon,
+        dialogRef,
+        closeButton,
+        keepEditing,
+        fields: children,
+        error: null,
+        confirm,
+        closeDisabled: !view.canDismiss,
+        saveDisabled: true,
+        hostForm: true,
+        backdrop: {
+            onPointerDown(event) {
+                backdropPress.current =
+                    !confirm &&
+                    event.isTrusted &&
+                    event.isPrimary &&
+                    event.button === 0 &&
+                    hitEditBackdrop(event)
+                        ? {
+                              pointerId: event.pointerId,
+                              expected: view.ref,
+                              releasedOutside: false,
+                          }
+                        : null;
+            },
+            onPointerUp(event) {
+                const press = backdropPress.current;
+                if (press?.pointerId !== event.pointerId) return;
+                if (event.isTrusted && hitEditBackdrop(event))
+                    press.releasedOutside = true;
+                else backdropPress.current = null;
+            },
+            onPointerCancel() {
+                backdropPress.current = null;
+            },
+            onClick(event) {
+                const press = backdropPress.current;
+                backdropPress.current = null;
+                if (
+                    !press?.releasedOutside ||
+                    !event.isTrusted ||
+                    !hitEditBackdrop(event) ||
+                    !canDismiss(press.expected) ||
+                    ('pointerId' in event.nativeEvent &&
+                        event.nativeEvent.pointerId !== press.pointerId)
+                )
+                    return;
+                event.stopPropagation();
+                dismiss();
+            },
+        },
+        dismiss,
+        keep: () => setQuestion(null),
+        discard: () => {
+            if (!confirm || !question) return;
+            setQuestion(null);
+            close(question);
+        },
+    });
+}
+
+function hitEditBackdrop(event: MouseEvent<HTMLDialogElement>): boolean {
+    if (event.target !== event.currentTarget) return false;
+    const rect = event.currentTarget.getBoundingClientRect();
+    return (
+        event.clientX < rect.left ||
+        event.clientX >= rect.right ||
+        event.clientY < rect.top ||
+        event.clientY >= rect.bottom
+    );
 }

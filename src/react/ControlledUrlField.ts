@@ -29,7 +29,7 @@ export type UrlEditOwner = {
     isCurrent(): boolean;
 };
 
-export type ControlledUrlFieldProps = {
+type ControlledUrlPresentation = {
     mode: 'controlled';
     binding?: never;
     render?: never;
@@ -37,8 +37,6 @@ export type ControlledUrlFieldProps = {
     onChange(value: string): void;
     /** Defaults to the same writer as typing and Clear. */
     onScan?(value: string): void;
-    owner?: UrlEditOwner;
-    enableInlineEdit?: boolean;
     disabled?: boolean;
     id?: string;
     form?: string;
@@ -56,6 +54,12 @@ export type ControlledUrlFieldProps = {
         'fieldType' | 'setValue' | 'ownerKey' | 'readOnly' | 'isCurrent'
     >;
 };
+
+export type ControlledUrlFieldProps = ControlledUrlPresentation &
+    (
+        | { enableInlineEdit?: false; owner?: UrlEditOwner }
+        | { enableInlineEdit: true; owner: UrlEditOwner }
+    );
 
 type ReadOnlyUrlGallery = Omit<
     AttachmentGalleryProps,
@@ -93,6 +97,9 @@ function UrlEditor(props: EditorProps): ReactNode {
     const [focused, setFocused] = useState(false);
     const [lease] = useState(() => ({ mounted: false }));
     const committed = useRef<EditorProps | null>(null);
+    const disabled =
+        props.disabled === true ||
+        (props.enableInlineEdit === true && props.owner == null);
     useCommittedEffect(() => {
         committed.current = props;
     });
@@ -112,6 +119,7 @@ function UrlEditor(props: EditorProps): ReactNode {
         if (
             !current ||
             current.disabled ||
+            (current.enableInlineEdit === true && current.owner == null) ||
             !props.isCurrentGeneration() ||
             (!lease.mounted && !settling)
         )
@@ -139,7 +147,7 @@ function UrlEditor(props: EditorProps): ReactNode {
         autoStartCamera:
             props.allowAutoStart && props.scanner?.autoStartCamera === true,
         fieldType: 'url',
-        readOnly: props.disabled,
+        readOnly: disabled,
         ownerKey: lease,
         isCurrent: () =>
             props.isCurrentGeneration() &&
@@ -163,7 +171,7 @@ function UrlEditor(props: EditorProps): ReactNode {
             'div',
             {
                 className: 'mx-sdk-url-control relative flex w-full',
-                'data-disabled': props.disabled === true,
+                'data-disabled': disabled,
             },
             h(CompleteClearableTextInput, {
                 ref: input,
@@ -172,7 +180,7 @@ function UrlEditor(props: EditorProps): ReactNode {
                 type: 'url',
                 autoComplete: 'off',
                 value,
-                disabled: props.disabled,
+                disabled,
                 placeholder: props.placeholder,
                 clearLabel: props.clearLabel ?? 'Clear',
                 initialMobile: props.initialMobile ?? false,
@@ -217,8 +225,6 @@ function UrlEditor(props: EditorProps): ReactNode {
                             event.preventDefault();
                             input.current?.focus();
                         },
-                        onAuxClick: (event: MouseEvent<HTMLAnchorElement>) =>
-                            event.preventDefault(),
                     },
                     value
                 ),

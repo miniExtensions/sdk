@@ -1825,11 +1825,13 @@ native entry, clearing, remounts, inert text and enclosing-form Enter behavior.
 Simulated composition does not certify real OS input methods.
 
 For a host-controlled Form, use `UrlField` with `mode="controlled"`, a `value`,
-and an `onChange` callback. The decorative resting link focuses the native URL
-input without navigating. The host can supply an existing field `id`, `form`,
+and an `onChange` callback. Primary click on the resting link focuses the native
+URL input without navigating. A middle-click opens a valid link in a new tab.
+The host can supply an existing field `id`, `form`,
 `describedBy` and `invalid` state. Deferred edits use the same clearable input
-lifecycle as other native Form fields. Supply `owner` to bind deferred changes
-and scanner values to a current host generation. The host owns Save.
+lifecycle as other native Form fields. Deferred editing requires an `owner`
+whose token identifies the current record. This also keeps scanner values with
+the current host. The host owns Save.
 
 Use `mode="readOnly"` for the Form display path. With the respective options
 enabled, a valid HTTP attachment takes precedence over a URL button, followed by

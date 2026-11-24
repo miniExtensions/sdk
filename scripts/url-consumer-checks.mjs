@@ -57,6 +57,8 @@ urlElement(UrlField, readOnlyUrl);
 urlElement(UrlField, {...controlledUrl, binding: urlBinding});
 // @ts-expect-error Read-only presentation accepts no writer.
 urlElement(UrlField, {...readOnlyUrl, onChange() {}});
+// @ts-expect-error Deferred editing requires a current record owner.
+urlElement(UrlField, {mode: 'controlled', enableInlineEdit: true, value: '', onChange() {}});
 `;
 
 /** Installed ESM/CJS APIs with synthetic drafts; no navigation, requests or Save. */

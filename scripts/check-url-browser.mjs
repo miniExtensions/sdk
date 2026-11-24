@@ -5,12 +5,15 @@ import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { basename, resolve, join } from 'node:path';
 
 const output = resolve(process.argv[2] ?? 'dist/url-browser');
 mkdirSync(output, { recursive: true });
 const bundle = await build({
-    entryPoints: ['examples/react-url/main.ts'],
+    entryPoints: [
+        'examples/react-url/main.ts',
+        'examples/react-url/controlled.ts',
+    ],
     bundle: true,
     platform: 'browser',
     format: 'esm',
@@ -19,16 +22,21 @@ const bundle = await build({
     write: false,
 });
 const assets = new Map(
-    bundle.outputFiles.map((file) => [
-        '/' + file.path.split('/').at(-1),
-        file.contents,
-    ])
+    bundle.outputFiles.map((file) => ['/' + basename(file.path), file.contents])
 );
 const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname;
     if (path === '/') {
         response.setHeader('content-type', 'text/html');
         response.end(readFileSync('examples/react-url/index.html'));
+    } else if (path === '/controlled') {
+        response.setHeader('content-type', 'text/html');
+        response.end(
+            '<title>Controlled URL proof</title><link rel="stylesheet" href="/controlled.css"><div id="app"></div><script type="module" src="/controlled.js"></script>'
+        );
+    } else if (path === '/url-destination') {
+        response.setHeader('content-type', 'text/html');
+        response.end('<h1>Local URL destination</h1>');
     } else if (assets.has(path)) {
         response.setHeader(
             'content-type',
@@ -513,6 +521,60 @@ try {
     assert.equal(await first.count(), 0);
     assert.equal(await writes(), afterExternal);
     await inert();
+    const controlled = await context.newPage();
+    controlled.on('pageerror', (error) => errors.push(error.message));
+    await controlled.goto(origin + '/controlled');
+    const controlledUrl = controlled.getByRole('textbox', {
+        name: 'Controlled website',
+    });
+    const resting = controlled.locator('a[aria-hidden="true"]');
+    const destination = origin + '/url-destination';
+    const changes = () =>
+        controlled.locator('#controlled-writes').textContent();
+    const submitCount = () =>
+        controlled.locator('#controlled-submits').textContent();
+    await resting.waitFor();
+    assert.equal(await resting.getAttribute('href'), destination);
+    const opened = [];
+    const onOpen = (popup) => opened.push(popup);
+    context.on('page', onOpen);
+    const [destinationPage] = await Promise.all([
+        context.waitForEvent('page'),
+        resting.click({ button: 'middle' }),
+    ]);
+    await destinationPage
+        .getByRole('heading', { name: 'Local URL destination' })
+        .waitFor();
+    assert.equal(destinationPage.url(), destination);
+    assert.equal(opened.length, 1);
+    assert.equal(await controlledUrl.inputValue(), destination);
+    assert.equal(await changes(), '[]');
+    assert.equal(await submitCount(), '0');
+    await destinationPage.close();
+
+    await resting.click();
+    assert.equal(
+        await controlledUrl.evaluate((node) => node === document.activeElement),
+        true
+    );
+    assert.equal(await controlledUrl.inputValue(), destination);
+    assert.equal(opened.length, 1);
+    assert.equal(controlled.url(), origin + '/controlled');
+    assert.equal(await changes(), '[]');
+    await controlledUrl.fill('https://example.test/unsaved-a');
+    await controlled.getByRole('button', { name: 'Show record B' }).click();
+    assert.equal(
+        await controlledUrl.inputValue(),
+        'https://example.test/record-b'
+    );
+    assert.equal(await changes(), '[]');
+    await controlledUrl.fill('https://example.test/accepted-b');
+    await controlled.getByRole('button', { name: 'After URL' }).click();
+    assert.equal(await changes(), '["b: https://example.test/accepted-b"]');
+    assert.equal(await submitCount(), '0');
+    assert.deepEqual(transports, []);
+    context.off('page', onOpen);
+    await controlled.close();
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     writeFileSync(
@@ -530,6 +592,12 @@ try {
                 fetchOrXhrRequests: 0,
                 rawValues,
                 nativeEnterHosts,
+                controlled: {
+                    deliberateMiddleClickTabs: opened.length,
+                    recordSwitchWrites: 0,
+                    currentOwnerWrites: 1,
+                    submits: 0,
+                },
                 compositionScope:
                     'Synthetic composition only; untrusted keys do not exercise native submission or certify OS IMEs.',
                 checks: [

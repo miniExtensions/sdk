@@ -205,6 +205,7 @@ for (const enableInlineEdit of [false, true]) {
                     invalid: true,
                     value,
                     enableInlineEdit,
+                    owner: { token: {}, isCurrent: () => true },
                     onChange: (next) => writes.push(next),
                 })
             )
@@ -257,11 +258,15 @@ it('a dirty URL writer settles only for the same generation and Clear writes one
     const f = await fixture(t);
     const previous: string[] = [];
     const current: string[] = [];
-    const next = (owner: object, onChange: (value: string) => void) =>
+    const next = (
+        owner: object,
+        value: string,
+        onChange: (value: string) => void
+    ) =>
         h(UrlField, {
             mode: 'controlled',
             id: 'website',
-            value: 'https://example.test',
+            value,
             enableInlineEdit: true,
             initialMobile: true,
             owner: { token: owner, isCurrent: () => true },
@@ -269,13 +274,16 @@ it('a dirty URL writer settles only for the same generation and Clear writes one
         });
     const owner = {};
     const writeCurrent = (value: string) => current.push(value);
-    await f.render(next({}, (value) => previous.push(value)));
+    await f.render(
+        next({}, 'https://example.test/first', (value) => previous.push(value))
+    );
     await act(async () => f.input().focus());
     await f.edit('https://example.test/obsolete');
-    await f.render(next(owner, writeCurrent));
+    const accepted = 'https://example.test/second';
+    await f.render(next(owner, accepted, writeCurrent));
     assert.deepEqual(previous, []);
     assert.deepEqual(current, []);
-    assert.equal(f.input().value, 'https://example.test');
+    assert.equal(f.input().value, accepted);
 
     const clear = f.container.querySelector('button[aria-label="Clear"]');
     assert.ok(clear instanceof f.window.HTMLButtonElement);
@@ -295,11 +303,35 @@ it('a dirty URL writer settles only for the same generation and Clear writes one
     assert.deepEqual(current, ['']);
     assert.equal(f.container.textContent, 'Display value');
 
-    await f.render(next(owner, writeCurrent));
+    await f.render(next(owner, accepted, writeCurrent));
     await act(async () => f.input().focus());
     await f.edit('https://example.test/settled');
     await f.render(null);
     assert.deepEqual(current, ['', 'https://example.test/settled']);
+});
+
+it('an untyped deferred URL without an owner disables its input and scanner', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const props = {
+        mode: 'controlled' as const,
+        enableInlineEdit: true as const,
+        value: 'https://example.test/accepted',
+        onChange: (value: string) => writes.push(value),
+        owner: { token: {}, isCurrent: () => true },
+        scanner: {
+            enableQRCodeScannerForFormField: true,
+            autoStartCamera: true,
+        },
+    };
+    // Exercise the runtime boundary for JavaScript callers.
+    Reflect.deleteProperty(props, 'owner');
+    await f.render(h(UrlField, props));
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.container.querySelector('button'), null);
+    await f.edit('https://example.test/forbidden');
+    await f.render(null);
+    assert.deepEqual(writes, []);
 });
 
 it('read-only URL renders an HTTP attachment before a button and preserves invalid and text fallbacks', async (t) => {

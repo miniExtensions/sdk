@@ -27,6 +27,7 @@ const filterCases = [
     'reactPortalVisitorQuickFilter.test.ts',
 ];
 const viewButtonsCase = 'reactPortalVisitorViewButtons.test.ts';
+const queryCase = 'portalVisitorQuery.test.ts';
 const fixture = 'fixtures/htmlPresentationFixture.ts';
 const quickFilterFixture = 'fixtures/portalVisitorQuickFilterFixture.ts';
 const profiles = [
@@ -118,9 +119,15 @@ void createElement(PortalVisitorViewButtons, props);
 function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
     const archive = resolve(archivePath);
     const cases = includeQuery
-        ? [...sortCases, ...searchCases, viewButtonsCase, ...filterCases]
+        ? [
+              ...sortCases,
+              ...searchCases,
+              viewButtonsCase,
+              ...filterCases,
+              queryCase,
+          ]
         : sortCases;
-    const expectedTests = includeQuery ? 90 : 15;
+    const expectedTests = includeQuery ? 91 : 15;
     const fixtures = includeQuery ? [fixture, quickFilterFixture] : [fixture];
     const output = [];
     for (const [react, types, domTypes] of profiles) {

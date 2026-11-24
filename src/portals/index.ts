@@ -103,6 +103,15 @@ export type {
     PortalVisitorSortRule,
     PortalVisitorSortStamp,
 } from './visitorSort.js';
+export { createPortalVisitorQueryControls } from './visitorQuery.js';
+export type {
+    PortalVisitorQueryCommand,
+    PortalVisitorQueryControls,
+    PortalVisitorQueryFrame,
+    PortalVisitorQueryOutcome,
+    PortalVisitorQueryPort,
+    PortalVisitorQueryRequestStart,
+} from './visitorQuery.js';
 export type {
     PortalEditorOptions,
     PortalEditorField,

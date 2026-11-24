@@ -224,16 +224,34 @@ it('separates accepted query criteria, native request starts, and explicit Retry
     assert.deepEqual(sends, ['search', 'search', 'filter']);
     assert.equal(requestStarts.length, 2);
 
-    assert.deepEqual(await controls.retry(initial.stamp), { type: 'stale' });
+    const failedStamp = frame.stamp;
+    const failedRetryId = frame.retryId;
+    assert.ok(failedRetryId);
+    assert.deepEqual(await controls.retry(initial.stamp, failedRetryId), {
+        type: 'stale',
+    });
+
+    const replacementRetryId = 'replacement-filter-failure';
+    publish({ ...frame, retryId: replacementRetryId });
+    assert.equal(frame.stamp, failedStamp);
+    const commandsBeforeRetry = commands.length;
+    assert.deepEqual(await controls.retry(failedStamp, failedRetryId), {
+        type: 'stale',
+    });
+    assert.equal(commands.length, commandsBeforeRetry);
+    assert.equal(frame.retryId, replacementRetryId);
     assert.deepEqual(sends, ['search', 'search', 'filter']);
-    assert.deepEqual(await controls.retry(frame.stamp), {
+    assert.equal(requestStarts.length, 2);
+
+    assert.deepEqual(await controls.retry(failedStamp, replacementRetryId), {
         type: 'allocated',
         requestStart: { requestId: 'native-3', generation: 8 },
     });
+    assert.equal(commands.length, commandsBeforeRetry + 1);
     assert.deepEqual(commands.at(-1), {
         type: 'retry',
-        stamp: frame.stamp,
-        retryId: 'failed-filter',
+        stamp: failedStamp,
+        retryId: replacementRetryId,
     });
     assert.deepEqual(requestStarts[2], {
         requestId: 'native-3',
@@ -241,7 +259,10 @@ it('separates accepted query criteria, native request starts, and explicit Retry
     });
     assert.deepEqual(sends, ['search', 'search', 'filter', 'retry']);
     assert.equal(criteriaPublications.length, 1);
-    assert.deepEqual(await controls.retry(frame.stamp), { type: 'refused' });
+    assert.deepEqual(await controls.retry(failedStamp, replacementRetryId), {
+        type: 'refused',
+    });
+    assert.equal(commands.length, commandsBeforeRetry + 1);
     assert.equal(sends.length, 4);
 
     const sort = createPortalVisitorSortDraft(controls.sort);

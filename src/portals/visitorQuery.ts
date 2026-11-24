@@ -86,7 +86,11 @@ export type PortalVisitorQueryControls = {
         stamp: PortalVisitorSortStamp,
         viewId: string
     ): Promise<PortalVisitorQueryOutcome>;
-    retry(stamp: PortalVisitorSortStamp): Promise<PortalVisitorQueryOutcome>;
+    /** Pass the capability captured with the frame that rendered Retry. */
+    retry(
+        stamp: PortalVisitorSortStamp,
+        retryId: string
+    ): Promise<PortalVisitorQueryOutcome>;
 };
 
 /** Connect the existing control drafts to the same host-owned query port. */
@@ -187,12 +191,13 @@ export function createPortalVisitorQueryControls(
                     : { type: 'view', stamp, viewId }
             );
         },
-        retry(stamp) {
-            return submit(stamp, ({ retryId }) =>
-                retryId
+        retry(stamp, retryId) {
+            return submit(stamp, ({ retryId: currentRetryId }) => {
+                if (!currentRetryId) return { type: 'refused' };
+                return currentRetryId === retryId
                     ? { type: 'retry', stamp, retryId }
-                    : { type: 'refused' }
-            );
+                    : { type: 'stale' };
+            });
         },
     };
 }

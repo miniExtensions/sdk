@@ -27,7 +27,10 @@ import {
     requireFinalFormSaveAdmission,
     requireFormSaveAdmission,
 } from './saveAdmission.js';
-import { admitsFormWrite } from './writeAdmission.js';
+import {
+    admitsFormControllerMutation,
+    admitsFormWrite,
+} from './writeAdmission.js';
 
 /** Applications change revision for visitor, connection, token and context changes. */
 export type FormOwnerScope = { ownerId: string; revision: number };
@@ -419,7 +422,7 @@ export const createFormController = (
         if (!observeScope()) throw scopeError();
     };
 
-    const controller: FormController = {
+    const formController: FormController = {
         getState: () => {
             observeScope();
             return state();
@@ -440,6 +443,7 @@ export const createFormController = (
             const writeGeneration = generation;
             if (
                 !admitsFormWrite(afterCommit) ||
+                !admitsFormControllerMutation(formController) ||
                 context !== owner ||
                 generation !== writeGeneration ||
                 status === 'stale' ||
@@ -458,6 +462,8 @@ export const createFormController = (
         },
         save: async (requestOptions = {}) => {
             requireScope();
+            if (!admitsFormControllerMutation(formController))
+                throw scopeError();
             if (active !== null) {
                 throw new FormControllerError(
                     'save-in-progress',
@@ -568,6 +574,8 @@ export const createFormController = (
                 // Admission can replace the session; observing it can invalidate
                 // the Review signal, linked field configuration or native draft.
                 requireScope();
+                if (!admitsFormControllerMutation(formController))
+                    throw scopeError();
                 const authorityChecked = requireFinalFormSaveAdmission(
                     requestOptions.lifecycle,
                     requireScope
@@ -766,7 +774,7 @@ export const createFormController = (
             );
         },
     };
-    draftRevisionCaptures.set(controller, (revision) => {
+    draftRevisionCaptures.set(formController, (revision) => {
         const owner = context;
         const epoch = generation;
         return () => {
@@ -790,5 +798,5 @@ export const createFormController = (
             }
         };
     });
-    return controller;
+    return formController;
 };

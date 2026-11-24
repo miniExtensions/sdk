@@ -399,7 +399,7 @@ Custom static and dynamic Form headers also belong to your app. Render them
 from the published settings and record metadata when needed. This example uses
 `extensionName`, falling back to “Custom Form”.
 
-### Configured linked-child actions in a standalone Form
+### Configured linked-child actions
 
 A standalone direct-URL root Form offers **Create linked record** for an
 eligible configured modal child. **Load selected records** explicitly hydrates
@@ -407,6 +407,10 @@ the current native selection; only the SDK's returned eligible IDs offer
 **Edit linked record**. These actions are independent of finder visibility.
 An eligible child Edit also remains available when the parent link is readonly
 or full. Mounting the controls never reads or saves a record.
+
+A Portal-opened Edit Form can also hydrate its own selected records and open
+one configured Related Edit. Returning from that child restores the exact
+Edit opener and retains the enclosing Form draft.
 
 The child pane borrows the SDK owner's bindings and page owner. It retains
 mounted inputs while typing and supports one-page and manual multipage child
@@ -426,11 +430,10 @@ One deliberate **Confirm** validates all pages and delegates one Save through
 the existing child owner, retaining its recovery and parent reconciliation path.
 Saving the parent remains a separate action.
 
-Portal-parent and nested child actions are outside this adapter. The SDK still
-refuses computed-field Review, automatic workflows, Compute, captcha and
-unsupported linked-filter settings.
-Child linked fields use their existing native controls without nested child
-actions or finder UI. Attachments use the conservative readonly label
+The SDK refuses nested Create, further child actions, computed-field Review,
+automatic workflows, Compute, captcha and unsupported linked-filter settings.
+Child linked fields use their existing native controls. Attachments use the
+conservative readonly label
 presentation; this pane adds no upload action. No child action automatically
 saves the parent or retries an uncertain child Save.
 
@@ -713,8 +716,8 @@ before adapting it to a production application.
   category changes.
 - `src/fields.ts` is the replaceable field renderer. Values and dirty lists use
   Airtable field IDs; login credentials use the configured field names.
-- `src/linkedChildPanel.ts` is the standalone root Form host for the SDK-owned
-  configured child actions; it borrows the child bindings and page owner.
+- `src/linkedChildPanel.ts` hosts the SDK-owned configured child actions and
+  borrows the child bindings and page owner.
 - `src/recovery.ts` keeps safe document-local operation metadata separate from
   draft/session clearing. It does not store credentials or signed upload URLs.
 - `dev.mjs` bundles the installed SDK and serves three local static assets.

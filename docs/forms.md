@@ -2735,6 +2735,17 @@ unresolved records cannot open Edit directly. An explicit accepted option read
 may supply a newly selected existing record; Review or mounting never performs
 that read. A read-only or full-capacity parent may still expose Edit.
 
+A current Portal row Edit can offer these same actions for one selected record
+inside its Project Form. Load the Portal's issued child request with
+`await loadPortalChildForm(request, { signal })` from `@miniextensions/sdk/portals`
+and pass the exact returned Form, the same
+client, `request.parent` and `request.saveContext` to the Project's Form
+bindings. Keep the Project owner's usual currentness check. The SDK checks the
+accepted Portal scope and selected record before and after the Related Form
+load. A copied response or a generic Form reload needs a fresh admitted Portal
+opening for this capability. Nested Create and further child actions remain
+unsupported.
+
 `snapshot.intent` distinguishes Create from the captured exact Edit record.
 Create freezes its configured prefill. Edit uses an empty query and no dynamic
 or static Create query, while retaining applicable token-bound parent
@@ -2800,7 +2811,8 @@ Close or owner replacement unsubscribes and retires the old pages.
 
 Configured Review requires the explicit adapter described below; omission
 preserves its refusal, including in the browser starter. Compute, captcha,
-automatic submission and nested child flows remain unsupported. Unknown page modes are refused. Existing child
+automatic submission, nested Create and further child actions remain unsupported.
+Unknown page modes are refused. Existing child
 validation and backend validation remain authoritative. Successful reconciliation
 updates the shared parent's native linked IDs, rich presentation and dirty state;
 other parent values remain in the shared draft.
@@ -2855,8 +2867,9 @@ they demonstrate the recipe and native reconciliation, not live persistence.
 
 ### Configured linked-child Review
 
-The standalone direct-URL Form starter supplies Review for supported configured
-child Create and Edit. **Review child** opens a plain-text dialog on the final
+The browser starter supplies Review for supported configured child Create and
+Edit in a standalone Form and for the selected Related Edit inside a current
+Portal Edit Form. **Review child** opens a plain-text dialog on the final
 visible page of a one-page or manual multipage child. **Edit** or Escape returns
 to the current child answers without a Save; a fresh explicit Review opens the
 dialog again. **Confirm** validates all pages and delegates one Save through the
@@ -2913,8 +2926,8 @@ may be inspected; Confirm still requires all-page validation before dispatch.
 Reuse the prepared Review presentation recipe and its supported-answer/privacy
 checks. An adapter must reject unsupported answers rather than confirm an
 incomplete presentation; computed-field Review remains unsupported by that
-recipe. The starter's configured-child pane is limited to standalone root Forms:
-Portal-parent and nested child actions remain outside it. Compute, captcha,
+recipe. The starter supplies the pane for standalone Forms and the selected
+Related Edit inside a current Portal Edit Form. Compute, captcha,
 automatic submission, unsupported page modes and dynamic child linked-filter
 settings remain refused; Review does not add those workflows. Detached request copies are presentation-only. Confirm must return the
 fresh presentation guard and abort signal required by the page-owner contract.

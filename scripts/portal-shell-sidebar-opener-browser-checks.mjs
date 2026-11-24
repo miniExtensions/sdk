@@ -158,10 +158,8 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
                     after.header.slice(0, 3),
                     before.header.slice(0, 3)
                 );
-                assert.deepEqual(
-                    after.heading.slice(0, 2),
-                    before.heading.slice(0, 2)
-                );
+                assert.equal(after.heading[0] - before.heading[0], 8);
+                assert.equal(after.heading[1], before.heading[1]);
                 assert.deepEqual(before.titleFont, ['20px', '700', 'normal']);
                 assert.deepEqual(after.titleFont, nativeTitleFont);
                 const nav = page.getByRole('navigation', {
@@ -273,6 +271,16 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
             await heading.waitFor();
             const measured = await measure(header);
             assert.deepEqual(measured.titleFont, nativeTitleFont);
+            if (width >= 1024) {
+                // Native PortalHeader.tsx at 66e03254 uses a 24px
+                // inline inset inside the desktop sidebar divider.
+                assert.deepEqual(measured.heading, [24, 16, 239, 56]);
+            } else {
+                assert.deepEqual(measured.heading.slice(0, 2), [
+                    60,
+                    width === 375 ? 8 : 16,
+                ]);
+            }
             const titleLayout = await heading.evaluate((node) => {
                 const range = document.createRange();
                 range.selectNodeContents(node);

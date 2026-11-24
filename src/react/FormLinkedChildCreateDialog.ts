@@ -28,6 +28,7 @@ import type { FormPageOwner } from '../forms/pages.js';
 import { FormPageNavigationButton } from './CompleteFormPageNavigation.js';
 import { FormSubmitButton } from './FormSubmitButton.js';
 import { getThemePortalProps, useThemeSnapshot } from './ThemeBoundary.js';
+import { isVisible, wrapDialogTab } from './dialogFocus.js';
 
 export type FormLinkedChildCreateOpening = Readonly<{
     /** The exact button that began this explicit Create. */
@@ -75,28 +76,6 @@ const LinkedChildDialogPortal = lazy(async () => {
         }) => createPortal(children, container),
     };
 });
-
-function isVisible(element: HTMLElement): boolean {
-    return (
-        element.getClientRects().length > 0 &&
-        element.ownerDocument.defaultView?.getComputedStyle(element)
-            .visibility === 'visible'
-    );
-}
-
-function tabStops(dialog: HTMLDialogElement): HTMLElement[] {
-    return [
-        ...dialog.querySelectorAll<HTMLElement>(
-            'button,a[href],input,select,textarea,[contenteditable],[tabindex]'
-        ),
-    ].filter(
-        (element) =>
-            element.tabIndex >= 0 &&
-            !element.matches(':disabled') &&
-            !element.closest('[hidden],[inert]') &&
-            isVisible(element)
-    );
-}
 
 function matchesIntent(
     state: FormLinkedChildSnapshot,
@@ -522,15 +501,7 @@ function LinkedChildDialogChrome({
                     event.defaultPrevented
                 )
                     return;
-                const dialog = event.currentTarget;
-                const stops = tabStops(dialog);
-                const first = stops[0];
-                const last = stops.at(-1);
-                if (!first || !last) return;
-                const active = dialog.ownerDocument.activeElement;
-                if (active !== (event.shiftKey ? first : last)) return;
-                event.preventDefault();
-                (event.shiftKey ? last : first).focus();
+                wrapDialogTab(event);
             },
         },
         h(

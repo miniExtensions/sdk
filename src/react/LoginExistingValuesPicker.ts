@@ -1,5 +1,7 @@
 import {
     createElement as h,
+    lazy,
+    Suspense,
     useEffect,
     useId,
     useLayoutEffect,
@@ -16,6 +18,19 @@ import type {
     SelectionState,
 } from '../ui/types.js';
 import { NativeLoginExistingValuesDialog } from './NativeLoginExistingValuesDialog.js';
+
+const LoginDialogPortal = lazy(async () => {
+    const { createPortal } = await import('react-dom');
+    return {
+        default: ({
+            children,
+            container,
+        }: {
+            children?: ReactNode;
+            container: HTMLElement;
+        }) => createPortal(children, container),
+    };
+});
 
 export type LoginExistingValuesOwner = Readonly<{
     extensionSessionId: string;
@@ -363,6 +378,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
         view && native
             ? h(NativeLoginExistingValuesDialog, {
                   id,
+                  opener: trigger.current,
                   labels,
                   state: view.state,
                   debouncing: view.lookup.timer !== null,
@@ -377,6 +393,13 @@ function Picker(props: LoginExistingValuesPickerProps) {
                   load: (append) => load(view.lookup, append),
               })
             : defaultPanel;
+
+    // Keep browser form ownership with the host's Login fields. Mount next to
+    // its form so the picker still inherits the surrounding application theme.
+    const portalContainer =
+        native && panel
+            ? trigger.current?.closest('form')?.parentElement
+            : null;
 
     return h(
         'div',
@@ -412,7 +435,13 @@ function Picker(props: LoginExistingValuesPickerProps) {
             },
             props.triggerContent ?? labels.open
         ),
-        panel
+        portalContainer
+            ? h(
+                  Suspense,
+                  null,
+                  h(LoginDialogPortal, { container: portalContainer }, panel)
+              )
+            : panel
     );
 }
 

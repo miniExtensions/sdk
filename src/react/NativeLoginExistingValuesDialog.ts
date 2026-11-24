@@ -16,6 +16,7 @@ import type {
     LoginExistingValuesLabels,
     LoginExistingValuesPickerProps,
 } from './LoginExistingValuesPicker.js';
+import { wrapDialogTab } from './dialogFocus.js';
 
 type NativeDialogProps = Pick<
     LoginExistingValuesPickerProps,
@@ -26,6 +27,7 @@ type NativeDialogProps = Pick<
     | 'renderLoading'
 > & {
     id: string;
+    opener: HTMLButtonElement | null;
     labels: LoginExistingValuesLabels;
     state: SelectionState;
     debouncing: boolean;
@@ -40,6 +42,7 @@ const useCommitEffect =
 
 export function NativeLoginExistingValuesDialog({
     id,
+    opener,
     labels,
     state,
     debouncing,
@@ -72,21 +75,13 @@ export function NativeLoginExistingValuesDialog({
     useCommitEffect(() => {
         const panel = dialog.current;
         if (!panel) return;
-        const opener = panel.ownerDocument.activeElement;
-        const HTMLElement = panel.ownerDocument.defaultView?.HTMLElement;
         panel.showModal();
         input.current?.focus();
         return () => {
             panel.close();
-            if (
-                opener?.isConnected &&
-                HTMLElement &&
-                opener instanceof HTMLElement
-            ) {
-                opener.focus();
-            }
+            if (opener?.isConnected) opener.focus();
         };
-    }, []);
+    }, [opener]);
 
     function optionId(occurrence: string) {
         return optionsId + '-' + occurrence;
@@ -95,10 +90,17 @@ export function NativeLoginExistingValuesDialog({
     function handleSearchKey(event: KeyboardEvent<HTMLInputElement>) {
         if (event.nativeEvent.isComposing) return;
 
-        if (event.key === 'Enter' || (event.key === 'Tab' && activeOption)) {
+        if (event.key === 'Enter') {
             event.preventDefault();
             event.stopPropagation();
             if (!event.repeat && activeOption) choose(activeOption.value);
+            return;
+        }
+        if (event.key === 'Tab' && activeOption) {
+            // The browser continues Tab from the restored trigger after closing.
+            event.stopPropagation();
+            if (event.repeat) event.preventDefault();
+            else choose(activeOption.value);
             return;
         }
 
@@ -197,13 +199,15 @@ export function NativeLoginExistingValuesDialog({
             'aria-labelledby': titleId,
             'aria-modal': true,
             'data-testid': testIds?.dialog,
+            onSubmit: (event: SyntheticEvent<HTMLDialogElement>) =>
+                event.stopPropagation(),
             onCancel: (event: SyntheticEvent<HTMLDialogElement>) => {
                 event.preventDefault();
                 dismiss();
             },
             onKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => {
                 if (
-                    event.key !== 'Escape' ||
+                    (event.key !== 'Tab' && event.key !== 'Escape') ||
                     event.defaultPrevented ||
                     event.nativeEvent.isComposing ||
                     !(event.target instanceof Element) ||
@@ -211,6 +215,10 @@ export function NativeLoginExistingValuesDialog({
                         'dialog, [role="dialog"], [role="alertdialog"]'
                     ) !== event.currentTarget
                 ) {
+                    return;
+                }
+                if (event.key === 'Tab') {
+                    wrapDialogTab(event);
                     return;
                 }
                 event.preventDefault();

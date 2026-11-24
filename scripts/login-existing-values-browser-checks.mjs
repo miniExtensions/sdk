@@ -19,6 +19,7 @@ const selections = [];
 const trusted = [];
 const settingsActivations = [];
 const nativeOverlayClicks = [];
+const nativeTabs = [];
 const nativeQuery = '  Native needle_*  ';
 const nativeQueryLabels = Array.from({ length: 40 }, (_, index) => 'Native result ' + (index + 1));
 const signupDraft = 'masked-signup@example.invalid';
@@ -45,6 +46,7 @@ function App() {
     });
     update = (patch) => flushSync(() => setState(current => ({ ...current, ...patch })));
     return h('form', {
+        id: 'login-proof-outer-form',
         onSubmit(event) { event.preventDefault(); submits++; },
     },
     h('label', null, 'Sign-in value', h('input', { type: 'password', defaultValue: signupDraft })),
@@ -64,6 +66,11 @@ function App() {
         },
         onCancel() { signupCancels++; update({ signup: null }); },
         onCreate() { signupCreates.push(state.signupAttempt); },
+    }),
+    state.pickerAppearance === 'native' && h('input', {
+        type: 'text',
+        'aria-label': 'Before the native picker',
+        'data-testid': 'native-login-before-trigger',
     }),
     h(LoginExistingValuesPicker, {
         owner: {
@@ -115,13 +122,22 @@ function App() {
             return first;
         },
         onSelect(value) { selections.push(value); },
-    }));
+    }),
+    state.pickerAppearance === 'native' && h('button', {
+        type: 'submit',
+        'data-testid': 'native-login-after-trigger',
+    }, 'After the native picker'));
 }
 document.addEventListener('click', event => {
     if (event.target.closest('[role=dialog] li button')) trusted.push(event.isTrusted);
 });
 document.addEventListener('click', event => {
     if (event.target.closest('[data-testid=native-login-search-overlay]')) nativeOverlayClicks.push(event.isTrusted);
+}, true);
+document.addEventListener('keydown', event => {
+    if (event.key === 'Tab' && event.target.closest('[data-testid=native-login-search-dialog]')) {
+        nativeTabs.push({ trusted: event.isTrusted, backward: event.shiftKey, target: event.target.tagName });
+    }
 }, true);
 for (const type of ['pointerdown', 'pointerup']) {
     document.addEventListener(type, event => {
@@ -143,6 +159,7 @@ window.pickerProof = {
     release: () => release({ labels: ['Retired owner result'], offset: 'old-page' }),
     snapshot: () => ({ react: React.version, selections, calls, submits, trusted, settingsActivations, signupCancels, signupCreates, signupPointers }),
     overlayClicks: () => nativeOverlayClicks.slice(),
+    nativeTabs: () => nativeTabs.slice(),
 };
 `;
 
@@ -854,6 +871,14 @@ export async function checkLoginExistingValuesBrowser({
         await patch({ allowed: true, pickerAppearance: 'native' });
         const nativeTrigger = button('Rechercher');
         await nativeTrigger.getByTestId('native-login-search-icon').waitFor();
+        const beforeNativeTrigger = page.getByTestId(
+            'native-login-before-trigger'
+        );
+        const afterNativeTrigger = page.getByTestId(
+            'native-login-after-trigger'
+        );
+        const nativeFormOwner = (locator) =>
+            locator.evaluate((element) => element.form?.id ?? null);
         const nativeDialog = page.getByRole('dialog', {
             name: 'Valeurs existantes',
             exact: true,
@@ -864,6 +889,16 @@ export async function checkLoginExistingValuesBrowser({
         });
         const nativeList = nativeDialog.getByRole('listbox');
         const nativeOptions = nativeList.getByRole('option');
+        const nativeSettings = nativeDialog.getByRole('button', {
+            name: 'Réglages',
+            exact: true,
+        });
+        const nativeMore = nativeDialog.getByRole('button', {
+            name: 'Load more',
+            exact: true,
+        });
+        const readNativeTabs = () =>
+            page.evaluate(() => window.pickerProof.nativeTabs());
         const openNative = async () => {
             await nativeTrigger.click();
             await nativeOptions.nth(2).waitFor();
@@ -903,9 +938,54 @@ export async function checkLoginExistingValuesBrowser({
             await nativeSearch.getAttribute('placeholder'),
             'Saisissez quelques lettres'
         );
-        await nativeDialog
-            .getByRole('button', { name: 'Réglages', exact: true })
-            .click();
+        const outerFormOwners = await Promise.all(
+            [beforeNativeTrigger, nativeTrigger, afterNativeTrigger].map(
+                nativeFormOwner
+            )
+        );
+        assert.deepEqual(
+            outerFormOwners,
+            Array(3).fill('login-proof-outer-form')
+        );
+        assert.equal(await afterNativeTrigger.getAttribute('type'), 'submit');
+        const modalFormAncestor = await nativeDialog.evaluate(
+            (element) => element.closest('form')?.id ?? null
+        );
+        const modalFormOwners = await Promise.all(
+            [nativeSearch, nativeSettings, nativeMore].map(nativeFormOwner)
+        );
+        assert.equal(modalFormAncestor, null);
+        assert.deepEqual(modalFormOwners, [null, null, null]);
+        assert.equal(
+            await nativeSearch.getAttribute('aria-activedescendant'),
+            null
+        );
+        await page.keyboard.press('Enter');
+        assert(await nativeDialog.isVisible());
+        await focus(nativeSearch);
+        await readNativeSelection();
+
+        await page.keyboard.press('Shift+Tab');
+        await focus(nativeSettings);
+        await page.keyboard.press('Shift+Tab');
+        await focus(nativeMore);
+        await page.keyboard.press('Tab');
+        await focus(nativeSettings);
+        await page.keyboard.press('Tab');
+        await focus(nativeSearch);
+        await page.keyboard.press('Tab');
+        await focus(nativeMore);
+        await readNativeSelection();
+        const unhighlightedTabEvents = await readNativeTabs();
+        assert.deepEqual(unhighlightedTabEvents, [
+            { trusted: true, backward: true, target: 'INPUT' },
+            { trusted: true, backward: true, target: 'BUTTON' },
+            { trusted: true, backward: false, target: 'BUTTON' },
+            { trusted: true, backward: false, target: 'BUTTON' },
+            { trusted: true, backward: false, target: 'INPUT' },
+        ]);
+
+        await nativeSettings.click();
         assert.deepEqual(
             (await read()).settingsActivations.slice(
                 proof.settingsActivations.length
@@ -985,7 +1065,23 @@ export async function checkLoginExistingValuesBrowser({
         const tabSelectedOccurrence = await activeNativeOption(1);
         await page.keyboard.press('Tab');
         await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(afterNativeTrigger);
         await readNativeSelection([duplicate, '']);
+
+        await openNative();
+        await page.keyboard.press('ArrowDown');
+        const reverseTabSelectedOccurrence = await activeNativeOption(0);
+        await page.keyboard.press('Shift+Tab');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(beforeNativeTrigger);
+        await readNativeSelection([duplicate, '', duplicate]);
+        const highlightedTabEvents = (await readNativeTabs()).slice(
+            unhighlightedTabEvents.length
+        );
+        assert.deepEqual(highlightedTabEvents, [
+            { trusted: true, backward: false, target: 'INPUT' },
+            { trusted: true, backward: true, target: 'INPUT' },
+        ]);
 
         await openNative();
         const outside = await page
@@ -1007,23 +1103,37 @@ export async function checkLoginExistingValuesBrowser({
         await page.mouse.click(...outside);
         await nativeDialog.waitFor({ state: 'hidden' });
         await focus(nativeTrigger);
-        await readNativeSelection([duplicate, '']);
+        await readNativeSelection([duplicate, '', duplicate]);
         const trustedOutside = await page.evaluate(() =>
             window.pickerProof.overlayClicks()
         );
         assert.deepEqual(trustedOutside, [true]);
+        assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
 
         evidence.nativeLoginCombobox = {
             rawQuery: nativeQuery,
             occurrenceIds,
             selectedOccurrence: occurrenceIds[2],
             tabSelectedOccurrence,
+            reverseTabSelectedOccurrence,
+            formOwnership: {
+                outerFormOwners,
+                modalFormAncestor,
+                modalFormOwners,
+            },
+            unhighlightedTabEvents,
+            highlightedTabEvents,
+            tabFocusAfter: {
+                forward: 'submit after trigger',
+                backward: 'input before trigger',
+            },
             lastOptionScroll,
             selections: (await read()).selections.slice(
                 proof.selections.length
             ),
             trustedOutside: trustedOutside[0],
             restoredFocusAfter: ['Escape', 'Enter', 'outside'],
+            credentialDraftPreserved: true,
             submits: (await read()).submits,
         };
         assert.deepEqual(pageErrors, []);

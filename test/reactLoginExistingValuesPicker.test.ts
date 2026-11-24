@@ -555,6 +555,7 @@ it('keeps native combobox focus on the input and commits exact duplicate and bla
         const input = ui.search();
         assert.equal(opener.getAttribute('aria-controls'), panel.id);
         assert.equal(input.getAttribute('aria-controls'), listbox.id);
+        assert.equal(input.form, null);
         assert.equal(ui.window.document.activeElement, input);
         return rows;
     };
@@ -656,7 +657,7 @@ it('keeps native combobox focus on the input and commits exact duplicate and bla
     await act(async () => t.mock.timers.tick(500));
     assert(await ui.nativeKey('ArrowDown'));
     assertActive(ui.native().rows[0].id);
-    assert(await ui.nativeKey('Tab'));
+    assert.equal(await ui.nativeKey('Tab', { shiftKey: true }), false);
     assert.deepEqual(ui.choices, [duplicate, '']);
     assert.equal(ui.dialog(), null);
     assert.equal(ui.submits(), 0);

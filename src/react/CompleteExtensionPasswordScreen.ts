@@ -18,11 +18,16 @@ export type CompleteExtensionPasswordScreenLabels = {
     wrong: string;
     blocked: string;
     error: string;
+    refreshRequired?: string;
 };
 
-export type CompleteExtensionPasswordScreenResult = Readonly<{
-    type: AuthPasswordResult['type'] | 'error';
-}>;
+export type CompleteExtensionPasswordScreenResult = Readonly<
+    | { type: AuthPasswordResult['type'] }
+    | {
+          type: 'error';
+          recovery?: 'refresh-required' | 'reload-required' | 'retired';
+      }
+>;
 
 export type CompleteExtensionPasswordScreenProps = {
     scope: AuthOwnerScope;
@@ -31,6 +36,11 @@ export type CompleteExtensionPasswordScreenProps = {
     verifyPassword: (
         password: string
     ) => Promise<CompleteExtensionPasswordScreenResult>;
+    /** Reload the accepted screen without re-verifying its password. */
+    reload?: {
+        label: string;
+        run(): Promise<'completed' | 'retry' | 'refresh-required' | 'retired'>;
+    };
     className?: string;
     accentColor?: string;
 };
@@ -48,9 +58,20 @@ export function CompleteExtensionPasswordScreen(
     });
 }
 
+type PasswordFormStatus =
+    | 'ready'
+    | 'pending'
+    | 'accepted'
+    | 'blocked'
+    | 'refresh-required'
+    | 'reload-required'
+    | 'reloading'
+    | 'waiting';
+
 function ExtensionPasswordForm({
     labels,
     verifyPassword,
+    reload,
     className,
     accentColor,
 }: CompleteExtensionPasswordScreenProps) {
@@ -58,48 +79,106 @@ function ExtensionPasswordForm({
     const errorId = `${inputId}-error`;
     const input = useRef<HTMLInputElement>(null);
     const [hasPassword, setHasPassword] = useState(false);
-    const [status, setStatus] = useState<'ready' | 'pending' | 'accepted'>(
-        'ready'
-    );
+    const [status, setStatus] = useState<PasswordFormStatus>('ready');
     const [feedback, setFeedback] = useState<
-        'wrong' | 'blocked' | 'error' | null
+        'wrong' | 'blocked' | 'error' | 'refreshRequired' | null
     >(null);
-    const owner = useRef<{ acceptsSubmit: boolean } | null>(null);
+    const owner = useRef<{ status: PasswordFormStatus } | null>(null);
 
     useCommitEffect(() => {
-        owner.current = { acceptsSubmit: true };
+        owner.current = { status: 'ready' };
         return () => {
             owner.current = null;
         };
     }, []);
 
+    function transition(
+        currentOwner: NonNullable<typeof owner.current>,
+        next: PasswordFormStatus
+    ) {
+        // Claim the next action before React has committed the new controls.
+        currentOwner.status = next;
+        setStatus(next);
+    }
+
+    function clearDraft() {
+        if (input.current) input.current.value = '';
+        setHasPassword(false);
+    }
+
+    function settleRecovery(
+        currentOwner: NonNullable<typeof owner.current>,
+        result: 'reload-required' | 'refresh-required' | 'completed' | 'retired'
+    ) {
+        clearDraft();
+        if (result === 'reload-required') {
+            setFeedback('error');
+            transition(currentOwner, result);
+        } else if (result === 'refresh-required') {
+            setFeedback('refreshRequired');
+            transition(currentOwner, result);
+        } else {
+            setFeedback(null);
+            transition(currentOwner, 'waiting');
+        }
+    }
+
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const attemptOwner = owner.current;
         const field = input.current;
-        if (!attemptOwner?.acceptsSubmit || !field?.value.length) return;
-        attemptOwner.acceptsSubmit = false;
-        setStatus('pending');
+        if (attemptOwner?.status !== 'ready' || !field?.value.length) return;
+        transition(attemptOwner, 'pending');
 
-        let result: CompleteExtensionPasswordScreenResult['type'];
+        let result: CompleteExtensionPasswordScreenResult;
         try {
-            result = (await verifyPassword(field.value)).type;
+            result = await verifyPassword(field.value);
         } catch {
-            result = 'error';
+            result = { type: 'error' };
         }
         if (owner.current !== attemptOwner) return;
 
-        if (result === 'correct') {
-            field.value = '';
-            setHasPassword(false);
+        if (result.type === 'correct') {
+            clearDraft();
             setFeedback(null);
-            setStatus('accepted');
+            transition(attemptOwner, 'accepted');
+        } else if (result.type === 'error' && result.recovery) {
+            settleRecovery(attemptOwner, result.recovery);
         } else {
-            setFeedback(result);
-            setStatus('ready');
-            attemptOwner.acceptsSubmit = result !== 'blocked';
+            setFeedback(result.type);
+            transition(
+                attemptOwner,
+                result.type === 'blocked' ? 'blocked' : 'ready'
+            );
         }
     }
+
+    async function reloadScreen() {
+        const attemptOwner = owner.current;
+        if (attemptOwner?.status !== 'reload-required' || !reload) return;
+        transition(attemptOwner, 'reloading');
+
+        let result: Awaited<ReturnType<typeof reload.run>>;
+        try {
+            result = await reload.run();
+        } catch {
+            result = 'retry';
+        }
+        if (owner.current !== attemptOwner) return;
+
+        if (result === 'retry') transition(attemptOwner, 'reload-required');
+        else settleRecovery(attemptOwner, result);
+    }
+
+    const reloadAction =
+        status === 'reload-required' || status === 'reloading'
+            ? reload
+            : undefined;
+    const lockedInput =
+        status === 'reload-required' ||
+        status === 'reloading' ||
+        status === 'refresh-required' ||
+        status === 'waiting';
 
     return h(
         'div',
@@ -125,6 +204,7 @@ function ExtensionPasswordForm({
                 type: 'password',
                 autoComplete: 'current-password',
                 required: true,
+                readOnly: lockedInput,
                 // Keep the draft in the input property so React does not
                 // mirror a controlled value into serialized HTML.
                 onChange: (event) =>
@@ -134,18 +214,23 @@ function ExtensionPasswordForm({
             }),
             feedback === null
                 ? null
-                : h('p', { id: errorId, role: 'alert' }, labels[feedback]),
+                : h(
+                      'p',
+                      { id: errorId, role: 'alert' },
+                      labels[feedback] ?? labels.error
+                  ),
             h(
                 'div',
-                { className: 'mx-sdk-extension-password-actions' },
+                {
+                    className: reloadAction
+                        ? 'mx-sdk-extension-password-actions mx-sdk-extension-password-actions--with-reload'
+                        : 'mx-sdk-extension-password-actions',
+                },
                 h(
                     'button',
                     {
                         type: 'submit',
-                        disabled:
-                            status !== 'ready' ||
-                            feedback === 'blocked' ||
-                            !hasPassword,
+                        disabled: status !== 'ready' || !hasPassword,
                     },
                     status === 'pending'
                         ? h(
@@ -174,6 +259,18 @@ function ExtensionPasswordForm({
                         : null,
                     labels.submit
                 ),
+                reloadAction
+                    ? h(
+                          'button',
+                          {
+                              type: 'button',
+                              disabled: status === 'reloading',
+                              'aria-busy': status === 'reloading',
+                              onClick: reloadScreen,
+                          },
+                          reloadAction.label
+                      )
+                    : null,
                 h(
                     'span',
                     {

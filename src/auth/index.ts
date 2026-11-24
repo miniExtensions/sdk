@@ -21,6 +21,8 @@ export type {
     AuthLoginResult,
     AuthFlowErrorCode,
     AuthFlowBase,
+    PasswordAuthPort,
+    PasswordAuthFlowOptions,
     PasswordAuthFlow,
     LoginAuthFlow,
     AuthFlow,

@@ -25,6 +25,19 @@ export type AuthFlowOptions<Page extends AuthPage = AuthPage> = {
     page: Page;
     getScope(): AuthOwnerScope;
 };
+/** Session and verification operations for a host with an accepted Password page. */
+export type PasswordAuthPort = Pick<
+    MiniExtensionsClient,
+    'getSession' | 'setSession'
+> & {
+    auth: Pick<MiniExtensionsClient['auth'], 'verifyExtensionPassword'>;
+};
+export type PasswordAuthFlowOptions = Omit<
+    AuthFlowOptions<PasswordRequiredResult>,
+    'client'
+> & {
+    client: PasswordAuthPort;
+};
 export type AuthRequestOptions = { signal?: AbortSignal };
 
 export type AuthPasswordResult =

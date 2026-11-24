@@ -6439,6 +6439,16 @@ localized `error` label. A `blocked` result locks Submit for the current scope.
 After `correct`, the draft is cleared and Submit remains locked until the host
 replaces the screen.
 
+Return `{ type: 'error', recovery: 'refresh-required' }` when the visitor needs a
+new page before trying another password. The screen clears the draft, locks
+Submit and shows `labels.refreshRequired`, falling back to `labels.error`.
+Use `recovery: 'reload-required'` for an accepted result whose next read can be
+retried. Supply `reload.label` and a guarded `reload.run` for that action.
+The action reopens after `retry` or an exception and stays locked after
+`completed`. Return `refresh-required` to require a fresh page or `retired`
+to dismiss feedback for an obsolete owner. A verification result can likewise
+request silent retirement with `{ type: 'error', recovery: 'retired' }`.
+
 Advance the scope revision on accepted page, connection, session, or visitor
 changes. A scope change makes a fresh prompt and prevents earlier results from
 updating its UI. Check ownership in the host adapter before committing any

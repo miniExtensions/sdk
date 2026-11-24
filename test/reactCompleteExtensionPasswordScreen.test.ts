@@ -69,6 +69,17 @@ async function setup(t: TestContext) {
         query('form').dispatchEvent(event);
         assert.equal(event.defaultPrevented, true);
     };
+    const reloadButton = () =>
+        Array.from(container.querySelectorAll('button')).find(
+            (button) => button.type === 'button'
+        );
+    const clickReload = () => {
+        const button = reloadButton();
+        assert.ok(button);
+        button.dispatchEvent(
+            new window.MouseEvent('click', { bubbles: true, cancelable: true })
+        );
+    };
     const requests: string[] = [];
     const attempts: Array<{
         resolve: (result: CompleteExtensionPasswordScreenResult) => void;
@@ -90,6 +101,8 @@ async function setup(t: TestContext) {
         input,
         submit,
         button: () => query('button'),
+        reloadButton,
+        clickReload,
         feedback: () => container.querySelector('[role=alert]'),
         status: () => container.querySelector('[role=status]')?.textContent,
         render: async (
@@ -249,4 +262,204 @@ it('renders localized generic failure and clears and locks after an accepted res
     await act(async () => screen.submit());
     assert.equal(screen.button().disabled, true);
     assert.equal(screen.requests.length, 3);
+});
+
+type ReloadAction = NonNullable<CompleteExtensionPasswordScreenProps['reload']>;
+type ReloadResult = Awaited<ReturnType<ReloadAction['run']>>;
+
+function deferredReload() {
+    const attempts: Array<{
+        resolve: (result: ReloadResult) => void;
+        reject: (error: Error) => void;
+    }> = [];
+    const reload: ReloadAction = {
+        label: 'Try loading again',
+        run: () =>
+            new Promise((resolve, reject) =>
+                attempts.push({ resolve, reject })
+            ),
+    };
+    return { reload, attempts };
+}
+
+it('clears the latest draft and keeps a refresh-required owner locked', async (t) => {
+    const screen = await setup(t);
+    const recoveryLabels = { ...labels, refreshRequired: 'Refresh this page' };
+    const { reload, attempts } = deferredReload();
+    await screen.render({ labels: recoveryLabels, reload });
+    await screen.edit('first draft');
+    await act(async () => screen.submit());
+    await screen.edit('edited while checking');
+    await act(async () =>
+        screen.attempts[0].resolve({
+            type: 'error',
+            recovery: 'refresh-required',
+        })
+    );
+    assert.equal(screen.input().value, '');
+    assert.equal(screen.input().hasAttribute('value'), false);
+    assert.equal(screen.input().readOnly, true);
+    assert.equal(
+        screen.feedback()?.textContent,
+        recoveryLabels.refreshRequired
+    );
+    assert.equal(screen.button().disabled, true);
+    assert.equal(screen.reloadButton(), undefined);
+    await screen.edit('synthetic bypass attempt');
+    await act(async () => screen.submit());
+    assert.equal(screen.requests.length, 1);
+    assert.equal(attempts.length, 0);
+    assert.equal(screen.button().disabled, true);
+});
+
+it('uses the generic message when refresh copy is omitted, and keeps a missing reload action locked', async (t) => {
+    const screen = await setup(t);
+    const recoveries = ['refresh-required', 'reload-required'] as const;
+    for (const [revision, recovery] of recoveries.entries()) {
+        const currentScope = { ...scope, revision };
+        await screen.render({ scope: currentScope });
+        await screen.edit('private synthetic draft');
+        await act(async () => screen.submit());
+        await act(async () =>
+            screen.attempts[revision].resolve({ type: 'error', recovery })
+        );
+        await screen.render({ scope: { ...currentScope } });
+        assert.equal(screen.input().value, '');
+        assert.equal(screen.input().readOnly, true);
+        assert.equal(screen.feedback()?.textContent, labels.error);
+        assert.equal(screen.button().disabled, true);
+        assert.equal(screen.reloadButton(), undefined);
+        await screen.edit('synthetic bypass attempt');
+        await act(async () => screen.submit());
+        assert.equal(screen.requests.length, revision + 1);
+    }
+});
+
+it('admits one same-turn reload, retries only reload, then waits for a successor', async (t) => {
+    const screen = await setup(t);
+    const { reload, attempts } = deferredReload();
+    await screen.render({ reload });
+    assert.equal(screen.reloadButton(), undefined);
+    await screen.edit('private synthetic draft');
+    await act(async () => screen.submit());
+    await act(async () =>
+        screen.attempts[0].resolve({
+            type: 'error',
+            recovery: 'reload-required',
+        })
+    );
+    assert.equal(screen.input().value, '');
+    assert.equal(screen.input().readOnly, true);
+    assert.equal(screen.feedback()?.textContent, labels.error);
+    assert.equal(screen.reloadButton()?.type, 'button');
+    assert.equal(screen.reloadButton()?.textContent, reload.label);
+
+    await act(async () => {
+        screen.clickReload();
+        screen.clickReload();
+        screen.submit();
+    });
+    assert.equal(attempts.length, 1);
+    assert.equal(screen.reloadButton()?.disabled, true);
+    assert.equal(screen.reloadButton()?.getAttribute('aria-busy'), 'true');
+    await act(async () => attempts[0].resolve('retry'));
+    assert.equal(screen.reloadButton()?.disabled, false);
+    assert.equal(screen.feedback()?.textContent, labels.error);
+
+    await act(async () => screen.clickReload());
+    await act(async () =>
+        attempts[1].reject(new Error('private reload diagnostic'))
+    );
+    assert.equal(screen.reloadButton()?.disabled, false);
+    assert.equal(screen.feedback()?.textContent, labels.error);
+    await screen.edit('synthetic bypass attempt');
+    await act(async () => screen.submit());
+    assert.equal(screen.requests.length, 1);
+    assert.equal(screen.button().disabled, true);
+
+    await act(async () => screen.clickReload());
+    await act(async () => attempts[2].resolve('completed'));
+    assert.equal(screen.reloadButton(), undefined);
+    assert.equal(screen.feedback(), null);
+    assert.equal(screen.input().value, '');
+    assert.equal(screen.input().readOnly, true);
+    assert.equal(screen.button().disabled, true);
+    await screen.render({ scope: { ...scope, revision: 1 }, reload });
+    await screen.edit('successor draft');
+    assert.equal(screen.input().readOnly, false);
+    assert.equal(screen.button().disabled, false);
+    assert.equal(screen.requests.length, 1);
+});
+
+it('ignores a late reload result across an owner replacement', async (t) => {
+    const screen = await setup(t);
+    const { reload, attempts } = deferredReload();
+    await screen.render({ reload });
+    await screen.edit('initial draft');
+    await act(async () => screen.submit());
+    await act(async () =>
+        screen.attempts[0].resolve({
+            type: 'error',
+            recovery: 'reload-required',
+        })
+    );
+    await act(async () => screen.clickReload());
+    await screen.render({ scope: { ...scope, revision: 1 }, reload });
+    await screen.edit('successor draft');
+    await act(async () => attempts[0].resolve('refresh-required'));
+    assert.equal(screen.input().value, 'successor draft');
+    assert.equal(screen.input().readOnly, false);
+    assert.equal(screen.feedback(), null);
+    assert.equal(screen.reloadButton(), undefined);
+    assert.equal(screen.button().disabled, false);
+});
+
+it('turns reload into refresh-only or silent retirement without reopening verification', async (t) => {
+    const screen = await setup(t);
+    const recoveryLabels = { ...labels, refreshRequired: 'Refresh this page' };
+    const { reload, attempts } = deferredReload();
+    const results = ['refresh-required', 'retired'] as const;
+    for (const [revision, result] of results.entries()) {
+        await screen.render({
+            scope: { ...scope, revision },
+            labels: recoveryLabels,
+            reload,
+        });
+        await screen.edit('synthetic verification');
+        await act(async () => screen.submit());
+        await act(async () =>
+            screen.attempts[revision].resolve({
+                type: 'error',
+                recovery: 'reload-required',
+            })
+        );
+        await act(async () => screen.clickReload());
+        await act(async () => attempts[revision].resolve(result));
+        assert.equal(screen.reloadButton(), undefined);
+        assert.equal(screen.input().value, '');
+        assert.equal(screen.input().readOnly, true);
+        assert.equal(screen.button().disabled, true);
+        assert.equal(
+            screen.feedback()?.textContent,
+            result === 'retired' ? undefined : recoveryLabels.refreshRequired
+        );
+        await screen.edit('synthetic bypass attempt');
+        await act(async () => screen.submit());
+        assert.equal(screen.requests.length, revision + 1);
+    }
+});
+
+it('does not expose an error for a verifying owner retired before its replacement commits', async (t) => {
+    const screen = await setup(t);
+    await screen.render();
+    await screen.edit('retiring draft');
+    await act(async () => screen.submit());
+    await act(async () =>
+        screen.attempts[0].resolve({ type: 'error', recovery: 'retired' })
+    );
+    assert.equal(screen.input().value, '');
+    assert.equal(screen.input().readOnly, true);
+    assert.equal(screen.status(), '');
+    assert.equal(screen.feedback(), null);
+    assert.equal(screen.button().disabled, true);
 });

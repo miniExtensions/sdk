@@ -2,7 +2,6 @@ import { SDKError } from '../runtime/client.js';
 import { withExtensionPassword, withLoginToken } from '../runtime/session.js';
 import type {
     LoginPageResult,
-    PasswordRequiredResult,
     RuntimeLanguage,
     RuntimeSession,
 } from '../runtime/types.js';
@@ -17,6 +16,7 @@ import type {
     AuthVerificationChallenge,
     LoginAuthFlow,
     PasswordAuthFlow,
+    PasswordAuthFlowOptions,
 } from './types.js';
 
 export class AuthFlowError extends Error {
@@ -133,14 +133,17 @@ const handle = <Handle extends object>(): Handle =>
     Object.freeze(Object.create(null)) as Handle;
 
 export function createAuthFlow(
-    options: AuthFlowOptions<PasswordRequiredResult>
+    options: PasswordAuthFlowOptions
 ): PasswordAuthFlow;
 export function createAuthFlow(
     options: AuthFlowOptions<LoginPageResult>
 ): LoginAuthFlow;
 export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow;
-export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
+export function createAuthFlow(
+    options: AuthFlowOptions<AuthPage> | PasswordAuthFlowOptions
+): AuthFlow {
     const client = options.client;
+    const auth = client.auth;
     const getScope = options.getScope;
     const metadata = readMetadata(options.page);
     let capturedSession: RuntimeSession | null = readSession(
@@ -403,15 +406,16 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                     throw new TypeError(
                         'An extension password string is required.'
                     );
-                const extensionPassword = input.extensionPassword;
+                const { extensionPassword, viewMode } = input;
                 return run(
                     true,
                     requestOptions,
                     (signal, session) =>
-                        client.auth.verifyExtensionPassword(
+                        auth.verifyExtensionPassword(
                             {
                                 extensionId: metadata.extensionId,
                                 extensionPassword,
+                                ...(viewMode === undefined ? {} : { viewMode }),
                             },
                             { signal, session }
                         ),
@@ -439,6 +443,10 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
             },
         } satisfies PasswordAuthFlow);
     }
+    if (!('login' in auth))
+        throw new TypeError(
+            'A login page requires the login client operations.'
+        );
     return Object.freeze({
         ...common,
         screen: 'login_page' as const,
@@ -471,7 +479,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 true,
                 requestOptions,
                 (signal, session) =>
-                    client.auth.login(
+                    auth.login(
                         {
                             extensionId: metadata.extensionId,
                             loginCredentials,
@@ -536,7 +544,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 false,
                 requestOptions,
                 (signal, session) =>
-                    client.auth.confirmVerificationCode(
+                    auth.confirmVerificationCode(
                         {
                             verificationId: challenge.verificationId,
                             verificationCode,
@@ -565,7 +573,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 true,
                 requestOptions,
                 (signal, session) =>
-                    client.auth.signUp(
+                    auth.signUp(
                         {
                             extensionId: metadata.extensionId,
                             signUpCredentials,

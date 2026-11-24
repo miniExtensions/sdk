@@ -15,7 +15,6 @@ import {
     type ReactElement,
     type SyntheticEvent,
 } from 'react';
-import { createPortal } from 'react-dom';
 import {
     createPortalVisitorFilterDraft,
     resolvePortalVisitorFilterOperator,
@@ -88,6 +87,18 @@ type Status = {
 const FilterDateField = /* @__PURE__ */ lazy(async () => ({
     default: (await import('./date/DateField.js')).DateField,
 }));
+const FilterQuickRowPortal = /* @__PURE__ */ lazy(async () => {
+    const { createPortal } = await import('react-dom');
+    return {
+        default: ({
+            children,
+            container,
+        }: {
+            children: ReactElement;
+            container: HTMLElement;
+        }) => createPortal(children, container),
+    };
+});
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 const buttons: CSSProperties = {
@@ -898,7 +909,14 @@ export function PortalVisitorFilter(
         props.quickFiltersContainer === undefined
             ? dropdowns
             : dropdowns && props.quickFiltersContainer
-              ? createPortal(dropdowns, props.quickFiltersContainer)
+              ? h(
+                    Suspense,
+                    { fallback: null },
+                    h(FilterQuickRowPortal, {
+                        container: props.quickFiltersContainer,
+                        children: dropdowns,
+                    })
+                )
               : null;
     return h(
         'div',

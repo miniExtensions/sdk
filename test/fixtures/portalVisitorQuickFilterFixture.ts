@@ -19,7 +19,9 @@ const choices = [
     { value: 'red', label: 'Red' },
     { value: 'blue', label: 'Blue' },
 ];
-const fields: PortalVisitorFilterField[] = [
+const makeFields = (
+    multipleChoices: readonly { value: string; label: string }[]
+): PortalVisitorFilterField[] => [
     {
         id: 'status',
         name: 'Status',
@@ -38,7 +40,7 @@ const fields: PortalVisitorFilterField[] = [
         operators: [
             {
                 label: 'Has any',
-                operand: { kind: 'choices', choices },
+                operand: { kind: 'choices', choices: multipleChoices },
                 setting: {
                     fieldType: 'multipleSelects',
                     type: 'hasAnyOf',
@@ -76,7 +78,8 @@ export const title = leaf('retained-title', {
 
 export function quickFilterOwner(
     criteria: RuntimeConditionsDefinition | null,
-    dropdownFieldIds = ['labels', 'status']
+    dropdownFieldIds = ['labels', 'status'],
+    multipleChoices = choices
 ) {
     const calls: PortalVisitorFilterCommand[] = [];
     const listeners = new Set<() => void>();
@@ -89,7 +92,7 @@ export function quickFilterOwner(
             metadataRevision: 1,
             generation: 1,
         },
-        fields,
+        fields: makeFields(multipleChoices),
         criteria,
         dropdownFieldIds,
         effectiveSettings: criteria?.conditions.some(

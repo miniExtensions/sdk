@@ -289,7 +289,9 @@ function SelectControl(props: ControlProps): ReactNode {
         () =>
             isFuseConstructor(FuseModule)
                 ? new FuseModule([...candidates], {
-                      keys: ['displayName', 'name'],
+                      keys: portalFilter
+                          ? [{ name: 'label', getFn: label }]
+                          : ['displayName', 'name'],
                       threshold: 0.2,
                       ignoreLocation: true,
                       ignoreFieldNorm: true,

@@ -233,7 +233,15 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
             reveals.push({ id: this.id, options });
         }
     );
-    const host = quickFilterOwner(null, ['labels']);
+    const blueId = 'selNK7cvbz6dR2QpX';
+    const host = quickFilterOwner(
+        null,
+        ['labels'],
+        [
+            { value: 'selXb9nHT4WzMu3vj', label: 'Red' },
+            { value: blueId, label: 'Blue' },
+        ]
+    );
     const outcomes: PortalVisitorFilterOutcome[] = [];
     const blueStyle = {
         color: 'rgb(18, 52, 86)',
@@ -244,7 +252,8 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
             port: host.port,
             showDropdowns: true,
             quickFiltersPresentation: 'combobox',
-            quickFilterChoiceStyles: { labels: { blue: blueStyle } },
+            quickFilterChoiceStyles: { labels: { [blueId]: blueStyle } },
+            labels: { noMatches: 'Aucune option correspondante' },
             onOutcome: (outcome) => outcomes.push(outcome),
         })
     );
@@ -325,16 +334,24 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
         'value'
     )?.set;
     assert.ok(setValue);
-    await act(async () => {
-        setValue.call(input, 'Blue');
-        input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
-    });
-    assert.deepEqual(
+    const typeChoice = async (text: string) => {
+        await act(async () => {
+            setValue.call(input, text);
+            input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+        });
+    };
+    const visibleChoiceLabels = () =>
         [...listbox().querySelectorAll('[role="option"]')].map(
             (node) => node.textContent
-        ),
-        ['Blue']
+        );
+    await typeChoice('sel');
+    assert.deepEqual(
+        { options: visibleChoiceLabels(), emptyHint: listbox().textContent },
+        { options: [], emptyHint: 'Aucune option correspondante' }
     );
+    assert.equal(host.calls.length, 0);
+    await typeChoice('Blue');
+    assert.deepEqual(visibleChoiceLabels(), ['Blue']);
     assert.equal(host.calls.length, 0);
     const pressed = option('Blue');
     await pointer(pressed, 'pointerdown');
@@ -356,7 +373,7 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
         fieldType: 'multipleSelects',
         type: 'hasAnyOf',
         idOrName: { type: 'id', id: 'labels' },
-        value: ['blue'],
+        value: [blueId],
     });
     const accepted = host.port.read()?.criteria;
     const chip = quick.querySelector(

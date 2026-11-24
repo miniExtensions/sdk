@@ -36,6 +36,7 @@ const defaultLabels = {
     quickFilters: 'Quick filters',
     allValues: 'All values',
     availableOptions: 'Available options',
+    noMatches: 'No matching options',
     removeChoice: (label: string) => `Remove option ${label}`,
     title: 'Filter records',
     done: 'Done',
@@ -777,6 +778,7 @@ export function PortalVisitorFilter(
                         labels: {
                             placeholder: label,
                             availableOptions: labels.availableOptions,
+                            noMatches: labels.noMatches,
                             remove: labels.removeChoice,
                         },
                         onValueChange: (values) =>

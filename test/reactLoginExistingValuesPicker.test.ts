@@ -42,6 +42,7 @@ async function fixture(
         'window',
         'document',
         'navigator',
+        'Element',
         'HTMLElement',
         'HTMLInputElement',
         'IS_REACT_ACT_ENVIRONMENT',
@@ -141,7 +142,9 @@ async function fixture(
         );
     const text = () => options().map((node) => node.textContent);
     const search = () => {
-        const node = container.querySelector('input[type=search]');
+        const node = container.querySelector(
+            'input[type=search], input[role=combobox]'
+        );
         assert(node instanceof window.HTMLInputElement);
         return node;
     };
@@ -159,6 +162,39 @@ async function fixture(
     const click = async (label: string) => {
         await act(async () => button(label).click());
     };
+    const dialog = () => container.querySelector('[role=dialog], dialog[open]');
+    const native = () => {
+        const panel = dialog();
+        assert(panel instanceof window.HTMLDialogElement && panel.open);
+        const listbox = panel.querySelector('[role=listbox]');
+        assert(listbox instanceof window.HTMLElement);
+        return {
+            panel,
+            listbox,
+            rows: [...listbox.querySelectorAll('[role=option]')].map((row) => {
+                assert(row instanceof window.HTMLElement);
+                return row;
+            }),
+        };
+    };
+    const nativeKey = async (
+        key: string,
+        modifiers: {
+            isComposing?: boolean;
+            repeat?: boolean;
+            shiftKey?: boolean;
+        } = {},
+        target: ReturnType<typeof search> | ReturnType<typeof button> = search()
+    ) => {
+        const event = new window.KeyboardEvent('keydown', {
+            key,
+            ...modifiers,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => target.dispatchEvent(event));
+        return event.defaultPrevented;
+    };
     return {
         window,
         container,
@@ -173,7 +209,9 @@ async function fixture(
         choices,
         requests,
         submits: () => submits,
-        dialog: () => container.querySelector('[role=dialog]'),
+        dialog,
+        native,
+        nativeKey,
     };
 }
 
@@ -492,4 +530,309 @@ it('enforces explicit eligibility and retires a lookup when masking takes effect
     assert.equal(ui.container.querySelector('button'), null);
     assert.equal(ui.submits(), 0);
     old.resolve({ labels: ['No longer offered'], offset: null });
+});
+
+it('keeps native combobox focus on the input and commits exact duplicate and blank occurrences', async (t) => {
+    const ui = await fixture(t, {
+        appearance: 'native',
+        labels: { open: 'Rechercher', search: 'Adresse électronique' },
+        searchPlaceholder: 'Saisissez quelques lettres',
+        triggerContent: h('span', { 'aria-hidden': true }, 'Search icon'),
+        async loadOptions({ searchTerm }) {
+            if (searchTerm === 'No results')
+                return { labels: [], offset: null };
+            return searchTerm === ''
+                ? pages[0]
+                : { labels: ['', duplicate], offset: null };
+        },
+    });
+    const opener = ui.button('Search icon');
+    assert.equal(opener.getAttribute('aria-label'), 'Rechercher');
+    const open = async () => {
+        opener.focus();
+        await ui.click('Search icon');
+        const { panel, listbox, rows } = ui.native();
+        const input = ui.search();
+        assert.equal(opener.getAttribute('aria-controls'), panel.id);
+        assert.equal(input.getAttribute('aria-controls'), listbox.id);
+        assert.equal(ui.window.document.activeElement, input);
+        return rows;
+    };
+    const active = () => ui.search().getAttribute('aria-activedescendant');
+    const assertActive = (id: string) => {
+        assert.equal(active(), id);
+        assert.equal(ui.window.document.activeElement, ui.search());
+        assert.equal(
+            ui.window.document
+                .getElementById(id)
+                ?.getAttribute('aria-selected'),
+            'true'
+        );
+    };
+
+    const [first, blank, second] = await open();
+    assert.equal(
+        ui.search().getAttribute('aria-label'),
+        'Adresse électronique'
+    );
+    assert.equal(ui.search().placeholder, 'Saisissez quelques lettres');
+    assert.deepEqual(
+        [first.textContent, blank.textContent, second.textContent],
+        pages[0].labels
+    );
+    assert.equal(blank.getAttribute('aria-label'), 'Blank value');
+    assert.equal(new Set([first.id, blank.id, second.id]).size, 3);
+    assert(await ui.nativeKey('Enter'));
+    assert.equal(await ui.nativeKey('ArrowDown', { shiftKey: true }), false);
+    assert.equal(await ui.nativeKey('ArrowDown', { isComposing: true }), false);
+    assert.deepEqual(ui.choices, []);
+    assert(await ui.nativeKey('ArrowDown'));
+    assertActive(first.id);
+    assert(await ui.nativeKey('ArrowUp'));
+    assertActive(first.id);
+    assert(await ui.nativeKey('End'));
+    assertActive(second.id);
+    assert(await ui.nativeKey('Home'));
+    assertActive(first.id);
+    assert(await ui.nativeKey('PageDown'));
+    assertActive(second.id);
+    assert(await ui.nativeKey('PageUp'));
+    assertActive(first.id);
+
+    const pointer = async (type: string, pointerType: string) => {
+        await act(async () =>
+            second.dispatchEvent(
+                new ui.window.PointerEvent(type, { pointerType, bubbles: true })
+            )
+        );
+    };
+    await pointer('pointermove', 'touch');
+    assertActive(first.id);
+    await pointer('pointermove', 'mouse');
+    assertActive(second.id);
+    await pointer('pointerout', 'mouse');
+    assert.equal(active(), null);
+    assert(await ui.nativeKey('ArrowUp'));
+    assertActive(second.id);
+    assert(await ui.nativeKey('Enter', { repeat: true }));
+    assert.deepEqual(ui.choices, []);
+    assert(await ui.nativeKey('Enter'));
+    assert.deepEqual(ui.choices, [duplicate]);
+    assert.equal(ui.dialog(), null);
+    assert.equal(ui.window.document.activeElement, opener);
+
+    await open();
+    assert(await ui.nativeKey('ArrowDown'));
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const raw = '  Needle_*  ';
+    await ui.edit(raw);
+    assert.equal(active(), null);
+    assert.equal(ui.native().listbox.hidden, true);
+    assert.equal(
+        ui.container.querySelector('[role=status]')?.getAttribute('aria-label'),
+        'Loading values…'
+    );
+    assert.equal(await ui.nativeKey('ArrowDown'), false);
+    const beforeDebounce = ui.requests.length;
+    await act(async () => t.mock.timers.tick(499));
+    assert.equal(ui.requests.length, beforeDebounce);
+    await act(async () => t.mock.timers.tick(1));
+    assert.equal(ui.requests.at(-1)?.searchTerm, raw);
+    assert.equal(ui.search().value, raw);
+    assert.deepEqual(
+        ui.native().rows.map((row) => row.textContent),
+        ['', duplicate]
+    );
+    assert.deepEqual(ui.choices, [duplicate]);
+
+    await ui.edit('No results');
+    await act(async () => t.mock.timers.tick(500));
+    assert.equal(
+        ui.container.querySelector('[role=status]')?.textContent,
+        'No matching values.'
+    );
+    assert.equal(ui.search().getAttribute('aria-expanded'), 'false');
+    await ui.edit(raw);
+    await act(async () => t.mock.timers.tick(500));
+    assert(await ui.nativeKey('ArrowDown'));
+    assertActive(ui.native().rows[0].id);
+    assert(await ui.nativeKey('Tab'));
+    assert.deepEqual(ui.choices, [duplicate, '']);
+    assert.equal(ui.dialog(), null);
+    assert.equal(ui.submits(), 0);
+});
+
+it('dismisses the native modal and retires lookups without focusing a replaced opener', async (t) => {
+    const pending = deferred<LoginExistingValuesPage>();
+    const ui = await fixture(t, {
+        appearance: 'native',
+        testIds: { dialog: 'lookup-dialog', overlay: 'lookup-overlay' },
+        loadOptions({ extensionSessionId }) {
+            return extensionSessionId === owner.extensionSessionId
+                ? pending.promise
+                : Promise.resolve({ labels: ['Fresh owner'], offset: null });
+        },
+        titleAction: h(
+            'div',
+            { role: 'dialog' },
+            h('button', { type: 'button' }, 'Nested action')
+        ),
+    });
+    const showModal = t.mock.method(
+        ui.window.HTMLDialogElement.prototype,
+        'showModal'
+    );
+    const close = t.mock.method(ui.window.HTMLDialogElement.prototype, 'close');
+    const opener = ui.button(openLabel);
+    const open = async () => {
+        opener.focus();
+        await ui.click(openLabel);
+        const { panel } = ui.native();
+        assert.equal(panel.getAttribute('data-testid'), 'lookup-dialog');
+        assert.equal(ui.window.document.activeElement, ui.search());
+        return panel;
+    };
+    const closed = (index: number) => {
+        assert.equal(ui.dialog(), null);
+        assert(ui.requests[index].signal.aborted);
+        assert.equal(ui.window.document.activeElement, opener);
+    };
+
+    const panel = await open();
+    const overlay = panel.querySelector('[data-testid=lookup-overlay]');
+    assert(overlay instanceof ui.window.HTMLElement);
+    const press = new ui.window.MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => overlay.dispatchEvent(press));
+    assert(press.defaultPrevented);
+    assert(panel.open);
+    await act(async () => overlay.click());
+    closed(0);
+
+    await open();
+    assert.equal(
+        await ui.nativeKey('Escape', {}, ui.button('Nested action')),
+        false
+    );
+    assert.equal(await ui.nativeKey('Escape', { isComposing: true }), false);
+    assert(await ui.nativeKey('Escape', { repeat: true }));
+    assert(ui.native().panel.open);
+    assert(await ui.nativeKey('Escape'));
+    closed(1);
+
+    const cancelled = await open();
+    const cancel = new ui.window.Event('cancel', { cancelable: true });
+    await act(async () => cancelled.dispatchEvent(cancel));
+    assert(cancel.defaultPrevented);
+    closed(2);
+
+    const retired = await open();
+    const restoreFocus = t.mock.method(opener, 'focus');
+    await ui.render({ owner: { ...owner, extensionSessionId: 'session-B' } });
+    assert(ui.requests[3].signal.aborted);
+    assert.equal(restoreFocus.mock.callCount(), 0);
+    assert.equal(opener.isConnected, false);
+    assert.equal(retired.open, false);
+    assert.equal(ui.dialog(), null);
+    assert(showModal.mock.callCount() >= 4);
+    assert(close.mock.callCount() >= 4);
+    await act(async () =>
+        pending.resolve({ labels: ['Retired result'], offset: null })
+    );
+    assert.equal(ui.dialog(), null);
+    await ui.click(openLabel);
+    assert.deepEqual(
+        ui.native().rows.map((row) => row.textContent),
+        ['Fresh owner']
+    );
+    assert.deepEqual(ui.choices, []);
+    assert.equal(ui.submits(), 0);
+});
+
+it('uses a safe native error label and preserves loading, formatting and append retry controls', async (t) => {
+    const initial = deferred<LoginExistingValuesPage>();
+    const append = deferred<LoginExistingValuesPage>();
+    let reads = 0;
+    const ui = await fixture(t, {
+        appearance: 'native',
+        labels: { error: 'Valeurs indisponibles' },
+        renderLoading: () => h('span', { role: 'status' }, 'Host loading'),
+        loadOptions() {
+            switch (++reads) {
+                case 1:
+                    return initial.promise;
+                case 2:
+                    return Promise.resolve(pages[0]);
+                case 3:
+                    return append.promise;
+                default:
+                    return Promise.resolve(pages[1]);
+            }
+        },
+    });
+    await ui.click(openLabel);
+    assert.equal(
+        ui.container.querySelector('[role=status]')?.textContent,
+        'Host loading'
+    );
+    await act(async () => initial.reject(new Error('private initial detail')));
+    assert.equal(
+        ui.container.querySelector('[role=alert]')?.textContent,
+        'Valeurs indisponibles'
+    );
+    assert(!ui.container.innerHTML.includes('private initial detail'));
+    await ui.render({
+        renderError(message) {
+            return h(
+                'span',
+                { role: 'alert' },
+                message === 'private append detail'
+                    ? 'Host append error'
+                    : 'Host initial error'
+            );
+        },
+    });
+    assert.equal(
+        ui.container.querySelector('[role=alert]')?.textContent,
+        'Host initial error'
+    );
+    await ui.click('Retry');
+    assert.deepEqual(
+        ui.native().rows.map((row) => row.textContent),
+        pages[0].labels
+    );
+    await ui.click('Load more');
+    assert.equal(ui.button('Load more').disabled, true);
+    assert.deepEqual(
+        ui.native().rows.map((row) => row.textContent),
+        pages[0].labels
+    );
+    await act(async () => append.reject(new Error('private append detail')));
+    assert.equal(
+        ui.container.querySelector('[role=alert]')?.textContent,
+        'Host append error'
+    );
+    assert.equal(ui.native().listbox.hidden, true);
+    await ui.click('Retry');
+    assert.deepEqual(
+        ui.requests.map(({ offset }) => offset),
+        [null, null, 'raw-page-2', 'raw-page-2']
+    );
+    assert.deepEqual(
+        ui.native().rows.map((row) => row.textContent),
+        [...pages[0].labels, ...pages[1].labels]
+    );
+    const choice = ui.native().rows[4];
+    const mouseDown = new ui.window.MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => choice.dispatchEvent(mouseDown));
+    assert(mouseDown.defaultPrevented);
+    await act(async () => choice.click());
+    assert.deepEqual(ui.choices, [duplicate]);
+    assert.equal(ui.dialog(), null);
+    assert.equal(ui.submits(), 0);
 });

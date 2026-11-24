@@ -7,6 +7,7 @@ import {
     type KeyboardEvent,
     type MouseEvent,
     type PointerEvent,
+    type ReactElement,
     type SyntheticEvent,
 } from 'react';
 import type { SelectionState } from '../ui/types.js';
@@ -50,7 +51,7 @@ export function NativeLoginExistingValuesDialog({
     changeQuery,
     choose,
     load,
-}: NativeDialogProps) {
+}: NativeDialogProps): ReactElement {
     const dialog = useRef<HTMLDialogElement>(null);
     const input = useRef<HTMLInputElement>(null);
     const [activeOccurrence, setActiveOccurrence] = useState<string | null>(

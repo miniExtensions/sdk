@@ -16,7 +16,6 @@ import {
     type AttachmentSliderProps,
 } from './AttachmentSlider.js';
 import type { AttachmentSliderBodyRow } from './AttachmentSliderBody.js';
-import { AttachmentSliderPortal } from './attachmentSliderDialogRuntime.js';
 import {
     AttachmentGalleryThumbnail,
     type AttachmentGalleryDocument,
@@ -210,7 +209,11 @@ function RemoveAttachmentTile({
 }
 
 /** The SDK renders the tile collection and viewer; storage and writes stay with its host. */
-export function AttachmentGallery(props: AttachmentGalleryProps): ReactNode {
+export function AttachmentGallery(
+    props: AttachmentGalleryProps & {
+        portal?: (typeof import('./attachmentSliderDialogRuntime.js'))['AttachmentSliderPortal'];
+    }
+): ReactNode {
     const { rows, onRemove, canRemoveFromSlider, labels } = props;
     const identityRows = useMemo(
         () => rows.map(({ id, resourceUrl }) => ({ id, url: resourceUrl })),
@@ -371,7 +374,7 @@ export function AttachmentGallery(props: AttachmentGalleryProps): ReactNode {
                 readDownload: props.readDownload,
                 onDownloadError: props.onDownloadError,
             },
-            AttachmentSliderPortal
+            props.portal
         )
     );
 }

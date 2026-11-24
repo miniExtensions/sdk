@@ -7,7 +7,7 @@ import {
 import {
     AttachmentGallery,
     type AttachmentGalleryProps,
-} from './AttachmentGallery.js';
+} from './attachment-slider.js';
 import {
     AttachmentUploadDialog,
     type AttachmentUploadDialogProps,

@@ -1755,7 +1755,7 @@ or `render`. The binding/slot examples and semantics above remain unchanged.
 ## React URL presentation
 
 The optional `/react` entry exports `UrlField`, `UrlFieldProps`, `UrlFieldOptions`
-and `renderUrlField`. `UrlField` delegates to `TextField`; its props and options
+and `renderUrlField`. Binding mode delegates to `TextField`. Its props and options
 are aliases of `TextFieldProps` and `TextFieldOptions`. The existing
 `{ binding, render }` override replaces all stock markup.
 
@@ -1783,7 +1783,7 @@ export const urlRenderers: FieldRendererSlots<ReactNode> = {
 };
 ```
 
-This is manual single-line text entry. Input uses `type="text"`, or `password`
+Binding and slot modes use manual single-line text entry. Input uses `type="text"`, or `password`
 when accepted masking config requires it, rather than browser `type="url"`
 validation. Entered spaces, case, Unicode, relative paths, incomplete values and
 non-URL strings remain native drafts. The renderer does not trim, prefix a scheme,
@@ -1814,7 +1814,7 @@ those integrations.
 
 Applications own their enclosing HTML form's submit policy: stopped key-event
 bubbling does not prevent native Enter submission. Clear is `type="button"`.
-There is no separate URL stylesheet. Import the existing optional
+For bindings and slots, import the existing optional
 `@miniextensions/sdk/react/text.css`, override its `mx-sdk-text*` classes or supply
 your own styles. JavaScript does not import CSS; `className` decorates the wrapper.
 Core and `/ui` remain React-free.
@@ -1823,6 +1823,23 @@ After building, `node examples/react-url/dev.mjs` serves synthetic presentation
 fixtures at `http://127.0.0.1:4184`. `node scripts/check-url-browser.mjs` checks
 native entry, clearing, remounts, inert text and enclosing-form Enter behavior.
 Simulated composition does not certify real OS input methods.
+
+For a host-controlled Form, use `UrlField` with `mode="controlled"`, a `value`,
+and an `onChange` callback. Primary click on the resting link focuses the native
+URL input without navigating. A middle-click opens a valid link in a new tab.
+The host can supply an existing field `id`, `form`,
+`describedBy` and `invalid` state. Deferred edits use the same clearable input
+lifecycle as other native Form fields. Deferred editing requires an `owner`
+whose token identifies the current record. This also keeps scanner values with
+the current host. The host owns Save.
+
+Use `mode="readOnly"` for the Form display path. With the respective options
+enabled, a valid HTTP attachment takes precedence over a URL button, followed by
+the shared text presentation. A host that already projects attachments can
+provide `attachmentGallery` for the same validated URL, using its existing
+media layout and download options. Import
+`@miniextensions/sdk/react/url-field.css` for the controlled and read-only
+presentations.
 
 ## React Phone Number presentation
 

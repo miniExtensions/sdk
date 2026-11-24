@@ -188,6 +188,7 @@ export function assertModuleFormats(root) {
                 './react/checkbox.css',
                 './react/text.css',
                 './react/single-line-text.css',
+                './react/url-field.css',
                 './react/number.css',
                 './react/rating.css',
                 './react/localized-numeric.css',

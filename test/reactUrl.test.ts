@@ -177,6 +177,207 @@ async function fixture(
     };
 }
 
+for (const enableInlineEdit of [false, true]) {
+    it(`controlled URL edits from its resting overlay without navigation (inline: ${enableInlineEdit})`, async (t) => {
+        const f = await fixture(t);
+        const writes: string[] = [];
+        let submits = 0;
+        const value = 'Example.test/Path?item=1';
+        const location = f.window.location.href;
+        await f.render(
+            h(
+                'section',
+                null,
+                h('form', {
+                    id: 'native-form',
+                    onSubmit: (event: { preventDefault(): void }) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                }),
+                h('label', { htmlFor: 'website' }, 'Website'),
+                h('p', { id: 'website-description' }, 'Use a site link.'),
+                h(UrlField, {
+                    mode: 'controlled',
+                    id: 'website',
+                    form: 'native-form',
+                    describedBy: 'website-description',
+                    invalid: true,
+                    value,
+                    enableInlineEdit,
+                    owner: { token: {}, isCurrent: () => true },
+                    onChange: (next) => writes.push(next),
+                })
+            )
+        );
+
+        const input = f.input();
+        const overlay = f.container.querySelector('a');
+        assert.ok(overlay);
+        assert.equal(
+            overlay.getAttribute('href'),
+            'https://Example.test/Path?item=1'
+        );
+        assert.equal(overlay.getAttribute('aria-hidden'), 'true');
+        assert.equal(overlay.tabIndex, -1);
+        const click = new f.window.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            overlay.dispatchEvent(click);
+        });
+        assert.equal(click.defaultPrevented, true);
+        assert.equal(f.window.document.activeElement, input);
+        assert.equal(f.container.querySelector('a'), null);
+        assert.equal(input.type, 'url');
+        assert.equal(input.labels?.[0]?.textContent, 'Website');
+        assert.equal(input.form?.id, 'native-form');
+        assert.equal(input.getAttribute('aria-invalid'), 'true');
+        assert.equal(
+            input.getAttribute('aria-describedby'),
+            'website-description'
+        );
+        assert.equal(input.value, value);
+        assert.deepEqual(writes, []);
+        assert.equal(submits, 0);
+        assert.equal(f.window.location.href, location);
+
+        const next = 'https://example.test/Next';
+        await f.edit(next);
+        assert.deepEqual(writes, enableInlineEdit ? [] : [next]);
+        await act(async () => input.blur());
+        assert.deepEqual(writes, [next]);
+        if (!enableInlineEdit)
+            assert.ok(f.container.querySelector('a[aria-hidden="true"]'));
+        assert.equal(submits, 0);
+    });
+}
+
+it('a dirty URL writer settles only for the same generation and Clear writes one empty string', async (t) => {
+    const f = await fixture(t);
+    const previous: string[] = [];
+    const current: string[] = [];
+    const next = (
+        owner: object,
+        value: string,
+        onChange: (value: string) => void
+    ) =>
+        h(UrlField, {
+            mode: 'controlled',
+            id: 'website',
+            value,
+            enableInlineEdit: true,
+            initialMobile: true,
+            owner: { token: owner, isCurrent: () => true },
+            onChange,
+        });
+    const owner = {};
+    const writeCurrent = (value: string) => current.push(value);
+    await f.render(
+        next({}, 'https://example.test/first', (value) => previous.push(value))
+    );
+    await act(async () => f.input().focus());
+    await f.edit('https://example.test/obsolete');
+    const accepted = 'https://example.test/second';
+    await f.render(next(owner, accepted, writeCurrent));
+    assert.deepEqual(previous, []);
+    assert.deepEqual(current, []);
+    assert.equal(f.input().value, accepted);
+
+    const clear = f.container.querySelector('button[aria-label="Clear"]');
+    assert.ok(clear instanceof f.window.HTMLButtonElement);
+    assert.equal(clear.getAttribute('type'), 'button');
+    await act(async () => clear.click());
+    assert.deepEqual(current, ['']);
+
+    await act(async () => f.input().focus());
+    await f.edit('https://example.test/retired');
+    await f.render(
+        h(UrlField, {
+            mode: 'readOnly',
+            value: 'Display value',
+            language: 'en',
+        })
+    );
+    assert.deepEqual(current, ['']);
+    assert.equal(f.container.textContent, 'Display value');
+
+    await f.render(next(owner, accepted, writeCurrent));
+    await act(async () => f.input().focus());
+    await f.edit('https://example.test/settled');
+    await f.render(null);
+    assert.deepEqual(current, ['', 'https://example.test/settled']);
+});
+
+it('an untyped deferred URL without an owner disables its input and scanner', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const props = {
+        mode: 'controlled' as const,
+        enableInlineEdit: true as const,
+        value: 'https://example.test/accepted',
+        onChange: (value: string) => writes.push(value),
+        owner: { token: {}, isCurrent: () => true },
+        scanner: {
+            enableQRCodeScannerForFormField: true,
+            autoStartCamera: true,
+        },
+    };
+    // Exercise the runtime boundary for JavaScript callers.
+    Reflect.deleteProperty(props, 'owner');
+    await f.render(h(UrlField, props));
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.container.querySelector('button'), null);
+    await f.edit('https://example.test/forbidden');
+    await f.render(null);
+    assert.deepEqual(writes, []);
+});
+
+it('read-only URL renders an HTTP attachment before a button and preserves invalid and text fallbacks', async (t) => {
+    const f = await fixture(t);
+    const readOnly = (
+        value: string | null,
+        displayAsAttachments: boolean,
+        displayAsButton: boolean
+    ) =>
+        h(UrlField, {
+            mode: 'readOnly',
+            language: 'en',
+            value,
+            displayAsAttachments,
+            displayAsButton,
+            validButtonLabel: 'Open the website',
+            invalidButtonLabel: 'URL unavailable',
+        });
+    await f.render(readOnly('https://example.invalid/report.pdf', true, true));
+    assert.equal(
+        f.container.querySelector('.mx-sdk-created-time-url-button'),
+        null
+    );
+    assert.ok(f.container.querySelector('ul[aria-label="Attachments"]'));
+    assert.equal(f.container.querySelector('input'), null);
+
+    await f.render(readOnly('mailto:qa@example.test', true, true));
+    const link = f.container.querySelector('a.mx-sdk-created-time-url-button');
+    assert.equal(link?.getAttribute('href'), 'mailto:qa@example.test');
+    assert.equal(link?.getAttribute('target'), '_blank');
+    assert.equal(link?.getAttribute('rel'), 'noreferrer');
+    assert.equal(link?.textContent, 'Open the website');
+
+    for (const value of [null, '', 'javascript:alert(1)']) {
+        await f.render(readOnly(value, true, true));
+        assert.equal(f.container.querySelector('a[href]'), null);
+        const button = f.container.querySelector('button');
+        assert.ok(button?.disabled);
+        assert.equal(button.textContent, 'URL unavailable');
+    }
+
+    await f.render(readOnly('A literal value', true, false));
+    assert.equal(f.container.textContent, 'A literal value');
+    assert.equal(f.container.querySelector('button,a[href],input'), null);
+});
+
 it('binding and Form slot preserve literal URL drafts without normalization, activation or native URL validation', async (t) => {
     const f = await fixture(t, {
         enforceUniqueness: true,

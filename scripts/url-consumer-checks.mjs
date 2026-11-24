@@ -42,6 +42,25 @@ export function Compositions({ form, portal }: { form: FormRenderScope; portal: 
 }
 `;
 
+export const urlModeTypedConsumer = String.raw`
+import { createElement as urlElement } from 'react';
+import { UrlField, type UrlFieldProps as BoundUrlProps, type ControlledUrlFieldProps, type ReadOnlyUrlFieldProps, type UrlEditOwner } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/url-field.css';
+declare const urlOwner: UrlEditOwner;
+declare const urlBinding: BoundUrlProps['binding'];
+const controlledUrl: ControlledUrlFieldProps = {mode: 'controlled', value: null, onChange(value) { const text: string = value; void text; }, owner: urlOwner, enableInlineEdit: true};
+const readOnlyUrl: ReadOnlyUrlFieldProps = {mode: 'readOnly', value: 'https://example.test', language: 'en', displayAsButton: true};
+urlElement(UrlField, {binding: urlBinding});
+urlElement(UrlField, controlledUrl);
+urlElement(UrlField, readOnlyUrl);
+// @ts-expect-error Binding and controlled writes cannot be combined.
+urlElement(UrlField, {...controlledUrl, binding: urlBinding});
+// @ts-expect-error Read-only presentation accepts no writer.
+urlElement(UrlField, {...readOnlyUrl, onChange() {}});
+// @ts-expect-error Deferred editing requires a current record owner.
+urlElement(UrlField, {mode: 'controlled', enableInlineEdit: true, value: '', onChange() {}});
+`;
+
 /** Installed ESM/CJS APIs with synthetic drafts; no navigation, requests or Save. */
 export async function checkUrlConsumer({
     consumerDirectory,
@@ -89,6 +108,12 @@ export async function checkUrlConsumer({
             () => require.resolve('@miniextensions/sdk/react/url.css'),
             { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }
         );
+        const urlStyles = readFileSync(
+            require.resolve('@miniextensions/sdk/react/url-field.css'),
+            'utf8'
+        );
+        assert.match(urlStyles, /\.mx-sdk-url-overlay/);
+        assert.doesNotMatch(urlStyles, /@tailwind|@apply/);
         for (const format of ['esm', 'cjs']) {
             const load = (name) =>
                 format === 'cjs'
@@ -370,6 +395,91 @@ export async function checkUrlConsumer({
                 assert.equal(window.location.href, initialLocation);
                 assert.equal(window.__urlConsumerExecuted, undefined);
                 assert.equal(globalThis.__urlConsumerExecuted, undefined);
+                checks++;
+
+                const edits = [];
+                const value = 'https://example.test/path';
+                await act(async () =>
+                    root.render(
+                        h(
+                            'form',
+                            { id: 'consumer-url-form' },
+                            h('label', { htmlFor: 'consumer-url' }, 'Website'),
+                            h('p', { id: 'consumer-help' }, 'Use a site link'),
+                            h(react.UrlField, {
+                                mode: 'controlled',
+                                id: 'consumer-url',
+                                form: 'consumer-url-form',
+                                describedBy: 'consumer-help',
+                                value,
+                                onChange: (next) => edits.push(next),
+                            })
+                        )
+                    )
+                );
+                assert.equal(input().type, 'url');
+                assert.equal(input().form?.id, 'consumer-url-form');
+                assert.equal(input().labels?.[0]?.textContent, 'Website');
+                assert.equal(
+                    input().getAttribute('aria-describedby'),
+                    'consumer-help'
+                );
+                const overlay = container.querySelector(
+                    'a[aria-hidden="true"]'
+                );
+                assert.equal(overlay.getAttribute('href'), value);
+                assert.equal(overlay.tabIndex, -1);
+                const click = new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                });
+                await act(async () => overlay.dispatchEvent(click));
+                assert.equal(click.defaultPrevented, true);
+                assert.equal(window.document.activeElement, input());
+                assert.equal(input().value, value);
+                assert.deepEqual(edits, []);
+                assert.equal(writes, beforeOverride);
+                await edit('https://example.test/next');
+                assert.deepEqual(edits, ['https://example.test/next']);
+                checks++;
+
+                const showUrl = async (resource) =>
+                    act(async () =>
+                        root.render(
+                            h(react.UrlField, {
+                                mode: 'readOnly',
+                                value: resource,
+                                language: 'en',
+                                displayAsAttachments: true,
+                                displayAsButton: true,
+                                validButtonLabel: 'Open the website',
+                            })
+                        )
+                    );
+                await showUrl('https://example.invalid/report.pdf');
+                assert.ok(
+                    container.querySelector('ul[aria-label="Attachments"]')
+                );
+                assert.equal(
+                    container.querySelector('.mx-sdk-created-time-url-button'),
+                    null
+                );
+                await showUrl('mailto:example@example.test');
+                assert.equal(
+                    container.querySelector('a')?.getAttribute('href'),
+                    'mailto:example@example.test'
+                );
+                assert.equal(
+                    container.querySelector('a')?.textContent,
+                    'Open the website'
+                );
+                await showUrl(null);
+                assert.equal(container.querySelector('a[href]'), null);
+                assert.equal(container.querySelector('button')?.disabled, true);
+                assert.equal(input(), null);
+                assert.equal(requests, 0);
+                assert.equal(openCalls, 0);
+                assert.equal(window.location.href, initialLocation);
                 checks++;
             } finally {
                 await act(async () => root.unmount());

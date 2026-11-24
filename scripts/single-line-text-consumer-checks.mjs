@@ -1,4 +1,5 @@
 import { runAgeQualifiedConsumerInstall } from './age-qualified-consumer-install.mjs';
+import { urlModeTypedConsumer } from './url-consumer-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -381,7 +382,16 @@ export function checkSingleLineTextReactMatrix({
                 },
             })
         );
-        const runner = `import {checkSingleLineTextConsumer} from ${JSON.stringify(import.meta.url)};\nimport {checkTextConsumer} from ${JSON.stringify(new URL('./text-consumer-checks.mjs', import.meta.url).href)};\nconst options=${JSON.stringify({ consumerDirectory: directory, happyDomModulePath })};\nconst result=await checkSingleLineTextConsumer(options);result.bindingChecks=await checkTextConsumer(options);console.log(JSON.stringify(result));\n`;
+        const runner = `
+import { checkSingleLineTextConsumer } from ${JSON.stringify(import.meta.url)};
+import { checkTextConsumer } from ${JSON.stringify(new URL('./text-consumer-checks.mjs', import.meta.url).href)};
+import { checkUrlConsumer } from ${JSON.stringify(new URL('./url-consumer-checks.mjs', import.meta.url).href)};
+const options = ${JSON.stringify({ consumerDirectory: directory, happyDomModulePath })};
+const result = await checkSingleLineTextConsumer(options);
+result.bindingChecks = await checkTextConsumer(options);
+result.urlChecks = await checkUrlConsumer(options);
+console.log(JSON.stringify(result));
+`;
         writeFileSync(join(directory, 'runtime.mjs'), runner);
         for (const version of [
             { react: '18.3.1', types: '18.3.12', dom: '18.3.1' },
@@ -401,7 +411,10 @@ export function checkSingleLineTextReactMatrix({
             ]);
             for (const extension of ['mts', 'cts']) {
                 const file = 'consumer.' + extension;
-                writeFileSync(join(directory, file), typed);
+                writeFileSync(
+                    join(directory, file),
+                    typed + urlModeTypedConsumer
+                );
                 run(process.execPath, [
                     typescriptBin,
                     '--noEmit',
@@ -430,6 +443,7 @@ export function checkSingleLineTextReactMatrix({
             assert.equal(result.react, version.react);
             assert.equal(result.checks, 38);
             assert.ok(result.bindingChecks.checks > 0);
+            assert.equal(result.urlChecks.checks, 16);
             assert.equal(result.cleanup, 'completed');
             versions.push(result);
         }

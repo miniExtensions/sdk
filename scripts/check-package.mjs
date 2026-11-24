@@ -824,6 +824,8 @@ try {
         'dist/cjs/react/SingleLineTextField.d.ts',
         'dist/esm/react/single-line-text.css',
         'dist/cjs/react/single-line-text.css',
+        'dist/esm/react/url-field.css',
+        'dist/cjs/react/url-field.css',
         'docs/customer-chat.md',
         'docs/image-annotation-markerjs2-license.txt',
         'examples/react-image-annotation/README.md',
@@ -3485,9 +3487,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(urlProof.checks, 12);
+    assert.equal(urlProof.checks, 16);
     console.log(
-        `Installed URL renderer, binding, shared Text CSS and local example: ${urlProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+        `Installed URL renderer, binding, controlled and read-only field, CSS and local example: ${urlProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const emailProof = await checkEmailConsumer({
         consumerDirectory: temporaryDirectory,

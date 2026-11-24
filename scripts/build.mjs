@@ -418,6 +418,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-address',
         'address-field',
         'single-line-text',
+        'url-field',
         'complete-collaborators',
         'complete-date',
         'date',

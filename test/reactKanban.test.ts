@@ -841,9 +841,8 @@ it('composes actual rich Card leaves and image lifetimes inside the public board
 
 it('preserves native keyboard rectangle selection and empty-container offsets with immutable measured snapshots', async (t) => {
     const f = await fixture(t),
-        { coordinateGetter } = await import(
-            '../src/react/kanban/keyboardCoordinates.js'
-        );
+        { coordinateGetter, getKeyboardHorizontalCollision, getKeyboardMove } =
+            await import('../src/react/kanban/keyboardCoordinates.js');
     type Options = Parameters<typeof coordinateGetter>[1];
     type Containers = Options['context']['droppableContainers'];
     type Entry = NonNullable<ReturnType<Containers['get']>>;
@@ -942,6 +941,105 @@ it('preserves native keyboard rectangle selection and empty-container offsets wi
         ),
         { x: 920, y: 474 }
     );
+    for (const [width, targetX] of [
+        [4, 822],
+        [40, 840],
+    ] as const) {
+        const nextX = 840 + width;
+        const narrow = entry('narrow', rect(820, 400, width, 400), {
+            type: 'container',
+            children: [],
+        });
+        const nextCard = entry('next-card', rect(nextX, 500));
+        const narrowOptions = options([narrow, nextCard]);
+        const narrowMove = getKeyboardMove(
+            key('ArrowRight') as unknown as KeyboardEvent,
+            narrowOptions,
+            null
+        );
+        assert.deepEqual(narrowMove, {
+            coordinates: { x: targetX, y: 474 },
+            horizontalTarget: {
+                activeId: 'active',
+                id: 'narrow',
+                registrationKey: 'narrow',
+            },
+        });
+        const narrowTarget = narrowMove?.horizontalTarget ?? null;
+        // The translated 300px overlay overlaps the next card. Hover has added
+        // only the active record to the measured narrow column.
+        narrow.data.current = { type: 'container', children: ['active'] };
+        narrowOptions.context.collisionRect = rect(targetX, 474);
+        const collision = {
+            active: narrowOptions.context.active!,
+            collisionRect: narrowOptions.context.collisionRect,
+            droppableRects: narrowOptions.context.droppableRects,
+            droppableContainers: [narrow, nextCard],
+            pointerCoordinates: null,
+        };
+        assert.equal(
+            getKeyboardHorizontalCollision(collision, narrowTarget)?.id,
+            'narrow'
+        );
+        assert.equal(
+            getKeyboardHorizontalCollision(
+                { ...collision, pointerCoordinates: { x: targetX, y: 474 } },
+                narrowTarget
+            ),
+            null
+        );
+        assert.deepEqual(
+            getKeyboardMove(
+                key('ArrowRight') as unknown as KeyboardEvent,
+                narrowOptions,
+                narrowTarget
+            ),
+            {
+                coordinates: { x: nextX, y: 500 },
+                horizontalTarget: {
+                    activeId: 'active',
+                    id: 'next-card',
+                    registrationKey: 'next-card',
+                },
+            }
+        );
+        narrow.node.current = null;
+        assert.equal(
+            getKeyboardHorizontalCollision(collision, narrowTarget),
+            null
+        );
+    }
+
+    const shortCard = entry('short-card', rect(371, 500, 109));
+    const wideMoveOptions = options([shortCard]);
+    wideMoveOptions.context.collisionRect = rect(500, 500, 623);
+    const wideMove = getKeyboardMove(
+        key('ArrowLeft') as unknown as KeyboardEvent,
+        wideMoveOptions,
+        null
+    );
+    assert.deepEqual(wideMove, {
+        coordinates: { x: 371, y: 500 },
+        horizontalTarget: {
+            activeId: 'active',
+            id: 'short-card',
+            registrationKey: 'short-card',
+        },
+    });
+    assert.equal(
+        getKeyboardHorizontalCollision(
+            {
+                active: wideMoveOptions.context.active!,
+                collisionRect: rect(371, 500, 623),
+                droppableRects: wideMoveOptions.context.droppableRects,
+                droppableContainers: [shortCard],
+                pointerCoordinates: null,
+            },
+            wideMove?.horizontalTarget ?? null
+        )?.id,
+        'short-card'
+    );
+
     const full = entry('full', empty, {
         type: 'container',
         children: ['child'],

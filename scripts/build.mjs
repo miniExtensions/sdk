@@ -403,6 +403,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-verification',
         'complete-extension-password',
         'login-existing-values-picker',
+        'login-signup-confirmation-dialog',
         'complete-image-annotation',
         'complete-barcode-scanner',
         'barcode',

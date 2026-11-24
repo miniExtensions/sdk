@@ -222,6 +222,17 @@ test('mounted multi-value quick Filter sends only selected choice IDs and clears
 
 test('the opt-in Quick combobox searches and shares the Advanced draft owner', async (t) => {
     const f = await htmlPresentationFixture(t);
+    const reveals: { id: string; options: unknown }[] = [];
+    t.mock.method(
+        f.window.Element.prototype,
+        'scrollIntoView',
+        function (
+            this: InstanceType<typeof f.window.Element>,
+            options: unknown
+        ) {
+            reveals.push({ id: this.id, options });
+        }
+    );
     const host = quickFilterOwner(null, ['labels']);
     const outcomes: PortalVisitorFilterOutcome[] = [];
     const blueStyle = {
@@ -299,6 +310,12 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
     await f.click(input);
     await press('ArrowDown');
     assert.equal(input.getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(reveals, [
+        {
+            id: input.getAttribute('aria-activedescendant'),
+            options: { block: 'nearest', inline: 'nearest' },
+        },
+    ]);
     assert.equal(listbox().getAttribute('aria-multiselectable'), 'true');
     assert.equal(option('Blue').getAttribute('aria-selected'), 'false');
     assert.equal(host.calls.length, 0);
@@ -332,6 +349,7 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
     await pointer(pressed, 'pointerdown');
     await pointer(pressed, 'click');
     assert.equal(host.calls.length, 1);
+    assert.equal(reveals.length, 1);
     const condition = host.calls[0].criteria?.conditions[0];
     assert.equal(condition?.type, 'singleCondition');
     assert.deepEqual(condition.setting, {

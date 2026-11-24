@@ -118,6 +118,11 @@ function SelectControl(props: ControlProps): ReactNode {
     const id = props.inputId ?? generatedId;
     const root = useRef<HTMLDivElement>(null);
     const input = useRef<HTMLInputElement>(null);
+    const revealAfterKey = useRef<{
+        epoch: object;
+        index: number;
+        choiceKey: string;
+    } | null>(null);
     const focusAfterRemoval = useRef<{
         epoch: object;
         element: HTMLButtonElement;
@@ -295,6 +300,40 @@ function SelectControl(props: ControlProps): ReactNode {
     const found = state.text
         ? (fuse?.search(state.text).map((result) => result.item) ?? [])
         : candidates;
+    const moveActiveWithKeyboard = (index: number) => {
+        if (portalFilter && writable()) {
+            const choice = found[index];
+            revealAfterKey.current = choice
+                ? { epoch, index, choiceKey: key(choice) }
+                : null;
+        }
+        update({ open: true, active: index });
+    };
+    commitEffect(() => {
+        const pending = revealAfterKey.current;
+        if (!pending) return;
+        revealAfterKey.current = null;
+        const target = input.current;
+        const choice = found[state.active];
+        if (
+            !portalFilter ||
+            pending.epoch !== epoch ||
+            pending.index !== state.active ||
+            !state.open ||
+            !choice ||
+            key(choice) !== pending.choiceKey ||
+            !target ||
+            target.ownerDocument.activeElement !== target ||
+            !writable()
+        )
+            return;
+        const activeId = target.getAttribute('aria-activedescendant');
+        const option = activeId
+            ? target.ownerDocument.getElementById(activeId)
+            : null;
+        if (option && root.current?.contains(option))
+            option.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    });
     const settlePending = (committed: boolean) => {
         const pending = pendingSettlement.current;
         if (!pending) return;
@@ -759,24 +798,17 @@ function SelectControl(props: ControlProps): ReactNode {
                                           ? 0
                                           : optionCount - 1
                                       : state.active + direction;
-                              update({
-                                  open: true,
-                                  active: Math.max(
-                                      -1,
-                                      Math.min(optionCount - 1, next)
-                                  ),
-                              });
+                              moveActiveWithKeyboard(
+                                  Math.max(-1, Math.min(optionCount - 1, next))
+                              );
                           } else if (
                               state.open &&
                               (event.key === 'Home' || event.key === 'End')
                           ) {
                               event.preventDefault();
-                              update({
-                                  active:
-                                      event.key === 'Home'
-                                          ? 0
-                                          : optionCount - 1,
-                              });
+                              moveActiveWithKeyboard(
+                                  event.key === 'Home' ? 0 : optionCount - 1
+                              );
                           } else if (event.key === 'Enter') {
                               event.preventDefault();
                               if (!state.open || (portalFilter && event.repeat))

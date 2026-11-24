@@ -18,6 +18,9 @@ const calls = [];
 const selections = [];
 const trusted = [];
 const settingsActivations = [];
+const nativeOverlayClicks = [];
+const nativeQuery = '  Native needle_*  ';
+const nativeQueryLabels = Array.from({ length: 40 }, (_, index) => 'Native result ' + (index + 1));
 const signupDraft = 'masked-signup@example.invalid';
 const unmaskedDraft = 'visible-signup@example.invalid';
 let signupCancels = 0;
@@ -34,6 +37,7 @@ function App() {
         allowed: true,
         disabled: false,
         masked: false,
+        pickerAppearance: undefined,
         signup: null,
         signupAttempt: 'A',
         signupDisabled: false,
@@ -71,7 +75,18 @@ function App() {
         allowSearchFromExistingValuesInLogin: state.allowed,
         disabled: state.disabled,
         maskPasswordOnLoginScreen: state.masked,
-        labels: { title: 'Valeurs existantes', error: 'Values unavailable' },
+        labels: {
+            title: 'Valeurs existantes', error: 'Values unavailable',
+            ...(state.pickerAppearance === 'native' && { open: 'Rechercher', search: 'Adresse électronique' }),
+        },
+        ...(state.pickerAppearance === 'native' && {
+            appearance: 'native',
+            searchPlaceholder: 'Saisissez quelques lettres',
+            triggerContent: h('svg', { 'aria-hidden': 'true', 'data-testid': 'native-login-search-icon', width: 20, height: 20, viewBox: '0 0 20 20' },
+                h('path', { d: 'm14 14 4 4', stroke: 'currentColor' }),
+                h('circle', { cx: 8, cy: 8, r: 6, fill: 'none', stroke: 'currentColor' })),
+            testIds: { dialog: 'native-login-search-dialog', overlay: 'native-login-search-overlay' },
+        }),
         titleAction: h('button', {
             type: 'button',
             onClick(event) { settingsActivations.push(event.isTrusted); },
@@ -83,6 +98,8 @@ function App() {
             if (extensionSessionId === 'held') {
                 return new Promise(resolve => { release = resolve; });
             }
+            if (state.pickerAppearance === 'native' && searchTerm === nativeQuery)
+                return { labels: nativeQueryLabels, offset: null };
             if (searchTerm) return { labels: ['Current query result'], offset: null };
             if (offset !== null) {
                 if (appendFailure) {
@@ -103,6 +120,9 @@ function App() {
 document.addEventListener('click', event => {
     if (event.target.closest('[role=dialog] li button')) trusted.push(event.isTrusted);
 });
+document.addEventListener('click', event => {
+    if (event.target.closest('[data-testid=native-login-search-overlay]')) nativeOverlayClicks.push(event.isTrusted);
+}, true);
 for (const type of ['pointerdown', 'pointerup']) {
     document.addEventListener(type, event => {
         const dialog = event.target instanceof Element && event.target.closest('dialog[open]');
@@ -122,6 +142,7 @@ window.pickerProof = {
     update: (patch) => update(patch),
     release: () => release({ labels: ['Retired owner result'], offset: 'old-page' }),
     snapshot: () => ({ react: React.version, selections, calls, submits, trusted, settingsActivations, signupCancels, signupCreates, signupPointers }),
+    overlayClicks: () => nativeOverlayClicks.slice(),
 };
 `;
 
@@ -829,6 +850,182 @@ export async function checkLoginExistingValuesBrowser({
         assert.deepEqual(proof.settingsActivations, [true, true]);
         assert.equal(proof.submits, 0);
         assert.equal(proof.react, expectedReactVersion);
+
+        await patch({ allowed: true, pickerAppearance: 'native' });
+        const nativeTrigger = button('Rechercher');
+        await nativeTrigger.getByTestId('native-login-search-icon').waitFor();
+        const nativeDialog = page.getByRole('dialog', {
+            name: 'Valeurs existantes',
+            exact: true,
+        });
+        const nativeSearch = nativeDialog.getByRole('combobox', {
+            name: 'Adresse électronique',
+            exact: true,
+        });
+        const nativeList = nativeDialog.getByRole('listbox');
+        const nativeOptions = nativeList.getByRole('option');
+        const openNative = async () => {
+            await nativeTrigger.click();
+            await nativeOptions.nth(2).waitFor();
+            await focus(nativeSearch);
+        };
+        const activeNativeOption = async (index) => {
+            const id = await nativeOptions.nth(index).getAttribute('id');
+            assert(id);
+            assert.equal(
+                await nativeSearch.getAttribute('aria-activedescendant'),
+                id
+            );
+            await focus(nativeSearch);
+            return id;
+        };
+        const readNativeSelection = async (expected = []) => {
+            const current = await read();
+            assert.deepEqual(
+                current.selections.slice(proof.selections.length),
+                expected
+            );
+            assert.equal(current.submits, 0);
+        };
+
+        await openNative();
+        assert.equal(
+            await nativeDialog.getAttribute('data-testid'),
+            'native-login-search-dialog'
+        );
+        assert(
+            await nativeDialog.evaluate(
+                (element) =>
+                    element instanceof HTMLDialogElement && element.open
+            )
+        );
+        assert.equal(
+            await nativeSearch.getAttribute('placeholder'),
+            'Saisissez quelques lettres'
+        );
+        await nativeDialog
+            .getByRole('button', { name: 'Réglages', exact: true })
+            .click();
+        assert.deepEqual(
+            (await read()).settingsActivations.slice(
+                proof.settingsActivations.length
+            ),
+            [true]
+        );
+        assert(await nativeDialog.isVisible());
+        await nativeSearch.click();
+        await page.keyboard.press('ArrowDown');
+        await activeNativeOption(0);
+        const nativeQuery = '  Native needle_*  ';
+        const beforeNativeQuery = (await read()).calls.length;
+        await page.keyboard.type(nativeQuery);
+        await nativeOptions.nth(39).waitFor();
+        await focus(nativeSearch);
+        assert.equal(await nativeSearch.inputValue(), nativeQuery);
+        assert.deepEqual(
+            (await read()).calls
+                .slice(beforeNativeQuery)
+                .map(({ query, offset }) => [query, offset]),
+            [[nativeQuery, null]]
+        );
+        await readNativeSelection();
+
+        const listId = await nativeList.getAttribute('id');
+        assert(listId);
+        assert.equal(await nativeSearch.getAttribute('aria-controls'), listId);
+        const initialScroll = await nativeList.evaluate(
+            (element) => element.scrollTop
+        );
+        await page.keyboard.press('End');
+        const lastOptionId = await activeNativeOption(39);
+        await page.waitForFunction(
+            ({ listId, optionId, initialScroll }) => {
+                const list = document.getElementById(listId);
+                const option = document.getElementById(optionId);
+                if (!list || !option || list.scrollTop <= initialScroll)
+                    return false;
+                const optionBounds = option.getBoundingClientRect();
+                const listBounds = list.getBoundingClientRect();
+                return (
+                    optionBounds.top >= listBounds.top &&
+                    optionBounds.bottom <= listBounds.bottom
+                );
+            },
+            { listId, optionId: lastOptionId, initialScroll }
+        );
+        const lastOptionScroll = await nativeList.evaluate(
+            (element) => element.scrollTop
+        );
+        await page.keyboard.press('Escape');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(nativeTrigger);
+        await readNativeSelection();
+
+        await openNative();
+        assert.deepEqual(await nativeOptions.allTextContents(), [
+            duplicate,
+            '',
+            duplicate,
+        ]);
+        const occurrenceIds = [];
+        for (let index = 0; index < 3; index++) {
+            await page.keyboard.press('ArrowDown');
+            occurrenceIds.push(await activeNativeOption(index));
+        }
+        assert.equal(new Set(occurrenceIds).size, 3);
+        await page.keyboard.press('Enter');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(nativeTrigger);
+        await readNativeSelection([duplicate]);
+
+        await openNative();
+        await page.keyboard.press('ArrowDown');
+        await activeNativeOption(0);
+        await page.keyboard.press('ArrowDown');
+        const tabSelectedOccurrence = await activeNativeOption(1);
+        await page.keyboard.press('Tab');
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await readNativeSelection([duplicate, '']);
+
+        await openNative();
+        const outside = await page
+            .getByTestId('native-login-search-overlay')
+            .evaluate((overlay) => {
+                const { top, left, right, bottom } =
+                    overlay.getBoundingClientRect();
+                return [
+                    [left + 4, top + 4],
+                    [right - 4, top + 4],
+                    [left + 4, bottom - 4],
+                    [right - 4, bottom - 4],
+                ].find(([x, y]) => {
+                    const target = document.elementFromPoint(x, y);
+                    return target != null && overlay.contains(target);
+                });
+            });
+        assert(outside, 'Expected a physically exposed native picker overlay');
+        await page.mouse.click(...outside);
+        await nativeDialog.waitFor({ state: 'hidden' });
+        await focus(nativeTrigger);
+        await readNativeSelection([duplicate, '']);
+        const trustedOutside = await page.evaluate(() =>
+            window.pickerProof.overlayClicks()
+        );
+        assert.deepEqual(trustedOutside, [true]);
+
+        evidence.nativeLoginCombobox = {
+            rawQuery: nativeQuery,
+            occurrenceIds,
+            selectedOccurrence: occurrenceIds[2],
+            tabSelectedOccurrence,
+            lastOptionScroll,
+            selections: (await read()).selections.slice(
+                proof.selections.length
+            ),
+            trustedOutside: trustedOutside[0],
+            restoredFocusAfter: ['Escape', 'Enter', 'outside'],
+            submits: (await read()).submits,
+        };
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(unexpectedRequests, []);
         Object.assign(evidence, proof, {

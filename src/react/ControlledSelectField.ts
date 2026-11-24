@@ -9,6 +9,8 @@ import {
     useState,
     type ReactNode,
     type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
     type SyntheticEvent,
 } from 'react';
 import { RadioInput } from './RadioInput.js';
@@ -125,11 +127,26 @@ function SelectControl(props: ControlProps): ReactNode {
         generation.current = { token: props.owner.token, epoch: {} };
     const epoch = generation.current.epoch;
     const live = useRef<ControlProps | null>(null);
+    const pointerSelection = useRef<{
+        target: Element;
+        owner: SelectEditOwner;
+        epoch: object;
+    } | null>(null);
     const pendingSettlement = useRef<SelectionSettlement | null>(null);
     const commitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
     commitEffect(() => {
         live.current = props;
+        const selection = pointerSelection.current;
+        if (
+            selection &&
+            (selection.epoch !== epoch ||
+                props.visible === false ||
+                props.disabled ||
+                props.readOnly ||
+                !selection.owner.isCurrent())
+        )
+            pointerSelection.current = null;
         return () => {
             live.current = null;
         };
@@ -210,6 +227,33 @@ function SelectControl(props: ControlProps): ReactNode {
         !props.readOnly &&
         !props.disabled &&
         props.owner.isCurrent();
+    const selectionPointerEvents = portalFilter
+        ? {
+              onPointerDown: (event: PointerEvent) => {
+                  if (event.isPrimary && event.button === 0)
+                      pointerSelection.current = writable()
+                          ? {
+                                target: event.currentTarget,
+                                owner: props.owner,
+                                epoch,
+                            }
+                          : null;
+              },
+              onPointerCancel: (event: PointerEvent) => {
+                  if (event.isPrimary) pointerSelection.current = null;
+              },
+          }
+        : {};
+    const admitsSelectionClick = (event: MouseEvent) => {
+        if (!portalFilter || event.detail === 0) return true;
+        const selection = pointerSelection.current;
+        pointerSelection.current = null;
+        return (
+            selection?.target === event.currentTarget &&
+            selection.epoch === epoch &&
+            selection.owner.isCurrent()
+        );
+    };
     const disabled = props.readOnly === true || props.disabled === true;
     const canAdd =
         !disabled &&
@@ -502,9 +546,13 @@ function SelectControl(props: ControlProps): ReactNode {
                               props.labels?.remove?.(choiceLabel) ??
                               `Remove ${choiceLabel}`,
                           'data-select-remove': choice.name,
+                          ...selectionPointerEvents,
                           onClick: (
                               event: import('react').MouseEvent<HTMLButtonElement>
-                          ) => remove(choice.name, event.currentTarget),
+                          ) => {
+                              if (admitsSelectionClick(event))
+                                  remove(choice.name, event.currentTarget);
+                          },
                       },
                       portalFilter
                           ? h(
@@ -731,7 +779,8 @@ function SelectControl(props: ControlProps): ReactNode {
                               });
                           } else if (event.key === 'Enter') {
                               event.preventDefault();
-                              if (!state.open) return;
+                              if (!state.open || (portalFilter && event.repeat))
+                                  return;
                               if (found[state.active])
                                   choose(found[state.active]!.name);
                               else if (
@@ -776,12 +825,16 @@ function SelectControl(props: ControlProps): ReactNode {
                                         'aria-selected': props.values.includes(
                                             choice.name
                                         ),
+                                        ...selectionPointerEvents,
                                         onMouseDown: (
                                             event: import('react').MouseEvent
                                         ) => event.preventDefault(),
                                         onMouseEnter: () =>
                                             update({ active: index }),
-                                        onClick: () => choose(choice.name),
+                                        onClick: (event: MouseEvent) => {
+                                            if (admitsSelectionClick(event))
+                                                choose(choice.name);
+                                        },
                                     },
                                     badge(choice, false),
                                     portalFilter &&

@@ -248,7 +248,6 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
     assert.ok(chevron);
     assert.equal(chevron.getAttribute('width'), '16');
     assert.equal(chevron.getAttribute('height'), '16');
-    assert.equal(quick.querySelector('button[aria-label="Clear"]'), null);
     const listbox = () => {
         const menu = f.window.document.getElementById(
             input.getAttribute('aria-controls') ?? ''
@@ -267,11 +266,28 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
         );
         return item;
     };
-    const press = async (key: string) => {
+    const press = async (key: string, repeat = false) => {
         await act(async () => {
             input.dispatchEvent(
                 new f.window.KeyboardEvent('keydown', {
                     key,
+                    repeat,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        });
+    };
+    const pointer = async (
+        element: ReturnType<typeof option>,
+        type: 'pointerdown' | 'click'
+    ) => {
+        await act(async () => {
+            element.dispatchEvent(
+                new f.window.PointerEvent(type, {
+                    button: 0,
+                    isPrimary: true,
+                    detail: 1,
                     bubbles: true,
                     cancelable: true,
                 })
@@ -303,7 +319,18 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
         ['Blue']
     );
     assert.equal(host.calls.length, 0);
-    await f.click(option('Blue'));
+    const pressed = option('Blue');
+    await pointer(pressed, 'pointerdown');
+    const previous = host.port.read();
+    assert.ok(previous);
+    await act(async () =>
+        host.update({ stamp: { ...previous.stamp, generation: 2 } })
+    );
+    assert.equal(option('Blue'), pressed);
+    await pointer(pressed, 'click');
+    assert.equal(host.calls.length, 0);
+    await pointer(pressed, 'pointerdown');
+    await pointer(pressed, 'click');
     assert.equal(host.calls.length, 1);
     const condition = host.calls[0].criteria?.conditions[0];
     assert.equal(condition?.type, 'singleCondition');
@@ -321,6 +348,7 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
     assert.match(chip.textContent ?? '', /Blue/);
     assert.equal(chip.style.color, blueStyle.color);
     assert.equal(chip.style.backgroundColor, blueStyle.backgroundColor);
+    assert.equal(quick.querySelector('button[aria-label="Clear"]'), null);
 
     await press('ArrowDown');
     const selected = option('Blue');
@@ -351,6 +379,20 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
     assert.deepEqual(
         outcomes.map(({ type }) => type),
         ['allocated', 'unchanged']
+    );
+    await f.click(input);
+    await press('ArrowDown');
+    assert.equal(option('Blue').getAttribute('aria-selected'), 'true');
+    await press('Enter');
+    assert.equal(host.calls.length, 2);
+    assert.equal(option('Blue').getAttribute('aria-selected'), 'false');
+    await press('Enter', true);
+    assert.equal(host.calls.length, 2);
+    await press('Enter');
+    assert.equal(host.calls.length, 3);
+    assert.match(
+        quick.querySelector('.mx-sdk-select-selected')?.textContent ?? '',
+        /Blue/
     );
     f.unchangedEffects();
 });

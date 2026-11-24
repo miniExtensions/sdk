@@ -17,6 +17,14 @@ successful user-submit flow; a second Reload click is not required. Applying a
 session itself performs no read. If the following load fails, retry that read
 without repeating login, verification or sign-up.
 
+For an accepted Password page, `createAuthFlow` also accepts a
+`PasswordAuthPort`. Supply your existing session reader, session writer, and
+password verification operation. Dispatch verification with the supplied
+request session and signal, and preserve an explicitly authorized `viewMode`.
+The same grant engine consumes the grant before calling the host writer. A
+writer error leaves the grant spent. Keep any native maker credentials in the
+host transport and keep the visitor session bound to its accepted page.
+
 ## React client panel
 
 This recipe uses your application's React 19 installation. The SDK's `/react`

@@ -2,7 +2,6 @@ import { SDKError } from '../runtime/client.js';
 import { withExtensionPassword, withLoginToken } from '../runtime/session.js';
 import type {
     LoginPageResult,
-    PasswordRequiredResult,
     RuntimeLanguage,
     RuntimeSession,
 } from '../runtime/types.js';
@@ -17,6 +16,7 @@ import type {
     AuthVerificationChallenge,
     LoginAuthFlow,
     PasswordAuthFlow,
+    PasswordAuthFlowOptions,
 } from './types.js';
 
 export class AuthFlowError extends Error {
@@ -52,6 +52,13 @@ type Attempt = {
     generation: number;
     dispatched: boolean;
 };
+
+function requireNotAborted(signal?: AbortSignal): void {
+    if (signal?.aborted)
+        throw signal.reason === undefined
+            ? new DOMException('The request was aborted.', 'AbortError')
+            : signal.reason;
+}
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -133,13 +140,15 @@ const handle = <Handle extends object>(): Handle =>
     Object.freeze(Object.create(null)) as Handle;
 
 export function createAuthFlow(
-    options: AuthFlowOptions<PasswordRequiredResult>
+    options: PasswordAuthFlowOptions
 ): PasswordAuthFlow;
 export function createAuthFlow(
     options: AuthFlowOptions<LoginPageResult>
 ): LoginAuthFlow;
 export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow;
-export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
+export function createAuthFlow(
+    options: AuthFlowOptions<AuthPage> | PasswordAuthFlowOptions
+): AuthFlow {
     const client = options.client;
     const getScope = options.getScope;
     const metadata = readMetadata(options.page);
@@ -258,7 +267,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
             throw lifecycleError();
     };
     const requireAttempt = (attempt: Attempt) => {
-        attempt.controller.signal.throwIfAborted();
+        requireNotAborted(attempt.controller.signal);
         requireCurrent(attempt.generation);
         if (active !== attempt) throw lifecycleError();
     };
@@ -285,7 +294,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 'busy',
                 'An authentication request is already in progress.'
             );
-        requestOptions?.signal?.throwIfAborted();
+        requireNotAborted(requestOptions?.signal);
         const attempt: Attempt = {
             controller: new AbortController(),
             generation,
@@ -403,7 +412,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                     throw new TypeError(
                         'An extension password string is required.'
                     );
-                const extensionPassword = input.extensionPassword;
+                const { extensionPassword, viewMode } = input;
                 return run(
                     true,
                     requestOptions,
@@ -412,6 +421,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                             {
                                 extensionId: metadata.extensionId,
                                 extensionPassword,
+                                ...(viewMode === undefined ? {} : { viewMode }),
                             },
                             { signal, session }
                         ),
@@ -439,6 +449,14 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
             },
         } satisfies PasswordAuthFlow);
     }
+    const loginAuth = () => {
+        const auth = client.auth;
+        if (!('login' in auth))
+            throw new TypeError(
+                'A login page requires the login client operations.'
+            );
+        return auth;
+    };
     return Object.freeze({
         ...common,
         screen: 'login_page' as const,
@@ -471,7 +489,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 true,
                 requestOptions,
                 (signal, session) =>
-                    client.auth.login(
+                    loginAuth().login(
                         {
                             extensionId: metadata.extensionId,
                             loginCredentials,
@@ -536,7 +554,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 false,
                 requestOptions,
                 (signal, session) =>
-                    client.auth.confirmVerificationCode(
+                    loginAuth().confirmVerificationCode(
                         {
                             verificationId: challenge.verificationId,
                             verificationCode,
@@ -565,7 +583,7 @@ export function createAuthFlow(options: AuthFlowOptions<AuthPage>): AuthFlow {
                 true,
                 requestOptions,
                 (signal, session) =>
-                    client.auth.signUp(
+                    loginAuth().signUp(
                         {
                             extensionId: metadata.extensionId,
                             signUpCredentials,

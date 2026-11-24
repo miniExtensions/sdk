@@ -33,13 +33,20 @@ type Props = CompleteExtensionPasswordScreenProps;
 type Result = CompleteExtensionPasswordScreenResult;
 
 type PropsKeys = Assert<Equal<keyof Props,
-    'scope' | 'labels' | 'verifyPassword' | 'className' | 'accentColor'>>;
+    'scope' | 'labels' | 'verifyPassword' | 'reload' | 'className' | 'accentColor'>>;
 type ExactScope = Assert<Equal<Props['scope'], AuthOwnerScope>>;
 type ExactVerifier = Assert<Equal<Props['verifyPassword'],
     (password: string) => Promise<Result>>>;
-type ExactResult = Assert<Equal<Result, Readonly<{
-    type: 'correct' | 'wrong' | 'blocked' | 'error';
-}>>>;
+type ExactResult = Assert<Equal<Result, Readonly<
+    | { type: 'correct' | 'wrong' | 'blocked' }
+    | { type: 'error'; recovery?: 'refresh-required' | 'reload-required' | 'retired' }
+>>>;
+type ExactRefreshLabel = Assert<Equal<Props['labels']['refreshRequired'], string | undefined>>;
+type ExactAcceptedLoadingLabel = Assert<Equal<Props['labels']['loadingAcceptedPage'], string | undefined>>;
+type ExactReload = Assert<Equal<Props['reload'], {
+    label: string;
+    run(): Promise<'completed' | 'retry' | 'refresh-required' | 'retired'>;
+} | undefined>>;
 type ReactOnly = Assert<Equal<Extract<'CompleteExtensionPasswordScreen',
     keyof typeof import('@miniextensions/sdk') | keyof typeof import('@miniextensions/sdk/auth')>, never>>;
 
@@ -54,6 +61,7 @@ const labels: CompleteExtensionPasswordScreenLabels = {
 
 export function renderConsumers() {
     let verifications = 0;
+    let reloads = 0;
     const first: Props = {
         scope: { ownerId: 'synthetic-form', revision: 1 },
         labels,
@@ -64,12 +72,30 @@ export function renderConsumers() {
             return { type: 'wrong' };
         },
     };
-    const second: Props = { ...first, scope: { ownerId: 'synthetic-portal', revision: 2 } };
+    const second: Props = {
+        scope: { ownerId: 'synthetic-portal', revision: 2 },
+        labels: {
+            ...labels,
+            refreshRequired: 'Actualisez la page',
+            loadingAcceptedPage: 'Chargement de la page',
+        },
+        async verifyPassword() {
+            verifications++;
+            return { type: 'error', recovery: 'refresh-required' };
+        },
+        reload: {
+            label: 'Recharger la page',
+            async run() {
+                reloads++;
+                return 'completed';
+            },
+        },
+    };
     const html = renderToString(createElement('main', null,
         createElement(CompleteExtensionPasswordScreen, first),
         createElement(CompleteExtensionPasswordScreen, second)
     ));
-    return { react: version, html, verifications };
+    return { react: version, html, verifications, reloads };
 }
 `;
 
@@ -111,6 +137,7 @@ async function verifyServerRendering(
         const rendered = module.renderConsumers();
         assert.equal(rendered.react, react);
         assert.equal(rendered.verifications, 0);
+        assert.equal(rendered.reloads, 0);
 
         const window = new Window();
         try {
@@ -130,6 +157,7 @@ async function verifyServerRendering(
                 assert.equal(input.value, '');
                 assert.equal(button.type, 'submit');
                 assert.equal(button.disabled, true);
+                assert.equal(form.querySelector('button[type="button"]'), null);
                 return input.id;
             });
             assert.equal(new Set(inputIds).size, forms.length);

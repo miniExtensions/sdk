@@ -1031,6 +1031,8 @@ try {
         'dist/cjs/react/CompleteExtensionPasswordScreen.d.ts',
         'dist/esm/react/login-existing-values-picker.css',
         'dist/cjs/react/login-existing-values-picker.css',
+        'dist/esm/react/login-signup-confirmation-dialog.css',
+        'dist/cjs/react/login-signup-confirmation-dialog.css',
         'dist/esm/react/LoginExistingValuesPicker.js',
         'dist/esm/react/LoginExistingValuesPicker.d.ts',
         'dist/cjs/react/LoginExistingValuesPicker.js',

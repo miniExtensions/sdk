@@ -120,6 +120,7 @@
         "./react/complete-verification.css": "./dist/esm/react/complete-verification.css",
         "./react/complete-extension-password.css": "./dist/esm/react/complete-extension-password.css",
         "./react/login-existing-values-picker.css": "./dist/esm/react/login-existing-values-picker.css",
+        "./react/login-signup-confirmation-dialog.css": "./dist/esm/react/login-signup-confirmation-dialog.css",
         "./react/complete-image-annotation.css": "./dist/esm/react/complete-image-annotation.css",
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",

@@ -35,6 +35,28 @@ it('renders only the supplied confirmation copy on the server', () => {
     assert.match(markup, /•••••••• n’existe pas/);
     assert.match(markup, /aria-describedby=/);
     assert.doesNotMatch(markup, /masked-signup@example\.invalid/);
+    assert.match(markup, /<h2[^>]*>•••••••• n’existe pas<\/h2>/);
+    assert.match(markup, />Retour<\/button><button[^>]*>Créer<\/button>/);
+
+    const nativeMarkup = renderToString(
+        h(LoginSignupConfirmationDialog, {
+            ...props,
+            open: true,
+            appearance: 'native',
+            testIds: {
+                root: 'signup-panel',
+                cancelButton: 'signup-back',
+                confirmButton: 'signup-create',
+            },
+        })
+    );
+    assert.match(nativeMarkup, /<dialog[^>]*class="mx-sdk-login-signup"/);
+    assert.match(nativeMarkup, /data-testid="signup-panel"/);
+    assert.match(nativeMarkup, /<h3[^>]*>•••••••• n’existe pas<\/h3>/);
+    assert.match(
+        nativeMarkup,
+        /<button[^>]*data-testid="signup-create"[^>]*>Créer<\/button><button[^>]*data-testid="signup-back"[^>]*>Retour<\/button>/
+    );
 });
 
 it('preserves the masked host draft and admits only one intent per opening', async (t) => {

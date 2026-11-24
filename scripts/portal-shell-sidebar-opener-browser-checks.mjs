@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const title = 'Projects Portal';
 const wrappedTitle = 'Read-only Portal Chart voYrEfA8SQ_G 0 0';
 const nativeTitleFont = ['18px', '700', '28px'];
+const titleWidths = [375, 1023, 1024, 1280];
 const open = 'Open navigation menu';
 const legacyIcon =
     'M3 6.75A.75.75 0 0 1 3.75 6h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 6.75ZM3 12a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 12Zm0 5.25a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z';
@@ -68,6 +69,118 @@ async function measure(header) {
             ],
         };
     });
+}
+
+async function checkSidebarLogos(page, header, output, label) {
+    const logoBytes = readFileSync(
+        new URL('../test/fixtures/image-annotation-64x32.png', import.meta.url)
+    );
+    const logoUrl = 'data:image/png;base64,' + logoBytes.toString('base64');
+    const wideLogoUrl = await page.evaluate(async (source) => {
+        const image = new Image();
+        image.src = source;
+        await image.decode();
+        const wide = document.createElement('canvas');
+        wide.width = 512;
+        wide.height = 64;
+        wide.getContext('2d').drawImage(image, 0, 0, wide.width, wide.height);
+        return wide.toDataURL('image/png');
+    }, logoUrl);
+    const logo = header.locator('.mx-sdk-portal-logo');
+    const cases = [];
+    for (const width of titleWidths) {
+        await page.setViewportSize({
+            width,
+            height: width === 375 ? 780 : 720,
+        });
+        for (const mode of [
+            'standalone',
+            'with-title',
+            'native',
+            'native-wide',
+        ]) {
+            const wide = mode === 'native-wide';
+            const source = wide ? wideLogoUrl : logoUrl;
+            const titleText = mode === 'with-title' ? title : '';
+            await page.evaluate(
+                ({ mode, source, titleText }) => {
+                    window.configure({
+                        header: {
+                            layout: 'sidebar',
+                            sidebarWidth: 288,
+                            showBrandInNavigation: true,
+                            title: titleText,
+                            titleHtml: titleText === '' ? '' : undefined,
+                            logoUrl: source,
+                            ...(mode === 'standalone'
+                                ? {}
+                                : {
+                                      sidebarToggle: 'icon',
+                                      actionsPlacement: 'layout',
+                                      menuInteraction: 'menu',
+                                  }),
+                        },
+                    });
+                },
+                { mode, source, titleText }
+            );
+            await page.waitForFunction(
+                ({ mode, source, titleText }) => {
+                    const configured = window.fixtureCommittedSnapshot?.header;
+                    return (
+                        configured?.logoUrl === source &&
+                        configured.title === titleText &&
+                        (configured.sidebarToggle === 'icon') ===
+                            (mode !== 'standalone')
+                    );
+                },
+                { mode, source, titleText }
+            );
+            const geometry = await logo.evaluate(async (node) => {
+                await node.decode();
+                const image = node.getBoundingClientRect();
+                const header = node.closest('header').getBoundingClientRect();
+                return {
+                    box: [
+                        image.x - header.x,
+                        image.y - header.y,
+                        image.width,
+                        image.height,
+                    ],
+                    intrinsic: [node.naturalWidth, node.naturalHeight],
+                    objectFit: getComputedStyle(node).objectFit,
+                };
+            });
+            assert.deepEqual(geometry.intrinsic, wide ? [512, 64] : [64, 32]);
+            if (mode === 'standalone' || mode === 'with-title') {
+                assert.deepEqual(geometry.box.slice(2), [64, 32]);
+                assert.equal(geometry.objectFit, 'contain');
+            } else {
+                // The native h-14 w-auto image uses the available width after sidebar padding.
+                const desktop = width >= 1024;
+                const nativeWidth = wide
+                    ? desktop
+                        ? 239
+                        : Math.min(448, width - 68)
+                    : 112;
+                assert.deepEqual(
+                    geometry.box,
+                    desktop
+                        ? [24, 16, nativeWidth, 56]
+                        : [60, 8, nativeWidth, 56]
+                );
+                assert.equal(geometry.objectFit, 'fill');
+                await header.screenshot({
+                    path: join(
+                        output,
+                        `${label}-sidebar-logo-${mode}-${width}.png`
+                    ),
+                });
+            }
+            cases.push({ width, mode, ...geometry });
+        }
+    }
+    return cases;
 }
 
 export async function checkNativeSidebarOpener(browser, origin, output, label) {
@@ -261,7 +374,7 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
         });
         assert.deepEqual(loadedFaces, ['Inter']);
         const wrappedTitleCases = [];
-        for (const width of [375, 1023, 1024, 1280]) {
+        for (const width of titleWidths) {
             await page.setViewportSize({
                 width,
                 height: width === 375 ? 780 : 720,
@@ -308,9 +421,10 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
                 ...titleLayout,
             });
         }
+        const logoCases = await checkSidebarLogos(page, header, output, label);
         assert.deepEqual(errors, []);
         assert.deepEqual(refused, []);
-        return { cases, wrappedTitleCases, errors, refused };
+        return { cases, wrappedTitleCases, logoCases, errors, refused };
     } finally {
         await context.close();
     }

@@ -98,6 +98,24 @@
     max-width: 5rem;
     object-fit: contain;
 }
+.mx-sdk-portal-shell--sidebar-icon-toggle.mx-sdk-portal-shell--layout-actions
+    > .mx-sdk-portal-header
+    > .mx-sdk-portal-brand
+    > .mx-sdk-portal-logo--only {
+    height: 3.5rem;
+    width: auto;
+    max-width: 100%;
+    object-fit: fill;
+}
+@media (min-width: 1024px) {
+    .mx-sdk-portal-shell--sidebar-icon-toggle.mx-sdk-portal-shell--layout-actions
+        > .mx-sdk-portal-header
+        > .mx-sdk-portal-brand
+        > .mx-sdk-portal-logo--only {
+        margin-inline: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+}
 .mx-sdk-portal-navigation-wrap {
     grid-column: 1;
     grid-row: 2;

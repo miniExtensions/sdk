@@ -58,6 +58,7 @@ const canonical=['off-day'],attempts=[],writes=[],pickerReads=[],portalReads=[],
 const scenario=new URLSearchParams(window.location.search);
 const holdPickerEcho=scenario.has('hold-picker-echo');
 const nestedPickerActions=scenario.has('nested-picker-actions');
+const formList=scenario.get('form-list');
 const pickerActions=[];
 const visiblePublications=[];
 let activeVisiblePublication=null;
@@ -67,6 +68,16 @@ let setPickerFrame=null,setPortalFrame=null,observed=null;
 const pickerControl={owner:{},isCurrent:()=>pickerControlLive,scheduleRead(request){pickerReads.push(request);return refuseReads?refused('native-read-refusal'):admitted();}};
 const pickerRecords=[{id:'one',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'two',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'off-day',fields:{start:'2026-02-21',end:'2026-02-21'}}];
 const presentations={one:{type:'list',primary:'Rich appointment',showPreviewFieldTitle:true,details:[{key:'notes',title:'Notes',leaf:{kind:'text',display:{value:'Rich https://example.test/calendar',language:'en',layout:'linked-list'}}},{key:'tag',title:'Tag',leaf:{kind:'pills',items:[{label:'Accepted tag'}]}}]},two:{type:'calendar',primary:'Second appointment',subtitle:'Native compact detail'},'off-day':{type:'calendar',primary:'Off-day selection',subtitle:''}};
+if(formList){
+ canonical.push('two');
+ const names=['Long project title for the matched Calendar picker row with a narrow list pane and an unchanged neighboring selection','Short project'];
+ const subtitles=['Scheduled from 11:00 AM to 12:00 PM','Scheduled from 9:00 AM to 10:00 AM'];
+ for(const [index,id] of ['one','two'].entries()){
+  presentations[id]=formList==='rich'
+   ? {type:'list',primary:names[index],showPreviewFieldTitle:true,details:[{key:'button',title:'E2E Button Webhook',leaf:{kind:'button',accepted:{mode:'controlled',value:{label:'Button',url:null},config:{openLinkType:'_blank'}}}}]}
+   : {type:'calendar',primary:names[index],subtitle:subtitles[index]};
+ }
+}
 if(nestedPickerActions){
  const target='/calendar-picker-link-target';
  const owner={isCurrent:()=>pickerLive&&pickerControlLive};
@@ -85,7 +96,7 @@ if(nestedPickerActions){
   presentations.two={type:'list',primary:'Second appointment',showPreviewFieldTitle:true,details:[{key:'later',title:'Later link',leaf:{kind:'button',accepted:{mode:'controlled',value:link('Later row link'),config:{openLinkType:'_blank'},owner}}}]};
  }
 }
-function makePicker(patch={}){const expected=pickerOwner;return Object.freeze({control:pickerControl,presentationOwner:{owner:expected,isCurrent:()=>pickerLive&&pickerOwner===expected},records:pickerRecords,startField:date('start'),endField:date('end'),selectedRecordIds:[...canonical],presentationByRecordId:presentations,selectionEnabled:true,errorMessage:null,isLoading:false,isLoadingMore:false,canLoadMore:true,toggleRecord(id){attempts.push(id);if(!pickerControlLive||!pickerLive||pickerOwner!==expected)return refused('stale-host');if(capped&&!canonical.includes(id))return refused('native-cap');const index=canonical.indexOf(id);if(index>=0)canonical.splice(index,1);else canonical.push(id);writes.push(id);if(!holdPickerEcho)publishPicker();return admitted();},...patch});}
+function makePicker(patch={}){const expected=pickerOwner;return Object.freeze({control:pickerControl,presentationOwner:{owner:expected,isCurrent:()=>pickerLive&&pickerOwner===expected},records:pickerRecords,startField:date('start'),endField:date('end'),selectedRecordIds:[...canonical],presentationByRecordId:presentations,selectionEnabled:true,errorMessage:null,isLoading:false,isLoadingMore:false,canLoadMore:!formList,toggleRecord(id){attempts.push(id);if(!pickerControlLive||!pickerLive||pickerOwner!==expected)return refused('stale-host');if(capped&&!canonical.includes(id))return refused('native-cap');const index=canonical.indexOf(id);if(index>=0)canonical.splice(index,1);else canonical.push(id);writes.push(id);if(!holdPickerEcho)publishPicker();return admitted();},...patch});}
 function publishPicker(patch={}){pickerOwner={};setPickerFrame?.(makePicker(patch));}
 const portalControl={owner:{},isCurrent:()=>portalControlLive,retainMonth(month){if(!portalControlLive)return refused('stale-control');portalReads.push(['retain',month]);retainedMonth=month;publishPortal();return admitted();},readFirstPage(request){if(!portalControlLive)return refused('stale-control');portalReads.push(['read',request]);return admitted();}};
 function makePortal(){const expected=portalOwner;const current=()=>portalControlLive&&portalLive&&portalOwner===expected;return Object.freeze({control:portalControl,presentationOwner:{token:expected,isCurrent:()=>portalLive&&portalOwner===expected},retainedMonth,records:[{id:'one',fields:{date:'2026-02-15'},display:{status:'present',primary:'Literal <appointment>',subtitle:'Native compact subtitle'}}],dateField:date('date'),fallbackClientUtcOffset:0,shouldShowToTheSide:true,recordActions:[{recordId:'one',...(portalCanOpen?{open(request){if(!current())return refused('stale-host');opens.push(request);return admitted();}}:{}),remove(){if(!current())return refused('stale-host');removals.push('one');return admitted();}}],status:'ready'});}
@@ -122,8 +133,8 @@ function App(){
   h('button',{type:'button','data-complete-calendar':'retire-portal',onClick:()=>{portalLive=false;}},'Retire Portal display'),
   h('button',{type:'button','data-complete-calendar':'retire-portal-control',onClick:()=>{portalControlLive=false;}},'Retire Portal controls'),
   h('button',{type:'button','data-complete-calendar':'unmount',onClick:()=>setMounted(false)},'Unmount complete Calendar')),
-  mounted?h('div',{className:'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US'}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null,
-  nestedPickerActions?h('button',{type:'button'},'After picker'):null);
+  mounted?h('div',{className:formList?'fixture-form-list':'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US',className:formList&&!scenario.has('default-list')?'mx-sdk-calendar-picker--form-record-list':undefined}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null,
+  (nestedPickerActions||formList)?h('button',{type:'button'},'After picker'):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.completeCalendarProof={publishPickerEcho:()=>publishPicker(),snapshot:()=>observed&&({...observed,reactVersion:React.version,canonical:[...canonical],attempts:[...attempts],writes:[...writes],pickerReads:[...pickerReads],pickerActions:[...pickerActions],portalReads:[...portalReads],opens:[...opens],removals:[...removals],visibleRecordIds:activeVisiblePublication?.isCurrent()?[...activeVisiblePublication.recordIds]:null,visiblePublications:visiblePublications.length,retiredVisiblePublications:visiblePublications.filter(value=>!value.isCurrent()).length})};
@@ -135,6 +146,7 @@ main{width:100%;max-width:1100px;margin:0 auto}
 .fixture-controls{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .fixture-controls button{font:inherit;padding:6px 10px}
 .fixture-grid-host{width:100%}
+.fixture-form-list{font:16px/1.5 system-ui,sans-serif;padding-inline-start:32px}
 @media(max-width:400px){.fixture-grid-host{max-width:270px;margin:0 auto}}
 `;
 
@@ -1088,6 +1100,219 @@ export async function checkCalendarBrowser({
             attempts: url.attempts,
             writes: url.writes,
             reads: url.pickerReads,
+        });
+        const formListResults = [];
+        const formPicker = page.locator('.mx-sdk-calendar-picker');
+        const formListState = () =>
+            formPicker.evaluate((picker) => {
+                const list = picker.querySelector(
+                    '.mx-sdk-calendar-picker__list'
+                );
+                const records = list.querySelector('[role=listbox]');
+                const pane = list.getBoundingClientRect();
+                const clip = records.getBoundingClientRect();
+                return {
+                    width: innerWidth,
+                    optedIn: picker.classList.contains(
+                        'mx-sdk-calendar-picker--form-record-list'
+                    ),
+                    padding: getComputedStyle(records).padding,
+                    rows: Array.from(
+                        records.querySelectorAll('[role=option]'),
+                        (row) => {
+                            const box = row.getBoundingClientRect();
+                            const title = row.querySelector(
+                                '.mx-sdk-calendar-picker__primary'
+                            );
+                            const titleBox = title.getBoundingClientRect();
+                            const titleStyle = getComputedStyle(title);
+                            const details = row.querySelector(
+                                '.mx-sdk-calendar-picker__details'
+                            );
+                            const rich = details.querySelector('dl');
+                            const caption = rich?.querySelector('dt');
+                            const button = rich?.querySelector('dd > a');
+                            const slot = button?.closest('dd');
+                            const slotBox = slot?.getBoundingClientRect();
+                            const buttonBox = button?.getBoundingClientRect();
+                            return {
+                                id: row.getAttribute('data-key'),
+                                selected: row.getAttribute('aria-selected'),
+                                title: title.textContent,
+                                height: box.height,
+                                inset: box.left - pane.left,
+                                trailing: pane.right - box.right,
+                                titleClientWidth: title.clientWidth,
+                                titleScrollWidth: title.scrollWidth,
+                                titleOverflow: titleStyle.textOverflow,
+                                titleWhiteSpace: titleStyle.whiteSpace,
+                                titleClipped:
+                                    titleBox.left < clip.left ||
+                                    titleBox.right > clip.right ||
+                                    titleBox.top < clip.top ||
+                                    titleBox.bottom > clip.bottom,
+                                details: details.textContent,
+                                lineHeight:
+                                    getComputedStyle(details).lineHeight,
+                                richFontSize: rich
+                                    ? getComputedStyle(rich).fontSize
+                                    : null,
+                                captionHeight:
+                                    caption?.getBoundingClientRect().height ??
+                                    null,
+                                button: button
+                                    ? {
+                                          label: button.textContent,
+                                          href: button.getAttribute('href'),
+                                          height: buttonBox.height,
+                                          slotHeight: slotBox.height,
+                                          clipped:
+                                              buttonBox.top < slotBox.top ||
+                                              buttonBox.bottom >
+                                                  slotBox.bottom ||
+                                              buttonBox.left < slotBox.left ||
+                                              buttonBox.right > slotBox.right,
+                                      }
+                                    : null,
+                            };
+                        }
+                    ),
+                };
+            });
+        await page.setViewportSize({ width: 375, height: 1050 });
+        await page.goto(origin + '/complete?form-list=rich&default-list');
+        await option(1).waitFor();
+        const formListDefault = await formListState();
+        assert.equal(formListDefault.optedIn, false);
+        assert.equal(formListDefault.padding, '4px');
+        assert.deepEqual(
+            formListDefault.rows.map(({ button, height }) => [
+                button?.height,
+                height,
+            ]),
+            [
+                [26, 102],
+                [26, 102],
+            ]
+        );
+
+        const formLongTitle =
+            'Long project title for the matched Calendar picker row with a narrow list pane and an unchanged neighboring selection';
+        for (const mode of ['rich', 'compact']) {
+            await page.goto(origin + '/complete?form-list=' + mode);
+            await option(1).waitFor();
+            for (const width of [375, 1023, 1024, 1280]) {
+                await page.setViewportSize({ width, height: 1050 });
+                await day('2026-02-15').click();
+                const frame = await formListState();
+                assert.equal(frame.width, width);
+                assert.equal(frame.optedIn, true);
+                assert.deepEqual(
+                    frame.rows.map(({ id, selected, title }) => [
+                        id,
+                        selected,
+                        title,
+                    ]),
+                    [
+                        ['one', 'false', formLongTitle],
+                        ['two', 'true', 'Short project'],
+                    ]
+                );
+                assert.equal(frame.rows[0].titleOverflow, 'ellipsis');
+                assert.equal(frame.rows[0].titleWhiteSpace, 'nowrap');
+                assert(
+                    frame.rows[0].titleScrollWidth >
+                        frame.rows[0].titleClientWidth
+                );
+                for (const row of frame.rows) {
+                    assert.equal(row.inset, 0);
+                    assert.equal(row.trailing, 32);
+                    assert.equal(row.titleClipped, false);
+                    assert.equal(row.lineHeight, '20px');
+                    if (mode === 'rich') {
+                        assert.equal(row.height, 98);
+                        assert.equal(row.details, 'E2E Button WebhookButton');
+                        assert.equal(row.richFontSize, '13px');
+                        assert.equal(row.captionHeight, 16);
+                        assert.deepEqual(row.button, {
+                            label: 'Button',
+                            href: null,
+                            height: 24,
+                            slotHeight: 24,
+                            clipped: false,
+                        });
+                    } else {
+                        assert.equal(row.button, null);
+                        assert.match(row.details, /^Scheduled from /);
+                    }
+                }
+
+                const formFocus = async (key, row, label) => {
+                    await tabTo(key, row, label);
+                    const ink = await row.evaluate((element) => {
+                        const css = getComputedStyle(element);
+                        const rect = element.getBoundingClientRect();
+                        const clip =
+                            element.parentElement.getBoundingClientRect();
+                        return {
+                            visible: element.dataset.focusVisible,
+                            style: css.outlineStyle,
+                            width: css.outlineWidth,
+                            offset: css.outlineOffset,
+                            space: [
+                                rect.left - clip.left,
+                                rect.top - clip.top,
+                                clip.right - rect.right,
+                                clip.bottom - rect.bottom,
+                            ],
+                        };
+                    });
+                    assert.deepEqual(
+                        [ink.visible, ink.style, ink.width, ink.offset],
+                        ['true', 'solid', '2px', '2px']
+                    );
+                    assert(ink.space.every((space) => space >= 4));
+                    return ink;
+                };
+                const selectedOutline = await formFocus(
+                    'Tab',
+                    option(1),
+                    'Enter selected Form Calendar row'
+                );
+                const unselectedOutline = await formFocus(
+                    'ArrowUp',
+                    option(0),
+                    'Focus long Form Calendar row'
+                );
+                await saveScreenshot(
+                    `complete-picker-form-list-${mode}-${width}`
+                );
+                await tabTo(
+                    'ArrowDown',
+                    option(1),
+                    'Return to selected Form Calendar row'
+                );
+                await tabTo(
+                    'Tab',
+                    afterPicker,
+                    'Skip inert details and leave Form Calendar'
+                );
+                const settled = await completeSnapshot();
+                assert.deepEqual(settled.canonical, ['off-day', 'two']);
+                assert.deepEqual(settled.attempts, []);
+                assert.deepEqual(settled.writes, []);
+                formListResults.push({
+                    mode,
+                    ...frame,
+                    selectedOutline,
+                    unselectedOutline,
+                });
+            }
+        }
+        evidence.results.push({
+            name: 'complete-picker-form-record-list-parity',
+            default: formListDefault,
+            captures: formListResults,
         });
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);

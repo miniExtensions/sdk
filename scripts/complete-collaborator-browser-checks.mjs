@@ -657,6 +657,32 @@ export async function checkCompleteCollaboratorBrowser({
             name: `Remove person ${label}`,
             exact: true,
         });
+    const assertMultipleBadgeGeometry = async (badge, removable) => {
+        const actual = await badge.evaluate((node) => {
+            const rect = (selector) =>
+                node.querySelector(selector)?.getBoundingClientRect();
+            const outer = node.getBoundingClientRect();
+            const image = rect('img');
+            const label = node.querySelector('.mx-sdk-collaborator-name');
+            const remove = rect('button');
+            return {
+                height: outer.height,
+                avatarSize: [image?.width, image?.height],
+                avatarTop: image?.top - outer.top,
+                labelInset: label.getBoundingClientRect().left - outer.left,
+                lineHeight: getComputedStyle(label).lineHeight,
+                removeSize: remove ? [remove.width, remove.height] : null,
+            };
+        });
+        assert.deepEqual(actual, {
+            height: 24,
+            avatarSize: [28, 28],
+            avatarTop: -2,
+            labelInset: 32,
+            lineHeight: '20px',
+            removeSize: removable ? [16, 16] : null,
+        });
+    };
     const adjacent = page.getByRole('textbox', { name: 'Adjacent draft' });
     const ready = async (value) => {
         if (value === undefined) value = await snapshot();
@@ -1209,6 +1235,12 @@ export async function checkCompleteCollaboratorBrowser({
             '<img src=x onerror="identityLookup()">',
         ]);
         assert.deepEqual(value.valueTags, ['C', 'A', 'Adup', 'literal']);
+        const alphaBadge = page
+            .locator('#field .mx-sdk-collaborator-badge')
+            .filter({
+                has: page.getByText('Alpha Person', { exact: true }),
+            });
+        await assertMultipleBadgeGeometry(alphaBadge, false);
         assert.equal(
             await page.locator('#field .mx-sdk-collaborator-name img').count(),
             0
@@ -1225,6 +1257,7 @@ export async function checkCompleteCollaboratorBrowser({
             valueTags: ['C', 'A', 'Adup'],
             choiceTags: ['A', 'B'],
         });
+        await assertMultipleBadgeGeometry(alphaBadge, true);
         await input().fill('Alpha');
         const selected = page.getByRole('option');
         await selected.waitFor();

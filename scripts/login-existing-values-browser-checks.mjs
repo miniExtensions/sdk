@@ -9,6 +9,7 @@ import React, { createElement as h, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import '@miniextensions/sdk/react/login-existing-values-picker.css';
+import '@miniextensions/sdk/react/login-signup-confirmation-dialog.css';
 
 const duplicate = '  duplicate@example.com  ';
 const first = { labels: [duplicate, '', duplicate], offset: 'raw-page-2' };
@@ -36,6 +37,7 @@ function App() {
         signup: null,
         signupAttempt: 'A',
         signupDisabled: false,
+        signupAppearance: undefined,
     });
     update = (patch) => flushSync(() => setState(current => ({ ...current, ...patch })));
     return h('form', {
@@ -48,6 +50,8 @@ function App() {
         open: state.signup !== null,
         attemptId: state.signupAttempt,
         disabled: state.signupDisabled,
+        appearance: state.signupAppearance,
+        testIds: { root: 'signup-panel', cancelButton: 'signup-back', confirmButton: 'signup-create' },
         copy: {
             title: (state.signup === 'masked' ? '••••••••' : unmaskedDraft) + ' n’existe pas',
             body: 'Vérifiez la valeur ou créez un nouvel enregistrement.',
@@ -163,6 +167,11 @@ export async function checkLoginExistingValuesBrowser({
         assert(
             inputs.some((path) =>
                 path.endsWith('/react/login-existing-values-picker.css')
+            )
+        );
+        assert(
+            inputs.some((path) =>
+                path.endsWith('/react/login-signup-confirmation-dialog.css')
             )
         );
         assert(
@@ -727,6 +736,77 @@ export async function checkLoginExistingValuesBrowser({
             escapeCancels:
                 (await read()).signupCancels - afterBackdrop.signupCancels,
         });
+
+        const initialViewport = page.viewportSize();
+        assert(initialViewport);
+        const nativeSignupFrames = [];
+        for (const width of [1280, 375]) {
+            await page.setViewportSize({ width, height: 800 });
+            await patch({
+                signupAttempt: `native-${width}`,
+                signupAppearance: 'native',
+            });
+            await maskedSignup.click();
+            const styled = page.getByTestId('signup-panel');
+            await styled.waitFor();
+            await styled.evaluate(async (element) => {
+                await Promise.all(
+                    element
+                        .getAnimations()
+                        .map((animation) => animation.finished)
+                );
+            });
+            const styledBack = styled.getByTestId('signup-back');
+            const styledCreate = styled.getByTestId('signup-create');
+            await focus(styledBack);
+            await page.keyboard.press('Shift+Tab');
+            await focus(styledCreate);
+            assert.equal(
+                await styledCreate.evaluate((element) => {
+                    const style = getComputedStyle(element);
+                    return style.backgroundColor + ' ' + style.outlineColor;
+                }),
+                'rgb(37, 99, 235) rgb(37, 99, 235)'
+            );
+            await page.keyboard.press('Tab');
+            await focus(styledBack);
+            const bounds = await styled.boundingBox();
+            const backBounds = await styledBack.boundingBox();
+            const createBounds = await styledCreate.boundingBox();
+            assert(bounds && backBounds && createBounds);
+            assert.equal(
+                await styled.evaluate(
+                    (element) =>
+                        getComputedStyle(element, '::backdrop').backgroundColor
+                ),
+                'rgba(107, 114, 128, 0.75)'
+            );
+            if (width === 1280) {
+                assert.equal(bounds.width, 512);
+                assert.equal(backBounds.y, createBounds.y);
+                assert(backBounds.x < createBounds.x);
+            } else {
+                assert(bounds.width <= width - 32);
+                assert.equal(backBounds.width, bounds.width - 24);
+                assert.equal(createBounds.width, backBounds.width);
+                assert(createBounds.y < backBounds.y);
+            }
+            const frame = `login-signup-native-${expectedReactVersion}-${width}.png`;
+            await page.screenshot({ path: join(output, frame) });
+            await page.mouse.click(backdrop.x, backdrop.y);
+            await styled.waitFor({ state: 'hidden' });
+            await focus(maskedSignup);
+            nativeSignupFrames.push({
+                width,
+                bounds,
+                backBounds,
+                createBounds,
+                frame,
+            });
+        }
+        await page.setViewportSize(initialViewport);
+        await assertSignupIntents(completedSignupAttempts, 8);
+        evidence.nativeSignupFrames = nativeSignupFrames;
 
         await trigger.click();
         await choices.nth(0).waitFor();

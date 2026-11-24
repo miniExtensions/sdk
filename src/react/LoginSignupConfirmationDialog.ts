@@ -26,6 +26,13 @@ export type LoginSignupConfirmationDialogProps = Readonly<{
     attemptId: string;
     /** Suspends decisions and retires held input without reopening the attempt. */
     disabled?: boolean;
+    /** Uses the responsive panel styling from login-signup-confirmation-dialog.css. */
+    appearance?: 'native';
+    testIds?: Readonly<{
+        root?: string;
+        cancelButton?: string;
+        confirmButton?: string;
+    }>;
     copy: LoginSignupConfirmationCopy;
     /** Requests dismissal without changing the host draft. */
     onCancel(): void;
@@ -65,10 +72,12 @@ export function LoginSignupConfirmationDialog({
 }
 
 function SignupConfirmation({
+    appearance,
     copy,
     disabled = false,
     onCancel,
     onCreate,
+    testIds,
 }: Omit<
     LoginSignupConfirmationDialogProps,
     'open' | 'attemptId'
@@ -123,7 +132,7 @@ function SignupConfirmation({
             (focused === current || !current.contains(focused ?? null))
         )
             back.current?.focus();
-    }, [disabled]);
+    }, [appearance, disabled]);
 
     function choose(action: () => void) {
         if (disabled || decision.current !== 'ready') return;
@@ -174,10 +183,35 @@ function SignupConfirmation({
         };
     }
 
+    const native = appearance === 'native';
+    const title = h(native ? 'h3' : 'h2', { id: titleId }, copy.title);
+    const body = h('p', { id: bodyId }, copy.body);
+    const backButton = h(
+        'button',
+        {
+            ...actionProps(onCancel),
+            ref: back,
+            'data-testid': testIds?.cancelButton,
+            className: native ? 'mx-sdk-login-signup__back' : undefined,
+        },
+        copy.back
+    );
+    const createButton = h(
+        'button',
+        {
+            ...actionProps(onCreate),
+            'data-testid': testIds?.confirmButton,
+            className: native ? 'mx-sdk-login-signup__create' : undefined,
+        },
+        copy.create
+    );
+
     return h(
         'dialog',
         {
             ref: dialog,
+            className: native ? 'mx-sdk-login-signup' : undefined,
+            'data-testid': testIds?.root,
             'aria-labelledby': titleId,
             'aria-modal': true,
             'aria-describedby': bodyId,
@@ -225,13 +259,22 @@ function SignupConfirmation({
                 choose(onCancel);
             },
         },
-        h('h2', { id: titleId }, copy.title),
-        h('p', { id: bodyId }, copy.body),
+        ...(native
+            ? [
+                  h(
+                      'div',
+                      { className: 'mx-sdk-login-signup__copy' },
+                      title,
+                      body
+                  ),
+              ]
+            : [title, body]),
         h(
             'div',
-            null,
-            h('button', { ...actionProps(onCancel), ref: back }, copy.back),
-            h('button', actionProps(onCreate), copy.create)
+            native ? { className: 'mx-sdk-login-signup__actions' } : null,
+            ...(native
+                ? [createButton, backButton]
+                : [backButton, createButton])
         )
     );
 }

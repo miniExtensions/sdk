@@ -5056,6 +5056,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(gridProof.phoneCellTests, 8);
     assert.equal(gridProof.buttonCellTests, 8);
     assert.equal(gridProof.singleSelectCellTests, 16);
+    assert.equal(gridProof.linkedPillsTests, 8);
     console.log(
         'Installed readonly Portal Grid DateTime assertions passed.',
         gridProof.profiles.map(({ react, format, dateTime }) => ({

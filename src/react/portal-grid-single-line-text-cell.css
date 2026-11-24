@@ -97,6 +97,23 @@
     white-space: nowrap;
 }
 
+.mx-sdk-portal-grid-linked-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.mx-sdk-portal-grid-linked-pills__pill {
+    min-width: 0;
+    overflow-wrap: break-word;
+    background-color: #eff6ff;
+    color: #1f2937;
+    padding: 0.125rem 0.25rem;
+}
+
 .mx-sdk-portal-grid-text-cell__selection {
     position: absolute;
     z-index: 9;

@@ -15,6 +15,7 @@ const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const attachmentSliderRuntime = 'attachmentSliderDialogRuntime';
 const attachmentSliderReceipt = 'attachment-slider';
+const formRecordActionsHeaderRuntime = 'formRecordActionsHeaderMenuRuntime';
 const localImports = [
     './CompleteCollaboratorField.js',
     './PersonBadge.js',
@@ -103,7 +104,7 @@ export async function bundleScannerDialog(root = process.cwd()) {
 export async function bundleFormRecordActionsHeaderMenu(root = process.cwd()) {
     return bundleHeadlessRuntime(
         root,
-        'formRecordActionsHeaderMenuRuntime',
+        formRecordActionsHeaderRuntime,
         'form-record-actions-header',
         [],
         []
@@ -195,6 +196,12 @@ async function bundleHeadlessRuntime(
         fuse.manifest,
         upstream.externalDependencies['fuse.js']
     );
+    // Preserve static ESM imports for the header menu so both outputs
+    // tree-shake the Headless UI barrel before esbuild emits their format.
+    const headerInput =
+        runtime === formRecordActionsHeaderRuntime
+            ? readFileSync(join(root, `dist/esm/react/${runtime}.js`), 'utf8')
+            : undefined;
     const receipts = [];
     for (const format of ['esm', 'cjs']) {
         const child = `dist/${format}/react/${runtime}.js`;
@@ -202,7 +209,7 @@ async function bundleHeadlessRuntime(
         const result = await build({
             absWorkingDir: root,
             stdin: {
-                contents: readFileSync(path, 'utf8'),
+                contents: headerInput ?? readFileSync(path, 'utf8'),
                 resolveDir: dirname(path),
                 sourcefile: basename(path),
                 loader: 'js',
@@ -210,7 +217,9 @@ async function bundleHeadlessRuntime(
             bundle: true,
             platform: 'neutral',
             mainFields:
-                format === 'esm' ? ['module', 'main'] : ['main', 'module'],
+                format === 'esm' || headerInput !== undefined
+                    ? ['module', 'main']
+                    : ['main', 'module'],
             format,
             target: 'es2022',
             outfile: path,

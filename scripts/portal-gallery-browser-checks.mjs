@@ -305,6 +305,39 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
             'contain'
         );
     }
+    const previousViewport = page.viewportSize();
+    assert(previousViewport);
+    const indicatorStrip = [];
+    for (const width of [375, 1280]) {
+        await page.setViewportSize({ ...previousViewport, width });
+        const strip = first.locator('.mx-sdk-finder-carousel-dots');
+        assert.equal(await strip.locator('button').count(), 2);
+        const firstIndicator = strip.getByRole('button', {
+            name: 'View image 1',
+            exact: true,
+        });
+        const secondIndicator = strip.getByRole('button', {
+            name: 'View image 2',
+            exact: true,
+        });
+        const stripColor = () =>
+            strip.evaluate(
+                (element) => getComputedStyle(element).backgroundColor
+            );
+        await firstIndicator.click();
+        const before = await stripColor();
+        assert.equal(before, 'rgba(0, 0, 0, 0.25)');
+        await secondIndicator.click();
+        assert.equal(
+            await secondIndicator.getAttribute('aria-current'),
+            'true'
+        );
+        const selected = await stripColor();
+        assert.equal(selected, before);
+        await firstIndicator.click();
+        indicatorStrip.push({ width, before, selected });
+    }
+    await page.setViewportSize(previousViewport);
     await page.waitForFunction(() =>
         [...document.querySelectorAll('.mx-sdk-portal-gallery-row')].every(
             (n) =>
@@ -494,6 +527,7 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
             submits: end.submits,
         },
         errors: end.errors,
+        indicatorStrip,
         unlinkPresentation,
         limits: [
             'Portable installed SDK only; native ownership, child modal and transport acceptance are separately required.',

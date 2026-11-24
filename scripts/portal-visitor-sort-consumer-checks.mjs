@@ -27,6 +27,7 @@ const filterCases = [
     'reactPortalVisitorQuickFilter.test.ts',
 ];
 const viewButtonsCase = 'reactPortalVisitorViewButtons.test.ts';
+const queryCase = 'portalVisitorQuery.test.ts';
 const fixture = 'fixtures/htmlPresentationFixture.ts';
 const quickFilterFixture = 'fixtures/portalVisitorQuickFilterFixture.ts';
 const profiles = [
@@ -76,7 +77,7 @@ void createElement(PortalVisitorSearch, { port });
 const typedFilter = `
 import { createElement } from 'react';
 import { PortalVisitorFilter, type PortalVisitorFilterProps } from '@miniextensions/sdk/react';
-import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterDropdown, type PortalVisitorFilterPort } from '@miniextensions/sdk/portals';
+import { createPortalVisitorFilterDraft, type PortalVisitorFilterDraft, type PortalVisitorFilterDropdown, type PortalVisitorFilterPort, type PortalVisitorQueryOutcome } from '@miniextensions/sdk/portals';
 const port: PortalVisitorFilterPort = {
     read: () => null,
     subscribe: () => () => undefined,
@@ -93,6 +94,8 @@ const quickFilters: readonly PortalVisitorFilterDropdown[] = draft?.dropdowns() 
 void quickFilters.map(({selected}) => selected);
 const props: PortalVisitorFilterProps = { port, showDropdowns: true };
 void createElement(PortalVisitorFilter, props);
+const queryOutcome: PortalVisitorQueryOutcome = { type: 'uncertain', committedGeneration: 2 };
+void queryOutcome;
 `;
 
 const typedViewButtons = `
@@ -118,9 +121,15 @@ void createElement(PortalVisitorViewButtons, props);
 function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
     const archive = resolve(archivePath);
     const cases = includeQuery
-        ? [...sortCases, ...searchCases, viewButtonsCase, ...filterCases]
+        ? [
+              ...sortCases,
+              ...searchCases,
+              viewButtonsCase,
+              ...filterCases,
+              queryCase,
+          ]
         : sortCases;
-    const expectedTests = includeQuery ? 90 : 15;
+    const expectedTests = includeQuery ? 92 : 15;
     const fixtures = includeQuery ? [fixture, quickFilterFixture] : [fixture];
     const output = [];
     for (const [react, types, domTypes] of profiles) {

@@ -10,6 +10,7 @@ import {
 } from '../src/react/Kanban.js';
 import { Item } from '../src/react/kanban/Item.js';
 import { claimKanbanCursor } from '../src/react/kanban/cursor.js';
+import { createKanbanKeyboardFocus } from '../src/react/kanban/keyboardFocus.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
 type PublicProps = KanbanProps<{ category: string }, object>;
@@ -115,6 +116,239 @@ async function fixture(t: TestContext) {
     await import('../src/react/kanban/Board.js');
     return f;
 }
+
+async function keyboardFocusFixture(t: TestContext) {
+    const { window, container } = await htmlPresentationFixture(t);
+    const document = window.document;
+    const focus = createKanbanKeyboardFocus();
+    t.after(() => focus.clear());
+    const otherBoard = document.createElement('div');
+    const board = document.createElement('div');
+    otherBoard.className = board.className = 'mx-sdk-kanban-board';
+    const nextControl = document.createElement('button');
+    nextControl.type = 'button';
+    container.append(otherBoard, board, nextControl);
+
+    const card = (parent = board, recordId = 'a') => {
+        const item = document.createElement('li');
+        item.className = 'mx-sdk-kanban-item';
+        const element = document.createElement('div');
+        element.className = 'mx-sdk-kanban-draggable';
+        element.dataset.kanbanRecord = recordId;
+        element.tabIndex = 0;
+        item.append(element);
+        parent.append(item);
+        return element;
+    };
+    const source = card();
+    const start = (target = source, epoch = 1) => {
+        target.addEventListener(
+            'keydown',
+            (event) => focus.start(event as unknown as Event, 'a', epoch),
+            { once: true }
+        );
+        target.dispatchEvent(
+            new window.KeyboardEvent('keydown', {
+                key: ' ',
+                code: 'Space',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    };
+    const lift = () => {
+        focus.update(1, ['a', 'b'], false);
+        source.focus();
+        start();
+    };
+    const restore = (epoch: number) =>
+        focus.restore(board as unknown as HTMLDivElement, epoch);
+    return {
+        window,
+        document,
+        focus,
+        board,
+        otherBoard,
+        nextControl,
+        source,
+        card,
+        start,
+        lift,
+        restore,
+    };
+}
+
+it('restores the exact keyboard card during preview and saved projection replacements', async (t) => {
+    const { document, focus, board, otherBoard, source, card, lift, restore } =
+        await keyboardFocusFixture(t);
+    const otherRecord = card(board, 'b');
+    const otherBoardCard = card(otherBoard);
+    lift();
+    assert.ok(document.activeElement === source, 'Expected focus on source');
+    source.remove();
+    assert.ok(
+        document.activeElement === document.body,
+        'Expected focus on document.body'
+    );
+
+    restore(1);
+    assert.ok(
+        document.activeElement === document.body,
+        'Expected focus on document.body'
+    );
+    const preview = card();
+    restore(1);
+    assert.ok(document.activeElement === preview, 'Expected focus on preview');
+
+    focus.end(1, true);
+    focus.update(2, ['a', 'b'], false);
+    preview.remove();
+    const optimistic = card();
+    restore(2);
+    assert.ok(
+        document.activeElement === optimistic,
+        'Expected focus on optimistic'
+    );
+
+    focus.update(3, ['a', 'b'], false);
+    optimistic.remove();
+    const acknowledged = card();
+    restore(3);
+    assert.ok(
+        document.activeElement === acknowledged,
+        'Expected focus on acknowledged'
+    );
+    assert.ok(otherRecord.isConnected);
+    assert.ok(otherBoardCard.isConnected);
+});
+
+it('keeps keyboard cancellation focus within its epoch and retires a replaced unallocated drag', async (t) => {
+    const { document, focus, source, card, start, lift, restore } =
+        await keyboardFocusFixture(t);
+    lift();
+    source.remove();
+    const preview = card();
+    restore(1);
+    assert.ok(document.activeElement === preview, 'Expected focus on preview');
+
+    focus.end(1);
+    preview.remove();
+    const returned = card();
+    restore(1);
+    assert.ok(
+        document.activeElement === returned,
+        'Expected focus on returned'
+    );
+
+    start(returned);
+    focus.update(2, ['a', 'b'], false);
+    returned.remove();
+    card();
+    restore(2);
+    assert.ok(
+        document.activeElement === document.body,
+        'Expected focus on document.body'
+    );
+});
+
+it('ignores a keyboard lift from a card that does not own document focus', async (t) => {
+    const { document, focus, nextControl, source, card, start, restore } =
+        await keyboardFocusFixture(t);
+    focus.update(1, ['a', 'b'], false);
+    nextControl.focus();
+    start();
+    assert.ok(
+        document.activeElement === nextControl,
+        'Expected focus on nextControl'
+    );
+
+    nextControl.remove();
+    source.remove();
+    card();
+    restore(1);
+    assert.ok(
+        document.activeElement === document.body,
+        'Expected focus on document.body'
+    );
+});
+
+it('never follows a saved card after the visitor moves focus to a different control', async (t) => {
+    const { document, focus, nextControl, source, card, lift, restore } =
+        await keyboardFocusFixture(t);
+    lift();
+    focus.end(1, true);
+    nextControl.focus();
+    focus.update(2, ['a', 'b'], false);
+    source.remove();
+    const replacement = card();
+    restore(2);
+    assert.ok(
+        document.activeElement === nextControl,
+        'Expected focus on nextControl'
+    );
+
+    nextControl.remove();
+    focus.update(3, ['a', 'b'], false);
+    replacement.remove();
+    card();
+    restore(3);
+    assert.ok(
+        document.activeElement === document.body,
+        'Expected focus on document.body'
+    );
+});
+
+for (const retirement of ['disabled policy', 'removed record'] as const) {
+    it(`retires saved keyboard focus after a ${retirement} even if the ID reappears`, async (t) => {
+        const { document, focus, source, card, lift, restore } =
+            await keyboardFocusFixture(t);
+        lift();
+        focus.end(1, true);
+        focus.update(
+            2,
+            retirement === 'removed record' ? ['b'] : ['a', 'b'],
+            retirement === 'disabled policy'
+        );
+        source.remove();
+        focus.update(3, ['a', 'b'], false);
+        card();
+        restore(3);
+        assert.ok(
+            document.activeElement === document.body,
+            'Expected focus on document.body'
+        );
+    });
+}
+
+for (const interaction of ['pointerdown', 'Tab'] as const) {
+    it(`retires saved keyboard focus on ${interaction} before another projection`, async (t) => {
+        const { window, document, focus, source, card, lift, restore } =
+            await keyboardFocusFixture(t);
+        lift();
+        focus.end(1, true);
+        source.dispatchEvent(
+            interaction === 'Tab'
+                ? new window.KeyboardEvent('keydown', {
+                      key: 'Tab',
+                      code: 'Tab',
+                      bubbles: true,
+                  })
+                : new window.PointerEvent('pointerdown', {
+                      pointerType: 'mouse',
+                      bubbles: true,
+                  })
+        );
+        focus.update(2, ['a', 'b'], false);
+        source.remove();
+        card();
+        restore(2);
+        assert.ok(
+            document.activeElement === document.body,
+            'Expected focus on document.body'
+        );
+    });
+}
+
 it('composes ordered columns, actual rich card content and explicitly admitted action chrome', async (t) => {
     const f = await fixture(t),
         props = kanbanFixtureProps();

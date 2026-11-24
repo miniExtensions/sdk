@@ -1,5 +1,12 @@
 /* eslint @typescript-eslint/strict-boolean-expressions: 0 */
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, {
+    useCallback,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
     CancelDrop,
@@ -38,6 +45,7 @@ import {
     getKeyboardMove,
     type KeyboardHorizontalTarget,
 } from './keyboardCoordinates.js';
+import type { createKanbanKeyboardFocus } from './keyboardFocus.js';
 import { Container, ContainerProps } from './Container.js';
 import { Item } from './Item.js';
 import { RenderItemFunc } from './Item.js';
@@ -122,6 +130,8 @@ const findColumnById = (
 const isColumnId = (items: KanbanItems, id: UniqueIdentifier): boolean =>
     findColumnById(items, id) != null;
 export interface KanbanBoardProps {
+    epoch: number;
+    keyboardFocus: ReturnType<typeof createKanbanKeyboardFocus>;
     adjustScale?: boolean;
     cancelDrop?: CancelDrop;
     columns?: number;
@@ -156,6 +166,8 @@ export interface KanbanBoardProps {
     ) => void;
 }
 export function MultipleContainers({
+    epoch,
+    keyboardFocus,
     adjustScale = false,
     cancelDrop,
     columns,
@@ -179,6 +191,7 @@ export function MultipleContainers({
     overlayClassName,
 }: KanbanBoardProps): React.ReactElement {
     const contextId = useId();
+    const board = useRef<HTMLDivElement | null>(null);
     const live = useRef(true);
     const keyboardHorizontalTarget = useRef<KeyboardHorizontalTarget | null>(
         null
@@ -283,6 +296,7 @@ export function MultipleContainers({
     const [clonedItems, setClonedItems] = useState<KanbanItems | null>(null);
     const sensors = useSensors(
         useSensor(MouseSensor, {
+            onActivation: keyboardFocus.clear,
             activationConstraint: {
                 distance: 0,
             },
@@ -292,6 +306,7 @@ export function MultipleContainers({
                 distance: 0,
             },
             onActivation: ({ event }) => {
+                keyboardFocus.clear();
                 releaseTouchMove();
                 if (acceptsDrag())
                     touchMoveCleanup.current = claimKanbanTouchMove(
@@ -301,6 +316,13 @@ export function MultipleContainers({
             },
         }),
         useSensor(KeyboardSensor, {
+            onActivation: ({ event }) => {
+                if (handle || !acceptsDrag()) return;
+                const recordId = (event.target as HTMLElement | null)?.dataset
+                    ?.kanbanRecord;
+                if (recordId != null)
+                    keyboardFocus.start(event, recordId, epoch);
+            },
             coordinateGetter:
                 coordinateGetter ??
                 ((event, options) => {
@@ -335,6 +357,7 @@ export function MultipleContainers({
         return index;
     };
     const onDragCancel = () => {
+        keyboardFocus.end(epoch);
         keyboardHorizontalTarget.current = null;
         releaseTouchMove();
         if (!acceptsDrag()) return;
@@ -352,8 +375,14 @@ export function MultipleContainers({
         });
         return () => cancelAnimationFrame(frame);
     }, [items]);
+    useLayoutEffect(() => {
+        if (!disabled && !modalOpen && board.current != null) {
+            keyboardFocus.restore(board.current, epoch);
+        }
+    }, [disabled, modalOpen, items, keyboardFocus, epoch]);
     return React.createElement(DndContext, {
         id: contextId,
+        accessibility: { restoreFocus: handle },
         sensors: sensors,
         collisionDetection: collisionDetectionStrategy,
         measuring: {
@@ -433,6 +462,7 @@ export function MultipleContainers({
             }
         },
         onDragEnd: ({ active, over }) => {
+            keyboardFocus.end(epoch);
             keyboardHorizontalTarget.current = null;
             releaseTouchMove();
             if (!acceptsDrag()) return;
@@ -485,6 +515,12 @@ export function MultipleContainers({
                         )
                     );
                 }
+                const original = clonedItems?.find((column) =>
+                    column.recordIds.includes(active.id)
+                );
+                if (original != null && original.id !== overContainer) {
+                    keyboardFocus.end(epoch, true);
+                }
                 onRecordUpdate(active.id as string, overContainer);
             }
             setActiveId(null);
@@ -495,6 +531,7 @@ export function MultipleContainers({
         children: [
             React.createElement('div', {
                 key: 'board',
+                ref: board,
                 className: 'mx-sdk-kanban-board',
                 children: React.createElement(SortableContext, {
                     items: containers,

@@ -239,7 +239,7 @@ const capture=recordId=>{
  return{originalRecord,columns,readCategory:record=>record.fields.status,
  publishOptimistic:value=>{calls.events.push({kind:'optimistic',recordId,value,revision:capturedRevision});records={...records,[recordId]:{...originalRecord,fields:{...originalRecord.fields,status:value}}};source=makeSource();render();},
  mutate:value=>{calls.events.push({kind:'mutate',recordId,value,revision:capturedRevision});return model.pending?new Promise((resolve,reject)=>pending.push({resolve,reject})):Promise.resolve({type:'no-login'});},
- publishLoggedIn:record=>calls.events.push({kind:'logged-in',revision:capturedRevision,identity:record.synthetic}),
+ publishLoggedIn:record=>{calls.events.push({kind:'logged-in',revision:capturedRevision,identity:record.synthetic});source=makeSource();render();},
  restore:record=>{calls.events.push({kind:'restore',recordId,revision:capturedRevision});records={...records,[recordId]:record};source=makeSource();render();}
  };
 };
@@ -435,28 +435,39 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                     ),
                 id
             );
+        const sourceSelector = (id) =>
+            `section.mx-sdk-kanban:has(> [data-kanban-ready="true"]) .mx-sdk-kanban-board .mx-sdk-kanban-item:not(.mx-sdk-kanban-item-overlay) [data-kanban-record="${id}"]`;
+        const source = (id) => page.locator(sourceSelector(id));
+        const waitForCardFocus = (id, label) =>
+            page.waitForFunction(
+                ({ selector, label }) => {
+                    const cards = document.querySelectorAll(selector);
+                    const card = cards[0];
+                    return (
+                        cards.length === 1 &&
+                        card === document.activeElement &&
+                        card
+                            .closest('.mx-sdk-kanban-column')
+                            ?.querySelector('.mx-sdk-kanban-column-label')
+                            ?.textContent === label
+                    );
+                },
+                { selector: sourceSelector(id), label }
+            );
         const moveKey = async (key, target, label, recordId = 'a') => {
             await page.keyboard.press(key);
             if (label)
                 await page.waitForFunction(
-                    ({ label, recordId }) =>
+                    ({ label, selector }) =>
                         document
-                            .querySelector(
-                                'section [data-kanban-record="' +
-                                    recordId +
-                                    '"]'
-                            )
+                            .querySelector(selector)
                             ?.closest('.mx-sdk-kanban-column')
                             ?.querySelector('.mx-sdk-kanban-column-label')
                             ?.textContent === label,
-                    { label, recordId }
+                    { label, selector: sourceSelector(recordId) }
                 );
             else await keyboardReady(target);
         };
-        const source = (id) =>
-            page.locator(
-                'section.mx-sdk-kanban [data-kanban-record="' + id + '"]'
-            );
         const overlay = () => page.locator('.mx-sdk-kanban-item-overlay');
         const column = (label) =>
             page.locator('section.mx-sdk-kanban .mx-sdk-kanban-column').filter({
@@ -934,16 +945,64 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             'trusted-keyboard-same-category-local-order-no-transport-and-source-reset'
         );
 
+        await replace({ pending: true });
+        const beforeKeyboardDrop = (await state()).calls.events.length;
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
         await keyboardReady('a');
         await moveKey('ArrowRight', 'c', 'Closed');
-        await page.keyboard.press('Space');
+        await waitForCardFocus('a', 'Closed');
+        assert.equal((await state()).calls.events.length, beforeKeyboardDrop);
+
+        const previewCard = await source('a').elementHandle();
+        assert(previewCard);
+        try {
+            await page.keyboard.press('Space');
+            await page.waitForFunction(() => {
+                const snapshot = window.__kanbanProbe.snapshot();
+                return (
+                    snapshot.pending === 1 &&
+                    snapshot.records.a.fields.status === 'Closed'
+                );
+            });
+            await overlay().waitFor({ state: 'detached' });
+            assert.equal(
+                await previewCard.evaluate((card) => card.isConnected),
+                false
+            );
+            await waitForCardFocus('a', 'Closed');
+        } finally {
+            await previewCard.dispose();
+        }
+
+        const adjacentDraft = page.getByRole('textbox', {
+            name: 'Adjacent draft',
+        });
+        await adjacentDraft.focus();
+        await page.evaluate(() => window.__kanbanProbe.settle('logged-in'));
         await page.waitForFunction(
             () =>
-                window.__kanbanProbe.snapshot().records.a.fields.status ===
-                'Closed'
+                window.__kanbanProbe.snapshot().calls.events.at(-1)?.kind ===
+                'logged-in'
+        );
+        await page.evaluate(
+            () =>
+                new Promise((resolve) =>
+                    requestAnimationFrame(() => requestAnimationFrame(resolve))
+                )
+        );
+        assert.equal(
+            await adjacentDraft.evaluate(
+                (draft) => draft.ownerDocument.activeElement === draft
+            ),
+            true
+        );
+        assert.deepEqual(
+            (await state()).calls.events
+                .slice(beforeKeyboardDrop)
+                .map(({ kind }) => kind),
+            ['optimistic', 'mutate', 'logged-in']
         );
         await verify('trusted-keyboard-populated-column-drop');
 
@@ -981,6 +1040,7 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 await keyboardReady('a');
                 await moveKey('ArrowRight', 'c', 'Closed');
                 await moveKey('ArrowRight', 'empty', 'Empty');
+                await waitForCardFocus('a', 'Empty');
             };
             const before = (await state()).calls.events.length;
             for (const [key, target, label] of [
@@ -989,8 +1049,10 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             ]) {
                 await previewNarrowEmpty(4);
                 await moveKey(key, target, label);
+                await waitForCardFocus('a', label);
                 await page.keyboard.press('Escape');
                 await overlay().waitFor({ state: 'detached' });
+                await waitForCardFocus('a', 'Open');
                 assert.deepEqual(await order('Open'), ['a', 'b']);
                 assert.equal((await state()).calls.events.length, before);
             }

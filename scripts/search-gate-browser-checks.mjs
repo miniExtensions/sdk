@@ -221,7 +221,47 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                     .urlReads,
                 0
             );
+            const inputAppearance = await input.evaluate((node) => {
+                const style = getComputedStyle(node);
+                return {
+                    height: node.getBoundingClientRect().height,
+                    fontSize: style.fontSize,
+                    lineHeight: style.lineHeight,
+                    border: style.borderTopColor,
+                    ring: style.boxShadow,
+                    outline: style.outlineColor,
+                };
+            });
+            assert.equal(inputAppearance.height, mobile ? 42 : 38);
+            assert.equal(inputAppearance.fontSize, mobile ? '16px' : '14px');
+            assert.equal(inputAppearance.lineHeight, mobile ? '24px' : '20px');
+            assert.equal(inputAppearance.border, 'rgb(99, 102, 241)');
+            assert(
+                inputAppearance.ring.includes(
+                    'rgb(99, 102, 241) 0px 0px 0px 1px'
+                )
+            );
+            assert.equal(inputAppearance.outline, 'rgba(0, 0, 0, 0)');
             await input.fill('  Alice & 東京  ');
+            await input.press('Tab');
+            const primary = dialog.getByRole('button', {
+                name: 'Continue',
+                exact: true,
+            });
+            assert.equal(await focusIs(primary, 'enabled-submit'), true);
+            const primaryAppearance = await primary.evaluate((node) => ({
+                height: node.getBoundingClientRect().height,
+                outline: getComputedStyle(node).outline,
+                offset: getComputedStyle(node).outlineOffset,
+            }));
+            assert.equal(primaryAppearance.height, 32);
+            assert.equal(
+                primaryAppearance.outline,
+                'rgb(79, 70, 229) solid 2px'
+            );
+            assert.equal(primaryAppearance.offset, '2px');
+            await primary.press('Shift+Tab');
+            assert.equal(await focusIs(input, 'return-from-submit'), true);
             await input.press('Enter');
             const snapshot = await page.evaluate(() =>
                 window.searchGateProof.snapshot()
@@ -331,6 +371,20 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             await dialog
                 .getByRole('button', { name: 'Search Again', exact: true })
                 .waitFor({ state: 'visible' });
+            const retryAppearances = {};
+            for (const name of ['Search Again', 'Clear']) {
+                const appearance = await dialog
+                    .getByRole('button', { name, exact: true })
+                    .evaluate((button) => ({
+                        height: button.getBoundingClientRect().height,
+                        borderTopWidth: getComputedStyle(button).borderTopWidth,
+                    }));
+                assert.deepEqual(appearance, {
+                    height: 34,
+                    borderTopWidth: '1px',
+                });
+                retryAppearances[name] = appearance;
+            }
             evidence.uiTransitions.push({
                 mobile,
                 phase: 'no-results-prop',
@@ -371,6 +425,17 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             });
             evidence.phase = 'no-results-edit-persistence';
             await input.fill('retry');
+            const invalidFocus = await input.evaluate((node) => {
+                const style = getComputedStyle(node);
+                return {
+                    outlineColor: style.outlineColor,
+                    borderColor: style.borderTopColor,
+                };
+            });
+            assert.deepEqual(invalidFocus, {
+                outlineColor: 'rgb(239, 68, 68)',
+                borderColor: 'rgb(239, 68, 68)',
+            });
             assert.equal(
                 await dialog.locator('.mx-sdk-search-gate-error').isVisible(),
                 true
@@ -542,6 +607,10 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 mobile,
                 react: snapshot.react,
                 geometry,
+                inputAppearance,
+                primaryAppearance,
+                retryAppearances,
+                invalidFocus,
                 navigations: 1,
                 clears: 1,
                 focus: 'initial/trapped/restored',

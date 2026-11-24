@@ -344,6 +344,26 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 await dialog.locator('.mx-sdk-search-gate-error').isVisible(),
                 true
             );
+            const errorGlyph = await dialog
+                .locator('.mx-sdk-search-gate-error svg')
+                .evaluate((node) => {
+                    const { width, height } = node.getBoundingClientRect();
+                    const pathStyle = getComputedStyle(
+                        node.querySelector('path')
+                    );
+                    return {
+                        width,
+                        height,
+                        fill: pathStyle.fill,
+                        stroke: pathStyle.stroke,
+                    };
+                });
+            assert.deepEqual(errorGlyph, {
+                width: 20,
+                height: 20,
+                fill: 'rgb(248, 113, 113)',
+                stroke: 'none',
+            });
             evidence.uiTransitions.push({
                 mobile,
                 phase: 'no-results-error',

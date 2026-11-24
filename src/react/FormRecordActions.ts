@@ -1,6 +1,8 @@
 import type * as React from 'react';
 import {
     createElement as h,
+    lazy,
+    Suspense,
     useEffect,
     useId,
     useRef,
@@ -122,6 +124,20 @@ export type FormRecordActionsProps = Readonly<{
     className?: string;
 }>;
 
+/** A portaled action menu for a clipped Portal side-panel header. */
+export type FormRecordActionsHeaderMenuProps = FormRecordActionsProps &
+    Readonly<{
+        /** Decorative icons supplied by the host. The action labels name the controls. */
+        icons: Readonly<{
+            trigger: React.ReactNode;
+            comments: React.ReactNode;
+            deleteRecord: React.ReactNode;
+        }>;
+        buttonRef?: React.RefObject<HTMLButtonElement | null>;
+        buttonClassName?: string;
+        buttonTestId?: string;
+    }>;
+
 function useActions(controller: FormRecordActionsController) {
     return useSyncExternalStore(
         controller.subscribe,
@@ -197,18 +213,102 @@ export function FormRecordActionsFooter(
     );
 }
 
+function useActionOwnerKey(controller: FormRecordActionsController): number {
+    const [owner, setOwner] = useState(() => ({
+        controller,
+        key: 0,
+    }));
+    if (owner.controller !== controller)
+        setOwner({ controller, key: owner.key + 1 });
+    return owner.key;
+}
+
 /** A disclosure with actionable buttons and ordinary keyboard tab order. */
 export function FormRecordActionsMenu(
     props: FormRecordActionsProps
 ): React.ReactElement | null {
-    const [owner, setOwner] = useState(() => ({
-        controller: props.controller,
-        key: 0,
-    }));
-    if (owner.controller !== props.controller)
-        setOwner({ controller: props.controller, key: owner.key + 1 });
     // A reused row must not inherit the old disclosure or its focus target.
-    return h(RecordActionsMenu, { ...props, key: owner.key });
+    return h(RecordActionsMenu, {
+        ...props,
+        key: useActionOwnerKey(props.controller),
+    });
+}
+
+const HeaderMenu = lazy(async () => ({
+    default: (await import('./formRecordActionsHeaderMenuRuntime.js'))
+        .FormRecordActionsHeaderMenuRuntime,
+}));
+
+/** Header actions with arrow navigation and a menu outside the panel's clipping boundary. */
+export function FormRecordActionsHeaderMenu(
+    props: FormRecordActionsHeaderMenuProps
+): React.ReactElement {
+    return h(RecordActionsHeaderMenu, {
+        ...props,
+        key: useActionOwnerKey(props.controller),
+    });
+}
+
+function RecordActionsHeaderMenu(props: FormRecordActionsHeaderMenuProps) {
+    const { controller, labels, icons } = props;
+    const snapshot = useActions(controller);
+    const localOpener = useRef<HTMLButtonElement>(null);
+    const opener = props.buttonRef ?? localOpener;
+    const mounted = useRef(false);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+    const run = (action: () => void) => () => {
+        if (mounted.current) action();
+    };
+    const items = [
+        ...(snapshot.showComments
+            ? [
+                  {
+                      kind: 'comments' as const,
+                      label: labels.comments,
+                      icon: icons.comments,
+                      disabled: snapshot.commentsDisabled,
+                      onSelect: run(controller.openComments),
+                  },
+              ]
+            : []),
+        ...(snapshot.showDelete
+            ? [
+                  {
+                      kind: 'delete' as const,
+                      label: labels.deleteRecord,
+                      icon: icons.deleteRecord,
+                      disabled: snapshot.deleteDisabled,
+                      pending: snapshot.deletePending,
+                      onSelect: run(controller.openDeleteConfirmation),
+                  },
+              ]
+            : []),
+    ];
+
+    if (items.length === 0 && !snapshot.confirmation) return null;
+    return h(
+        'div',
+        { className: props.className },
+        items.length > 0 &&
+            h(
+                Suspense,
+                { fallback: null },
+                h(HeaderMenu, {
+                    label: labels.openMenu,
+                    buttonRef: opener,
+                    buttonClassName: props.buttonClassName,
+                    buttonTestId: props.buttonTestId,
+                    triggerIcon: icons.trigger,
+                    items,
+                })
+            ),
+        confirmation(props, snapshot, opener)
+    );
 }
 
 function showActionsPanel(panel: HTMLDivElement, button: HTMLButtonElement) {

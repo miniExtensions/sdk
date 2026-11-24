@@ -155,9 +155,7 @@
     flex-shrink: 0;
     width: 1.25rem;
     height: 1.25rem;
-    fill: #f87171;
-    stroke: white;
-    stroke-width: 1.5;
+    color: #f87171;
 }
 @media (min-width: 640px) {
     .mx-sdk-search-gate {

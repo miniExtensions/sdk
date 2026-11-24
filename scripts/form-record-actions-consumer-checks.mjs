@@ -15,6 +15,7 @@ import {
 import {
     FormRecordActionsFooter,
     FormRecordActionsMenu,
+    FormRecordActionsHeaderMenu,
     FormRecordDeleteConfirmation,
     type FormRecordActionsLabels,
 } from '@miniextensions/sdk/react';
@@ -34,6 +35,10 @@ const labels: FormRecordActionsLabels = {
 };
 createElement(FormRecordActionsFooter, { controller, labels });
 createElement(FormRecordActionsMenu, { controller, labels });
+createElement(FormRecordActionsHeaderMenu, {
+    controller, labels, buttonRef: createRef<HTMLButtonElement>(), buttonTestId: 'record-options',
+    icons: { trigger: createElement('svg'), comments: createElement('svg'), deleteRecord: createElement('svg') },
+});
 createElement(FormRecordDeleteConfirmation, { labels, returnFocus: createRef<HTMLButtonElement>(), onConfirm() {}, onDismiss() {} });
 const result: FormRecordDeleteOutcome = { status: 'acknowledged', operationId: {}, localSettlement: 'failed' };
 void result;
@@ -64,6 +69,8 @@ const css = readFileSync(require.resolve(style), 'utf8');
 assert.equal(readFileSync(fileURLToPath(import.meta.resolve(style)), 'utf8'), css);
 assert.equal(readFileSync('node_modules/@miniextensions/sdk/dist/cjs/react/form-record-actions.css', 'utf8'), css);
 assert.match(css, /\.mx-sdk-form-record-actions__dialog::backdrop/);
+assert.match(css, /\.mx-sdk-form-record-actions-header__items/);
+assert.equal(typeof ui.FormRecordActionsHeaderMenu, 'function');
 
 const oldScope = {};
 const currentScope = {};

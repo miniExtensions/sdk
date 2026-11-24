@@ -15,6 +15,7 @@ import {
     bundleAttachmentSliderDialog,
     bundleCollaboratorPicker,
     bundleScannerDialog,
+    bundleFormRecordActionsHeaderMenu,
 } from './collaborator-picker-vendor-checks.mjs';
 import { createHash } from 'node:crypto';
 import {
@@ -171,6 +172,7 @@ await bundleCalendar();
 await bundleDocumentPDF();
 await bundleCollaboratorPicker();
 await bundleScannerDialog();
+await bundleFormRecordActionsHeaderMenu();
 await bundleAttachmentSliderDialog();
 await bundleKanban();
 await bundlePortalMap();

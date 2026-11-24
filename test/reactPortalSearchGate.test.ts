@@ -455,6 +455,14 @@ it('keeps no-results separate from local error visibility across typing, submit,
     const f = await fixture(t, { hasNoResults: true });
     const error = () => f.container.querySelector('.mx-sdk-search-gate-error');
     assert.ok(error());
+    const glyph = error()?.querySelector('svg');
+    assert.equal(glyph?.getAttribute('viewBox'), '0 0 24 24');
+    assert.equal(glyph?.getAttribute('aria-hidden'), 'true');
+    assert.equal(glyph?.childElementCount, 1);
+    assert.equal(
+        glyph?.querySelector('path')?.getAttribute('fill-rule'),
+        'evenodd'
+    );
     await f.edit('term');
     assert.ok(error(), 'typing does not hide the native error');
     await f.submit();

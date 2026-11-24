@@ -158,6 +158,30 @@ try {
   const observation=await page.evaluate(({height})=>{window.renderSummary([{fieldId:'long',fieldName:'Current label',readable:window.summaryLongText}],height);const value=document.querySelector('dd'),title=document.querySelector('dt'),style=getComputedStyle(value);return {height:value.clientHeight,scrollHeight:value.scrollHeight,clamp:style.webkitLineClamp,tooltip:value.title,full:window.summaryLongText,titleSibling:title.nextElementSibling.tagName};},{height});
   assert.equal(observation.clamp,String(lines));assert.equal(observation.height,28*lines);assert(observation.scrollHeight>observation.height);assert.equal(observation.tooltip,observation.full);assert.equal(observation.titleSibling,'DD');heights.push({height,lines,pixels:observation.height});
  }
+ const borders=[];
+ for (const viewport of [{width:375,height:780},{width:1280,height:720}]) {
+  await page.setViewportSize(viewport);
+  const colors=await page.evaluate(()=>{
+   const list=document.querySelector('.mx-sdk-portal-summary-cards');
+   const card=list.querySelector('.mx-sdk-portal-summary-card');
+   const property='--mx-sdk-portal-summary-card-border';
+   const border=()=>getComputedStyle(card).borderTopColor;
+   const standalone=border();
+   list.style.setProperty(property,'hsl(214.3 31.8% 91.4%)');
+   const publicPortal=border();
+   list.style.setProperty(property,'hsl(240 6% 90%)');
+   const builder=border();
+   list.style.removeProperty(property);
+   return {standalone,publicPortal,builder,restored: border()};
+  });
+  assert.deepEqual(colors,{
+   standalone:'rgb(229, 231, 235)',
+   publicPortal:'rgb(226, 232, 240)',
+   builder:'rgb(228, 228, 231)',
+   restored:'rgb(229, 231, 235)',
+  });
+  borders.push({viewport,colors});
+ }
  await page.setViewportSize({width:240,height:700});
  const mobile=await page.evaluate(()=>{window.renderSummary([{fieldId:'long',fieldName:'Long title for truncation at mobile width',readable:window.summaryLongText},{fieldId:'zero',fieldName:'Zero',readable:'0.00'}],'medium');const slots=Array.from(document.querySelectorAll('.mx-sdk-portal-summary-slot')),title=document.querySelector('dt');return {pageWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,slots:slots.map(element=>({left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right,top:element.getBoundingClientRect().top})),titleStyle:{overflow:getComputedStyle(title).overflow,ellipsis:getComputedStyle(title).textOverflow,whiteSpace:getComputedStyle(title).whiteSpace},titleClipped:title.scrollWidth>title.clientWidth};});
  assert.equal(mobile.scrollWidth,mobile.pageWidth);assert(mobile.slots.every(slot=>slot.left>=0&&slot.right<=mobile.pageWidth));assert(mobile.slots[1].top>mobile.slots[0].top);assert.equal(mobile.titleClipped,true);assert.deepEqual(mobile.titleStyle,{overflow:'hidden',ellipsis:'ellipsis',whiteSpace:'nowrap'});
@@ -169,7 +193,7 @@ try {
  assert.equal(await page.locator('#summary-owner button,#summary-owner input,#summary-owner a').count(),0);
  assert.deepEqual(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie,href:location.href})),{local:0,session:0,cookies:'',href:origin+'/'});
  assert.deepEqual(pageErrors,[]);assert.deepEqual(externalRequests,[]);assert.deepEqual(unexpectedPaths,[]);assert.equal(documentRequests,1);
- console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),heights,mobileClipping:true,desktopColumns:3,documentRequests,pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
+ console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),heights,borders,mobileClipping:true,desktopColumns:3,documentRequests,pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
 } finally {if(browser)await browser.close();if(server.listening)await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));}
 `;
 
@@ -327,6 +351,7 @@ export function checkPortalSummaryCardsReactMatrix({
                 assert.equal(localhost.externalRequests, 0);
                 assert.equal(localhost.mobileClipping, true);
                 assert.equal(localhost.heights.length, 4);
+                assert.equal(localhost.borders.length, 2);
             }
             versions.push({
                 react: version.react,

@@ -349,7 +349,7 @@ THE SOFTWARE.
 
 ## Heroicons
 
-The numeric, controlled Rating and complete readonly-text empty-state symbols retain the native NoSymbol icon, FormValidationSummary retains the native XCircle icon, readonly Finder attachments retain the native solid Play and Document icons, Gallery image placeholders retain the native solid Photo icon, and the Portal shell retains the native UserCircle and ArrowRightStartOnRectangle outlines and the solid Bars3 icon, from [Heroicons](https://github.com/tailwindlabs/heroicons).
+The numeric, controlled Rating and complete readonly-text empty-state symbols retain the native NoSymbol icon, FormValidationSummary and Portal Search Gate retain the native solid XCircle icon, readonly Finder attachments retain the native solid Play and Document icons, Gallery image placeholders retain the native solid Photo icon, and the Portal shell retains the native UserCircle and ArrowRightStartOnRectangle outlines and the solid Bars3 icon, from [Heroicons](https://github.com/tailwindlabs/heroicons).
 
 The Form completion banner retains the native solid CheckCircle icon, and the read-only Form footer retains the native solid ArrowPathRoundedSquare and DocumentDuplicate icons, from Heroicons 2.1.1.
 

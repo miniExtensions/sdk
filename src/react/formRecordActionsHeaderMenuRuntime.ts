@@ -1,3 +1,11 @@
+import {
+    autoUpdate,
+    flip,
+    offset,
+    shift,
+    useFloating,
+    useMergeRefs,
+} from '@floating-ui/react';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
     createElement as h,
@@ -30,14 +38,25 @@ export function FormRecordActionsHeaderMenuRuntime({
     triggerIcon,
     items,
 }: FormRecordActionsHeaderMenuRuntimeProps): ReactElement {
+    const { refs, floatingStyles, isPositioned } =
+        useFloating<HTMLButtonElement>({
+            placement: 'bottom-start',
+            strategy: 'fixed',
+            middleware: [offset(4), flip(), shift()],
+            whileElementsMounted: autoUpdate,
+        });
+    // React 18 types place null in RefObject.current, while React 19 includes it in the type parameter.
+    const setButton = useMergeRefs([
+        buttonRef as RefObject<HTMLButtonElement>,
+        refs.setReference,
+    ]);
     return h(
         Menu<'div'>,
         { as: 'div', className: 'mx-sdk-form-record-actions-header' },
         h(
             MenuButton<'button'>,
             {
-                // React 18 types place null in RefObject.current, while React 19 includes it in the type parameter.
-                ref: buttonRef as RefObject<HTMLButtonElement>,
+                ref: setButton,
                 type: 'button',
                 className: [
                     'mx-sdk-form-record-actions-header__trigger',
@@ -51,12 +70,16 @@ export function FormRecordActionsHeaderMenuRuntime({
             triggerIcon
         ),
         h(
-            MenuItems,
+            MenuItems<'div'>,
             {
-                anchor: { to: 'bottom end', gap: 4 },
+                ref: refs.setFloating,
                 portal: true,
                 modal: false,
                 className: 'mx-sdk-form-record-actions-header__items',
+                style: {
+                    ...floatingStyles,
+                    opacity: isPositioned ? undefined : 0,
+                },
             },
             items.map((item) =>
                 h(

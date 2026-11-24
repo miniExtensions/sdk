@@ -61,8 +61,9 @@ Browsers without that API use the inline disclosure, subject to ancestor overflo
 Use `FormRecordActionsHeaderMenu` for the right edge of a clipped Portal side
 panel. Supply the trigger, Comments and Delete icons through `icons`. The
 component labels the trigger, portals the action menu outside the panel, and
-supports ArrowDown to open and move through the actions. Pass `buttonRef` if the
-host comments surface should return focus to the same trigger.
+anchors to the trigger's start edge with collision handling. ArrowDown opens
+and moves through the actions. Pass `buttonRef` if the host comments surface
+should return focus to the same trigger.
 
 The host publishes visibility, disabled state and operation progress. When the
 visitor confirms, the controller closes the dialog and asks the host to admit

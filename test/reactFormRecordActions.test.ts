@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { act, createElement as h } from 'react';
+import { act, createElement as h, createRef } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
     createFormRecordActionsController,
@@ -10,6 +10,7 @@ import {
 } from '../src/forms/recordActions.js';
 import {
     FormRecordActionsFooter,
+    FormRecordActionsHeaderMenu,
     FormRecordActionsMenu,
     type FormRecordActionsLabels,
 } from '../src/react/FormRecordActions.js';
@@ -262,6 +263,160 @@ it('the menu hands off only current comments and uses the same confirmation path
     await f.click(button(f, labels.cancel));
     assert.equal(f.window.document.activeElement, toggle);
     assert.deepEqual(host.allocations, []);
+    f.unchangedEffects();
+});
+
+it('keeps clipped header keyboard actions and confirmation with the current owner', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    // Provide the same browser constructors and animation callbacks used by
+    // the real Headless UI collaborator fixture.
+    const platform = {
+        Window: f.window.constructor,
+        Document: f.window.Document,
+        EventTarget: f.window.EventTarget,
+        SVGElement: f.window.SVGElement,
+        ShadowRoot: f.window.ShadowRoot,
+        Event: f.window.Event,
+        MouseEvent: f.window.MouseEvent,
+        PointerEvent: f.window.PointerEvent,
+        KeyboardEvent: f.window.KeyboardEvent,
+        FocusEvent: f.window.FocusEvent,
+        HTMLButtonElement: f.window.HTMLButtonElement,
+        HTMLFormElement: f.window.HTMLFormElement,
+        HTMLSelectElement: f.window.HTMLSelectElement,
+        HTMLIFrameElement: f.window.HTMLIFrameElement,
+        HTMLFieldSetElement: f.window.HTMLFieldSetElement,
+        HTMLLegendElement: f.window.HTMLLegendElement,
+        requestAnimationFrame: f.window.requestAnimationFrame.bind(f.window),
+        cancelAnimationFrame: f.window.cancelAnimationFrame.bind(f.window),
+    };
+    const originals = Object.entries(platform).map(([name, value]) => {
+        const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
+        Object.defineProperty(globalThis, name, {
+            configurable: true,
+            writable: true,
+            value,
+        });
+        return [name, descriptor] as const;
+    });
+    t.after(() => {
+        for (const [name, descriptor] of originals) {
+            if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+            else Reflect.deleteProperty(globalThis, name);
+        }
+    });
+
+    const oldScope = {};
+    const currentScope = {};
+    const retired = makeHost({
+        ...editable(oldScope),
+        comments: { visible: true, disabled: true },
+    });
+    const replacement = makeHost(editable(currentScope));
+    const buttonRef = createRef<HTMLButtonElement>();
+    const icon = h('svg', { 'aria-hidden': true });
+    const render = (host: typeof retired) =>
+        f.render(
+            h(FormRecordActionsHeaderMenu, {
+                controller: host.controller,
+                labels,
+                icons: { trigger: icon, comments: icon, deleteRecord: icon },
+                className: 'side-panel-actions',
+                buttonRef,
+                buttonClassName: 'side-panel-trigger',
+                buttonTestId: 'header-menu-button',
+            })
+        );
+    const press = async (
+        node: {
+            dispatchEvent(
+                event: InstanceType<typeof f.window.KeyboardEvent>
+            ): boolean;
+        },
+        key: string
+    ) => {
+        await act(async () => {
+            node.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    bubbles: true,
+                    cancelable: true,
+                    key,
+                })
+            );
+        });
+    };
+    const open = async (opener: ReturnType<typeof button>) => {
+        await act(async () => opener.focus());
+        await press(opener, 'ArrowDown');
+        const menu = f.window.document.getElementById(
+            opener.getAttribute('aria-controls') ?? ''
+        );
+        assert.ok(menu);
+        assert.equal(menu.getAttribute('role'), 'menu');
+        assert.equal(f.container.contains(menu), false);
+        const actions = [...menu.querySelectorAll('[role="menuitem"]')];
+        return { menu, actions };
+    };
+
+    await render(retired);
+    await act(async () => {
+        await import('../src/react/formRecordActionsHeaderMenuRuntime.js');
+    });
+    const oldOpener = button(f, labels.openMenu);
+    assert.equal(buttonRef.current, oldOpener);
+    assert.equal(oldOpener.getAttribute('data-testid'), 'header-menu-button');
+    assert.equal(oldOpener.getAttribute('aria-haspopup'), 'menu');
+    assert.ok(oldOpener.closest('.side-panel-actions'));
+    assert.ok(oldOpener.classList.contains('side-panel-trigger'));
+
+    const old = await open(oldOpener);
+    const [comments, deletion] = old.actions;
+    assert.equal(comments.textContent, labels.comments);
+    assert.equal(comments.getAttribute('data-unavailable'), 'true');
+    assert.equal(old.menu.getAttribute('aria-activedescendant'), comments.id);
+    await press(old.menu, 'Enter');
+    assert.deepEqual(retired.comments, []);
+
+    const again = await open(oldOpener);
+    await press(again.menu, 'ArrowDown');
+    assert.equal(
+        again.menu.getAttribute('aria-activedescendant'),
+        again.actions[1].id
+    );
+    assert.equal(deletion.textContent, labels.deleteRecord);
+    await press(again.menu, 'Enter');
+    assert.equal(f.window.document.activeElement, button(f, labels.cancel));
+    const opening = retired.controller.getSnapshot().confirmation;
+    assert.ok(opening);
+
+    await render(replacement);
+    const opener = button(f, labels.openMenu);
+    assert.equal(buttonRef.current, opener);
+    assert.equal(oldOpener.isConnected, false);
+    assert.notEqual(f.window.document.activeElement, opener);
+    assert.equal(f.container.querySelector('dialog'), null);
+    assert.equal(retired.subscriptionCount(), 0);
+    await act(async () => retired.controller.confirmDelete(opening));
+    assert.deepEqual(retired.allocations, []);
+    assert.deepEqual(replacement.allocations, []);
+
+    const current = await open(opener);
+    await press(current.menu, 'Enter');
+    assert.deepEqual(replacement.comments, [currentScope]);
+    await act(async () =>
+        replacement.setFrame({
+            ...editable(currentScope),
+            comments: { visible: false, disabled: true },
+            delete: { visible: true, disabled: false, pending: true },
+        })
+    );
+    const pending = await open(opener);
+    assert.equal(pending.actions.length, 1);
+    assert.equal(pending.actions[0].getAttribute('aria-busy'), 'true');
+    await press(pending.menu, 'Enter');
+    assert.deepEqual(replacement.allocations, []);
+    await act(async () => replacement.setFrame(null));
+    assert.equal(buttonRef.current, null);
     f.unchangedEffects();
 });
 

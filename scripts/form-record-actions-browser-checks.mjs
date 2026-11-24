@@ -127,10 +127,11 @@ const headerHtml = `<!doctype html><html lang="en" data-presentation="header"><m
 body {font:16px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;margin:0}
 #panel {position:absolute;top:148px;left:24px;width:342px;height:60px;overflow:hidden;border-radius:12px;background:#f8fafc}
 #target {position:absolute;top:16px;right:48px}
+@media (min-width:800px) {#panel {left:calc((100vw - 342px) / 2)}}
 </style><main id="panel" aria-label="Side panel"></main>
 <button id="after" type="button">After</button><script type="module" src="/proof.js"></script></html>`;
 
-async function checkHeaderMenu(page, viewport, output, hash) {
+async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
     const opener = page.getByTestId('tooltip-open-menu-button');
     await opener
         .and(
@@ -170,7 +171,8 @@ async function checkHeaderMenu(page, viewport, output, hash) {
         settlements: [],
     };
     const capture = async (state) => {
-        const file = `record-actions-header-${state}.png`;
+        const profile = spacious ? 'header-spacious' : 'header';
+        const file = `record-actions-${profile}-${state}.png`;
         const path = join(output, file);
         await page.screenshot({ path, animations: 'disabled' });
         return { file, sha256: hash(readFileSync(path)) };
@@ -256,7 +258,11 @@ async function checkHeaderMenu(page, viewport, output, hash) {
             deletion: item.toJSON(),
             portaled: !card.contains(menu),
             gap: panel.top - opener.bottom,
+            leftEdgeDifference: panel.left - opener.left,
             rightEdgeDifference: panel.right - opener.right,
+            startFits:
+                opener.left + panel.width <= doc.documentElement.clientWidth,
+            endFits: opener.right >= panel.width,
             outsideCard: y > card.getBoundingClientRect().bottom,
             hit:
                 doc.elementFromPoint(x, y)?.closest('[role="menuitem"]') ===
@@ -266,14 +272,87 @@ async function checkHeaderMenu(page, viewport, output, hash) {
     });
     assert.equal(geometry.portaled, true);
     assert(Math.abs(geometry.gap - 4) <= 1, 'Expected the native 4px gap');
+    assert.equal(geometry.startFits, spacious);
+    assert.equal(geometry.endFits, true);
     assert(
-        Math.abs(geometry.rightEdgeDifference) <= 1,
-        'Expected right-aligned header menu'
+        Math.abs(
+            spacious
+                ? geometry.leftEdgeDifference
+                : geometry.rightEdgeDifference
+        ) <= 1,
+        spacious
+            ? 'Expected the default bottom-start placement with room on both sides'
+            : 'Expected bottom-end collision placement near the right edge'
     );
     assert.equal(geometry.outsideCard, true);
     assert.equal(geometry.hit, true);
     assert.equal(geometry.menuFocused, true);
     const open = await capture('open');
+
+    if (spacious) {
+        const beforeSelection = await counts();
+        assert.deepEqual(beforeSelection, noActions);
+        const pointer = await comments.evaluate((action) => {
+            const { left, width, top, height } = action.getBoundingClientRect();
+            const x = left + width / 2;
+            const y = top + height / 2;
+            return {
+                x,
+                y,
+                hitsComments:
+                    action.ownerDocument
+                        .elementFromPoint(x, y)
+                        ?.closest('[role="menuitem"]') === action,
+            };
+        });
+        assert.equal(pointer.hitsComments, true);
+        await page.mouse.click(pointer.x, pointer.y);
+        await popup.waitFor({ state: 'hidden' });
+        const afterSelection = await counts();
+        assert.deepEqual(afterSelection, {
+            ...noActions,
+            comments: ['target'],
+        });
+
+        await opener.click();
+        await popup.waitFor();
+        const outside = page.getByRole('button', {
+            name: 'After',
+            exact: true,
+        });
+        await outside.click();
+        await popup.waitFor({ state: 'hidden' });
+        await page.evaluate(
+            () =>
+                new Promise((done) =>
+                    requestAnimationFrame(() => requestAnimationFrame(done))
+                )
+        );
+        const outsideFocused = await focused(outside);
+        assert.equal(outsideFocused, true);
+        assert.equal(await opener.getAttribute('aria-expanded'), 'false');
+        const afterDismissal = await counts();
+        assert.deepEqual(afterDismissal, afterSelection);
+
+        return {
+            status: 'passed',
+            viewport,
+            trigger,
+            geometry,
+            pointerSelection: {
+                pointer,
+                before: beforeSelection,
+                after: afterSelection,
+            },
+            outsideClick: {
+                focused: outsideFocused,
+                dismissed: true,
+                after: afterDismissal,
+            },
+            screenshots: [resting, open],
+        };
+    }
+
     await page.keyboard.press('Escape');
     await popup.waitFor({ state: 'hidden' });
     assert.equal(await focused(originalOpener), true);
@@ -480,6 +559,16 @@ export async function checkFormRecordActionsBrowser({
                 viewport,
                 output,
                 hash
+            );
+            await context.close();
+            const spaciousViewport = { width: 800, height: 480 };
+            const spaciousPage = await openPage('/header', spaciousViewport);
+            evidence.header.spacious = await checkHeaderMenu(
+                spaciousPage,
+                spaciousViewport,
+                output,
+                hash,
+                true
             );
         };
 

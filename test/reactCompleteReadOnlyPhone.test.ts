@@ -5,6 +5,7 @@ import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
     CompleteReadOnlyPhoneNumberField,
+    CompleteReadOnlyTextField,
     ReadOnlyPhoneNumberField,
 } from '../src/react/index.js';
 
@@ -139,10 +140,20 @@ it('server-renders the supplied empty message as text', async () => {
         window.document.body.innerHTML = html;
         assert.equal(window.document.body.textContent, emptyLabel);
         assert.equal(window.document.querySelector('a,em,input,select'), null);
-        const icon = window.document.querySelector('svg');
+        const empty = window.document.querySelector(
+            'p[data-testid="no-value-test-id"]'
+        );
+        assert.ok(empty);
+        const icon = empty.querySelector('svg');
         assert.ok(icon);
         assert.equal(icon.getAttribute('aria-hidden'), 'true');
         assert.equal(icon.getAttribute('focusable'), 'false');
+        assert.equal(icon.getAttribute('fill'), 'currentColor');
+        const reference = window.document.createElement('div');
+        reference.innerHTML = renderToStaticMarkup(
+            h(CompleteReadOnlyTextField, { value: null, language: 'en' })
+        );
+        assert.equal(icon.innerHTML, reference.querySelector('svg')?.innerHTML);
     } finally {
         await window.happyDOM.close();
     }

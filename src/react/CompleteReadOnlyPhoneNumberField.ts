@@ -25,24 +25,25 @@ export function CompleteReadOnlyPhoneNumberField({
                 className: ['mx-sdk-complete-phone-empty', className]
                     .filter(Boolean)
                     .join(' '),
+                'data-testid': 'no-value-test-id',
             },
             createElement(
                 'svg',
                 {
                     className: 'mx-sdk-complete-phone-empty-icon',
+                    xmlns: 'http://www.w3.org/2000/svg',
                     width: 16,
                     height: 16,
                     viewBox: '0 0 24 24',
-                    fill: 'none',
-                    stroke: 'currentColor',
-                    strokeWidth: 1.75,
+                    fill: 'currentColor',
                     'aria-hidden': true,
+                    'data-slot': 'icon',
                     focusable: 'false',
                 },
-                createElement('circle', { cx: 12, cy: 12, r: 9 }),
                 createElement('path', {
-                    d: 'M5.6 5.6l12.8 12.8',
-                    strokeLinecap: 'round',
+                    fillRule: 'evenodd',
+                    clipRule: 'evenodd',
+                    d: 'm6.72 5.66 11.62 11.62A8.25 8.25 0 0 0 6.72 5.66Zm10.56 12.68L5.66 6.72a8.25 8.25 0 0 0 11.62 11.62ZM5.105 5.106c3.807-3.808 9.98-3.808 13.788 0 3.808 3.807 3.808 9.98 0 13.788-3.807 3.808-9.98 3.808-13.788 0-3.808-3.807-3.808-9.98 0-13.788Z',
                 })
             ),
             emptyLabel

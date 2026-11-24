@@ -2,6 +2,7 @@ import {
     createElement as h,
     useEffect,
     useLayoutEffect,
+    useCallback,
     useRef,
     useState,
     type ChangeEvent,
@@ -27,7 +28,7 @@ type NativeDialogProps = Pick<
     | 'renderLoading'
 > & {
     id: string;
-    opener: HTMLButtonElement | null;
+    attachDialog(node: HTMLDialogElement | null): void;
     labels: LoginExistingValuesLabels;
     state: SelectionState;
     debouncing: boolean;
@@ -42,7 +43,7 @@ const useCommitEffect =
 
 export function NativeLoginExistingValuesDialog({
     id,
-    opener,
+    attachDialog,
     labels,
     state,
     debouncing,
@@ -56,7 +57,14 @@ export function NativeLoginExistingValuesDialog({
     choose,
     load,
 }: NativeDialogProps): ReactElement {
-    const dialog = useRef<HTMLDialogElement>(null);
+    const dialog = useRef<HTMLDialogElement | null>(null);
+    const setDialog = useCallback(
+        (node: HTMLDialogElement | null) => {
+            dialog.current = node;
+            attachDialog(node);
+        },
+        [attachDialog]
+    );
     const input = useRef<HTMLInputElement>(null);
     const [activeOccurrence, setActiveOccurrence] = useState<string | null>(
         null
@@ -74,14 +82,9 @@ export function NativeLoginExistingValuesDialog({
 
     useCommitEffect(() => {
         const panel = dialog.current;
-        if (!panel) return;
-        panel.showModal();
+        if (panel && !panel.open) panel.showModal();
         input.current?.focus();
-        return () => {
-            panel.close();
-            if (opener?.isConnected) opener.focus();
-        };
-    }, [opener]);
+    }, []);
 
     function optionId(occurrence: string) {
         return optionsId + '-' + occurrence;
@@ -193,7 +196,7 @@ export function NativeLoginExistingValuesDialog({
     return h(
         'dialog',
         {
-            ref: dialog,
+            ref: setDialog,
             id: id + '-panel',
             className: 'mx-sdk-login-values-native',
             'aria-labelledby': titleId,

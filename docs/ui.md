@@ -6767,8 +6767,11 @@ Login form.
 
 Set `appearance: 'native'` to use the responsive modal and editable
 combobox. Arrow navigation updates the active occurrence while the input
-keeps focus. Enter selects that occurrence, and Escape or a backdrop click
-dismisses the modal. Use `searchPlaceholder` for the visible hint and
+keeps focus. Enter selects that occurrence. Tab and Shift+Tab select the
+active occurrence and continue through the login controls. Escape or a
+backdrop click dismisses the modal and returns focus to its trigger. When
+the trigger is in a form, the modal mounts beside the form, keeping its
+controls separate from Login submission. Use `searchPlaceholder` for the visible hint and
 `labels.search` for the accessible field name. `triggerContent` can supply
 an icon while `labels.open` names the button. In this appearance,
 `renderError(message)` can display lookup errors and `renderLoading()` can

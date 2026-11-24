@@ -735,10 +735,10 @@ it('dismisses the native modal and retires lookups without focusing a replaced o
     assert(ui.requests[3].signal.aborted);
     assert.equal(restoreFocus.mock.callCount(), 0);
     assert.equal(opener.isConnected, false);
-    assert.equal(retired.open, false);
+    assert.equal(retired.isConnected, false);
     assert.equal(ui.dialog(), null);
     assert(showModal.mock.callCount() >= 4);
-    assert(close.mock.callCount() >= 4);
+    assert.equal(close.mock.callCount(), 3);
     await act(async () =>
         pending.resolve({ labels: ['Retired result'], offset: null })
     );

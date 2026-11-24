@@ -1110,6 +1110,50 @@ export async function checkLoginExistingValuesBrowser({
         assert.deepEqual(trustedOutside, [true]);
         assert.equal(await draft.inputValue(), 'masked-signup@example.invalid');
 
+        await nativeTrigger.evaluate((element) => {
+            const witness = { element, focusEvents: 0 };
+            const onFocus = () => witness.focusEvents++;
+            element.addEventListener('focus', onFocus);
+            window.pickerProof.retiredOpener = { witness, onFocus };
+        });
+        await beforeNativeTrigger.focus();
+        await openNative();
+        const focusBeforeRetirement = await page.evaluate(
+            () => window.pickerProof.retiredOpener.witness.focusEvents
+        );
+        assert(
+            focusBeforeRetirement > 0,
+            'Expected the opener focus witness to observe the trusted opening'
+        );
+        await patch({ session: 'native-replacement' });
+        await page
+            .getByTestId('native-login-search-dialog')
+            .waitFor({ state: 'detached' });
+        await nativeTrigger.waitFor();
+        const ownerRetirement = await nativeTrigger.evaluate(
+            (successor, focusBefore) => {
+                const { witness, onFocus } = window.pickerProof.retiredOpener;
+                witness.element.removeEventListener('focus', onFocus);
+                delete window.pickerProof.retiredOpener;
+                return {
+                    dialogDetached: !document.querySelector(
+                        '[data-testid=native-login-search-dialog]'
+                    ),
+                    oldTriggerDisconnected: !witness.element.isConnected,
+                    successorIsDistinct: successor !== witness.element,
+                    restorationFocusEvents: witness.focusEvents - focusBefore,
+                };
+            },
+            focusBeforeRetirement
+        );
+        assert.deepEqual(ownerRetirement, {
+            dialogDetached: true,
+            oldTriggerDisconnected: true,
+            successorIsDistinct: true,
+            restorationFocusEvents: 0,
+        });
+        await readNativeSelection([duplicate, '', duplicate]);
+
         evidence.nativeLoginCombobox = {
             rawQuery: nativeQuery,
             occurrenceIds,
@@ -1133,6 +1177,7 @@ export async function checkLoginExistingValuesBrowser({
             ),
             trustedOutside: trustedOutside[0],
             restoredFocusAfter: ['Escape', 'Enter', 'outside'],
+            ownerRetirement,
             credentialDraftPreserved: true,
             submits: (await read()).submits,
         };

@@ -2,6 +2,7 @@ import {
     createElement as h,
     lazy,
     Suspense,
+    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -128,11 +129,17 @@ function retire(active: { current: Lookup | null }, lookup: Lookup) {
 function Picker(props: LoginExistingValuesPickerProps) {
     const id = useId();
     const trigger = useRef<HTMLButtonElement>(null);
+    const dialog = useRef<HTMLDialogElement | null>(null);
     const search = useRef<HTMLInputElement>(null);
     const optionsList = useRef<HTMLUListElement>(null);
     const active = useRef<Lookup | null>(null);
     const callbacks = useRef(props);
     const [view, setView] = useState<LookupView | null>(null);
+    const [dialogAttached, setDialogAttached] = useState(false);
+    const attachDialog = useCallback((node: HTMLDialogElement | null) => {
+        dialog.current = node;
+        setDialogAttached(node !== null);
+    }, []);
     const labels = { ...defaultLabels, ...props.labels };
     const native = props.appearance === 'native';
     const useCommittedEffect =
@@ -155,8 +162,11 @@ function Picker(props: LoginExistingValuesPickerProps) {
 
     function close(lookup: Lookup) {
         if (!retire(active, lookup)) return;
+        // A user close restores focus before native Tab traversal. An owner
+        // retirement removes the dialog with its trigger and skips this path.
+        if (dialog.current?.open) dialog.current.close();
         setView(null);
-        if (!native) trigger.current?.focus();
+        trigger.current?.focus();
     }
 
     function open() {
@@ -378,7 +388,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
         view && native
             ? h(NativeLoginExistingValuesDialog, {
                   id,
-                  opener: trigger.current,
+                  attachDialog,
                   labels,
                   state: view.state,
                   debouncing: view.lookup.timer !== null,
@@ -400,6 +410,7 @@ function Picker(props: LoginExistingValuesPickerProps) {
         native && panel
             ? trigger.current?.closest('form')?.parentElement
             : null;
+    const expanded = native ? dialogAttached : panel !== null;
 
     return h(
         'div',
@@ -421,9 +432,15 @@ function Picker(props: LoginExistingValuesPickerProps) {
                 'aria-label':
                     props.triggerContent != null ? labels.open : undefined,
                 'aria-haspopup': 'dialog',
-                'aria-expanded': panel !== null,
-                'aria-controls': panel ? `${id}-panel` : undefined,
+                'aria-expanded': expanded,
+                'aria-controls': expanded ? `${id}-panel` : undefined,
                 onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+                    if (event.key === 'Escape' && native && active.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!event.repeat) close(active.current);
+                        return;
+                    }
                     // A held Enter can repeat after selection returns focus.
                     if (event.key === 'Enter' && event.repeat)
                         event.preventDefault();

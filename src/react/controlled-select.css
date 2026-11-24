@@ -278,7 +278,8 @@
 .mx-sdk-select[data-portal-filter] > .mx-sdk-select-portal-chevron {
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-end: 0.5rem;
+    /* Measure the host inset from the outer trigger edge. */
+    inset-inline-end: calc(0.5rem - 1px);
     width: 1rem;
     height: 1rem;
     color: #6b7280;

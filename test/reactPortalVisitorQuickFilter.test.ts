@@ -19,12 +19,29 @@ const saved = {
     conditions: [displayed, group('keep', title)],
 };
 
-async function mounted(t: TestContext, host = quickFilterOwner(saved)) {
+async function mounted(
+    t: TestContext,
+    host = quickFilterOwner(saved),
+    placeQuickSeparately = false
+) {
     const f = await htmlPresentationFixture(t);
     const outcomes: PortalVisitorFilterOutcome[] = [];
+    const quickContainer = placeQuickSeparately
+        ? f.window.document.createElement('div')
+        : undefined;
+    if (quickContainer) {
+        f.container.after(quickContainer);
+        t.after(() => quickContainer.remove());
+    }
     const control = h(PortalVisitorFilter, {
         port: host.port,
         showDropdowns: true,
+        ...(quickContainer
+            ? {
+                  quickFiltersContainer:
+                      quickContainer as unknown as HTMLElement,
+              }
+            : {}),
         labels: {
             quickFilters: 'Filtres rapides',
             allValues: 'Toutes les valeurs',
@@ -34,10 +51,11 @@ async function mounted(t: TestContext, host = quickFilterOwner(saved)) {
     assert.doesNotMatch(renderToString(control), /Filtres rapides/);
     assert.equal(host.calls.length, 0);
     await f.render(control);
-    const toolbar = f.container.querySelector(
+    const toolbar = (quickContainer ?? f.container).querySelector(
         '[role="group"][aria-label="Filtres rapides"]'
     );
     assert.ok(toolbar);
+    if (quickContainer) assert.equal(f.container.contains(toolbar), false);
     const [labels, status] = toolbar.querySelectorAll('select');
     assert.ok(labels instanceof f.window.HTMLSelectElement);
     assert.ok(status instanceof f.window.HTMLSelectElement);
@@ -146,7 +164,7 @@ test('mounted quick Filter drops a retained change on the same select after a vi
 });
 
 test('mounted quick and advanced Filter share one active operation and never retry an unknown outcome', async (t) => {
-    const f = await mounted(t);
+    const f = await mounted(t, quickFilterOwner(saved), true);
     await f.click(f.button('Filter'));
     await f.key(f.status, 'ArrowDown');
     await f.change(f.status, ['blue']);

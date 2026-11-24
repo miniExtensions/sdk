@@ -15,6 +15,7 @@ import {
     type ReactElement,
     type SyntheticEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
     createPortalVisitorFilterDraft,
     resolvePortalVisitorFilterOperator,
@@ -66,6 +67,8 @@ export type PortalVisitorFilterProps = {
     disabled?: boolean;
     /** Show the quick filters admitted by the current host frame. */
     showDropdowns?: boolean;
+    /** Mount the Quick row separately while retaining this Filter's draft owner. */
+    quickFiltersContainer?: HTMLElement | null;
     labels?: PortalVisitorFilterLabels;
     /** Calendar locale for date operands. Defaults to English. */
     language?: RuntimeLanguage;
@@ -887,6 +890,16 @@ export function PortalVisitorFilter(
         type === 'refused' || type === 'uncertain' || type === 'stale'
             ? labels[type]
             : null;
+    const dropdowns =
+        props.showDropdowns && quick?.port === props.port
+            ? renderDropdowns(quick)
+            : null;
+    const quickRow =
+        props.quickFiltersContainer === undefined
+            ? dropdowns
+            : dropdowns && props.quickFiltersContainer
+              ? createPortal(dropdowns, props.quickFiltersContainer)
+              : null;
     return h(
         'div',
         { className: props.className, style: props.style },
@@ -903,9 +916,7 @@ export function PortalVisitorFilter(
             },
             labels.trigger
         ),
-        props.showDropdowns && quick?.port === props.port
-            ? renderDropdowns(quick)
-            : null,
+        quickRow,
         feedback ? h('p', { role: 'status' }, feedback) : null,
         active?.port === props.port
             ? h(FilterDialog, {

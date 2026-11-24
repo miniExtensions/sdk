@@ -248,6 +248,7 @@ test('the opt-in Quick combobox searches and shares the Advanced draft owner', a
     assert.ok(chevron);
     assert.equal(chevron.getAttribute('width'), '16');
     assert.equal(chevron.getAttribute('height'), '16');
+    assert.equal(quick.querySelector('button[aria-label="Clear"]'), null);
     const listbox = () => {
         const menu = f.window.document.getElementById(
             input.getAttribute('aria-controls') ?? ''

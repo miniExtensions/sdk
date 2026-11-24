@@ -888,7 +888,7 @@ function SelectControl(props: ControlProps): ReactNode {
                       'The choice could not be added. Review the current field before trying again.'
               )
             : null,
-        !disabled && props.values.length > 0
+        !portalFilter && !disabled && props.values.length > 0
             ? h(
                   'button',
                   {

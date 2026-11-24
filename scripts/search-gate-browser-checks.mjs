@@ -12,6 +12,9 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+const accentColor = 'rgb(37, 99, 235)';
+const focusColor = 'rgb(59, 130, 246)';
+
 /** Actual installed public component and trusted keyboard/pointer interaction. */
 export async function checkSearchGateBrowser({
     browser,
@@ -67,7 +70,7 @@ function App(){
  return h(React.Fragment,null,
   h('button',{type:'button','data-search-proof-control':'open-gate',onClick:event=>{openers.push(event.currentTarget===document.activeElement);setMounted(true);}},'Open gate'),
   h('button',{type:'button','data-search-proof-control':'outside-control'},'Outside control'),
-  mounted?h(PortalSearchGate,{searchPageField:field,title:'Search one',hasNoResults:noResults,getCurrentUrl(){urlReads++;return 'https://example.test/portal?keep=yes&search_fld_name=old#fragment';},onNavigate(url){navigations.push({url,recognized:hasSearchPageQueryParam({searchParams:new URL(url).searchParams,searchPageField:field})});},onClearSearch(){clears++;},headerActions:actions,accentColor:'#4f46e5',focusColor:'#6366f1'}):null,
+  mounted?h(PortalSearchGate,{searchPageField:field,title:'Search one',hasNoResults:noResults,getCurrentUrl(){urlReads++;return 'https://example.test/portal?keep=yes&search_fld_name=old#fragment';},onNavigate(url){navigations.push({url,recognized:hasSearchPageQueryParam({searchParams:new URL(url).searchParams,searchPageField:field})});},onClearSearch(){clears++;},headerActions:actions,accentColor:${JSON.stringify(accentColor)},focusColor:${JSON.stringify(focusColor)}}):null,
   second?h(PortalSearchGate,{searchPageField:{fieldId:'fld_second',fieldName:'Second'},title:'Search two',getCurrentUrl:()=> 'https://example.test',onNavigate(url){navigations.push({url});},headerActions:h('span',null,h('button',{type:'button',onClick:()=>setSecond(false)},'Unmount second gate'),h('button',{type:'button',onClick:()=>setMounted(false)},'Unmount first gate'))}):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
@@ -143,7 +146,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             context = await browser.newContext({
                 serviceWorkers: 'block',
                 viewport: mobile
-                    ? { width: 390, height: 844 }
+                    ? { width: 375, height: 844 }
                     : { width: 1280, height: 800 },
             });
             await context.route('**/*', async (route) => {
@@ -235,11 +238,9 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             assert.equal(inputAppearance.height, mobile ? 42 : 38);
             assert.equal(inputAppearance.fontSize, mobile ? '16px' : '14px');
             assert.equal(inputAppearance.lineHeight, mobile ? '24px' : '20px');
-            assert.equal(inputAppearance.border, 'rgb(99, 102, 241)');
+            assert.equal(inputAppearance.border, focusColor);
             assert(
-                inputAppearance.ring.includes(
-                    'rgb(99, 102, 241) 0px 0px 0px 1px'
-                )
+                inputAppearance.ring.includes(`${focusColor} 0px 0px 0px 1px`)
             );
             assert.equal(inputAppearance.outline, 'rgba(0, 0, 0, 0)');
             await input.fill('  Alice & 東京  ');
@@ -253,13 +254,12 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 height: node.getBoundingClientRect().height,
                 outline: getComputedStyle(node).outline,
                 offset: getComputedStyle(node).outlineOffset,
+                borderTopWidth: getComputedStyle(node).borderTopWidth,
             }));
             assert.equal(primaryAppearance.height, 32);
-            assert.equal(
-                primaryAppearance.outline,
-                'rgb(79, 70, 229) solid 2px'
-            );
+            assert.equal(primaryAppearance.outline, `${accentColor} solid 2px`);
             assert.equal(primaryAppearance.offset, '2px');
+            assert.equal(primaryAppearance.borderTopWidth, '0px');
             await primary.press('Shift+Tab');
             assert.equal(await focusIs(input, 'return-from-submit'), true);
             await input.press('Enter');
@@ -360,7 +360,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             assert(geometry.left >= 0 && geometry.right <= geometry.viewport);
             assert(geometry.width <= 512 && geometry.width > 250);
             assert.equal(geometry.backdrop, 'rgb(17, 24, 39)');
-            assert.equal(geometry.button, 'rgb(79, 70, 229)');
+            assert.equal(geometry.button, accentColor);
             evidence.phase = 'no-results-prop';
             await dialog
                 .getByRole('button', { name: 'Show no results', exact: true })
@@ -368,20 +368,27 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             // The host first commits hasNoResults; the native-compatible hook
             // then commits showError in its effect. Observe both public phases,
             // with the existing default timeout, rather than sample mid-commit.
-            await dialog
-                .getByRole('button', { name: 'Search Again', exact: true })
-                .waitFor({ state: 'visible' });
+            const retry = dialog.getByRole('button', {
+                name: 'Search Again',
+                exact: true,
+            });
+            const clear = dialog.getByRole('button', {
+                name: 'Clear',
+                exact: true,
+            });
+            await retry.waitFor({ state: 'visible' });
             const retryAppearances = {};
-            for (const name of ['Search Again', 'Clear']) {
-                const appearance = await dialog
-                    .getByRole('button', { name, exact: true })
-                    .evaluate((button) => ({
-                        height: button.getBoundingClientRect().height,
-                        borderTopWidth: getComputedStyle(button).borderTopWidth,
-                    }));
+            for (const [name, button, borderTopWidth] of [
+                ['Search Again', retry, '0px'],
+                ['Clear', clear, '1px'],
+            ]) {
+                const appearance = await button.evaluate((node) => ({
+                    height: node.getBoundingClientRect().height,
+                    borderTopWidth: getComputedStyle(node).borderTopWidth,
+                }));
                 assert.deepEqual(appearance, {
                     height: 34,
-                    borderTopWidth: '1px',
+                    borderTopWidth,
                 });
                 retryAppearances[name] = appearance;
             }
@@ -425,41 +432,56 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             });
             evidence.phase = 'no-results-edit-persistence';
             await input.fill('retry');
+            await page.keyboard.press('Tab');
+            assert.equal(await focusIs(retry, 'retry-submit'), true);
+            const invalidRestBorder = await input.evaluate(
+                (node) => getComputedStyle(node).borderTopColor
+            );
+            assert.equal(invalidRestBorder, 'rgb(252, 165, 165)');
+            await page.keyboard.press('Shift+Tab');
+            assert.equal(await focusIs(input, 'retry-input'), true);
             const invalidFocus = await input.evaluate((node) => {
                 const style = getComputedStyle(node);
                 return {
                     outlineColor: style.outlineColor,
                     borderColor: style.borderTopColor,
+                    ring: style.boxShadow,
                 };
             });
             assert.deepEqual(invalidFocus, {
-                outlineColor: 'rgb(239, 68, 68)',
-                borderColor: 'rgb(239, 68, 68)',
+                outlineColor: inputAppearance.outline,
+                borderColor: inputAppearance.border,
+                ring: inputAppearance.ring,
             });
-            assert.equal(
-                await dialog.locator('.mx-sdk-search-gate-error').isVisible(),
-                true
+            const error = dialog.locator('.mx-sdk-search-gate-error');
+            assert.equal(await error.isVisible(), true);
+            assert.equal(await input.getAttribute('aria-invalid'), 'true');
+            const errorId = await error.getAttribute('id');
+            assert(errorId);
+            assert(
+                (await input.getAttribute('aria-describedby'))
+                    ?.split(/\s+/)
+                    .includes(errorId)
             );
+            await page.screenshot({
+                path: join(
+                    output,
+                    `search-gate-retry-focus-${mobile ? 'mobile' : 'wide'}.png`
+                ),
+            });
             evidence.uiTransitions.push({
                 mobile,
                 phase: 'error-after-edit',
                 visible: true,
             });
             evidence.phase = 'no-results-clear';
-            await dialog
-                .getByRole('button', { name: 'Clear', exact: true })
-                .click();
+            await clear.click();
             assert.equal(await input.inputValue(), '');
             assert.equal(
                 await dialog.locator('.mx-sdk-search-gate-error').count(),
                 0
             );
-            assert.equal(
-                await dialog
-                    .getByRole('button', { name: 'Search Again', exact: true })
-                    .isDisabled(),
-                true
-            );
+            assert.equal(await retry.isDisabled(), true);
             const afterClear = await page.evaluate(() =>
                 window.searchGateProof.snapshot()
             );
@@ -610,6 +632,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 inputAppearance,
                 primaryAppearance,
                 retryAppearances,
+                invalidRestBorder,
                 invalidFocus,
                 navigations: 1,
                 clears: 1,

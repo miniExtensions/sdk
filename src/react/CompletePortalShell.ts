@@ -1369,7 +1369,11 @@ function Shell(props: CompletePortalShellProps) {
                       ? h('img', {
                             src: snapshot.header.logoUrl,
                             alt: '',
-                            className: 'mx-sdk-portal-logo',
+                            className:
+                                snapshot.header.title === '' &&
+                                snapshot.header.titleHtml === ''
+                                    ? 'mx-sdk-portal-logo mx-sdk-portal-logo--only'
+                                    : 'mx-sdk-portal-logo',
                         })
                       : null,
                   h(

@@ -258,10 +258,45 @@ it('renders localized generic failure and clears and locks after an accepted res
     assert.equal(screen.input().value, '');
     assert.equal(screen.feedback(), null);
     assert.equal(screen.input().hasAttribute('aria-describedby'), false);
+    assert.equal(screen.status(), '');
+    assert.equal(screen.button().querySelector('svg'), null);
     await screen.edit('after acceptance');
     await act(async () => screen.submit());
     assert.equal(screen.button().disabled, true);
     assert.equal(screen.requests.length, 3);
+});
+
+it('keeps the opted-in indicator until the accepted page is replaced', async (t) => {
+    const screen = await setup(t);
+    const loadingAcceptedPage = 'Loading the next page';
+    const labelsWithNavigation = { ...labels, loadingAcceptedPage };
+    await screen.render({ labels: labelsWithNavigation });
+    await screen.edit('synthetic draft');
+    await act(async () => screen.submit());
+    assert.equal(screen.status(), labels.pending);
+
+    await act(async () => screen.attempts[0].resolve({ type: 'correct' }));
+    assert.equal(screen.status(), loadingAcceptedPage);
+    assert.equal(
+        screen.button().querySelector('svg')?.getAttribute('aria-hidden'),
+        'true'
+    );
+    assert.equal(screen.input().value, '');
+    assert.equal(screen.input().hasAttribute('value'), false);
+    assert.equal(screen.button().disabled, true);
+    await screen.edit('after acceptance');
+    await act(async () => screen.submit());
+    assert.equal(screen.requests.length, 1);
+
+    await screen.render({
+        scope: { ...scope, revision: 1 },
+        labels: labelsWithNavigation,
+    });
+    assert.equal(screen.status(), '');
+    assert.equal(screen.button().querySelector('svg'), null);
+    assert.equal(screen.input().value, '');
+    await screen.edit('successor draft');
+    assert.equal(screen.button().disabled, false);
 });
 
 type ReloadAction = NonNullable<CompleteExtensionPasswordScreenProps['reload']>;
@@ -477,7 +512,9 @@ it('turns reload into refresh-required or silent retirement without reopening ve
 
 it('does not expose an error for a verifying owner retired before its replacement commits', async (t) => {
     const screen = await setup(t);
-    await screen.render();
+    await screen.render({
+        labels: { ...labels, loadingAcceptedPage: 'Loading the next page' },
+    });
     await screen.edit('retiring draft');
     await act(async () => screen.submit());
     await act(async () =>
@@ -486,6 +523,7 @@ it('does not expose an error for a verifying owner retired before its replacemen
     assert.equal(screen.input().value, '');
     assert.equal(screen.input().readOnly, true);
     assert.equal(screen.status(), '');
+    assert.equal(screen.button().querySelector('svg'), null);
     assert.equal(screen.feedback(), null);
     assert.equal(screen.button().disabled, true);
 });

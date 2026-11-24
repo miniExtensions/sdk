@@ -42,6 +42,7 @@ type ExactResult = Assert<Equal<Result, Readonly<
     | { type: 'error'; recovery?: 'refresh-required' | 'reload-required' | 'retired' }
 >>>;
 type ExactRefreshLabel = Assert<Equal<Props['labels']['refreshRequired'], string | undefined>>;
+type ExactAcceptedLoadingLabel = Assert<Equal<Props['labels']['loadingAcceptedPage'], string | undefined>>;
 type ExactReload = Assert<Equal<Props['reload'], {
     label: string;
     run(): Promise<'completed' | 'retry' | 'refresh-required' | 'retired'>;
@@ -73,7 +74,11 @@ export function renderConsumers() {
     };
     const second: Props = {
         scope: { ownerId: 'synthetic-portal', revision: 2 },
-        labels: { ...labels, refreshRequired: 'Actualisez la page' },
+        labels: {
+            ...labels,
+            refreshRequired: 'Actualisez la page',
+            loadingAcceptedPage: 'Chargement de la page',
+        },
         async verifyPassword() {
             verifications++;
             return { type: 'error', recovery: 'refresh-required' };

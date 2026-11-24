@@ -6437,7 +6437,9 @@ editable and Submit stays disabled. A `wrong` or `error` result permits an
 explicit retry with the latest draft. A rejected verification shows the
 localized `error` label. A `blocked` result locks Submit for the current scope.
 After `correct`, the draft is cleared and Submit remains locked until the host
-replaces the screen.
+replaces the screen. Provide `labels.loadingAcceptedPage` to keep the spinner
+and announce that the accepted page is loading while the host replaces the
+screen. Omit this label to end the indicator when verification succeeds.
 
 Return `{ type: 'error', recovery: 'refresh-required' }` when the visitor needs a
 fresh page before trying another password. The screen clears the draft, locks

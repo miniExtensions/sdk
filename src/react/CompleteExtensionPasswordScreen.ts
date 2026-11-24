@@ -15,6 +15,8 @@ export type CompleteExtensionPasswordScreenLabels = {
     password: string;
     submit: string;
     pending: string;
+    /** Keep the loading indicator visible after acceptance until the host replaces the screen. */
+    loadingAcceptedPage?: string;
     wrong: string;
     blocked: string;
     error: string;
@@ -185,6 +187,12 @@ function ExtensionPasswordForm({
         isRecoveryStatus(status) ||
         status === 'reloading' ||
         status === 'waiting';
+    const loadingLabel =
+        status === 'pending'
+            ? labels.pending
+            : status === 'accepted'
+              ? labels.loadingAcceptedPage
+              : undefined;
 
     return h(
         'div',
@@ -238,7 +246,7 @@ function ExtensionPasswordForm({
                         type: 'submit',
                         disabled: status !== 'ready' || !hasPassword,
                     },
-                    status === 'pending'
+                    loadingLabel !== undefined
                         ? h(
                               'svg',
                               {
@@ -283,7 +291,7 @@ function ExtensionPasswordForm({
                         className: 'mx-sdk-extension-password-status',
                         role: 'status',
                     },
-                    status === 'pending' ? labels.pending : null
+                    loadingLabel
                 )
             )
         )

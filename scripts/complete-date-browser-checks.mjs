@@ -403,7 +403,62 @@ export async function checkCompleteDateBrowser({
             .click();
         assert.equal((await snapshot()).value, '2024-07-02T14:30:00.000Z');
         await input.click();
+        const dayPopup = page.locator('.mx-sdk-complete-date-popup');
+        assert.equal(
+            await dayPopup.evaluate(
+                (node) => node.getBoundingClientRect().width
+            ),
+            266
+        );
+        await page.locator('body').evaluate((body) => {
+            body.style.font = '16px/1.5 Arial, sans-serif';
+            body.style.color = 'rgb(2, 8, 23)';
+        });
         await page.getByRole('cell', { name: '10:30', exact: true }).click();
+        const timePanel = await dayPopup.evaluate((node) => {
+            const style = getComputedStyle(node);
+            return {
+                width: node.getBoundingClientRect().width,
+                font: style.fontFamily,
+                size: style.fontSize,
+                color: style.color,
+                digits: Array.from(
+                    node.querySelectorAll('.rdtCount'),
+                    (digit) => ({
+                        value: digit.textContent,
+                        size: getComputedStyle(digit).fontSize,
+                    })
+                ),
+                counterSizes: Array.from(
+                    node.querySelectorAll('.rdtCounter'),
+                    (counter) => {
+                        const { width, height } =
+                            counter.getBoundingClientRect();
+                        return [width, height];
+                    }
+                ),
+                adjustmentHeights: Array.from(
+                    node.querySelectorAll('.rdtCounter .rdtBtn'),
+                    (button) => button.getBoundingClientRect().height
+                ),
+            };
+        });
+        assert.deepEqual(timePanel, {
+            width: 250,
+            font: 'Arial, sans-serif',
+            size: '16px',
+            color: 'rgb(2, 8, 23)',
+            digits: [
+                { value: '10', size: '19.2px' },
+                { value: '30', size: '19.2px' },
+            ],
+            counterSizes: [
+                [40, 100],
+                [40, 100],
+            ],
+            adjustmentHeights: [40, 40, 40, 40],
+        });
+        evidence.timePanel = timePanel;
         await page.locator('.rdtCounter .rdtBtn').first().click();
         assert.equal((await snapshot()).value, '2024-07-02T15:30:00.000Z');
         assert.equal(await input.inputValue(), '2024-07-02 11:30');

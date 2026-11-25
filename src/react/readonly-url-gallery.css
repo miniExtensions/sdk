@@ -42,6 +42,76 @@
     color: #6b7280;
     font-size: 2rem;
 }
+.mx-sdk-url-gallery__thumbnail[data-presentation='native-formula'] {
+    position: relative;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+}
+.mx-sdk-url-gallery__formula-thumbnail {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: 0.5rem;
+}
+.mx-sdk-url-gallery__formula-thumbnail[data-media='document'],
+.mx-sdk-url-gallery__formula-thumbnail[data-media='framed-document']
+    > .mx-sdk-url-gallery__formula-media {
+    background-color: #d1d5db;
+    color: #e5e7eb;
+}
+.mx-sdk-url-gallery__formula-thumbnail[data-media='framed-document'],
+.mx-sdk-url-gallery__formula-thumbnail[data-media='generated-png'],
+.mx-sdk-url-gallery__formula-thumbnail[data-media='image'] > img {
+    box-sizing: border-box;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+.mx-sdk-url-gallery__formula-thumbnail[data-media='framed-document'],
+.mx-sdk-url-gallery__formula-thumbnail[data-media='generated-png'] {
+    background-color: white;
+}
+.mx-sdk-url-gallery__formula-media {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+.mx-sdk-url-gallery__formula-thumbnail[data-media='framed-document']
+    > .mx-sdk-url-gallery__formula-media {
+    border-radius: 0.5rem;
+}
+.mx-sdk-url-gallery__formula-thumbnail > svg,
+.mx-sdk-url-gallery__formula-media > svg {
+    width: 3rem;
+    height: 3rem;
+}
+.mx-sdk-url-gallery__formula-thumbnail[data-media='generated-png']
+    > .mx-sdk-url-gallery__formula-media {
+    background-color: white;
+    background-image:
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+        linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+    background-position:
+        0 0,
+        0 10px,
+        10px -10px,
+        -10px 0;
+    background-size: 20px 20px;
+}
+.mx-sdk-url-gallery__formula-thumbnail[data-media='generated-png']
+    > .mx-sdk-url-gallery__formula-media
+    > img {
+    width: auto;
+    height: auto;
+    max-width: 95%;
+    max-height: 95%;
+}
 .mx-sdk-url-gallery__name {
     margin: 0.25rem 0 0;
     overflow: hidden;

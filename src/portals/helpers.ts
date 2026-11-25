@@ -315,6 +315,8 @@ const configuredChildId = (
 
 export type PortalMetadata = {
     portalId: string;
+    workspaceId: string;
+    baseId: string;
     token: string;
     parentRecordId: string;
     linkedTableId: string;
@@ -426,6 +428,8 @@ export const capturePortalMetadata = (
     );
     return {
         portalId: requireIdentifier(portal.extensionId, 'Portal ID'),
+        workspaceId: portal.workspaceId,
+        baseId: portal.payload.baseId,
         token: requireIdentifier(
             portal.payload.extensionAccessToken,
             'Portal access token'

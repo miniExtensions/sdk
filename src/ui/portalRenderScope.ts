@@ -6,6 +6,7 @@ import type {
     PortalRecordPresentation,
 } from '../portals/listOwner.js';
 import { PortalCollectionError } from '../portals/collection.js';
+import { narrowPortalChildFormRequest } from '../portals/childFormRequest.js';
 import type {
     PortalCollectionCriteria,
     PortalReadOptions,
@@ -199,11 +200,10 @@ export function createPortalRenderScope(
                             'A current accepted Portal page is required.'
                         );
                     const request = owner.childFormRequest(expected, child);
-                    const checked = request.isCurrent;
-                    return {
-                        ...request,
-                        isCurrent: () => allowed() && checked() && allowed(),
-                    };
+                    return narrowPortalChildFormRequest(
+                        request,
+                        () => allowed() && request.isCurrent() && allowed()
+                    );
                 },
                 cancel: () => {
                     if (allowed()) owner.cancel(expected);

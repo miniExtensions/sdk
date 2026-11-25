@@ -8,6 +8,7 @@ import type {
 } from '../runtime/types.js';
 import { SDKError } from '../runtime/client.js';
 import { createPortalCollection, PortalCollectionError } from './collection.js';
+import { narrowPortalChildFormRequest } from './childFormRequest.js';
 import { AirtableFieldType } from '../formulas/types.js';
 import {
     captureCriteria,
@@ -601,15 +602,14 @@ export function createPortalListOwner(
                     'A current accepted Portal page is required.'
                 );
             const plan = collection.childFormRequest(supplied);
-            const checked = plan.isCurrent;
-            return {
-                ...plan,
-                isCurrent: () =>
+            return narrowPortalChildFormRequest(
+                plan,
+                () =>
                     owned(expected) &&
                     active === null &&
                     (phase === 'ready' || phase === 'empty') &&
-                    checked(),
-            };
+                    plan.isCurrent()
+            );
         },
         cancel(expected) {
             if (!owned(expected) || active === null) return;

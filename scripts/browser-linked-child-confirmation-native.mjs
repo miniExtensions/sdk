@@ -74,7 +74,12 @@ export async function prepareStarterConfirmationProof({
     const app = join(consumer, 'confirmation-starter');
     cpSync(join(installed, 'examples/browser'), app, { recursive: true });
     const sourceHashes = {};
-    for (const name of ['main.ts', 'linkedChildPanel.ts', 'confirmation.ts']) {
+    for (const name of [
+        'main.ts',
+        'portal.ts',
+        'linkedChildPanel.ts',
+        'confirmation.ts',
+    ]) {
         const bytes = readFileSync(join(app, 'src', name));
         assert.deepEqual(
             bytes,
@@ -152,6 +157,318 @@ await import('./src/main.ts');
             ['/favicon.ico', ['image/x-icon', Buffer.alloc(0)]],
         ]),
     };
+}
+
+async function checkPortalRelatedEdit({ browser, fixtures, origin }) {
+    const apiOrigin = 'https://synthetic-sdk.invalid';
+    const linkFieldId = 'fld_children_a';
+    const projectId = 'rec_parent';
+    const relatedId = 'rec_existing';
+    const portal = fixtures.portalPage();
+    const project = fixtures.parentForm('edit');
+    project.extensionId = 'extension_child';
+    project.workspaceId = portal.workspaceId;
+    project.payload.baseId = portal.payload.baseId;
+    project.payload.extensionName = 'Project';
+    project.payload.hasParentExtension = true;
+    project.payload.publicFields.state.tableId = 'table_children';
+    project.payload.formRecord = {
+        type: 'edit',
+        tableId: 'table_children',
+        recordId: projectId,
+        data: { fld_title: 'Stored Project title', [linkFieldId]: [relatedId] },
+    };
+    project.payload.fieldIdsInForm = ['fld_title', linkFieldId];
+    project.payload.fieldIdsToSchemas[
+        linkFieldId
+    ].miniExtConfig.recordFinderMode = 'hide-finder';
+    const related = fixtures.childForm('edit');
+    related.workspaceId = project.workspaceId;
+    related.payload.baseId = project.payload.baseId;
+    related.payload.formRecord = {
+        type: 'edit',
+        tableId: 'tbl_child',
+        recordId: relatedId,
+        data: {
+            ...related.payload.formRecord.data,
+            fld_title: 'Stored Related title',
+        },
+    };
+    related.payload.formFieldIdsWithUnsavedChanges = [];
+    const titleField =
+        project.payload.fieldIdsToSchemas.fld_title.airtableField;
+    const calls = [];
+    const errors = [];
+    const unexpectedRequests = [];
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+        const page = await context.newPage();
+        page.setDefaultTimeout(10000);
+        page.on('pageerror', (error) => errors.push(error.message));
+        await page.addInitScript(() => {
+            window.portalRelatedEditEvents = {
+                activations: [],
+                escapes: [],
+                projectSubmits: 0,
+            };
+            document.addEventListener(
+                'submit',
+                (event) => {
+                    if (
+                        event.target instanceof HTMLFormElement &&
+                        event.target.querySelector(
+                            '[data-field-id="fld_children_a"]'
+                        )
+                    )
+                        window.portalRelatedEditEvents.projectSubmits++;
+                },
+                true
+            );
+        });
+        await context.route('**/*', async (route) => {
+            const request = route.request();
+            const url = new URL(request.url());
+            if (url.origin === origin) return route.continue();
+            const headers = {
+                'access-control-allow-origin': origin,
+                'access-control-allow-headers': '*',
+                'access-control-allow-methods': 'GET, POST, OPTIONS',
+            };
+            const reply = (json) => route.fulfill({ headers, json });
+            if (url.origin === apiOrigin) {
+                if (request.method() === 'OPTIONS')
+                    return route.fulfill({ status: 204, headers });
+                const operation = url.searchParams.get('route');
+                if (operation === 'fetchExtensionForEndUser') {
+                    assert.equal(request.method(), 'POST');
+                    const input = request.postDataJSON();
+                    if (!('childExtensionInfo' in input)) {
+                        calls.push('load Portal');
+                        assert.equal(input.context.type, 'direct-url');
+                        return reply(portal);
+                    }
+                    const { childExtensionId, accessType } =
+                        input.childExtensionInfo;
+                    assert.equal(input.context.type, 'modal');
+                    assert.equal(accessType.type, 'edit');
+                    if (childExtensionId === project.extensionId) {
+                        calls.push('load Portal Project');
+                        assert.equal(
+                            accessType.childExtensionRecordId,
+                            projectId
+                        );
+                        assert.equal(
+                            input.context.linkedTableIdOfLinkedRecordField,
+                            'table_children'
+                        );
+                        assert.deepEqual(input.childExtensionAccessData, {
+                            parentExtensionAccessToken:
+                                portal.payload.extensionAccessToken,
+                            fieldIdUsedToAccessExtension: 'fld_children',
+                        });
+                        return reply(project);
+                    }
+                    calls.push('load selected Related');
+                    assert.equal(childExtensionId, related.extensionId);
+                    assert.equal(accessType.childExtensionRecordId, relatedId);
+                    assert.equal(
+                        input.context.linkedTableIdOfLinkedRecordField,
+                        'tbl_child'
+                    );
+                    assert.deepEqual(input.childExtensionAccessData, {
+                        parentExtensionAccessToken:
+                            project.payload.extensionAccessToken,
+                        fieldIdUsedToAccessExtension: linkFieldId,
+                    });
+                    return reply(related);
+                }
+                if (operation === 'fetchRecordsForLinkedTableOnPortal') {
+                    calls.push('read Portal Projects');
+                    assert.equal(request.method(), 'POST');
+                    return reply(
+                        fixtures.portalListPage({
+                            recordIds: [projectId],
+                            tableIdsToLinkedTableStates: {
+                                table_children: {
+                                    airtableFields: [titleField],
+                                    recordIdsToAirtableRecords: {
+                                        [projectId]: {
+                                            id: projectId,
+                                            fields: project.payload.formRecord
+                                                .data,
+                                        },
+                                    },
+                                },
+                            },
+                        })
+                    );
+                }
+                if (
+                    url.pathname ===
+                    '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+                ) {
+                    calls.push('read selected Related');
+                    assert.equal(request.method(), 'GET');
+                    return reply({
+                        result: {
+                            data: {
+                                tbl_child: {
+                                    airtableFields: [titleField],
+                                    recordIdsToAirtableRecords: {
+                                        [relatedId]: {
+                                            id: relatedId,
+                                            fields: {
+                                                fld_title:
+                                                    'Stored Related title',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    });
+                }
+                if (operation === 'saveForm') calls.push('attempted Save');
+            }
+            unexpectedRequests.push(`${request.method()} ${url.pathname}`);
+            return route.abort();
+        });
+
+        await page.goto(origin);
+        await page.locator('#api-origin').fill(apiOrigin);
+        await page.locator('#share-id').fill('share_synthetic_portal');
+        await page
+            .locator('#connection-form button[type=submit]')
+            .press('Enter');
+        const screen = page.locator('#screen');
+        const button = (name) =>
+            screen.getByRole('button', { name, exact: true });
+        const idle = () =>
+            page.waitForFunction(
+                () =>
+                    document
+                        .querySelector('#screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+        await idle();
+        await button('Load records').press('Enter');
+        await idle();
+        await button('Open Form').press('Enter');
+        await idle();
+        const projectTitle = screen.locator('[data-field-id="fld_title"]');
+        const projectLinks = screen.locator(`[data-field-id="${linkFieldId}"]`);
+        assert(
+            await projectTitle.evaluate((node) =>
+                Boolean(
+                    node.form?.querySelector('[data-field-id="fld_children_a"]')
+                )
+            )
+        );
+        await projectTitle.fill('Unsaved Project title');
+        await projectTitle.press('Tab');
+        assert.deepEqual(JSON.parse(await projectLinks.inputValue()), [
+            relatedId,
+        ]);
+        await button('Load selected records').press('Enter');
+        await idle();
+        const edit = button(`Edit linked record ${relatedId}`);
+        await edit.waitFor();
+        assert.equal(await button('Create linked record').count(), 0);
+        const opener = await edit.elementHandle();
+        assert(opener);
+        await opener.evaluate((node) => {
+            node.addEventListener('click', (event) => {
+                window.portalRelatedEditEvents.activations.push({
+                    trusted: event.isTrusted,
+                    detail: event.detail,
+                });
+            });
+        });
+        await opener.focus();
+        await page.keyboard.press('Enter');
+        const dialog = page.getByRole('dialog', {
+            name: 'Edit linked record',
+            exact: true,
+        });
+        await idle();
+        await dialog.waitFor();
+        assert(
+            await dialog.evaluate(
+                (node) =>
+                    node.matches(':modal') &&
+                    node.contains(document.activeElement)
+            )
+        );
+        await dialog.evaluate((node) => {
+            node.addEventListener('cancel', (event) => {
+                window.portalRelatedEditEvents.escapes.push(event.isTrusted);
+            });
+        });
+        const relatedTitle = dialog.locator('[data-field-id="fld_title"]');
+        assert.equal(await relatedTitle.inputValue(), 'Stored Related title');
+        await relatedTitle.fill('Unsaved Related title');
+        await relatedTitle.press('Tab');
+        await page.keyboard.press('Escape');
+        const confirmation = page.getByRole('alertdialog', {
+            name: 'Close linked record?',
+        });
+        await confirmation.waitFor();
+        assert(
+            await confirmation
+                .getByRole('button', { name: 'Keep editing' })
+                .evaluate((node) => node === document.activeElement)
+        );
+        await confirmation
+            .getByRole('button', { name: 'Confirm close' })
+            .press('Enter');
+        await dialog.waitFor({ state: 'hidden' });
+        assert(
+            await opener.evaluate(
+                (node) => node === document.activeElement && node.isConnected
+            ),
+            'Focus must return to the same Related Edit opener'
+        );
+        assert.equal(await projectTitle.inputValue(), 'Unsaved Project title');
+        assert.deepEqual(JSON.parse(await projectLinks.inputValue()), [
+            relatedId,
+        ]);
+
+        await page.keyboard.press('Enter');
+        await idle();
+        await dialog.waitFor();
+        assert.equal(await relatedTitle.inputValue(), 'Unsaved Related title');
+        const events = await page.evaluate(
+            () => window.portalRelatedEditEvents
+        );
+        assert.deepEqual(events, {
+            activations: [
+                { trusted: true, detail: 0 },
+                { trusted: true, detail: 0 },
+            ],
+            escapes: [true],
+            projectSubmits: 0,
+        });
+        assert.deepEqual(calls, [
+            'load Portal',
+            'read Portal Projects',
+            'load Portal Project',
+            'read selected Related',
+            'load selected Related',
+        ]);
+        assert.deepEqual(errors, []);
+        assert.deepEqual(unexpectedRequests, []);
+        return {
+            mode: 'edit',
+            scenario: 'portal-project-related-edit',
+            calls,
+            events,
+            exactFocusRestored: true,
+            draftsRetained: true,
+            saves: 0,
+        };
+    } finally {
+        await context.close();
+    }
 }
 
 /** Bounded Review paths in the copied installed app, with synthetic responses. */
@@ -898,6 +1215,17 @@ export async function checkStarterConfirmationRecovery({
             } finally {
                 await context.close();
             }
+        }
+        if (!onlyClose && !onlySelectedEditDialog) {
+            console.log(
+                'Installed starter Portal Project Related Edit: starting'
+            );
+            report.cases.push(
+                await checkPortalRelatedEdit({ browser, fixtures, origin })
+            );
+            console.log(
+                'Installed starter Portal Project Related Edit: passed'
+            );
         }
         return report;
     } finally {

@@ -104,6 +104,7 @@ type InternalOptions = FormLinkedChildRecovery & {
     getScope(): FormOwnerScope;
     configurationRevision(): string | number;
     parentCurrent(): boolean;
+    portalEditCurrent: (() => boolean) | null;
     canAccept(): boolean;
     /** Observation lease permits readonly child Edit; native writes keep their own admission. */
     canObserve(): boolean;
@@ -112,6 +113,7 @@ type InternalOptions = FormLinkedChildRecovery & {
         saveOptions: FormSaveOptions;
         store: FormDraftStore<AirtableValue>;
         isCurrent(): boolean;
+        canWrite?: () => boolean;
     }): FormFieldBindings;
     /** Guarded native write and private receipt bookkeeping before publication. */
     commit(
@@ -183,6 +185,9 @@ export function createFormLinkedChildOwner(
     if (!Number.isSafeInteger(options.loadVersion) || options.loadVersion < 0)
         throw new TypeError('A nonnegative accepted load version is required.');
     const parent = options.form.getLoaded();
+    const canEditParent =
+        !parent.payload.hasParentExtension ||
+        options.portalEditCurrent !== null;
     const initial = options.form.controller.getState();
     const config = options.configurationRevision();
     const parentKey = JSON.stringify(normalizeFormLeaseLoaded(parent));
@@ -211,6 +216,7 @@ export function createFormLinkedChildOwner(
     let completion: FormLinkedChildSnapshot['completion'] = 'none';
     let error: string | null = null;
     let activeLoad: AbortController | null = null;
+    let observePendingNestedSelection: (() => void) | null = null;
     let saving = false;
     const ownedAttempts = new Set<RecoveryAttempt>();
     type Intent = {
@@ -245,12 +251,16 @@ export function createFormLinkedChildOwner(
         retainedEdit = null;
         // Cancel presentation promptly, but retain a dispatched Save's receipt lease.
         if (intent?.reviewSignal) intent.pages?.dispose();
+        if (options.portalEditCurrent !== null && intent && !saving)
+            release(intent);
     };
     const parentCurrent = () => {
         if (disposed || parentRetired) return false;
         try {
             const before = options.form.controller.getState();
-            const live = options.parentCurrent();
+            const live =
+                options.parentCurrent() &&
+                (options.portalEditCurrent?.() ?? true);
             const after = options.form.controller.getState();
             if (
                 !live ||
@@ -284,6 +294,8 @@ export function createFormLinkedChildOwner(
         options.getClient() === options.client &&
         sameSession(session, options.client.getSession()) &&
         ownsIntent(candidate);
+    const nestedPresentationCurrent = () =>
+        options.portalEditCurrent === null || saving || parentCurrent();
     const policy = () => {
         try {
             const data = options.form.controller.getState().draft?.data;
@@ -356,7 +368,7 @@ export function createFormLinkedChildOwner(
         try {
             const ticket = generation;
             if (
-                parent.payload.hasParentExtension ||
+                !canEditParent ||
                 !parentCurrent() ||
                 activeLoad ||
                 saving ||
@@ -396,9 +408,7 @@ export function createFormLinkedChildOwner(
             !intent &&
             !activeLoad &&
             !saving &&
-            (parent.payload.hasParentExtension ||
-                p?.type === 'unavailable' ||
-                !p) &&
+            (!canEditParent || p?.type === 'unavailable' || !p) &&
             editableIds().length === 0;
         return {
             revision,
@@ -510,6 +520,15 @@ export function createFormLinkedChildOwner(
         activeLoad = abort;
         if (old) release(old);
         if (activeLoad !== abort || generation !== ticket) return false;
+        let nestedSelectionLost = false;
+        const observeNestedSelection = () => {
+            if (recordId !== null && !isSelected(recordId))
+                nestedSelectionLost = true;
+        };
+        if (options.portalEditCurrent !== null && recordId !== null) {
+            observePendingNestedSelection = observeNestedSelection;
+            observeNestedSelection();
+        }
         phase = 'loading';
         completion = 'none';
         error = null;
@@ -528,12 +547,24 @@ export function createFormLinkedChildOwner(
                 retainedEdit === resume
             );
         };
+        const nestedSelectionCurrent = () => {
+            if (options.portalEditCurrent === null || recordId === null)
+                return true;
+            const fresh = editPolicy(recordId);
+            return (
+                !nestedSelectionLost &&
+                fresh?.type === 'available' &&
+                fresh.childExtensionId === plan.childExtensionId &&
+                fresh.linkedTableId === plan.linkedTableId
+            );
+        };
         const ownsLoad = () =>
             activeLoad === abort &&
             generation === ticket &&
             !abort.signal.aborted &&
             parentCurrent() &&
             resumeCurrent() &&
+            nestedSelectionCurrent() &&
             activeLoad === abort &&
             generation === ticket &&
             !abort.signal.aborted &&
@@ -637,7 +668,12 @@ export function createFormLinkedChildOwner(
                 isCurrent: () =>
                     initializing
                         ? ownsLoad()
-                        : candidate !== null && childCurrent(candidate),
+                        : candidate !== null &&
+                          childCurrent(candidate) &&
+                          nestedPresentationCurrent(),
+                ...(options.portalEditCurrent === null
+                    ? {}
+                    : { canWrite: parentCurrent }),
             });
             if (!ownsLoad()) {
                 initializing = false;
@@ -667,7 +703,8 @@ export function createFormLinkedChildOwner(
                 initializing = false;
                 pages = createFormPageOwner({
                     fields,
-                    isCurrent: () => childCurrent(candidate!),
+                    isCurrent: () =>
+                        childCurrent(candidate!) && nestedPresentationCurrent(),
                     configurationRevision: () => 0,
                     review: options.review
                         ? async (request) => {
@@ -748,8 +785,12 @@ export function createFormLinkedChildOwner(
             return false;
         } finally {
             request.signal?.removeEventListener('abort', forward);
+            if (observePendingNestedSelection === observeNestedSelection)
+                observePendingNestedSelection = null;
             if (activeLoad === abort) {
                 activeLoad = null;
+                if (options.portalEditCurrent !== null && phase === 'loading')
+                    phase = 'closed';
                 emit();
             }
         }
@@ -944,7 +985,14 @@ export function createFormLinkedChildOwner(
                 },
                 () => {
                     requireParent(candidate);
-                }
+                },
+                options.portalEditCurrent === null
+                    ? undefined
+                    : (requireScope) => {
+                          requireScope();
+                          requireParent(candidate);
+                          return true;
+                      }
             );
             saving = true;
             phase = 'saving';
@@ -1214,7 +1262,10 @@ export function createFormLinkedChildOwner(
         else stopRich = stop;
     };
     try {
-        stopParent = options.form.controller.subscribe(() => emit());
+        stopParent = options.form.controller.subscribe(() => {
+            observePendingNestedSelection?.();
+            emit();
+        });
         stopField = options.form.field(options.fieldId).subscribe(() => {
             reconnectRich();
             emit();

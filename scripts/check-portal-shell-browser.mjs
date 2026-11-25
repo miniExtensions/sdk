@@ -40,6 +40,28 @@ const report = {
     profiles: [],
 };
 let browser, server;
+async function checkAccountMenuBorders(panel, expectedRowBorder) {
+    const { popup, rows } = await panel.evaluate((node) => {
+        const borders = (element) => {
+            const style = getComputedStyle(element);
+            return [
+                style.borderTopWidth,
+                style.borderRightWidth,
+                style.borderBottomWidth,
+                style.borderLeftWidth,
+            ];
+        };
+        return {
+            popup: borders(node),
+            rows: Array.from(node.querySelectorAll(':scope > button'), borders),
+        };
+    });
+    assert.deepEqual(popup, Array(4).fill('1px'));
+    assert.deepEqual(rows, [
+        Array(4).fill(expectedRowBorder),
+        Array(4).fill(expectedRowBorder),
+    ]);
+}
 async function navigationCompatibility(browser, origin, label) {
     const page = await browser.newPage({
         viewport: { width: 1280, height: 900 },
@@ -201,6 +223,57 @@ async function navigationCompatibility(browser, origin, label) {
                 .count(),
             0
         );
+        const user = page.locator('.mx-sdk-portal-user');
+        const accountTrigger = user.locator('summary');
+        const accountPanel = user.locator(':scope > div');
+        const accountSettings = user.getByRole('button', {
+            name: 'User settings',
+            exact: true,
+        });
+        const accountLogout = user.getByRole('button', {
+            name: 'Log out',
+            exact: true,
+        });
+        await accountTrigger.click();
+        await accountLogout.hover();
+        assert.equal(
+            await accountLogout.evaluate(
+                (node) => getComputedStyle(node).backgroundColor
+            ),
+            'rgb(243, 244, 246)'
+        );
+        await accountTrigger.press('ArrowDown');
+        await checkAccountMenuBorders(accountPanel, '0px');
+        assert.deepEqual(
+            await accountSettings.evaluate((node) => {
+                const style = getComputedStyle(node);
+                return [
+                    node === document.activeElement,
+                    style.outlineWidth,
+                    style.outlineStyle,
+                    style.backgroundColor,
+                ];
+            }),
+            [true, '3px', 'solid', 'rgb(243, 244, 246)']
+        );
+        await page.keyboard.press('ArrowDown');
+        assert.equal(
+            await accountLogout.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
+        await accountPanel.screenshot({
+            path: join(output, `account-menu-${label}-1280.png`),
+        });
+        await page.keyboard.press('Escape');
+        assert.equal(await accountPanel.isVisible(), false);
+        assert.equal(
+            await accountTrigger.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
         await page.setViewportSize({ width: 639, height: 800 });
         await page.getByRole('button', { name: 'Open navigation' }).click();
         await openView.waitFor();
@@ -229,7 +302,6 @@ async function navigationCompatibility(browser, origin, label) {
         await page.keyboard.press('Escape');
         await page.getByRole('button', { name: 'Open navigation' }).click();
         await openView.waitFor();
-        const user = page.locator('.mx-sdk-portal-user');
         await user.locator('summary').focus();
         await page.keyboard.press('ArrowDown');
         assert.equal(
@@ -260,8 +332,6 @@ async function navigationCompatibility(browser, origin, label) {
         );
 
         await page.setViewportSize({ width: 375, height: 900 });
-        const accountTrigger = user.locator('summary');
-        const accountPanel = user.locator(':scope > div');
         const accountActions = page.locator(
             '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
         );
@@ -312,6 +382,7 @@ async function navigationCompatibility(browser, origin, label) {
             `First ArrowDown clips the account menu: ${JSON.stringify(accountPlacement)}`
         );
         assert.equal(focused, 'User settings');
+        await checkAccountMenuBorders(accountPanel, '0px');
         await page.screenshot({
             path: join(output, `account-menu-${label}-375.png`),
         });
@@ -1190,6 +1261,7 @@ async function configuredPresentation(browser, origin, label) {
         });
         const menu = page.locator('.mx-sdk-portal-user');
         await menu.locator('summary').click();
+        await checkAccountMenuBorders(menu.locator(':scope > div'), '1px');
         await menu
             .getByRole('button', { name: 'Log out', exact: true })
             .click();

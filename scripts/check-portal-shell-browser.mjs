@@ -258,6 +258,80 @@ async function navigationCompatibility(browser, origin, label) {
             1,
             'Account-menu Escape preserves the mobile navigation dialog'
         );
+
+        await page.setViewportSize({ width: 375, height: 900 });
+        const accountTrigger = user.locator('summary');
+        const accountPanel = user.locator(':scope > div');
+        const drawer = page.getByRole('dialog');
+        await accountTrigger.press('ArrowDown');
+        const naturalPanel = await accountPanel.evaluate((node) => {
+            const bounds = node.getBoundingClientRect();
+            const trigger = node.previousElementSibling.getBoundingClientRect();
+            return {
+                height: bounds.height,
+                opensBelow: bounds.top >= trigger.bottom,
+            };
+        });
+        assert.equal(naturalPanel.opensBelow, true);
+        await page.keyboard.press('Escape');
+        await accountTrigger.evaluate((trigger, height) => {
+            const navigation = trigger.closest('.mx-sdk-portal-navigation');
+            navigation.style.height = `${trigger.getBoundingClientRect().bottom - navigation.getBoundingClientRect().top + height - 16}px`;
+        }, naturalPanel.height);
+        await accountTrigger.press('ArrowDown');
+        const accountPlacement = await accountPanel.evaluate((panel) => {
+            const bounds = (node) => {
+                const { top, bottom } = node.getBoundingClientRect();
+                return { top, bottom };
+            };
+            const navigation = panel.closest('.mx-sdk-portal-navigation');
+            const top =
+                navigation.getBoundingClientRect().top + navigation.clientTop;
+            return {
+                drawer: { top, bottom: top + navigation.clientHeight },
+                panel: bounds(panel),
+                logout: bounds(panel.querySelector('button:last-child')),
+                focused: document.activeElement.textContent,
+            };
+        });
+        const {
+            drawer: drawerBounds,
+            panel,
+            logout,
+            focused,
+        } = accountPlacement;
+        assert.ok(
+            [panel, logout].every(
+                ({ top, bottom }) =>
+                    top >= drawerBounds.top && bottom <= drawerBounds.bottom
+            ),
+            `First ArrowDown clips the account menu: ${JSON.stringify(accountPlacement)}`
+        );
+        assert.equal(focused, 'User settings');
+        await page.screenshot({
+            path: join(output, `account-menu-${label}-375.png`),
+        });
+        await page.keyboard.press('Escape');
+        assert.equal(
+            await accountTrigger.evaluate(
+                (node) => node === document.activeElement
+            ),
+            true
+        );
+        await accountTrigger.click();
+        await page.waitForFunction(() => {
+            const panel = document.querySelector(
+                '.mx-sdk-portal-user[open] > div'
+            );
+            const trigger = panel?.previousElementSibling;
+            return (
+                !!panel &&
+                panel.getBoundingClientRect().bottom <=
+                    trigger.getBoundingClientRect().top
+            );
+        });
+        await page.keyboard.press('Escape');
+        await drawer.evaluate((node) => node.style.removeProperty('height'));
         await openView.focus();
         await page.keyboard.press('Escape');
         assert.equal(await page.getByRole('dialog').count(), 0);
@@ -931,6 +1005,7 @@ async function navigationCompatibility(browser, origin, label) {
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
             desktopAndMobileMenuTabFocus: 'passed',
+            mobileAccountPlacement: accountPlacement,
             nativeHostEditorTabDestination: 'passed',
             nativeHostControlStylesAndFocus: 'passed',
             hostSelectionAcrossMenuDrift: 'passed',

@@ -305,26 +305,64 @@ try {
                         exact: true,
                     })
                     .click();
-                await page.getByRole('alert').waitFor();
+                const conflict = page.getByRole('alert');
+                await conflict.waitFor();
                 assert.equal(
                     await page.locator('#entries').textContent(),
                     'Retry answer'
                 );
-                const styles = await page
-                    .getByRole('alert')
-                    .evaluate((node) => ({
-                        background: getComputedStyle(node).backgroundColor,
-                        padding: getComputedStyle(node).padding,
-                        color: getComputedStyle(node.querySelector('h3')).color,
-                        iconWidth: getComputedStyle(node.querySelector('svg'))
-                            .width,
-                    }));
+                const styles = await conflict.evaluate((node) => ({
+                    background: getComputedStyle(node).backgroundColor,
+                    padding: getComputedStyle(node).padding,
+                    color: getComputedStyle(node.querySelector('h3')).color,
+                    iconWidth: getComputedStyle(node.querySelector('svg'))
+                        .width,
+                }));
                 assert.deepEqual(styles, {
                     background: 'rgb(254, 252, 232)',
                     padding: '16px',
                     color: 'rgb(133, 77, 14)',
                     iconWidth: '24px',
                 });
+                const initialViewport = page.viewportSize();
+                const iconProfiles = [];
+                for (const width of [375, 1280]) {
+                    await page.setViewportSize({ width, height: 900 });
+                    const icon = await conflict.evaluate((alert) => {
+                        const path = alert.querySelector('svg > path');
+                        const svg = path?.ownerSVGElement;
+                        if (!svg) throw new Error('Missing warning icon');
+                        const box = svg.getBoundingClientRect();
+                        const paint = path.getBBox();
+                        return {
+                            size: [box.width, box.height],
+                            paint: [
+                                paint.x,
+                                paint.y,
+                                paint.width,
+                                paint.height,
+                            ].map((value) => Math.round(value * 1000) / 1000),
+                            fill: getComputedStyle(path).fill,
+                            decorative: svg.getAttribute('aria-hidden'),
+                        };
+                    });
+                    // The historical Form used Heroicons 2.1.1 solid ExclamationTriangle.
+                    assert.deepEqual(icon, {
+                        size: [24, 24],
+                        paint: [1.641, 1.503, 20.718, 18.748],
+                        fill: 'rgb(250, 204, 21)',
+                        decorative: 'true',
+                    });
+                    iconProfiles.push({ width, ...icon });
+                    await conflict.screenshot({
+                        path: join(
+                            output,
+                            `conflict-${react}-${format}-${width}.png`
+                        ),
+                    });
+                }
+                if (initialViewport)
+                    await page.setViewportSize(initialViewport);
                 await page
                     .getByRole('button', { name: 'Saving off', exact: true })
                     .click();
@@ -356,6 +394,7 @@ try {
                     react,
                     format,
                     styles,
+                    iconProfiles,
                     orderedWrites: true,
                     cutoffs: 4,
                     laterRetry: true,

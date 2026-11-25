@@ -207,6 +207,37 @@ function navigationControls(node: HTMLElement): HTMLElement[] {
     );
 }
 
+function positionMobileAccountMenu(
+    account: HTMLDetailsElement,
+    drawer: HTMLElement
+) {
+    const viewport = drawer.ownerDocument.defaultView;
+    if (!account.open || !drawer.clientHeight || !viewport) return;
+    const trigger = account.querySelector(':scope > summary');
+    const panel = account.querySelector<HTMLDivElement>(':scope > div');
+    if (!trigger || !panel) return;
+
+    const triggerBounds = trigger.getBoundingClientRect();
+    const drawerTop = drawer.getBoundingClientRect().top + drawer.clientTop;
+    const drawerBottom = drawerTop + drawer.clientHeight;
+    const above = Math.max(0, triggerBounds.top - Math.max(0, drawerTop));
+    const below = Math.max(
+        0,
+        Math.min(drawerBottom, viewport.innerHeight) - triggerBounds.bottom
+    );
+    // Include scrollable content if a previous placement constrained the panel.
+    const panelHeight =
+        panel.getBoundingClientRect().height +
+        panel.scrollHeight -
+        panel.clientHeight;
+    const opensAbove = panelHeight > below && above > below;
+    account.toggleAttribute('data-open-above', opensAbove);
+    panel.style.setProperty(
+        '--mx-portal-account-menu-space',
+        `${opensAbove ? above : below}px`
+    );
+}
+
 function trapFocus(
     event: KeyboardEvent<HTMLElement>,
     boundary = event.currentTarget
@@ -367,6 +398,7 @@ function Shell(props: CompletePortalShellProps) {
     const lastNavigationFocus = useRef<HTMLElement | null>(null);
     const toggle = useRef<HTMLButtonElement>(null),
         nav = useRef<HTMLDivElement>(null),
+        accountMenu = useRef<HTMLDetailsElement>(null),
         main = useRef<HTMLElement>(null),
         container = useRef<HTMLDivElement>(null);
     const controlledSidebar =
@@ -1237,12 +1269,51 @@ function Shell(props: CompletePortalShellProps) {
               )
             : null
     );
+    const hasAccountMenu = Boolean(
+        !directUserAction && (user?.settingsEnabled || user?.logoutEnabled)
+    );
+    const placeAccountMenuInDrawer = mobile && actionsInNavigation && open;
+    useCommitEffect(() => {
+        const account = accountMenu.current;
+        const drawer = nav.current;
+        if (!placeAccountMenuInDrawer || !hasAccountMenu || !account || !drawer)
+            return;
+
+        const position = () => positionMobileAccountMenu(account, drawer);
+        const panel = account.querySelector<HTMLDivElement>(':scope > div');
+        const viewport = drawer.ownerDocument.defaultView;
+        const observer =
+            typeof ResizeObserver === 'function'
+                ? new ResizeObserver(position)
+                : null;
+        observer?.observe(drawer);
+        observer?.observe(account);
+        if (panel) observer?.observe(panel);
+        account.addEventListener('toggle', position);
+        drawer.addEventListener('scroll', position, { passive: true });
+        viewport?.addEventListener('resize', position);
+        position();
+        return () => {
+            observer?.disconnect();
+            account.removeEventListener('toggle', position);
+            drawer.removeEventListener('scroll', position);
+            viewport?.removeEventListener('resize', position);
+            account.removeAttribute('data-open-above');
+            panel?.style.removeProperty('--mx-portal-account-menu-space');
+        };
+    }, [
+        placeAccountMenuInDrawer,
+        hasAccountMenu,
+        nativeTopbar,
+        snapshot.revision,
+    ]);
     const userActions =
         directUserAction ??
-        (user && (user.settingsEnabled || user.logoutEnabled)
+        (hasAccountMenu && user
             ? h(
                   'details',
                   {
+                      ref: accountMenu,
                       className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
                       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
                           if (exitMenuOnTab(event)) return;
@@ -1257,6 +1328,11 @@ function Shell(props: CompletePortalShellProps) {
                               const details =
                                   event.currentTarget as HTMLDetailsElement;
                               details.open = true;
+                              if (placeAccountMenuInDrawer && nav.current)
+                                  positionMobileAccountMenu(
+                                      details,
+                                      nav.current
+                                  );
                               const controls = navigationControls(
                                   details
                               ).filter((node) => node.tagName !== 'SUMMARY');

@@ -37,6 +37,8 @@ export type AttachmentUrlInputProps = Readonly<{
     /** ID of the host field label when the surrounding Form provides one. */
     labelledBy?: string;
     labels: AttachmentUrlInputLabels;
+    /** Join the URL input and icon action using the native Form presentation. */
+    layout?: 'native-form';
     /** The host's captured field owner, with a new token for each lifetime. */
     owner: ReadonlyResourceOwner;
     readOnly?: boolean;
@@ -129,9 +131,10 @@ function UrlDraft(props: AttachmentUrlInputProps) {
     };
 
     if (retired) return null;
+    const nativeForm = props.layout === 'native-form';
     return h(
         'div',
-        { className: 'mx-sdk-attachment-url' },
+        { className: 'mx-sdk-attachment-url', 'data-layout': props.layout },
         h(
             'div',
             { className: 'mx-sdk-attachment-url__controls' },
@@ -170,12 +173,28 @@ function UrlDraft(props: AttachmentUrlInputProps) {
                 ActionButton,
                 {
                     className: 'mx-sdk-attachment-url__add',
+                    'aria-label': nativeForm ? props.labels.add : undefined,
                     onClick(event) {
                         event.stopPropagation();
                         add();
                     },
                 },
-                props.labels.add
+                nativeForm
+                    ? h(
+                          'svg',
+                          {
+                              'aria-hidden': true,
+                              viewBox: '0 0 24 24',
+                              fill: 'currentColor',
+                              className: 'mx-sdk-attachment-url__add-icon',
+                          },
+                          h('path', {
+                              fillRule: 'evenodd',
+                              clipRule: 'evenodd',
+                              d: 'M10.5 3.75a6 6 0 0 0-5.98 6.496A5.25 5.25 0 0 0 6.75 20.25H18a4.5 4.5 0 0 0 2.206-8.423 3.75 3.75 0 0 0-4.133-4.303A6.001 6.001 0 0 0 10.5 3.75Zm2.03 5.47a.75.75 0 0 0-1.06 0l-3 3a.75.75 0 1 0 1.06 1.06l1.72-1.72v4.94a.75.75 0 0 0 1.5 0v-4.94l1.72 1.72a.75.75 0 1 0 1.06-1.06l-3-3Z',
+                          })
+                      )
+                    : props.labels.add
             )
         ),
         error != null

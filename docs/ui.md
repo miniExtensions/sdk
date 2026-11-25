@@ -6785,6 +6785,11 @@ localized Previous and Next buttons. Set `frame` to `null` for a direct URL.
 With no neighbors it renders nothing. With only one neighbor it disables the
 other direction. The buttons have `type="button"` and work inside a Form.
 
+The buttons show the localized labels by default. Supply
+`icons={{ previous, next }}` to show one decorative React element in each
+button. Use non-focusable elements. The same localized labels name the
+buttons for assistive technology.
+
 Provide the accepted record and session in `frame`, along with the exact
 neighbor IDs. Give each accepted frame a fresh `ownerToken` even when
 restoring the same record, session and neighbors. The request contains that

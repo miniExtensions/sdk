@@ -313,13 +313,17 @@ function PhoneArrow() {
         'svg',
         {
             className: 'mx-sdk-phone-country-arrow',
-            viewBox: '0 0 20 20',
+            viewBox: '0 0 24 24',
             width: 12,
             height: 12,
             fill: 'currentColor',
             'aria-hidden': true,
         },
-        h('path', { d: 'm5 7.5 5 5 5-5-1.5-1.5-3.5 3.5L6.5 6z' })
+        h('path', {
+            fillRule: 'evenodd',
+            clipRule: 'evenodd',
+            d: 'M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z',
+        })
     );
 }
 

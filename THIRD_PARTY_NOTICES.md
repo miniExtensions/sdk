@@ -361,9 +361,11 @@ The editable Form Back and Next actions retain the native solid ChevronLeft and 
 
 The editable collaborator picker uses the native solid ChevronDown icon from Heroicons 2.1.1.
 
-The editable Phone field uses the native solid Phone icon from Heroicons 2.1.1.
+The editable Phone field uses the native solid Phone and ChevronDown icons from Heroicons 2.1.1.
 
 The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.
+
+The native Form Attachment URL action uses the solid CloudArrowUp icon from Heroicons 2.1.1.
 
 The Form text Clear button retains the native solid XMark icon from Heroicons 2.1.1.
 
@@ -372,6 +374,12 @@ The editable Email field uses the native solid Envelope icon from Heroicons 2.1.
 The editable Duration field uses the native solid Clock icon from Heroicons 2.1.1.
 
 The editable Barcode scanner trigger uses the native solid Camera and Stop icons from Heroicons 2.1.1.
+
+The Form saved-progress conflict alert uses the native solid ExclamationTriangle icon from Heroicons 2.1.1.
+
+The Form tracking disclosure uses the native solid InformationCircle icon from Heroicons 2.1.1.
+
+The native Form Comments dialog uses the solid ArrowPath and XCircle icons from Heroicons 2.1.1.
 
 ```text
 MIT License

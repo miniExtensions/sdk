@@ -81,7 +81,9 @@ window.lookupProof.startGalleryDownload = () => {
  };
  replace();
 };
-window.lookupProof.startVisitorUrlEntry = () => {
+let visitorUrlMount = 0;
+window.lookupProof.startVisitorUrlEntry = (layout) => {
+ const key = ++visitorUrlMount;
  const labels = {
   url: 'Lien de pièce jointe',
   add: 'Ajouter',
@@ -92,11 +94,15 @@ window.lookupProof.startVisitorUrlEntry = () => {
  let owner, current, denied = false, flag, submits = 0, attempts = 0, labelled = false;
  function render() {
   flushSync(() => root.render(h(React.StrictMode, null,
-   h('form', { id: 'visitor-url-host', onSubmit(event) { event.preventDefault(); submits++; } },
+   h('form', {
+    id: 'visitor-url-host', key,
+    style: layout ? { width: 'min(calc(100vw - 40px), 608px)' } : undefined,
+    onSubmit(event) { event.preventDefault(); submits++; }
+   },
     labelled ? h('label', { id: 'visitor-url-label', htmlFor: 'visitor-url' }, 'Justificatif') : null,
     h(api.AttachmentUrlInput, {
      id: 'visitor-url', labelledBy: labelled ? 'visitor-url-label' : undefined,
-     labels, owner, full: flag === 'full',
+     labels, layout, owner, full: flag === 'full',
      readOnly: flag === 'readOnly', masked: flag === 'masked',
      appendCurrent(value) {
       attempts++;
@@ -884,11 +890,12 @@ export async function checkControlledLookupBrowser({
                 page.evaluate(() => window.lookupProof.visitorUrl.snapshot());
             assert.equal(await form.locator('form').count(), 0);
             assert.equal(await addUrl.getAttribute('type'), 'button');
+            assert.equal(await addUrl.textContent(), 'Ajouter');
             assert.equal(
                 await urlInput.evaluate(
-                    (node) => getComputedStyle(node.parentElement).display
+                    (node) => getComputedStyle(node.parentElement).gap
                 ),
-                'flex'
+                '8px'
             );
             await urlInput.press('Enter');
             assert.equal((await urlState()).attempts, 0);
@@ -998,6 +1005,150 @@ export async function checkControlledLookupBrowser({
             record(
                 'visitor URL input stages ordered Form drafts without network or submit'
             );
+
+            const originalViewport = page.viewportSize();
+            for (const [width, inputWidth, height, fontSize, lineHeight] of [
+                [375, 300, 42, '16px', '24px'],
+                [1280, 573, 38, '14px', '20px'],
+            ]) {
+                await page.setViewportSize({ width, height: 640 });
+                await page.evaluate(() =>
+                    window.lookupProof.startVisitorUrlEntry('native-form')
+                );
+                const row = form.locator('.mx-sdk-attachment-url__controls');
+                const paint = await row.evaluate((node) => {
+                    const [input, button] = node.children;
+                    const icon = button.querySelector('svg');
+                    const inputBox = input.getBoundingClientRect();
+                    const buttonBox = button.getBoundingClientRect();
+                    const inputStyle = getComputedStyle(input);
+                    const buttonStyle = getComputedStyle(button);
+                    return {
+                        inputWidth: inputBox.width,
+                        inputHeight: inputBox.height,
+                        buttonWidth: buttonBox.width,
+                        buttonHeight: buttonBox.height,
+                        gap: buttonBox.left - inputBox.right,
+                        fontSize: inputStyle.fontSize,
+                        lineHeight: inputStyle.lineHeight,
+                        inputRadius: inputStyle.borderRadius,
+                        buttonRadius: buttonStyle.borderRadius,
+                        buttonBackground: buttonStyle.backgroundColor,
+                        iconWidth: icon?.getBoundingClientRect().width,
+                        iconHeight: icon?.getBoundingClientRect().height,
+                        iconColor: icon && getComputedStyle(icon).fill,
+                    };
+                });
+                assert.deepEqual(paint, {
+                    inputWidth,
+                    inputHeight: height,
+                    buttonWidth: 36,
+                    buttonHeight: height,
+                    gap: -1,
+                    fontSize,
+                    lineHeight,
+                    inputRadius: '6px 0px 0px 6px',
+                    buttonRadius: '0px 6px 6px 0px',
+                    buttonBackground: 'rgb(59, 130, 246)',
+                    iconWidth: 20,
+                    iconHeight: 20,
+                    iconColor: 'rgb(255, 255, 255)',
+                });
+                assert.equal(await addUrl.textContent(), '');
+                assert.equal(await addUrl.getAttribute('type'), 'button');
+                assert.equal(
+                    await addUrl.getAttribute('aria-label'),
+                    'Ajouter'
+                );
+                assert.equal(
+                    await addUrl.locator('svg').getAttribute('aria-hidden'),
+                    'true'
+                );
+                assert.equal(await urlInput.getAttribute('type'), 'text');
+                assert.equal(await urlInput.getAttribute('inputmode'), 'url');
+                assert.equal(await form.locator('form').count(), 0);
+
+                await page.keyboard.press('Tab');
+                assert.equal(
+                    await urlInput.evaluate(
+                        (node) => document.activeElement === node
+                    ),
+                    true
+                );
+                await page.waitForFunction(() => {
+                    const input = document.activeElement;
+                    return (
+                        input.id === 'visitor-url' &&
+                        getComputedStyle(input).boxShadow ===
+                            'rgb(59, 130, 246) 0px 0px 0px 1px inset'
+                    );
+                });
+                await row.screenshot({
+                    path: join(
+                        output,
+                        `native-form-url-${format}-${width}-input.png`
+                    ),
+                });
+                await urlInput.fill(pointerUrl);
+                await urlInput.press('Enter');
+                await urlInput.fill(trailingSlash);
+                await page.keyboard.press('Tab');
+                assert.equal(
+                    await addUrl.evaluate(
+                        (node) =>
+                            document.activeElement === node &&
+                            node.matches(':focus-visible') &&
+                            getComputedStyle(node).outlineStyle === 'auto'
+                    ),
+                    true
+                );
+                await row.screenshot({
+                    path: join(
+                        output,
+                        `native-form-url-${format}-${width}-add.png`
+                    ),
+                });
+                await addUrl.press('Space');
+                await urlInput.fill('unfinished');
+                await page.keyboard.press('Tab');
+                await page.keyboard.press('Tab');
+                const save = form.getByRole('button', {
+                    name: 'Save draft explicitly',
+                });
+                assert.equal(
+                    await save.evaluate(
+                        (node) => document.activeElement === node
+                    ),
+                    true
+                );
+                assert.deepEqual(await urlState(), {
+                    entries: [
+                        { id: 'first' },
+                        { id: 'second' },
+                        {
+                            id: null,
+                            url: pointerUrl,
+                            filename: 'space name.pdf',
+                        },
+                        {
+                            id: null,
+                            url: trailingSlash,
+                            filename: 'files.example.test',
+                        },
+                    ],
+                    submits: 0,
+                    attempts: 2,
+                });
+                await page.keyboard.press('Enter');
+                assert.equal((await urlState()).submits, 1);
+                assert.equal(await urlInput.inputValue(), 'unfinished');
+                assert.deepEqual((await snapshot()).effects, beforeUrl);
+                record(
+                    'native Form URL row matches joined paint and keeps independent host Save',
+                    { width, ...paint }
+                );
+            }
+            await page.setViewportSize(originalViewport);
 
             await page.evaluate(() => window.lookupProof.richText());
             await page.locator('.ProseMirror[contenteditable=false]').waitFor();

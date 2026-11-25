@@ -1315,6 +1315,7 @@ function Shell(props: CompletePortalShellProps) {
                   {
                       ref: accountMenu,
                       className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
+                      'data-menu-interaction': snapshot.header.menuInteraction,
                       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
                           if (exitMenuOnTab(event)) return;
                           if (

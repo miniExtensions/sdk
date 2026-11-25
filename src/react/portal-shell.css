@@ -238,6 +238,15 @@
     display: block;
     width: 100%;
 }
+.mx-sdk-portal-user[data-menu-interaction='menu'] > div > button {
+    border: 0;
+    background: transparent;
+}
+.mx-sdk-portal-user[data-menu-interaction='menu']
+    > div
+    > button:is(:hover, :focus-visible) {
+    background: #f3f4f6;
+}
 .mx-sdk-portal-toggle {
     display: none;
 }

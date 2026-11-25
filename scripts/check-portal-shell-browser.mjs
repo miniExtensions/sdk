@@ -1820,7 +1820,26 @@ try {
                     },
                 });
                 assert.deepEqual(await counts(), beforeHeader);
-                await summary('Orders').click();
+                const ordersSummary = summary('Orders');
+                const fill = (control) =>
+                    control.evaluate(
+                        (node) => getComputedStyle(node).backgroundColor
+                    );
+                await page.mouse.move(1, 1);
+                assert.equal(await fill(ordersSummary), 'rgb(224, 231, 255)');
+                await ordersSummary.click();
+                await page.mouse.move(1, 1);
+                assert.equal(
+                    await ordersSummary.getAttribute('data-active'),
+                    'true'
+                );
+                assert.equal(await fill(ordersSummary), 'rgba(0, 0, 0, 0)');
+                assert.equal(
+                    await fill(button('Open orders')),
+                    'rgb(224, 231, 255)'
+                );
+                await ordersSummary.hover();
+                assert.equal(await fill(ordersSummary), 'rgb(224, 231, 255)');
                 await button('Done orders').hover();
                 await button('Done orders').focus();
                 assert.deepEqual(await counts(), {
@@ -1830,6 +1849,16 @@ try {
                 });
                 await button('Done orders').click();
                 await page.getByText('Selected: orders/done').waitFor();
+                assert.equal(await fill(ordersSummary), 'rgba(0, 0, 0, 0)');
+                assert.equal(
+                    await button('Done orders').getAttribute('aria-current'),
+                    'page'
+                );
+                await page.mouse.move(1, 1);
+                assert.equal(
+                    await fill(button('Done orders')),
+                    'rgb(224, 231, 255)'
+                );
                 assert.deepEqual(await counts(), {
                     intents: 1,
                     storage: 1,
@@ -1880,6 +1909,7 @@ try {
                 await summary('Orders').click();
                 await button('Open orders').click();
                 await page.getByText('Selected: orders/open').waitFor();
+                assert.equal(await fill(ordersSummary), 'rgb(224, 231, 255)');
                 assert.equal(
                     await summary('Orders').evaluate(
                         (node) => node.parentElement.open
@@ -1893,6 +1923,14 @@ try {
                     'Orders'
                 );
                 await summary('Orders').click();
+                await page.mouse.move(1, 1);
+                assert.equal(
+                    await ordersSummary.evaluate(
+                        (node) => node.parentElement.open
+                    ),
+                    true
+                );
+                assert.equal(await fill(ordersSummary), 'rgb(224, 231, 255)');
                 await page
                     .getByRole('heading', { name: 'Host collection' })
                     .click();

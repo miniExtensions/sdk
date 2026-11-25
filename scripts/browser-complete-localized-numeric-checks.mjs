@@ -107,7 +107,7 @@ export async function checkCompleteLocalizedNumericBrowser({
         const source = `
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {NumberField,CurrencyField,PercentField,CompleteLocalizedNumericField,CompleteClearableTextInput} from '@miniextensions/sdk/react';
+import {NumberField,CurrencyField,PercentField,CompleteLocalizedNumericField,CompleteClearableTextInput,CompleteReadOnlyTextField} from '@miniextensions/sdk/react';
 const mode=new URLSearchParams(location.search).get('mode')||'number';
 const appearance=/^appearance-(number|currency|percent)-(native|sdk)$/.exec(mode);
 let writes=[],inputs=[],submits=0;
@@ -180,7 +180,38 @@ function App(){
   h('button',{type:'button',onClick:()=>setState(old=>({...old,mounted:false}))},'Remove input'),
   h('button',{type:'button',onClick:()=>setState(old=>({...old,value:null,display:true}))},'Show empty value'));
 }
-createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
+function ReadOnlyNumberAppearance() {
+ const config = {type:'number',options:{precision:2}};
+ const rows = [['negative',-12345,'-12,345.00'],['zero',0,'0.00'],['empty',null,'']];
+ function sdkNumber(id,value,context,computed=false) {
+  return h(NumberField,{
+   mode:'controlled',
+   field:{
+    physicalKind:'number',
+    presentation:{type:computed?'computed-result':'physical',config},
+    fieldId:id,
+    title:'Amount',
+    field:{id,name:'Amount',description:null,isComputed:computed,isPrimaryField:false,config},
+    displayConfig:{numberSeparator:'comma-period',showThousandsSeparator:true,readOnly:true},
+    value,context,computed,dirty:false,pending:false,error:null,validation:[],capability:{type:'readonly'},
+   },
+   options:{presentation:'display',showLabel:false,className:'read-only-text linkify',emptyLabel:'No Value'},
+  });
+ }
+ function sample(renderer,field) {
+  return h('div',{'data-renderer':renderer},field,h('div',{'data-next':''},'Following field'));
+ }
+ return h('form',{onSubmit:event=>{event.preventDefault();submits++;}},
+  h('button',{type:'button'},'Before numbers'),
+  ...rows.map(([id,value,text])=>h('section',{'data-sample':id,key:id},
+   sample('native',h(CompleteReadOnlyTextField,{value:text,language:'en'})),
+   sample('sdk',sdkNumber(id,value,'form')))),
+  h('div',{'data-boundary':'computed'},sdkNumber('computed',null,'form',true)),
+  h('div',{'data-boundary':'portal'},sdkNumber('portal',null,'portal-detail')),
+  h('button',{type:'button'},'After numbers'));
+}
+createRoot(document.querySelector('main')).render(h(React.StrictMode,null,
+ h(mode==='readonly-number-appearance'?ReadOnlyNumberAppearance:App)));
 window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes],inputs:[...inputs],submits})};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
@@ -212,6 +243,9 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         const css = readFileSync(
             join(installed, 'dist/esm/react/localized-numeric.css')
         );
+        const readonlyTextCss = readFileSync(
+            join(installed, 'dist/esm/react/complete-readonly-text.css')
+        );
         evidence.sdkInputs = inputs;
         evidence.harnessSha256 = hash(readFileSync(new URL(import.meta.url)));
         evidence.hostSha256 = hash(source);
@@ -231,11 +265,13 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
             } else if (path === '/numeric.css') {
                 response.setHeader('Content-Type', 'text/css');
                 response.end(css);
+            } else if (path === '/readonly-text.css') {
+                response.setHeader('Content-Type', 'text/css');
+                response.end(readonlyTextCss);
             } else if (path === '/') {
                 response.setHeader('Content-Type', 'text/html');
-                const appearance = requestUrl.searchParams
-                    .get('mode')
-                    ?.startsWith('appearance-');
+                const mode = requestUrl.searchParams.get('mode');
+                const appearance = mode?.startsWith('appearance-');
                 response.end(
                     '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Complete localized numeric proof</title>' +
                         (appearance
@@ -246,6 +282,9 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                         '<link rel="stylesheet" href="/numeric.css">' +
                         (appearance
                             ? '<style>' + numericAppearanceThemeCss + '</style>'
+                            : '') +
+                        (mode === 'readonly-number-appearance'
+                            ? '<style>body{font:16px/1.5 system-ui}p{margin:0}[data-renderer]{margin-bottom:24px}</style><link rel="stylesheet" href="/readonly-text.css">'
                             : '') +
                         '<main></main><script type="module" src="/proof.js"></script>'
                 );
@@ -271,7 +310,10 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         const visit = async (mode) => {
             evidence.phase = mode;
             await page.goto(origin + '?mode=' + mode);
-            const field = fieldLocator();
+            const field =
+                mode === 'readonly-number-appearance'
+                    ? page.getByRole('button', { name: 'Before numbers' })
+                    : fieldLocator();
             await field.waitFor();
             return field;
         };
@@ -300,7 +342,12 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                 const url = new URL(route.request().url());
                 if (
                     url.origin === origin &&
-                    ['/', '/proof.js', '/numeric.css'].includes(url.pathname)
+                    [
+                        '/',
+                        '/proof.js',
+                        '/numeric.css',
+                        '/readonly-text.css',
+                    ].includes(url.pathname)
                 )
                     return route.continue();
                 evidence.unexpectedRequests.push(url.origin + url.pathname);
@@ -453,6 +500,86 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         await page.emulateMedia({ forcedColors: 'active' });
         await finish('mobile-clear-forced-colors');
         assert.equal(evidence.results.length, 6);
+
+        evidence.readonlyNumber = [];
+        for (const width of [375, 1280]) {
+            const before = await open(
+                'readonly-number-appearance',
+                false,
+                width
+            );
+            const after = page.getByRole('button', { name: 'After numbers' });
+            const rows = await page
+                .locator('[data-sample]')
+                .evaluateAll((samples) =>
+                    samples.map((sample) =>
+                        [...sample.querySelectorAll('[data-renderer]')].map(
+                            (renderer) => {
+                                const value = renderer.querySelector('p');
+                                const bounds = value.getBoundingClientRect();
+                                return {
+                                    text: value.textContent,
+                                    lineHeight:
+                                        getComputedStyle(value).lineHeight,
+                                    height: bounds.height,
+                                    followingOffset:
+                                        renderer
+                                            .querySelector('[data-next]')
+                                            .getBoundingClientRect().top -
+                                        bounds.top,
+                                };
+                            }
+                        )
+                    )
+                );
+            const otherNumberLineHeights = await page
+                .locator('[data-boundary] p')
+                .evaluateAll((rows) =>
+                    rows.map((row) => getComputedStyle(row).lineHeight)
+                );
+            evidence.readonlyNumber.push({
+                width,
+                rows,
+                otherNumberLineHeights,
+            });
+            const expected = [
+                ['-12,345.00', 24],
+                ['0.00', 24],
+                ['No Value', 20],
+            ].map(([text, height]) => ({
+                text,
+                lineHeight: `${height}px`,
+                height,
+                followingOffset: height,
+            }));
+            assert.deepEqual(
+                rows,
+                expected.map((row) => [row, row])
+            );
+            assert.deepEqual(otherNumberLineHeights, ['21px', '21px']);
+            await before.focus();
+            await page.keyboard.press('Tab');
+            assert.equal(
+                await after.evaluate(
+                    (button) => button === document.activeElement
+                ),
+                true
+            );
+            await page.keyboard.press('Shift+Tab');
+            assert.equal(
+                await before.evaluate(
+                    (button) => button === document.activeElement
+                ),
+                true
+            );
+            const state = await snapshot();
+            assert.deepEqual(state.writes, []);
+            assert.equal(state.submits, 0);
+            await page.screenshot({
+                path: join(output, `numeric-readonly-number-${width}.png`),
+                fullPage: true,
+            });
+        }
 
         evidence.readonlyPercent = [];
         for (const width of [375, 1280]) {

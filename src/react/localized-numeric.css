@@ -172,6 +172,8 @@
 .mx-sdk-localized-numeric-form-percent-display
     .mx-sdk-localized-numeric-progress-label,
 .mx-sdk-localized-numeric-form-percent-display
+    > .mx-sdk-localized-numeric-empty,
+.mx-sdk-localized-numeric-form-number-display
     > .mx-sdk-localized-numeric-empty {
     line-height: 1.25rem;
 }

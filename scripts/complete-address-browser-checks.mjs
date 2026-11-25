@@ -269,11 +269,23 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
                 options: [b.x, b.y, b.width, b.height],
                 logo: [c.width, c.height],
                 position: getComputedStyle(options).position,
+                rows: Array.from(
+                    options.querySelectorAll('[role=option]'),
+                    (row) => ({
+                        height: row.getBoundingClientRect().height,
+                        lineHeight: getComputedStyle(row).lineHeight,
+                    })
+                ),
             };
         });
         assert.equal(geometry.position, 'absolute');
         assert.equal(geometry.logo[0], 98);
         assert.equal(geometry.logo[1], 18);
+        assert.deepEqual(geometry.rows, [
+            { height: 36, lineHeight: '20px' },
+            { height: 36, lineHeight: '20px' },
+        ]);
+        evidence.desktopPredictionRows = geometry.rows;
         assert(Math.abs(geometry.input[0] - geometry.options[0]) < 1);
         assert(Math.abs(geometry.input[2] - geometry.options[2]) < 1);
         assert(geometry.options[1] >= geometry.input[1] + geometry.input[3]);

@@ -30,9 +30,46 @@ function App(){
  return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Gallery'),h(PortalGallery,{label:'Synthetic Gallery',content:state.status==='rows'?{status:'rows',rows:displayedRows,emptyLabel:state.empty?'No records':null}:{status:state.status,label:state.status==='loading'?'Loading records':'Unavailable records'},columns:state.columns,width:state.width,unlinkingRecordId:state.pending,reloading:state.reload?{label:'Refreshing'}:null,paging:{canRequestMore:true,showSpinner:false,requestLabel:'Load more',loadingLabel:'Loading more',requestMore:()=>{pages++;}}}));
 }
 window.__nativeProbe={change:patch=>set(patch),returnFocus:()=>triggers.get(0)?.element.focus(),snapshot:()=>({react:React.version,registered:triggers.size,committed,opens,unlinks,pages,submits,errors})};
+function GalleryTextDetails() {
+    const notes = 'This long Gallery note wraps across several lines while the short status stays aligned in the same row.';
+    const rows = ['default', 'linked-list'].map(layout => ({
+        key: layout,
+        recordId: layout,
+        accessibleLabel: 'Gallery text ' + layout,
+        projection: {
+            status: 'present',
+            layout: 'gallery',
+            primary: 'Gallery detail parity',
+            fields: [['Status', 'Open'], ['Notes', notes]].map(([title, value]) => ({
+                key: title,
+                title,
+                leaf: {
+                    kind: 'singleLine',
+                    display: {
+                        mode: 'readOnly',
+                        language: 'en',
+                        value,
+                        layout,
+                    },
+                },
+            })),
+            language: 'en',
+            images: [],
+            shouldRenderThumbnail: false,
+            imageHeight: 160,
+            imageFit: 'cover',
+            thumbnailLocation: 'right',
+            fieldsPerCardRow: 2,
+            labels: { previousImage: 'Previous image', nextImage: 'Next image', noImage: 'No image' },
+        },
+    }));
+    return h(PortalGallery, { label: 'Gallery text', columns: 2, content: { status: 'rows', rows, emptyLabel: null } });
+}
 const root = createRoot(document.querySelector('#root'));
-const pagingLanguage = new URLSearchParams(location.search).get('paging');
+const parameters = new URLSearchParams(location.search);
+const pagingLanguage = parameters.get('paging');
 if (pagingLanguage) mountPagingAppearance(root, pagingLanguage);
+else if (parameters.has('textDetails')) root.render(h(GalleryTextDetails));
 else root.render(h(StrictMode,null,h(App)));
 `;
 
@@ -596,6 +633,57 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         output,
         react: end.react,
     });
+    const textUrl = new URL('/portal-gallery-layout.html', page.url());
+    textUrl.searchParams.set('textDetails', '1');
+    await page.goto(textUrl.href);
+    const textDetails = [];
+    for (const width of [375, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const layout of ['default', 'linked-list']) {
+            const card = page.locator(`[data-record-id="${layout}"]`);
+            const textValues = card
+                .getByRole('definition')
+                .locator('.read-only-text');
+            await textValues.first().waitFor({ state: 'visible' });
+            const values = await textValues.evaluateAll((elements) =>
+                elements.map((element) => {
+                    const style = getComputedStyle(element);
+                    const range = document.createRange();
+                    range.selectNodeContents(element);
+                    return {
+                        fontSize: style.fontSize,
+                        lineHeight: style.lineHeight,
+                        whiteSpace: style.whiteSpace,
+                        lines: new Set(
+                            Array.from(
+                                range.getClientRects(),
+                                (rect) => rect.top
+                            )
+                        ).size,
+                    };
+                })
+            );
+            assert.equal(values.length, 2);
+            for (const value of values) {
+                assert.equal(
+                    value.fontSize,
+                    layout === 'default' ? '13px' : '14px'
+                );
+                assert.equal(
+                    value.lineHeight,
+                    layout === 'default' ? '19.5px' : '20px'
+                );
+                assert.equal(
+                    value.whiteSpace,
+                    layout === 'default' ? 'pre-wrap' : 'nowrap'
+                );
+            }
+            assert.equal(values[0].lines, 1);
+            if (layout === 'default') assert.ok(values[1].lines > 1);
+            else assert.equal(values[1].lines, 1);
+            textDetails.push({ width, layout, values });
+        }
+    }
     Object.assign(evidence, {
         groups,
         keyboardOrder,
@@ -615,6 +703,7 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
             failed: failedBacking,
         },
         unlinkPresentation,
+        textDetails,
         limits: [
             'Portable installed SDK only; native ownership, child modal and transport acceptance are separately required.',
         ],

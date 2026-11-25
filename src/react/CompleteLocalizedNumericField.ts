@@ -416,6 +416,11 @@ export function CompleteLocalizedNumericField({
                     field.context === 'form' &&
                         field.physicalKind === 'percent' &&
                         'mx-sdk-localized-numeric-form-percent-display',
+                    field.context === 'form' &&
+                        field.physicalKind === 'number' &&
+                        field.presentation.type === 'physical' &&
+                        !field.computed &&
+                        'mx-sdk-localized-numeric-form-number-display',
                     options.className
                 ),
             },

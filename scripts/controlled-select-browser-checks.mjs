@@ -124,6 +124,160 @@ async function readNativeReadonlyForm(page) {
     return { painted, tabs };
 }
 
+async function checkNativeEditableForm(page, snapshot, capture) {
+    const holder = page.locator(
+        '[data-editable-dropdown-layout="native-form"]'
+    );
+    const status = holder.getByRole('combobox', {
+        name: 'Status',
+        exact: true,
+    });
+    const remove = holder.getByRole('button', { name: 'Remove option Second' });
+    const name = page.getByRole('textbox', { name: 'Name', exact: true });
+    const active = (target) =>
+        target.evaluate((node) => node === document.activeElement);
+    const listbox = holder.getByRole('listbox');
+    const paint = () =>
+        holder.evaluate((node) => {
+            const box = node.getBoundingClientRect();
+            const sibling = document.querySelector('[data-following-name]');
+            const input = node.querySelector('input');
+            const chip = node.querySelector('.mx-sdk-select-badge');
+            const chevron = node.querySelector('.mx-sdk-select-portal-chevron');
+            const icon = chevron.getBoundingClientRect();
+            const menu = node.querySelector('[role="listbox"]');
+            const menuBox = menu?.getBoundingClientRect();
+            return {
+                height: box.height,
+                width: box.width,
+                nameGap: sibling.getBoundingClientRect().top - box.bottom,
+                radius: getComputedStyle(node).borderRadius,
+                inputFont: getComputedStyle(input).fontSize,
+                inputLineHeight: getComputedStyle(input).lineHeight,
+                chipHeight: chip?.getBoundingClientRect().height ?? null,
+                chevron: [icon.width, icon.height, box.right - icon.right],
+                menu: menuBox && [menuBox.height, menuBox.top - box.bottom],
+            };
+        });
+    await page.getByRole('button', { name: 'Before Status' }).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await active(remove), true);
+    await page.keyboard.press('Tab');
+    assert.equal(await active(status), true);
+    assert.equal(await status.getAttribute('aria-expanded'), 'false');
+    assert.equal(await listbox.count(), 0);
+    assert.equal(
+        await holder.getByRole('button', { name: 'Clear' }).count(),
+        0
+    );
+    assert.equal(await status.getAttribute('placeholder'), '');
+    const closed = await paint();
+    assert.deepEqual(closed, {
+        height: 42,
+        width: page.viewportSize().width === 375 ? 335 : 608,
+        nameGap: 24,
+        radius: '8px',
+        inputFont: '14px',
+        inputLineHeight: '20px',
+        chipHeight: 24,
+        chevron: [16, 16, 8],
+        menu: undefined,
+    });
+    assert.equal(
+        await holder.evaluate((node) => getComputedStyle(node).borderColor),
+        'rgb(59, 130, 246)'
+    );
+    await capture('closed');
+
+    await page.keyboard.press('ArrowDown');
+    const options = listbox.getByRole('option');
+    assert.equal(await options.count(), 3);
+    assert.equal(
+        await listbox.getByText('Available choices', { exact: true }).count(),
+        1
+    );
+    assert.equal(
+        await status.getAttribute('aria-activedescendant'),
+        await options.nth(1).getAttribute('id')
+    );
+    const open = await paint();
+    assert.deepEqual(open.menu, [160, 4]);
+    await options.first().hover();
+    await page.keyboard.press('ArrowDown');
+    assert.deepEqual(
+        await options.evaluateAll((nodes) =>
+            nodes.map((node) => getComputedStyle(node).backgroundColor)
+        ),
+        ['rgba(0, 0, 0, 0)', 'rgb(219, 234, 254)', 'rgba(0, 0, 0, 0)']
+    );
+    await capture('open');
+    await page.keyboard.press('Escape');
+    assert.equal(await listbox.count(), 0);
+    assert.equal(await active(status), true);
+    await page.keyboard.press('Tab');
+    assert.equal(await active(name), true);
+
+    await status.click();
+    assert.equal(await listbox.count(), 1);
+    const chevron = await holder
+        .locator('.mx-sdk-select-portal-chevron')
+        .boundingBox();
+    await page.mouse.click(
+        chevron.x + chevron.width / 2,
+        chevron.y + chevron.height / 2
+    );
+    assert.equal(await listbox.count(), 0);
+    assert.equal(await active(status), true);
+    assert.deepEqual((await snapshot()).writes, []);
+
+    await remove.click();
+    await remove.waitFor({ state: 'detached' });
+    const blank = await paint();
+    assert.deepEqual(blank, { ...closed, height: 38, chipHeight: null });
+    assert.equal(await status.getAttribute('placeholder'), 'Choose one');
+    assert.equal(await active(status), true);
+    assert.equal(await status.getAttribute('aria-expanded'), 'false');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(
+        await status.getAttribute('aria-activedescendant'),
+        await options.first().getAttribute('id')
+    );
+    await page.keyboard.press('Tab');
+    assert.equal(await active(name), true);
+    assert.equal(await listbox.count(), 0);
+    const effects = await snapshot();
+    assert.deepEqual(effects.writes, [
+        { kind: 'value', key: 'single', value: null },
+    ]);
+    assert.equal(effects.submits, 0);
+    await status.click();
+    await options.nth(2).click();
+    const removeThird = holder.getByRole('button', {
+        name: 'Remove option Third',
+    });
+    await removeThird.waitFor();
+    assert.equal(await listbox.count(), 0);
+    await removeThird.focus();
+    await page.keyboard.press('Space');
+    await removeThird.waitFor({ state: 'detached' });
+    assert.equal(await active(status), true);
+    assert.equal(await status.getAttribute('aria-expanded'), 'false');
+    const activated = await snapshot();
+    assert.deepEqual(activated.writes, [
+        { kind: 'value', key: 'single', value: null },
+        { kind: 'value', key: 'single', value: 'Gamma' },
+        { kind: 'value', key: 'single', value: null },
+    ]);
+    assert.equal(activated.submits, 0);
+    assert.equal(
+        await page
+            .locator('[data-editable-guards] [data-editable-dropdown-layout]')
+            .count(),
+        0
+    );
+    return { closed, open, blank };
+}
+
 // Synthetic controlled host, installed public entry points, actual browser input.
 // Canonical state and deferred metadata remain host-owned; no provider is called.
 export async function checkControlledSelectBrowser({
@@ -182,8 +336,9 @@ export async function checkControlledSelectBrowser({
 const {createElement:h,useState,useRef}=React;
 let writes=[],submits=0,activations=0,observed,singleEchoTransitions=[];
 const choices=[{id:'a',name:'Alpha',displayName:'First'},{id:'b',name:'Beta',displayName:'Second'},{id:'c',name:'Gamma',displayName:'Third'}];
+const nativeEditable=new URLSearchParams(location.search).has('native-editable-dropdown');
 function App(){
- const [state,setState]=useState({single:null,multi:['Alpha','Beta'],limited:['Alpha'],choices,readonly:false,active:true,token:{}});
+ const [state,setState]=useState({single:nativeEditable?'Beta':null,multi:['Alpha','Beta'],limited:['Alpha'],choices,readonly:false,active:true,token:{}});
  const latest=useRef(state);latest.current=state;observed=state;
  const canonicalSingle=useRef(state.single);
  const scope=state.token;
@@ -191,6 +346,19 @@ function App(){
  const singleOwner={token:scope,isCurrent:()=>owner.isCurrent()&&canonicalSingle.current===state.single};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
+ if(nativeEditable){
+    const nativeChoices=choices.map(choice=>({...choice,backgroundColor:'#ffeab6',color:'#374151'}));
+    const dropdown={...common,owner:singleOwner,choices:nativeChoices,availableChoices:nativeChoices,inputId:'status',ariaLabel:'Status',presentation:'dropdown',value:state.single,editableDropdownLayout:'native-form',labels:{placeholder:'Choose one',availableOptions:'Available choices',remove:name=>'Remove option '+name},onValueChange:value=>change('single',value)};
+    return h('form',{id:'select-form',style:{width:'min(calc(100vw - 40px), 608px)',margin:'0 auto',font:'400 16px/24px system-ui, sans-serif'},onSubmit:event=>{event.preventDefault();submits++;}},
+      h('button',{type:'button'},'Before Status'),
+      h(SingleSelectField,dropdown),
+      h('label',{'data-following-name':'',style:{display:'block',marginTop:'24px'}},'Name',h('input',{defaultValue:'Synthetic Status record'})),
+      h('div',{'data-editable-guards':'',hidden:true},
+        ...[{editableDropdownLayout:undefined},{readOnly:true},{disabled:true},{presentation:'list'},{isInGrid:true},{dropdownStyle:'portal-filter'}].map((options,index)=>h(SingleSelectField,{...dropdown,...options,inputId:'guard-'+index,key:index})),
+        h(MultipleSelectsField,{...dropdown,inputId:'guard-multiple',value:['Beta']})
+      )
+    );
+ }
  if (new URLSearchParams(location.search).has('native-readonly-dropdown')) {
     const status = { id: 'status-in-progress', name: 'In progress', backgroundColor: '#ffeab6', color: '#374151' };
     const dropdown = {
@@ -795,6 +963,25 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                     ),
                 });
             }
+            presentation.nativeEditableDropdown = [];
+            for (const width of [375, 1280]) {
+                await page.setViewportSize({ width, height: 640 });
+                await page.goto(
+                    origin + '/?format=' + format + '&native-editable-dropdown'
+                );
+                const result = await checkNativeEditableForm(
+                    page,
+                    snapshot,
+                    (state) =>
+                        page.screenshot({
+                            path: join(
+                                output,
+                                `controlled-select-editable-form-${format}-${width}-${state}.png`
+                            ),
+                        })
+                );
+                presentation.nativeEditableDropdown.push({ width, ...result });
+            }
             evidence.results.push({
                 format,
                 synchronousCanonicalEcho,
@@ -808,7 +995,7 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, caps/radios, spacing, keyboard focus, Clear, readonly Grid events, and native Form readonly dropdown appearance/inertness. Synthetic host and explicit submit sentinel.';
+            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, caps/radios, readonly Grid events, and native Form dropdown appearance, focus and actions. Synthetic host and explicit submit sentinel.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

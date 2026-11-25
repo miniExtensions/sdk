@@ -71,6 +71,8 @@ export type ControlledSelectCommonProps = {
 export type ControlledSingleSelectFieldProps = ControlledSelectCommonProps & {
     value: string | null;
     onValueChange(value: string | null): boolean | void;
+    /** Native published Form appearance for an editable, non-Grid dropdown. */
+    editableDropdownLayout?: 'native-form';
     /** Native Form appearance for a read-only, non-Grid dropdown. */
     readOnlyDropdownLayout?: 'native-form';
 };
@@ -83,6 +85,7 @@ type ControlProps = ControlledSelectCommonProps & {
     values: readonly string[];
     multiple: boolean;
     change(values: string[]): boolean | void;
+    editableDropdownLayout?: ControlledSingleSelectFieldProps['editableDropdownLayout'];
     readOnlyDropdownLayout?: ControlledSingleSelectFieldProps['readOnlyDropdownLayout'];
 };
 function isFuseConstructor(
@@ -118,6 +121,15 @@ function SelectControl(props: ControlProps): ReactNode {
     const portalFilter =
         props.presentation === 'dropdown' &&
         props.dropdownStyle === 'portal-filter';
+    const nativeFormEditable =
+        props.editableDropdownLayout === 'native-form' &&
+        props.presentation === 'dropdown' &&
+        !props.multiple &&
+        !props.readOnly &&
+        !props.disabled &&
+        !props.isInGrid &&
+        !portalFilter;
+    const nativeDropdown = portalFilter || nativeFormEditable;
     const nativeFormReadOnly =
         props.readOnlyDropdownLayout === 'native-form' &&
         props.readOnly === true &&
@@ -243,7 +255,17 @@ function SelectControl(props: ControlProps): ReactNode {
         !props.readOnly &&
         !props.disabled &&
         props.owner.isCurrent();
-    const selectionPointerEvents = portalFilter
+    const isNativeHolderPress = (event: MouseEvent) =>
+        nativeFormEditable &&
+        !event.defaultPrevented &&
+        event.button === 0 &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        !(event.target as Element).closest('button, [role="listbox"]') &&
+        writable();
+    const selectionPointerEvents = nativeDropdown
         ? {
               onPointerDown: (event: PointerEvent) => {
                   if (event.isPrimary && event.button === 0)
@@ -261,7 +283,7 @@ function SelectControl(props: ControlProps): ReactNode {
           }
         : {};
     const admitsSelectionClick = (event: MouseEvent) => {
-        if (!portalFilter || event.detail === 0) return true;
+        if (!nativeDropdown || event.detail === 0) return true;
         const selection = pointerSelection.current;
         pointerSelection.current = null;
         return (
@@ -313,8 +335,18 @@ function SelectControl(props: ControlProps): ReactNode {
     const found = state.text
         ? (fuse?.search(state.text).map((result) => result.item) ?? [])
         : candidates;
+    const openingIndex = (
+        choices: readonly ControlledSelectChoice[],
+        fallback: number
+    ) => {
+        if (!nativeFormEditable) return fallback;
+        const selectedIndex = choices.findIndex(
+            (choice) => choice.name === props.values[0]
+        );
+        return selectedIndex < 0 ? fallback : selectedIndex;
+    };
     const moveActiveWithKeyboard = (index: number) => {
-        if (portalFilter && writable()) {
+        if (nativeDropdown && writable()) {
             const choice = found[index];
             revealAfterKey.current = choice
                 ? { epoch, index, choiceKey: key(choice) }
@@ -329,7 +361,7 @@ function SelectControl(props: ControlProps): ReactNode {
         const target = input.current;
         const choice = found[state.active];
         if (
-            !portalFilter ||
+            !nativeDropdown ||
             pending.epoch !== epoch ||
             pending.index !== state.active ||
             !state.open ||
@@ -581,7 +613,8 @@ function SelectControl(props: ControlProps): ReactNode {
                     backgroundColor: choice.backgroundColor,
                 },
             },
-            (removable && props.multiple) || nativeFormReadOnly
+            (removable && (props.multiple || nativeFormEditable)) ||
+                nativeFormReadOnly
                 ? h(
                       'span',
                       { className: 'mx-sdk-select-selected-label' },
@@ -606,7 +639,7 @@ function SelectControl(props: ControlProps): ReactNode {
                                   remove(choice.name, event.currentTarget);
                           },
                       },
-                      portalFilter
+                      nativeDropdown
                           ? h(
                                 'svg',
                                 {
@@ -637,6 +670,10 @@ function SelectControl(props: ControlProps): ReactNode {
                 .join(' '),
             'data-style': props.presentation,
             'data-portal-filter': portalFilter || undefined,
+            'data-native-dropdown': nativeDropdown || undefined,
+            'data-editable-dropdown-layout': nativeFormEditable
+                ? props.editableDropdownLayout
+                : undefined,
             'data-readonly-dropdown-layout': nativeFormReadOnly
                 ? props.readOnlyDropdownLayout
                 : undefined,
@@ -654,7 +691,26 @@ function SelectControl(props: ControlProps): ReactNode {
                           input.current?.focus();
                           update({ open: true });
                       }
+                      if (isNativeHolderPress(event)) {
+                          input.current?.focus({ preventScroll: true });
+                          update({
+                              open: !state.open,
+                              text: '',
+                              active: state.open
+                                  ? -1
+                                  : openingIndex(candidates, 0),
+                          });
+                      }
                   },
+            onMouseDown: nativeFormEditable
+                ? (event: MouseEvent<HTMLDivElement>) => {
+                      if (
+                          isNativeHolderPress(event) &&
+                          !(event.target as Element).closest('input')
+                      )
+                          event.preventDefault();
+                  }
+                : undefined,
             onPointerDown: props.readOnly ? undefined : stop,
             onKeyDown: props.readOnly ? undefined : stop,
             onBlur: (event: import('react').FocusEvent<HTMLDivElement>) => {
@@ -778,7 +834,7 @@ function SelectControl(props: ControlProps): ReactNode {
                               : undefined,
                       autoComplete: 'off',
                       placeholder:
-                          portalFilter && selected.length
+                          nativeDropdown && selected.length
                               ? ''
                               : props.labels?.placeholder,
                       value: state.text,
@@ -791,18 +847,25 @@ function SelectControl(props: ControlProps): ReactNode {
                               active: 0,
                           }),
                       onFocus: () =>
-                          update(portalFilter ? { text: '' } : { open: true }),
-                      onClick: () => update({ open: true }),
+                          update(
+                              nativeDropdown ? { text: '' } : { open: true }
+                          ),
+                      onClick: nativeFormEditable
+                          ? undefined
+                          : () => update({ open: true }),
                       onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
                           event.stopPropagation();
                           if (event.nativeEvent.isComposing) return;
                           const optionCount =
                               found.length + (showCreate ? 1 : 0);
-                          if (event.key === 'Escape') {
-                              event.preventDefault();
-                              update({ open: false, active: -1 });
-                          } else if (event.key === 'Tab') {
-                              update({ open: false, active: -1 });
+                          if (event.key === 'Escape' || event.key === 'Tab') {
+                              if (event.key === 'Escape')
+                                  event.preventDefault();
+                              update({
+                                  open: false,
+                                  active: -1,
+                                  ...(nativeFormEditable ? { text: '' } : {}),
+                              });
                           } else if (
                               event.key === 'ArrowDown' ||
                               event.key === 'ArrowUp'
@@ -812,9 +875,12 @@ function SelectControl(props: ControlProps): ReactNode {
                                   event.key === 'ArrowDown' ? 1 : -1;
                               const next =
                                   !state.open || state.active < 0
-                                      ? direction === 1
-                                          ? 0
-                                          : optionCount - 1
+                                      ? openingIndex(
+                                            found,
+                                            direction === 1
+                                                ? 0
+                                                : optionCount - 1
+                                        )
                                       : state.active + direction;
                               moveActiveWithKeyboard(
                                   Math.max(-1, Math.min(optionCount - 1, next))
@@ -851,7 +917,7 @@ function SelectControl(props: ControlProps): ReactNode {
                                 'aria-label': props.ariaLabel,
                                 'aria-multiselectable': props.multiple,
                             },
-                            portalFilter && found.length > 0
+                            nativeDropdown && found.length > 0
                                 ? h(
                                       'li',
                                       {
@@ -887,7 +953,7 @@ function SelectControl(props: ControlProps): ReactNode {
                                         },
                                     },
                                     badge(choice, false),
-                                    portalFilter &&
+                                    nativeDropdown &&
                                         props.values.includes(choice.name)
                                         ? h(
                                               'svg',
@@ -947,7 +1013,7 @@ function SelectControl(props: ControlProps): ReactNode {
                       : null
               )
             : null,
-        portalFilter && !disabled
+        nativeDropdown && !disabled
             ? h(
                   'svg',
                   {
@@ -991,7 +1057,7 @@ function SelectControl(props: ControlProps): ReactNode {
                       'The choice could not be added. Review the current field before trying again.'
               )
             : null,
-        !portalFilter && !disabled && props.values.length > 0
+        !nativeDropdown && !disabled && props.values.length > 0
             ? h(
                   'button',
                   {

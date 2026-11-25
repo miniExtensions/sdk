@@ -62,6 +62,23 @@ it('renders localized non-submitting controls, disables missing directions and h
     assert.match(first, /aria-label="Fiches" role="group"/);
     assert.match(first, /type="button" disabled="".*Précédent/);
     assert.match(first, /type="button" class="[^"]+">Suivant/);
+
+    const iconButtons = renderToString(
+        h(PortalSidePanelNavigation, {
+            ...defaults,
+            icons: { previous: h('svg'), next: h('svg') },
+        })
+    );
+    assert.match(iconButtons, /type="button" aria-label="Précédent"/);
+    assert.match(iconButtons, /type="button" aria-label="Suivant"/);
+    assert.equal(
+        (
+            iconButtons.match(
+                /<span aria-hidden="true"><svg><\/svg><\/span>/g
+            ) ?? []
+        ).length,
+        2
+    );
 });
 
 it('refuses accepted dismissal from a replaced same-record frame, coalesces repeat activation and opens exactly once from the fresh frame', async (t) => {
@@ -86,11 +103,7 @@ it('refuses accepted dismissal from a replaced same-record frame, coalesces repe
     };
     const render = () =>
         fixture.render(
-            h(
-                'form',
-                null,
-                h(PortalSidePanelNavigation, { ...props, frame: offered })
-            )
+            h(PortalSidePanelNavigation, { ...props, frame: offered })
         );
     await render();
     const next = fixture.container.querySelectorAll('button')[1];

@@ -34,6 +34,47 @@ it('canonical controlled Single Select server-renders actual radios and labels w
     assert.match(html, /form="form"/);
     assert.match(html, /checked=""/);
 });
+it('native Form radio spacing is opt-in for an editable Single Select list only', () => {
+    const props = {
+        ...common,
+        value: 'Alpha',
+        onValueChange: () => {
+            throw new Error('render must not write');
+        },
+    };
+    const layout = { editableRadioLayout: 'native-form' as const };
+    const marker = /data-editable-radio-layout="native-form"/;
+    const selected = renderToStaticMarkup(
+        h(SingleSelectField, { ...props, ...layout })
+    );
+    assert.match(selected, marker);
+    assert.match(selected, /title="First">First/);
+    assert.match(selected, /<button type="button"[^>]+>Clear<\/button>/);
+    for (const conventional of [
+        props,
+        { ...props, ...layout, presentation: 'dropdown' as const },
+        { ...props, ...layout, isInGrid: true },
+        { ...props, ...layout, readOnly: true },
+        { ...props, ...layout, disabled: true },
+    ]) {
+        assert.doesNotMatch(
+            renderToStaticMarkup(h(SingleSelectField, conventional)),
+            marker
+        );
+    }
+    assert.doesNotMatch(
+        renderToStaticMarkup(
+            h(MultipleSelectsField, {
+                ...common,
+                ...layout,
+                value: ['Alpha'],
+                limitToOneSelection: true,
+                onValueChange: props.onValueChange,
+            })
+        ),
+        marker
+    );
+});
 it('canonical controlled Multiple Select retains removability at the selection cap', () => {
     const html = renderToStaticMarkup(
         h(MultipleSelectsField, {

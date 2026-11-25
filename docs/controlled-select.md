@@ -16,6 +16,12 @@ choice IDs (including pending blank IDs), available choices, and a real current
 owner token/currentness check. The component owns only transient search/open
 state. It does not save records, resolve credentials, or call a provider.
 
+Set `editableRadioLayout: 'native-form'` on an editable controlled
+`SingleSelectField` with `presentation: 'list'` outside the Grid to use the
+native Form row spacing and single-line choice pills. Long labels still supply
+their complete accessible name and title. The existing indicators, keyboard
+focus, and Add/Clear actions retain their controlled Select behavior.
+
 Set `readOnlyDropdownLayout: 'native-form'` on a controlled `SingleSelectField`
 with `readOnly: true` and `presentation: 'dropdown'` to render the native Form
 value holder and empty-state icon. Use this appearance for Form fields outside

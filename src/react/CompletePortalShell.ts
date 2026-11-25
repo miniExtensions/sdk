@@ -63,6 +63,8 @@ export type PortalShellSnapshot = Readonly<{
         hidden?: boolean;
         /** Repeat configured branding inside an open overlay drawer. Omission retains header-only branding. */
         showBrandInNavigation?: boolean;
+        /** Place plain visitor branding and layout actions in the native top bar. */
+        topbarLayout?: 'native';
         /** Use a leading menu icon for the visible sidebar's narrow header. */
         sidebarToggle?: 'icon';
         title: string;
@@ -373,6 +375,15 @@ function Shell(props: CompletePortalShellProps) {
         (snapshot.header.sidebarWidth !== undefined ||
             props.onSidebarWidthCommit !== undefined);
     const layoutActions = snapshot.header.actionsPlacement === 'layout';
+    const nativeTopbar =
+        layoutActions &&
+        snapshot.header.layout === 'topbar' &&
+        !snapshot.header.hidden &&
+        snapshot.header.topbarLayout === 'native' &&
+        snapshot.header.titleHtml == null &&
+        !snapshot.header.logoUrl &&
+        !snapshot.header.descriptionHtml &&
+        snapshot.settings == null;
     const sidebarIconToggle =
         snapshot.header.layout === 'sidebar' &&
         !snapshot.header.hidden &&
@@ -1396,6 +1407,7 @@ function Shell(props: CompletePortalShellProps) {
                   settingsButton({ type: 'title' }, snapshot.settings?.title)
               )
             : null;
+    const iconToggle = sidebarIconToggle || nativeTopbar;
     const toggleLabel = open ? labels.closeNavigation : labels.openNavigation;
     const navigationToggle = showNavigation
         ? h(
@@ -1406,7 +1418,7 @@ function Shell(props: CompletePortalShellProps) {
                   className: 'mx-sdk-portal-toggle',
                   'aria-expanded': open,
                   'aria-controls': navId,
-                  'aria-label': sidebarIconToggle ? toggleLabel : undefined,
+                  'aria-label': iconToggle ? toggleLabel : undefined,
                   onClick: () => {
                       openingNavigationEdge.current = null;
                       setOpen(!open);
@@ -1425,7 +1437,7 @@ function Shell(props: CompletePortalShellProps) {
                       setOpen(true);
                   },
               },
-              sidebarIconToggle
+              iconToggle
                   ? h(
                         'svg',
                         {
@@ -1444,6 +1456,65 @@ function Shell(props: CompletePortalShellProps) {
                   : toggleLabel
           )
         : null;
+    const navigation = showNavigation
+        ? h(
+              'div',
+              {
+                  className: 'mx-sdk-portal-navigation-wrap',
+                  'data-open': open ? 'true' : 'false',
+                  onClick: (event: MouseEvent<HTMLElement>) => {
+                      if (overlay && event.target === event.currentTarget)
+                          close();
+                  },
+              },
+              h(
+                  'div',
+                  {
+                      ref: nav,
+                      id: navId,
+                      hidden: overlay && !open,
+                      className: 'mx-sdk-portal-navigation',
+                      role: overlay && open ? 'dialog' : undefined,
+                      'aria-modal': overlay && open ? true : undefined,
+                      'aria-label': labels.navigation,
+                      tabIndex: -1,
+                      onFocusCapture: (event: FocusEvent<HTMLElement>) => {
+                          lastNavigationFocus.current = event.target;
+                      },
+                      onBlurCapture: (event: FocusEvent<HTMLElement>) => {
+                          if (
+                              event.relatedTarget != null
+                                  ? !event.currentTarget.contains(
+                                        event.relatedTarget
+                                    )
+                                  : event.target.isConnected
+                          )
+                              lastNavigationFocus.current = null;
+                      },
+                      onKeyDown: keyboard,
+                  },
+                  overlay
+                      ? h(
+                            'button',
+                            { type: 'button', onClick: close },
+                            labels.closeNavigation
+                        )
+                      : null,
+                  overlay && snapshot.header.showBrandInNavigation
+                      ? brand(false)
+                      : null,
+                  h(
+                      'nav',
+                      { 'aria-label': labels.navigation },
+                      snapshot.hideMenuItems ? null : menu(items),
+                      descriptionInNavigation && !snapshot.header.hidden
+                          ? description
+                          : null
+                  ),
+                  actionsInNavigation ? actions : null
+              )
+          )
+        : null;
     return h(
         'div',
         {
@@ -1459,6 +1530,7 @@ function Shell(props: CompletePortalShellProps) {
                 snapshot.header.hidden ? 'mx-sdk-portal-shell--hidden' : '',
                 controlledSidebar ? 'mx-sdk-portal-shell--resizable' : '',
                 layoutActions ? 'mx-sdk-portal-shell--layout-actions' : '',
+                nativeTopbar ? 'mx-sdk-portal-shell--native-topbar' : '',
                 sidebarIconToggle
                     ? 'mx-sdk-portal-shell--sidebar-icon-toggle'
                     : '',
@@ -1482,67 +1554,10 @@ function Shell(props: CompletePortalShellProps) {
             sidebarIconToggle ? navigationToggle : null,
             brand(true),
             sidebarIconToggle ? null : navigationToggle,
+            nativeTopbar ? navigation : null,
             actionsInNavigation ? null : actions
         ),
-        showNavigation
-            ? h(
-                  'div',
-                  {
-                      className: 'mx-sdk-portal-navigation-wrap',
-                      'data-open': open ? 'true' : 'false',
-                      onClick: (event: MouseEvent<HTMLElement>) => {
-                          if (overlay && event.target === event.currentTarget)
-                              close();
-                      },
-                  },
-                  h(
-                      'div',
-                      {
-                          ref: nav,
-                          id: navId,
-                          hidden: overlay && !open,
-                          className: 'mx-sdk-portal-navigation',
-                          role: overlay && open ? 'dialog' : undefined,
-                          'aria-modal': overlay && open ? true : undefined,
-                          'aria-label': labels.navigation,
-                          tabIndex: -1,
-                          onFocusCapture: (event: FocusEvent<HTMLElement>) => {
-                              lastNavigationFocus.current = event.target;
-                          },
-                          onBlurCapture: (event: FocusEvent<HTMLElement>) => {
-                              if (
-                                  event.relatedTarget != null
-                                      ? !event.currentTarget.contains(
-                                            event.relatedTarget
-                                        )
-                                      : event.target.isConnected
-                              )
-                                  lastNavigationFocus.current = null;
-                          },
-                          onKeyDown: keyboard,
-                      },
-                      overlay
-                          ? h(
-                                'button',
-                                { type: 'button', onClick: close },
-                                labels.closeNavigation
-                            )
-                          : null,
-                      overlay && snapshot.header.showBrandInNavigation
-                          ? brand(false)
-                          : null,
-                      h(
-                          'nav',
-                          { 'aria-label': labels.navigation },
-                          snapshot.hideMenuItems ? null : menu(items),
-                          descriptionInNavigation && !snapshot.header.hidden
-                              ? description
-                              : null
-                      ),
-                      actionsInNavigation ? actions : null
-                  )
-              )
-            : null,
+        nativeTopbar ? null : navigation,
         controlledSidebar && !mobile && props.onSidebarWidthCommit
             ? h(PortalSidebarResize, {
                   scope: snapshot.scope,

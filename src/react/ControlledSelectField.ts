@@ -75,6 +75,8 @@ export type ControlledSingleSelectFieldProps = ControlledSelectCommonProps & {
     onValueChange(value: string | null): boolean | void;
     /** Native published Form appearance for an editable, non-Grid dropdown. */
     editableDropdownLayout?: 'native-form';
+    /** Native Form spacing and labels for an editable, non-Grid radio list. */
+    editableRadioLayout?: 'native-form';
 };
 export type ControlledMultipleSelectsFieldProps =
     ControlledSelectCommonProps & {
@@ -86,6 +88,7 @@ type ControlProps = ControlledSelectCommonProps & {
     multiple: boolean;
     change(values: string[]): boolean | void;
     editableDropdownLayout?: ControlledSingleSelectFieldProps['editableDropdownLayout'];
+    editableRadioLayout?: ControlledSingleSelectFieldProps['editableRadioLayout'];
 };
 function isFuseConstructor(
     value: unknown
@@ -722,6 +725,13 @@ function SelectControl(props: ControlProps): ReactNode {
                   {
                       id,
                       disabled,
+                      'data-editable-radio-layout':
+                          props.editableRadioLayout === 'native-form' &&
+                          !props.multiple &&
+                          !props.isInGrid &&
+                          !disabled
+                              ? props.editableRadioLayout
+                              : undefined,
                       'aria-describedby': props.describedBy,
                       'aria-invalid': props.invalid,
                   },

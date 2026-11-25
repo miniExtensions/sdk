@@ -445,6 +445,31 @@ class NativeTextSelectionExtension extends Extension {
                         return handled;
                     },
                     handleDOMEvents: {
+                        keydown: (view, event) => {
+                            const button = view.dom.ownerDocument.activeElement;
+                            const editorState = this.editor.state;
+                            const menuNavigation =
+                                (event.key === 'ArrowDown' ||
+                                    event.key === 'ArrowUp') &&
+                                'blockMenuOpen' in editorState &&
+                                editorState.blockMenuOpen === true;
+                            // Let the focused widget activate as a button. When
+                            // the menu is open, its window listener owns arrows.
+                            // Returning true skips ProseMirror, without cancelling
+                            // native activation or stopping the event.
+                            return (
+                                (event.key === 'Enter' || menuNavigation) &&
+                                !event.isComposing &&
+                                event.keyCode !== 229 &&
+                                this.editor.isViewCurrent(view) &&
+                                view.editable &&
+                                button === event.target &&
+                                !!button?.matches(
+                                    'button.block-menu-trigger[type="button"]'
+                                ) &&
+                                view.dom.contains(button)
+                            );
+                        },
                         focus: (view, event) =>
                             focusWitnesses.get(view)?.focus(event) ?? false,
                         blur: (view, event) =>

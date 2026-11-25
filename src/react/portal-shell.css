@@ -162,6 +162,13 @@
     font-weight: 600;
     background: var(--mx-portal-selected);
 }
+.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-group[open]:has(
+        > .mx-sdk-portal-menu > li > button[aria-current='page']:not([hidden])
+    )
+    > summary[data-active='true']:not(:hover) {
+    background: transparent;
+}
 .mx-sdk-portal-group > summary {
     display: list-item;
     list-style-position: inside;

@@ -9,7 +9,7 @@ import {
 } from '../src/react/FormLinkedChildCreateDialog.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
-async function fixture(t: TestContext) {
+async function fixture(t: TestContext, truncateTitle = false) {
     const dom = await htmlPresentationFixture(t);
     const doc = dom.window.document;
     const opener = doc.createElement('button');
@@ -65,6 +65,7 @@ async function fixture(t: TestContext) {
                 h(BorrowedFormLinkedChildEditDialog, {
                     owner,
                     opening,
+                    truncateTitle,
                     labels: {
                         title: 'Native Edit',
                         keepEditing: 'Cancel',
@@ -134,6 +135,19 @@ async function fixture(t: TestContext) {
         saves: () => ({ childSaves, parentSaves }),
     };
 }
+
+it('sizes the optional caption separately and keeps the dialog name and initial Close', async (t) => {
+    const f = await fixture(t, true);
+    const dialog = f.doc.querySelector('dialog')!;
+    const heading = dialog.querySelector('h2')!;
+    const caption = heading.querySelector(
+        '.mx-sdk-linked-child-create__title-text'
+    )!;
+    assert.equal(caption.textContent, 'Native Edit');
+    assert.equal(caption.getAttribute('title'), 'Native Edit');
+    assert.equal(dialog.getAttribute('aria-labelledby'), heading.id);
+    assert.equal(f.doc.activeElement, f.button('Close'));
+});
 
 it('borrows Close and retains the native single form and Save', async (t) => {
     const f = await fixture(t);

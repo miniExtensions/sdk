@@ -66,7 +66,10 @@ function EmptyValue({
 }
 
 /** Shared decorative empty-state markup; the caller supplies localized text. */
-export function renderReadOnlyEmptyValue(label: string, className?: string) {
+export function renderReadOnlyEmptyValue(
+    label: string,
+    className?: string
+): ReactElement {
     return createElement(
         'p',
         {

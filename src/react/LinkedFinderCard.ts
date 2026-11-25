@@ -745,8 +745,10 @@ function GalleryPlaceholder(): ReactElement {
 
 export function LinkedFinderCard({
     projection,
+    nativeFormListPresentation,
 }: {
     projection: LinkedFinderCardProjection | LinkedFinderMapCardProjection;
+    nativeFormListPresentation?: boolean;
 }): ReactElement {
     const carousel = useCarouselController(projection);
     if (projection.status !== 'present')
@@ -773,7 +775,11 @@ export function LinkedFinderCard({
             },
             projection.primary
         );
-    return h(PresentCard, { projection, carousel });
+    return h(PresentCard, {
+        projection,
+        carousel,
+        nativeFormListPresentation,
+    });
 }
 
 function CardDetail({
@@ -814,10 +820,15 @@ function CardDetail({
 function PresentCard({
     projection,
     carousel,
+    nativeFormListPresentation,
 }: {
     projection: Present;
     carousel: ReturnType<typeof useCarouselController>;
+    nativeFormListPresentation?: boolean;
 }): ReactElement {
+    const showsNativePrimary =
+        projection.layout === 'gallery' ||
+        (nativeFormListPresentation && projection.layout === 'list');
     // Native List position belongs to the record presenter, so it survives
     // thumbnail hiding, moving sides and a Gallery/Kanban round trip.
     const listImage = useListImage(projection);
@@ -854,25 +865,19 @@ function PresentCard({
                 {
                     className: [
                         'mx-sdk-finder-card-primary',
-                        projection.layout === 'gallery' &&
-                        projection.primaryIsEmpty
+                        showsNativePrimary && projection.primaryIsEmpty
                             ? 'mx-sdk-finder-card-primary-empty'
                             : '',
-                        projection.layout === 'gallery' &&
-                        projection.fields.length
+                        showsNativePrimary && projection.fields.length
                             ? 'mx-sdk-finder-card-primary-with-details'
                             : '',
                     ]
                         .filter(Boolean)
                         .join(' '),
-                    title:
-                        projection.layout === 'gallery'
-                            ? projection.primary
-                            : undefined,
-                    'aria-label':
-                        projection.layout === 'gallery'
-                            ? projection.primary
-                            : undefined,
+                    title: showsNativePrimary ? projection.primary : undefined,
+                    'aria-label': showsNativePrimary
+                        ? projection.primary
+                        : undefined,
                 },
                 projection.primary
             ),

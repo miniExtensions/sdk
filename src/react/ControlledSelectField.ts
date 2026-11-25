@@ -65,14 +65,14 @@ export type ControlledSelectCommonProps = {
     className?: string;
     labels?: ControlledSelectLabels;
     isInGrid?: boolean;
+    /** Native Form appearance for a read-only, non-Grid dropdown. */
+    readOnlyDropdownLayout?: 'native-form';
     /** Compact dropdown presentation used by Portal Quick Filter. */
     dropdownStyle?: 'portal-filter';
 };
 export type ControlledSingleSelectFieldProps = ControlledSelectCommonProps & {
     value: string | null;
     onValueChange(value: string | null): boolean | void;
-    /** Native Form appearance for a read-only, non-Grid dropdown. */
-    readOnlyDropdownLayout?: 'native-form';
 };
 export type ControlledMultipleSelectsFieldProps =
     ControlledSelectCommonProps & {
@@ -83,7 +83,6 @@ type ControlProps = ControlledSelectCommonProps & {
     values: readonly string[];
     multiple: boolean;
     change(values: string[]): boolean | void;
-    readOnlyDropdownLayout?: ControlledSingleSelectFieldProps['readOnlyDropdownLayout'];
 };
 function isFuseConstructor(
     value: unknown
@@ -122,7 +121,6 @@ function SelectControl(props: ControlProps): ReactNode {
         props.readOnlyDropdownLayout === 'native-form' &&
         props.readOnly === true &&
         props.presentation === 'dropdown' &&
-        !props.multiple &&
         !props.isInGrid &&
         !portalFilter;
     const generatedId = useId();

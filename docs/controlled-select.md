@@ -17,8 +17,9 @@ owner token/currentness check. The component owns only transient search/open
 state. It does not save records, resolve credentials, or call a provider.
 
 Set `readOnlyDropdownLayout: 'native-form'` on a controlled `SingleSelectField`
-with `readOnly: true` and `presentation: 'dropdown'` to render the native Form
-value holder and empty-state icon. Use this appearance for Form fields outside
+or `MultipleSelectsField` with `readOnly: true` and `presentation: 'dropdown'`
+to render the native Form value holder and empty-state icon. Multiple selections
+keep their canonical value order. Use this appearance for Form fields outside
 the Grid. The empty caption comes from `labels.empty`.
 
 `publishMetadata` is a synchronous host admission step for `{id:'', name,

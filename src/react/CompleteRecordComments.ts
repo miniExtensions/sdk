@@ -48,6 +48,8 @@ export type CompleteRecordCommentsProps = {
     labels: RecordCommentsLabels;
     className?: string;
     style?: CSSProperties;
+    /** Uses the native Form layout and controls. */
+    appearance?: 'native';
 };
 
 const useCommitEffect =
@@ -92,11 +94,24 @@ function commentText(text: string, mentions: Record<string, string>) {
     });
 }
 
+function commentsIcon(path: string) {
+    return h(
+        'svg',
+        { viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': true },
+        h('path', { fillRule: 'evenodd', clipRule: 'evenodd', d: path })
+    );
+}
+
+const refreshIconPath =
+    'M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z';
+const closeIconPath =
+    'M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-1.72 6.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 1 0 1.06 1.06L12 13.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L13.06 12l1.72-1.72a.75.75 0 1 0-1.06-1.06L12 10.94l-1.72-1.72Z';
+
 /** Full rows/composer/loading/error/paging UI; no host renderer injection. */
 export function CompleteRecordComments(
     props: CompleteRecordCommentsProps
 ): ReactElement | null {
-    const { controller, labels } = props;
+    const { appearance, controller, labels } = props;
     const { state, act } = useCommentsView(controller);
     const titleId = useId();
     if (state.retired) return null;
@@ -114,7 +129,7 @@ export function CompleteRecordComments(
     else
         body = h(
             'div',
-            null,
+            { className: 'mx-sdk-comments-history' },
             state.nextCursor != null
                 ? h(
                       'button',
@@ -163,6 +178,7 @@ export function CompleteRecordComments(
                 .join(' '),
             style: props.style,
             'aria-labelledby': titleId,
+            'data-appearance': appearance,
         },
         h(
             'header',
@@ -173,10 +189,13 @@ export function CompleteRecordComments(
                 {
                     type: 'button',
                     'aria-label': labels.refresh,
+                    className: 'mx-sdk-comments-refresh',
                     disabled: loading,
                     onClick: () => act(() => controller.refresh()),
                 },
-                labels.refresh
+                appearance === 'native'
+                    ? commentsIcon(refreshIconPath)
+                    : labels.refresh
             )
         ),
         h('div', { className: 'mx-sdk-comments-body' }, body),
@@ -330,6 +349,7 @@ export function CompleteRecordCommentsDialog(
             ref: node,
             'aria-label': props.labels.title,
             className: 'mx-sdk-comments-dialog',
+            'data-appearance': props.appearance,
             style,
             onCancel: (event: SyntheticEvent<HTMLDialogElement>) => {
                 event.preventDefault();
@@ -359,7 +379,9 @@ export function CompleteRecordCommentsDialog(
                     'data-testid': 'close-dialog',
                     onClick: props.dismiss,
                 },
-                '×'
+                props.appearance === 'native'
+                    ? commentsIcon(closeIconPath)
+                    : '×'
             )
         )
     );

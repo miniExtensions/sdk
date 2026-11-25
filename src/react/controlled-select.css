@@ -20,6 +20,42 @@
 .mx-sdk-select-list-option label {
     min-width: 0;
 }
+.mx-sdk-select
+    > [data-editable-radio-layout='native-form']
+    > .mx-sdk-select-list-option {
+    margin: 0;
+}
+.mx-sdk-select
+    > [data-editable-radio-layout='native-form']
+    > .mx-sdk-select-list-option
+    + .mx-sdk-select-list-option {
+    margin-block-start: 1.25rem;
+}
+.mx-sdk-select
+    > [data-editable-radio-layout='native-form']
+    > .mx-sdk-select-list-option
+    > label {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-block-size: calc(1.5rem + 1px);
+}
+.mx-sdk-select
+    > [data-editable-radio-layout='native-form']
+    > .mx-sdk-select-list-option
+    .mx-sdk-select-badge {
+    display: block;
+    box-sizing: border-box;
+    padding: 0.125rem 0.75rem;
+    border-radius: 9999px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+}
 .mx-sdk-select-list-input {
     appearance: auto;
     box-sizing: border-box;

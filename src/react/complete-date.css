@@ -294,6 +294,11 @@
     font-size: 14px;
     line-height: 20px;
 }
+.mx-sdk-complete-date-popup:where(:has(> .rdtPicker > .rdtTime)) {
+    width: 250px;
+    color: inherit;
+    font: inherit;
+}
 .mx-sdk-complete-date-popup .rdtPicker {
     position: static;
     opacity: 1;

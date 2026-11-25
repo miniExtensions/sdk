@@ -541,6 +541,66 @@ window.completeRichTextProbe={
         );
         await finish('keyboard-and-toolbar');
 
+        evidence.phase = 'block-menu-keyboard';
+        const beforeBlockMenu = await reset('');
+        await focusEditor();
+        const plus = editor.locator('button.block-menu-trigger[type="button"]');
+        await page.keyboard.press('Tab');
+        assert(
+            await plus.evaluate((button) => document.activeElement === button)
+        );
+        const blockMenu = page.locator('#block-menu-container');
+        const isBlockMenuOpen = () =>
+            blockMenu.evaluate(
+                (menu) => getComputedStyle(menu).pointerEvents !== 'none'
+            );
+        await page.keyboard.press('Enter');
+        assert(
+            await isBlockMenuOpen(),
+            'Enter on Plus must open the block menu'
+        );
+        const headingPaint = () =>
+            blockMenu.locator('button.block-menu-item').evaluateAll((items) =>
+                items.slice(0, 2).map((item) => ({
+                    label: item.textContent,
+                    background: getComputedStyle(item).backgroundColor,
+                }))
+            );
+        const headings = await headingPaint();
+        assert.match(headings[0].label, /Big heading/);
+        assert.match(headings[1].label, /Medium heading/);
+        assert.notEqual(headings[0].background, headings[1].background);
+        await page.keyboard.press('ArrowDown');
+        assert(
+            await isBlockMenuOpen(),
+            'ArrowDown must keep the block menu open'
+        );
+        const selected = await headingPaint();
+        assert.equal(selected[0].background, headings[1].background);
+        assert.equal(selected[1].background, headings[0].background);
+        await page.keyboard.press('Escape');
+        assert.equal(await isBlockMenuOpen(), false);
+        assert(
+            await editor.evaluate(
+                (surface) => document.activeElement === surface
+            )
+        );
+        const afterBlockMenu = await snapshot();
+        assert.equal(afterBlockMenu.state.value, beforeBlockMenu.state.value);
+        assert.deepEqual(afterBlockMenu.writes, beforeBlockMenu.writes);
+        assert.deepEqual(
+            afterBlockMenu.nativeEvents
+                .slice(beforeBlockMenu.nativeEvents.length)
+                .filter((event) => event.type === 'keydown' && event.trusted)
+                .map((event) => event.key),
+            ['Tab', 'Enter', 'ArrowDown', 'Escape']
+        );
+        evidence.blockMenuKeyboard = {
+            initial: headings,
+            afterArrowDown: selected,
+        };
+        await finish('block-menu-keyboard');
+
         evidence.phase = 'native-paste';
         await reset('');
         await nativePaste('**Pasted strong**', () => editor.click());
@@ -802,7 +862,7 @@ window.completeRichTextProbe={
             status: 'passed',
             state,
         });
-        assert.equal(evidence.results.length, 6);
+        assert.equal(evidence.results.length, 7);
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

@@ -141,6 +141,26 @@ test('keyboard/focus and programmatic controlled search echoes preserve current 
     await f.settle();
     await f.resolve(['A', 'B']);
     const input = f.host.querySelector('input')!;
+    const search = '.mx-sdk-finder-search';
+    const presentation = '.mx-sdk-native-form-list-finder';
+    assert.equal(f.host.querySelector(presentation), null);
+    assert.equal(f.host.querySelector(`${search} > span`)?.textContent, '⌕');
+    assert.equal(
+        f.host.querySelector('[role="option"] p')?.getAttribute('title'),
+        null
+    );
+    await f.render({ nativeFormListPresentation: true });
+    assert.equal(f.host.querySelector('input'), input);
+    assert.equal(
+        f.host
+            .querySelector(`${presentation} ${search} > svg`)
+            ?.getAttribute('aria-hidden'),
+        'true'
+    );
+    assert.equal(
+        f.host.querySelector('[role="option"] p')?.getAttribute('title'),
+        'Card A'
+    );
     await act(async () => {
         input.focus();
         input.dispatchEvent(

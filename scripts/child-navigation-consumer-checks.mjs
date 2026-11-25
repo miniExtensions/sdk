@@ -149,6 +149,13 @@ const portalNavigationProps: PortalSidePanelNavigationProps = {
     openAdjacent: (request: PortalSidePanelNavigationRequest) => { void resolvePanelSibling({}, request); },
 };
 createPortalNavigationElement(PortalSidePanelNavigation, portalNavigationProps);
+const portalIcons = {
+    previous: createPortalNavigationElement('svg', null),
+    next: createPortalNavigationElement('svg', null),
+};
+createPortalNavigationElement(PortalSidePanelNavigation, { ...portalNavigationProps, icons: portalIcons });
+// @ts-expect-error an opted-in icon pair supplies both directions
+createPortalNavigationElement(PortalSidePanelNavigation, { ...portalNavigationProps, icons: { next: portalIcons.next } });
 // @ts-expect-error native ownership supplies the current-frame admission
 const missingPortalNavigationAdmission: PortalSidePanelNavigationProps = { frame: null, labels: portalNavigationProps.labels, confirmDismissal: () => true, openAdjacent() {} };
 void missingPortalNavigationAdmission;
@@ -173,26 +180,45 @@ export async function checkPortalSidePanelNavigationConsumer({
         esm.PortalSidePanelNavigation,
         require('@miniextensions/sdk/react').PortalSidePanelNavigation,
     ]) {
+        const frame = {
+            ownerToken: {},
+            sourceExtensionSessionId: 'origin',
+            sourceRecordId: 'current',
+            previousRecordId: null,
+            nextRecordId: 'next',
+        };
         const props = {
+            frame,
             labels: { previous: 'Précédent', next: 'Suivant' },
             isCurrent: () => true,
             confirmDismissal: () => false,
             openAdjacent: () => assert.fail('Unexpected SSR open'),
         };
-        const html = renderToStaticMarkup(
+        const html = renderToStaticMarkup(createElement(Navigation, props));
+        assert.match(html, /type="button" disabled="".*Précédent/);
+        assert.match(html, /type="button" class="[^"]+">Suivant/);
+        const iconMarkup = renderToStaticMarkup(
             createElement(Navigation, {
                 ...props,
-                frame: {
-                    ownerToken: {},
-                    sourceExtensionSessionId: 'origin',
-                    sourceRecordId: 'current',
-                    previousRecordId: null,
-                    nextRecordId: 'next',
+                icons: {
+                    previous: createElement('svg', null),
+                    next: createElement('svg', null),
                 },
             })
         );
-        assert.match(html, /type="button" disabled="".*Précédent/);
-        assert.match(html, /type="button" class="[^"]+">Suivant/);
+        assert.match(
+            iconMarkup,
+            /type="button" disabled="" aria-label="Précédent"/
+        );
+        assert.match(iconMarkup, /type="button" aria-label="Suivant"/);
+        assert.equal(
+            (
+                iconMarkup.match(
+                    /<span aria-hidden="true"><svg><\/svg><\/span>/g
+                ) ?? []
+            ).length,
+            2
+        );
         assert.equal(
             renderToStaticMarkup(
                 createElement(Navigation, { ...props, frame: null })

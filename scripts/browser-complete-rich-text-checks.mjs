@@ -430,7 +430,31 @@ window.completeRichTextProbe={
             false
         );
         assert.deepEqual(state.writes, []);
+        const wrapper = page.locator('.me-rich-text .me-rich-text-editor');
+        const restingShadow = 'rgba(0, 0, 0, 0.05) 0px 1px 2px 0px';
+        assert.equal(
+            await wrapper.evaluate((node) => getComputedStyle(node).boxShadow),
+            restingShadow
+        );
         await focusEditor();
+        const focusedShadow = `rgb(99, 102, 241) 0px 0px 0px 1px, ${restingShadow}`;
+        const viewport = page.viewportSize();
+        assert(viewport);
+        evidence.focusShadow = [];
+        for (const width of [375, 1280]) {
+            await page.setViewportSize({ width, height: viewport.height });
+            await page.waitForFunction((shadow) => {
+                const focused = document.querySelector(
+                    '.me-rich-text .me-rich-text-editor.me-rich-text-focused'
+                );
+                return (
+                    focused && getComputedStyle(focused).boxShadow === shadow
+                );
+            }, focusedShadow);
+            evidence.focusShadow.push({ width, restingShadow, focusedShadow });
+        }
+        await page.setViewportSize(viewport);
+        assert.deepEqual((await snapshot()).writes, []);
         await page.keyboard.press(documentKeys.end);
         await page.waitForFunction(() => {
             const state = window.completeRichTextProbe.snapshot();

@@ -14,7 +14,9 @@
 }
 .me-rich-text .me-rich-text-focused {
     border-color: var(--me-rich-text-accent, #6366f1);
-    box-shadow: 0 0 0 1px var(--me-rich-text-accent, #6366f1);
+    box-shadow:
+        0 0 0 1px var(--me-rich-text-accent, #6366f1),
+        0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 .me-rich-text .me-rich-text-editor .heading-actions {
     display: none;

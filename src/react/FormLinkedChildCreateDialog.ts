@@ -383,6 +383,7 @@ type DialogChromeProps = {
     };
     dismiss(): void;
     keep(): void;
+    truncateTitle?: boolean;
     discard(): void;
     save?(): void;
 };
@@ -405,6 +406,7 @@ function LinkedChildDialogChrome({
     primarySaving = false,
     beforePrimary,
     hostForm = false,
+    truncateTitle = false,
     backdrop,
     dismiss,
     keep,
@@ -512,7 +514,16 @@ function LinkedChildDialogChrome({
                     ? 'mx-sdk-linked-child-create__title'
                     : undefined,
             },
-            labels.title
+            truncateTitle
+                ? h(
+                      'span',
+                      {
+                          className: 'mx-sdk-linked-child-create__title-text',
+                          title: labels.title,
+                      },
+                      labels.title
+                  )
+                : labels.title
         ),
         h(
             'div',
@@ -1019,6 +1030,8 @@ export type BorrowedFormLinkedChildEditDialogProps = Readonly<{
     children: ReactNode;
     labels?: Partial<Omit<typeof defaultLabels, 'save' | 'incomplete'>>;
     className?: string;
+    /** Render a separate full-label caption that the host can size and truncate. */
+    truncateTitle?: boolean;
     closeIcon?: ReactNode;
 }>;
 
@@ -1029,6 +1042,7 @@ export function BorrowedFormLinkedChildEditDialog({
     children,
     labels,
     className,
+    truncateTitle,
     closeIcon,
 }: BorrowedFormLinkedChildEditDialogProps): ReactElement | null {
     const controlGeneration = useBorrowedDialogControlGeneration(
@@ -1062,6 +1076,7 @@ export function BorrowedFormLinkedChildEditDialog({
                 view,
                 labels,
                 className,
+                truncateTitle,
                 closeIcon,
                 children,
             })
@@ -1075,6 +1090,7 @@ function BorrowedEditPresentation({
     view,
     labels: suppliedLabels,
     className,
+    truncateTitle,
     closeIcon,
     children,
 }: BorrowedFormLinkedChildEditDialogProps & {
@@ -1184,6 +1200,7 @@ function BorrowedEditPresentation({
     return h(LinkedChildDialogChrome, {
         labels,
         className,
+        truncateTitle,
         closeIcon,
         dialogRef,
         closeButton,

@@ -377,6 +377,10 @@ The editable Barcode scanner trigger uses the native solid Camera and Stop icons
 
 The Form saved-progress conflict alert uses the native solid ExclamationTriangle icon from Heroicons 2.1.1.
 
+The Form tracking disclosure uses the native solid InformationCircle icon from Heroicons 2.1.1.
+
+The native Form Comments dialog uses the solid ArrowPath and XCircle icons from Heroicons 2.1.1.
+
 ```text
 MIT License
 

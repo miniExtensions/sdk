@@ -3,7 +3,11 @@ import { Window } from 'happy-dom';
 import { it } from 'node:test';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { SingleSelectField, MultipleSelectsField } from '../src/react/index.js';
+import {
+    SingleSelectField,
+    MultipleSelectsField,
+    type ControlledMultipleSelectsFieldProps,
+} from '../src/react/index.js';
 
 const choices = [
     { id: 'alpha', name: 'Alpha', displayName: 'First' },
@@ -107,6 +111,69 @@ it('readonly dropdown retains unavailable canonical values and hides mutation co
     assert.match(html, /Missing/);
     assert.match(html, /First/);
     assert.doesNotMatch(html, /<button|<input/);
+});
+
+it('opts a read-only Multiple Select dropdown into the passive native Form layout', () => {
+    const priority = [
+        { id: 'beta', name: 'Beta' },
+        { id: 'alpha', name: 'Alpha' },
+    ];
+    const props = {
+        ...common,
+        choices: priority,
+        availableChoices: priority,
+        presentation: 'dropdown' as const,
+        readOnly: true,
+        readOnlyDropdownLayout: 'native-form' as const,
+        labels: { empty: 'No choices' },
+        onValueChange: () => {
+            throw new Error('read-only render must not write');
+        },
+    };
+    const window = new Window();
+    try {
+        const render = (
+            overrides: Partial<ControlledMultipleSelectsFieldProps> = {},
+            value: string[] = ['Alpha', 'Beta']
+        ) => {
+            window.document.body.innerHTML = renderToStaticMarkup(
+                h(MultipleSelectsField, { ...props, ...overrides, value })
+            );
+            return window.document.body;
+        };
+        const native = '[data-readonly-dropdown-layout="native-form"]';
+        const filled = render();
+        assert.ok(filled.querySelector(native));
+        assert.deepEqual(
+            [...filled.querySelectorAll('.mx-sdk-select-badge')].map(
+                (pill) => pill.textContent
+            ),
+            ['Alpha', 'Beta']
+        );
+        assert.equal(filled.querySelector('button,input,[tabindex]'), null);
+        const blank = render({}, []);
+        assert.equal(
+            blank.querySelector(native + ' [data-testid="no-value-test-id"]')
+                ?.textContent,
+            'No choices'
+        );
+        assert.equal(
+            blank.querySelector('svg')?.getAttribute('aria-hidden'),
+            'true'
+        );
+        assert.equal(blank.querySelector('button,input,[tabindex]'), null);
+        for (const edits of [
+            { readOnlyDropdownLayout: undefined },
+            { readOnly: false },
+            { presentation: 'list' as const },
+            { isInGrid: true },
+            { dropdownStyle: 'portal-filter' as const },
+        ]) {
+            assert.equal(render(edits).querySelector(native), null);
+        }
+    } finally {
+        window.close();
+    }
 });
 
 it('real controlled list publishes exact ordered values, permits cap reduction, and retires retained actions', async (t) => {

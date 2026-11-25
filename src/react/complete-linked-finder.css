@@ -442,6 +442,14 @@
     line-height: 1.25rem;
     overflow-wrap: anywhere;
 }
+:where(
+    .mx-sdk-finder-card-fields-gallery
+        .mx-sdk-finder-card-field-value
+        > .mx-sdk-complete-readonly-text[data-layout='default']
+) {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
 .mx-sdk-finder-gallery-placeholder {
     box-sizing: border-box;
     display: block;
@@ -625,4 +633,76 @@
     overflow: hidden;
     pointer-events: none;
     font-size: 0.75rem;
+}
+
+.mx-sdk-native-form-list-finder .mx-sdk-finder-search {
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom-color: hsl(var(--border, 214.3 31.8% 91.4%));
+}
+.mx-sdk-native-form-list-finder .mx-sdk-finder-search > input {
+    flex: 0 1 auto;
+    width: 100%;
+    border-radius: 6px;
+}
+.mx-sdk-native-form-list-finder .mx-sdk-finder-search > svg {
+    pointer-events: none;
+    width: 24px;
+    height: 24px;
+    color: #9ca3af;
+}
+@media (min-width: 640px) {
+    .mx-sdk-native-form-list-finder .mx-sdk-finder-search > input {
+        font-size: 14px;
+        line-height: 20px;
+    }
+}
+.mx-sdk-native-form-list-finder .mx-sdk-finder-record {
+    border: 0;
+    background: white;
+    color: #111827;
+}
+.mx-sdk-native-form-list-finder .mx-sdk-finder-record::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 3px solid #e5e7eb;
+    border-radius: inherit;
+    transition: border-color 75ms;
+}
+.mx-sdk-native-form-list-finder
+    .mx-sdk-finder-record:where(
+        :not(.mx-sdk-finder-record-selected, [aria-disabled='true'])
+    ):is(:hover, .mx-sdk-finder-option-active)::after {
+    border-color: rgb(var(--theme-300, 147 197 253));
+}
+.mx-sdk-native-form-list-finder .mx-sdk-finder-record-selected::after {
+    border-color: rgb(var(--theme-500, 59 130 246));
+}
+.mx-sdk-native-form-list-finder .mx-sdk-finder-record > .mx-sdk-finder-check {
+    color: rgb(var(--theme-500, 59 130 246));
+}
+.mx-sdk-native-form-list-finder
+    .mx-sdk-finder-card-list
+    > .mx-sdk-finder-card-content {
+    flex: 1;
+}
+.mx-sdk-native-form-list-finder
+    .mx-sdk-finder-card-list
+    .mx-sdk-finder-card-primary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+}
+.mx-sdk-native-form-list-finder
+    .mx-sdk-finder-card-list
+    .mx-sdk-finder-card-primary-with-details {
+    font-weight: 500;
+}
+.mx-sdk-native-form-list-finder
+    .mx-sdk-finder-card-list
+    .mx-sdk-finder-card-primary-empty {
+    color: #9ca3af;
 }

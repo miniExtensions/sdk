@@ -31,6 +31,8 @@ export type PortalSidePanelNavigationProps = {
     /** The accepted linked-record side panel. Use null for a direct URL. */
     frame: PortalSidePanelNavigationFrame | null;
     labels: Readonly<{ previous: string; next: string; group?: string }>;
+    /** Decorative button icons. Existing labels remain the accessible names. */
+    icons?: Readonly<{ previous: ReactElement; next: ReactElement }>;
     /** Read the host's live admission for the supplied source frame and exact neighbor. */
     isCurrent(request: PortalSidePanelNavigationRequest): boolean;
     /** Let the existing host dismissal flow retain or discard the open draft. */
@@ -52,6 +54,7 @@ const useCommitEffect =
 export function PortalSidePanelNavigation({
     frame,
     labels,
+    icons,
     isCurrent,
     confirmDismissal,
     openAdjacent,
@@ -144,6 +147,7 @@ export function PortalSidePanelNavigation({
             {
                 type: 'button',
                 disabled: recordId === null,
+                'aria-label': icons ? labels[direction] : undefined,
                 className: 'me-portal-side-panel-navigation__button',
                 onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
                     if (event.isPrimary && event.button === 0)
@@ -176,7 +180,9 @@ export function PortalSidePanelNavigation({
                     void activate(direction, recordId);
                 },
             },
-            labels[direction]
+            icons
+                ? h('span', { 'aria-hidden': true }, icons[direction])
+                : labels[direction]
         );
 
     return h(

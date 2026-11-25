@@ -220,6 +220,13 @@
     border-radius: 0.375rem;
     box-shadow: 0 0.5rem 1rem #0002;
 }
+.mx-sdk-portal-navigation[aria-modal='true'] .mx-sdk-portal-user > div {
+    max-block-size: var(--mx-portal-account-menu-space, none);
+    overflow: auto;
+}
+.mx-sdk-portal-user[data-open-above] > div {
+    inset-block-end: 100%;
+}
 .mx-sdk-portal-user button {
     display: block;
     width: 100%;

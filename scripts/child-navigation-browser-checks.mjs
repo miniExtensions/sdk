@@ -28,6 +28,7 @@ const opens = [];
 const dismissals = [];
 let submissions = 0;
 let frame = null;
+let icons;
 let heldFocus = null;
 document.querySelector('form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -52,7 +53,7 @@ const props = {
     },
 };
 const render = () => flushSync(() => root.render(
-    h(StrictMode, null, h(PortalSidePanelNavigation, { ...props, frame }))
+    h(StrictMode, null, h(PortalSidePanelNavigation, { ...props, frame, icons }))
 ));
 function offer(presented, neighbors = true) {
     const sourceExtensionSessionId = 'session' + presented;
@@ -69,6 +70,13 @@ function offer(presented, neighbors = true) {
 offer('B');
 globalThis.adjacentNavigation = {
     offer,
+    useIcons: () => {
+        icons = {
+            previous: h('svg', { viewBox: '0 0 16 16' }, h('path', { d: 'M3 10l5-5 5 5' })),
+            next: h('svg', { viewBox: '0 0 16 16' }, h('path', { d: 'M3 6l5 5 5-5' })),
+        };
+        render();
+    },
     retainFocus: () => { heldFocus = document.activeElement; },
     unmount: () => { root.unmount(); },
     async resolve(index, accept) {
@@ -177,8 +185,23 @@ export async function checkPortalSidePanelNavigationBrowser({
         assert.equal((await report()).version, expectedReactVersion);
         assert.equal(await previous.getAttribute('type'), 'button');
         assert.equal(await next.getAttribute('type'), 'button');
+        assert.equal(await previous.textContent(), 'Précédent');
+        assert.equal(await next.textContent(), 'Suivant');
         await next.focus();
         await page.evaluate(() => globalThis.adjacentNavigation.retainFocus());
+        await page.evaluate(() => globalThis.adjacentNavigation.useIcons());
+        assert.equal((await report()).focused, true);
+        assert.equal(await previous.textContent(), '');
+        assert.equal(await next.textContent(), '');
+        const hiddenIcon = 'span[aria-hidden="true"] > svg path';
+        assert.equal(
+            await previous.locator(hiddenIcon).getAttribute('d'),
+            'M3 10l5-5 5 5'
+        );
+        assert.equal(
+            await next.locator(hiddenIcon).getAttribute('d'),
+            'M3 6l5 5 5-5'
+        );
 
         await next.press('Enter');
         await waitDismissals(1);

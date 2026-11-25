@@ -12,6 +12,9 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+const nativeInformationCirclePath =
+    'M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z';
+
 /** Synthetic presentation only: never calls a provider, Save or permissions API. */
 export async function checkFormTrackingBrowser({
     browser,
@@ -133,6 +136,16 @@ function App(){const[state,setState]=useState({readOnly:false,preview:false,isLa
         await page.goto(origin);
         await page.getByRole('alert').first().waitFor();
         assert.equal(await page.getByRole('alert').count(), 2);
+        const iconPaths = await page
+            .getByRole('alert')
+            .locator('.mx-sdk-form-tracking-icon > path')
+            .evaluateAll((paths) =>
+                paths.map((path) => path.getAttribute('d'))
+            );
+        assert.deepEqual(iconPaths, [
+            nativeInformationCirclePath,
+            nativeInformationCirclePath,
+        ]);
         assert.equal(await page.locator('#notices b').count(), 0);
         assert.equal(
             await page.getByRole('alert').nth(1).textContent(),

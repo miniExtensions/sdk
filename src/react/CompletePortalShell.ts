@@ -721,6 +721,38 @@ function Shell(props: CompletePortalShellProps) {
     const topbarPresentation = snapshot.header.layout === 'topbar' && !overlay;
     const topbarMenu =
         snapshot.header.menuInteraction === 'menu' && topbarPresentation;
+    const desktopMenuSelector =
+        'nav > ul > li > .mx-sdk-portal-group > .mx-sdk-portal-menu';
+    function sizeDesktopMenu(details: HTMLElement | null) {
+        if (!details || !nativeDesktopTopbar || !topbarPresentation) return;
+        const popup = details.querySelector<HTMLElement>(
+            ':scope > .mx-sdk-portal-menu'
+        );
+        const header = details.closest('header');
+        if (!header || !popup?.matches(desktopMenuSelector)) return;
+        popup.style.setProperty(
+            '--mx-portal-desktop-header-bottom',
+            `${Math.max(0, header.getBoundingClientRect().bottom)}px`
+        );
+    }
+    function focusNavigationControl(control: HTMLElement | undefined) {
+        if (!control) return;
+        const popup =
+            nativeDesktopTopbar && topbarMenu
+                ? control.closest<HTMLElement>(desktopMenuSelector)
+                : null;
+        if (!popup) {
+            control.focus();
+            return;
+        }
+        sizeDesktopMenu(popup.parentElement);
+        control.focus({ preventScroll: true });
+        const bounds = popup.getBoundingClientRect();
+        const row = control.getBoundingClientRect();
+        if (row.top < bounds.top) popup.scrollTop += row.top - bounds.top;
+        else if (row.bottom > bounds.bottom)
+            popup.scrollTop += row.bottom - bounds.bottom;
+    }
     function hoverItem(itemId: string, viewId: string | null) {
         if (accepted.current !== commandToken) return;
         props.onItemHover?.({
@@ -736,6 +768,7 @@ function Shell(props: CompletePortalShellProps) {
         if (!details) return;
         if (enter && !details.open) {
             details.dataset.hoverOpen = 'true';
+            sizeDesktopMenu(details);
             details.open = true;
         } else if (!enter && details.dataset.hoverOpen === 'true') {
             delete details.dataset.hoverOpen;
@@ -744,6 +777,7 @@ function Shell(props: CompletePortalShellProps) {
     }
     function summaryActivation(event: MouseEvent<HTMLElement>) {
         const details = event.currentTarget.closest('details');
+        if (details && !details.open) sizeDesktopMenu(details);
         if (topbarMenu && details?.dataset.hoverOpen === 'true') {
             delete details.dataset.hoverOpen;
             if (details.open) event.preventDefault();
@@ -807,14 +841,14 @@ function Shell(props: CompletePortalShellProps) {
             if (target.tagName === 'SUMMARY' && details) {
                 event.preventDefault();
                 delete details.dataset.hoverOpen;
+                sizeDesktopMenu(details);
                 details.open = true;
                 const controls = navigationControls(details).filter(
                     (node) => node !== target
                 );
-                (event.key === 'ArrowDown'
-                    ? controls[0]
-                    : controls.at(-1)
-                )?.focus({ preventScroll: nativeDesktopTopbar });
+                focusNavigationControl(
+                    event.key === 'ArrowDown' ? controls[0] : controls.at(-1)
+                );
                 return;
             }
             if (details) delete details.dataset.hoverOpen;
@@ -855,10 +889,7 @@ function Shell(props: CompletePortalShellProps) {
                     controls.length;
         if (controls[next]) {
             event.preventDefault();
-            controls[next]!.focus({
-                preventScroll:
-                    nativeDesktopTopbar && topbarMenu && popup != null,
-            });
+            focusNavigationControl(controls[next]);
         }
     }
     // Fixed native lucide-react0.417 Settings outline; installed ISC notice retained.

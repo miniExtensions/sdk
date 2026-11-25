@@ -724,6 +724,50 @@
         margin: 0;
         background: var(--mx-portal-background);
     }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap {
+        align-self: stretch;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar.mx-sdk-portal-shell--layout-actions
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        > .mx-sdk-portal-navigation {
+        height: 100%;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        .mx-sdk-portal-navigation
+        > nav {
+        padding-block: 0;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        > .mx-sdk-portal-navigation
+        > nav
+        > ul {
+        height: 100%;
+        align-items: stretch;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar > header nav > ul > li {
+        display: flex;
+        align-items: center;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        nav
+        > ul
+        > li
+        > .mx-sdk-portal-group
+        > .mx-sdk-portal-menu {
+        max-block-size: max(
+            0px,
+            calc(100dvh - var(--mx-portal-desktop-header-bottom, 4rem))
+        );
+        overflow-y: auto;
+    }
     :is(
             .mx-sdk-portal-shell--native-topbar,
             .mx-sdk-portal-shell--native-desktop-topbar

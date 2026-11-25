@@ -532,3 +532,108 @@
     border-radius: 50%;
     background: #ef4444;
 }
+
+/* The native top bar reserves one row for the brand, navigation and actions. */
+.mx-sdk-portal-shell--native-topbar > .mx-sdk-portal-header {
+    position: relative;
+    z-index: 30;
+    height: 4rem;
+    padding: 0 1rem;
+    flex-wrap: nowrap;
+    border-bottom: 0;
+    box-shadow:
+        0 1px 3px #0000001a,
+        0 1px 2px -1px #0000001a;
+}
+.mx-sdk-portal-shell--native-topbar > .mx-sdk-portal-content {
+    padding-block-start: 0;
+}
+.mx-sdk-portal-shell--native-topbar > header > .mx-sdk-portal-brand > div {
+    min-width: 0;
+}
+.mx-sdk-portal-shell--native-topbar
+    > header
+    > .mx-sdk-portal-brand
+    .mx-sdk-portal-title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.mx-sdk-portal-shell--native-topbar > header > .mx-sdk-portal-toggle {
+    flex: none;
+    padding: 0.5rem;
+    border: 0;
+}
+@media (min-width: 640px) {
+    .mx-sdk-portal-shell--native-topbar > .mx-sdk-portal-header {
+        padding-inline: 1.5rem;
+    }
+    .mx-sdk-portal-shell--native-topbar > header > .mx-sdk-portal-brand {
+        max-width: min(32rem, 40%);
+    }
+    .mx-sdk-portal-shell--native-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap {
+        display: block;
+        flex: 1 1 auto;
+        position: static;
+        inset: auto;
+        border: 0;
+        background: transparent;
+    }
+    .mx-sdk-portal-shell--native-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        > .mx-sdk-portal-navigation {
+        width: auto;
+        height: auto;
+        min-height: 0;
+        padding: 0;
+        overflow: visible;
+    }
+    .mx-sdk-portal-shell--native-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        > .mx-sdk-portal-navigation
+        > nav
+        > ul {
+        width: max-content;
+        min-width: 100%;
+        flex-flow: row nowrap;
+        white-space: nowrap;
+        justify-content: center;
+        align-items: center;
+    }
+    .mx-sdk-portal-shell--native-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        .mx-sdk-portal-navigation
+        > nav {
+        overflow-x: auto;
+        padding-block: 0.25rem;
+    }
+    .mx-sdk-portal-shell--native-topbar
+        > header
+        > .mx-sdk-portal-navigation-wrap
+        .mx-sdk-portal-navigation
+        > nav
+        > ul
+        > li
+        > .mx-sdk-portal-group
+        > .mx-sdk-portal-menu {
+        position: absolute;
+        inset-block-start: 100%;
+        z-index: 1;
+        margin: 0;
+        background: var(--mx-portal-background);
+    }
+    .mx-sdk-portal-shell--native-topbar > header > .mx-sdk-portal-actions {
+        flex: none;
+        flex-wrap: nowrap;
+    }
+}
+@media (min-width: 1024px) {
+    .mx-sdk-portal-shell--native-topbar > .mx-sdk-portal-header {
+        padding-inline: 2rem;
+    }
+}

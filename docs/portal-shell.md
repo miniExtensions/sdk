@@ -423,6 +423,9 @@ header actions, untruncated header description and 1024px responsive breakpoint.
 `header.actionsPlacement: 'layout'` places the whole Search Again/user group
 after sidebar navigation. Topbars keep it in the header from 640px upward and
 put it after mobile menu rows below 640px. Sidebar navigation uses 1024px.
+
+With layout actions, set `header.topbarLayout: 'native'` for the native single-row top bar with a plain visitor title. HTML titles, logos, descriptions and authoring controls retain their existing presentation. At 640px and above the title, menu and available actions share a 64px row. Below 640px the accessible menu opener opens the existing drawer. The host body begins below that row. Sidebar, hidden headers and consumers omitting the option keep their existing layout.
+
 Empty menus retain the configured container; `hideMenuItems` withholds menu
 rows without discarding explicitly placed utility actions or descriptions.
 The native adapter still decides which headerless controls are available.

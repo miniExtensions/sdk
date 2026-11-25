@@ -146,6 +146,7 @@
 @media (min-width: 640px) {
     .mx-sdk-address-options {
         font-size: 0.875rem;
+        line-height: 1.25rem;
     }
 }
 @media (prefers-reduced-motion: reduce) {

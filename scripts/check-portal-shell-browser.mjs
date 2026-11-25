@@ -262,22 +262,26 @@ async function navigationCompatibility(browser, origin, label) {
         await page.setViewportSize({ width: 375, height: 900 });
         const accountTrigger = user.locator('summary');
         const accountPanel = user.locator(':scope > div');
-        const drawer = page.getByRole('dialog');
-        await accountTrigger.press('ArrowDown');
-        const naturalPanel = await accountPanel.evaluate((node) => {
-            const bounds = node.getBoundingClientRect();
-            const trigger = node.previousElementSibling.getBoundingClientRect();
-            return {
-                height: bounds.height,
-                opensBelow: bounds.top >= trigger.bottom,
-            };
+        const accountActions = page.locator(
+            '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+        );
+        await accountActions.evaluate((node) => {
+            node.style.marginBlockEnd = '128px';
         });
-        assert.equal(naturalPanel.opensBelow, true);
+        await accountTrigger.press('ArrowDown');
+        assert.equal(
+            await accountPanel.evaluate(
+                (node) =>
+                    node.getBoundingClientRect().top >=
+                    node.previousElementSibling.getBoundingClientRect().bottom
+            ),
+            true,
+            'The account menu opens below when there is room'
+        );
         await page.keyboard.press('Escape');
-        await accountTrigger.evaluate((trigger, height) => {
-            const navigation = trigger.closest('.mx-sdk-portal-navigation');
-            navigation.style.height = `${trigger.getBoundingClientRect().bottom - navigation.getBoundingClientRect().top + height - 16}px`;
-        }, naturalPanel.height);
+        await accountActions.evaluate((node) =>
+            node.style.removeProperty('margin-block-end')
+        );
         await accountTrigger.press('ArrowDown');
         const accountPlacement = await accountPanel.evaluate((panel) => {
             const bounds = (node) => {
@@ -331,7 +335,6 @@ async function navigationCompatibility(browser, origin, label) {
             );
         });
         await page.keyboard.press('Escape');
-        await drawer.evaluate((node) => node.style.removeProperty('height'));
         await openView.focus();
         await page.keyboard.press('Escape');
         assert.equal(await page.getByRole('dialog').count(), 0);

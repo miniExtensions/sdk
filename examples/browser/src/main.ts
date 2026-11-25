@@ -1305,6 +1305,17 @@ const renderForm = (page: FormLoadedResult): void => {
         updateValidationPresentation();
         updateRecoveryReferences();
     };
+    const directLinkedChildren =
+        !page.payload.hasParentExtension &&
+        context.type === 'direct-url' &&
+        visitor.root === null &&
+        visitor.formParentScope === null;
+    const portalLinkedEdit =
+        page.payload.hasParentExtension &&
+        page.payload.formRecord.type === 'edit' &&
+        context.type === 'modal' &&
+        visitor.formParentScope !== null &&
+        visitor.formAuthority !== null;
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
         if (schema == null) continue;
@@ -1406,14 +1417,12 @@ const renderForm = (page: FormLoadedResult): void => {
         if (
             bindingOwner != null &&
             schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS &&
-            page.payload.hasParentExtension === false &&
-            context.type === 'direct-url' &&
-            visitor.root === null &&
-            visitor.formParentScope === null &&
             config != null &&
-            (('allowCreatingRecords' in config &&
+            ((directLinkedChildren &&
+                'allowCreatingRecords' in config &&
                 config.allowCreatingRecords === true) ||
-                ('allowEditingRecords' in config &&
+                ((directLinkedChildren || portalLinkedEdit) &&
+                    'allowEditingRecords' in config &&
                     config.allowEditingRecords === true))
         ) {
             const configuration = observeNavigationConfiguration();

@@ -71,7 +71,13 @@ try {
         consumer
     );
     await build({
-        entryPoints: [join(root, 'test/formLinkedChildFixtures.ts')],
+        stdin: {
+            contents: `
+                export * from './test/formLinkedChildFixtures.ts';
+                export { portalPage, portalListPage } from './test/portalFixtures.ts';
+            `,
+            resolveDir: root,
+        },
         bundle: true,
         platform: 'node',
         format: 'esm',

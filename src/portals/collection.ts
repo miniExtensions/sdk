@@ -3,6 +3,7 @@ import type {
     ListPortalLinkedRecordsInput,
     RuntimeSession,
 } from '../runtime/types.js';
+import { issuePortalChildFormRequest } from './childFormRequest.js';
 import {
     captureCriteria,
     capturePage,
@@ -401,7 +402,13 @@ export const createPortalCollection = (
             };
             requireCurrent(observed);
             if (!current()) throw lifecycleError();
-            return plan;
+            return issuePortalChildFormRequest(plan, {
+                client,
+                workspaceId: metadata.workspaceId,
+                baseId: metadata.baseId,
+                session: session!,
+                expired: lifecycleError,
+            });
         },
         destroy: () => {
             if (phase !== 'disposed') retire('disposed');

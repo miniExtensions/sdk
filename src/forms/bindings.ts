@@ -15,6 +15,7 @@ import {
     type FormAttachmentControllerOptions,
 } from './attachmentController.js';
 import type { AirtableValue, FormLoadedResult } from '../runtime/types.js';
+import { capturePortalProjectEdit } from '../portals/childFormRequest.js';
 import { createSelectionModel } from '../ui/model.js';
 import { guardFormLinkedRecordPage } from '../ui/linkedRecordPages.js';
 import { createSelectFieldModel } from '../ui/selectModel.js';
@@ -56,7 +57,10 @@ import {
     type FormLinkedChildOwner,
     type FormLinkedChildRecovery,
 } from './linkedChild.js';
-import { withFormWriteAdmission } from './writeAdmission.js';
+import {
+    guardFormControllerMutations,
+    withFormWriteAdmission,
+} from './writeAdmission.js';
 import {
     registerLinkedRecordOpenHistory,
     type LinkedRecordOpenHistory,
@@ -200,6 +204,14 @@ export function createFormFieldBindings(
     initial: FormFieldBindingsOptions
 ): FormFieldBindings {
     let options = initial;
+    let portalEditCurrent =
+        initial.saveOptions.context.type === 'modal'
+            ? capturePortalProjectEdit(
+                  initial.loaded,
+                  initial.client,
+                  initial.parent
+              )
+            : null;
     let readingLinkedOpenAuthority = false;
     const readLinkedOpenAuthority = () => {
         if (readingLinkedOpenAuthority) return null;
@@ -718,6 +730,7 @@ export function createFormFieldBindings(
                     configurationRevision: () =>
                         options.configurationRevision?.() ?? 0,
                     parentCurrent: () => current(),
+                    portalEditCurrent,
                     canAccept: () =>
                         fieldLease() &&
                         [...retainedChildren].every(
@@ -728,12 +741,19 @@ export function createFormFieldBindings(
                         [...retainedChildren].every(
                             (other) => other === model || !other.blocksForm()
                         ),
-                    createChild: (child) =>
-                        createFormFieldBindings({
+                    createChild: (child) => {
+                        const fields = createFormFieldBindings({
                             ...child,
                             client: options.client,
                             getScope: () => options.getScope(),
-                        }),
+                        });
+                        if (child.canWrite)
+                            guardFormControllerMutations(
+                                fields.controller,
+                                child.canWrite
+                            );
+                        return fields;
+                    },
                     commit: (
                         value,
                         expectedDraftRevision,
@@ -1288,6 +1308,7 @@ export function createFormFieldBindings(
                     parent: options.parent,
                 });
                 store.discard(handle);
+                portalEditCurrent = null;
                 loaded = fresh;
                 originalLinkedRecordData = freshOriginalLinkedRecordData;
                 options = {

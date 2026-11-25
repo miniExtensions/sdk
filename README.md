@@ -686,8 +686,9 @@ One deliberate **Confirm** validates all pages and saves once through the
 existing child owner. Saving the parent remains a separate action. Custom
 applications must supply the existing page-owner Review adapter to the
 linked-child owner; configured child Review without an adapter remains refused.
-Computed-field Review, automatic workflows, Compute and CAPTCHA remain
-unsupported. Portal-parent and nested child actions remain outside this adapter.
+The starter also supports selected Related Edit from a current Portal Edit
+Form. Nested Create, further child actions, computed-field Review, automatic
+workflows, Compute and CAPTCHA remain unsupported.
 
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)

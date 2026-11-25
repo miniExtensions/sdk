@@ -28,6 +28,7 @@ import {
     validationError,
 } from './formLinkedChildFixtures.js';
 import { formSaveOptions, loadedForm } from './formsFixtures.js';
+import { portalListPage, portalPage } from './portalFixtures.js';
 
 type Element = InstanceType<Window['HTMLElement']>;
 // The bundle executes the shipped helper. Describe its adapter boundary here so
@@ -1397,6 +1398,182 @@ describe('browser starter standalone linked-child integration', () => {
 });
 
 describe('actual starter root versus nested linked-child admission', () => {
+    it('closes a Portal Project’s Related Edit and restores focus and both drafts without a write', async (test) => {
+        const portal = portalPage();
+        const project = configuredParent(true);
+        project.extensionId = 'extension_child';
+        project.workspaceId = portal.workspaceId;
+        project.payload.baseId = portal.payload.baseId;
+        project.payload.extensionName = 'Project';
+        project.payload.publicFields.state.tableId = 'table_children';
+        assert.equal(project.payload.formRecord.type, 'edit');
+        project.payload.formRecord.tableId = 'table_children';
+        const projectId = project.payload.formRecord.recordId;
+        const calls: string[] = [];
+        const fetch: typeof globalThis.fetch = async (resource, init) => {
+            const url = new URL(String(resource));
+            assert.equal(url.origin, 'https://sdk.example.test');
+            const route = url.searchParams.get('route') ?? url.pathname;
+            calls.push(route);
+            if (route === 'fetchExtensionForEndUser') {
+                const input: LoadExtensionInput = JSON.parse(
+                    String(init?.body)
+                );
+                if (!('childExtensionInfo' in input))
+                    return Response.json(portal);
+
+                assert.equal(input.context.type, 'modal');
+                const { childExtensionId, accessType } =
+                    input.childExtensionInfo;
+                assert.equal(accessType.type, 'edit');
+                if (childExtensionId === project.extensionId) {
+                    assert.equal(accessType.childExtensionRecordId, projectId);
+                    assert.deepEqual(input.childExtensionAccessData, {
+                        parentExtensionAccessToken:
+                            portal.payload.extensionAccessToken,
+                        fieldIdUsedToAccessExtension: 'fld_children',
+                    });
+                    return Response.json(project);
+                }
+
+                assert.equal(childExtensionId, 'form_child_synthetic');
+                assert.equal(accessType.childExtensionRecordId, 'rec_existing');
+                assert.deepEqual(input.childExtensionAccessData, {
+                    parentExtensionAccessToken:
+                        project.payload.extensionAccessToken,
+                    fieldIdUsedToAccessExtension: fieldId,
+                });
+                const related = loadedChild(input);
+                related.workspaceId = project.workspaceId;
+                related.payload.baseId = project.payload.baseId;
+                return Response.json(related);
+            }
+            if (route === 'fetchRecordsForLinkedTableOnPortal')
+                return Response.json(
+                    portalListPage({
+                        recordIds: [projectId],
+                        tableIdsToLinkedTableStates: {
+                            table_children: {
+                                airtableFields: [
+                                    project.payload.fieldIdsToSchemas.fld_title
+                                        .airtableField,
+                                ],
+                                recordIdsToAirtableRecords: {
+                                    [projectId]: {
+                                        id: projectId,
+                                        fields: project.payload.formRecord.data,
+                                    },
+                                },
+                            },
+                        },
+                    })
+                );
+            if (
+                route ===
+                '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+            )
+                return Response.json({
+                    result: { data: selectedRecords(project) },
+                });
+            assert.fail(`Unexpected synthetic request: ${route}`);
+        };
+
+        const window = await environment(test, fetch, true);
+        await import(
+            `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+        );
+        const origin = window.document.getElementById('api-origin');
+        const share = window.document.getElementById('share-id');
+        assert.ok(origin instanceof window.HTMLInputElement);
+        assert.ok(share instanceof window.HTMLInputElement);
+        origin.value = 'https://sdk.example.test';
+        share.value = 'share_synthetic_portal';
+        const connectionForm =
+            window.document.getElementById('connection-form');
+        const screen = window.document.getElementById('screen');
+        assert.ok(connectionForm instanceof window.HTMLElement);
+        assert.ok(screen instanceof window.HTMLElement);
+        connectionForm.dispatchEvent(
+            new window.Event('submit', { bubbles: true, cancelable: true })
+        );
+        const body = window.document.body;
+        const idle = () => screen.getAttribute('aria-busy') === 'false';
+        await waitFor(
+            () => idle() && buttons(screen, 'Load records').length === 1
+        );
+        button(screen, 'Load records').click();
+        await waitFor(
+            () => idle() && buttons(screen, 'Open Form').length === 1
+        );
+        button(screen, 'Open Form').click();
+        await waitFor(
+            () =>
+                idle() && buttons(screen, 'Load selected records').length === 1
+        );
+
+        const title = edit(
+            window,
+            screen,
+            'fld_title',
+            'Unsaved Project title'
+        );
+        const links = screen.querySelector(`[data-field-id="${fieldId}"]`);
+        assert.ok(links instanceof window.HTMLTextAreaElement);
+        const linkedIds = JSON.parse(links.value);
+        assert.equal(buttons(screen, 'Create linked record').length, 0);
+        button(screen, 'Load selected records').click();
+        const editLabel = 'Edit linked record rec_existing';
+        await waitFor(() => idle() && buttons(screen, editLabel).length === 1);
+        const opener = button(screen, editLabel);
+        opener.focus();
+        assert.equal(window.document.activeElement, opener);
+        opener.click();
+
+        const dialogSelector = 'dialog[aria-label="Edit linked record"][open]';
+        await waitFor(
+            () => idle() && body.querySelector(dialogSelector) !== null
+        );
+        const dialog = body.querySelector(dialogSelector);
+        assert.ok(dialog instanceof window.HTMLDialogElement);
+        assert.equal(
+            window.document.activeElement,
+            button(dialog, 'Close child')
+        );
+        edit(window, dialog, 'fld_title', 'Unsaved Related title');
+
+        // Escape reaches the existing native dialog cancel event.
+        dialog.dispatchEvent(new window.Event('cancel', { cancelable: true }));
+        await waitFor(() => buttons(body, 'Keep editing').length === 1);
+        assert.equal(
+            window.document.activeElement,
+            button(body, 'Keep editing')
+        );
+        button(body, 'Confirm close').click();
+        await waitFor(() => body.querySelector(dialogSelector) === null);
+        assert.equal(button(screen, editLabel), opener);
+        assert.equal(window.document.activeElement, opener);
+        assert.equal(title.value, 'Unsaved Project title');
+        assert.deepEqual(JSON.parse(links.value), linkedIds);
+
+        opener.click();
+        await waitFor(
+            () => idle() && body.querySelector(dialogSelector) !== null
+        );
+        const reopened = body.querySelector(dialogSelector);
+        const childTitle = reopened?.querySelector(
+            '[data-field-id="fld_title"]'
+        );
+        assert.ok(childTitle instanceof window.HTMLInputElement);
+        assert.equal(childTitle.value, 'Unsaved Related title');
+        assert.deepEqual(calls, [
+            'fetchExtensionForEndUser',
+            'fetchRecordsForLinkedTableOnPortal',
+            'fetchExtensionForEndUser',
+            '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates',
+            'fetchExtensionForEndUser',
+        ]);
+    });
+
     for (const scenario of [
         'one-page',
         'multi-page',

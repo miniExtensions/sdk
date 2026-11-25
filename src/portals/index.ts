@@ -1,4 +1,5 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
+export { loadPortalChildForm } from './childFormRequest.js';
 export { createNativePortalCollectionKernel } from './nativeCollectionKernel.js';
 export { runNativePortalCollectionRead } from './nativeCollectionHost.js';
 export type {

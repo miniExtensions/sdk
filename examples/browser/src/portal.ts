@@ -24,6 +24,7 @@ import {
     createPortalCellBinding,
     type PortalCellBinding,
     getPortalLinkedRecordFieldConfig,
+    loadPortalChildForm,
     evaluatePortalViewAvailability,
     type PortalCollection,
     type PortalCollectionSnapshot,
@@ -940,9 +941,9 @@ export const createPortalView = (options: {
                     collection === owner &&
                     plan.isCurrent();
                 if (!accepted() || client !== options.client) return;
-                const loaded = await client.loadExtension(plan.input, {
-                    signal,
-                });
+                const loaded = creating
+                    ? await client.loadExtension(plan.input, { signal })
+                    : await loadPortalChildForm(plan, { signal });
                 if (!accepted()) return;
                 if (loaded.extensionScreen !== 'form_loaded')
                     throw new Error(

@@ -12,6 +12,118 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+async function readNativeReadonlyForm(page) {
+    const specimens = page.locator('[data-readonly-sample]');
+    const painted = await specimens.evaluateAll((nodes) =>
+        nodes.map((node) => {
+            const root = node.querySelector(
+                '.mx-sdk-select[data-readonly-dropdown-layout="native-form"]'
+            );
+            const name = node.querySelector('label');
+            if (!root || !name) throw Error('Missing readonly Form fixture');
+            const box = root.getBoundingClientRect();
+            const holder = root.querySelector('.mx-sdk-select-dropdown');
+            const badge = root.querySelector('.mx-sdk-select-badge');
+            const blank = root.querySelector(
+                '[data-testid="no-value-test-id"]'
+            );
+            const icon = blank?.querySelector('svg');
+            const font = (style) => [
+                style.fontSize,
+                style.lineHeight,
+                style.fontWeight,
+            ];
+            return {
+                height: box.height,
+                nameGap: name.getBoundingClientRect().top - box.bottom,
+                controls: root.querySelectorAll(
+                    'button,input,textarea,select,[tabindex],a[href],[contenteditable="true"]'
+                ).length,
+                selected:
+                    holder && badge
+                        ? {
+                              border: getComputedStyle(holder).borderTop,
+                              holderRadius:
+                                  getComputedStyle(holder).borderRadius,
+                              holderWidth:
+                                  holder.getBoundingClientRect().width ===
+                                  box.width,
+                              badgeRadius: getComputedStyle(badge).borderRadius,
+                              inset:
+                                  badge.getBoundingClientRect().left - box.left,
+                              height: badge.getBoundingClientRect().height,
+                              font: font(getComputedStyle(badge)),
+                              color: getComputedStyle(badge).color,
+                              background:
+                                  getComputedStyle(badge).backgroundColor,
+                              title: badge.title,
+                              text: badge.textContent,
+                          }
+                        : null,
+                empty:
+                    blank && icon
+                        ? {
+                              font: font(getComputedStyle(blank)),
+                              color: getComputedStyle(blank).color,
+                              text: blank.textContent,
+                              icon: {
+                                  width: icon.getBoundingClientRect().width,
+                                  height: icon.getBoundingClientRect().height,
+                                  color: getComputedStyle(icon).color,
+                                  margin: getComputedStyle(icon).marginRight,
+                                  hidden: icon.getAttribute('aria-hidden'),
+                              },
+                          }
+                        : null,
+            };
+        })
+    );
+    const form = page.locator('[data-readonly-form]');
+    await form.evaluate((node) => {
+        node.dataset.trustedTabs = '';
+        node.addEventListener('keydown', (event) => {
+            if (event.key === 'Tab')
+                node.dataset.trustedTabs += event.isTrusted ? 'T' : 'F';
+        });
+    });
+    await form
+        .getByRole('button', { name: 'Before Status', exact: true })
+        .focus();
+    const names = form.getByRole('textbox', { name: 'Name', exact: true });
+    const tabs = [];
+    for (const name of await names.all()) {
+        await page.keyboard.press('Tab');
+        tabs.push(
+            await name.evaluate((node) => node === document.activeElement)
+        );
+        assert.equal(await name.inputValue(), 'Synthetic Status record');
+    }
+    assert.deepEqual(tabs, [true, true]);
+    assert.equal(await form.getAttribute('data-trusted-tabs'), 'TT');
+
+    const guards = page.locator('[data-readonly-guards]');
+    assert.equal(
+        await guards.locator('[data-readonly-dropdown-layout]').count(),
+        0
+    );
+    assert.equal(
+        await guards
+            .locator('[data-dropdown-guard="editable"]')
+            .getByRole('combobox')
+            .count(),
+        1
+    );
+    assert.equal(
+        await guards
+            .locator('[data-dropdown-guard="list"]')
+            .getByRole('radio')
+            .isDisabled(),
+        true
+    );
+    assert.equal(await guards.locator('[title="In progress"]').count(), 7);
+    return { painted, tabs };
+}
+
 // Synthetic controlled host, installed public entry points, actual browser input.
 // Canonical state and deferred metadata remain host-owned; no provider is called.
 export async function checkControlledSelectBrowser({
@@ -79,6 +191,42 @@ function App(){
  const singleOwner={token:scope,isCurrent:()=>owner.isCurrent()&&canonicalSingle.current===state.single};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
+ if (new URLSearchParams(location.search).has('native-readonly-dropdown')) {
+    const status = { id: 'status-in-progress', name: 'In progress', backgroundColor: '#ffeab6', color: '#374151' };
+    const dropdown = {
+        ...common, choices: [status], availableChoices: [status], presentation: 'dropdown',
+        readOnly: true, readOnlyDropdownLayout: 'native-form', labels: { empty: 'No Selection' },
+        onValueChange: value => writes.push({ kind: 'readonly-value', value }),
+        publishMetadata: choice => writes.push({ kind: 'readonly-metadata', choice }),
+    };
+    const guards = [
+        ['default', SingleSelectField, { value: status.name, readOnlyDropdownLayout: undefined }],
+        ['disabled', SingleSelectField, { value: status.name, readOnly: false, disabled: true }],
+        ['editable', SingleSelectField, { value: status.name, readOnly: false }],
+        ['list', SingleSelectField, { value: status.name, presentation: 'list' }],
+        ['multiple', MultipleSelectsField, { value: [status.name] }],
+        ['grid', SingleSelectField, { value: status.name, isInGrid: true }],
+        ['filter', SingleSelectField, { value: status.name, dropdownStyle: 'portal-filter' }],
+    ];
+    return h('form', {
+        id: 'select-form', style: { maxWidth: '38rem', margin: '0 auto', font: '400 16px/24px system-ui, sans-serif' },
+        onSubmit: event => { event.preventDefault(); submits++; },
+    },
+        h('div', { 'data-readonly-form': '' },
+            h('button', { type: 'button' }, 'Before Status'),
+            ...[status.name, null].map((value, index) => h('section', { 'data-readonly-sample': '', key: index },
+                h('div', null, 'Status'),
+                h(SingleSelectField, { ...dropdown, value }),
+                h('label', { style: { display: 'block', marginTop: '24px' } },
+                    'Name', h('input', { defaultValue: 'Synthetic Status record' })
+                )
+            ))
+        ),
+        h('div', { 'data-readonly-guards': '' }, ...guards.map(([scope, Field, options]) =>
+            h('section', { key: scope, 'data-dropdown-guard': scope }, h(Field, { ...dropdown, ...options }))
+        ))
+    );
+ }
  if(new URLSearchParams(location.search).has('long-badge')){
     const dropdownChoices=[{...choices[0],displayName:${JSON.stringify(longLabel)}},{...choices[1],displayName:'Short'},choices[2]];
     return h('form',{id:'select-form',style:{maxWidth:'42rem',fontFamily:'system-ui, sans-serif',lineHeight:'24px'},onSubmit:event=>{event.preventDefault();submits++;}},
@@ -587,6 +735,66 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                     ),
                 });
             }
+            presentation.nativeReadonlyDropdown = [];
+            for (const width of [375, 1280]) {
+                await page.setViewportSize({ width, height: 640 });
+                await page.goto(
+                    origin + '/?format=' + format + '&native-readonly-dropdown'
+                );
+                await page
+                    .getByRole('button', { name: 'Before Status', exact: true })
+                    .waitFor();
+                const layout = await readNativeReadonlyForm(page);
+                assert.deepEqual(layout.painted, [
+                    {
+                        height: 42,
+                        nameGap: 24,
+                        controls: 0,
+                        selected: {
+                            border: '1px solid rgb(209, 213, 219)',
+                            holderRadius: '8px',
+                            holderWidth: true,
+                            badgeRadius: '9999px',
+                            inset: 13,
+                            height: 24,
+                            font: ['14px', '20px', '500'],
+                            color: 'rgb(55, 65, 81)',
+                            background: 'rgb(255, 234, 182)',
+                            title: 'In progress',
+                            text: 'In progress',
+                        },
+                        empty: null,
+                    },
+                    {
+                        height: 20,
+                        nameGap: 24,
+                        controls: 0,
+                        selected: null,
+                        empty: {
+                            font: ['14px', '20px', '400'],
+                            text: 'No Selection',
+                            color: 'rgb(107, 114, 128)',
+                            icon: {
+                                width: 16,
+                                height: 16,
+                                margin: '4px',
+                                color: 'rgb(156, 163, 175)',
+                                hidden: 'true',
+                            },
+                        },
+                    },
+                ]);
+                const observed = await snapshot();
+                assert.deepEqual(observed.writes, []);
+                assert.equal(observed.submits, 0);
+                presentation.nativeReadonlyDropdown.push({ width, ...layout });
+                await page.locator('[data-readonly-form]').screenshot({
+                    path: join(
+                        output,
+                        `controlled-select-readonly-form-${format}-${width}.png`
+                    ),
+                });
+            }
             evidence.results.push({
                 format,
                 synchronousCanonicalEcho,
@@ -600,7 +808,7 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; synchronous value-bound canonical owner echo with one Enter writer and settled search/menu, deferred metadata order, caps/radios, action spacing and wrapped layout, themed list inputs, keyboard focus and disabled actions, cancelled prompt and one Clear, readonly grid events, sentinel and explicit submit. No native Form/provider claim.';
+            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, caps/radios, spacing, keyboard focus, Clear, readonly Grid events, and native Form readonly dropdown appearance/inertness. Synthetic host and explicit submit sentinel.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

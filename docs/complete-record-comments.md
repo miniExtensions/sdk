@@ -66,6 +66,8 @@ backdrop and Escape stay available during a send. The SDK owns named-dialog
 semantics, focus containment/restoration and the 42rem/80vh header/body/footer
 layout. Theme CSS variables, desktop messenger inset and z-index are optional
 plain presentation inputs. No private native context is required.
+Use `appearance: 'native'` for the native Form layout, including the responsive
+composer and theme-500 textarea focus ring. Omit `appearance` for portable styling.
 When a transient menu item opens the dialog, pass its stable invoker ref as
 `returnFocusTo`; the SDK captures that target at opening and restores it only
 while it remains connected.

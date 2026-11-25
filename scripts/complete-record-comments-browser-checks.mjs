@@ -53,11 +53,14 @@ import {flushSync} from 'react-dom';
 import {CompleteRecordCommentsDialog,recordCommentsLabels} from '@miniextensions/sdk/react';
 import {createRecordCommentsController} from '@miniextensions/sdk/ui';
 const mode=new URLSearchParams(location.search).get('mode');
+const nativeAppearance=mode==='native-empty'||mode==='native-send-error';
+const emptyHistory=nativeAppearance||mode==='portable-empty';
+const stableInvoker=emptyHistory||mode==='stable-invoker';
 const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,openSecond;
 const labels=mode==='spanish'?{...recordCommentsLabels,title:'Comentarios',addComment:'Añadir comentario',send:'Enviar',close:'Cerrar'}:mode==='literal'?{...recordCommentsLabels,title:'<Comentarios>'}:recordCommentsLabels;
-function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:40},(_,index)=>({id:String(index),text:'Literal row '+index+' @[missing]',createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
+function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:emptyHistory?0:40},(_,index)=>({id:String(index),text:'Literal row '+index+' @[missing]',createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='native-send-error')throw new Error('Synthetic append failure');if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
 const first=controller('captured-A'),second=controller('captured-B');
-function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,mode==='stable-invoker'?h('button',{ref:invoker},'Record options'):null,mode==='stable-invoker'&&open?null:h('button',{onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,returnFocusTo:mode==='stable-invoker'?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
+function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,stableInvoker?h('button',{ref:invoker},'Record options'):null,stableInvoker&&open?null:h('button',{onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,...(nativeAppearance?{appearance:'native'}:{}),returnFocusTo:stableInvoker?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),openSecond:()=>openSecond()};
 `;
@@ -128,10 +131,10 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
                 })
         );
         const origin = 'http://127.0.0.1:' + server.address().port;
-        async function open(mode, width = 1280) {
+        async function open(mode, width = 1280, height = 800) {
             if (context) await context.close();
             context = await browser.newContext({
-                viewport: { width, height: 800 },
+                viewport: { width, height },
             });
             await context.route('**/*', (route) => {
                 const url = new URL(route.request().url());
@@ -148,6 +151,22 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
                 evidence.pageErrors.push(error.message)
             );
             await page.goto(origin + '/?mode=' + mode);
+            if (mode.endsWith('-empty')) {
+                await page.evaluate(() => {
+                    window.commentsKeys = [];
+                    window.addEventListener(
+                        'keydown',
+                        (event) => {
+                            if (event.key === 'Tab' || event.key === 'Escape')
+                                window.commentsKeys.push({
+                                    key: event.key,
+                                    trusted: event.isTrusted,
+                                });
+                        },
+                        true
+                    );
+                });
+            }
             await page
                 .getByRole('button', { name: 'Open comments', exact: true })
                 .click();
@@ -248,6 +267,147 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
         evidence.results.push({
             group: 'temporary-activation-stable-return-focus',
         });
+
+        for (const width of [375, 1280]) {
+            for (const appearance of ['native', 'portable']) {
+                await open(`${appearance}-empty`, width, 640);
+                const dialog = page.getByRole('dialog', {
+                    name: 'Comments',
+                    exact: true,
+                });
+                const prompt = dialog.getByText('No comments on this record', {
+                    exact: true,
+                });
+                const textarea = dialog.getByRole('textbox', {
+                    name: 'Add a comment',
+                });
+                const send = dialog.getByRole('button', { name: 'Send' });
+                await prompt.waitFor();
+                assert.equal(await textarea.inputValue(), '');
+                assert.equal(await send.isDisabled(), true);
+                const geometry = await dialog.evaluate((node) => {
+                    const panel = node.querySelector('.mx-sdk-comments-panel');
+                    const prompt = node.querySelector('.mx-sdk-comments-empty');
+                    const textarea = node.querySelector('textarea');
+                    const send = node.querySelector('.mx-sdk-comments-send');
+                    const style = getComputedStyle(textarea);
+                    return {
+                        appearance: node.getAttribute('data-appearance'),
+                        panel: panel.getBoundingClientRect().toJSON(),
+                        history:
+                            prompt.parentElement.getBoundingClientRect().height,
+                        promptLineHeight: getComputedStyle(prompt).lineHeight,
+                        fontSize: style.fontSize,
+                        lineHeight: style.lineHeight,
+                        textareaHeight: textarea.getBoundingClientRect().height,
+                        sendHeight: send.getBoundingClientRect().height,
+                    };
+                });
+                if (appearance === 'native') {
+                    assert.equal(geometry.history, 200);
+                    assert.equal(geometry.appearance, 'native');
+                    assert.equal(
+                        geometry.panel.width,
+                        width === 375 ? 311 : 672
+                    );
+                    assert.equal(geometry.promptLineHeight, '20px');
+                    assert.equal(
+                        geometry.fontSize,
+                        width === 375 ? '16px' : '14px'
+                    );
+                    assert.equal(
+                        geometry.lineHeight,
+                        width === 375 ? '24px' : '20px'
+                    );
+                    assert.equal(
+                        geometry.textareaHeight,
+                        width === 375 ? 66 : 58
+                    );
+                    assert.equal(geometry.sendHeight, geometry.textareaHeight);
+                } else {
+                    assert.equal(geometry.appearance, null);
+                    assert(geometry.history < 200);
+                    assert.equal(
+                        geometry.panel.width,
+                        width === 375 ? 343 : 672
+                    );
+                    assert(geometry.sendHeight < geometry.textareaHeight);
+                }
+                await page.keyboard.press('Tab');
+                await page.keyboard.press('Tab');
+                const focus = await textarea.evaluate((node) => {
+                    const style = getComputedStyle(node);
+                    return {
+                        active: node === document.activeElement,
+                        visible: node.matches(':focus-visible'),
+                        border: style.borderColor,
+                        outline: style.outlineColor,
+                        ring: style.boxShadow,
+                    };
+                });
+                assert(focus.active && focus.visible);
+                if (appearance === 'native') {
+                    assert.equal(focus.border, 'rgb(59, 130, 246)');
+                    assert.equal(focus.outline, 'rgba(0, 0, 0, 0)');
+                    assert.match(focus.ring, /rgb\(59, 130, 246\).*1px/);
+                } else {
+                    assert.equal(focus.outline, 'rgb(79, 70, 229)');
+                }
+                await page.keyboard.press('Escape');
+                assert.equal(await dialog.count(), 0);
+                assert.equal(
+                    await page
+                        .getByRole('button', { name: 'Record options' })
+                        .evaluate((node) => node === document.activeElement),
+                    true
+                );
+                const keys = await page.evaluate(() => window.commentsKeys);
+                assert.deepEqual(
+                    keys.map(({ key }) => key),
+                    ['Tab', 'Tab', 'Escape']
+                );
+                assert(keys.every(({ trusted }) => trusted));
+                const stats = await page.evaluate(() =>
+                    window.commentsProof.snapshot()
+                );
+                assert.equal(stats.reads.length, 1);
+                assert.deepEqual(stats.writes, []);
+                evidence.results.push({
+                    group: 'empty-composer-appearance',
+                    appearance,
+                    width,
+                    geometry,
+                    focus,
+                    keys,
+                });
+            }
+        }
+
+        await open('native-send-error', 375, 640);
+        const draft = page.getByRole('textbox', { name: 'Add a comment' });
+        const send = page.getByRole('button', { name: 'Send' });
+        await draft.fill('Retained draft');
+        await send.click();
+        const alert = page.getByRole('alert');
+        await alert.waitFor();
+        assert.equal(await alert.textContent(), 'Synthetic append failure');
+        assert.equal(await draft.inputValue(), 'Retained draft');
+        const draftBounds = await draft.boundingBox();
+        const sendBounds = await send.boundingBox();
+        const alertBounds = await alert.boundingBox();
+        assert.equal(draftBounds.y, sendBounds.y);
+        assert(alertBounds.y >= draftBounds.y + draftBounds.height);
+        assert.equal(alertBounds.x, draftBounds.x);
+        assert.equal(
+            alertBounds.x + alertBounds.width,
+            sendBounds.x + sendBounds.width
+        );
+        const failedSend = await page.evaluate(() =>
+            window.commentsProof.snapshot()
+        );
+        assert.equal(failedSend.writes.length, 1);
+        assert.deepEqual(failedSend.invalidations, []);
+        evidence.results.push({ group: 'native-composer-append-error' });
 
         await open('pending');
         await page.getByRole('textbox').fill('pending');

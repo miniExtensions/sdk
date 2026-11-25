@@ -17,6 +17,7 @@ import { build } from 'esbuild';
 import ts from 'typescript';
 import { chromium } from 'playwright';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { checkNativeTopbar } from './portal-shell-topbar-browser-checks.mjs';
 import { checkNativeSidebarOpener } from './portal-shell-sidebar-opener-browser-checks.mjs';
 
 const output = resolve(process.argv[2] ?? 'dist/portal-shell-browser');
@@ -2057,6 +2058,7 @@ try {
                         origin,
                         `${react}-${format}`
                     ),
+                    nativeTopbar: await checkNativeTopbar(browser, origin),
                     nativeSidebarOpener: await checkNativeSidebarOpener(
                         browser,
                         origin,

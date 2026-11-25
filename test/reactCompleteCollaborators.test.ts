@@ -1063,6 +1063,72 @@ for (const [name, props] of [
     });
 }
 
+it('uses native Form presentation only for an opted-in readonly Single', async (t) => {
+    const formPresentation = '.mx-sdk-complete-collaborators--readonly-form';
+    const emptyMarker = '[data-testid="no-value-test-id"]';
+    const src = '/_next/image?url=synthetic-avatar&w=32&q=75';
+    const f = await fixture(t, {
+        props: {
+            readOnly: true,
+            readOnlyVariant: 'form',
+            avatarPolicy: { type: 'source', getSource: () => ({ src }) },
+        },
+    });
+    const group = f.container.querySelector(formPresentation);
+    assert.ok(group);
+    const blank = group.querySelector(emptyMarker);
+    assert.ok(blank);
+    assert.equal(blank.textContent, labels.empty);
+    assert.equal(
+        blank.querySelector('svg')?.getAttribute('aria-hidden'),
+        'true'
+    );
+    assert.equal(
+        blank.querySelector('svg')?.getAttribute('fill'),
+        'currentColor'
+    );
+    assert.equal(blank.querySelectorAll('svg path').length, 1);
+    assert.equal(f.container.querySelector('input, button'), null);
+
+    f.state.single = first;
+    await f.render();
+    const badge = group.querySelector('.mx-sdk-collaborator-badge');
+    assert.ok(badge);
+    assert.equal(badge.textContent, first.name);
+    assert.equal(badge.querySelector('img')?.getAttribute('src'), src);
+    assert.equal(badge.querySelector('img')?.getAttribute('alt'), '');
+    assert.equal(group.querySelector(emptyMarker), null);
+    assert.equal(f.container.querySelector('input, button'), null);
+
+    f.state.props.readOnlyVariant = undefined;
+    await f.render();
+    assert.equal(f.container.querySelector(formPresentation), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-badge'),
+        badge
+    );
+    f.state.single = null;
+    await f.render();
+    assert.equal(f.container.querySelector(emptyMarker), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-collaborator-empty')?.textContent,
+        labels.empty
+    );
+
+    f.state.props.readOnlyVariant = 'form';
+    f.state.multiple = true;
+    await f.render();
+    assert.equal(f.container.querySelector(formPresentation), null);
+    assert.equal(f.container.querySelector(emptyMarker), null);
+
+    f.state.multiple = false;
+    f.state.props.readOnly = false;
+    await f.render();
+    assert.equal(f.container.querySelector(formPresentation), null);
+    assert.equal(f.input().disabled, false);
+    assert.equal(f.count(), 0);
+});
+
 it('readonly lookup occurrences remain literal, ordered, duplicate-preserving and action-free', async (t) => {
     const literal = { ...first, name: '<img src=x onerror=literal>' };
     const fallback = { ...second, name: '', email: '<b>email fallback</b>' };

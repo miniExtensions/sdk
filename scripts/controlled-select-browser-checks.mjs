@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
-async function readNativeReadonlyForm(page) {
+async function readNativeReadonlyForm(page, multiple) {
     const specimens = page.locator('[data-readonly-sample]');
     const painted = await specimens.evaluateAll((nodes) =>
         nodes.map((node) => {
@@ -24,6 +24,7 @@ async function readNativeReadonlyForm(page) {
             const box = root.getBoundingClientRect();
             const holder = root.querySelector('.mx-sdk-select-dropdown');
             const badge = root.querySelector('.mx-sdk-select-badge');
+            const selected = root.querySelector('.mx-sdk-select-selected');
             const blank = root.querySelector(
                 '[data-testid="no-value-test-id"]'
             );
@@ -58,6 +59,17 @@ async function readNativeReadonlyForm(page) {
                                   getComputedStyle(badge).backgroundColor,
                               title: badge.title,
                               text: badge.textContent,
+                              gap: getComputedStyle(selected).columnGap,
+                              badges: Array.from(
+                                  selected.querySelectorAll(
+                                      '.mx-sdk-select-badge'
+                                  ),
+                                  (pill) => ({
+                                      text: pill.textContent,
+                                      height: pill.getBoundingClientRect()
+                                          .height,
+                                  })
+                              ),
                           }
                         : null,
                 empty:
@@ -86,9 +98,11 @@ async function readNativeReadonlyForm(page) {
                 node.dataset.trustedTabs += event.isTrusted ? 'T' : 'F';
         });
     });
-    await form
-        .getByRole('button', { name: 'Before Status', exact: true })
-        .focus();
+    const before = form.getByRole('button', {
+        name: 'Before Status',
+        exact: true,
+    });
+    await before.focus();
     const names = form.getByRole('textbox', { name: 'Name', exact: true });
     const tabs = [];
     for (const name of await names.all()) {
@@ -99,7 +113,13 @@ async function readNativeReadonlyForm(page) {
         assert.equal(await name.inputValue(), 'Synthetic Status record');
     }
     assert.deepEqual(tabs, [true, true]);
-    assert.equal(await form.getAttribute('data-trusted-tabs'), 'TT');
+    for (const previous of [names.first(), before]) {
+        await page.keyboard.press('Shift+Tab');
+        assert(
+            await previous.evaluate((node) => node === document.activeElement)
+        );
+    }
+    assert.equal(await form.getAttribute('data-trusted-tabs'), 'TTTT');
 
     const guards = page.locator('[data-readonly-guards]');
     assert.equal(
@@ -116,7 +136,7 @@ async function readNativeReadonlyForm(page) {
     assert.equal(
         await guards
             .locator('[data-dropdown-guard="list"]')
-            .getByRole('radio')
+            .getByRole(multiple ? 'checkbox' : 'radio')
             .isDisabled(),
         true
     );
@@ -192,7 +212,14 @@ function App(){
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
  if (new URLSearchParams(location.search).has('native-readonly-dropdown')) {
+    const multiple = new URLSearchParams(location.search).get('native-readonly-dropdown') === 'multiple';
     const status = { id: 'status-in-progress', name: 'In progress', backgroundColor: '#ffeab6', color: '#374151' };
+    const alpha = { id: 'status-alpha', name: 'Alpha', color: '#374151', backgroundColor: '#cfdfff' };
+    const beta = { id: 'status-beta', name: 'Beta', color: '#374151', backgroundColor: '#ffeab6' };
+    const orderedChoices = [beta, alpha];
+    const Field = multiple ? MultipleSelectsField : SingleSelectField;
+    const values = multiple ? [['Alpha', 'Beta'], []] : [status.name, null];
+    const guardValue = multiple ? [status.name] : status.name;
     const dropdown = {
         ...common, choices: [status], availableChoices: [status], presentation: 'dropdown',
         readOnly: true, readOnlyDropdownLayout: 'native-form', labels: { empty: 'No Selection' },
@@ -200,13 +227,13 @@ function App(){
         publishMetadata: choice => writes.push({ kind: 'readonly-metadata', choice }),
     };
     const guards = [
-        ['default', SingleSelectField, { value: status.name, readOnlyDropdownLayout: undefined }],
-        ['disabled', SingleSelectField, { value: status.name, readOnly: false, disabled: true }],
-        ['editable', SingleSelectField, { value: status.name, readOnly: false }],
-        ['list', SingleSelectField, { value: status.name, presentation: 'list' }],
-        ['multiple', MultipleSelectsField, { value: [status.name] }],
-        ['grid', SingleSelectField, { value: status.name, isInGrid: true }],
-        ['filter', SingleSelectField, { value: status.name, dropdownStyle: 'portal-filter' }],
+        ['default', Field, { value: guardValue, readOnlyDropdownLayout: undefined }],
+        ['disabled', Field, { value: guardValue, readOnly: false, disabled: true }],
+        ['editable', Field, { value: guardValue, readOnly: false }],
+        ['list', Field, { value: guardValue, presentation: 'list' }],
+        ['multiple', MultipleSelectsField, { value: [status.name], readOnlyDropdownLayout: undefined }],
+        ['grid', Field, { value: guardValue, isInGrid: true }],
+        ['filter', Field, { value: guardValue, dropdownStyle: 'portal-filter' }],
     ];
     return h('form', {
         id: 'select-form', style: { maxWidth: '38rem', margin: '0 auto', font: '400 16px/24px system-ui, sans-serif' },
@@ -214,9 +241,9 @@ function App(){
     },
         h('div', { 'data-readonly-form': '' },
             h('button', { type: 'button' }, 'Before Status'),
-            ...[status.name, null].map((value, index) => h('section', { 'data-readonly-sample': '', key: index },
+            ...values.map((value, index) => h('section', { 'data-readonly-sample': '', key: index },
                 h('div', null, 'Status'),
-                h(SingleSelectField, { ...dropdown, value }),
+                h(Field, { ...dropdown, ...(multiple ? { choices: orderedChoices, availableChoices: orderedChoices } : {}), value }),
                 h('label', { style: { display: 'block', marginTop: '24px' } },
                     'Name', h('input', { defaultValue: 'Synthetic Status record' })
                 )
@@ -736,64 +763,84 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 });
             }
             presentation.nativeReadonlyDropdown = [];
-            for (const width of [375, 1280]) {
-                await page.setViewportSize({ width, height: 640 });
-                await page.goto(
-                    origin + '/?format=' + format + '&native-readonly-dropdown'
-                );
-                await page
-                    .getByRole('button', { name: 'Before Status', exact: true })
-                    .waitFor();
-                const layout = await readNativeReadonlyForm(page);
-                assert.deepEqual(layout.painted, [
-                    {
-                        height: 42,
-                        nameGap: 24,
-                        controls: 0,
-                        selected: {
-                            border: '1px solid rgb(209, 213, 219)',
-                            holderRadius: '8px',
-                            holderWidth: true,
-                            badgeRadius: '9999px',
-                            inset: 13,
-                            height: 24,
-                            font: ['14px', '20px', '500'],
-                            color: 'rgb(55, 65, 81)',
-                            background: 'rgb(255, 234, 182)',
-                            title: 'In progress',
-                            text: 'In progress',
+            presentation.nativeReadonlyMultipleDropdown = [];
+            for (const [multiple, receipts, label] of [
+                [false, presentation.nativeReadonlyDropdown, 'In progress'],
+                [true, presentation.nativeReadonlyMultipleDropdown, 'Alpha'],
+            ]) {
+                for (const width of [375, 1280]) {
+                    await page.setViewportSize({ width, height: 640 });
+                    await page.goto(
+                        origin +
+                            '/?format=' +
+                            format +
+                            '&native-readonly-dropdown=' +
+                            (multiple ? 'multiple' : 'single')
+                    );
+                    await page
+                        .getByRole('button', {
+                            name: 'Before Status',
+                            exact: true,
+                        })
+                        .waitFor();
+                    const layout = await readNativeReadonlyForm(page, multiple);
+                    assert.deepEqual(layout.painted, [
+                        {
+                            height: 42,
+                            nameGap: 24,
+                            controls: 0,
+                            selected: {
+                                border: '1px solid rgb(209, 213, 219)',
+                                holderRadius: '8px',
+                                holderWidth: true,
+                                badgeRadius: '9999px',
+                                inset: 13,
+                                height: 24,
+                                font: ['14px', '20px', '500'],
+                                color: 'rgb(55, 65, 81)',
+                                background: multiple
+                                    ? 'rgb(207, 223, 255)'
+                                    : 'rgb(255, 234, 182)',
+                                title: label,
+                                text: label,
+                                gap: '4px',
+                                badges: (multiple
+                                    ? ['Alpha', 'Beta']
+                                    : [label]
+                                ).map((text) => ({ text, height: 24 })),
+                            },
+                            empty: null,
                         },
-                        empty: null,
-                    },
-                    {
-                        height: 20,
-                        nameGap: 24,
-                        controls: 0,
-                        selected: null,
-                        empty: {
-                            font: ['14px', '20px', '400'],
-                            text: 'No Selection',
-                            color: 'rgb(107, 114, 128)',
-                            icon: {
-                                width: 16,
-                                height: 16,
-                                margin: '4px',
-                                color: 'rgb(156, 163, 175)',
-                                hidden: 'true',
+                        {
+                            height: 20,
+                            nameGap: 24,
+                            controls: 0,
+                            selected: null,
+                            empty: {
+                                font: ['14px', '20px', '400'],
+                                text: 'No Selection',
+                                color: 'rgb(107, 114, 128)',
+                                icon: {
+                                    width: 16,
+                                    height: 16,
+                                    margin: '4px',
+                                    color: 'rgb(156, 163, 175)',
+                                    hidden: 'true',
+                                },
                             },
                         },
-                    },
-                ]);
-                const observed = await snapshot();
-                assert.deepEqual(observed.writes, []);
-                assert.equal(observed.submits, 0);
-                presentation.nativeReadonlyDropdown.push({ width, ...layout });
-                await page.locator('[data-readonly-form]').screenshot({
-                    path: join(
-                        output,
-                        `controlled-select-readonly-form-${format}-${width}.png`
-                    ),
-                });
+                    ]);
+                    const observed = await snapshot();
+                    assert.deepEqual(observed.writes, []);
+                    assert.equal(observed.submits, 0);
+                    receipts.push({ width, ...layout });
+                    await page.locator('[data-readonly-form]').screenshot({
+                        path: join(
+                            output,
+                            `controlled-select-readonly-form${multiple ? '-multiple' : ''}-${format}-${width}.png`
+                        ),
+                    });
+                }
             }
             evidence.results.push({
                 format,

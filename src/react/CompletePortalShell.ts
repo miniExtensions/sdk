@@ -63,8 +63,8 @@ export type PortalShellSnapshot = Readonly<{
         hidden?: boolean;
         /** Repeat configured branding inside an open overlay drawer. Omission retains header-only branding. */
         showBrandInNavigation?: boolean;
-        /** Place plain visitor branding and layout actions in the native top bar. */
-        topbarLayout?: 'native';
+        /** Opt into the native row, including rich titles and settings with the desktop option. */
+        topbarLayout?: 'native' | 'native-desktop';
         /** Use a leading menu icon for the visible sidebar's narrow header. */
         sidebarToggle?: 'icon';
         title: string;
@@ -407,15 +407,21 @@ function Shell(props: CompletePortalShellProps) {
         (snapshot.header.sidebarWidth !== undefined ||
             props.onSidebarWidthCommit !== undefined);
     const layoutActions = snapshot.header.actionsPlacement === 'layout';
-    const nativeTopbar =
+    const supportsNativeTopbar =
         layoutActions &&
         snapshot.header.layout === 'topbar' &&
         !snapshot.header.hidden &&
+        !snapshot.header.logoUrl &&
+        !snapshot.header.descriptionHtml;
+    const nativeTopbar =
+        supportsNativeTopbar &&
         snapshot.header.topbarLayout === 'native' &&
         snapshot.header.titleHtml == null &&
-        !snapshot.header.logoUrl &&
-        !snapshot.header.descriptionHtml &&
         snapshot.settings == null;
+    const nativeDesktopTopbar =
+        supportsNativeTopbar &&
+        snapshot.header.topbarLayout === 'native-desktop';
+    const navigationInHeader = nativeTopbar || nativeDesktopTopbar;
     const sidebarIconToggle =
         snapshot.header.layout === 'sidebar' &&
         !snapshot.header.hidden &&
@@ -783,7 +789,9 @@ function Shell(props: CompletePortalShellProps) {
                 event.preventDefault();
                 event.stopPropagation();
                 details.removeAttribute('open');
-                details.querySelector('summary')?.focus();
+                details.querySelector('summary')?.focus({
+                    preventScroll: nativeDesktopTopbar && topbarMenu,
+                });
                 return;
             }
             if (overlay) {
@@ -806,7 +814,7 @@ function Shell(props: CompletePortalShellProps) {
                 (event.key === 'ArrowDown'
                     ? controls[0]
                     : controls.at(-1)
-                )?.focus();
+                )?.focus({ preventScroll: nativeDesktopTopbar });
                 return;
             }
             if (details) delete details.dataset.hoverOpen;
@@ -847,7 +855,10 @@ function Shell(props: CompletePortalShellProps) {
                     controls.length;
         if (controls[next]) {
             event.preventDefault();
-            controls[next]!.focus();
+            controls[next]!.focus({
+                preventScroll:
+                    nativeDesktopTopbar && topbarMenu && popup != null,
+            });
         }
     }
     // Fixed native lucide-react0.417 Settings outline; installed ISC notice retained.
@@ -1304,7 +1315,7 @@ function Shell(props: CompletePortalShellProps) {
     }, [
         placeAccountMenuInDrawer,
         hasAccountMenu,
-        nativeTopbar,
+        navigationInHeader,
         snapshot.revision,
     ]);
     const userActions =
@@ -1608,6 +1619,9 @@ function Shell(props: CompletePortalShellProps) {
                 controlledSidebar ? 'mx-sdk-portal-shell--resizable' : '',
                 layoutActions ? 'mx-sdk-portal-shell--layout-actions' : '',
                 nativeTopbar ? 'mx-sdk-portal-shell--native-topbar' : '',
+                nativeDesktopTopbar
+                    ? 'mx-sdk-portal-shell--native-desktop-topbar'
+                    : '',
                 sidebarIconToggle
                     ? 'mx-sdk-portal-shell--sidebar-icon-toggle'
                     : '',
@@ -1631,10 +1645,10 @@ function Shell(props: CompletePortalShellProps) {
             sidebarIconToggle ? navigationToggle : null,
             brand(true),
             sidebarIconToggle ? null : navigationToggle,
-            nativeTopbar ? navigation : null,
+            navigationInHeader ? navigation : null,
             actionsInNavigation ? null : actions
         ),
-        nativeTopbar ? null : navigation,
+        navigationInHeader ? null : navigation,
         controlledSidebar && !mobile && props.onSidebarWidthCommit
             ? h(PortalSidebarResize, {
                   scope: snapshot.scope,

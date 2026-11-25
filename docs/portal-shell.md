@@ -426,6 +426,8 @@ put it after mobile menu rows below 640px. Sidebar navigation uses 1024px.
 
 With layout actions, set `header.topbarLayout: 'native'` for the native single-row top bar with a plain visitor title. HTML titles, logos, descriptions and authoring controls retain their existing presentation. At 640px and above the title, menu and available actions share a 64px row. Below 640px the accessible menu opener opens the existing drawer. The host body begins below that row. Sidebar, hidden headers and consumers omitting the option keep their existing layout.
 
+Use `header.topbarLayout: 'native-desktop'` with layout actions to include an HTML title or authoring controls in the same 64px row at 640px and above. The HTML title stays scrollable within the row, and settings retain their existing host callbacks. Below 640px this option uses the standard narrow header and navigation drawer. Logo and description layouts retain their existing presentation.
+
 Empty menus retain the configured container; `hideMenuItems` withholds menu
 rows without discarding explicitly placed utility actions or descriptions.
 The native adapter still decides which headerless controls are available.

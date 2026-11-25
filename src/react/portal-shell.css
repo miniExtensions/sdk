@@ -588,13 +588,75 @@
     border: 0;
 }
 @media (min-width: 640px) {
-    .mx-sdk-portal-shell--native-topbar > .mx-sdk-portal-header {
+    .mx-sdk-portal-shell--native-desktop-topbar > .mx-sdk-portal-header {
+        position: relative;
+        z-index: 30;
+        height: 4rem;
+        padding-block: 0;
+        flex-wrap: nowrap;
+        border-bottom: 0;
+        box-shadow:
+            0 1px 3px #0000001a,
+            0 1px 2px -1px #0000001a;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar > .mx-sdk-portal-content {
+        padding-block-start: 0;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        > .mx-sdk-portal-brand
+        > div {
+        min-width: 0;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar .mx-sdk-portal-title {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        .mx-sdk-portal-title-html {
+        max-block-size: 4rem;
+        overflow: auto;
+    }
+    /* Keep the header as the popup's containing block, outside the nav scroller. */
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        nav
+        > ul
+        > .mx-sdk-portal-configurable {
+        position: static;
+        display: flex;
+        align-items: center;
+        padding-inline-end: 0;
+    }
+    .mx-sdk-portal-shell--native-desktop-topbar
+        > header
+        nav
+        > ul
+        > .mx-sdk-portal-configurable
+        > .mx-sdk-portal-settings {
+        position: static;
+    }
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
+        > .mx-sdk-portal-header {
         padding-inline: 1.5rem;
     }
-    .mx-sdk-portal-shell--native-topbar > header > .mx-sdk-portal-brand {
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
+        > header
+        > .mx-sdk-portal-brand {
         max-width: min(32rem, 40%);
     }
-    .mx-sdk-portal-shell--native-topbar
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
         > header
         > .mx-sdk-portal-navigation-wrap {
         display: block;
@@ -604,7 +666,10 @@
         border: 0;
         background: transparent;
     }
-    .mx-sdk-portal-shell--native-topbar
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
         > header
         > .mx-sdk-portal-navigation-wrap
         > .mx-sdk-portal-navigation {
@@ -614,7 +679,10 @@
         padding: 0;
         overflow: visible;
     }
-    .mx-sdk-portal-shell--native-topbar
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
         > header
         > .mx-sdk-portal-navigation-wrap
         > .mx-sdk-portal-navigation
@@ -627,7 +695,10 @@
         justify-content: center;
         align-items: center;
     }
-    .mx-sdk-portal-shell--native-topbar
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
         > header
         > .mx-sdk-portal-navigation-wrap
         .mx-sdk-portal-navigation
@@ -635,7 +706,10 @@
         overflow-x: auto;
         padding-block: 0.25rem;
     }
-    .mx-sdk-portal-shell--native-topbar
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
         > header
         > .mx-sdk-portal-navigation-wrap
         .mx-sdk-portal-navigation
@@ -650,13 +724,22 @@
         margin: 0;
         background: var(--mx-portal-background);
     }
-    .mx-sdk-portal-shell--native-topbar > header > .mx-sdk-portal-actions {
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
+        > header
+        > .mx-sdk-portal-actions {
         flex: none;
         flex-wrap: nowrap;
     }
 }
 @media (min-width: 1024px) {
-    .mx-sdk-portal-shell--native-topbar > .mx-sdk-portal-header {
+    :is(
+            .mx-sdk-portal-shell--native-topbar,
+            .mx-sdk-portal-shell--native-desktop-topbar
+        )
+        > .mx-sdk-portal-header {
         padding-inline: 2rem;
     }
 }

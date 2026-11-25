@@ -373,6 +373,8 @@ The editable Duration field uses the native solid Clock icon from Heroicons 2.1.
 
 The editable Barcode scanner trigger uses the native solid Camera and Stop icons from Heroicons 2.1.1.
 
+The Form saved-progress conflict alert uses the native solid ExclamationTriangle icon from Heroicons 2.1.1.
+
 ```text
 MIT License
 

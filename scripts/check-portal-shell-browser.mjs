@@ -1263,16 +1263,71 @@ async function configuredPresentation(browser, origin, label) {
             name: 'Edit title',
             exact: true,
         });
+        const ordersGears = page.getByRole('button', {
+            name: 'Edit orders',
+            exact: true,
+        });
+        const readSettingsPaint = (button) =>
+            button.evaluate((node) => {
+                const paint = getComputedStyle(node);
+                return {
+                    borders: [
+                        paint.borderTopWidth,
+                        paint.borderRightWidth,
+                        paint.borderBottomWidth,
+                        paint.borderLeftWidth,
+                    ],
+                    focusVisible: node.matches(':focus-visible'),
+                    outline: paint.outlineStyle,
+                    outlineWidth: paint.outlineWidth,
+                    outlineOffset: paint.outlineOffset,
+                };
+            });
+        const borderless = ['0px', '0px', '0px', '0px'];
+        const focusedSettingsPaint = {
+            borders: borderless,
+            focusVisible: true,
+            outline: 'solid',
+            outlineWidth: '3px',
+            outlineOffset: '3px',
+        };
+        await page.setViewportSize({ width: 375, height: 900 });
+        await titleGear.waitFor();
+        assert.deepEqual(
+            (await readSettingsPaint(titleGear)).borders,
+            borderless
+        );
+        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await ordersGears.last().waitFor();
+        assert.deepEqual(
+            (await readSettingsPaint(ordersGears.last())).borders,
+            borderless
+        );
+        await page.keyboard.press('Escape');
+        await page.setViewportSize({ width: 1280, height: 900 });
+        for (const gear of [titleGear, ordersGears.last()]) {
+            await gear.waitFor();
+            const paint = await readSettingsPaint(gear);
+            assert.deepEqual(paint.borders, borderless);
+            assert.equal(paint.outline, 'none');
+        }
+        await page.keyboard.press('Tab');
         await titleGear.focus();
+        assert.deepEqual(
+            await readSettingsPaint(titleGear),
+            focusedSettingsPaint
+        );
         await page.keyboard.press('Enter');
         const box = await titleGear.boundingBox();
         assert(box && box.width <= 32 && box.height <= 32);
         for (const name of ['Edit description', 'Edit profile'])
             await page.getByRole('button', { name, exact: true }).click();
-        const ordersGears = page.getByRole('button', {
-            name: 'Edit orders',
-            exact: true,
-        });
+        await page.keyboard.press('Shift+Tab');
+        await ordersGears.last().focus();
+        assert.deepEqual(
+            await readSettingsPaint(ordersGears.last()),
+            focusedSettingsPaint
+        );
         await ordersGears.last().click();
         const orderSummary = page
             .locator('summary')
@@ -1339,6 +1394,7 @@ async function configuredPresentation(browser, origin, label) {
             descriptionExpansion: 'passed',
             directActions: 'passed',
             committedLogoutRetirement: 'passed',
+            authoringSettingsBordersAndFocus: 'passed',
             authoringMouseKeyboardTargetsAndZeroNavigation: 'passed',
             cleanup: 'completed',
         };

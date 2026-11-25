@@ -442,6 +442,14 @@
     line-height: 1.25rem;
     overflow-wrap: anywhere;
 }
+:where(
+    .mx-sdk-finder-card-fields-gallery
+        .mx-sdk-finder-card-field-value
+        > .mx-sdk-complete-readonly-text[data-layout='default']
+) {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
 .mx-sdk-finder-gallery-placeholder {
     box-sizing: border-box;
     display: block;

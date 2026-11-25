@@ -81,6 +81,8 @@ export type CompleteLinkedFinderViewProps<
     coordinator: CompleteLinkedFinderCoordinator<Row, Filter, Owner> | null;
     /** Native prefetch/open can own the initial read without a second allocation. */
     queryOnMount?: boolean;
+    /** Native spacing and primary labels for the accepted root Form's List Finder. */
+    nativeFormListPresentation?: boolean;
     /** Admitted authenticated-preview presentation, with no candidate model or loading flash. */
     previewPresentation?: {
         readonly expectedOwner: Owner;
@@ -93,7 +95,7 @@ export type CompleteLinkedFinderViewProps<
 export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
     props: CompleteLinkedFinderViewProps<Row, Filter, Owner>
 ): ReactElement {
-    const { coordinator, host } = props;
+    const { coordinator, host, nativeFormListPresentation } = props;
     const [, refresh] = useState(0);
     const scroll = useRef<HTMLDivElement>(null);
     const sentinel = useRef<HTMLDivElement>(null);
@@ -302,7 +304,10 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                                                 '✓'
                                             )
                                           : null,
-                                      h(LinkedFinderCard, { projection })
+                                      h(LinkedFinderCard, {
+                                          projection,
+                                          nativeFormListPresentation,
+                                      })
                                   ),
                           })
                       )
@@ -317,7 +322,11 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
     return h(
         'div',
         {
-            className: ['mx-sdk-complete-linked-finder', props.className]
+            className: [
+                'mx-sdk-complete-linked-finder',
+                nativeFormListPresentation && 'mx-sdk-native-form-list-finder',
+                props.className,
+            ]
                 .filter(Boolean)
                 .join(' '),
         },
@@ -352,7 +361,21 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                 h(
                     'div',
                     { className: 'mx-sdk-finder-search' },
-                    h('span', { 'aria-hidden': true }, '⌕'),
+                    nativeFormListPresentation
+                        ? h(
+                              'svg',
+                              {
+                                  viewBox: '0 0 24 24',
+                                  fill: 'currentColor',
+                                  'aria-hidden': true,
+                              },
+                              h('path', {
+                                  fillRule: 'evenodd',
+                                  clipRule: 'evenodd',
+                                  d: 'M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z',
+                              })
+                          )
+                        : h('span', { 'aria-hidden': true }, '⌕'),
                     h(Combobox.Input, {
                         type: 'search',
                         'aria-label': props.labels.search,

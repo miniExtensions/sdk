@@ -461,7 +461,10 @@ function CollaboratorControl<T extends CompleteCollaborator>(
         props.value.length
             ? h(
                   'ul',
-                  { className: 'mx-sdk-collaborator-badges' },
+                  {
+                      className: 'mx-sdk-collaborator-badges',
+                      'data-multiple': props.single ? undefined : '',
+                  },
                   ...props.value.map((collaborator, index) => {
                       const label = collaborator.name || collaborator.email;
                       return h(CollaboratorBadge<T>, {

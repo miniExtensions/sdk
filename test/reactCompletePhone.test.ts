@@ -764,6 +764,19 @@ it('server renders real country formatting and native associations without a doc
         assert.equal(selected.length, 1);
         assert.ok(selected[0].includes(' value="US"'));
         assert.equal(window.document.querySelector('img'), null);
+        const arrow = window.document.querySelector(
+            '.mx-sdk-phone-country-arrow'
+        );
+        assert.ok(arrow);
+        assert.equal(arrow.getAttribute('viewBox'), '0 0 24 24');
+        const arrowPath = arrow.querySelector('path');
+        assert.ok(arrowPath);
+        assert.equal(arrowPath.getAttribute('fill-rule'), 'evenodd');
+        assert.equal(arrowPath.getAttribute('clip-rule'), 'evenodd');
+        assert.equal(
+            arrowPath.getAttribute('d'),
+            'M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z'
+        );
         assert.equal(writes, 0);
     } finally {
         await window.happyDOM.close();

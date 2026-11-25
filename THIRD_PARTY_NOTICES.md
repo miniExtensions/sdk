@@ -361,7 +361,7 @@ The editable Form Back and Next actions retain the native solid ChevronLeft and 
 
 The editable collaborator picker uses the native solid ChevronDown icon from Heroicons 2.1.1.
 
-The editable Phone field uses the native solid Phone icon from Heroicons 2.1.1.
+The editable Phone field uses the native solid Phone and ChevronDown icons from Heroicons 2.1.1.
 
 The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.
 

@@ -13,6 +13,7 @@ import {
     type AttachmentPreviewSource,
 } from '../ui/attachmentPreview.js';
 import { AttachmentPreview } from './AttachmentPreview.js';
+import { AttachmentFallbackIcon } from './AttachmentFallbackIcon.js';
 import { ActionButton } from './ActionButton.js';
 import { RecoverableImage } from './RecoverableImage.js';
 import { readResourceResponse } from './resourceResponse.js';
@@ -54,6 +55,8 @@ export type ReadOnlyURLGalleryProps = {
     labels?: Partial<ReadOnlyURLGalleryLabels>;
     isInGrid?: boolean;
     displayMode?: 'thumbnail' | 'icon';
+    /** Match the closed thumbnail appearance of native public Form Formula. */
+    thumbnailPresentation?: 'native-formula';
     thumbnailSize?: 'small' | 'medium' | 'large';
     thumbFitType?: 'cover' | 'contain';
     hideAttachmentName?: boolean;
@@ -89,12 +92,39 @@ type ThumbnailPresentation = {
     current(): boolean;
 };
 
+function isLegacyGeneratedPng(url: string): boolean {
+    try {
+        const parsed = new URL(url);
+        // The legacy dummyimage PNG text syntax places &text in the path.
+        // Recognize it without probing the MIME type of arbitrary Formula URLs.
+        return (
+            parsed.origin === 'https://dummyimage.com' &&
+            !parsed.username &&
+            !parsed.password &&
+            !parsed.search &&
+            !parsed.hash &&
+            /^\/[1-9]\d*x[1-9]\d*\/[\da-f]{3,8}\/[\da-f]{3,8}\.png&text=[^/]+$/i.test(
+                parsed.pathname
+            )
+        );
+    } catch {
+        return false;
+    }
+}
+
 function thumbnail(
     entry: ReadOnlyURLGalleryEntry,
-    view: ThumbnailPresentation
+    view: ThumbnailPresentation,
+    useNativeFormulaPresentation = false
 ): ReactNode {
     const explicitResource = typeof entry.url === 'string' && entry.url !== '';
-    const image = explicitResource && isAttachmentPreviewImage(entry);
+    const legacyPng =
+        explicitResource &&
+        useNativeFormulaPresentation &&
+        entry.type == null &&
+        isLegacyGeneratedPng(entry.url);
+    const image =
+        explicitResource && (isAttachmentPreviewImage(entry) || legacyPng);
     const sources = explicitResource
         ? [
               entry.thumbnailUrl,
@@ -107,14 +137,36 @@ function thumbnail(
                   (image || source !== entry.url)
           )
         : [];
-    if (sources.length === 0)
+    if (sources.length === 0) {
+        if (useNativeFormulaPresentation) {
+            const { isVideo, isAudio, isPdf } =
+                classifyAttachmentPreview(entry);
+            const icon = h(AttachmentFallbackIcon, {
+                play: isVideo || isAudio,
+            });
+            return h(
+                'span',
+                {
+                    className: 'mx-sdk-url-gallery__formula-thumbnail',
+                    'data-media': isPdf ? 'document' : 'framed-document',
+                },
+                isPdf
+                    ? icon
+                    : h(
+                          'span',
+                          { className: 'mx-sdk-url-gallery__formula-media' },
+                          icon
+                      )
+            );
+        }
         return h(
             'span',
             { 'aria-hidden': true, className: 'mx-sdk-url-gallery__glyph' },
             '▤'
         );
+    }
     const { labels } = view;
-    return h(RecoverableImage, {
+    const preview = h(RecoverableImage, {
         key: view.thumbnailRevision,
         sources,
         alt: '',
@@ -159,6 +211,22 @@ function thumbnail(
                 )
             ),
     });
+    return useNativeFormulaPresentation
+        ? h(
+              'div',
+              {
+                  className: 'mx-sdk-url-gallery__formula-thumbnail',
+                  'data-media': legacyPng ? 'generated-png' : 'image',
+              },
+              legacyPng
+                  ? h(
+                        'div',
+                        { className: 'mx-sdk-url-gallery__formula-media' },
+                        preview
+                    )
+                  : preview
+          )
+        : preview;
 }
 
 /** Retain the ordered selected occurrence before any preview/action dereference. */
@@ -304,6 +372,10 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
         resourcesCurrent,
         current,
     };
+    const useNativeFormulaPresentation =
+        props.thumbnailPresentation === 'native-formula' &&
+        props.isInGrid !== true &&
+        props.displayMode !== 'icon';
     const choose = (index: number, open = true) => {
         if (!current() || props.entries.length === 0) return;
         setSelection({
@@ -366,9 +438,17 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
                                 'div',
                                 {
                                     className: 'mx-sdk-url-gallery__thumbnail',
+                                    'data-presentation':
+                                        useNativeFormulaPresentation
+                                            ? 'native-formula'
+                                            : undefined,
                                     tabIndex: -1,
                                 },
-                                thumbnail(item, thumbnails)
+                                thumbnail(
+                                    item,
+                                    thumbnails,
+                                    useNativeFormulaPresentation
+                                )
                             ),
                             props.hideAttachmentName === false &&
                                 props.isInGrid !== true

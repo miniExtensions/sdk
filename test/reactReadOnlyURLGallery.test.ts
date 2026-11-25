@@ -125,6 +125,80 @@ it('renders localized ordered rows and explicit layout options without write con
     );
 });
 
+it('limits native Form Formula thumbnail paint and generated PNGs to the opted-in list', async (t) => {
+    const f = await fixture(t);
+    const unknown = 'https://example.com/article-formula-html';
+    const generated =
+        'https://dummyimage.com/120x40/1f2937/ffffff.png&text=HTML';
+    const standard = 'https://files.example.test/preview.png?text=HTML';
+    const lookalikes = [
+        'https://dummyimage.com.example.test/120x40/1f2937/ffffff.png&text=HTML',
+        'https://dummyimage.com/other?source=.png&text=HTML',
+        'https://user@dummyimage.com/120x40/1f2937/ffffff.png&text=HTML',
+    ];
+    const entries = [unknown, generated, standard, ...lookalikes].map(
+        (url) => ({
+            url,
+        })
+    );
+    const list = '.mx-sdk-url-gallery__entries';
+    const imageSources = () =>
+        [...f.host.querySelectorAll(`${list} img`)].map((image) =>
+            image.getAttribute('src')
+        );
+    const appearance = { thumbnailPresentation: 'native-formula' as const };
+    await f.render({ entries });
+    assert.deepEqual(imageSources(), [standard]);
+    assert.equal(f.host.querySelector('[data-presentation]'), null);
+
+    await f.render({ entries, ...appearance });
+    assert.deepEqual(imageSources(), [generated, standard]);
+    assert.deepEqual(
+        [...f.host.querySelectorAll(`${list} [data-media]`)].map((media) =>
+            media.getAttribute('data-media')
+        ),
+        [
+            'framed-document',
+            'generated-png',
+            'image',
+            ...lookalikes.map(() => 'framed-document'),
+        ]
+    );
+    assert.equal(
+        f.host.querySelectorAll(`${list} [data-media="framed-document"] svg`)
+            .length,
+        4
+    );
+    assert.deepEqual(
+        [...f.host.querySelectorAll(`${list} button`)].map((button) => [
+            button.getAttribute('aria-label'),
+            button.getAttribute('type'),
+        ]),
+        entries.map(({ url }) => [url, 'button'])
+    );
+    await f.open(1);
+    assert.ok(f.host.querySelector('[role="dialog"]'));
+    assert.equal(
+        f.host.querySelector('[role="dialog"] [data-presentation]'),
+        null
+    );
+    assert.deepEqual(
+        [...f.host.querySelectorAll('.mx-sdk-url-gallery__strip img')].map(
+            (image) => image.getAttribute('src')
+        ),
+        [standard]
+    );
+    assert.equal(f.submits(), 0);
+
+    await f.render({ entries, ...appearance, isInGrid: true });
+    assert.deepEqual(imageSources(), [standard]);
+    assert.equal(f.host.querySelector('[data-presentation]'), null);
+
+    await f.render({ entries, ...appearance, displayMode: 'icon' });
+    assert.deepEqual(imageSources(), [standard]);
+    assert.equal(f.host.querySelector('[data-presentation]'), null);
+});
+
 for (const surface of ['list', 'modal picker'] as const) {
     it(`recovers a broken granted image thumbnail in the ${surface}`, async (t) => {
         const f = await fixture(t);

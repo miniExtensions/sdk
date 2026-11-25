@@ -53,6 +53,21 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.mx-sdk-complete-collaborators--readonly-form .mx-sdk-collaborator-badges {
+    margin: 0;
+}
+.mx-sdk-complete-collaborators--readonly-form .mx-sdk-collaborator-badge {
+    background: transparent;
+}
+.mx-sdk-complete-collaborators--readonly-form .mx-sdk-collaborator-badge-body {
+    border-radius: 9999px;
+    background: var(--mx-sdk-collaborator-tint, #eff6ff);
+}
+.mx-sdk-complete-collaborators--readonly-form
+    .mx-sdk-collaborator-badge-avatar {
+    top: 50%;
+    transform: translateY(-50%);
+}
 .mx-sdk-collaborator-remove {
     display: inline-flex;
     align-items: center;
@@ -77,25 +92,33 @@
         );
     outline-offset: 2px;
 }
-/* Native multiples reserve the avatar's space inside the pill. */
-.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-badge {
+/* Native badges reserve the avatar's space inside the pill. */
+.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-badge,
+.mx-sdk-complete-collaborators--readonly-form .mx-sdk-collaborator-badge {
     position: relative;
 }
-.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-badge-avatar {
+.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-badge-avatar,
+.mx-sdk-complete-collaborators--readonly-form
+    .mx-sdk-collaborator-badge-avatar {
     position: absolute;
     left: 0;
     width: 1.75rem;
     height: 1.75rem;
 }
-.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-avatar {
+.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-avatar,
+.mx-sdk-complete-collaborators--readonly-form .mx-sdk-collaborator-avatar {
     width: 100%;
     height: 100%;
 }
-.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-badge-body {
+.mx-sdk-collaborator-badges[data-multiple] .mx-sdk-collaborator-badge-body,
+.mx-sdk-complete-collaborators--readonly-form .mx-sdk-collaborator-badge-body {
     padding: 0.125rem 0.5rem;
     line-height: 1.25rem;
 }
 .mx-sdk-collaborator-badges[data-multiple]
+    .mx-sdk-collaborator-badge-avatar:not(:empty)
+    + .mx-sdk-collaborator-badge-body,
+.mx-sdk-complete-collaborators--readonly-form
     .mx-sdk-collaborator-badge-avatar:not(:empty)
     + .mx-sdk-collaborator-badge-body {
     padding-left: 2rem;

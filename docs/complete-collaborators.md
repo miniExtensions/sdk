@@ -138,6 +138,12 @@ label, form, help and error associations. `title` renders an SDK label unless
 Single has no input. Remove and open controls do not submit a surrounding form;
 picker events remain inside the field boundary.
 
+Set `readOnlyVariant="form"` on a controlled Single field with `readOnly`
+enabled to use the Form badge and empty marker. Load
+`@miniextensions/sdk/react/complete-readonly-text.css` alongside the
+collaborator stylesheet for the shared empty marker. The field still uses
+`labels.empty` and the caller's avatar policy.
+
 An editable Grid host can set `allowReadonlyClickThrough` on a controlled
 Single display while the host owns cell selection. With `readOnly` set and the
 display enabled, an uncancelled primary click bubbles to that host. The host can

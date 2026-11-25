@@ -16,6 +16,7 @@ import {
     getCollaboratorSelectionPresentation,
     removeCollaboratorSelection,
 } from '../ui/collaboratorSelection.js';
+import { CompleteReadOnlyTextField } from './CompleteReadOnlyTextField.js';
 import { PersonBadge } from './PersonBadge.js';
 import { TextInput } from './TextInput.js';
 
@@ -91,6 +92,8 @@ export type CompleteSingleCollaboratorFieldProps<
     onValueChange(value: T | null): void;
     /** Let an editable host cell receive a primary click on this readonly display. */
     allowReadonlyClickThrough?: boolean;
+    /** Use native Form badge and empty presentation when readOnly is true. */
+    readOnlyVariant?: 'form';
 };
 
 export type CompleteMultipleCollaboratorsFieldProps<
@@ -103,7 +106,7 @@ export type CompleteMultipleCollaboratorsFieldProps<
 type ControlProps<T extends CompleteCollaborator> = CommonProps<T> &
     Pick<
         CompleteSingleCollaboratorFieldProps<T>,
-        'allowReadonlyClickThrough'
+        'allowReadonlyClickThrough' | 'readOnlyVariant'
     > & {
         value: readonly T[];
         onValueChange(value: T[]): void;
@@ -413,6 +416,13 @@ function CollaboratorControl<T extends CompleteCollaborator>(
     }, [props.readOnly, props.disabled]);
     if (loadError) throw loadError.error;
     const labels = props.labels;
+    const formReadOnly =
+        props.single &&
+        props.readOnly === true &&
+        props.readOnlyVariant === 'form';
+    const emptyLabel = presentation.showEmpty
+        ? (labels?.empty ?? 'No collaborators')
+        : undefined;
     const allowReadonlyClickThrough =
         props.single &&
         props.readOnly === true &&
@@ -433,7 +443,11 @@ function CollaboratorControl<T extends CompleteCollaborator>(
                 : (props.title ?? props.ariaLabel),
             'aria-describedby': props.describedBy,
             'aria-invalid': props.invalid,
-            className: ['mx-sdk-complete-collaborators', props.className]
+            className: [
+                'mx-sdk-complete-collaborators',
+                formReadOnly && 'mx-sdk-complete-collaborators--readonly-form',
+                props.className,
+            ]
                 .filter(Boolean)
                 .join(' '),
             onClick: (event: MouseEvent) => {
@@ -529,12 +543,14 @@ function CollaboratorControl<T extends CompleteCollaborator>(
                       })
                   )
             : null,
-        presentation.showEmpty
-            ? h(
-                  'p',
-                  { className: 'mx-sdk-collaborator-empty' },
-                  labels?.empty ?? 'No collaborators'
-              )
+        emptyLabel !== undefined
+            ? formReadOnly
+                ? h(CompleteReadOnlyTextField, {
+                      value: null,
+                      language: 'en',
+                      emptyLabel,
+                  })
+                : h('p', { className: 'mx-sdk-collaborator-empty' }, emptyLabel)
             : null
     );
 }

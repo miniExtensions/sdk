@@ -365,6 +365,8 @@ The editable Phone field uses the native solid Phone and ChevronDown icons from 
 
 The Attachment device picker retains the native solid DocumentPlus icon from Heroicons 2.1.1.
 
+The native Form Attachment URL action uses the solid CloudArrowUp icon from Heroicons 2.1.1.
+
 The Form text Clear button retains the native solid XMark icon from Heroicons 2.1.1.
 
 The editable Email field uses the native solid Envelope icon from Heroicons 2.1.1.

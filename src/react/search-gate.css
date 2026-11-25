@@ -86,7 +86,8 @@
     background: white;
     color: #111827;
     font: inherit;
-    line-height: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.5rem;
     user-select: text;
     box-shadow: 0 1px 2px #0000000d;
 }
@@ -94,16 +95,15 @@
     color: #9ca3af;
 }
 .mx-sdk-search-gate-panel input:focus {
-    outline: 2px solid var(--mx-sdk-search-focus, var(--mx-sdk-accent, #6366f1));
-    outline-offset: 1px;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     border-color: var(--mx-sdk-search-focus, var(--mx-sdk-accent, #6366f1));
+    box-shadow:
+        0 0 0 1px var(--mx-sdk-search-focus, var(--mx-sdk-accent, #6366f1)),
+        0 1px 2px #0000000d;
 }
-.mx-sdk-search-gate-panel input[aria-invalid='true'] {
+.mx-sdk-search-gate-panel input[aria-invalid='true']:not(:focus) {
     border-color: #fca5a5;
-}
-.mx-sdk-search-gate-panel input[aria-invalid='true']:focus {
-    outline-color: #ef4444;
-    border-color: #ef4444;
 }
 .mx-sdk-search-gate-actions {
     display: flex;
@@ -120,6 +120,10 @@
     font-weight: 500;
     line-height: 1.25rem;
     cursor: pointer;
+}
+.mx-sdk-search-gate-actions > button[type='submit'] {
+    border: 0;
+    box-shadow: 0 1px 2px #0000000d;
 }
 .mx-sdk-search-gate-actions button:disabled {
     opacity: 0.5;
@@ -158,6 +162,10 @@
     color: #f87171;
 }
 @media (min-width: 640px) {
+    .mx-sdk-search-gate-panel input {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
     .mx-sdk-search-gate {
         padding: 1rem 1rem 1.5rem;
     }

@@ -99,6 +99,7 @@ function isLegacyGeneratedPng(url: string): boolean {
         // Recognize it without probing the MIME type of arbitrary Formula URLs.
         return (
             parsed.origin === 'https://dummyimage.com' &&
+            parsed.href === url &&
             !parsed.username &&
             !parsed.password &&
             !parsed.search &&
@@ -139,18 +140,19 @@ function thumbnail(
         : [];
     if (sources.length === 0) {
         if (useNativeFormulaPresentation) {
-            const { isVideo, isAudio, isPdf } =
-                classifyAttachmentPreview(entry);
+            const media = explicitResource
+                ? classifyAttachmentPreview(entry)
+                : null;
             const icon = h(AttachmentFallbackIcon, {
-                play: isVideo || isAudio,
+                play: Boolean(media?.isVideo || media?.isAudio),
             });
             return h(
                 'span',
                 {
                     className: 'mx-sdk-url-gallery__formula-thumbnail',
-                    'data-media': isPdf ? 'document' : 'framed-document',
+                    'data-media': media?.isPdf ? 'document' : 'framed-document',
                 },
-                isPdf
+                media?.isPdf
                     ? icon
                     : h(
                           'span',

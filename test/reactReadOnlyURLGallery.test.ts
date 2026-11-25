@@ -135,6 +135,8 @@ it('limits native Form Formula thumbnail paint and generated PNGs to the opted-i
         'https://dummyimage.com.example.test/120x40/1f2937/ffffff.png&text=HTML',
         'https://dummyimage.com/other?source=.png&text=HTML',
         'https://user@dummyimage.com/120x40/1f2937/ffffff.png&text=HTML',
+        'https:/dummyimage.com/120x40/1f2937/ffffff.png&text=HTML',
+        'https:dummyimage.com/120x40/1f2937/ffffff.png&text=HTML',
     ];
     const entries = [unknown, generated, standard, ...lookalikes].map(
         (url) => ({
@@ -167,7 +169,7 @@ it('limits native Form Formula thumbnail paint and generated PNGs to the opted-i
     assert.equal(
         f.host.querySelectorAll(`${list} [data-media="framed-document"] svg`)
             .length,
-        4
+        lookalikes.length + 1
     );
     assert.deepEqual(
         [...f.host.querySelectorAll(`${list} button`)].map((button) => [
@@ -197,6 +199,22 @@ it('limits native Form Formula thumbnail paint and generated PNGs to the opted-i
     await f.render({ entries, ...appearance, displayMode: 'icon' });
     assert.deepEqual(imageSources(), [standard]);
     assert.equal(f.host.querySelector('[data-presentation]'), null);
+});
+
+it('retains inert label-only entries in the native Formula tile presentation', () => {
+    const labelOnly = { filename: 'Retained label' } as ReadOnlyURLGalleryEntry;
+    const html = renderToStaticMarkup(
+        h(ReadOnlyURLGallery, {
+            entries: [labelOnly],
+            thumbnailPresentation: 'native-formula',
+            hideAttachmentName: false,
+            disableOpenFiles: true,
+        })
+    );
+    assert.match(html, /data-media="framed-document"/);
+    assert.match(html, /<svg[^>]+aria-hidden="true"/);
+    assert.match(html, /Retained label/);
+    assert.doesNotMatch(html, /<img\b|<button\b/);
 });
 
 for (const surface of ['list', 'modal picker'] as const) {

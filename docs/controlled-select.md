@@ -16,6 +16,11 @@ choice IDs (including pending blank IDs), available choices, and a real current
 owner token/currentness check. The component owns only transient search/open
 state. It does not save records, resolve credentials, or call a provider.
 
+Set `readOnlyDropdownLayout: 'native-form'` on a controlled `SingleSelectField`
+with `readOnly: true` and `presentation: 'dropdown'` to render the native Form
+value holder and empty-state icon. Use this appearance for Form fields outside
+the Grid. The empty caption comes from `labels.empty`.
+
 `publishMetadata` is a synchronous host admission step for `{id:'', name,
 newOption:true}`. A new choice is published before its selected canonical name.
 The host must preserve the captured authority across only that exact metadata

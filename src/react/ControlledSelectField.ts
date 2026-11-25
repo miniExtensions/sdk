@@ -14,6 +14,7 @@ import {
     type SyntheticEvent,
 } from 'react';
 import { RadioInput } from './RadioInput.js';
+import { renderReadOnlyEmptyValue } from './CompleteReadOnlyTextField.js';
 import {
     publishDeferredSelectChoice,
     type PendingSelectChoice,
@@ -70,6 +71,8 @@ export type ControlledSelectCommonProps = {
 export type ControlledSingleSelectFieldProps = ControlledSelectCommonProps & {
     value: string | null;
     onValueChange(value: string | null): boolean | void;
+    /** Native Form appearance for a read-only, non-Grid dropdown. */
+    readOnlyDropdownLayout?: 'native-form';
 };
 export type ControlledMultipleSelectsFieldProps =
     ControlledSelectCommonProps & {
@@ -80,6 +83,7 @@ type ControlProps = ControlledSelectCommonProps & {
     values: readonly string[];
     multiple: boolean;
     change(values: string[]): boolean | void;
+    readOnlyDropdownLayout?: ControlledSingleSelectFieldProps['readOnlyDropdownLayout'];
 };
 function isFuseConstructor(
     value: unknown
@@ -114,6 +118,13 @@ function SelectControl(props: ControlProps): ReactNode {
     const portalFilter =
         props.presentation === 'dropdown' &&
         props.dropdownStyle === 'portal-filter';
+    const nativeFormReadOnly =
+        props.readOnlyDropdownLayout === 'native-form' &&
+        props.readOnly === true &&
+        props.presentation === 'dropdown' &&
+        !props.multiple &&
+        !props.isInGrid &&
+        !portalFilter;
     const generatedId = useId();
     const id = props.inputId ?? generatedId;
     const root = useRef<HTMLDivElement>(null);
@@ -570,7 +581,7 @@ function SelectControl(props: ControlProps): ReactNode {
                     backgroundColor: choice.backgroundColor,
                 },
             },
-            removable && props.multiple
+            (removable && props.multiple) || nativeFormReadOnly
                 ? h(
                       'span',
                       { className: 'mx-sdk-select-selected-label' },
@@ -626,6 +637,9 @@ function SelectControl(props: ControlProps): ReactNode {
                 .join(' '),
             'data-style': props.presentation,
             'data-portal-filter': portalFilter || undefined,
+            'data-readonly-dropdown-layout': nativeFormReadOnly
+                ? props.readOnlyDropdownLayout
+                : undefined,
             onClick: props.readOnly
                 ? undefined
                 : (event: import('react').MouseEvent<HTMLDivElement>) => {
@@ -703,31 +717,33 @@ function SelectControl(props: ControlProps): ReactNode {
                       );
                   })
               )
-            : h(
-                  'div',
-                  { className: 'mx-sdk-select-dropdown' },
-                  h(
-                      'ul',
-                      {
-                          className: 'mx-sdk-select-selected',
-                          'aria-label': 'selected options',
-                      },
-                      ...selected.map((choice, index) =>
-                          h(
-                              'li',
-                              {
-                                  key: `${key(choice)}-${index}`,
-                                  className:
-                                      props.multiple && !disabled
-                                          ? 'mx-sdk-select-removable-selection'
-                                          : undefined,
-                              },
-                              badge(choice, !disabled)
-                          )
-                      )
-                  )
-              ),
-        disabled && selected.length === 0
+            : nativeFormReadOnly && selected.length === 0
+              ? renderReadOnlyEmptyValue(props.labels?.empty ?? 'None')
+              : h(
+                    'div',
+                    { className: 'mx-sdk-select-dropdown' },
+                    h(
+                        'ul',
+                        {
+                            className: 'mx-sdk-select-selected',
+                            'aria-label': 'selected options',
+                        },
+                        ...selected.map((choice, index) =>
+                            h(
+                                'li',
+                                {
+                                    key: `${key(choice)}-${index}`,
+                                    className:
+                                        props.multiple && !disabled
+                                            ? 'mx-sdk-select-removable-selection'
+                                            : undefined,
+                                },
+                                badge(choice, !disabled)
+                            )
+                        )
+                    )
+                ),
+        disabled && selected.length === 0 && !nativeFormReadOnly
             ? h('span', null, props.labels?.empty ?? 'None')
             : null,
         !disabled && props.presentation === 'dropdown' && canAdd

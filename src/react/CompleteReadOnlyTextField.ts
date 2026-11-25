@@ -62,6 +62,14 @@ function EmptyValue({
 }) {
     const label = suppliedLabel ?? emptyLabels[language];
     if (label === undefined) throw new Error(`Unexpected: ${String(language)}`);
+    return renderReadOnlyEmptyValue(label, className);
+}
+
+/** Shared decorative empty-state markup; the caller supplies localized text. */
+export function renderReadOnlyEmptyValue(
+    label: string,
+    className?: string
+): ReactElement {
     return createElement(
         'p',
         {

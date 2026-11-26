@@ -125,7 +125,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             } else if (path === '/') {
                 response.setHeader('Content-Type', 'text/html');
                 response.end(
-                    '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Portable Search gate proof</title><link rel="stylesheet" href="/gate.css"><main></main><script type="module" src="/proof.js"></script>'
+                    '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Portable Search gate proof</title><style>html{line-height:1.5}</style><link rel="stylesheet" href="/gate.css"><main></main><script type="module" src="/proof.js"></script>'
                 );
             } else {
                 response.statusCode = path === '/favicon.ico' ? 204 : 404;
@@ -226,14 +226,28 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             );
             const inputAppearance = await input.evaluate((node) => {
                 const style = getComputedStyle(node);
+                const label = node.labels[0];
+                if (!label) throw new Error('Missing stock Search label');
+                const inputBounds = node.getBoundingClientRect();
+                const labelBounds = label.getBoundingClientRect();
                 return {
-                    height: node.getBoundingClientRect().height,
+                    height: inputBounds.height,
                     fontSize: style.fontSize,
                     lineHeight: style.lineHeight,
                     border: style.borderTopColor,
                     ring: style.boxShadow,
                     outline: style.outlineColor,
+                    label: {
+                        lineHeight: getComputedStyle(label).lineHeight,
+                        height: labelBounds.height,
+                        gap: inputBounds.top - labelBounds.bottom,
+                    },
                 };
+            });
+            assert.deepEqual(inputAppearance.label, {
+                lineHeight: '20px',
+                height: 20,
+                gap: 4,
             });
             assert.equal(inputAppearance.height, mobile ? 42 : 38);
             assert.equal(inputAppearance.fontSize, mobile ? '16px' : '14px');

@@ -884,11 +884,28 @@ it('wide visibility follows actual mounted locale-calendar cards, including inhe
         LocaleHost
     );
     const gregorian = publications[publications.length - 1]!;
+    const localDay = clock.localToday();
+    const utcDay = clock.utcDay();
+    function readToday(locale: string) {
+        const utcCell = f.container.querySelector(
+            `[data-date="${utcDay}"] [data-today]`
+        );
+        assert.ok(utcCell, `${locale} renders the UTC day as a visible cell`);
+        return {
+            locale,
+            markedDays: [
+                ...f.container.querySelectorAll('[data-today="true"]'),
+            ].map((node) => node.closest('td')?.getAttribute('data-date')),
+            utcDayIsToday: utcCell.getAttribute('data-today'),
+        };
+    }
+    const todayByLocale = [readToday('en-US')];
     for (const locale of [
         'en-US-u-ca-islamic-umalqura',
         'ar-SA-u-ca-islamic-umalqura',
     ]) {
         await act(async () => setLocale(locale));
+        todayByLocale.push(readToday(locale));
         const current = publications[publications.length - 1]!;
         const mounted = [
             ...f.container.querySelectorAll('article[data-record-id]'),
@@ -904,6 +921,22 @@ it('wide visibility follows actual mounted locale-calendar cards, including inhe
         );
     }
     assert.equal(gregorian.isCurrent(), false);
+    await act(async () => setLocale('en-US'));
+    todayByLocale.push(readToday('en-US'));
+    assert.deepEqual(
+        todayByLocale,
+        [
+            'en-US',
+            'en-US-u-ca-islamic-umalqura',
+            'ar-SA-u-ca-islamic-umalqura',
+            'en-US',
+        ].map((locale) => ({
+            locale,
+            markedDays: [localDay],
+            utcDayIsToday: 'false',
+        }))
+    );
+    await act(async () => setLocale('ar-SA-u-ca-islamic-umalqura'));
     assert.deepEqual(
         native.state.events,
         [],

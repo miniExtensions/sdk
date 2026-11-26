@@ -77,6 +77,16 @@
     margin: 0;
     font-size: 1.25rem;
 }
+.mx-sdk-portal-brand--rich-sidebar-title > div > .mx-sdk-portal-title-html {
+    color: #020817;
+    font-family:
+        Inter, ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+.mx-sdk-portal-brand--rich-sidebar-title > div {
+    inline-size: 100%;
+    min-inline-size: 0;
+}
 .mx-sdk-portal-shell--sidebar-icon-toggle
     > .mx-sdk-portal-header
     .mx-sdk-portal-title {
@@ -91,6 +101,16 @@
         > :only-child
         > .mx-sdk-portal-title:only-child {
         margin-inline: 0.5rem;
+    }
+    .mx-sdk-portal-header > .mx-sdk-portal-brand--rich-sidebar-title {
+        inline-size: 100%;
+        padding-inline-start: 0.5rem;
+    }
+    .mx-sdk-portal-header
+        > .mx-sdk-portal-brand--rich-sidebar-title:not(
+            .mx-sdk-portal-configurable
+        ) {
+        padding-inline-end: 0.5rem;
     }
 }
 .mx-sdk-portal-logo {
@@ -399,6 +419,33 @@
         height: 100%;
         overflow: auto;
         background: var(--mx-portal-background);
+    }
+    .mx-sdk-portal-navigation.mx-sdk-portal-navigation--rich-title {
+        --mx-portal-drawer-close-size: 2.75rem;
+        width: calc(min(100vi, 24rem) - var(--mx-portal-drawer-close-size));
+        padding-inline: 1.5rem;
+    }
+    .mx-sdk-portal-navigation > .mx-sdk-portal-navigation-close {
+        position: fixed;
+        z-index: 1;
+        inset-block-start: 0;
+        inset-inline-start: calc(
+            min(100vi, 24rem) - var(--mx-portal-drawer-close-size)
+        );
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        inline-size: var(--mx-portal-drawer-close-size);
+        block-size: var(--mx-portal-drawer-close-size);
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: white;
+    }
+    .mx-sdk-portal-navigation > .mx-sdk-portal-navigation-close:focus-visible {
+        outline-color: white;
+        outline-offset: -3px;
     }
     .mx-sdk-portal-shell > .mx-sdk-portal-content {
         grid-column: 1;

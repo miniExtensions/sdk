@@ -442,6 +442,14 @@ function Shell(props: CompletePortalShellProps) {
         snapshot.header.layout === 'sidebar' &&
         !snapshot.header.hidden &&
         snapshot.header.sidebarToggle === 'icon';
+    const richSidebarTitle =
+        sidebarIconToggle &&
+        layoutActions &&
+        Boolean(snapshot.header.titleHtml?.trim()) &&
+        !snapshot.header.logoUrl &&
+        !snapshot.header.descriptionHtml;
+    const richSidebarDrawer =
+        richSidebarTitle && snapshot.header.showBrandInNavigation;
     const mobileLimit =
         layoutActions && snapshot.header.layout === 'topbar' ? 639 : 1023;
     const actionsInNavigation =
@@ -1533,6 +1541,10 @@ function Shell(props: CompletePortalShellProps) {
                   'div',
                   {
                       className: `mx-sdk-portal-brand${
+                          richSidebarTitle
+                              ? ' mx-sdk-portal-brand--rich-sidebar-title'
+                              : ''
+                      }${
                           props.onOpenSettings &&
                           snapshot.settings?.title?.trim()
                               ? ' mx-sdk-portal-configurable'
@@ -1636,7 +1648,10 @@ function Shell(props: CompletePortalShellProps) {
                       ref: nav,
                       id: navId,
                       hidden: overlay && !open,
-                      className: 'mx-sdk-portal-navigation',
+                      className:
+                          overlay && richSidebarDrawer
+                              ? 'mx-sdk-portal-navigation mx-sdk-portal-navigation--rich-title'
+                              : 'mx-sdk-portal-navigation',
                       role: overlay && open ? 'dialog' : undefined,
                       'aria-modal': overlay && open ? true : undefined,
                       'aria-label': labels.navigation,
@@ -1659,8 +1674,36 @@ function Shell(props: CompletePortalShellProps) {
                   overlay
                       ? h(
                             'button',
-                            { type: 'button', onClick: close },
-                            labels.closeNavigation
+                            {
+                                type: 'button',
+                                onClick: close,
+                                ...(richSidebarDrawer
+                                    ? {
+                                          className:
+                                              'mx-sdk-portal-navigation-close',
+                                          'aria-label': labels.closeNavigation,
+                                      }
+                                    : {}),
+                            },
+                            richSidebarDrawer
+                                ? h(
+                                      'svg',
+                                      {
+                                          width: 24,
+                                          height: 24,
+                                          viewBox: '0 0 24 24',
+                                          fill: 'none',
+                                          stroke: 'currentColor',
+                                          strokeWidth: 1.5,
+                                          'aria-hidden': true,
+                                      },
+                                      h('path', {
+                                          strokeLinecap: 'round',
+                                          strokeLinejoin: 'round',
+                                          d: 'M6 18 18 6M6 6l12 12',
+                                      })
+                                  )
+                                : labels.closeNavigation
                         )
                       : null,
                   overlay && snapshot.header.showBrandInNavigation

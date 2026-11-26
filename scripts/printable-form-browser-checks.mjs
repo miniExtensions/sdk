@@ -12,13 +12,33 @@ window.addEventListener('error',e=>errors.push(String(e.error||e.message)));
 window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
 const field=(key,title,facet,extra={})=>({key,title,fieldName:title,semanticTitle:title,showTitle:true,required:false,sameRow:false,enableSideBySideOnMobile:false,facet,...extra});
 const image=new URL('/printable-form-image.svg',location.href).href;
+const instructions = Array.from({length: 7}, (_, index) =>
+    '<p>' + (index + 1) + '. Follow instruction ' + (index + 1) + '.</p>'
+).join('') + '<p>8. END OF INSTRUCTIONS</p>';
 const document={language:'en',fields:[
- field('name','Name',{kind:'text',value:'Synthetic Person',emptyLabel:'None'},{description:{html:'<p>Complete configured-order document.</p>',imageUrl:null,placement:'top',truncate:false}}),
- field('password','Password',{kind:'text',value:'••••••••',emptyLabel:'None'}),
+ field('name','Name',{kind:'text',value:'Synthetic Person',emptyLabel:'None'},{description:{html:instructions,imageUrl:null,placement:'top',truncate:true}}),
+ field('password','Password',{kind:'text',value:'••••••••',emptyLabel:'None'},{description:{html:'<p>Complete configured-order document.</p>',imageUrl:null,placement:'top',truncate:false}}),
  field('images','Synthetic images',{kind:'attachments',items:[{key:'first',label:'First synthetic image',kind:'image',url:image,imageSources:[image]},{key:'duplicate',label:'Second synthetic image',kind:'image',url:image,imageSources:[image]}],layout:'grid',columns:2,fit:'contain',thumbnailSize:'medium',showNames:true,emptyLabel:'None'}),
 ]};
 const rect=n=>{if(!n)return null;const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,width:r.width,height:r.height};};
-window.__nativeProbe={snapshot(){const fields=[...globalThis.document.querySelectorAll('.mx-sdk-print-field')],name=fields[0];return {react:React.version,committed,errors:[...errors],name:rect(name),help:rect(name?.querySelector('.mx-sdk-field-description')),value:rect(name?.querySelector('.mx-sdk-field-control')),next:rect(fields[1]),images:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment img')].map(n=>({complete:n.complete,naturalWidth:n.naturalWidth,...rect(n)})),labels:fields.map(n=>n.querySelector('.mx-sdk-field-title')?.textContent),imageLabels:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment figcaption')].map(n=>n.textContent)};}};
+function describeHelp(field) {
+    const viewport = field?.querySelector('.mx-sdk-description__viewport');
+    if (!viewport) return null;
+    const finalLine = viewport.querySelector('.ql-editor p:last-child');
+    const toggle = field.querySelector('.mx-sdk-description__toggle');
+    return {
+        viewport: rect(viewport),
+        overflowY: getComputedStyle(viewport).overflowY,
+        maxHeight: getComputedStyle(viewport).maxHeight,
+        lastLine: {text: finalLine?.textContent, box: rect(finalLine)},
+        toggle: toggle ? {
+            box: rect(toggle),
+            display: getComputedStyle(toggle).display,
+            expanded: toggle.getAttribute('aria-expanded'),
+        } : null,
+    };
+}
+window.__nativeProbe={snapshot(){const fields=[...globalThis.document.querySelectorAll('.mx-sdk-print-field')],name=fields[0];return {react:React.version,committed,errors:[...errors],name:rect(name),help:rect(name?.querySelector('.mx-sdk-field-description')),description:describeHelp(name),value:rect(name?.querySelector('.mx-sdk-field-control')),next:rect(fields[1]),images:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment img')].map(n=>({complete:n.complete,naturalWidth:n.naturalWidth,...rect(n)})),labels:fields.map(n=>n.querySelector('.mx-sdk-field-title')?.textContent),imageLabels:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment figcaption')].map(n=>n.textContent)};}};
 function Ready(){useLayoutEffect(()=>{committed++;},[]);return null;}
 createRoot(globalThis.document.getElementById('root')).render(h(StrictMode,null,h(ReadonlyPrintDocumentView,{document}),h(Ready)));
 `;
@@ -109,6 +129,7 @@ export async function preparePrintableFormBrowserFixtures({
 }
 
 export async function checkPrintableFormBrowser({ page, evidence }) {
+    await page.emulateMedia({ media: 'screen' });
     await page.waitForFunction(() => {
         const s = window.__nativeProbe?.snapshot();
         return (
@@ -117,13 +138,37 @@ export async function checkPrintableFormBrowser({ page, evidence }) {
             s.images.every((n) => n.complete && n.naturalWidth === 48)
         );
     });
+    const readMore = page.getByRole('button', {
+        name: 'Read more',
+        exact: true,
+    });
+    const showLess = page.getByRole('button', {
+        name: 'Show less',
+        exact: true,
+    });
+    await readMore.click();
+    await showLess.waitFor({ state: 'visible' });
+    const expanded = await page.evaluate(
+        () => window.__nativeProbe.snapshot().description
+    );
+    assert.equal(expanded.toggle.expanded, 'true');
+    assert(
+        expanded.lastLine.box.bottom <= expanded.viewport.bottom + 1,
+        'screen: Read more reveals the final instruction'
+    );
+    evidence.expandedScreenDescription = expanded;
+    await showLess.click();
+    await readMore.waitFor({ state: 'visible' });
+
     const groups = [];
+    evidence.groups = groups;
     try {
         for (const media of ['screen', 'print']) {
             await page.emulateMedia({ media });
             const state = await page.evaluate(() =>
                 window.__nativeProbe.snapshot()
             );
+            groups.push({ media, geometry: state });
             assert.deepEqual(state.errors, []);
             assert.deepEqual(state.labels, [
                 'Name',
@@ -150,6 +195,33 @@ export async function checkPrintableFormBrowser({ page, evidence }) {
                 state.help.bottom <= state.value.top + 1,
                 media + ': value follows help'
             );
+            const description = state.description;
+            assert.equal(description.lastLine.text, '8. END OF INSTRUCTIONS');
+            assert(description.lastLine.box.height > 0);
+            if (media === 'screen') {
+                assert.equal(description.toggle.expanded, 'false');
+                assert(
+                    description.lastLine.box.bottom >
+                        description.viewport.bottom + 1,
+                    'screen: the collapsed viewport clips the final line'
+                );
+            } else {
+                assert(
+                    description.lastLine.box.bottom <=
+                        description.viewport.bottom + 1,
+                    'print: the final instruction fits inside the viewport'
+                );
+                assert(
+                    description.lastLine.box.bottom <= state.value.top + 1,
+                    'print: the Name value follows the final instruction'
+                );
+                assert(
+                    !description.toggle ||
+                        (description.toggle.display === 'none' &&
+                            description.toggle.box.height === 0),
+                    'print: the disclosure control occupies no space'
+                );
+            }
             assert(
                 state.value.bottom <= state.name.bottom + 1,
                 media + ': value stays inside Name'
@@ -169,12 +241,10 @@ export async function checkPrintableFormBrowser({ page, evidence }) {
                 ),
                 media + ': duplicate images render'
             );
-            groups.push({ media, geometry: state });
         }
     } finally {
         await page.emulateMedia({ media: 'screen' });
     }
-    evidence.groups = groups;
     evidence.limits = [
         'Packed renderer/CSS geometry and local synthetic images; no native print-dialog or hardcopy claim.',
     ];

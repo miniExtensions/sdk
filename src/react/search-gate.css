@@ -84,12 +84,15 @@
     border: 1px solid #d1d5db;
     border-radius: 0.375rem;
     background: white;
-    color: #020817;
+    color: #111827;
     font: inherit;
     font-size: 1rem;
     line-height: 1.5rem;
     user-select: text;
     box-shadow: 0 1px 2px #0000000d;
+}
+.mx-sdk-search-gate-field > input {
+    color: #020817;
 }
 .mx-sdk-search-gate-panel input::placeholder {
     color: #9ca3af;

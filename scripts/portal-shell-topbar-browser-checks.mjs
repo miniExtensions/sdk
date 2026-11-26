@@ -183,8 +183,284 @@ export async function checkNativeTopbar(browser, origin) {
                 );
             }
         }
+        measurements.push(...(await checkDesktopTitleVariants(page)));
         return measurements;
     } finally {
         await page.close();
     }
+}
+
+async function checkDesktopTitleVariants(page) {
+    const measurements = [];
+    const shell = page.locator('.mx-sdk-portal-shell--native-desktop-topbar');
+    const header = shell.locator(':scope > header');
+    const navigation = header.locator(
+        ':scope > .mx-sdk-portal-navigation-wrap'
+    );
+    const opener = header.getByRole('button', {
+        name: 'Open navigation',
+        exact: true,
+    });
+    const summary = navigation
+        .locator('summary')
+        .filter({ hasText: /^Orders$/ });
+    const view = navigation.getByRole('button', {
+        name: 'Open orders',
+        exact: true,
+    });
+    const geometry = () =>
+        shell.evaluate((node) => {
+            const header = node
+                .querySelector(':scope > header')
+                .getBoundingClientRect();
+            const table = node
+                .querySelector('nav summary')
+                .getBoundingClientRect();
+            const workspace = node.querySelector('main');
+            return {
+                headerHeight: header.height,
+                insideHeader:
+                    table.top >= header.top && table.bottom <= header.bottom,
+                workspaceTop:
+                    workspace.getBoundingClientRect().top +
+                    parseFloat(getComputedStyle(workspace).paddingTop),
+                firstRowTop: workspace
+                    .querySelector('p')
+                    .getBoundingClientRect().top,
+                documentWidth: document.documentElement.scrollWidth,
+            };
+        });
+    for (const profile of ['rich', 'editable']) {
+        await page.evaluate((profile) => {
+            const rich = profile === 'rich';
+            window.configure({
+                header: {
+                    layout: 'topbar',
+                    topbarLayout: 'native-desktop',
+                    title: rich ? '' : 'Editable Portal',
+                    ...(rich
+                        ? { titleHtml: '<strong>Rich Portal</strong>' }
+                        : {}),
+                    showBrandInNavigation: true,
+                    actionsPlacement: 'layout',
+                    menuInteraction: 'menu',
+                },
+                settings: rich
+                    ? undefined
+                    : {
+                          title: 'Edit title',
+                          items: [
+                              {
+                                  itemId: 'orders',
+                                  label: 'Edit Orders',
+                                  includeViews: false,
+                              },
+                          ],
+                      },
+            });
+        }, profile);
+        await shell.waitFor();
+        await (
+            profile === 'rich'
+                ? header
+                      .locator('.mx-sdk-portal-title-html strong')
+                      .filter({ hasText: /^Rich Portal$/ })
+                : header.getByRole('heading', { name: 'Editable Portal' })
+        ).waitFor();
+        const ownedNavigation = await navigation.elementHandle();
+        assert(ownedNavigation);
+        try {
+            for (const width of [375, 639, 640, 1200, 1280]) {
+                const height = width === 1280 ? 800 : 813;
+                await page.setViewportSize({ width, height });
+                if (width < 640) {
+                    await opener.waitFor();
+                    assert(!(await navigation.isVisible()));
+                    await opener.press('Enter');
+                    const drawer = header.getByRole('dialog', {
+                        name: 'Portal navigation',
+                    });
+                    await drawer.waitFor();
+                    assert(
+                        await drawer
+                            .getByText(
+                                profile === 'rich'
+                                    ? 'Rich Portal'
+                                    : 'Editable Portal',
+                                { exact: true }
+                            )
+                            .isVisible()
+                    );
+                    await page.keyboard.press('Escape');
+                    await drawer.waitFor({ state: 'hidden' });
+                    assert(
+                        await opener.evaluate(
+                            (node) => node === document.activeElement
+                        )
+                    );
+                } else {
+                    await opener.waitFor({ state: 'hidden' });
+                    await summary.waitFor();
+                    const rest = await geometry();
+                    assert.equal(rest.headerHeight, 64);
+                    assert.equal(rest.workspaceTop, 64);
+                    assert(rest.insideHeader);
+                    assert.equal(rest.documentWidth, width);
+                    await summary.hover();
+                    await view.waitFor();
+                    assert.deepEqual(await geometry(), rest);
+                    const option = await view.boundingBox();
+                    assert(option);
+                    await page.mouse.move(
+                        option.x + option.width / 2,
+                        option.y + option.height / 2,
+                        { steps: 12 }
+                    );
+                    assert(
+                        (await view.isVisible()) &&
+                            (await view.evaluate((node) =>
+                                node.matches(':hover')
+                            )),
+                        `${profile} at ${width}px: pointer reaches the open view`
+                    );
+                    await page.mouse.move(width - 1, height - 1);
+                    await view.waitFor({ state: 'hidden' });
+                    assert.deepEqual(await geometry(), rest);
+                    await summary.focus();
+                    await page.keyboard.press('ArrowDown');
+                    await view.waitFor();
+                    assert(
+                        await view.evaluate((node) => {
+                            const bounds = node.getBoundingClientRect();
+                            return (
+                                node === document.activeElement &&
+                                node.contains(
+                                    document.elementFromPoint(
+                                        bounds.x + bounds.width / 2,
+                                        bounds.y + bounds.height / 2
+                                    )
+                                )
+                            );
+                        })
+                    );
+                    assert.deepEqual(await geometry(), rest);
+                    await page.keyboard.press('Escape');
+                    await view.waitFor({ state: 'hidden' });
+                    assert(
+                        await summary.evaluate(
+                            (node) => node === document.activeElement
+                        )
+                    );
+                    assert.deepEqual(await geometry(), rest);
+                    if (profile === 'editable') {
+                        const before = await page.evaluate(
+                            () => window.proof.settings.length
+                        );
+                        await header
+                            .getByRole('button', {
+                                name: 'Edit title',
+                                exact: true,
+                            })
+                            .press('Enter');
+                        await header
+                            .getByRole('button', {
+                                name: 'Edit Orders',
+                                exact: true,
+                            })
+                            .press('Enter');
+                        assert.deepEqual(
+                            await page.evaluate(
+                                (before) =>
+                                    window.proof.settings
+                                        .slice(before)
+                                        .map(({ target }) => target),
+                                before
+                            ),
+                            [
+                                { type: 'title' },
+                                { type: 'item', itemId: 'orders' },
+                            ]
+                        );
+                    }
+                    measurements.push({ width, height, profile, ...rest });
+                }
+                assert(
+                    await ownedNavigation.evaluate((node) => node.isConnected)
+                );
+            }
+        } finally {
+            await ownedNavigation.dispose();
+        }
+    }
+    const width = 640;
+    const height = 360;
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => {
+        window.configure({
+            items: window.fixtureItems.map((item) =>
+                item.id === 'orders'
+                    ? {
+                          ...item,
+                          views: [
+                              ...item.views,
+                              ...Array.from({ length: 30 }, (_, i) => ({
+                                  id: `additional-${i + 1}`,
+                                  label: `Additional view ${i + 1}`,
+                              })),
+                          ],
+                      }
+                    : item
+            ),
+        });
+    });
+    await page.waitForFunction(
+        () => window.fixtureCommittedSnapshot?.items[0].views.length === 32
+    );
+    const rest = await geometry();
+    const lastView = navigation.getByRole('button', {
+        name: 'Additional view 30',
+        exact: true,
+    });
+    const isFocusedAndVisible = (node) => {
+        const { left, top, width, height } = node.getBoundingClientRect();
+        return (
+            node === document.activeElement &&
+            node.contains(
+                document.elementFromPoint(left + width / 2, top + height / 2)
+            )
+        );
+    };
+    await summary.focus();
+    await page.keyboard.press('ArrowUp');
+    assert(await lastView.evaluate(isFocusedAndVisible));
+    const popupScroll = await lastView.evaluate(
+        (node) => node.closest('.mx-sdk-portal-menu').scrollTop
+    );
+    assert(popupScroll > 0);
+    assert.deepEqual(await geometry(), rest);
+    await page.keyboard.press('Home');
+    assert(await view.evaluate(isFocusedAndVisible));
+    await page.setViewportSize({ width, height: 280 });
+    await page.keyboard.press('End');
+    assert(await lastView.evaluate(isFocusedAndVisible));
+    await page.keyboard.press('Escape');
+    await lastView.waitFor({ state: 'hidden' });
+    assert(await summary.evaluate((node) => node === document.activeElement));
+    assert.deepEqual(await geometry(), rest);
+    measurements.push({ width, height, popupScroll, ...rest });
+    await page.setViewportSize({ width: 375, height: 813 });
+    await opener.waitFor();
+    await opener.press('Enter');
+    const drawer = header.getByRole('dialog', { name: 'Portal navigation' });
+    await drawer.waitFor();
+    await summary.waitFor();
+    assert.equal(
+        await summary.evaluate(
+            (node) => getComputedStyle(node.nextElementSibling).maxBlockSize
+        ),
+        'none'
+    );
+    await drawer.getByRole('button', { name: 'Close navigation' }).click();
+    await drawer.waitFor({ state: 'hidden' });
+    return measurements;
 }

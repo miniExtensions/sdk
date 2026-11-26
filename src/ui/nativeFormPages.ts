@@ -48,7 +48,10 @@ export type NativeFormPages<T> = NativeFormPagesActions & {
     dispose(): void;
 };
 
-type Review = Readonly<{ submit: () => unknown }>;
+type Review = Readonly<{
+    submit: () => unknown;
+    requiresLastPage: boolean;
+}>;
 
 function copyPublication<T>(
     publication: NativeFormPagesPublication<T>
@@ -108,6 +111,7 @@ const lastVisible = (pages: readonly NativeFormPageDescriptor[]) => {
 /**
  * One live presentation lifecycle over native Form authority. Review keeps its
  * captured one-shot callback while current host publications update its rows.
+ * Review opened on the last page closes if a later page becomes reachable.
  * No draft, validation, pending-input inference or Save settlement lives here.
  */
 export function createNativeFormPages<T>(
@@ -118,6 +122,7 @@ export function createNativeFormPages<T>(
     let publication = copyPublication(initial);
     let internalPageIndex = 0;
     let navigation = 0;
+    let lastPageLosses = 0;
     let review: Review | null = null;
     let retired = false;
     let checking = false;
@@ -144,6 +149,11 @@ export function createNativeFormPages<T>(
         );
         return publication.pages[index]!.hidden ? first : index;
     };
+
+    const isLastPage = (
+        pages: readonly NativeFormPageDescriptor[],
+        index: number
+    ) => !publication.multiple || index === Math.max(lastVisible(pages), 0);
 
     const retire = () => {
         if (retired) return;
@@ -212,6 +222,7 @@ export function createNativeFormPages<T>(
             return;
         }
         // Consume before publication or native invocation, including reentry.
+        const lossesBeforeConfirm = lastPageLosses;
         review = null;
         navigation++;
         publish();
@@ -219,13 +230,18 @@ export function createNativeFormPages<T>(
             publish();
             return;
         }
+        if (expected.requiresLastPage && lastPageLosses !== lossesBeforeConfirm)
+            return;
         // Native owns queued admission, latest payload and allocated settlement.
         return expected.submit();
     };
 
     const open = (expectedNavigation: number, submit: () => unknown) => {
         if (!allowed(expectedNavigation) || review != null) return false;
-        review = Object.freeze({ submit });
+        review = Object.freeze({
+            submit,
+            requiresLastPage: isLastPage(publication.pages, activeIndex()),
+        });
         navigation++;
         publish();
         return true;
@@ -287,6 +303,11 @@ export function createNativeFormPages<T>(
         const pages = retired ? Object.freeze([]) : publication.pages;
         const items = retired ? Object.freeze([]) : publication.reviewItems;
         const index = retired ? 0 : activeIndex();
+        const lastPage = isLastPage(pages, index);
+        if (cached?.isLastPage && !lastPage) {
+            lastPageLosses++;
+            if (review?.requiresLastPage) review = null;
+        }
         if (
             cached &&
             cachedNavigation === navigation &&
@@ -307,9 +328,7 @@ export function createNativeFormPages<T>(
             isFirstPage:
                 !publication.multiple ||
                 index === Math.max(firstVisible(pages), 0),
-            isLastPage:
-                !publication.multiple ||
-                index === Math.max(lastVisible(pages), 0),
+            isLastPage: lastPage,
             reviewItems: items,
             reviewing: review != null,
             retired,

@@ -259,6 +259,55 @@ it('live Review updates preserve the captured one-shot callback and close before
     assert.deepEqual(calls, ['original']);
 });
 
+it('a newly visible later page retires a final-page Review without retiring navigation', () => {
+    const f = fixture();
+    const initial = [page('contact'), page('delivery', true)];
+    const visible = [page('contact'), page('delivery')];
+    const pages = createNativeFormPages(f.publication({ pages: initial }));
+    const submissions: string[] = [];
+    pages.openReview(() => submissions.push('original'));
+    const oldConfirm = pages.confirmReview;
+
+    pages.update(f.publication({ pages: initial, reviewItems: ['updated'] }));
+    assert.equal(pages.getSnapshot().reviewing, true);
+    pages.update(f.publication({ pages: visible }));
+    assert.equal(pages.getSnapshot().reviewing, false);
+    assert.equal(pages.getSnapshot().isLastPage, false);
+    oldConfirm();
+    assert.equal(submissions.length, 0);
+
+    pages.next();
+    f.advances[0]!();
+    assert.equal(pages.getSnapshot().activePageIndex, 1);
+    pages.openReview(() => submissions.push('with delivery'));
+    oldConfirm();
+    pages.confirmReview();
+    pages.confirmReview();
+    assert.deepEqual(submissions, ['with delivery']);
+});
+
+it('losing final-page eligibility while Confirm closes Review invalidates native invocation', () => {
+    const f = fixture();
+    const initial = f.publication({
+        pages: [page('contact'), page('delivery', true)],
+    });
+    const pages = createNativeFormPages(initial);
+    let submissions = 0;
+    pages.openReview(() => submissions++);
+    const unsubscribe = pages.subscribe(() => {
+        if (pages.getSnapshot().reviewing) return;
+        unsubscribe();
+        pages.update(
+            f.publication({ pages: [page('contact'), page('delivery')] })
+        );
+        pages.update(initial);
+    });
+
+    pages.confirmReview();
+    assert.equal(pages.getSnapshot().isLastPage, true);
+    assert.equal(submissions, 0);
+});
+
 it('old Review dismiss and Confirm callbacks cannot affect a reopened Review', () => {
     const f = fixture();
     const pages = createNativeFormPages(f.publication());

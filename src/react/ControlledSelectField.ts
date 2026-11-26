@@ -1012,7 +1012,10 @@ function SelectControl(props: ControlProps): ReactNode {
                             found.length === 0 && !showCreate
                                 ? h(
                                       'li',
-                                      { role: 'presentation' },
+                                      {
+                                          role: 'presentation',
+                                          className: 'mx-sdk-select-no-matches',
+                                      },
                                       props.labels?.noMatches ??
                                           'No matching choices'
                                   )

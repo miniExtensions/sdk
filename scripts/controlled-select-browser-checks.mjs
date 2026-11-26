@@ -231,9 +231,70 @@ async function checkNativeEditableForm(page, snapshot, capture) {
         ['rgba(0, 0, 0, 0)', 'rgb(219, 234, 254)', 'rgba(0, 0, 0, 0)']
     );
     await capture('open');
+
+    await page.keyboard.type('Third');
+    const match = listbox.getByRole('option', { name: 'Third', exact: true });
+    assert.equal(await status.inputValue(), 'Third');
+    assert.equal(await options.count(), 1);
+    await page.keyboard.press('ArrowDown');
+    const matchId = await match.getAttribute('id');
+    assert(matchId);
+    assert.equal(await status.getAttribute('aria-activedescendant'), matchId);
+    assert.equal(await match.getAttribute('aria-selected'), 'false');
+
+    const missing = 'zzxqv42nomatch';
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type(missing);
+    assert.equal(await status.inputValue(), missing);
+    assert.equal(await options.count(), 0);
+    assert.equal(await status.getAttribute('aria-activedescendant'), null);
+    const emptyMessage = listbox.getByText('No matching choices', {
+        exact: true,
+    });
+    assert.equal(await emptyMessage.isVisible(), true);
+    const emptyMenu = await paint();
+    const message = await emptyMessage.evaluate((node) => {
+        const row = node.getBoundingClientRect();
+        const menu = node.parentElement.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {
+            width: row.width,
+            height: row.height,
+            start: row.left - menu.left,
+            top: row.top - menu.top,
+            padding: [
+                style.paddingBlockStart,
+                style.paddingBlockEnd,
+                style.paddingInlineStart,
+                style.paddingInlineEnd,
+            ],
+        };
+    });
+    const mobile = page.viewportSize().width === 375;
+    assert.deepEqual(emptyMenu.menu, [mobile ? 48 : 44, 4]);
+    assert.deepEqual(message, {
+        width: closed.width,
+        height: mobile ? 40 : 36,
+        start: 0,
+        top: 4,
+        padding: ['8px', '8px', '16px', '16px'],
+    });
+    await capture('no-match');
+
     await page.keyboard.press('Escape');
     assert.equal(await listbox.count(), 0);
+    assert.equal(await status.getAttribute('aria-expanded'), 'false');
+    assert.equal(await status.inputValue(), '');
     assert.equal(await active(status), true);
+    assert.equal(
+        await status.evaluate((node) => node.matches(':focus-visible')),
+        true
+    );
+    assert.equal(await remove.count(), 1);
+    const afterSearch = await snapshot();
+    assert.equal(afterSearch.single, 'Beta');
+    assert.deepEqual(afterSearch.writes, []);
+    assert.equal(afterSearch.submits, 0);
     await page.keyboard.press('Tab');
     assert.equal(await active(name), true);
 
@@ -295,7 +356,7 @@ async function checkNativeEditableForm(page, snapshot, capture) {
             .count(),
         0
     );
-    return { closed, open, blank };
+    return { closed, open, empty: { menu: emptyMenu.menu, message }, blank };
 }
 
 // Synthetic controlled host, installed public entry points, actual browser input.

@@ -74,6 +74,7 @@
     display: block;
     margin-bottom: 0.25rem;
     font-weight: 500;
+    line-height: 1.25rem;
 }
 .mx-sdk-search-gate-panel input {
     box-sizing: border-box;

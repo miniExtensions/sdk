@@ -62,6 +62,89 @@ async function checkAccountMenuBorders(panel, expectedRowBorder) {
         Array(4).fill(expectedRowBorder),
     ]);
 }
+async function checkFixedDesktopSidebarAccountMenu(
+    page,
+    trigger,
+    panel,
+    label
+) {
+    const style = await page.addStyleTag({
+        content:
+            '#app { height: 900px; font: 1rem/1.5 system-ui; } #app > .mx-sdk-portal-shell { height: 100%; min-height: 0; }',
+    });
+    try {
+        await trigger.press('ArrowDown');
+        const placement = await panel.evaluate((element) => {
+            const bounds = (node) => {
+                const { top, bottom, height } = node.getBoundingClientRect();
+                return { top, bottom, height };
+            };
+            const navigation = element.closest('.mx-sdk-portal-navigation');
+            const navigationTop =
+                navigation.getBoundingClientRect().top + navigation.clientTop;
+            const rows = Array.from(
+                element.querySelectorAll(':scope > button')
+            );
+            return {
+                viewportHeight: window.innerHeight,
+                navigation: {
+                    top: Math.max(0, navigationTop),
+                    bottom: Math.min(
+                        window.innerHeight,
+                        navigationTop + navigation.clientHeight
+                    ),
+                },
+                trigger: bounds(element.previousElementSibling),
+                panel: bounds(element),
+                rows: rows.map(bounds),
+                focused: document.activeElement.textContent,
+                pageScroll: window.scrollY,
+            };
+        });
+        await page.screenshot({
+            path: join(output, `account-menu-sidebar-${label}-1280.png`),
+        });
+        assert.equal(placement.viewportHeight, 900);
+        assert.equal(placement.rows.length, 2);
+        assert.ok(
+            placement.panel.height >
+                placement.navigation.bottom - placement.trigger.bottom,
+            'The desktop sidebar fixture must leave too little room below the trigger'
+        );
+        assert.ok(
+            placement.panel.bottom <= placement.trigger.top &&
+                placement.panel.top >= placement.navigation.top &&
+                placement.rows.every(
+                    ({ top, bottom }) =>
+                        top >= placement.panel.top &&
+                        bottom <= placement.panel.bottom &&
+                        bottom <= placement.navigation.bottom
+                ),
+            `First ArrowDown clips the desktop sidebar account menu: ${JSON.stringify(placement)}`
+        );
+        assert.equal(placement.focused, 'User settings');
+        await page.keyboard.press('ArrowDown');
+        assert.equal(
+            await panel
+                .getByRole('button', { name: 'Log out' })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.equal(
+            await page.evaluate(() => window.scrollY),
+            placement.pageScroll
+        );
+        await page.keyboard.press('Escape');
+        assert.equal(await panel.isVisible(), false);
+        assert.equal(
+            await trigger.evaluate((node) => node === document.activeElement),
+            true
+        );
+        return placement;
+    } finally {
+        await style.evaluate((node) => node.remove());
+    }
+}
 async function navigationCompatibility(browser, origin, label) {
     const page = await browser.newPage({
         viewport: { width: 1280, height: 900 },
@@ -414,12 +497,23 @@ async function navigationCompatibility(browser, origin, label) {
             window.enableHostEditor(true);
             window.configure({
                 header: { ...window.fixtureSnapshot.header, layout: 'sidebar' },
+                searchAgainEnabled: false,
             });
         });
         const editor = page.getByRole('textbox', {
             name: 'Native record editor',
         });
         await editor.waitFor();
+        const desktopSidebarAccountPlacement =
+            await checkFixedDesktopSidebarAccountMenu(
+                page,
+                accountTrigger,
+                accountPanel,
+                label
+            );
+        await page.evaluate(() =>
+            window.configure({ searchAgainEnabled: true })
+        );
         await user.locator('summary').focus();
         await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Tab');
@@ -1078,6 +1172,7 @@ async function navigationCompatibility(browser, origin, label) {
             pointerOnlyNotification: 'passed',
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
+            desktopSidebarAccountPlacement,
             desktopAndMobileMenuTabFocus: 'passed',
             mobileAccountPlacement: accountPlacement,
             nativeHostEditorTabDestination: 'passed',

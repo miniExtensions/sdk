@@ -152,15 +152,15 @@ export async function checkPortalGalleryReactMatrix({
                     '--test-reporter=tap',
                     testName,
                 ]);
-                assert.match(output, /# tests 13\b/);
-                assert.match(output, /# pass 13\b/);
+                assert.match(output, /# tests 19\b/);
+                assert.match(output, /# pass 19\b/);
                 assert.match(output, /# fail 0\b/);
                 assert.match(output, /# skipped 0\b/);
                 assert.match(output, /# cancelled 0\b/);
                 profiles.push({
                     react,
                     format,
-                    tests: 13,
+                    tests: 19,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -201,7 +201,7 @@ export async function checkPortalGalleryReactMatrix({
             completedProfile = {
                 react,
                 profiles: 2,
-                tests: 26,
+                tests: 38,
                 strictTypes: ['ESM', 'CJS'],
                 styles: 'shared card + HTML closure',
                 ...receipt,
@@ -213,5 +213,5 @@ export async function checkPortalGalleryReactMatrix({
             JSON.stringify({ ...completedProfile, cleanup: 'completed' })
         );
     }
-    return { profiles, tests: 52, archiveSha256 };
+    return { profiles, tests: 76, archiveSha256 };
 }

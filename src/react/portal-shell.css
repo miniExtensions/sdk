@@ -506,6 +506,39 @@
     min-height: 12.5rem;
     justify-content: center;
 }
+.mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions
+    > .mx-sdk-portal-user-direct--logout-text {
+    align-self: center;
+    border: 0;
+    border-radius: 0;
+    padding: 1.5rem 0;
+    background: transparent;
+    color: #6b7280;
+}
+.mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions
+    > .mx-sdk-portal-user-direct--logout-text:hover {
+    color: rgb(var(--theme-900, 30 58 138));
+}
+.mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions
+    > .mx-sdk-portal-user-direct--logout-text:focus-visible {
+    outline: revert;
+    outline-offset: 0;
+}
+.mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--sidebar
+    .mx-sdk-portal-navigation
+    > .mx-sdk-portal-actions
+    > .mx-sdk-portal-user-direct--logout-text
+    > .mx-sdk-portal-user-icon {
+    display: block;
+    width: 1.75rem;
+    height: 1.75rem;
+}
 @media (min-width: 640px) and (max-width: 1023px) {
     .mx-sdk-portal-shell--layout-actions.mx-sdk-portal-shell--topbar:not(
             .mx-sdk-portal-shell--hidden

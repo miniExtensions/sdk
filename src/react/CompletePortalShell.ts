@@ -207,24 +207,40 @@ function navigationControls(node: HTMLElement): HTMLElement[] {
     );
 }
 
-function positionMobileAccountMenu(
+function positionNavigationAccountMenu(
     account: HTMLDetailsElement,
-    drawer: HTMLElement
+    navigation: HTMLElement,
+    clipToHost: boolean
 ) {
-    const viewport = drawer.ownerDocument.defaultView;
-    if (!account.open || !drawer.clientHeight || !viewport) return;
+    const viewport = navigation.ownerDocument.defaultView;
+    if (!account.open || !navigation.clientHeight || !viewport) return;
     const trigger = account.querySelector(':scope > summary');
     const panel = account.querySelector<HTMLDivElement>(':scope > div');
     if (!trigger || !panel) return;
 
     const triggerBounds = trigger.getBoundingClientRect();
-    const drawerTop = drawer.getBoundingClientRect().top + drawer.clientTop;
-    const drawerBottom = drawerTop + drawer.clientHeight;
-    const above = Math.max(0, triggerBounds.top - Math.max(0, drawerTop));
-    const below = Math.max(
-        0,
-        Math.min(drawerBottom, viewport.innerHeight) - triggerBounds.bottom
+    const navigationTop =
+        navigation.getBoundingClientRect().top + navigation.clientTop;
+    let visibleTop = Math.max(0, navigationTop);
+    let visibleBottom = Math.min(
+        viewport.innerHeight,
+        navigationTop + navigation.clientHeight
     );
+    if (clipToHost) {
+        for (
+            let host = navigation.parentElement;
+            host && host !== navigation.ownerDocument.body;
+            host = host.parentElement
+        ) {
+            if (viewport.getComputedStyle(host).overflowY === 'visible')
+                continue;
+            const top = host.getBoundingClientRect().top + host.clientTop;
+            visibleTop = Math.max(visibleTop, top);
+            visibleBottom = Math.min(visibleBottom, top + host.clientHeight);
+        }
+    }
+    const above = Math.max(0, triggerBounds.top - visibleTop);
+    const below = Math.max(0, visibleBottom - triggerBounds.bottom);
     // Include scrollable content if a previous placement constrained the panel.
     const panelHeight =
         panel.getBoundingClientRect().height +
@@ -1317,38 +1333,59 @@ function Shell(props: CompletePortalShellProps) {
     const hasAccountMenu = Boolean(
         !directUserAction && (user?.settingsEnabled || user?.logoutEnabled)
     );
-    const placeAccountMenuInDrawer = mobile && actionsInNavigation && open;
+    const constrainAccountMenu =
+        actionsInNavigation &&
+        (mobile
+            ? open
+            : user?.settingsEnabled === true && user.logoutEnabled === true);
     useCommitEffect(() => {
         const account = accountMenu.current;
-        const drawer = nav.current;
-        if (!placeAccountMenuInDrawer || !hasAccountMenu || !account || !drawer)
+        const navigation = nav.current;
+        if (!constrainAccountMenu || !hasAccountMenu || !account || !navigation)
             return;
 
-        const position = () => positionMobileAccountMenu(account, drawer);
+        const position = () =>
+            positionNavigationAccountMenu(account, navigation, !mobile);
         const panel = account.querySelector<HTMLDivElement>(':scope > div');
-        const viewport = drawer.ownerDocument.defaultView;
+        const viewport = navigation.ownerDocument.defaultView;
+        const onViewportScroll = (event: Event) => {
+            if (event.target === navigation) return;
+            if (
+                event.target instanceof Element &&
+                !event.target.contains(navigation)
+            )
+                return;
+            position();
+        };
         const observer =
             typeof ResizeObserver === 'function'
                 ? new ResizeObserver(position)
                 : null;
-        observer?.observe(drawer);
+        observer?.observe(navigation);
         observer?.observe(account);
         if (panel) observer?.observe(panel);
         account.addEventListener('toggle', position);
-        drawer.addEventListener('scroll', position, { passive: true });
+        navigation.addEventListener('scroll', position, { passive: true });
+        // Element scroll events do not bubble. Capture parent scrolling on desktop.
+        viewport?.addEventListener('scroll', onViewportScroll, {
+            capture: !mobile,
+            passive: true,
+        });
         viewport?.addEventListener('resize', position);
         position();
         return () => {
             observer?.disconnect();
             account.removeEventListener('toggle', position);
-            drawer.removeEventListener('scroll', position);
+            navigation.removeEventListener('scroll', position);
+            viewport?.removeEventListener('scroll', onViewportScroll, !mobile);
             viewport?.removeEventListener('resize', position);
             account.removeAttribute('data-open-above');
             panel?.style.removeProperty('--mx-portal-account-menu-space');
         };
     }, [
-        placeAccountMenuInDrawer,
+        constrainAccountMenu,
         hasAccountMenu,
+        mobile,
         navigationInHeader,
         snapshot.revision,
     ]);
@@ -1361,6 +1398,9 @@ function Shell(props: CompletePortalShellProps) {
                       ref: accountMenu,
                       className: `mx-sdk-portal-user${user.presentation === 'icon' ? ' mx-sdk-portal-user--icon' : ''}`,
                       'data-menu-interaction': snapshot.header.menuInteraction,
+                      'data-constrain-to-navigation': constrainAccountMenu
+                          ? ''
+                          : undefined,
                       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
                           if (exitMenuOnTab(event)) return;
                           if (
@@ -1374,10 +1414,11 @@ function Shell(props: CompletePortalShellProps) {
                               const details =
                                   event.currentTarget as HTMLDetailsElement;
                               details.open = true;
-                              if (placeAccountMenuInDrawer && nav.current)
-                                  positionMobileAccountMenu(
+                              if (constrainAccountMenu && nav.current)
+                                  positionNavigationAccountMenu(
                                       details,
-                                      nav.current
+                                      nav.current,
+                                      !mobile
                                   );
                               const controls = navigationControls(
                                   details

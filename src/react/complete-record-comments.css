@@ -210,6 +210,12 @@
     min-height: 12.5rem;
     background: white;
 }
+.mx-sdk-comments[data-appearance='native'] .mx-sdk-comments-row {
+    line-height: 1.25rem;
+}
+.mx-sdk-comments[data-appearance='native'] .mx-sdk-comments-time {
+    line-height: 1rem;
+}
 .mx-sdk-comments[data-appearance='native'] .mx-sdk-comments-empty {
     line-height: 1.25rem;
 }

@@ -407,6 +407,14 @@
     padding-inline: 1rem;
 }
 
+.mx-sdk-select[data-editable-dropdown-layout='native-form']
+    [role='listbox']
+    > .mx-sdk-select-no-matches {
+    padding-block: 0.5rem;
+    padding-inline: 1rem;
+    user-select: none;
+}
+
 .mx-sdk-select[data-native-dropdown] .mx-sdk-select-options-heading {
     color: #6b7280;
     font-size: 0.75rem;

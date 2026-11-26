@@ -1,4 +1,4 @@
-import createDOMPurify from 'dompurify';
+import createDOMPurify, { type DOMPurify, type WindowLike } from 'dompurify';
 
 // Match the native Formula/description policy. Each caller supplies an owned
 // factory instance; no embedding application's sanitizer hooks are changed.
@@ -19,7 +19,7 @@ function isExplicitHTTPSURL(value: string): boolean {
     }
 }
 
-export function createHTMLPurifier(ownerWindow: Window) {
+export function createHTMLPurifier(ownerWindow: WindowLike): DOMPurify {
     const purifier = createDOMPurify(ownerWindow);
     purifier.addHook('afterSanitizeAttributes', (node) => {
         if (node.tagName.toLowerCase() !== 'iframe') return;

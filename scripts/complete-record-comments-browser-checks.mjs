@@ -53,12 +53,18 @@ import {flushSync} from 'react-dom';
 import {CompleteRecordCommentsDialog,recordCommentsLabels} from '@miniextensions/sdk/react';
 import {createRecordCommentsController} from '@miniextensions/sdk/ui';
 const mode=new URLSearchParams(location.search).get('mode');
-const nativeAppearance=mode==='native-empty'||mode==='native-send-error';
-const emptyHistory=nativeAppearance||mode==='portable-empty';
-const stableInvoker=emptyHistory||mode==='stable-invoker';
+const nativeAppearance=mode?.startsWith('native-');
+const emptyHistory=mode?.endsWith('-empty')||mode==='native-send-error';
+const comparePopulated=mode?.endsWith('-populated');
+const stableInvoker=emptyHistory||comparePopulated||mode==='stable-invoker';
+if (comparePopulated) document.body.style.lineHeight = '1.5';
 const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,openSecond;
 const labels=mode==='spanish'?{...recordCommentsLabels,title:'Comentarios',addComment:'Añadir comentario',send:'Enviar',close:'Cerrar'}:mode==='literal'?{...recordCommentsLabels,title:'<Comentarios>'}:recordCommentsLabels;
-function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:emptyHistory?0:40},(_,index)=>({id:String(index),text:'Literal row '+index+' @[missing]',createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='native-send-error')throw new Error('Synthetic append failure');if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
+function commentText(index) {
+    if (comparePopulated && index === 0) return 'W'.repeat(160);
+    return 'Literal row ' + index + ' @[missing]';
+}
+function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:emptyHistory?0:40},(_,index)=>({id:String(index),text:commentText(index),createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='native-send-error')throw new Error('Synthetic append failure');if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
 const first=controller('captured-A'),second=controller('captured-B');
 function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,stableInvoker?h('button',{ref:invoker},'Record options'):null,stableInvoker&&open?null:h('button',{onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,...(nativeAppearance?{appearance:'native'}:{}),returnFocusTo:stableInvoker?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
@@ -151,7 +157,7 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
                 evidence.pageErrors.push(error.message)
             );
             await page.goto(origin + '/?mode=' + mode);
-            if (mode.endsWith('-empty')) {
+            if (mode.endsWith('-empty') || mode.endsWith('-populated')) {
                 await page.evaluate(() => {
                     window.commentsKeys = [];
                     window.addEventListener(
@@ -378,6 +384,62 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
                     width,
                     geometry,
                     focus,
+                    keys,
+                });
+            }
+        }
+
+        for (const width of [375, 1280]) {
+            for (const appearance of ['native', 'portable']) {
+                await open(`${appearance}-populated`, width, 640);
+                const dialog = page.getByRole('dialog', { name: 'Comments' });
+                const row = dialog.locator('.mx-sdk-comments-row').filter({
+                    hasText: 'W'.repeat(160),
+                });
+                const geometry = await row.evaluate((node) => {
+                    const author = node.querySelector(
+                        '.mx-sdk-comments-author'
+                    );
+                    const text = node.querySelector('.mx-sdk-comments-text');
+                    const time = node.querySelector('.mx-sdk-comments-time');
+                    const body = node.closest('.mx-sdk-comments-body');
+                    return {
+                        author: getComputedStyle(author).lineHeight,
+                        text: getComputedStyle(text).lineHeight,
+                        time: getComputedStyle(time).lineHeight,
+                        wraps:
+                            text.getBoundingClientRect().height >
+                            parseFloat(getComputedStyle(text).lineHeight),
+                        overflow: body.scrollWidth - body.clientWidth,
+                    };
+                });
+                assert.deepEqual(geometry, {
+                    author: appearance === 'native' ? '20px' : '21px',
+                    text: appearance === 'native' ? '20px' : '21px',
+                    time: appearance === 'native' ? '16px' : '18px',
+                    wraps: true,
+                    overflow: 0,
+                });
+                await page.keyboard.press('Escape');
+                assert.equal(await dialog.count(), 0);
+                assert.equal(
+                    await page
+                        .getByRole('button', { name: 'Record options' })
+                        .evaluate((node) => node === document.activeElement),
+                    true
+                );
+                const keys = await page.evaluate(() => window.commentsKeys);
+                assert.deepEqual(keys, [{ key: 'Escape', trusted: true }]);
+                const stats = await page.evaluate(() =>
+                    window.commentsProof.snapshot()
+                );
+                assert.equal(stats.reads.length, 1);
+                assert.deepEqual(stats.writes, []);
+                evidence.results.push({
+                    group: 'populated-history-typography',
+                    appearance,
+                    width,
+                    geometry,
                     keys,
                 });
             }

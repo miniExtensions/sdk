@@ -1290,7 +1290,10 @@ function Shell(props: CompletePortalShellProps) {
                   'button',
                   {
                       type: 'button',
-                      className: 'mx-sdk-portal-user-direct',
+                      className:
+                          user.settingsEnabled && user.presentation === 'text'
+                              ? 'mx-sdk-portal-user-direct mx-sdk-portal-user-direct--profile-text'
+                              : 'mx-sdk-portal-user-direct',
                       'aria-label': user.logoutEnabled
                           ? labels.logout
                           : user.presentation === 'icon' || user.name === ''

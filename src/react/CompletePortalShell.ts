@@ -209,7 +209,8 @@ function navigationControls(node: HTMLElement): HTMLElement[] {
 
 function positionNavigationAccountMenu(
     account: HTMLDetailsElement,
-    navigation: HTMLElement
+    navigation: HTMLElement,
+    clipToHost: boolean
 ) {
     const viewport = navigation.ownerDocument.defaultView;
     if (!account.open || !navigation.clientHeight || !viewport) return;
@@ -220,12 +221,26 @@ function positionNavigationAccountMenu(
     const triggerBounds = trigger.getBoundingClientRect();
     const navigationTop =
         navigation.getBoundingClientRect().top + navigation.clientTop;
-    const navigationBottom = navigationTop + navigation.clientHeight;
-    const above = Math.max(0, triggerBounds.top - Math.max(0, navigationTop));
-    const below = Math.max(
-        0,
-        Math.min(navigationBottom, viewport.innerHeight) - triggerBounds.bottom
+    let visibleTop = Math.max(0, navigationTop);
+    let visibleBottom = Math.min(
+        viewport.innerHeight,
+        navigationTop + navigation.clientHeight
     );
+    if (clipToHost) {
+        for (
+            let host = navigation.parentElement;
+            host && host !== navigation.ownerDocument.body;
+            host = host.parentElement
+        ) {
+            if (viewport.getComputedStyle(host).overflowY === 'visible')
+                continue;
+            const top = host.getBoundingClientRect().top + host.clientTop;
+            visibleTop = Math.max(visibleTop, top);
+            visibleBottom = Math.min(visibleBottom, top + host.clientHeight);
+        }
+    }
+    const above = Math.max(0, triggerBounds.top - visibleTop);
+    const below = Math.max(0, visibleBottom - triggerBounds.bottom);
     // Include scrollable content if a previous placement constrained the panel.
     const panelHeight =
         panel.getBoundingClientRect().height +
@@ -1327,9 +1342,18 @@ function Shell(props: CompletePortalShellProps) {
             return;
 
         const position = () =>
-            positionNavigationAccountMenu(account, navigation);
+            positionNavigationAccountMenu(account, navigation, !mobile);
         const panel = account.querySelector<HTMLDivElement>(':scope > div');
         const viewport = navigation.ownerDocument.defaultView;
+        const onViewportScroll = (event: Event) => {
+            if (event.target === navigation) return;
+            if (
+                event.target instanceof Element &&
+                !event.target.contains(navigation)
+            )
+                return;
+            position();
+        };
         const observer =
             typeof ResizeObserver === 'function'
                 ? new ResizeObserver(position)
@@ -1339,14 +1363,18 @@ function Shell(props: CompletePortalShellProps) {
         if (panel) observer?.observe(panel);
         account.addEventListener('toggle', position);
         navigation.addEventListener('scroll', position, { passive: true });
-        viewport?.addEventListener('scroll', position, { passive: true });
+        // Element scroll events do not bubble. Capture parent scrolling on desktop.
+        viewport?.addEventListener('scroll', onViewportScroll, {
+            capture: !mobile,
+            passive: true,
+        });
         viewport?.addEventListener('resize', position);
         position();
         return () => {
             observer?.disconnect();
             account.removeEventListener('toggle', position);
             navigation.removeEventListener('scroll', position);
-            viewport?.removeEventListener('scroll', position);
+            viewport?.removeEventListener('scroll', onViewportScroll, !mobile);
             viewport?.removeEventListener('resize', position);
             account.removeAttribute('data-open-above');
             panel?.style.removeProperty('--mx-portal-account-menu-space');
@@ -1354,6 +1382,7 @@ function Shell(props: CompletePortalShellProps) {
     }, [
         constrainAccountMenu,
         hasAccountMenu,
+        mobile,
         navigationInHeader,
         snapshot.revision,
     ]);
@@ -1385,7 +1414,8 @@ function Shell(props: CompletePortalShellProps) {
                               if (constrainAccountMenu && nav.current)
                                   positionNavigationAccountMenu(
                                       details,
-                                      nav.current
+                                      nav.current,
+                                      !mobile
                                   );
                               const controls = navigationControls(
                                   details

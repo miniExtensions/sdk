@@ -332,6 +332,28 @@
     justify-content: end;
     gap: 0.75rem;
 }
+.mx-sdk-portal-dialog-actions[data-native-direct-logout] {
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.mx-sdk-portal-dialog-actions[data-native-direct-logout] > button {
+    text-align: center;
+}
+.mx-sdk-portal-dialog-actions[data-native-direct-logout] > button[data-danger] {
+    border-color: transparent;
+    background: #dc2626;
+    color: #fff;
+}
+.mx-sdk-portal-dialog-actions[data-native-direct-logout]
+    > button[data-danger]:hover {
+    background: #ef4444;
+}
+@media (min-width: 640px) {
+    .mx-sdk-portal-dialog-actions[data-native-direct-logout] {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+    }
+}
 .mx-sdk-portal-sr-only,
 .mx-sdk-portal-skip:not(:focus) {
     position: absolute;

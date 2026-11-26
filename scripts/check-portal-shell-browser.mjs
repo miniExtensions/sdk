@@ -1319,6 +1319,149 @@ async function navigationCompatibility(browser, origin, label) {
         await page.close();
     }
 }
+async function checkDirectNativeLogout(browser, origin) {
+    const profiles = [];
+    for (const [width, height] of [
+        [375, 780],
+        [1280, 720],
+    ]) {
+        const page = await browser.newPage({ viewport: { width, height } });
+        const violations = [];
+        page.on('pageerror', (error) => violations.push(String(error)));
+        await page.route('**/*', (route) => {
+            const request = route.request();
+            const url = new URL(request.url());
+            if (
+                request.method() === 'GET' &&
+                url.origin === origin &&
+                ['/', '/main.css', '/main.js'].includes(url.pathname)
+            )
+                return route.continue();
+            violations.push(request.url());
+            return route.abort();
+        });
+        try {
+            await page.goto(origin);
+            await page
+                .getByRole('heading', { name: '<Customer Portal>' })
+                .waitFor();
+            await page.evaluate(() =>
+                window.configure({
+                    header: {
+                        layout: 'sidebar',
+                        title: 'Direct logout fixture',
+                        actionsPlacement: 'layout',
+                    },
+                    user: {
+                        name: 'Configured member',
+                        presentation: 'text',
+                        settingsEnabled: false,
+                        logoutEnabled: true,
+                    },
+                })
+            );
+            await page.waitForFunction(
+                () =>
+                    window.fixtureCommittedSnapshot?.header.title ===
+                    'Direct logout fixture'
+            );
+            const drawer = page.getByRole('dialog', {
+                name: 'Portal navigation',
+                exact: true,
+            });
+            if (width === 375) {
+                await page
+                    .getByRole('button', {
+                        name: 'Open navigation',
+                        exact: true,
+                    })
+                    .press('Enter');
+                await drawer.waitFor();
+            }
+            const opener = page.getByRole('button', {
+                name: 'Log out',
+                exact: true,
+            });
+            assert.equal(await opener.count(), 1);
+            const original = await opener.elementHandle();
+            const dialog = page.getByRole('dialog', {
+                name: 'Are you sure you want to log out?',
+                exact: true,
+            });
+            const cancel = dialog.getByRole('button', {
+                name: 'Cancel',
+                exact: true,
+            });
+            const confirm = dialog.getByRole('button', {
+                name: 'Log out',
+                exact: true,
+            });
+            const open = async () => {
+                await opener.press('Enter');
+                await page.waitForFunction(
+                    (node) => node === document.activeElement,
+                    await cancel.elementHandle()
+                );
+            };
+            await open();
+            const style = await confirm.evaluate((node) => {
+                const css = getComputedStyle(node);
+                return [css.backgroundColor, css.color, css.textAlign];
+            });
+            assert.deepEqual(
+                style,
+                ['rgb(220, 38, 38)', 'rgb(255, 255, 255)', 'center'],
+                `Native direct Log out danger action at ${width}px`
+            );
+            assert.equal(
+                await cancel.evaluate(
+                    (node) => getComputedStyle(node).textAlign
+                ),
+                'center'
+            );
+            const dangerBounds = await confirm.boundingBox();
+            const cancelBounds = await cancel.boundingBox();
+            assert.ok(dangerBounds && cancelBounds);
+            if (width === 375) {
+                assert.equal(dangerBounds.width, cancelBounds.width);
+                assert.equal(
+                    cancelBounds.y - dangerBounds.y - dangerBounds.height,
+                    8
+                );
+            } else {
+                assert.equal(dangerBounds.y, cancelBounds.y);
+                assert.equal(
+                    dangerBounds.x - cancelBounds.x - cancelBounds.width,
+                    8
+                );
+            }
+            const close = async (key) => {
+                await page.keyboard.press(key);
+                await dialog.waitFor({ state: 'hidden' });
+                assert.equal(
+                    await original.evaluate(
+                        (node) =>
+                            node.isConnected && node === document.activeElement
+                    ),
+                    true
+                );
+            };
+            await close('Escape');
+            await open();
+            await close('Enter');
+            await original.dispose();
+            if (width === 375) assert(await drawer.isVisible());
+            const intents = await page.evaluate(() => window.proof.intents);
+            assert.deepEqual(intents, []);
+            assert.deepEqual(violations, []);
+            profiles.push({ width, height, style, dangerBounds, cancelBounds });
+        } finally {
+            await page.close();
+        }
+    }
+    return profiles;
+}
+
 async function configuredPresentation(browser, origin, label) {
     const page = await browser.newPage({
         viewport: { width: 1280, height: 900 },
@@ -1458,6 +1601,15 @@ async function configuredPresentation(browser, origin, label) {
         });
         await directLogout.locator('svg').waitFor();
         await directLogout.click();
+        const logoutDialog = page.getByRole('dialog', {
+            name: 'Are you sure you want to log out?',
+            exact: true,
+        });
+        await logoutDialog.waitFor();
+        assert.equal(
+            await logoutDialog.locator('[data-native-direct-logout]').count(),
+            0
+        );
         await page.getByRole('button', { name: 'Cancel', exact: true }).click();
         assert.equal(
             await page.evaluate(
@@ -2604,6 +2756,10 @@ try {
                         browser,
                         origin,
                         `${react}-${format}`
+                    ),
+                    nativeDirectLogout: await checkDirectNativeLogout(
+                        browser,
+                        origin
                     ),
                     configuredPresentation: await configuredPresentation(
                         browser,

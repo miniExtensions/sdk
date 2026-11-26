@@ -91,6 +91,9 @@
     user-select: text;
     box-shadow: 0 1px 2px #0000000d;
 }
+.mx-sdk-search-gate-field > input {
+    color: #020817;
+}
 .mx-sdk-search-gate-panel input::placeholder {
     color: #9ca3af;
 }

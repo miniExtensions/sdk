@@ -244,6 +244,10 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             );
             assert.equal(inputAppearance.outline, 'rgba(0, 0, 0, 0)');
             await input.fill('  Alice & 東京  ');
+            const typedTextColor = await input.evaluate(
+                (node) => getComputedStyle(node).color
+            );
+            assert.equal(typedTextColor, 'rgb(2, 8, 23)');
             await input.press('Tab');
             const primary = dialog.getByRole('button', {
                 name: 'Continue',
@@ -630,6 +634,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 react: snapshot.react,
                 geometry,
                 inputAppearance,
+                typedTextColor,
                 primaryAppearance,
                 retryAppearances,
                 invalidRestBorder,

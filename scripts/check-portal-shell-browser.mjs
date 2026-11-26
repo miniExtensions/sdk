@@ -1419,6 +1419,28 @@ async function checkDirectNativeLogout(browser, origin) {
                 ),
                 'center'
             );
+            const typography = await dialog
+                .getByRole('button')
+                .evaluateAll((buttons) =>
+                    buttons.map((button) => {
+                        const { fontSize, lineHeight, fontWeight } =
+                            getComputedStyle(button);
+                        return [
+                            button.textContent,
+                            fontSize,
+                            lineHeight,
+                            fontWeight,
+                        ];
+                    })
+                );
+            assert.deepEqual(
+                typography,
+                [
+                    ['Log out', '14px', '20px', '600'],
+                    ['Cancel', '14px', '20px', '600'],
+                ],
+                `Native direct Log out action typography at ${width}px`
+            );
             const dangerBounds = await confirm.boundingBox();
             const cancelBounds = await cancel.boundingBox();
             assert.ok(dangerBounds && cancelBounds);
@@ -1454,7 +1476,14 @@ async function checkDirectNativeLogout(browser, origin) {
             const intents = await page.evaluate(() => window.proof.intents);
             assert.deepEqual(intents, []);
             assert.deepEqual(violations, []);
-            profiles.push({ width, height, style, dangerBounds, cancelBounds });
+            profiles.push({
+                width,
+                height,
+                style,
+                typography,
+                dangerBounds,
+                cancelBounds,
+            });
         } finally {
             await page.close();
         }

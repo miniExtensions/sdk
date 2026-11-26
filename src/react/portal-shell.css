@@ -337,6 +337,9 @@
     gap: 0.5rem;
 }
 .mx-sdk-portal-dialog-actions[data-native-direct-logout] > button {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
     text-align: center;
 }
 .mx-sdk-portal-dialog-actions[data-native-direct-logout] > button[data-danger] {

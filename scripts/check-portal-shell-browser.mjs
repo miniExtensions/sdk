@@ -1673,6 +1673,98 @@ async function configuredPresentation(browser, origin, label) {
             );
         });
         assert.equal(await page.locator('.mx-sdk-portal-settings').count(), 0);
+        await configure({
+            searchAgainEnabled: false,
+            user: {
+                name: 'Configured member',
+                presentation: 'text',
+                settingsEnabled: false,
+                logoutEnabled: true,
+            },
+        });
+        const sidebarLogout = footer.getByRole('button', {
+            name: 'Log out',
+            exact: true,
+        });
+        for (const viewport of [
+            { width: 375, height: 780 },
+            { width: 1280, height: 720 },
+        ]) {
+            await page.setViewportSize(viewport);
+            if (viewport.width === 375)
+                await page
+                    .getByRole('button', { name: 'Open navigation' })
+                    .click();
+            await sidebarLogout.waitFor();
+            assert.equal(await footer.getByRole('button').count(), 1);
+            await page.mouse.move(0, 0);
+            if (
+                await sidebarLogout.evaluate(
+                    (node) => node === document.activeElement
+                )
+            )
+                await page.keyboard.press('Shift+Tab');
+            const geometry = await sidebarLogout.evaluate((button) => {
+                const icon = button.querySelector('svg');
+                const footer = button.parentElement;
+                const buttonBox = button.getBoundingClientRect();
+                const iconBox = icon.getBoundingClientRect();
+                const footerBox = footer.getBoundingClientRect();
+                const center = (box) => box.x + box.width / 2;
+                return {
+                    size: [buttonBox.width, buttonBox.height],
+                    icon: [iconBox.width, iconBox.height],
+                    footerOffset: center(buttonBox) - center(footerBox),
+                    iconOffset: [
+                        center(iconBox) - center(buttonBox),
+                        iconBox.y +
+                            iconBox.height / 2 -
+                            (buttonBox.y + buttonBox.height / 2),
+                    ],
+                    color: getComputedStyle(icon).color,
+                    background: getComputedStyle(button).backgroundColor,
+                };
+            });
+            assert.deepEqual(geometry.size, [28, 76]);
+            assert.deepEqual(geometry.icon, [28, 28]);
+            assert(Math.abs(geometry.footerOffset) <= 0.5);
+            assert.deepEqual(geometry.iconOffset, [0, 0]);
+            assert.equal(geometry.color, 'rgb(107, 114, 128)');
+            assert.equal(geometry.background, 'rgba(0, 0, 0, 0)');
+            const rest = await readSettingsPaint(sidebarLogout);
+            assert.deepEqual(rest.borders, borderless);
+            assert.equal(rest.focusVisible, false);
+            assert.equal(rest.outline, 'none');
+
+            await sidebarLogout.focus();
+            await page.keyboard.press('Shift+Tab');
+            assert.equal(
+                await sidebarLogout.evaluate(
+                    (node) => node === document.activeElement
+                ),
+                false
+            );
+            await page.keyboard.press('Tab');
+            assert.equal(
+                await sidebarLogout.evaluate(
+                    (node) => node === document.activeElement
+                ),
+                true
+            );
+            assert.deepEqual(await readSettingsPaint(sidebarLogout), {
+                borders: borderless,
+                focusVisible: true,
+                outline: 'auto',
+                outlineWidth: '1px',
+                outlineOffset: '0px',
+            });
+            assert.equal(
+                await page.locator('.mx-sdk-portal-dialog').count(),
+                0
+            );
+            if (viewport.width === 375) await page.keyboard.press('Escape');
+        }
+        assert.equal(await page.evaluate(() => window.proof.intents.length), 2);
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);
         return {
@@ -1681,6 +1773,7 @@ async function configuredPresentation(browser, origin, label) {
             emptyAndHiddenMenus: 'passed',
             descriptionExpansion: 'passed',
             directActions: 'passed',
+            directLogoutSidebarPaint: 'passed',
             committedLogoutRetirement: 'passed',
             authoringSettingsBordersAndFocus: 'passed',
             authoringMouseKeyboardTargetsAndZeroNavigation: 'passed',

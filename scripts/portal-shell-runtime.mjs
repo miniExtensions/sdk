@@ -559,6 +559,14 @@ export async function assertPortalShellPresentationConsumer({
                         ? direct
                         : null
                 );
+                assert.equal(
+                    footer.querySelector(
+                        '.mx-sdk-portal-user-direct--logout-text'
+                    ),
+                    logoutEnabled && !settingsEnabled && presentation === 'text'
+                        ? direct
+                        : null
+                );
                 if (direct && logoutEnabled)
                     assert(
                         direct.querySelector('svg'),

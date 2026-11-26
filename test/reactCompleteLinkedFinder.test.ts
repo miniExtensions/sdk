@@ -193,6 +193,51 @@ test('keyboard/focus and programmatic controlled search echoes preserve current 
     assert.equal(f.document.activeElement, input);
 });
 
+test('native Form List Finder marks only settled no-match searches', async (t) => {
+    const f = await fixture(t, false, { external: true });
+    const coordinator = f.coordinator!;
+    const terminal = () =>
+        f.host.querySelector('.mx-sdk-finder-feedback--terminal');
+    await f.render({ nativeFormListPresentation: true, searchTerm: 'missing' });
+    assert.equal(terminal(), null);
+
+    let pending!: ReturnType<typeof coordinator.queryNow>;
+    await act(async () => {
+        pending = coordinator.queryNow({
+            filter: 'missing',
+            resetOffset: true,
+        });
+    });
+    assert.equal(
+        f.host.querySelector('[role="status"]')?.textContent,
+        labels.loading
+    );
+    assert.equal(terminal(), null);
+    await f.resolve([], 'next');
+    assert.equal((await pending).status, 'accepted');
+    assert.equal(terminal(), null);
+    assert(!f.host.textContent.includes(labels.noMatches));
+
+    await act(async () => {
+        pending = coordinator.queryNow({
+            filter: 'missing',
+            resetOffset: false,
+        });
+    });
+    await f.resolve([]);
+    assert.equal((await pending).status, 'accepted');
+    assert.equal(terminal()?.textContent, labels.noMatches);
+
+    await f.render({ searchTerm: '' });
+    assert.equal(terminal(), null);
+    await f.render({
+        nativeFormListPresentation: false,
+        searchTerm: 'missing',
+    });
+    assert.equal(terminal(), null);
+    assert(f.host.textContent.includes(labels.noMatches));
+});
+
 test('400px observer paginates exact offset and retires callbacks on owner replacement without cancelling allocated reads', async (t) => {
     const f = await fixture(t);
     await f.settle();

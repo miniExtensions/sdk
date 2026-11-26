@@ -316,7 +316,15 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
                   ? null
                   : h(
                         'div',
-                        { className: 'mx-sdk-finder-feedback' },
+                        {
+                            className:
+                                nativeFormListPresentation &&
+                                preview === null &&
+                                snapshot?.phase === 'ready' &&
+                                props.searchTerm.trim() !== ''
+                                    ? 'mx-sdk-finder-feedback mx-sdk-finder-feedback--terminal'
+                                    : 'mx-sdk-finder-feedback',
+                        },
                         props.labels.noMatches
                     );
     return h(

@@ -651,6 +651,12 @@
     height: 24px;
     color: #9ca3af;
 }
+.mx-sdk-native-form-list-finder .mx-sdk-finder-feedback--terminal {
+    padding: 0;
+    text-align: center;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
 @media (min-width: 640px) {
     .mx-sdk-native-form-list-finder .mx-sdk-finder-search > input {
         font-size: 14px;

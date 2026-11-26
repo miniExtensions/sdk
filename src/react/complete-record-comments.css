@@ -258,6 +258,10 @@
     font-weight: 600;
     line-height: 1.3125rem;
 }
+.mx-sdk-comments[data-appearance='native'] .mx-sdk-comments-send:focus-visible {
+    outline: revert;
+    outline-offset: revert;
+}
 .mx-sdk-comments[data-appearance='native']
     :is(.mx-sdk-comments-refresh, .mx-sdk-comments-send):enabled {
     white-space: nowrap;

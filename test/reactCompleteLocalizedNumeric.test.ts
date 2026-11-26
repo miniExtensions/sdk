@@ -422,6 +422,57 @@ for (const kind of ['number', 'currency', 'percent'] as const)
         assert.deepEqual(f.writes, []);
     });
 
+for (const { name, undo, blur, writes, value } of [
+    {
+        name: 'closing directly after undo',
+        undo: true,
+        blur: false,
+        writes: [],
+        value: 40,
+    },
+    {
+        name: 'blurring before close after undo',
+        undo: true,
+        blur: true,
+        writes: [],
+        value: 40,
+    },
+    {
+        name: 'closing directly with a changed draft',
+        undo: false,
+        blur: false,
+        writes: [26],
+        value: 26,
+    },
+]) {
+    it(`settles a deferred Number after a host update when ${name}`, async (t) => {
+        const f = await fixture(t, {
+            kind: 'number',
+            value: 25,
+            deferred: true,
+        });
+        const input = f.input();
+        await f.focus();
+        assert.equal(input.value, '25.00');
+        await f.edit('26.00');
+        if (undo) await f.edit('25.00');
+
+        f.state.value = 40;
+        await f.render();
+        assert.equal(f.input(), input);
+        assert.equal(input.value, undo ? '25.00' : '26.00');
+        assert.equal(f.state.value, 40);
+        assert.deepEqual(f.writes, []);
+
+        if (blur) await f.blur();
+        await f.unmount();
+        assert.deepEqual(
+            { writes: f.writes, value: f.state.value },
+            { writes, value }
+        );
+    });
+}
+
 it('preserves same-owner focused metadata continuity while retiring pending config ABA', async (t) => {
     const f = await fixture(t, { value: 2, deferred: true });
     await f.focus();

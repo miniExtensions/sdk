@@ -355,7 +355,7 @@ export function CompleteLocalizedNumericField({
             const draft = pending.current;
             if (draft?.lease === lease) {
                 pending.current = null;
-                write(draft.input);
+                if (draft.input !== draft.baseline) write(draft.input);
             }
             // A replacement's layout commit already installed its successor lease.
             // Genuine unmount finalizes once before retiring this UI lifetime.

@@ -227,7 +227,7 @@
     border-radius: 0.375rem;
     box-shadow: 0 0.5rem 1rem #0002;
 }
-.mx-sdk-portal-navigation[aria-modal='true'] .mx-sdk-portal-user > div {
+.mx-sdk-portal-user[data-constrain-to-navigation] > div {
     max-block-size: var(--mx-portal-account-menu-space, none);
     overflow: auto;
 }

@@ -62,6 +62,210 @@ async function checkAccountMenuBorders(panel, expectedRowBorder) {
         Array(4).fill(expectedRowBorder),
     ]);
 }
+async function checkDesktopAccountMenuInScrollingHost(
+    page,
+    trigger,
+    panel,
+    label
+) {
+    const host = await page.evaluateHandle(() => {
+        const app = document.querySelector('#app');
+        const host = document.createElement('div');
+        host.dataset.accountScrollHost = 'true';
+        host.style.cssText =
+            'height:750px; overflow-y:auto; overflow-anchor:none';
+        const spacer = document.createElement('div');
+        spacer.style.height = '300px';
+        app.before(host);
+        host.append(app, spacer);
+        app.querySelector(
+            '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+        ).style.marginBlockEnd = '90px';
+        host.scrollTop = 145;
+        return host;
+    });
+    try {
+        const measure = () =>
+            panel.evaluate((element) => {
+                const bounds = (node) => {
+                    const { top, bottom, height } =
+                        node.getBoundingClientRect();
+                    return { top, bottom, height };
+                };
+                const host = element.closest('[data-account-scroll-host]');
+                return {
+                    scrollTop: host.scrollTop,
+                    viewportHeight: window.innerHeight,
+                    visibleBottom:
+                        host.getBoundingClientRect().top + host.clientHeight,
+                    trigger: bounds(element.previousElementSibling),
+                    panel: bounds(element),
+                    rows: Array.from(
+                        element.querySelectorAll(':scope > button'),
+                        bounds
+                    ),
+                    focused: document.activeElement.textContent,
+                };
+            });
+        await trigger.press('ArrowDown');
+        const before = await measure();
+        assert.equal(before.scrollTop, 145);
+        assert.ok(before.panel.top >= before.trigger.bottom);
+        assert.ok(before.panel.bottom <= before.visibleBottom);
+        await host.evaluate((node) => {
+            node.scrollTop = 45;
+        });
+        try {
+            await page.waitForFunction(
+                () => {
+                    const host = document.querySelector(
+                        '[data-account-scroll-host]'
+                    );
+                    const panel = host?.querySelector(
+                        '.mx-sdk-portal-user[open] > div'
+                    );
+                    return (
+                        panel?.getBoundingClientRect().bottom <=
+                        panel?.previousElementSibling.getBoundingClientRect()
+                            .top
+                    );
+                },
+                undefined,
+                { timeout: 2500 }
+            );
+        } catch (error) {
+            if (error.name !== 'TimeoutError') throw error;
+        }
+        const after = await measure();
+        await page.screenshot({
+            path: join(output, `account-menu-scroll-host-${label}-1280.png`),
+        });
+        assert.equal(after.scrollTop, 45);
+        assert.equal(after.focused, 'User settings');
+        assert.ok(after.trigger.bottom > before.trigger.bottom);
+        assert.equal(after.rows.length, 2);
+        assert.ok(
+            after.trigger.bottom + after.panel.height > after.visibleBottom &&
+                after.trigger.bottom + after.panel.height <
+                    after.viewportHeight,
+            'The outer scroller has a clipping edge inside the viewport'
+        );
+        assert.ok(
+            after.panel.bottom <= after.trigger.top &&
+                after.rows.every(
+                    ({ top, bottom }) =>
+                        top >= after.panel.top && bottom <= after.visibleBottom
+                ),
+            `Outer host scroll clips the open desktop account menu: ${JSON.stringify({ before, after })}`
+        );
+        await page.keyboard.press('Escape');
+        assert.equal(await panel.isVisible(), false);
+        assert.equal(
+            await trigger.evaluate((node) => node === document.activeElement),
+            true
+        );
+        return { before, after };
+    } finally {
+        await host.evaluate((node) => {
+            const app = node.querySelector('#app');
+            app.querySelector(
+                '.mx-sdk-portal-navigation > .mx-sdk-portal-actions'
+            ).style.removeProperty('margin-block-end');
+            node.before(app);
+            node.remove();
+        });
+        await host.dispose();
+    }
+}
+async function checkFixedDesktopSidebarAccountMenu(
+    page,
+    trigger,
+    panel,
+    label
+) {
+    const style = await page.addStyleTag({
+        content:
+            '#app { height: 900px; font: 1rem/1.5 system-ui; } #app > .mx-sdk-portal-shell { height: 100%; min-height: 0; }',
+    });
+    try {
+        await trigger.press('ArrowDown');
+        const placement = await panel.evaluate((element) => {
+            const bounds = (node) => {
+                const { top, bottom, height } = node.getBoundingClientRect();
+                return { top, bottom, height };
+            };
+            const navigation = element.closest('.mx-sdk-portal-navigation');
+            const navigationTop =
+                navigation.getBoundingClientRect().top + navigation.clientTop;
+            const rows = Array.from(
+                element.querySelectorAll(':scope > button')
+            );
+            return {
+                viewportHeight: window.innerHeight,
+                navigation: {
+                    top: Math.max(0, navigationTop),
+                    bottom: Math.min(
+                        window.innerHeight,
+                        navigationTop + navigation.clientHeight
+                    ),
+                },
+                trigger: bounds(element.previousElementSibling),
+                panel: bounds(element),
+                rows: rows.map(bounds),
+                focused: document.activeElement.textContent,
+                pageScroll: window.scrollY,
+            };
+        });
+        await page.screenshot({
+            path: join(output, `account-menu-sidebar-${label}-1280.png`),
+        });
+        assert.equal(placement.viewportHeight, 900);
+        assert.equal(placement.rows.length, 2);
+        assert.ok(
+            placement.panel.height >
+                placement.navigation.bottom - placement.trigger.bottom,
+            'The desktop sidebar fixture must leave too little room below the trigger'
+        );
+        assert.ok(
+            placement.panel.bottom <= placement.trigger.top &&
+                placement.panel.top >= placement.navigation.top &&
+                placement.rows.every(
+                    ({ top, bottom }) =>
+                        top >= placement.panel.top &&
+                        bottom <= placement.panel.bottom &&
+                        bottom <= placement.navigation.bottom
+                ),
+            `First ArrowDown clips the desktop sidebar account menu: ${JSON.stringify(placement)}`
+        );
+        assert.equal(placement.focused, 'User settings');
+        await page.keyboard.press('ArrowDown');
+        assert.equal(
+            await panel
+                .getByRole('button', { name: 'Log out' })
+                .evaluate((node) => node === document.activeElement),
+            true
+        );
+        assert.equal(
+            await page.evaluate(() => window.scrollY),
+            placement.pageScroll
+        );
+        await page.keyboard.press('Escape');
+        assert.equal(await panel.isVisible(), false);
+        assert.equal(
+            await trigger.evaluate((node) => node === document.activeElement),
+            true
+        );
+        const outerScroll = await checkDesktopAccountMenuInScrollingHost(
+            page,
+            trigger,
+            panel,
+            label
+        );
+        return { ...placement, outerScroll };
+    } finally {
+        await style.evaluate((node) => node.remove());
+    }
+}
 async function navigationCompatibility(browser, origin, label) {
     const page = await browser.newPage({
         viewport: { width: 1280, height: 900 },
@@ -414,12 +618,23 @@ async function navigationCompatibility(browser, origin, label) {
             window.enableHostEditor(true);
             window.configure({
                 header: { ...window.fixtureSnapshot.header, layout: 'sidebar' },
+                searchAgainEnabled: false,
             });
         });
         const editor = page.getByRole('textbox', {
             name: 'Native record editor',
         });
         await editor.waitFor();
+        const desktopSidebarAccountPlacement =
+            await checkFixedDesktopSidebarAccountMenu(
+                page,
+                accountTrigger,
+                accountPanel,
+                label
+            );
+        await page.evaluate(() =>
+            window.configure({ searchAgainEnabled: true })
+        );
         await user.locator('summary').focus();
         await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Tab');
@@ -1078,6 +1293,7 @@ async function navigationCompatibility(browser, origin, label) {
             pointerOnlyNotification: 'passed',
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
+            desktopSidebarAccountPlacement,
             desktopAndMobileMenuTabFocus: 'passed',
             mobileAccountPlacement: accountPlacement,
             nativeHostEditorTabDestination: 'passed',

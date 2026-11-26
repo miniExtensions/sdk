@@ -7,6 +7,7 @@ import {
     useRef,
     useState,
     type ReactNode,
+    type RefObject,
     type KeyboardEvent,
     type FocusEvent,
     type MouseEvent,
@@ -306,18 +307,20 @@ function Dialog(props: {
     title: string;
     children: ReactNode;
     onClose: () => void;
+    initialFocus?: RefObject<HTMLElement | null>;
 }) {
     const id = useId(),
         ref = useRef<HTMLDivElement>(null);
+    const { initialFocus } = props;
     useEffect(() => {
         const node = ref.current;
         if (!node) return;
         const previous = node.ownerDocument.activeElement as HTMLElement | null;
-        (visibleControls(node)[0] ?? node).focus();
+        (initialFocus?.current ?? visibleControls(node)[0] ?? node).focus();
         return () => {
             if (previous?.isConnected) previous.focus();
         };
-    }, []);
+    }, [initialFocus]);
     return h(
         'div',
         {
@@ -406,6 +409,7 @@ function Shell(props: CompletePortalShellProps) {
             null
         ),
         activeLogoutAuthority = useRef<typeof logoutAuthority | null>(null);
+    const logoutCancel = useRef<HTMLButtonElement>(null);
     const [logoutRequest, setLogoutRequest] = useState<
         typeof logoutAuthority | null
     >(null);
@@ -1721,6 +1725,33 @@ function Shell(props: CompletePortalShellProps) {
               )
           )
         : null;
+    const nativeDirectLogout = Boolean(
+        snapshot.header.layout === 'sidebar' &&
+            !snapshot.header.hidden &&
+            snapshot.header.actionsPlacement === 'layout' &&
+            directUserAction &&
+            user?.logoutEnabled
+    );
+    const cancelLogoutButton = h(
+        'button',
+        {
+            key: 'cancel',
+            ref: logoutCancel,
+            type: 'button',
+            onClick: closeLogout,
+        },
+        labels.cancel
+    );
+    const confirmLogoutButton = h(
+        'button',
+        {
+            key: 'confirm',
+            type: 'button',
+            'data-danger': nativeDirectLogout || undefined,
+            onClick: confirmLogout,
+        },
+        labels.logout
+    );
     return h(
         'div',
         {
@@ -1841,22 +1872,17 @@ function Shell(props: CompletePortalShellProps) {
             ? h(Dialog, {
                   title: labels.confirmLogout,
                   onClose: closeLogout,
+                  initialFocus: logoutCancel,
                   children: h(
                       'div',
-                      { className: 'mx-sdk-portal-dialog-actions' },
-                      h(
-                          'button',
-                          { type: 'button', onClick: closeLogout },
-                          labels.cancel
-                      ),
-                      h(
-                          'button',
-                          {
-                              type: 'button',
-                              onClick: confirmLogout,
-                          },
-                          labels.logout
-                      )
+                      {
+                          className: 'mx-sdk-portal-dialog-actions',
+                          'data-native-direct-logout':
+                              nativeDirectLogout || undefined,
+                      },
+                      ...(nativeDirectLogout
+                          ? [confirmLogoutButton, cancelLogoutButton]
+                          : [cancelLogoutButton, confirmLogoutButton])
                   ),
               })
             : null

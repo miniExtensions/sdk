@@ -238,6 +238,144 @@ async function checkSidebarLogos(page, header, output, label) {
     return { cases, drawerCases };
 }
 
+async function measureRichTitle(title) {
+    await title.waitFor();
+    return await title.evaluate((node) => {
+        const regular = node.querySelector('[data-regular]');
+        const strong = node.querySelector('strong');
+        const typography = (element) => {
+            const style = getComputedStyle(element);
+            return [
+                style.fontFamily,
+                style.fontSize,
+                style.fontWeight,
+                style.lineHeight,
+                style.color,
+            ];
+        };
+        const { x, y, width } = node.getBoundingClientRect();
+        return {
+            box: [x, y, width],
+            regular: typography(regular),
+            strong: typography(strong),
+            emphasizedText: strong.textContent,
+        };
+    });
+}
+
+async function checkRichSidebarTitle(page, header, output, label) {
+    // Match the host's base line height. The shell inherits it for rich text.
+    await page.addStyleTag({ content: 'body{line-height:1.5}' });
+    await page.evaluate(() => {
+        window.configure({
+            header: {
+                layout: 'sidebar',
+                title: '',
+                titleHtml:
+                    '<h2>Sidebar formula title</h2><p>Owned workspace</p><ul><li><span data-regular>Project update</span> <strong>review ready for sign-off</strong> for this workspace</li><li>portal-sidebar-formula-owned-run</li></ul>',
+                sidebarWidth: 288,
+                showBrandInNavigation: true,
+                sidebarToggle: 'icon',
+                actionsPlacement: 'layout',
+                menuInteraction: 'menu',
+            },
+        });
+    });
+    const checkTitle = async (container, box) => {
+        const observed = await measureRichTitle(
+            container.locator('.mx-sdk-portal-title-html')
+        );
+        assert.deepEqual(observed.box, box);
+        assert.equal(observed.emphasizedText, 'review ready for sign-off');
+        for (const [style, weight] of [
+            [observed.regular, '400'],
+            [observed.strong, '700'],
+        ]) {
+            assert.match(style[0], /^Inter(?:,|$)/);
+            assert.deepEqual(style.slice(1), [
+                '16px',
+                weight,
+                '24px',
+                'rgb(2, 8, 23)',
+            ]);
+        }
+        return observed;
+    };
+    await page.setViewportSize({ width: 375, height: 780 });
+    const narrow = await checkTitle(header, [60, 8, 307]);
+    const opener = header.getByRole('button', { name: open, exact: true });
+    const drawer = page.getByRole('dialog', {
+        name: 'Portal navigation',
+        exact: true,
+    });
+    const close = drawer.getByRole('button', {
+        name: 'Close navigation',
+        exact: true,
+    });
+    await opener.press('Enter');
+    const drawerTitle = await checkTitle(drawer, [24, 16, 283]);
+    const closeTarget = await close.evaluate((button) => {
+        const { x, y, width, height } = button.getBoundingClientRect();
+        const icon = button.querySelector('svg');
+        return {
+            box: [x, y, width, height],
+            icon: [icon.getAttribute('width'), icon.getAttribute('height')],
+            iconHidden: icon.getAttribute('aria-hidden'),
+            centerHit: button.contains(
+                document.elementFromPoint(x + width / 2, y + height / 2)
+            ),
+        };
+    });
+    assert.deepEqual(closeTarget, {
+        box: [331, 0, 44, 44],
+        icon: ['24', '24'],
+        iconHidden: 'true',
+        centerHit: true,
+    });
+    await page.screenshot({
+        path: join(output, `${label}-sidebar-rich-drawer-375.png`),
+        clip: { x: 0, y: 0, width: 375, height: 260 },
+    });
+    const waitForFocusReturn = async () => {
+        await drawer.waitFor({ state: 'hidden' });
+        await page.waitForFunction(
+            () =>
+                document.activeElement ===
+                document.querySelector(
+                    '.mx-sdk-portal-header > .mx-sdk-portal-toggle'
+                )
+        );
+        assert.equal(await opener.getAttribute('aria-expanded'), 'false');
+    };
+    await page.keyboard.press('Escape');
+    await waitForFocusReturn();
+    await opener.press('Enter');
+    await close.click();
+    await waitForFocusReturn();
+    await opener.press('Enter');
+    await drawer.waitFor({ state: 'visible' });
+    await page.mouse.click(353, 100);
+    await waitForFocusReturn();
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await opener.waitFor({ state: 'hidden' });
+    const desktop = await checkTitle(header, [24, 16, 239]);
+    await header.screenshot({
+        path: join(output, `${label}-sidebar-rich-desktop-1280.png`),
+    });
+    await page.evaluate(() => {
+        window.configure({ settings: { title: 'Edit portal title' } });
+    });
+    await header.getByRole('button', { name: 'Edit portal title' }).waitFor();
+    const authoringPadding = await header
+        .locator('.mx-sdk-portal-configurable')
+        .evaluate((brand) => {
+            const style = getComputedStyle(brand);
+            return [style.paddingInlineStart, style.paddingInlineEnd];
+        });
+    assert.deepEqual(authoringPadding, ['8px', '32px']);
+    return { narrow, drawer: drawerTitle, desktop, closeTarget };
+}
+
 export async function checkNativeSidebarOpener(browser, origin, output, label) {
     const context = await browser.newContext({
         viewport: { width: 390, height: 720 },
@@ -478,6 +616,12 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
         }
         const { cases: logoCases, drawerCases: logoDrawerCases } =
             await checkSidebarLogos(page, header, output, label);
+        const richTitle = await checkRichSidebarTitle(
+            page,
+            header,
+            output,
+            label
+        );
         assert.deepEqual(errors, []);
         assert.deepEqual(refused, []);
         return {
@@ -485,6 +629,7 @@ export async function checkNativeSidebarOpener(browser, origin, output, label) {
             wrappedTitleCases,
             logoCases,
             logoDrawerCases,
+            richTitle,
             errors,
             refused,
         };

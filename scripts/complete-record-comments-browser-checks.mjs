@@ -137,10 +137,11 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
                 })
         );
         const origin = 'http://127.0.0.1:' + server.address().port;
-        async function open(mode, width = 1280, height = 800) {
+        async function open(mode, width = 1280, height = 800, forcedColors) {
             if (context) await context.close();
             context = await browser.newContext({
                 viewport: { width, height },
+                forcedColors,
             });
             await context.route('**/*', (route) => {
                 const url = new URL(route.request().url());
@@ -384,6 +385,157 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
                     width,
                     geometry,
                     focus,
+                    keys,
+                });
+            }
+        }
+
+        const readOutline = (control) =>
+            control.evaluate((node) => {
+                const style = getComputedStyle(node);
+                return {
+                    active: node === document.activeElement,
+                    visible: node.matches(':focus-visible'),
+                    color: style.outlineColor,
+                    offset: style.outlineOffset,
+                    style: style.outlineStyle,
+                    width: style.outlineWidth,
+                };
+            });
+        const themedOutline = {
+            active: true,
+            visible: true,
+            color: 'rgb(79, 70, 229)',
+            offset: '2px',
+            style: 'solid',
+            width: '2px',
+        };
+        const draftText =
+            'First draft line\nSecond draft line\nThird draft line';
+
+        for (const [width, height, emptyHeight, draftHeight] of [
+            [375, 780, 66, 90],
+            [1280, 720, 58, 78],
+        ]) {
+            for (const [appearance, forcedColors] of [
+                ['native', 'none'],
+                ['native', 'active'],
+                ['portable', 'none'],
+            ]) {
+                await open(`${appearance}-empty`, width, height, forcedColors);
+                const dialog = page.getByRole('dialog', { name: 'Comments' });
+                const textarea = dialog.getByRole('textbox', {
+                    name: 'Add a comment',
+                });
+                const send = dialog.getByRole('button', { name: 'Send' });
+                const invoker = page.getByRole('button', {
+                    name: 'Record options',
+                    exact: true,
+                    includeHidden: true,
+                });
+                const invokerNode = await invoker.elementHandle({
+                    timeout: 5000,
+                });
+                assert.equal(await send.isDisabled(), true);
+                assert.equal(
+                    await page.evaluate(
+                        () => matchMedia('(forced-colors: active)').matches
+                    ),
+                    forcedColors === 'active'
+                );
+
+                await page.keyboard.press('Tab');
+                if (forcedColors === 'none') {
+                    assert.deepEqual(
+                        await readOutline(
+                            dialog.getByRole('button', { name: 'Refresh' })
+                        ),
+                        themedOutline
+                    );
+                    await page.keyboard.press('Shift+Tab');
+                    assert.deepEqual(
+                        await readOutline(
+                            dialog.getByRole('button', { name: 'Close' })
+                        ),
+                        themedOutline
+                    );
+                    await page.keyboard.press('Tab');
+                }
+                await page.keyboard.press('Tab');
+                assert((await readOutline(textarea)).active);
+                await textarea.fill(draftText);
+                assert.equal(await send.isEnabled(), true);
+                const textareaBounds = await textarea.boundingBox();
+                const sendBounds = await send.boundingBox();
+                if (appearance === 'native') {
+                    assert.equal(textareaBounds.height, draftHeight);
+                    assert.equal(sendBounds.height, draftHeight);
+                    assert.equal(sendBounds.y, textareaBounds.y);
+                }
+                await page.keyboard.press('Tab');
+                const sendFocus = await readOutline(send);
+                assert(sendFocus.active && sendFocus.visible);
+                await dialog.locator('.mx-sdk-comments-panel').screenshot({
+                    path: join(
+                        output,
+                        `comments-${appearance}-send-${width}-${forcedColors}.png`
+                    ),
+                    animations: 'disabled',
+                    caret: 'hide',
+                });
+
+                await page.keyboard.press('Shift+Tab');
+                assert((await readOutline(textarea)).active);
+                assert.equal(await textarea.inputValue(), draftText);
+                await textarea.clear();
+                assert.equal(await textarea.inputValue(), '');
+                assert.equal(await send.isDisabled(), true);
+                if (appearance === 'native')
+                    assert.equal(
+                        (await textarea.boundingBox()).height,
+                        emptyHeight
+                    );
+                await page.keyboard.press('Escape');
+                assert.equal(await dialog.count(), 0);
+                assert(
+                    await invokerNode.evaluate(
+                        (node) => node === document.activeElement
+                    )
+                );
+                await invokerNode.dispose();
+
+                const browserOutline = await readOutline(invoker);
+                if (appearance === 'native') {
+                    assert.deepEqual(sendFocus, browserOutline);
+                    assert.equal(sendFocus.style, 'auto');
+                    assert.equal(sendFocus.offset, '0px');
+                    assert(parseFloat(sendFocus.width) > 0);
+                } else {
+                    assert.deepEqual(sendFocus, themedOutline);
+                }
+                const keys = await page.evaluate(() => window.commentsKeys);
+                assert.deepEqual(
+                    keys.map(({ key }) => key),
+                    forcedColors === 'none'
+                        ? ['Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Escape']
+                        : ['Tab', 'Tab', 'Tab', 'Tab', 'Escape']
+                );
+                assert(keys.every(({ trusted }) => trusted));
+                const stats = await page.evaluate(() =>
+                    window.commentsProof.snapshot()
+                );
+                assert.deepEqual(stats.writes, []);
+                assert.deepEqual(stats.invalidations, []);
+                evidence.results.push({
+                    group: 'unsent-draft-send-focus',
+                    appearance,
+                    forcedColors,
+                    width,
+                    height,
+                    textareaBounds,
+                    sendBounds,
+                    sendFocus,
+                    browserOutline,
                     keys,
                 });
             }

@@ -379,6 +379,115 @@ test('Gallery preserves manual paging when the host projects zero visible rows',
     );
     assert.equal(reads, 1);
 });
+
+for (const target of [
+    'append',
+    'retained',
+    'outside',
+    'stale',
+    'empty',
+    'tabbed',
+] as const) {
+    test(`Gallery keyboard paging respects ${target} focus`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        let actions = 0;
+        let reads = 0;
+        let finish = (receipt: {
+            recordIds: readonly string[];
+            isCurrent(): boolean;
+        }): void => {
+            throw new Error(`Unexpected paging receipt: ${receipt.recordIds}`);
+        };
+        const openRow = (id: string) => ({
+            ...row(id),
+            open: {
+                label: `Open ${id}`,
+                activate: () => {
+                    actions++;
+                },
+            },
+        });
+        const a = openRow('a');
+        const b = openRow('b');
+        const c = openRow('c');
+        const paging: NonNullable<PortalGalleryProps['paging']> = {
+            canRequestMore: true,
+            showSpinner: false,
+            requestLabel: 'Load more',
+            loadingLabel: 'Loading',
+            requestMore() {
+                throw new Error('Expected keyboard continuation');
+            },
+            requestMoreWithFocus() {
+                reads++;
+                return new Promise<Parameters<typeof finish>[0]>((resolve) => {
+                    finish = resolve;
+                });
+            },
+        };
+        const render = (rows: readonly PortalGalleryRow[], canLoad: boolean) =>
+            f.render(
+                h(PortalGallery, {
+                    ...props(rows),
+                    paging: { ...paging, canRequestMore: canLoad },
+                })
+            );
+        await render([a, b], true);
+        const more = f.container.querySelector(
+            '.mx-sdk-portal-gallery-load-more'
+        );
+        assert(more instanceof f.window.HTMLButtonElement);
+        await act(async () => {
+            more.focus();
+            more.dispatchEvent(
+                new f.window.MouseEvent('click', { bubbles: true, detail: 0 })
+            );
+        });
+        assert.equal(reads, 1);
+        await render([a, b], false);
+        const outside = f.window.document.createElement('button');
+        f.window.document.body.append(outside);
+        if (target === 'retained') {
+            const button = f.container.querySelector('[aria-label="Open b"]');
+            assert(button instanceof f.window.HTMLButtonElement);
+            await act(async () => button.focus());
+        } else if (target === 'outside') {
+            outside.focus();
+        }
+        const withoutOpen = (record: PortalGalleryRow): PortalGalleryRow => ({
+            ...record,
+            open: null,
+        });
+        await render([a, withoutOpen(b), withoutOpen(c)], false);
+        await act(async () => {
+            finish({
+                recordIds: target === 'empty' ? ['b'] : ['c'],
+                isCurrent: () => target !== 'stale',
+            });
+        });
+        if (target === 'tabbed') {
+            f.window.document.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', { key: 'Tab' })
+            );
+        }
+        await render([a, b, c], false);
+        const expected =
+            target === 'outside'
+                ? outside
+                : target === 'stale' ||
+                    target === 'empty' ||
+                    target === 'tabbed'
+                  ? f.window.document.body
+                  : f.container.querySelector(
+                        `[aria-label="Open ${target === 'retained' ? 'b' : 'c'}"]`
+                    );
+        assert(expected);
+        assert.equal(f.window.document.activeElement, expected);
+        assert.equal(actions, 0);
+        assert.equal(reads, 1);
+    });
+}
+
 test('Gallery reload overlay preserves row nodes, image selection and current Open registration', async (t) => {
     const f = await htmlPresentationFixture(t);
     const active = new Set<unknown>();

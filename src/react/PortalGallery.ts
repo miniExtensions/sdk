@@ -10,6 +10,7 @@ import {
     useState,
     type CSSProperties,
     type KeyboardEvent,
+    type MouseEvent,
     type ReactElement,
 } from 'react';
 import {
@@ -81,6 +82,11 @@ export type PortalGalleryContent =
       }>
     | Readonly<{ status: 'loading' | 'unavailable'; label: string }>;
 
+type GalleryAppendReceipt = Readonly<{
+    recordIds: readonly string[];
+    isCurrent(): boolean;
+}>;
+
 export type PortalGalleryProps = Readonly<{
     label: string;
     content: PortalGalleryContent;
@@ -95,9 +101,173 @@ export type PortalGalleryProps = Readonly<{
         requestLabel: string;
         loadingLabel: string;
         requestMore(): void;
+        /** Resolve to the current accepted append or null on refusal, failure or replacement. */
+        requestMoreWithFocus?(): Promise<GalleryAppendReceipt | null>;
     }> | null;
     className?: string;
 }>;
+
+type GalleryPagingFocus = {
+    element: HTMLButtonElement;
+    recordId: string | null;
+    existingRecords: ReadonlySet<string>;
+    receipt: GalleryAppendReceipt | null;
+    clear(): void;
+};
+
+function useGalleryPagingFocus(
+    content: PortalGalleryContent,
+    paging: PortalGalleryProps['paging']
+) {
+    const gallery = useRef<HTMLDivElement>(null);
+    const pending = useRef<GalleryPagingFocus | null>(null);
+    const [settlements, setSettlements] = useState(0);
+
+    useEffect(() => () => pending.current?.clear(), []);
+    useEffect(() => {
+        const focus = pending.current;
+        const root = gallery.current;
+        if (!focus) return;
+        if (!root || content.status !== 'rows') {
+            focus.clear();
+            return;
+        }
+        const receipt = focus.receipt;
+        if (!receipt) return;
+        if (!receipt.isCurrent()) {
+            focus.clear();
+            return;
+        }
+        const document = root.ownerDocument;
+        const active = document.activeElement;
+        if (
+            focus.recordId !== null &&
+            active === focus.element &&
+            focus.element.isConnected
+        ) {
+            focus.clear();
+            return;
+        }
+        if (
+            active !== focus.element &&
+            active !== document.body &&
+            active !== document.documentElement
+        ) {
+            focus.clear();
+            return;
+        }
+
+        const recordIds =
+            focus.recordId === null
+                ? receipt.recordIds.filter(
+                      (id) => !focus.existingRecords.has(id)
+                  )
+                : [focus.recordId];
+        if (recordIds.length === 0) {
+            focus.clear();
+            return;
+        }
+        const candidate = content.rows.find(
+            (row) => row.open && recordIds.includes(row.recordId)
+        );
+        // A card can render before the host admits its Open control.
+        if (!candidate) return;
+        const destination = Array.from(
+            root.querySelectorAll<HTMLButtonElement>(
+                '.mx-sdk-portal-gallery-open'
+            )
+        ).find(
+            (button) =>
+                button.parentElement?.dataset.recordId === candidate.recordId &&
+                button.closest('.mx-sdk-portal-gallery') === root
+        );
+        if (destination) {
+            focus.clear();
+            destination.focus({ preventScroll: focus.recordId !== null });
+        }
+    }, [content, settlements]);
+
+    function requestMore(event: MouseEvent<HTMLButtonElement>) {
+        pending.current?.clear();
+        const button = event.currentTarget;
+        const document = button.ownerDocument;
+        const root = gallery.current;
+        if (
+            event.detail !== 0 ||
+            document.activeElement !== button ||
+            root === null ||
+            content.status !== 'rows' ||
+            !paging?.requestMoreWithFocus
+        ) {
+            paging?.requestMore();
+            return;
+        }
+
+        const window = document.defaultView;
+        const focus: GalleryPagingFocus = {
+            element: button,
+            recordId: null,
+            existingRecords: new Set(content.rows.map((row) => row.recordId)),
+            receipt: null,
+            clear() {
+                if (pending.current !== focus) return;
+                pending.current = null;
+                document.removeEventListener('focusin', onFocus, true);
+                document.removeEventListener('pointerdown', focus.clear, true);
+                document.removeEventListener('keydown', onKeyDown, true);
+                window?.removeEventListener('blur', focus.clear);
+            },
+        };
+        function onKeyDown() {
+            if (focus.receipt !== null) focus.clear();
+        }
+        function onFocus(event: FocusEvent) {
+            const target = event.target;
+            if (
+                target === focus.element ||
+                target === document.body ||
+                target === document.documentElement
+            )
+                return;
+            if (
+                window &&
+                target instanceof window.HTMLButtonElement &&
+                target.classList.contains('mx-sdk-portal-gallery-open') &&
+                target.closest('.mx-sdk-portal-gallery') === root
+            ) {
+                const recordId = target.parentElement?.dataset.recordId;
+                if (recordId != null) {
+                    focus.element = target;
+                    focus.recordId = recordId;
+                    return;
+                }
+            }
+            focus.clear();
+        }
+        pending.current = focus;
+        document.addEventListener('focusin', onFocus, true);
+        document.addEventListener('pointerdown', focus.clear, true);
+        document.addEventListener('keydown', onKeyDown, true);
+        window?.addEventListener('blur', focus.clear);
+        let requested: Promise<GalleryAppendReceipt | null>;
+        try {
+            requested = paging.requestMoreWithFocus();
+        } catch (error) {
+            focus.clear();
+            throw error;
+        }
+        void requested.then((receipt) => {
+            if (pending.current !== focus) return;
+            if (receipt === null) {
+                focus.clear();
+            } else {
+                focus.receipt = receipt;
+                setSettlements((count) => count + 1);
+            }
+        }, focus.clear);
+    }
+    return { gallery, requestMore };
+}
 
 function GalleryUnlinkButton({
     action,
@@ -305,6 +475,8 @@ export function PortalGallery(props: PortalGalleryProps): ReactElement {
         .filter(Boolean)
         .join(' ');
     const content = props.content;
+    const paging = props.paging;
+    const { gallery, requestMore } = useGalleryPagingFocus(content, paging);
     if (content.status !== 'rows')
         return h(
             'div',
@@ -315,11 +487,10 @@ export function PortalGallery(props: PortalGalleryProps): ReactElement {
             },
             content.label
         );
-    const paging = props.paging;
-    const requestMore = paging?.requestMore;
     return h(
         'div',
         {
+            ref: gallery,
             className: classes,
             'aria-busy': props.reloading != null,
         },
@@ -355,9 +526,7 @@ export function PortalGallery(props: PortalGalleryProps): ReactElement {
                                     type: 'button',
                                     className:
                                         'mx-sdk-portal-gallery-load-more',
-                                    onClick: () => {
-                                        requestMore?.();
-                                    },
+                                    onClick: requestMore,
                                 },
                                 paging.requestLabel
                             )

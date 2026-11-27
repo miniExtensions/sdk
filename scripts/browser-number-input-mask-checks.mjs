@@ -12,6 +12,71 @@ import {
 import { join, relative, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
+
+async function checkNumberCaret(page, origin, evidence) {
+    const captures = [];
+    evidence.caret = { captures };
+    await page.goto(origin);
+    await page.evaluate(() => window.numberInputMaskProbe.mountForm());
+    const input = page.locator('input[data-field-id="fld_number"]');
+    const save = page.getByRole('button', { name: 'Save', exact: true });
+    const capture = async (phase) => {
+        const state = await page.evaluate(() =>
+            window.formNumberProbe.snapshot()
+        );
+        captures.push({ phase, ...state });
+        return state;
+    };
+    try {
+        await input.pressSequentially('1.20');
+        assert.equal((await capture('initial')).value, '1.20');
+        await input.press('Home');
+        assert.equal((await capture('home')).start, 0);
+        await input.press('3');
+        const first = await capture('first-edit');
+        await input.press('4');
+        const second = await capture('second-edit');
+        assert.equal(first.value, '31.20');
+        assert.deepEqual([first.start, first.end], [1, 1]);
+        assert.equal(second.value, '341.20');
+        assert.equal(second.native, 341.2);
+        assert.deepEqual(second.saves, []);
+        assert(first.focused && second.focused);
+        assert(first.trusted && second.trusted);
+
+        await save.click();
+        await page.waitForFunction(
+            () => window.formNumberProbe.snapshot().saves.length === 1
+        );
+        assert.deepEqual((await capture('saved')).saves, [341.2]);
+
+        await input.press('ControlOrMeta+A');
+        await input.press('-');
+        const invalid = await capture('invalid');
+        assert.equal(invalid.value, '-');
+        assert.equal(invalid.valid, false);
+        assert.equal(invalid.native, 341.2);
+        await save.click();
+        await page.waitForFunction(
+            () => window.formNumberProbe.snapshot().saveError
+        );
+        assert.deepEqual((await capture('invalid-save-blocked')).saves, [
+            341.2,
+        ]);
+
+        await page.evaluate(() => window.formNumberProbe.reset());
+        const reset = await capture('external-reset');
+        assert.equal(reset.value, '');
+        assert.equal(reset.native, null);
+        assert.equal(reset.valid, true);
+        assert.deepEqual(reset.saves, [341.2]);
+        for (const state of captures) assert.deepEqual(state.requests, []);
+        evidence.caret.status = 'passed';
+    } finally {
+        await page.evaluate(() => window.formNumberProbe.destroy());
+    }
+}
 
 // Native keyboard input is essential: assigning/filling a number input cannot
 // represent Chrome's nonempty invalid editing buffer with value === ''.
@@ -75,9 +140,30 @@ export async function checkNumberInputMaskBrowser({
                 };
             }
         );
+        const loaded = portalRecipeFixtures.makeForm({
+            childExtensionInfo: { accessType: { type: 'create' } },
+        });
+        loaded.payload.hasParentExtension = false;
+        loaded.payload.fieldIdsInForm.push('fld_number');
+        loaded.payload.fieldIdsToSchemas.fld_number = {
+            fieldType: 'number',
+            airtableField: {
+                id: 'fld_number',
+                name: 'fld_number',
+                isComputed: false,
+                isPrimaryField: false,
+                description: null,
+                config: { type: 'number', options: { precision: 2 } },
+            },
+            miniExtConfig: {
+                conditionalFields: { logicalOperator: 'and', conditions: [] },
+            },
+        };
+        loaded.payload.formRecord.data.fld_number = null;
         const host = `
 import { AirtableFieldType } from '@miniextensions/sdk';
-import { fieldControl } from './fields.ts';
+import { createFormFieldBindings } from '@miniextensions/sdk/forms';
+import { fieldControl, mountBoundFormField } from './fields.ts';
 let control, input, config, changes, inputs;
 const requests = [];
 window.fetch = async (...args) => { requests.push(String(args[0])); throw Error('Unexpected Number transport'); };
@@ -93,8 +179,44 @@ const mount = (flag, masked) => {
     input.addEventListener('input', event => inputs.push({trusted:event.isTrusted,value:input.value,badInput:input.validity.badInput,type:input.type}));
     return snapshot();
 };
+const mountForm = () => {
+    control.destroy();
+    const loaded = ${JSON.stringify(loaded)};
+    const saves = [];
+    let saveError = false;
+    const owner = createFormFieldBindings({
+        client: { getSession: () => ({}), forms: { save: async (request) => {
+            saves.push(request.formRecord.data.fld_number);
+            return { type: 'error', formValidationErrors: [], formErrors: {} };
+        } } },
+        loaded,
+        getScope: () => ({ ownerId: 'A', revision: 0 }),
+        canWriteField: () => true,
+        saveOptions: { captchaVal: null, isComputeMode: false, context: { type: 'direct-url' }, searchQuery: {}, conditionalLinkedRecordFieldIdsToFilteringValues: {} },
+    });
+    const binding = owner.field('fld_number');
+    const field = mountBoundFormField(binding, loaded.payload.fieldIdsToSchemas.fld_number, () => {});
+    const input = field.node.querySelector('input');
+    let trusted = false;
+    input.addEventListener('input', (event) => { trusted = event.isTrusted; });
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Save';
+    button.addEventListener('click', async () => {
+        try { await owner.save(); }
+        catch { saveError = true; }
+    });
+    document.querySelector('main').replaceChildren(field.node, button);
+    window.formNumberProbe = {
+        snapshot: () => ({ value: input.value, start: input.selectionStart, end: input.selectionEnd,
+            focused: document.activeElement === input, trusted, native: binding.getSnapshot().value,
+            valid: binding.scalar.getState().valid, saves: [...saves], saveError, requests: [...requests] }),
+        reset: () => binding.setValue(null),
+        destroy: () => { field.destroy(); owner.destroy(); },
+    };
+};
 window.numberInputMaskProbe = {
-    mount, snapshot,
+    mount, mountForm, snapshot,
     policy:(flag, value) => {config[flag] = value; return snapshot();},
     read:() => {
         try { const value = control.read(); return {returned:true,value,state:snapshot()}; }
@@ -287,6 +409,10 @@ mount('obscurePassword', false);
                 failures,
                 'Native Number masking regressions failed.'
             );
+        evidence.phase = 'stock Form Number caret';
+        await checkNumberCaret(page, origin, evidence);
+        assert.deepEqual(evidence.unexpectedRequests, []);
+        assert.deepEqual(evidence.pageErrors, []);
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

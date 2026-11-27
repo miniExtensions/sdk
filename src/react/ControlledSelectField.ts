@@ -107,6 +107,7 @@ const key = (choice: ControlledSelectChoice) =>
 const sameValues = (left: readonly string[], right: readonly string[]) =>
     left.length === right.length &&
     left.every((value, index) => value === right[index]);
+const addChoice = Symbol('Add choice');
 
 type SelectionSettlement = {
     epoch: object;
@@ -228,8 +229,7 @@ function SelectControl(props: ControlProps): ReactNode {
         epoch,
         text: '',
         open: false,
-        // Multiple Select keyboard navigation stores the choice key, or null if it disappears.
-        active: -1 as number | string | null,
+        active: -1 as number | string | typeof addChoice | null,
     });
     const state =
         draft.epoch === epoch
@@ -365,15 +365,40 @@ function SelectControl(props: ControlProps): ReactNode {
     const found = state.text
         ? (fuse?.search(query).map((result) => result.item) ?? [])
         : candidates;
-    const resolveActiveIndex = (active: typeof state.active) =>
-        typeof active === 'string'
+    const normalized = state.text.trim().toLowerCase();
+    const showCreate =
+        canAdd &&
+        props.allowAddingNewOptions &&
+        props.publishMetadata &&
+        normalized.length > 0 &&
+        !props.choices.some((choice) =>
+            [choice.name, label(choice)].some(
+                (value) => value.trim().toLowerCase() === normalized
+            )
+        );
+    const resolveActiveIndex = (active: typeof state.active) => {
+        if (active === addChoice) return showCreate ? found.length : -1;
+        return typeof active === 'string'
             ? found.findIndex((choice) => key(choice) === active)
             : active;
+    };
     const resolvedActiveIndex = resolveActiveIndex(state.active);
     const activeIndex = resolvedActiveIndex ?? -1;
-    // Retire a vanished choice even if a later refresh offers it again.
-    if (typeof state.active === 'string' && activeIndex === -1)
+    // A vanished active target requires a fresh gesture.
+    if (
+        (typeof state.active === 'string' || state.active === addChoice) &&
+        activeIndex === -1
+    )
         setDraft({ ...state, active: null });
+    else if (
+        !props.multiple &&
+        props.presentation === 'dropdown' &&
+        props.visible !== false &&
+        state.open &&
+        showCreate &&
+        state.active === found.length
+    )
+        setDraft({ ...state, active: addChoice });
     const update = (change: Partial<typeof state>) => {
         // Retained blur/search/hover callbacks must not erase a successor's draft.
         if (live.current !== props || generation.current.epoch !== epoch)
@@ -648,17 +673,6 @@ function SelectControl(props: ControlProps): ReactNode {
             return;
         create(name);
     };
-    const normalized = state.text.trim().toLowerCase();
-    const showCreate =
-        canAdd &&
-        props.allowAddingNewOptions &&
-        props.publishMetadata &&
-        normalized.length > 0 &&
-        !props.choices.some((choice) =>
-            [choice.name, label(choice)].some(
-                (value) => value.trim().toLowerCase() === normalized
-            )
-        );
     const badge = (choice: ControlledSelectChoice, removable: boolean) => {
         const choiceLabel = label(choice);
         return h(

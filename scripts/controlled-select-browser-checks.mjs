@@ -480,6 +480,120 @@ function assertNativeClosedListKorean(receipt) {
     );
 }
 
+const addCedar = 'Add new option "Cedar"';
+
+async function readAddChoiceRefresh(page, snapshot, name) {
+    const decision = page.getByRole('combobox', {
+        name: 'Decision',
+        exact: true,
+    });
+    const readHighlight = () =>
+        decision.evaluate((input) => {
+            const document = input.ownerDocument;
+            const activeId = input.getAttribute('aria-activedescendant');
+            const listbox = document.getElementById(
+                input.getAttribute('aria-controls')
+            );
+            const active = activeId && document.getElementById(activeId);
+            return {
+                focused: document.activeElement === input,
+                query: input.value,
+                active: active?.textContent ?? null,
+                highlighted: Array.from(
+                    listbox?.querySelectorAll('[data-active]') ?? [],
+                    (option) => option.textContent
+                ),
+            };
+        });
+    const outcome = async () => {
+        const { single, writes, submits } = await snapshot();
+        return { single, writes, submits };
+    };
+    const add = page.getByRole('option', { name: addCedar, exact: true });
+    await decision.fill('Cedar');
+    await page.keyboard.press('End');
+    await add.waitFor();
+    const before = await readHighlight();
+    await page.evaluate((name) => {
+        window.selectProof.refreshChoices([{ id: 'refreshed', name }]);
+    }, name);
+    await page.getByRole('option', { name, exact: true }).waitFor();
+    const refreshed = {
+        ...(await readHighlight()),
+        add: await add.isVisible(),
+        ...(await outcome()),
+    };
+    await page.keyboard.press('Enter');
+    const afterEnter = await outcome();
+    let afterFreshSelection = null;
+    if (name === 'Cedar' && afterEnter.single === null) {
+        await page.keyboard.press('ArrowDown');
+        const highlight = await readHighlight();
+        await page.keyboard.press('Enter');
+        afterFreshSelection = { highlight, ...(await outcome()) };
+    }
+    return { before, refreshed, afterEnter, afterFreshSelection };
+}
+
+function assertAddChoiceRefresh({
+    name,
+    before,
+    refreshed,
+    afterEnter,
+    afterFreshSelection,
+}) {
+    const highlight = (active) => ({
+        focused: true,
+        query: 'Cedar',
+        active,
+        highlighted: active ? [active] : [],
+    });
+    assert.deepEqual(before, highlight(addCedar));
+    const {
+        add,
+        writes,
+        single,
+        submits,
+        focused,
+        query,
+        active,
+        highlighted,
+    } = refreshed;
+    assert.deepEqual(
+        { writes, single, submits },
+        { writes: [], single: null, submits: 0 }
+    );
+    const value = { kind: 'value', key: 'single', value: 'Cedar' };
+    if (name === 'Cedar Grove') {
+        assert.equal(add, true);
+        assert.deepEqual(
+            { focused, query, active, highlighted },
+            highlight(addCedar)
+        );
+        assert.deepEqual(afterEnter.writes, [
+            {
+                kind: 'metadata',
+                choice: { id: '', name: 'Cedar', newOption: true },
+            },
+            value,
+        ]);
+        assert.equal(afterEnter.single, 'Cedar');
+    } else {
+        assert.equal(add, false);
+        assert.deepEqual(
+            { focused, query, active, highlighted },
+            highlight(null)
+        );
+        assert.deepEqual(afterEnter.writes, []);
+        assert.equal(afterEnter.single, null);
+        assert.deepEqual(afterFreshSelection.highlight, highlight('Cedar'));
+        assert.deepEqual(afterFreshSelection.writes, [value]);
+        assert.equal(afterFreshSelection.single, 'Cedar');
+        assert.equal(afterFreshSelection.submits, 0);
+    }
+    assert.equal(afterEnter.submits, 0);
+}
+
 // Synthetic controlled host, installed public entry points, actual browser input.
 // Canonical state and deferred metadata remain host-owned; no provider is called.
 export async function checkControlledSelectBrowser({
@@ -492,6 +606,7 @@ export async function checkControlledSelectBrowser({
         status: 'running',
         results: [],
         nativeClosedListKorean: [],
+        addChoiceRefresh: [],
         pageErrors: [],
         unexpectedRequests: [],
         cleanup: {},
@@ -537,13 +652,15 @@ export async function checkControlledSelectBrowser({
                 imports +
                 `
 const {createElement:h,useState,useRef}=React;
-let writes=[],submits=0,activations=0,observed,singleEchoTransitions=[];
+let writes=[],submits=0,activations=0,observed,refreshChoices,singleEchoTransitions=[];
 const choices=[{id:'a',name:'Alpha',displayName:'First'},{id:'b',name:'Beta',displayName:'Second'},{id:'c',name:'Gamma',displayName:'Third'}];
 const nativeEditable=new URLSearchParams(location.search).has('native-editable-dropdown');
 const nativeClosedListKorean=new URLSearchParams(location.search).get('native-closed-list-korean');
+const addRefresh=new URLSearchParams(location.search).has('add-refresh');
 const koreanChoices=${JSON.stringify(koreanChoices)};
 function App(){
- const [state,setState]=useState({single:nativeEditable?'Beta':null,multi:['Alpha','Beta'],limited:['Alpha'],choices,readonly:false,active:true,token:{}});
+ const [state,setState]=useState({single:nativeEditable?'Beta':null,multi:['Alpha','Beta'],limited:['Alpha'],choices:addRefresh?[]:choices,readonly:false,active:true,token:{}});
+ if(addRefresh)refreshChoices=replacement=>setState(old=>({...old,choices:replacement}));
  const latest=useRef(state);latest.current=state;observed=state;
  const canonicalSingle=useRef(state.single);
  const scope=state.token;
@@ -636,7 +753,7 @@ function App(){
  h('button',{type:'submit'},'Explicit Save'));
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submits,activations,single:observed.single,multi:observed.multi,limited:observed.limited,singleEchoTransitions:[...singleEchoTransitions]})};
+window.selectProof={refreshChoices:replacement=>refreshChoices(replacement),snapshot:()=>({react:React.version,writes:[...writes],submits,activations,single:observed.single,multi:observed.multi,limited:observed.limited,singleEchoTransitions:[...singleEchoTransitions]})};
 `;
             const entry = join(
                 directory,
@@ -1248,6 +1365,12 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                     ...result,
                 });
             }
+            for (const name of ['Cedar Grove', 'Cedar']) {
+                evidence.phase = `${format} Add choice refresh ${name}`;
+                await page.goto(`${origin}/?format=${format}&add-refresh`);
+                const result = await readAddChoiceRefresh(page, snapshot, name);
+                evidence.addChoiceRefresh.push({ format, name, ...result });
+            }
             evidence.results.push({
                 format,
                 synchronousCanonicalEcho,
@@ -1263,10 +1386,14 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
             evidence.phase = `${receipt.format} native closed list ${receipt.direction}`;
             assertNativeClosedListKorean(receipt);
         }
+        for (const receipt of evidence.addChoiceRefresh) {
+            evidence.phase = `${receipt.format} Add choice refresh ${receipt.name}`;
+            assertAddChoiceRefresh(receipt);
+        }
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, caps/radios, readonly Grid events, and native Form dropdown appearance, focus, actions and equivalent Korean closed-list search. Synthetic host and explicit submit sentinel.';
+            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, Add highlight across choice refresh, caps/radios, readonly Grid events, and native Form dropdown appearance, focus, actions and equivalent Korean closed-list search. Synthetic host and explicit submit sentinel.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

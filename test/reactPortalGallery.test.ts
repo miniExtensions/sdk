@@ -531,14 +531,35 @@ test('Gallery reload overlay preserves row nodes, image selection and current Op
         },
     };
     await f.render(h(PortalGallery, props([a])));
+    const track = f.container.querySelector('.mx-sdk-finder-carousel-track');
+    assert.ok(track);
+    const photos = [...track.querySelectorAll('img')];
+    assert.equal(photos.length, 2);
+    const exposedPhotoNames = () =>
+        [...track.querySelectorAll('img')]
+            .filter((photo) => photo.getAttribute('aria-hidden') !== 'true')
+            .map((photo) => photo.getAttribute('alt'));
+    const initiallyExposed = exposedPhotoNames();
     const dot = f.container.querySelectorAll(
         '.mx-sdk-finder-carousel-dots button'
     )[1];
     assert(dot instanceof f.window.HTMLButtonElement);
+    await act(async () => dot.focus());
     await f.click(dot);
     assert.equal(opens, 0);
     const selected = f.container.querySelector('img[data-visible=true]');
     assert.equal(selected?.getAttribute('alt'), 'Two');
+    assert.equal(f.window.document.activeElement === dot, true);
+    const afterPhotos = [...track.querySelectorAll('img')];
+    assert.equal(afterPhotos.length, 2);
+    assert.equal(
+        afterPhotos.every((photo, index) => photo === photos[index]),
+        true
+    );
+    assert.deepEqual(
+        [initiallyExposed, exposedPhotoNames()],
+        [['One'], ['Two']]
+    );
     const node = f.container.querySelector('[data-record-id=a]');
     const button = f.container.querySelector('.mx-sdk-portal-gallery-open');
     const before = retirements;

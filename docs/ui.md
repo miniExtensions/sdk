@@ -1826,7 +1826,7 @@ Simulated composition does not certify real OS input methods.
 
 For a host-controlled Form, use `UrlField` with `mode="controlled"`, a `value`,
 and an `onChange` callback. Primary click on the resting link focuses the native
-URL input without navigating. A middle-click opens a valid link in a new tab.
+URL input without navigating. Middle-click also focuses the input without navigating.
 The host can supply an existing field `id`, `form`,
 `describedBy` and `invalid` state. Deferred edits use the same clearable input
 lifecycle as other native Form fields. Deferred editing requires an `owner`

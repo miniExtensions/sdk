@@ -101,6 +101,7 @@ export async function checkUrlConsumer({
     const { createElement: h, act, StrictMode } = require('react');
     const { createRoot } = require('react-dom/client');
     let checks = 0;
+    const middleClicks = [];
     try {
         const css = require.resolve('@miniextensions/sdk/react/text.css');
         assert.match(readFileSync(css, 'utf8'), /\.mx-sdk-text:focus-visible/);
@@ -399,46 +400,126 @@ export async function checkUrlConsumer({
 
                 const edits = [];
                 const value = 'https://example.test/path';
-                await act(async () =>
-                    root.render(
-                        h(
-                            'form',
-                            { id: 'consumer-url-form' },
-                            h('label', { htmlFor: 'consumer-url' }, 'Website'),
-                            h('p', { id: 'consumer-help' }, 'Use a site link'),
-                            h(react.UrlField, {
-                                mode: 'controlled',
-                                id: 'consumer-url',
-                                form: 'consumer-url-form',
-                                describedBy: 'consumer-help',
-                                value,
-                                onChange: (next) => edits.push(next),
-                            })
+                let submits = 0;
+                const mountControlled = (key) =>
+                    act(async () =>
+                        root.render(
+                            h(
+                                'form',
+                                {
+                                    key,
+                                    id: 'consumer-url-form',
+                                    onSubmit(event) {
+                                        event.preventDefault();
+                                        submits++;
+                                    },
+                                },
+                                h(
+                                    'label',
+                                    { htmlFor: 'consumer-url' },
+                                    'Website'
+                                ),
+                                h(
+                                    'p',
+                                    { id: 'consumer-help' },
+                                    'Use a site link'
+                                ),
+                                h(
+                                    'p',
+                                    { id: 'consumer-error' },
+                                    'URL rejected'
+                                ),
+                                h(react.UrlField, {
+                                    mode: 'controlled',
+                                    id: 'consumer-url',
+                                    form: 'consumer-url-form',
+                                    describedBy: 'consumer-help consumer-error',
+                                    invalid: true,
+                                    value,
+                                    onChange: (next) => edits.push(next),
+                                })
+                            )
                         )
-                    )
+                    );
+                const overlay = () =>
+                    container.querySelector('a[aria-hidden="true"]');
+                const checkControlled = (textbox) => {
+                    assert.equal(input(), textbox);
+                    assert.equal(textbox.type, 'url');
+                    assert.equal(textbox.form?.id, 'consumer-url-form');
+                    assert.equal(textbox.labels?.[0]?.textContent, 'Website');
+                    assert.equal(textbox.getAttribute('aria-invalid'), 'true');
+                    const description =
+                        textbox.getAttribute('aria-describedby');
+                    assert.equal(description, 'consumer-help consumer-error');
+                    assert.deepEqual(
+                        description
+                            .split(' ')
+                            .map(
+                                (id) =>
+                                    window.document.getElementById(id)
+                                        ?.textContent
+                            ),
+                        ['Use a site link', 'URL rejected']
+                    );
+                    assert.equal(textbox.value, value);
+                    assert.deepEqual(edits, []);
+                    assert.equal(writes, beforeOverride);
+                    assert.equal(submits, 0);
+                    assert.equal(openCalls, 0);
+                    assert.equal(requests, 0);
+                    assert.equal(window.location.href, initialLocation);
+                };
+                await mountControlled('auxiliary');
+                const textbox = input();
+                const resting = overlay();
+                assert.equal(resting.getAttribute('href'), value);
+                assert.equal(resting.tabIndex, -1);
+                assert.notEqual(window.document.activeElement, textbox);
+                const right = new window.MouseEvent('auxclick', {
+                    button: 2,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                await act(async () =>
+                    assert.equal(resting.dispatchEvent(right), true)
                 );
-                assert.equal(input().type, 'url');
-                assert.equal(input().form?.id, 'consumer-url-form');
-                assert.equal(input().labels?.[0]?.textContent, 'Website');
-                assert.equal(
-                    input().getAttribute('aria-describedby'),
-                    'consumer-help'
-                );
-                const overlay = container.querySelector(
-                    'a[aria-hidden="true"]'
-                );
-                assert.equal(overlay.getAttribute('href'), value);
-                assert.equal(overlay.tabIndex, -1);
+                assert.equal(right.defaultPrevented, false);
+                assert.notEqual(window.document.activeElement, textbox);
+                assert.equal(overlay(), resting);
+                const middle = new window.MouseEvent('auxclick', {
+                    button: 1,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                assert.equal(middle.type, 'auxclick');
+                assert.equal(middle.button, 1);
+                assert.equal(middle.bubbles, true);
+                assert.equal(middle.cancelable, true);
+                let dispatched;
+                await act(async () => {
+                    dispatched = resting.dispatchEvent(middle);
+                });
+                middleClicks.push({
+                    format,
+                    dispatched,
+                    defaultPrevented: middle.defaultPrevented,
+                    focused: window.document.activeElement === textbox,
+                });
+                checkControlled(textbox);
+
+                await mountControlled('primary');
+                const primaryTextbox = input();
+                assert.notEqual(primaryTextbox, textbox);
+                assert.notEqual(window.document.activeElement, primaryTextbox);
                 const click = new window.MouseEvent('click', {
                     bubbles: true,
                     cancelable: true,
                 });
-                await act(async () => overlay.dispatchEvent(click));
+                await act(async () => overlay().dispatchEvent(click));
                 assert.equal(click.defaultPrevented, true);
-                assert.equal(window.document.activeElement, input());
-                assert.equal(input().value, value);
-                assert.deepEqual(edits, []);
-                assert.equal(writes, beforeOverride);
+                assert.equal(window.document.activeElement, primaryTextbox);
+                checkControlled(primaryTextbox);
                 await edit('https://example.test/next');
                 assert.deepEqual(edits, ['https://example.test/next']);
                 checks++;
@@ -488,6 +569,16 @@ export async function checkUrlConsumer({
                 container.remove();
             }
         }
+        assert.deepEqual(
+            middleClicks,
+            ['esm', 'cjs'].map((format) => ({
+                format,
+                dispatched: false,
+                defaultPrevented: true,
+                focused: true,
+            })),
+            'Middle-click on the editable resting URL must focus the input without opening a tab'
+        );
         return { checks };
     } finally {
         keys.forEach((key, index) => {

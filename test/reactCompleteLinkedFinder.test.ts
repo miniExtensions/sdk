@@ -193,6 +193,106 @@ test('keyboard/focus and programmatic controlled search echoes preserve current 
     assert.equal(f.document.activeElement, input);
 });
 
+test('native Form List Finder offers refresh after ten seconds of its first read', async (t) => {
+    const f = await fixture(t, false, { external: true });
+    const coordinator = f.coordinator!;
+    await f.render({ nativeFormListPresentation: true });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => t.mock.timers.reset());
+    const refreshButtons = () =>
+        Array.from(f.host.querySelectorAll('button')).filter(
+            (button) => button.textContent === 'Click here to refresh'
+        );
+    const refreshCount = () => refreshButtons().length;
+    const reload = t.mock.method(f.window.location, 'reload', () => {});
+
+    let pending!: ReturnType<typeof coordinator.queryNow>;
+    await act(async () => {
+        pending = coordinator.queryNow({ filter: '', resetOffset: true });
+    });
+    const loadingStatus = () =>
+        f.host.querySelector('[role="status"]')?.textContent;
+    const initialStatus = loadingStatus();
+    assert.equal(
+        f.host
+            .querySelector('.mx-sdk-finder-initial-loading svg')
+            ?.getAttribute('aria-hidden'),
+        'true'
+    );
+    await act(async () => t.mock.timers.tick(9_999));
+    const beforeDeadline = { status: loadingStatus(), refresh: refreshCount() };
+    await act(async () => t.mock.timers.tick(1));
+    const atDeadline = { status: loadingStatus(), refresh: refreshCount() };
+    const button = refreshButtons()[0];
+    assert(button);
+    assert.equal(button.type, 'button');
+    await act(async () => {
+        button.focus();
+        button.click();
+    });
+    assert.equal(f.document.activeElement, button);
+    assert.equal(reload.mock.callCount(), 1);
+    assert.equal(f.reads.length, 1);
+    await f.resolve(['B']);
+    assert.equal((await pending).status, 'accepted');
+    const result = f.host.querySelector('[role="option"]')?.textContent;
+
+    assert.equal(initialStatus, labels.loading);
+    assert.deepEqual(
+        { beforeDeadline, atDeadline, result, reads: f.reads.length },
+        {
+            beforeDeadline: { status: labels.loading, refresh: 0 },
+            atDeadline: { status: labels.loading, refresh: 1 },
+            result: 'Card B',
+            reads: 1,
+        }
+    );
+    assert.equal(refreshCount(), 0);
+    assert.deepEqual(f.toggles, []);
+});
+
+test('native Form List Finder drops initial recovery after early settlement or close', async (t) => {
+    const f = await fixture(t, false, { external: true });
+    const coordinator = f.coordinator!;
+    await f.render({ nativeFormListPresentation: true });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => t.mock.timers.reset());
+    const loading = () =>
+        f.host.querySelector('.mx-sdk-finder-initial-loading');
+    const reload = t.mock.method(f.window.location, 'reload', () => {});
+    const start = async () => {
+        await act(async () => {
+            void coordinator.queryNow({ filter: '', resetOffset: true });
+        });
+    };
+
+    await start();
+    assert(loading());
+    await act(async () => t.mock.timers.tick(9_999));
+    await f.resolve([]);
+    await act(async () => t.mock.timers.tick(1));
+    assert.equal(loading(), null);
+
+    await start();
+    await act(async () => t.mock.timers.tick(10_000));
+    assert.equal(loading(), null);
+    assert.equal(
+        f.host.querySelector('[role="status"]')?.textContent,
+        labels.loading
+    );
+    await f.resolve(['B']);
+
+    await act(async () => f.replace());
+    await start();
+    assert(loading());
+    await f.unmount();
+    await act(async () => t.mock.timers.tick(10_000));
+    assert.equal(loading(), null);
+    assert.equal(reload.mock.callCount(), 0);
+    assert.equal(f.reads.length, 3);
+    assert.deepEqual(f.toggles, []);
+});
+
 test('native Form List Finder marks only settled no-match searches', async (t) => {
     const f = await fixture(t, false, { external: true });
     const coordinator = f.coordinator!;

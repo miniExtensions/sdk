@@ -24,6 +24,55 @@ import { useBarcodeScannerButton } from './useBarcodeScannerButton.js';
 import type { BarcodeScannerButtonOptions } from './useBarcodeScannerButton.js';
 
 const { Combobox } = createAddressRuntime(React);
+const initialReadRefreshDelayMs = 10_000;
+
+function NativeFormListFinderLoading({
+    label,
+    onRefresh,
+}: {
+    label: string;
+    onRefresh?: React.MouseEventHandler<HTMLButtonElement>;
+}): ReactElement {
+    return h(
+        'div',
+        { className: 'mx-sdk-finder-initial-loading' },
+        h(
+            'span',
+            { role: 'status', className: 'mx-sdk-finder-sr-only' },
+            label
+        ),
+        h(
+            'svg',
+            { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': true },
+            h('circle', {
+                cx: 12,
+                cy: 12,
+                r: 10,
+                stroke: 'currentColor',
+                strokeWidth: 4,
+                opacity: 0.25,
+            }),
+            h('path', {
+                fill: 'currentColor',
+                opacity: 0.75,
+                d: 'M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z',
+            })
+        ),
+        onRefresh &&
+            h(
+                'p',
+                null,
+                "We're loading the latest data for you. ",
+                h(
+                    'button',
+                    { type: 'button', onClick: onRefresh },
+                    'Click here to refresh'
+                ),
+                " if it doesn't load shortly."
+            )
+    );
+}
+
 export type CompleteLinkedFinderLabels = {
     readonly search: string;
     readonly loading: string;
@@ -97,6 +146,7 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
 ): ReactElement {
     const { coordinator, host, nativeFormListPresentation } = props;
     const [, refresh] = useState(0);
+    const [refreshForRead, setRefreshForRead] = useState<object | null>(null);
     const scroll = useRef<HTMLDivElement>(null);
     const sentinel = useRef<HTMLDivElement>(null);
     const focusInput = useCallback(
@@ -129,6 +179,28 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
         currentOwner()
             ? props.previewPresentation
             : null;
+    const initialRead =
+        nativeFormListPresentation && !preview && snapshot?.initialReadPending
+            ? readIdentity
+            : null;
+    useEffect(() => {
+        if (!initialRead) return;
+        const timer = setTimeout(
+            () => setRefreshForRead(initialRead),
+            initialReadRefreshDelayMs
+        );
+        return () => clearTimeout(timer);
+    }, [initialRead]);
+    const reload = (event: React.MouseEvent<HTMLButtonElement>) => {
+        const current = coordinator?.getSnapshot();
+        if (
+            initialRead !== null &&
+            current?.initialReadPending &&
+            current.owner === owner &&
+            current.readIdentity === initialRead
+        )
+            event.currentTarget.ownerDocument.defaultView?.location.reload();
+    };
     const rawIds =
         preview?.candidateIds ??
         coordinator?.model.getState().options.map((option) => option.value) ??
@@ -266,11 +338,17 @@ export function CompleteLinkedFinderView<Row, Filter, Owner extends object>(
     const body =
         props.initialLoading ||
         (!preview && snapshot?.phase === 'loading' && !snapshot.loadingMore)
-            ? h(
-                  'div',
-                  { role: 'status', className: 'mx-sdk-finder-feedback' },
-                  props.labels.loading
-              )
+            ? initialRead
+                ? h(NativeFormListFinderLoading, {
+                      label: props.labels.loading,
+                      onRefresh:
+                          refreshForRead === initialRead ? reload : undefined,
+                  })
+                : h(
+                      'div',
+                      { role: 'status', className: 'mx-sdk-finder-feedback' },
+                      props.labels.loading
+                  )
             : error
               ? h(
                     'div',

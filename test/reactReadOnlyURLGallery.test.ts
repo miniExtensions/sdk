@@ -548,25 +548,49 @@ it('navigates and closes without submission, reflects current options and reject
         entries,
         labels: { close: 'Cerrar', previous: 'Anterior', next: 'Siguiente' },
     });
-    await f.open(0);
-    const dialog = f.host.querySelector('[role="dialog"]')!;
-    await act(async () =>
-        dialog.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                bubbles: true,
-                key: 'ArrowRight',
-            })
-        )
-    );
+    await f.open(1);
+    const localizedClose = Array.from(
+        f.host.querySelectorAll('[role="dialog"] button')
+    ).find((node) => node.textContent === 'Cerrar');
+    assert.ok(localizedClose instanceof f.window.HTMLElement);
+    await act(async () => localizedClose.focus());
+    const press = async (
+        key: string,
+        modifiers?: {
+            altKey?: boolean;
+            ctrlKey?: boolean;
+            metaKey?: boolean;
+            shiftKey?: boolean;
+        }
+    ) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key,
+            bubbles: true,
+            cancelable: true,
+            ...modifiers,
+        });
+        await act(async () => localizedClose.dispatchEvent(event));
+        return event.defaultPrevented;
+    };
+    const altLeft = await press('ArrowLeft', { altKey: true });
+    assert.equal(f.window.document.activeElement === localizedClose, true);
+    assert.deepEqual([f.index(), altLeft], ['2 / 2', false]);
+    for (const modifiers of [
+        { ctrlKey: true },
+        { metaKey: true },
+        { shiftKey: true },
+    ]) {
+        assert.equal(await press('ArrowLeft', modifiers), false);
+        assert.equal(f.index(), '2 / 2');
+    }
+    assert.equal(await press('ArrowLeft'), true);
+    assert.equal(f.index(), '1 / 2');
+    const altRight = await press('ArrowRight', { altKey: true });
+    assert.equal(f.window.document.activeElement === localizedClose, true);
+    assert.deepEqual([f.index(), altRight], ['1 / 2', false]);
+    assert.equal(await press('ArrowRight'), true);
     assert.equal(f.index(), '2 / 2');
-    await act(async () =>
-        dialog.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                bubbles: true,
-                key: 'Escape',
-            })
-        )
-    );
+    assert.equal(await press('Escape'), true);
     assert.equal(f.host.querySelector('[role="dialog"]'), null);
     assert.equal(f.submits(), 0);
 });

@@ -279,6 +279,43 @@ export async function checkComputedBrowser({
                     .count(),
                 0
             );
+            const close = page.getByRole('button', {
+                name: 'Close',
+                exact: true,
+            });
+            const position = page.locator('.mx-sdk-url-gallery__position');
+            await close.waitFor({ state: 'visible' });
+            await close.focus();
+            for (const [key, selected, next] of [
+                ['ArrowLeft', '2 / 2', '1 / 2'],
+                ['ArrowRight', '1 / 2', '2 / 2'],
+            ]) {
+                assert.deepEqual(
+                    await close.evaluate((node, key) => {
+                        const event = new KeyboardEvent('keydown', {
+                            key,
+                            altKey: true,
+                            bubbles: true,
+                            cancelable: true,
+                        });
+                        node.dispatchEvent(event);
+                        return {
+                            defaultPrevented: event.defaultPrevented,
+                            focused: node === document.activeElement,
+                        };
+                    }, key),
+                    { defaultPrevented: false, focused: true }
+                );
+                assert.equal(await position.textContent(), selected);
+                await page.keyboard.press(key);
+                assert.equal(await position.textContent(), next);
+                assert.equal(
+                    await close.evaluate(
+                        (node) => node === document.activeElement
+                    ),
+                    true
+                );
+            }
             await page.keyboard.press('Escape');
             await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
             assert.equal(
@@ -288,7 +325,7 @@ export async function checkComputedBrowser({
                 true
             );
             record(
-                'trusted gallery selection Escape close and exact focus return'
+                'gallery leaves Alt arrows uncanceled, handles plain arrows and Escape, and returns focus'
             );
             await page.keyboard.press('Enter');
             await page.locator('[role="dialog"]').waitFor({ state: 'visible' });

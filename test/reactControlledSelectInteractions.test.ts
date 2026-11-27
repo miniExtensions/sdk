@@ -16,6 +16,7 @@ type FixtureValue = string | null | string[];
 async function fixture(
     t: TestContext,
     options: {
+        choices?: readonly ControlledSelectChoice[];
         multiple?: boolean;
         valueBoundOwner?: boolean;
         deferEcho?: boolean;
@@ -64,7 +65,8 @@ async function fixture(
     let presentation: 'list' | 'dropdown' = 'dropdown';
     let value: FixtureValue = options.multiple ? [] : null;
     let echoedValue: FixtureValue = value;
-    let choices = [...initialChoices];
+    let choices = [...(options.choices ?? initialChoices)];
+    let availableChoices: readonly ControlledSelectChoice[] | undefined;
     let receipt = false;
     const writes: FixtureValue[] = [];
     const metadata: string[] = [];
@@ -76,7 +78,7 @@ async function fixture(
         const renderedToken = token;
         const common = {
             choices,
-            availableChoices: choices,
+            availableChoices: availableChoices ?? choices,
             owner: {
                 token,
                 isCurrent: () =>
@@ -217,6 +219,9 @@ async function fixture(
         },
         setCurrent(next: boolean) {
             current = next;
+        },
+        setAvailableChoices(next: readonly ControlledSelectChoice[]) {
+            availableChoices = next;
         },
         setPublication(next: typeof publication) {
             publication = next;
@@ -403,6 +408,28 @@ it('reentrant metadata admission preserves a newer selection settlement', async 
     assert.deepEqual(f.writes, ['Beta', 'New']);
 });
 
+it('a delayed multiple value echo clears search when Home keeps the same choice highlighted', async (t) => {
+    const f = await fixture(t, {
+        multiple: true,
+        valueBoundOwner: true,
+        deferEcho: true,
+    });
+    await f.type('Second');
+    const highlighted = f.option('Second').id;
+    assert.equal(f.input().getAttribute('aria-activedescendant'), highlighted);
+
+    await f.key('Enter');
+    assert.deepEqual(f.writes, [['Beta']]);
+    await f.key('Home');
+    assert.equal(f.input().getAttribute('aria-activedescendant'), highlighted);
+    assert.equal(f.input().value, 'Second');
+
+    await f.echo();
+    assert.equal(f.input().value, '');
+    assert.equal(f.input().getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(f.writes, [['Beta']]);
+});
+
 for (const intent of ['Escape', 'ArrowUp']) {
     it(`a delayed multiple value echo preserves a newer ${intent} picker intent`, async (t) => {
         const f = await fixture(t, {
@@ -573,6 +600,69 @@ it('dropdown Arrow/Home/End navigation uses current offers and Tab never commits
     await f.key('Tab');
     assert.deepEqual(f.writes, []);
     assert.equal(f.container.querySelector('[role=listbox]'), null);
+});
+
+const [alpha, beta] = initialChoices;
+const refreshChoices = [{ id: 'existing', name: 'Existing' }, alpha, beta];
+
+it('Multiple Select keeps the keyboard-highlighted choice when available choices expand', async (t) => {
+    const f = await fixture(t, { choices: refreshChoices, multiple: true });
+    f.setValue(['Existing']);
+    f.setAvailableChoices([beta]);
+    await f.rerender();
+    await f.focus();
+    await f.key('ArrowDown');
+    const input = f.input();
+    assert.equal(
+        input.getAttribute('aria-activedescendant'),
+        f.option('Second').id
+    );
+
+    f.setAvailableChoices([alpha, { ...beta }]);
+    await f.rerender();
+    const highlighted = f.window.document.getElementById(
+        input.getAttribute('aria-activedescendant') ?? ''
+    );
+    assert.equal(f.window.document.activeElement, input);
+    assert.deepEqual(f.writes, []);
+    await f.key('Enter');
+    assert.deepEqual(
+        { highlighted: highlighted?.textContent, writes: f.writes },
+        { highlighted: 'Second', writes: [['Existing', 'Beta']] }
+    );
+});
+
+it('Multiple Select clears a removed keyboard highlight and keeps picker focus', async (t) => {
+    const f = await fixture(t, { choices: refreshChoices, multiple: true });
+    f.setValue(['Existing']);
+    f.setAvailableChoices([beta]);
+    await f.rerender();
+    await f.focus();
+    await f.key('ArrowDown');
+    const input = f.input();
+    assert.equal(
+        input.getAttribute('aria-activedescendant'),
+        f.option('Second').id
+    );
+
+    f.setAvailableChoices([alpha]);
+    await f.rerender();
+    assert.equal(f.window.document.activeElement, input);
+    const highlighted = input.getAttribute('aria-activedescendant');
+    await f.key('Enter');
+    assert.deepEqual(
+        { highlighted, writes: f.writes },
+        { highlighted: null, writes: [] }
+    );
+    assert.equal(f.window.document.activeElement, input);
+
+    await f.key('ArrowDown');
+    assert.equal(
+        input.getAttribute('aria-activedescendant'),
+        f.option('First').id
+    );
+    await f.key('Enter');
+    assert.deepEqual(f.writes, [['Existing', 'Alpha']]);
 });
 
 it('list Add Choice retains prompt cancellation/equivalent-label suppression and one admission while busy', async (t) => {

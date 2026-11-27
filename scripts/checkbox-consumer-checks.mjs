@@ -352,7 +352,13 @@ async function checkControlledCheckbox({
         container.querySelector('[data-checkbox-instance="left"]');
     const input = () => left()?.querySelector('input');
     let writer = 'first';
-    const rows = (value, checkboxStyle = 'checkbox', extra = {}) =>
+    const rows = (
+        value,
+        checkboxStyle = 'checkbox',
+        extra = {},
+        required = true,
+        withError = true
+    ) =>
         h(
             'div',
             null,
@@ -363,7 +369,8 @@ async function checkControlledCheckbox({
                     title: 'Approval',
                     fieldName: 'Canonical approval',
                     description: '<p>Approval help</p>',
-                    error: 'Approval required',
+                    error: withError ? 'Approval required' : null,
+                    required,
                     formId,
                     associationKind:
                         extra.isInGrid ||
@@ -397,6 +404,17 @@ async function checkControlledCheckbox({
                 })
             )
         );
+    for (const style of ['checkbox', 'toggle']) {
+        await publish(rows(null, style, {}, true, false));
+        assert.equal(input().checked, false);
+        assert.equal(input().getAttribute('aria-invalid'), 'false');
+        assert.equal(input().getAttribute('aria-required'), 'true');
+        assert.equal(input().required, false);
+        assert.equal(input().checkValidity(), true);
+        assert.deepEqual(changes, []);
+    }
+    await publish(rows(null, 'checkbox', {}, false, false));
+    assert.equal(input().getAttribute('aria-required'), null);
     await publish(rows(null));
     assert.equal(input().checked, false);
     const label = left().querySelector('label');
@@ -434,6 +452,7 @@ async function checkControlledCheckbox({
     writer = 'current';
     await publish(rows(true, 'toggle'));
     assert.equal(input().checked, true);
+    assert.equal(input().getAttribute('aria-required'), 'true');
     assert(left().querySelector('[data-style="toggle"]'));
     await click(input());
     assert.deepEqual(changes, [
@@ -463,6 +482,7 @@ async function checkControlledCheckbox({
     assert.equal(input().checked, true);
     assert.equal(input().disabled, true);
     assert.equal(input().readOnly, true);
+    assert.equal(input().getAttribute('aria-required'), null);
     assert.equal(left().querySelector('button'), null);
     const beforeReadonly = changes.length;
     await click(left().querySelector('label'));

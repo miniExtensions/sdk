@@ -38,11 +38,13 @@ async function checkboxFixture(t: TestContext) {
     function shell(
         leaf: Partial<CompleteCheckboxFieldProps>,
         associationKind: 'input' | 'group' | 'non-labelable' = 'input',
-        withFeedback = true
+        withFeedback = true,
+        required = false
     ) {
         return h(CompleteFormFieldPresentation, {
             title: 'Approve request',
             fieldName: 'Approval',
+            required,
             associationKind,
             formId: 'external-checkbox-form',
             description: withFeedback ? '<p>Approval help</p>' : null,
@@ -100,7 +102,11 @@ for (const checkboxStyle of ['checkbox', 'toggle'] as const) {
         external.id = 'external-checkbox-form';
         fixture.window.document.body.append(external);
         const changes: boolean[] = [];
-        const view = (value: boolean | null, withFeedback = true) =>
+        const view = (
+            value: boolean | null,
+            withFeedback = true,
+            required = true
+        ) =>
             fixture.shell(
                 {
                     checkboxStyle,
@@ -109,10 +115,19 @@ for (const checkboxStyle of ['checkbox', 'toggle'] as const) {
                     ariaInvalid: false, // A legacy prop cannot override shell feedback.
                 },
                 'input',
-                withFeedback
+                withFeedback,
+                required
             );
-        await fixture.render(view(null));
+        await fixture.render(view(null, false));
         const node = input(fixture);
+        assert.equal(node.checked, false);
+        assert.equal(node.getAttribute('aria-invalid'), 'false');
+        assert.equal(node.getAttribute('aria-required'), 'true');
+        assert.equal(node.required, false);
+        assert.equal(node.checkValidity(), true);
+        assert.deepEqual(changes, []);
+        await fixture.render(view(null));
+        assert.equal(input(fixture), node);
         const label = fixture.container.querySelector('label');
         assert.ok(label);
         assert.equal(label.htmlFor, node.id);
@@ -154,14 +169,26 @@ for (const checkboxStyle of ['checkbox', 'toggle'] as const) {
         assert.equal(node.checked, true);
         await fixture.click(node);
         assert.deepEqual(changes, [true, false]);
-        await fixture.render(view(false, false));
+        await fixture.render(view(false, false, false));
         assert.ok(
             input(fixture) === node,
             'The mounted checkbox input remains stable'
         );
         assert.equal(node.getAttribute('aria-describedby'), null);
         assert.equal(node.getAttribute('aria-invalid'), 'false');
+        assert.equal(node.getAttribute('aria-required'), null);
         assert.equal(node.id, label.htmlFor);
+        await fixture.render(
+            fixture.shell(
+                { checkboxStyle, value: false, readOnly: true },
+                'input',
+                false,
+                true
+            )
+        );
+        assert.equal(input(fixture).disabled, true);
+        assert.equal(input(fixture).getAttribute('aria-required'), null);
+        assert.deepEqual(changes, [true, false]);
         fixture.unchangedEffects();
     });
 }

@@ -14,6 +14,7 @@ export type FieldPresentationAssociation = {
 export type FieldPresentationComposition = {
     association: FieldPresentationAssociation;
     chromeOwner: 'shell';
+    required?: boolean;
 };
 
 /** Native meaningful-content policy; sanitization stays in public HTML renderers. */

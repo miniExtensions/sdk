@@ -178,6 +178,10 @@ export function CompleteCheckboxField(
             disabled: readOnly,
             readOnly: checkboxStyle === 'checkbox' ? readOnly : undefined,
             'aria-checked': checked,
+            'aria-required':
+                !readOnly && props.presentation?.required === true
+                    ? true
+                    : undefined,
             className:
                 checkboxStyle === 'toggle'
                     ? 'absolute inset-0 h-full w-full cursor-pointer rounded-full opacity-0 mx-sdk-complete-checkbox__toggle-input'

@@ -250,7 +250,12 @@ export function CompleteFormFieldPresentation(
               );
     const tooltipId = `${association.controlId}-tooltip`;
     const content =
-        props.loading ?? props.children({ association, chromeOwner: 'shell' });
+        props.loading ??
+        props.children({
+            association,
+            chromeOwner: 'shell',
+            ...(props.required && { required: true }),
+        });
     return h(
         Fragment,
         null,

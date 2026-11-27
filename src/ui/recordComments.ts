@@ -17,7 +17,19 @@ export function presentRecordComment(comment: RecordComment) {
             text: comment.text,
             mentions: noMentions,
         };
-    const alias = comment.text.match(/{{(.*?)}}:/)?.[1] ?? null;
+    const delimiter = comment.text.startsWith('{{')
+        ? comment.text.indexOf('}}:', 2)
+        : -1;
+    const leadingAlias =
+        delimiter !== -1 && comment.text[delimiter + 3] === ' '
+            ? comment.text.slice(2, delimiter)
+            : null;
+    // The writer preserves line breaks in a leading alias. Other comments
+    // retain the existing legacy matcher and its substring behavior.
+    const alias =
+        leadingAlias !== null && /[\r\n\u2028\u2029]/.test(leadingAlias)
+            ? leadingAlias
+            : (comment.text.match(/{{(.*?)}}:/)?.[1] ?? null);
     return {
         author: alias ?? comment.author.name ?? comment.author.email,
         text:

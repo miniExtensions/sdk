@@ -586,12 +586,22 @@ function GalleryDialog(props: DialogProps): ReactNode {
                     if (event.key === 'Escape') {
                         event.preventDefault();
                         props.close();
-                    } else if (event.key === 'ArrowLeft') {
+                    } else if (
+                        event.key === 'ArrowLeft' ||
+                        event.key === 'ArrowRight'
+                    ) {
+                        if (
+                            event.defaultPrevented ||
+                            event.altKey ||
+                            event.ctrlKey ||
+                            event.metaKey ||
+                            event.shiftKey
+                        )
+                            return;
                         event.preventDefault();
-                        chooseFromNavigation(props.index - 1);
-                    } else if (event.key === 'ArrowRight') {
-                        event.preventDefault();
-                        chooseFromNavigation(props.index + 1);
+                        chooseFromNavigation(
+                            props.index + (event.key === 'ArrowLeft' ? -1 : 1)
+                        );
                     } else if (event.key === 'Tab' && props.current()) {
                         const nodes = Array.from(
                             dialog.current?.querySelectorAll<HTMLElement>(

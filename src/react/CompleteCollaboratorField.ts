@@ -173,6 +173,44 @@ export type CollaboratorBadgeProps<
     onRemove?: (collaborator: T) => void;
 };
 
+function getRemoveLabelQualifiers(
+    selected: readonly CompleteCollaborator[],
+    offered: readonly CompleteCollaborator[]
+): ReadonlyMap<CompleteCollaborator, string> {
+    const displayLabel = (person: CompleteCollaborator) =>
+        (person.name || person.email).replace(/\s+/g, ' ').trim();
+    const firstIdByLabel = new Map<string, string>();
+    const sharedLabels = new Set<string>();
+    for (const person of selected) {
+        const label = displayLabel(person);
+        const firstId = firstIdByLabel.get(label);
+        if (firstId === undefined) firstIdByLabel.set(label, person.id);
+        else if (firstId !== person.id) sharedLabels.add(label);
+    }
+    const qualifiers = new Map<CompleteCollaborator, string>();
+    if (sharedLabels.size === 0) return qualifiers;
+
+    // Only the current picker can authorize an address, even for stored values
+    // with the same ID. Conflicting offers for an ID do not supply a qualifier.
+    const offeredAddresses = new Map<string, string>();
+    for (const person of offered) {
+        const previous = offeredAddresses.get(person.id);
+        offeredAddresses.set(
+            person.id,
+            previous === undefined || previous === person.email
+                ? person.email
+                : ''
+        );
+    }
+    for (const person of selected) {
+        const address = offeredAddresses.get(person.id);
+        if (address?.trim() && sharedLabels.has(displayLabel(person))) {
+            qualifiers.set(person, address);
+        }
+    }
+    return qualifiers;
+}
+
 /** Shared badge presentation; permission and canonical edits remain caller-owned. */
 export function CollaboratorBadge<T extends CompleteCollaborator>(
     props: CollaboratorBadgeProps<T>
@@ -416,6 +454,10 @@ function CollaboratorControl<T extends CompleteCollaborator>(
     }, [props.readOnly, props.disabled]);
     if (loadError) throw loadError.error;
     const labels = props.labels;
+    const removeLabelQualifiers =
+        presentation.canRemove && !props.single && props.value.length > 1
+            ? getRemoveLabelQualifiers(props.value, props.choices)
+            : undefined;
     const formReadOnly =
         props.single &&
         props.readOnly === true &&
@@ -481,12 +523,17 @@ function CollaboratorControl<T extends CompleteCollaborator>(
                   },
                   ...props.value.map((collaborator, index) => {
                       const label = collaborator.name || collaborator.email;
+                      const qualifier =
+                          removeLabelQualifiers?.get(collaborator);
+                      const removeLabel = labels?.remove?.(label);
                       return h(CollaboratorBadge<T>, {
                           key: `${collaborator.id}-${index}`,
                           collaborator,
                           avatarPolicy: props.avatarPolicy,
                           formId: props.formId,
-                          removeLabel: labels?.remove?.(label),
+                          removeLabel: qualifier
+                              ? `${removeLabel ?? `Remove collaborator ${label}`} (${qualifier})`
+                              : removeLabel,
                           onRemove: presentation.canRemove
                               ? (value) => remove(value.id)
                               : undefined,

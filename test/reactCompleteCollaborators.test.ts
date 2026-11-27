@@ -424,8 +424,11 @@ async function fixture(
         });
         await frame();
     };
-    const keyboardRemove = async (person: Person) => {
-        const node = removal(person);
+    const keyboardRemove = async (personOrName: Person | string) => {
+        const node =
+            typeof personOrName === 'string'
+                ? button(personOrName)
+                : removal(personOrName);
         await act(async () => node.focus());
         await act(async () => {
             const event = new window.KeyboardEvent('keydown', {
@@ -904,6 +907,81 @@ it('multiple preserves selected order, extra metadata and exact objects while to
     assert.equal(f.state.many[0], retired);
     assert.equal(f.state.many[1], first);
     assert.equal(f.container.querySelectorAll('li').length, 2);
+});
+
+it('same-name Remove buttons identify only people currently offered by the picker', async (t) => {
+    const alexOne = { ...first, name: 'Alex', email: 'alex.one@example.com' };
+    const alexTwo = { ...second, name: 'Alex', email: 'alex.two@example.com' };
+    const retainedTwo = { ...alexTwo, email: 'retained@example.com' };
+    const f = await fixture(t, {
+        multiple: true,
+        value: [alexOne, retainedTwo],
+        choices: [alexOne, alexTwo],
+    });
+    const removeLabels = () =>
+        Array.from(
+            f.container.querySelectorAll('.mx-sdk-collaborator-remove'),
+            (button) => button.textContent
+        );
+    assert.deepEqual(
+        Array.from(
+            f.container.querySelectorAll('.mx-sdk-collaborator-name'),
+            (label) => label.textContent
+        ),
+        ['Alex', 'Alex']
+    );
+    assert.deepEqual(removeLabels(), [
+        'Supprimer Alex (alex.one@example.com)',
+        'Supprimer Alex (alex.two@example.com)',
+    ]);
+
+    f.state.choices = [alexOne];
+    await f.render();
+    assert.deepEqual(removeLabels(), [
+        'Supprimer Alex (alex.one@example.com)',
+        'Supprimer Alex',
+    ]);
+    assert.equal(f.container.textContent.includes(retainedTwo.email), false);
+
+    f.state.choices = [
+        alexOne,
+        alexTwo,
+        { ...alexTwo, email: 'conflicting@example.com' },
+    ];
+    await f.render();
+    assert.deepEqual(removeLabels(), [
+        'Supprimer Alex (alex.one@example.com)',
+        'Supprimer Alex',
+    ]);
+
+    f.state.choices = [alexOne, alexTwo];
+    await f.render();
+    await f.keyboardRemove('Supprimer Alex (alex.two@example.com)');
+    assert.equal(f.count(), 1);
+    const remaining = f.invocations[0]?.value;
+    assert.ok(Array.isArray(remaining));
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0], alexOne);
+    assert.equal(f.window.document.activeElement === f.input(), true);
+    assert.deepEqual(removeLabels(), ['Supprimer Alex']);
+
+    f.state.many = [alexOne, { ...alexOne }];
+    await f.render();
+    assert.deepEqual(removeLabels(), ['Supprimer Alex', 'Supprimer Alex']);
+
+    f.state.many = [alexOne, { ...retainedTwo, name: ' Alex ' }];
+    await f.render();
+    assert.deepEqual(removeLabels(), [
+        'Supprimer Alex (alex.one@example.com)',
+        'Supprimer  Alex  (alex.two@example.com)',
+    ]);
+
+    f.state.choices = [alexOne, { ...alexTwo, email: ' ' }];
+    await f.render();
+    assert.deepEqual(removeLabels(), [
+        'Supprimer Alex (alex.one@example.com)',
+        'Supprimer  Alex ',
+    ]);
 });
 
 it('ID removal deletes every matching occurrence without cloning or deduplicating its neighbors', async (t) => {

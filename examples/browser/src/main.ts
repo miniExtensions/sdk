@@ -2790,7 +2790,8 @@ const renderForm = (page: FormLoadedResult): void => {
                         page,
                         request.draft.data,
                         linkedSnapshot,
-                        dateContext
+                        dateContext,
+                        { formatReadOnlyPercent: true }
                     );
                     const clientDateZoneRequired = rows.some(({ fieldId }) => {
                         const config =
@@ -3341,7 +3342,8 @@ const renderForm = (page: FormLoadedResult): void => {
                 page,
                 snapshot.data,
                 linkedSnapshot,
-                dateContext
+                dateContext,
+                { formatReadOnlyPercent: true }
             );
             const clientDateZoneRequired = rows.some(({ fieldId }) => {
                 const config =

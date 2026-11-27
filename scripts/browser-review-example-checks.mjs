@@ -37,6 +37,12 @@ const button = (document, text) => {
     return matches[0];
 };
 
+const percentAnswers = [
+    ['fld_review_percent_quarter', 'Quarter percent', 0.25],
+    ['fld_review_percent_zero', 'Zero percent', 0],
+    ['fld_review_percent_empty', 'Empty percent', null],
+];
+
 /** Exact installed package + copied complete starter, with synthetic transport. */
 export async function checkBrowserReviewExample({
     consumerDirectory,
@@ -80,6 +86,7 @@ export async function checkBrowserReviewExample({
     );
     const scenarios = [
         'answers',
+        'percent-multipage',
         'date-client-zone',
         'date-client-unsupported-zone',
         'refused-date-client-unsupported',
@@ -131,6 +138,7 @@ export async function checkBrowserReviewExample({
         'refused-select-driver',
         'refused-select-hide-empty',
     ];
+    const percentDisplays = [];
     for (const [revision, scenario] of scenarios.entries()) {
         const fixture = createReviewFixture(
             scenario === 'validation'
@@ -328,6 +336,36 @@ export async function checkBrowserReviewExample({
             ].includes(scenario)
         )
             addAttachmentReviewAnswers(form);
+        const multipagePercent = scenario === 'percent-multipage';
+        if (scenario === 'answers' || multipagePercent) {
+            if (multipagePercent)
+                form.payload.publicFields.state.multiPageFormMode =
+                    'multi-page';
+            for (const [id, name, value] of percentAnswers) {
+                const airtableField = {
+                    id,
+                    name,
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: { type: 'percent', options: { precision: 0 } },
+                };
+                const schema = {
+                    fieldType: 'percent',
+                    airtableField,
+                    miniExtConfig: {
+                        readOnly: true,
+                        ...(multipagePercent && id === percentAnswers[0][0]
+                            ? { headerSectionTitle: 'Percent answers' }
+                            : {}),
+                    },
+                };
+                form.payload.fieldIdsInForm.push(id);
+                form.payload.fieldIdsToSchemas[id] = schema;
+                form.payload.fieldNamesToSchemas[name] = schema;
+                form.payload.formRecord.data[id] = value;
+            }
+        }
         const initial = structuredClone(form.payload.formRecord.data);
         const window = new Window({
             url: 'https://review-starter.example.test',
@@ -439,7 +477,7 @@ export async function checkBrowserReviewExample({
                             name: 'accepted-page-observer',
                             setup(build) {
                                 build.onLoad(
-                                    { filter: /\/src\/main\.ts$/ },
+                                    { filter: /[/\\]src[/\\]main\.ts$/ },
                                     (args) => ({
                                         loader: 'ts',
                                         contents:
@@ -488,7 +526,12 @@ export async function checkBrowserReviewExample({
             const saves = () =>
                 fixture.state.calls.filter((call) => call.route === 'saveForm');
             const open = async () => {
-                submit();
+                if (multipagePercent) {
+                    const review = button(document, 'Review answers');
+                    assert.equal(review.hidden, false);
+                    assert.equal(review.disabled, false);
+                    review.click();
+                } else submit();
                 await waitFor(
                     () =>
                         document.querySelector(
@@ -956,13 +999,35 @@ export async function checkBrowserReviewExample({
                     'actual installed handler rejects newly selecting the restricted name'
                 );
                 assert.equal(saves().length, 1);
-            } else if (scenario === 'answers') {
+            } else if (scenario === 'answers' || multipagePercent) {
                 edit('fld_review_title', 'SecondExactReviewSecret');
                 edit('fld_review_conditional', 'Edited conditional answer');
                 field('fld_review_show').checked = false;
                 field('fld_review_show').dispatchEvent(
                     new window.Event('input', { bubbles: true })
                 );
+                if (multipagePercent) {
+                    const first = field('fld_review_title');
+                    const second = document.querySelector(
+                        `[data-form-page-field-id="${percentAnswers[0][0]}"]`
+                    );
+                    assert.ok(second);
+                    assert.equal(first.closest('[hidden]'), null);
+                    assert.ok(second.closest('[hidden]'));
+                    assert.equal(
+                        button(document, 'Review answers').hidden,
+                        true
+                    );
+                    const next = button(document, 'Next');
+                    assert.equal(next.hidden, false);
+                    assert.equal(next.disabled, false);
+                    next.click();
+                    await waitFor(() => second.closest('[hidden]') === null);
+                    assert.ok(first.closest('[hidden]'));
+                    assert.equal(next.hidden, true);
+                    assert.equal(fixture.state.calls.length, 1);
+                    assert.equal(saves().length, 0);
+                }
                 let dialog = await open();
                 assert.deepEqual(
                     [...dialog.querySelectorAll('dt')].map(
@@ -978,12 +1043,13 @@ export async function checkBrowserReviewExample({
                         'Date answer',
                         'Date answer',
                         ...linkedFixture.ids,
+                        ...percentAnswers.slice(0, 2).map(([, name]) => name),
                     ]
                 );
                 assert.deepEqual(
-                    [...dialog.querySelectorAll('dd')].map(
-                        (node) => node.textContent
-                    ),
+                    [...dialog.querySelectorAll('dd')]
+                        .slice(0, -2)
+                        .map((node) => node.textContent),
                     [
                         '••••••••',
                         initial.fld_review_readonly,
@@ -998,6 +1064,19 @@ export async function checkBrowserReviewExample({
                         ),
                     ]
                 );
+                const row = (id) =>
+                    dialog.querySelector(`[data-review-field-id="${id}"]`);
+                const display = {
+                    pages: multipagePercent ? 2 : 1,
+                    quarter: row(percentAnswers[0][0])?.nextElementSibling
+                        .textContent,
+                    zero: row(percentAnswers[1][0])?.nextElementSibling
+                        .textContent,
+                    hasEmpty: row(percentAnswers[2][0]) !== null,
+                    numberZero:
+                        row('fld_review_number')?.nextElementSibling
+                            .textContent,
+                };
                 assert.equal(
                     dialog.textContent.includes('SecondExactReviewSecret'),
                     false
@@ -1018,6 +1097,7 @@ export async function checkBrowserReviewExample({
                 button(dialog, 'Edit').click();
                 await settled();
                 assert.equal(saves().length, 0);
+                const savesAfterCancel = saves().length;
                 dialog = await open();
                 dialog.dispatchEvent(
                     new window.Event('cancel', { cancelable: true })
@@ -1062,6 +1142,32 @@ export async function checkBrowserReviewExample({
                     type: 'direct-url',
                 });
                 assert.equal(document.querySelector('dialog'), null);
+                percentDisplays.push(display);
+                console.log(
+                    '[packed review percent] ' +
+                        JSON.stringify({
+                            ...display,
+                            savesAfterCancel,
+                            savesAfterConfirm: saves().length,
+                            savedPercent: percentAnswers.map(
+                                ([id]) => saves()[0].input.formRecord.data[id]
+                            ),
+                            dirty: saves()[0].input
+                                .formFieldIdsWithUnsavedChanges,
+                        })
+                );
+                if (multipagePercent)
+                    assert.deepEqual(
+                        percentDisplays,
+                        [1, 2].map((pages) => ({
+                            pages,
+                            quarter: '25%',
+                            zero: '0%',
+                            hasEmpty: false,
+                            numberZero: '0',
+                        })),
+                        'Root Review must format read-only Percent answers in both page modes.'
+                    );
             } else if (scenario.startsWith('confirmed-')) {
                 const originalControl = field('fld_review_title');
                 const dialog = await open();

@@ -1,5 +1,8 @@
 import moment from 'moment-timezone';
-import { getReadableStringFromAirtableValue } from '@miniextensions/sdk/formulas';
+import {
+    formatAirtablePrimitive,
+    getReadableStringFromAirtableValue,
+} from '@miniextensions/sdk/formulas';
 import {
     AirtableFieldType,
     type AirtableValue,
@@ -168,7 +171,8 @@ export const prepareFormReviewRows = (
     page: FormLoadedResult,
     data: Readonly<Record<string, AirtableValue>>,
     linked?: LinkedReviewSnapshot,
-    dateContext?: PreparedDateContext
+    dateContext?: PreparedDateContext,
+    options?: { formatReadOnlyPercent?: boolean }
 ): ConfirmationRow[] => {
     if (linked != null && !linked.forPage(page)) unavailable();
     const configuration = settings(page.payload.publicFields);
@@ -326,11 +330,24 @@ export const prepareFormReviewRows = (
             if (typeof value !== 'number' || !Number.isFinite(value))
                 unavailable();
             if (type === AirtableFieldType.RATING && value === 0) continue;
-            text =
-                type === AirtableFieldType.NUMBER &&
-                hasMaskedValuePolicy(field.schema.miniExtConfig)
-                    ? '••••••••'
-                    : String(value);
+            const config = field.schema.airtableField.config;
+            if (
+                options?.formatReadOnlyPercent &&
+                field.readOnly &&
+                config.type === AirtableFieldType.PERCENT
+            ) {
+                text = formatAirtablePrimitive({
+                    value,
+                    airtableFieldConfig: config,
+                    fieldName: field.title,
+                });
+            } else {
+                text =
+                    type === AirtableFieldType.NUMBER &&
+                    hasMaskedValuePolicy(field.schema.miniExtConfig)
+                        ? '••••••••'
+                        : String(value);
+            }
         } else if (type === AirtableFieldType.CHECKBOX) {
             if (typeof value !== 'boolean') unavailable();
             if (!value) continue;

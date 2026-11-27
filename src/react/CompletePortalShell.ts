@@ -132,6 +132,8 @@ export type PortalShellLabels = {
     readMore?: string;
     showLess?: string;
     resizeSidebar?: string;
+    /** Screen-reader description for a view with the maker's badge flag. */
+    viewBadgeDescription?: string;
 };
 const defaultLabels: Required<PortalShellLabels> = {
     navigation: 'Portal navigation',
@@ -150,6 +152,7 @@ const defaultLabels: Required<PortalShellLabels> = {
     readMore: 'Read more',
     showLess: 'Show less',
     resizeSidebar: 'Resize sidebar',
+    viewBadgeDescription: 'Flagged view',
 };
 export type CompletePortalShellProps = {
     snapshot: PortalShellSnapshot;
@@ -408,7 +411,8 @@ function Shell(props: CompletePortalShellProps) {
     const labels = { ...defaultLabels, ...props.labels };
     const id = useId(),
         navId = `${id}-navigation`,
-        mainId = `${id}-content`;
+        mainId = `${id}-content`,
+        viewBadgeDescriptionId = `${id}-view-badge`;
     const items = projectPortalShellMenu(snapshot.items);
     const resolvedSelection = resolvePortalShellSelection({
         items,
@@ -1248,6 +1252,9 @@ function Shell(props: CompletePortalShellProps) {
                                                             view.id
                                                         );
                                                 },
+                                                'aria-describedby': view.badge
+                                                    ? viewBadgeDescriptionId
+                                                    : undefined,
                                                 'aria-current':
                                                     selection?.type ===
                                                         'table' &&
@@ -1773,7 +1780,13 @@ function Shell(props: CompletePortalShellProps) {
                       snapshot.hideMenuItems ? null : menu(items),
                       descriptionInNavigation && !snapshot.header.hidden
                           ? description
-                          : null
+                          : null,
+                      h(
+                          'span',
+                          { id: viewBadgeDescriptionId, hidden: true },
+                          labels.viewBadgeDescription?.trim() ||
+                              defaultLabels.viewBadgeDescription
+                      )
                   ),
                   actionsInNavigation ? actions : null
               )

@@ -16,6 +16,7 @@ import { basename, join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import ts from 'typescript';
 import { chromium } from 'playwright';
+import { expect } from 'playwright/test';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { checkPortalShellFooterGeometry } from './portal-shell-footer-browser-checks.mjs';
 import { checkNativeTopbar } from './portal-shell-topbar-browser-checks.mjs';
@@ -347,6 +348,67 @@ async function navigationCompatibility(browser, origin, label) {
         assert.equal(
             await openView.evaluate((node) => node === document.activeElement),
             true
+        );
+        const dot = openView.locator('.mx-sdk-portal-view-badge');
+        const publishBadge = async (badge, description) => {
+            const revision = await page.evaluate(
+                ({ badge, description }) => {
+                    const current = window.fixtureCommittedSnapshot;
+                    if (description !== undefined)
+                        window.sidebarOpenerLabels = {
+                            ...window.sidebarOpenerLabels,
+                            viewBadgeDescription: description,
+                        };
+                    window.configure({
+                        items: current.items.map((item) =>
+                            item.id === 'orders'
+                                ? {
+                                      ...item,
+                                      views: item.views.map((view) =>
+                                          view.id === 'open'
+                                              ? { ...view, badge }
+                                              : view
+                                      ),
+                                  }
+                                : item
+                        ),
+                    });
+                    return current.revision + 1;
+                },
+                { badge, description }
+            );
+            await page.waitForFunction(
+                (expected) =>
+                    window.fixtureCommittedSnapshot?.revision === expected,
+                revision
+            );
+        };
+        const verifyBadge = async (description) => {
+            await expect(openView).toHaveAccessibleName('Open orders');
+            await expect(openView).toHaveAccessibleDescription(description);
+            assert.equal(await openView.getAttribute('aria-current'), 'page');
+            assert.equal(await dot.count(), description ? 1 : 0);
+            assert.equal(
+                await openView.evaluate(
+                    (node) => node === document.activeElement
+                ),
+                true
+            );
+        };
+        await verifyBadge('Flagged view');
+        await publishBadge(false);
+        await verifyBadge('');
+        await publishBadge(true, 'Vista marcada');
+        await verifyBadge('Vista marcada');
+        assert.deepEqual(
+            await page.evaluate(() => ({
+                intents: window.proof.intents.length,
+                activations: window.proof.activations.length,
+                storage: window.proof.storage.length,
+                reads: window.proof.reads.length,
+                hovers: window.proof.hovers.length,
+            })),
+            { intents: 0, activations: 0, storage: 0, reads: 0, hovers: 0 }
         );
         assert.equal(await page.evaluate(() => window.proof.hovers.length), 0);
         await page.keyboard.press('Tab');
@@ -1296,6 +1358,7 @@ async function navigationCompatibility(browser, origin, label) {
             pointerOnlyNotification: 'passed',
             mobileDisclosureResetAndEscape: 'passed',
             configuredIconsBadgesAndSettings: 'passed',
+            customViewBadgeDescription: 'passed',
             desktopSidebarAccountPlacement,
             desktopAndMobileMenuTabFocus: 'passed',
             mobileAccountPlacement: accountPlacement,

@@ -41,6 +41,12 @@
     background: #ef4444;
     pointer-events: none;
 }
+@media (forced-colors: active) {
+    .mx-sdk-portal-map-review {
+        forced-color-adjust: none;
+        background: CanvasText;
+    }
+}
 .mx-sdk-portal-map-pointer {
     width: 1.5rem;
     height: 0.75rem;

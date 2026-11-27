@@ -192,12 +192,19 @@ export async function checkPortalMapBrowser({
                 licensesSHA256: receipt.licensesSha256,
             });
         }
+        // The shared map receives both a needs-review marker and a reviewed
+        // control through normal SDK props. Leave the SSR fixture unchanged.
+        const browserPropsFactory = portalMapPropsFactory.replace(
+            "needsReviewLabel: 'Review required'",
+            "needsReviewLabel: row.key === 'first-current-2' ? null : 'Review required'"
+        );
         evidence.provenance = {
             react,
             upstreamPerFormat,
             checkerSHA256: hash(regular(new URL(import.meta.url))),
             fixtureSHA256: hash(portalMapBrowserFixture),
             propsFactorySHA256: hash(portalMapPropsFactory),
+            browserPropsFactorySHA256: hash(browserPropsFactory),
             nodeSSRFixtureSHA256: hash(portalMapNodeSSRFixture),
             syntheticGoogleResponseSHA256: hash(portalMapGoogleBrowserBoundary),
         };
@@ -299,7 +306,7 @@ export async function checkPortalMapBrowser({
                         .replace('__PORTAL_MAP_FOREIGN_API__', foreignAPI)
                         .replace(
                             '__PORTAL_MAP_PROPS_FACTORY__',
-                            portalMapPropsFactory
+                            browserPropsFactory
                         )
                 );
                 evidence.provenance.browserEntries ??= [];
@@ -828,6 +835,161 @@ export async function checkPortalMapBrowser({
             }
             return measurements;
         }
+        async function checkReviewMarkerForcedColors(format) {
+            const page = current.page;
+            const needsReview = page.getByRole('group', {
+                name: 'Record first current one',
+                exact: true,
+            });
+            const reviewed = page.getByRole('group', {
+                name: 'Record first current two',
+                exact: true,
+            });
+            const dotSelector = '.mx-sdk-portal-map-review';
+            const markRole = { name: 'Review required', exact: true };
+            evidence.reviewMarkerForcedColors ??= {};
+            const measurements = {};
+            evidence.reviewMarkerForcedColors[format] = measurements;
+            try {
+                for (const [phase, forcedColors] of [
+                    ['normal', 'none'],
+                    ['forced', 'active'],
+                    ['restored', 'none'],
+                ]) {
+                    await page.emulateMedia({ forcedColors });
+                    const state = await needsReview.evaluate(
+                        (card, selector) => {
+                            const dot = card.querySelector(selector);
+                            const bounds = (node) => {
+                                const { x, y, width, height } =
+                                    node.getBoundingClientRect();
+                                return {
+                                    x: x + scrollX,
+                                    y: y + scrollY,
+                                    width,
+                                    height,
+                                };
+                            };
+                            const dotStyle = dot && getComputedStyle(dot);
+                            return {
+                                forcedColors: matchMedia(
+                                    '(forced-colors: active)'
+                                ).matches,
+                                dotColor: dotStyle?.backgroundColor ?? null,
+                                cardColor:
+                                    getComputedStyle(card).backgroundColor,
+                                forcedColorAdjust:
+                                    dotStyle?.forcedColorAdjust ?? null,
+                                geometry: {
+                                    card: bounds(card),
+                                    dot: dot && bounds(dot),
+                                },
+                            };
+                        },
+                        dotSelector
+                    );
+                    const screenshot = `portal-map-${format}-review-marker-${phase}.png`;
+                    measurements[phase] = {
+                        ...state,
+                        markCount: await needsReview
+                            .getByRole('img', markRole)
+                            .count(),
+                        markVisible: await needsReview
+                            .getByRole('img', markRole)
+                            .isVisible(),
+                        reviewedMarkCount: await reviewed
+                            .getByRole('img', markRole)
+                            .count(),
+                        reviewedDotCount: await reviewed
+                            .locator(dotSelector)
+                            .count(),
+                        screenshot,
+                    };
+                    const bytes = await page.screenshot({
+                        path: join(output, screenshot),
+                        fullPage: true,
+                        scale: 'css',
+                    });
+                    measurements[phase].paint = await page.evaluate(
+                        async ({ png, card, dot }) => {
+                            const image = await createImageBitmap(
+                                new Blob(
+                                    [
+                                        Uint8Array.from(
+                                            atob(png),
+                                            (character) =>
+                                                character.charCodeAt(0)
+                                        ),
+                                    ],
+                                    { type: 'image/png' }
+                                )
+                            );
+                            try {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = image.width;
+                                canvas.height = image.height;
+                                const context = canvas.getContext('2d');
+                                context.drawImage(image, 0, 0);
+                                const pixel = (x, y) =>
+                                    Array.from(
+                                        context.getImageData(
+                                            Math.floor(x),
+                                            Math.floor(y),
+                                            1,
+                                            1
+                                        ).data
+                                    );
+                                return {
+                                    card: pixel(
+                                        card.x + card.width - 6,
+                                        card.y + 6
+                                    ),
+                                    dot:
+                                        dot &&
+                                        pixel(
+                                            dot.x + dot.width / 2,
+                                            dot.y + dot.height / 2
+                                        ),
+                                };
+                            } finally {
+                                image.close();
+                            }
+                        },
+                        { png: bytes.toString('base64'), ...state.geometry }
+                    );
+                }
+            } finally {
+                await page.emulateMedia({ forcedColors: 'none' });
+            }
+            const { normal, forced, restored } = measurements;
+            assert.deepEqual(
+                [
+                    normal.forcedColors,
+                    forced.forcedColors,
+                    restored.forcedColors,
+                ],
+                [false, true, false]
+            );
+            for (const state of [normal, forced, restored]) {
+                assert.equal(state.markCount, 1);
+                assert.equal(state.markVisible, true);
+                assert.equal(state.reviewedMarkCount, 0);
+                assert.equal(state.reviewedDotCount, 0);
+                assert.deepEqual(state.geometry, normal.geometry);
+            }
+            assert(normal.geometry.dot);
+            assert.equal(normal.geometry.dot.width, 10);
+            assert.equal(normal.geometry.dot.height, 10);
+            for (const state of [normal, restored]) {
+                assert.equal(state.dotColor, 'rgb(239, 68, 68)');
+                assert.deepEqual(state.paint.dot, [239, 68, 68, 255]);
+            }
+            assert.notDeepEqual(
+                forced.paint.dot,
+                forced.paint.card,
+                'Forced-colors review dot must paint distinctly from the card'
+            );
+        }
 
         for (const format of ['esm', 'cjs']) {
             const cases = [];
@@ -891,6 +1053,11 @@ export async function checkPortalMapBrowser({
             );
             cases.at(-1).measurements = anchors;
 
+            evidence.phase = format + ':review-marker-forced-colors';
+            await checkReviewMarkerForcedColors(format);
+            cases.at(-1).reviewMarkerForcedColors =
+                evidence.reviewMarkerForcedColors[format];
+
             evidence.phase = format + ':keyboard-current-ABA';
             const open = item.page.getByRole('button', {
                 name: 'Open first current one',
@@ -935,7 +1102,7 @@ export async function checkPortalMapBrowser({
                 await item.page
                     .getByRole('img', { name: 'Review required' })
                     .count(),
-                3
+                2
             );
             await record(
                 cases,

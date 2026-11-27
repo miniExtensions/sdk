@@ -1444,6 +1444,11 @@ async function checkDirectNativeLogout(browser, origin) {
             const dangerBounds = await confirm.boundingBox();
             const cancelBounds = await cancel.boundingBox();
             assert.ok(dangerBounds && cancelBounds);
+            assert.deepEqual(
+                [dangerBounds.height, cancelBounds.height],
+                [36, 36],
+                `Native direct Log out action heights at ${width}px`
+            );
             if (width === 375) {
                 assert.equal(dangerBounds.width, cancelBounds.width);
                 assert.equal(

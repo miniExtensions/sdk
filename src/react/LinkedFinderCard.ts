@@ -6,6 +6,7 @@ import {
     useId,
     useRef,
     useState,
+    type CSSProperties,
     type ReactElement,
     type ReactNode,
 } from 'react';
@@ -636,7 +637,9 @@ function Carousel({
                   'div',
                   {
                       className: 'mx-sdk-finder-carousel-track',
-                      style: { transform: `translateX(-${index * 100}%)` },
+                      style: {
+                          '--mx-sdk-finder-carousel-offset': `${index * -100}%`,
+                      } as CSSProperties,
                   },
                   images.map((attempt, attemptIndex) =>
                       h('img', {

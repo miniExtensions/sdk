@@ -90,6 +90,12 @@
 .mx-sdk-portal-gallery-card-content .mx-sdk-finder-carousel > button {
     display: none;
 }
+.mx-sdk-portal-gallery-card-content .mx-sdk-finder-carousel-track {
+    position: relative;
+    inset-inline-start: var(--mx-sdk-finder-carousel-offset, 0%);
+    transform: none;
+    transition-property: inset-inline-start;
+}
 .mx-sdk-portal-gallery-card-content
     > .mx-sdk-finder-card-gallery
     > .mx-sdk-finder-carousel:has(> .mx-sdk-finder-carousel-track) {

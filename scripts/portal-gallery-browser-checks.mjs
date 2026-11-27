@@ -506,7 +506,126 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
             keyboardFocus,
         });
     }
-    await page.setViewportSize(previousViewport);
+    const selectedPhotoGeometry = [];
+    evidence.selectedPhotoGeometry = selectedPhotoGeometry;
+    const readSelectedPhotoGeometry = () =>
+        carousel.evaluate(async (frame) => {
+            const track = frame.querySelector('.mx-sdk-finder-carousel-track');
+            const photos = Array.from(track.querySelectorAll('img'));
+            await Promise.all(photos.map((photo) => photo.decode()));
+            await Promise.all(
+                track.getAnimations().map(({ finished }) => finished)
+            );
+            const { left, right } = frame.getBoundingClientRect();
+            const midpoint = (left + right) / 2;
+            return {
+                direction: getComputedStyle(track).direction,
+                frameWidth: right - left,
+                photos: photos.map((photo) => {
+                    const bounds = photo.getBoundingClientRect();
+                    return {
+                        url: new URL(photo.currentSrc).pathname,
+                        selected: photo.dataset.visible === 'true',
+                        coversMidpoint:
+                            bounds.left <= midpoint && bounds.right > midpoint,
+                        overlap: Math.max(
+                            0,
+                            Math.min(right, bounds.right) -
+                                Math.max(left, bounds.left)
+                        ),
+                    };
+                }),
+            };
+        });
+    const firstPhoto = carousel.getByRole('button', {
+        name: 'View image 1',
+        exact: true,
+    });
+    const secondPhoto = carousel.getByRole('button', {
+        name: 'View image 2',
+        exact: true,
+    });
+    try {
+        for (const width of [375, 1280]) {
+            await page.setViewportSize({ ...previousViewport, width });
+            for (const direction of ['rtl', 'ltr']) {
+                await page.evaluate(
+                    (value) =>
+                        document
+                            .querySelector('form')
+                            .setAttribute('dir', value),
+                    direction
+                );
+                await firstPhoto.focus();
+                await page.keyboard.press('Tab');
+                assert.equal(
+                    await secondPhoto.evaluate(
+                        (node) => node === document.activeElement
+                    ),
+                    true
+                );
+                await page.keyboard.press('Enter');
+                const forward = await readSelectedPhotoGeometry();
+                await page.keyboard.press('Shift+Tab');
+                assert.equal(
+                    await firstPhoto.evaluate(
+                        (node) => node === document.activeElement
+                    ),
+                    true
+                );
+                await page.keyboard.press('Enter');
+                const reverse = await readSelectedPhotoGeometry();
+                const { opens, unlinks, pages, submits } = await snapshot();
+                selectedPhotoGeometry.push({
+                    width,
+                    direction,
+                    forward,
+                    reverse,
+                    operations: { opens, unlinks, pages, submits },
+                });
+            }
+        }
+    } finally {
+        await page.evaluate(() =>
+            document.querySelector('form').removeAttribute('dir')
+        );
+        await page.setViewportSize(previousViewport);
+    }
+    for (const {
+        width,
+        direction,
+        forward,
+        reverse,
+        operations,
+    } of selectedPhotoGeometry) {
+        for (const [slide, selectedIndex] of [
+            [forward, 1],
+            [reverse, 0],
+        ]) {
+            const selected = slide.photos[selectedIndex];
+            const hidden = slide.photos[1 - selectedIndex];
+            assert.equal(slide.direction, direction);
+            assert.equal(selected.url, `/gallery-${selectedIndex + 1}.svg`);
+            assert.equal(selected.selected, true);
+            assert.equal(
+                selected.coversMidpoint,
+                true,
+                `${selected.url} stays visible at ${width}px in ${direction}`
+            );
+            assert.ok(Math.abs(selected.overlap - slide.frameWidth) <= 0.5);
+            assert.equal(hidden.selected, false);
+            assert.ok(
+                hidden.overlap <= 0.5,
+                `Only ${selected.url} is visible at ${width}px in ${direction}`
+            );
+        }
+        assert.deepEqual(operations, {
+            opens: 0,
+            unlinks: 0,
+            pages: 0,
+            submits: 0,
+        });
+    }
     await patch({ phase: 'reorder' });
     for (const {
         width,

@@ -245,6 +245,7 @@
     display: flex;
     height: 100%;
     width: 100%;
+    transform: translateX(var(--mx-sdk-finder-carousel-offset, 0%));
     transition: transform 0.3s;
 }
 .mx-sdk-finder-carousel-track > img {

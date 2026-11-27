@@ -1173,13 +1173,14 @@ describe('actual browser starter prepared review', () => {
                 },
             });
             const { document } = fixture.window;
-            const idle = () =>
-                document.getElementById('screen')?.getAttribute('aria-busy') ===
-                'false';
+            const screen = document.getElementById('screen')!;
+            const idle = () => screen.getAttribute('aria-busy') === 'false';
             fixture.button('Load records').click();
             await waitFor(() => reads === 1 && idle());
             fixture.button('Open Form').click();
             await waitFor(() => childLoads.length === 1 && idle());
+            const retiredForm = fixture.field('fld_title').closest('form');
+            assert.ok(retiredForm);
             fixture.button('Delete this record').click();
             await waitFor(
                 () => document.querySelector('dialog[open]') !== null
@@ -1193,6 +1194,12 @@ describe('actual browser starter prepared review', () => {
             await waitFor(() => deletes === 1);
             fixture.button('Cancel request').click();
             await settled();
+            assert.equal(retiredForm.isConnected, false);
+            assert.match(screen.textContent ?? '', /Choose Reload when ready/);
+            assert.match(
+                document.getElementById('status')!.textContent ?? '',
+                /Delete outcome is unknown/
+            );
             if (replacement === 'visitor round trip') {
                 const visitor = document.getElementById('visitor');
                 assert.ok(visitor instanceof fixture.window.HTMLSelectElement);
@@ -1200,7 +1207,10 @@ describe('actual browser starter prepared review', () => {
                     visitor.value = identity;
                     visitor.dispatchEvent(new fixture.window.Event('change'));
                 }
-                assert.equal(fixture.button('Save').disabled, true);
+                assert.match(
+                    screen.textContent ?? '',
+                    /Choose Reload when ready/
+                );
             } else {
                 fixture.button('Disconnect').click();
                 document.getElementById('connection-form')!.dispatchEvent(
@@ -1212,16 +1222,12 @@ describe('actual browser starter prepared review', () => {
                 await waitFor(() => fixture.loads() === 3 && idle());
                 assert.ok(fixture.button('Load records').isConnected);
             }
-            const successor =
-                document.getElementById('screen')!.firstElementChild;
+            const successor = screen.firstElementChild;
             const status = document.getElementById('status')!.textContent;
             assert.ok(acknowledge);
             acknowledge();
             await settled();
-            assert.equal(
-                document.getElementById('screen')!.firstElementChild,
-                successor
-            );
+            assert.equal(screen.firstElementChild, successor);
             assert.equal(
                 document.getElementById('status')!.textContent,
                 status
@@ -1230,21 +1236,11 @@ describe('actual browser starter prepared review', () => {
             assert.equal(reads, 1);
             assert.equal(fixture.saves.length, 0);
             if (replacement === 'visitor round trip') {
-                const expiredForm = fixture.field('fld_title').closest('form');
-                assert.ok(expiredForm);
-                assert.equal(
-                    fixture.button('Delete this record').disabled,
-                    true
-                );
-                const loadsBeforeBack = fixture.loads();
-                fixture.button('Back to Portal').click();
-                assert.equal(
-                    expiredForm.isConnected,
-                    false,
-                    'The current Back control must allow navigation from an expired child.'
-                );
+                assert.equal(screen.querySelector('form'), null);
+                assert.equal(fixture.loads(), 2);
+                fixture.button('Reload').click();
+                await waitFor(() => fixture.loads() === 3 && idle());
                 assert.equal(fixture.button('Load records').isConnected, true);
-                assert.equal(fixture.loads(), loadsBeforeBack);
                 assert.equal(reads, 1);
                 assert.equal(deletes, 1);
                 assert.equal(fixture.saves.length, 0);

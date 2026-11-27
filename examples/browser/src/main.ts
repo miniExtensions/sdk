@@ -176,6 +176,7 @@ let connection: {
     input: Extract<LoadExtensionInput, { shareId: string }>;
 } | null = null;
 let request: AbortController | null = null;
+const pendingChildDeleteCancels = new WeakMap<AbortSignal, () => boolean>();
 let disposeFormControls = (): void => {};
 let updateFormActivity = (): void => {};
 const sessionKey = (client: MiniExtensionsClient): string =>
@@ -2429,6 +2430,20 @@ const renderForm = (page: FormLoadedResult): void => {
         page.payload.formRecord.type === 'edit' &&
         settings(page.payload.publicFields).allowDeletingRecords === true
     ) {
+        const retireDeleteContext = () => {
+            const retiredPortal = visitor.portal;
+            visitor.portal = null;
+            visitor.root = null;
+            visitor.screen = null;
+            visitor.formContext = { type: 'direct-url' };
+            visitor.formParentScope = null;
+            visitor.formQueries = null;
+            visitor.formAuthority = null;
+            visitor.recoveryCandidate = null;
+            visitor.preparedAttempt = null;
+            visitor.drafts.discard(draft);
+            retiredPortal?.destroy();
+        };
         deleteRecord = button(
             'Delete this record',
             async () => {
@@ -2449,29 +2464,34 @@ const renderForm = (page: FormLoadedResult): void => {
                     async ({ client, signal, current }) => {
                         if (!mayDelete()) return;
                         signal.throwIfAborted();
-                        await client.forms.deleteCurrentRecord(
-                            {
-                                extensionAccessToken:
-                                    page.payload.extensionAccessToken,
-                            },
-                            { signal }
-                        );
+                        const parent = visitor.root;
+                        const portal = visitor.portal;
+                        if (parent != null && portal != null) {
+                            pendingChildDeleteCancels.set(signal, () => {
+                                if (
+                                    !current() ||
+                                    !ownsForm() ||
+                                    visitor.root !== parent ||
+                                    visitor.portal !== portal
+                                )
+                                    return false;
+                                retireDeleteContext();
+                                return true;
+                            });
+                        }
+                        try {
+                            await client.forms.deleteCurrentRecord(
+                                {
+                                    extensionAccessToken:
+                                        page.payload.extensionAccessToken,
+                                },
+                                { signal }
+                            );
+                        } finally {
+                            pendingChildDeleteCancels.delete(signal);
+                        }
                         if (!current() || !ownsForm()) return;
-                        // A completed Delete invalidates the cached parent
-                        // membership and cursor. Retained Back controls must
-                        // not reconstruct that Portal before an explicit Reload.
-                        const retiredPortal = visitor.portal;
-                        visitor.portal = null;
-                        visitor.root = null;
-                        visitor.screen = null;
-                        visitor.formContext = { type: 'direct-url' };
-                        visitor.formParentScope = null;
-                        visitor.formQueries = null;
-                        visitor.formAuthority = null;
-                        visitor.recoveryCandidate = null;
-                        visitor.preparedAttempt = null;
-                        visitor.drafts.discard(draft);
-                        retiredPortal?.destroy();
+                        retireDeleteContext();
                         render();
                         status(
                             'Record deleted. Reload to refresh the current records.'
@@ -3772,9 +3792,20 @@ nodeById('logout').addEventListener('click', () => {
     });
 });
 nodeById('cancel').addEventListener('click', () => {
+    // A dispatched child Delete may already have changed Portal membership.
+    // Retire its exact presentation while the current request still owns it.
+    const retiredChildDelete =
+        request != null && pendingChildDeleteCancels.get(request.signal)?.();
     request?.abort();
     request = null;
     setBusy(false);
+    if (retiredChildDelete) {
+        render();
+        status(
+            'Request cancelled. Delete outcome is unknown. Reload to inspect fresh records.'
+        );
+        return;
+    }
     if (visitors[activeVisitor].restorationError) {
         render();
         status(

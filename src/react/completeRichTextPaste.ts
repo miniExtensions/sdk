@@ -2,6 +2,7 @@ import {
     Extension,
     Plugin,
     PluginKey,
+    TextSelection,
     toggleMark,
     isInTable,
     type Editor,
@@ -193,6 +194,34 @@ export class GeneralPasteHandlerExtension extends Extension {
                         const hasProsemirrorSlice =
                             hasProsemirrorSliceInClipboard(event);
                         const { state, dispatch } = view;
+                        const { from, to, $from, $to } = state.selection;
+
+                        // The next block's start can be an endpoint without
+                        // its text being part of the selected code.
+                        if (
+                            $from.parent.type.spec.code === true &&
+                            from < $from.end() &&
+                            $to.parent.isTextblock &&
+                            $to.parentOffset === 0 &&
+                            $from.after() === $to.before() &&
+                            isUrl(text)
+                        ) {
+                            event.preventDefault();
+                            const transaction = state.tr.insertText(
+                                text,
+                                from,
+                                $from.end()
+                            );
+                            view.dispatch(
+                                transaction.setSelection(
+                                    TextSelection.create(
+                                        transaction.doc,
+                                        from + text.length
+                                    )
+                                )
+                            );
+                            return true;
+                        }
 
                         if (
                             selectionIsInCode(state) ||
@@ -206,8 +235,6 @@ export class GeneralPasteHandlerExtension extends Extension {
                         if (isUrl(text)) {
                             if (!state.selection.empty) {
                                 const link = this.editor.schema.marks.link;
-                                const { from, to, $from, $to } =
-                                    state.selection;
                                 const existingLink = link.isInSet(
                                     $from.nodeAfter?.marks ?? []
                                 );

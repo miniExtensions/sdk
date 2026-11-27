@@ -228,6 +228,18 @@ export class GeneralPasteHandlerExtension extends Extension {
                             state.selection.$head.parent.type.spec.code === true
                         ) {
                             event.preventDefault();
+                            // An image-only paste has no code to insert. An
+                            // empty insertText would delete the selection.
+                            if (
+                                !text &&
+                                clipboardData.types.length === 1 &&
+                                clipboardData.types[0] === 'Files' &&
+                                clipboardData.files.length > 0 &&
+                                Array.from(clipboardData.files).every((file) =>
+                                    file.type.startsWith('image/')
+                                )
+                            )
+                                return true;
                             view.dispatch(view.state.tr.insertText(text));
                             return true;
                         }

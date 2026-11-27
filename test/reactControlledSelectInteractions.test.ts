@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
-import { act, createElement as h, StrictMode } from 'react';
+import {
+    act,
+    createElement as h,
+    StrictMode,
+    type SyntheticEvent,
+} from 'react';
 import type {
     ControlledSelectChoice,
     ControlledMultipleSelectsFieldProps,
@@ -20,6 +25,7 @@ async function fixture(
         multiple?: boolean;
         valueBoundOwner?: boolean;
         deferEcho?: boolean;
+        closedNativeForm?: boolean;
     } = {}
 ) {
     const window = new Window();
@@ -93,7 +99,7 @@ async function fixture(
             readOnly,
             inputId: 'choice',
             ariaLabel: 'Decision',
-            allowAddingNewOptions: true,
+            allowAddingNewOptions: !options.closedNativeForm,
             publishMetadata: (choice: { name: string }) => {
                 metadata.push(choice.name);
                 return publication?.(choice.name);
@@ -114,11 +120,15 @@ async function fixture(
                 StrictMode,
                 null,
                 h(
-                    'div',
+                    options.closedNativeForm ? 'form' : 'div',
                     {
                         onClick: () => parentEvents.push('click'),
                         onPointerDown: () => parentEvents.push('pointerdown'),
                         onKeyDown: () => parentEvents.push('keydown'),
+                        onSubmit: (event: SyntheticEvent) => {
+                            event.preventDefault();
+                            parentEvents.push('submit');
+                        },
                     },
                     options.multiple
                         ? h(MultipleSelectsField, {
@@ -127,6 +137,9 @@ async function fixture(
                           } satisfies ControlledMultipleSelectsFieldProps)
                         : h(SingleSelectField, {
                               ...common,
+                              editableDropdownLayout: options.closedNativeForm
+                                  ? 'native-form'
+                                  : undefined,
                               value: renderedValue as string | null,
                           } satisfies ControlledSingleSelectFieldProps)
                 )
@@ -256,6 +269,39 @@ async function fixture(
         },
     };
 }
+it('matches equivalent Korean names in a closed Form dropdown and writes the exact available choice', async (t) => {
+    const composed = '\uC11C\uC6B8';
+    const decomposed = '\u1109\u1165\u110B\u116E\u11AF';
+    const choices = [
+        { id: 'decomposed', name: decomposed },
+        { id: 'composed', name: composed },
+    ];
+    const f = await fixture(t, { choices, closedNativeForm: true });
+    const options = () =>
+        [...f.container.querySelectorAll('[role=option]')].map(
+            (node) => node.textContent
+        );
+    for (const [choice, query] of [
+        [choices[0], composed],
+        [choices[1], decomposed],
+    ] as const) {
+        f.setValue(null);
+        f.setAvailableChoices([choice]);
+        await f.rerender();
+        await f.type('\uBD80\uC0B0');
+        assert.deepEqual(options(), []);
+        await f.type(query);
+        assert.equal(f.input().value, query);
+        assert.deepEqual(options(), [choice.name]);
+        await f.key('ArrowDown');
+        await f.key('Enter');
+        assert.equal(f.window.document.activeElement, f.input());
+    }
+    assert.deepEqual(f.writes, [decomposed, composed]);
+    assert.deepEqual(f.metadata, []);
+    assert.equal(f.parentEvents.includes('submit'), false);
+});
+
 function retainedClick(node: object) {
     const key = Object.keys(node).find((key) =>
         key.startsWith('__reactProps$')

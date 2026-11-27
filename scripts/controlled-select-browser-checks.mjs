@@ -12,6 +12,14 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+const composedSeoul = '\uC11C\uC6B8';
+const decomposedSeoul = '\u1109\u1165\u110B\u116E\u11AF';
+const busan = '\uBD80\uC0B0';
+const koreanChoices = {
+    composed: composedSeoul,
+    decomposed: decomposedSeoul,
+};
+
 async function readNativeReadonlyForm(page, multiple) {
     const specimens = page.locator('[data-readonly-sample]');
     const painted = await specimens.evaluateAll((nodes) =>
@@ -359,6 +367,119 @@ async function checkNativeEditableForm(page, snapshot, capture) {
     return { closed, open, empty: { menu: emptyMenu.menu, message }, blank };
 }
 
+async function readNativeClosedListKorean(page, snapshot, query) {
+    const holder = page.locator(
+        '[data-closed-list-korean] [data-editable-dropdown-layout="native-form"]'
+    );
+    const status = holder.getByRole('combobox', {
+        name: 'Status',
+        exact: true,
+    });
+    const listbox = holder.getByRole('listbox');
+    const options = listbox.getByRole('option');
+    const noMatch = listbox.getByText('No matching choices', { exact: true });
+    await page.getByRole('button', { name: 'Before Status' }).focus();
+    await page.keyboard.press('Tab');
+    const focused = () =>
+        status.evaluate((node) => node === document.activeElement);
+    const initiallyFocused = await focused();
+    const readSearch = async () => ({
+        rawQuery: await status.inputValue(),
+        optionCount: await options.count(),
+        optionLabels: await options.allTextContents(),
+        noMatchVisible: await noMatch.isVisible(),
+    });
+
+    await page.keyboard.insertText(busan);
+    const unavailable = await readSearch();
+    await page.keyboard.press('Enter');
+    const afterUnavailable = await snapshot();
+
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText(query);
+    const search = await readSearch();
+    await page.keyboard.press('ArrowDown');
+    const activeId = await status.getAttribute('aria-activedescendant');
+    const optionIds = await options.evaluateAll((nodes) =>
+        nodes.map((node) => node.id)
+    );
+    const beforeSelection = await snapshot();
+    await page.keyboard.press('Enter');
+    const afterSelection = await snapshot();
+    return {
+        react: afterSelection.react,
+        initiallyFocused,
+        unavailable,
+        afterUnavailable: {
+            value: afterUnavailable.single,
+            writes: afterUnavailable.writes,
+            submits: afterUnavailable.submits,
+        },
+        search,
+        activeId,
+        optionIds,
+        writesBeforeSelection: beforeSelection.writes,
+        afterSelection: {
+            value: afterSelection.single,
+            writes: afterSelection.writes,
+            submits: afterSelection.submits,
+            rawQuery: await status.inputValue(),
+            expanded: await status.getAttribute('aria-expanded'),
+            focused: await focused(),
+        },
+    };
+}
+
+function assertNativeClosedListKorean(receipt) {
+    const { format, direction, query, value } = receipt;
+    const scenario = `${format} ${direction}`;
+    assert.equal(receipt.initiallyFocused, true, scenario);
+    assert.deepEqual(
+        receipt.unavailable,
+        {
+            rawQuery: busan,
+            optionCount: 0,
+            optionLabels: [],
+            noMatchVisible: true,
+        },
+        scenario
+    );
+    assert.deepEqual(
+        receipt.afterUnavailable,
+        {
+            value: null,
+            writes: [],
+            submits: 0,
+        },
+        scenario
+    );
+    assert.deepEqual(
+        receipt.search,
+        {
+            rawQuery: query,
+            optionCount: 1,
+            optionLabels: [value],
+            noMatchVisible: false,
+        },
+        scenario
+    );
+    assert.ok(receipt.activeId, scenario);
+    assert.deepEqual(receipt.optionIds, [receipt.activeId], scenario);
+    assert.deepEqual(receipt.writesBeforeSelection, [], scenario);
+    assert.deepEqual(
+        receipt.afterSelection,
+        {
+            value,
+            writes: [{ kind: 'value', key: 'single', value }],
+            submits: 0,
+            rawQuery: '',
+            expanded: 'false',
+            focused: true,
+        },
+        scenario
+    );
+}
+
 // Synthetic controlled host, installed public entry points, actual browser input.
 // Canonical state and deferred metadata remain host-owned; no provider is called.
 export async function checkControlledSelectBrowser({
@@ -370,6 +491,7 @@ export async function checkControlledSelectBrowser({
     Object.assign(evidence, {
         status: 'running',
         results: [],
+        nativeClosedListKorean: [],
         pageErrors: [],
         unexpectedRequests: [],
         cleanup: {},
@@ -418,6 +540,8 @@ const {createElement:h,useState,useRef}=React;
 let writes=[],submits=0,activations=0,observed,singleEchoTransitions=[];
 const choices=[{id:'a',name:'Alpha',displayName:'First'},{id:'b',name:'Beta',displayName:'Second'},{id:'c',name:'Gamma',displayName:'Third'}];
 const nativeEditable=new URLSearchParams(location.search).has('native-editable-dropdown');
+const nativeClosedListKorean=new URLSearchParams(location.search).get('native-closed-list-korean');
+const koreanChoices=${JSON.stringify(koreanChoices)};
 function App(){
  const [state,setState]=useState({single:nativeEditable?'Beta':null,multi:['Alpha','Beta'],limited:['Alpha'],choices,readonly:false,active:true,token:{}});
  const latest=useRef(state);latest.current=state;observed=state;
@@ -427,6 +551,18 @@ function App(){
  const singleOwner={token:scope,isCurrent:()=>owner.isCurrent()&&canonicalSingle.current===state.single};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
+ if(nativeClosedListKorean){
+    const seoul={id:'seoul',name:koreanChoices[nativeClosedListKorean]};
+    const unavailable={id:'busan',name:${JSON.stringify(busan)}};
+    return h('form',{'data-closed-list-korean':'',id:'select-form',onSubmit:event=>{event.preventDefault();submits++;}},
+      h('button',{type:'button'},'Before Status'),
+      h(SingleSelectField,{
+        ...common,owner:singleOwner,choices:[seoul,unavailable],availableChoices:[seoul],inputId:'status',ariaLabel:'Status',
+        presentation:'dropdown',editableDropdownLayout:'native-form',value:state.single,allowAddingNewOptions:false,
+        onValueChange:value=>change('single',value),publishMetadata:choice=>{writes.push({kind:'metadata',choice});return false;},
+      })
+    );
+ }
  if(nativeEditable){
     const nativeChoices=choices.map(choice=>({...choice,backgroundColor:'#ffeab6',color:'#374151'}));
     const dropdown={...common,owner:singleOwner,choices:nativeChoices,availableChoices:nativeChoices,inputId:'status',ariaLabel:'Status',presentation:'dropdown',value:state.single,editableDropdownLayout:'native-form',labels:{placeholder:'Choose one',availableOptions:'Available choices',remove:name=>'Remove option '+name},onValueChange:value=>change('single',value)};
@@ -1090,6 +1226,28 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
                 );
                 presentation.nativeEditableDropdown.push({ width, ...result });
             }
+            await page.setViewportSize({ width: 375, height: 640 });
+            for (const [direction, value] of Object.entries(koreanChoices)) {
+                evidence.phase = `${format} native closed list ${direction}`;
+                await page.goto(
+                    `${origin}/?format=${format}&native-closed-list-korean=${direction}`
+                );
+                const query =
+                    direction === 'composed' ? decomposedSeoul : composedSeoul;
+                const result = await readNativeClosedListKorean(
+                    page,
+                    snapshot,
+                    query
+                );
+                evidence.nativeClosedListKorean.push({
+                    format,
+                    direction,
+                    width: 375,
+                    query,
+                    value,
+                    ...result,
+                });
+            }
             evidence.results.push({
                 format,
                 synchronousCanonicalEcho,
@@ -1100,10 +1258,15 @@ window.selectProof={snapshot:()=>({react:React.version,writes:[...writes],submit
             await context.close();
             context = null;
         }
+        // Keep both directions and both module formats in the red receipt.
+        for (const receipt of evidence.nativeClosedListKorean) {
+            evidence.phase = `${receipt.format} native closed list ${receipt.direction}`;
+            assertNativeClosedListKorean(receipt);
+        }
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, caps/radios, readonly Grid events, and native Form dropdown appearance, focus and actions. Synthetic host and explicit submit sentinel.';
+            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, caps/radios, readonly Grid events, and native Form dropdown appearance, focus, actions and equivalent Korean closed-list search. Synthetic host and explicit submit sentinel.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

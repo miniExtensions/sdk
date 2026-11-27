@@ -326,22 +326,44 @@ function SelectControl(props: ControlProps): ReactNode {
         : props.availableChoices.filter(
               (choice) => !props.multiple || !props.values.includes(choice.name)
           );
+    const normalizeFormSearch =
+        nativeFormEditable && !props.allowAddingNewOptions;
     const fuse = useMemo(
         () =>
             isFuseConstructor(FuseModule)
                 ? new FuseModule([...candidates], {
                       keys: portalFilter
                           ? [{ name: 'label', getFn: label }]
-                          : ['displayName', 'name'],
+                          : (['displayName', 'name'] as const).map((name) =>
+                                normalizeFormSearch
+                                    ? {
+                                          name,
+                                          getFn: (
+                                              choice: ControlledSelectChoice
+                                          ) =>
+                                              choice[name]?.normalize('NFC') ??
+                                              '',
+                                      }
+                                    : name
+                            ),
                       threshold: 0.2,
                       ignoreLocation: true,
                       ignoreFieldNorm: true,
                   })
                 : null,
-        [props.availableChoices, props.values, props.multiple, portalFilter]
+        [
+            props.availableChoices,
+            props.values,
+            props.multiple,
+            portalFilter,
+            normalizeFormSearch,
+        ]
     );
+    const query = normalizeFormSearch
+        ? state.text.normalize('NFC')
+        : state.text;
     const found = state.text
-        ? (fuse?.search(state.text).map((result) => result.item) ?? [])
+        ? (fuse?.search(query).map((result) => result.item) ?? [])
         : candidates;
     const resolveActiveIndex = (active: typeof state.active) =>
         typeof active === 'string'

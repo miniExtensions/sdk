@@ -22,9 +22,9 @@ export const removeMarkdown = (markdown: string): string => {
     const processedLines = [];
     let insideFencedCodeBlock = false;
 
-    for (let line of lines) {
+    for (const rawLine of lines) {
         // Trim whitespace from the line
-        line = line.trim();
+        let line = rawLine.trim();
 
         // Handle fenced code blocks (e.g., ``` or ~~~)
         if (line.startsWith('```') || line.startsWith('~~~')) {
@@ -47,11 +47,12 @@ export const removeMarkdown = (markdown: string): string => {
             continue;
         }
 
-        // Remove headers (both # and Setext-style)
-        if (line.startsWith('#')) {
-            line = line
-                .replace(/^#{1,6}\s*/, '')
-                .replace(/\s*#{1,6}\s*$/, '')
+        // Only a valid heading opener and a whitespace-separated closer are formatting.
+        const heading = /^ {0,3}#{1,6}(?=[ \t]|\r?$)/.exec(rawLine);
+        if (heading) {
+            line = rawLine
+                .slice(heading[0].length)
+                .replace(/[ \t]#+[ \t]*\r?$/, '')
                 .trim();
         }
         if (/^[=\-]{2,}\s*$/.test(line)) {

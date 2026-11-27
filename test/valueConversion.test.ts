@@ -160,6 +160,32 @@ describe('field value conversion', () => {
         assert.throws(() => primitive(config, 42), Error);
     });
 
+    for (const [markdown, expected] of [
+        ['#1042', '#1042'],
+        ['## C#', 'C#'],
+        ['## Heading ##', 'Heading'],
+        ['   ###\tTopic# #######', 'Topic#'],
+        ['####### Literal', '####### Literal'],
+        ['    ## Indented', '## Indented'],
+        ['## ##', ''],
+    ] as const) {
+        it(`preserves literal hashes in readable Rich Text for ${JSON.stringify(markdown)}`, () => {
+            const config: FieldConfig = { type: AirtableFieldType.RICH_TEXT };
+            assert.equal(
+                convertAirtableValueToPrimitive({
+                    airtableFieldConfig: config,
+                    value: markdown,
+                    source: emptySource,
+                    fieldName: 'Example field',
+                    doNotRemoveMarkdownFormatting: true,
+                }),
+                markdown
+            );
+            assert.equal(readable(config, markdown), expected);
+            assert.equal(primitive(config, markdown), expected);
+        });
+    }
+
     for (const count of [6, 11]) {
         it(`preserves all ${count} rich-text paragraphs in readable values`, () => {
             const config: FieldConfig = { type: AirtableFieldType.RICH_TEXT };

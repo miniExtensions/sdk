@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import type { Window } from 'happy-dom';
-import { act, createElement as h, createRef, useState } from 'react';
+import {
+    act,
+    createElement as h,
+    createRef,
+    useState,
+    type FormEvent,
+} from 'react';
 import { flushSync } from 'react-dom';
 import {
     CompleteRichTextEditor,
@@ -1144,6 +1150,54 @@ for (const selected of [true, false]) {
         ]);
     });
 }
+
+it('replaces a selected Rich Text link URL while retaining its label', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    const requests = t.mock.method(f.window, 'fetch', () =>
+        assert.fail('Pasting a link must not fetch it')
+    );
+    let submits = 0;
+    const mount = (initial: string, updates: string[], key: string) =>
+        f.render(
+            h(
+                'form',
+                {
+                    onSubmit(event: FormEvent<HTMLFormElement>) {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                h(ControlledCompleteEditor, {
+                    key,
+                    editorRef: ref,
+                    writes: updates,
+                    initial,
+                })
+            )
+        );
+    const oldUrl = 'https://example.test/old';
+    const newUrl = 'https://example.test/new';
+    await mount(`Alpha [Beta](${oldUrl})`, writes, 'original');
+    const { view } = await f.editor(ref);
+    assert.equal(view.dom.querySelector('a')?.getAttribute('href'), oldUrl);
+    await f.select(view, 7, 11);
+    await f.paste(view, { 'text/plain': newUrl });
+    assert.equal(view.state.doc.textContent, 'Alpha Beta');
+    assert.deepEqual(writes, [`Alpha [Beta](${newUrl})`]);
+    assert.equal(view.dom.querySelector('a')?.textContent, 'Beta');
+    assert.equal(view.dom.querySelector('a')?.getAttribute('href'), newUrl);
+
+    const reloadedWrites: string[] = [];
+    await mount(writes[0]!, reloadedWrites, 'reloaded');
+    const reloaded = (await f.editor(ref)).view;
+    assert.equal(reloaded.state.doc.textContent, 'Alpha Beta');
+    assert.equal(reloaded.dom.querySelector('a')?.getAttribute('href'), newUrl);
+    assert.deepEqual(reloadedWrites, []);
+    assert.equal(requests.mock.callCount(), 0);
+    assert.equal(submits, 0);
+});
 
 it('declines bold-only plain clipboard text and preserves the real native literal fallback', async (t) => {
     const f = await completeRichTextFixture(t);

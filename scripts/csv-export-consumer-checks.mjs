@@ -128,11 +128,11 @@ async function checkMountedRollup(container, trigger) {
         options: { choices: [{ id: 'blue', name: 'Blue' }, { id: 'red', name: 'Red' }] },
     };
     const tags = Object.freeze(['Blue', 'Red', 'Blue']);
-    const rollupInput = (value, result = selectResult) => ({
+    const rollupInput = (value, result = selectResult, name = 'Tags') => ({
         admission: { cohort: 'portal-grid', allowed: true, borrowedRecords: false },
         columns: [
             { key: 'Company', title: 'Company' },
-            { key: 'Tags', title: 'Tags' },
+            { key: name, title: name },
             { key: 'Private column', title: 'Private column', isHidden: true },
         ],
         rows: [{
@@ -141,7 +141,7 @@ async function checkMountedRollup(container, trigger) {
             fields: [company, {
                 field: {
                     id: 'fldRollup',
-                    name: 'Tags',
+                    name,
                     config: { type: 'rollup', options: {
                         isValid: true,
                         recordLinkFieldId: 'fldLinked',
@@ -198,7 +198,55 @@ async function checkMountedRollup(container, trigger) {
         rows: [[['Company', 'Tags'], ['Acme', 'Blue, Red, Blue']]],
         alert: null,
     }, 'Default mounted CSV must preserve the visible Rollup choice values');
-    return actual;
+    const linkedResult = {
+        type: 'multipleRecordLinks',
+        options: { linkedTableId: 'tblLinked' },
+    };
+    const links = Object.freeze(['rec12345678901234', 'Supplied label']);
+    const linkedInput = (value) => ({
+        ...rollupInput(value, linkedResult, 'Related'),
+        unavailableLinkedRecordPlaceholder: 'Unavailable',
+    });
+    const linked = linkedInput(links);
+    const linkedDescriptor = linked.rows[0].fields[1];
+    let linkedFormatterCalls = 0;
+    const empty = await readControl(linkedInput([]));
+    const custom = await readControl({
+        ...linked,
+        formatField({ field, value }) {
+            if (field.name !== 'Related') return value;
+            linkedFormatterCalls++;
+            assert.equal(field, linkedDescriptor.field);
+            assert.equal(value, linkedDescriptor.value);
+            return 'Host-formatted links';
+        },
+    });
+    const linkDownload = await clickMountedCSV(
+        container, trigger, linked, 'Synthetic Rollup links.csv'
+    );
+    const linkedRecords = {
+        ...linkDownload,
+        rows: linkDownload.csv.map(parseRows),
+        empty,
+        custom,
+        linkedFormatterCalls,
+        hiddenReads,
+    };
+    assert.deepEqual(linkedRecords, {
+        outcome: { status: 'delivered' },
+        blobs: 1,
+        createdUrls: ['blob:synthetic'],
+        filenames: ['Synthetic Rollup links.csv'],
+        revoked: ['blob:synthetic'],
+        csv: ['Company,Related\nAcme,"Unavailable, Supplied label"\n'],
+        rows: [[['Company', 'Related'], ['Acme', 'Unavailable, Supplied label']]],
+        empty: [['Company', 'Related'], ['Acme', '']],
+        custom: [['Company', 'Related'], ['Acme', 'Host-formatted links']],
+        linkedFormatterCalls: 1,
+        hiddenReads: 0,
+        alert: null,
+    });
+    return { ...actual, linkedRecords };
 }
 
 async function checkMountedFormulaLinks(container, trigger) {

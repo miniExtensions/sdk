@@ -230,9 +230,9 @@ const oldError=console.error;console.error=(...args)=>{calls.errors.push(args.ma
 window.addEventListener('error',event=>calls.errors.push(event.error?.message??event.message));
 window.addEventListener('unhandledrejection',event=>calls.errors.push(String(event.reason)));
 window.fetch=()=>{calls.requests++;throw Error('Unexpected Kanban fixture request');};
-const model={readOnly:false,modalOpen:false,mounted:true,rich:false,pending:false,hideEmpty:false,revision:0,rows:['a','b','c','legacy']};
+const model={readOnly:false,modalOpen:false,mounted:true,rich:false,pending:false,hideEmpty:false,uncategorizedLabel:'Uncategorized',revision:0,rows:['a','b','c','legacy']};
 let records={a:{id:'a',fields:{status:'Open',sibling:'A'}},b:{id:'b',fields:{status:'Open',sibling:'B'}},c:{id:'c',fields:{status:'Closed',sibling:'C'}},legacy:{id:'legacy',fields:{status:'Old choice',sibling:'Legacy'}}};
-let pending=[];let source;const makeSource=()=>({categoryFieldId:'status',fields,recordIds:[...model.rows],readRecord:id=>records[id],uncategorizedLabel:'Uncategorized',hideEmptyColumns:model.hideEmpty});
+let pending=[];let source;const makeSource=()=>({categoryFieldId:'status',fields,recordIds:[...model.rows],readRecord:id=>records[id],uncategorizedLabel:model.uncategorizedLabel,hideEmptyColumns:model.hideEmpty});
 source=makeSource();const root=createRoot(document.querySelector('main'));
 const capture=recordId=>{
  const originalRecord=records[recordId],capturedRevision=model.revision;const columns=api.projectKanbanColumns(source);
@@ -253,8 +253,8 @@ function render(){
 render();
 window.__kanbanProbe={
  snapshot(){return{calls:JSON.parse(JSON.stringify(calls)),records:JSON.parse(JSON.stringify(records)),model:{...model},pending:pending.length,columns:api.projectKanbanColumns(source).map(({id,label})=>({id,label})),react:React.version,platform:navigator.platform,storage:{local:localStorage.length,session:sessionStorage.length}};},
- replace(patch){Object.assign(model,patch);if(patch.rows||patch.hideEmpty!==undefined){source=makeSource();}render();},
- reset(){records={a:{id:'a',fields:{status:'Open',sibling:'A'}},b:{id:'b',fields:{status:'Open',sibling:'B'}},c:{id:'c',fields:{status:'Closed',sibling:'C'}},legacy:{id:'legacy',fields:{status:'Old choice',sibling:'Legacy'}}};Object.assign(model,{readOnly:false,modalOpen:false,mounted:true,rich:false,pending:false,hideEmpty:false,rows:['a','b','c','legacy']});source=makeSource();render();},
+ replace(patch){Object.assign(model,patch);if(patch.rows||patch.hideEmpty!==undefined||patch.uncategorizedLabel!==undefined){source=makeSource();}render();},
+ reset(){records={a:{id:'a',fields:{status:'Open',sibling:'A'}},b:{id:'b',fields:{status:'Open',sibling:'B'}},c:{id:'c',fields:{status:'Closed',sibling:'C'}},legacy:{id:'legacy',fields:{status:'Old choice',sibling:'Legacy'}}};Object.assign(model,{readOnly:false,modalOpen:false,mounted:true,rich:false,pending:false,hideEmpty:false,uncategorizedLabel:'Uncategorized',rows:['a','b','c','legacy']});source=makeSource();render();},
  settle(outcome){const target=pending.shift();if(!target)throw Error('No pending mutation');if(outcome==='reject')target.reject(Error('Synthetic mutation failure'));else target.resolve(outcome==='logged-in'?{type:'logged-in',loggedInUserRecord:{synthetic:true}}:{type:'no-login'});},
  unmount(){model.mounted=false;render();}
 };
@@ -424,17 +424,29 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 .locator('section [data-kanban-ready="true"]')
                 .waitFor({ state: 'attached' });
         };
-        const keyboardReady = (id) =>
+        const liveRegion = page.locator('[id^="DndLiveRegion"][role="status"]');
+        const keyboardReady = (label, position = 1) =>
             page.waitForFunction(
-                (id) =>
-                    [...document.querySelectorAll('[role="status"]')].some(
-                        (node) =>
-                            node.textContent?.includes(
-                                'was moved over droppable area ' + id
-                            )
-                    ),
-                id
+                (message) =>
+                    document.querySelector(
+                        '[id^="DndLiveRegion"][role="status"]'
+                    )?.textContent === message,
+                `Over ${label} column, position ${position}.`
             );
+        const destinationAnnouncement = async (label) => {
+            const expected = `Over ${label} column`;
+            await page.waitForFunction(
+                (expected) =>
+                    document
+                        .querySelector('[id^="DndLiveRegion"][role="status"]')
+                        ?.textContent?.startsWith(expected),
+                expected
+            );
+            const message = await liveRegion.textContent();
+            assert(message?.startsWith(expected));
+            assert(!message.includes('droppable area'));
+            return message;
+        };
         const sourceSelector = (id) =>
             `section.mx-sdk-kanban:has(> [data-kanban-ready="true"]) .mx-sdk-kanban-board .mx-sdk-kanban-item:not(.mx-sdk-kanban-item-overlay) [data-kanban-record="${id}"]`;
         const source = (id) => page.locator(sourceSelector(id));
@@ -454,19 +466,17 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 },
                 { selector: sourceSelector(id), label }
             );
-        const moveKey = async (key, target, label, recordId = 'a') => {
+        const moveKey = async (key, label, recordId = 'a') => {
             await page.keyboard.press(key);
-            if (label)
-                await page.waitForFunction(
-                    ({ label, selector }) =>
-                        document
-                            .querySelector(selector)
-                            ?.closest('.mx-sdk-kanban-column')
-                            ?.querySelector('.mx-sdk-kanban-column-label')
-                            ?.textContent === label,
-                    { label, selector: sourceSelector(recordId) }
-                );
-            else await keyboardReady(target);
+            await page.waitForFunction(
+                ({ label, selector }) =>
+                    document
+                        .querySelector(selector)
+                        ?.closest('.mx-sdk-kanban-column')
+                        ?.querySelector('.mx-sdk-kanban-column-label')
+                        ?.textContent === label,
+                { label, selector: sourceSelector(recordId) }
+            );
         };
         const overlay = () => page.locator('.mx-sdk-kanban-item-overlay');
         const column = (label) =>
@@ -933,8 +943,9 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await keyboardReady('a');
-        await moveKey('ArrowDown', 'b');
+        await keyboardReady('Open');
+        await page.keyboard.press('ArrowDown');
+        await keyboardReady('Open', 2);
         await page.keyboard.press('Space');
         await overlay().waitFor({ state: 'detached' });
         assert.deepEqual(await order('Open'), ['b', 'a']);
@@ -950,9 +961,12 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await keyboardReady('a');
-        await moveKey('ArrowRight', 'c', 'Closed');
+        await keyboardReady('Open');
+        await moveKey('ArrowRight', 'Closed');
         await waitForCardFocus('a', 'Closed');
+        result.destinationAnnouncements = {
+            occupied: await destinationAnnouncement('Closed'),
+        };
         assert.equal((await state()).calls.events.length, beforeKeyboardDrop);
 
         const previewCard = await source('a').elementHandle();
@@ -1007,17 +1021,16 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await verify('trusted-keyboard-populated-column-drop');
 
         await reset();
+        const beforeEmptyDrop = (await state()).calls.events.length;
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await keyboardReady('a');
-        await moveKey('ArrowRight', 'c', 'Closed');
-        await moveKey(
-            'ArrowRight',
-            (await state()).columns.find((column) => column.label === 'Empty')
-                .id,
-            'Empty'
-        );
+        await keyboardReady('Open');
+        await moveKey('ArrowRight', 'Closed');
+        await moveKey('ArrowRight', 'Empty');
+        result.destinationAnnouncements.empty =
+            await destinationAnnouncement('Empty');
+        assert.equal((await state()).calls.events.length, beforeEmptyDrop);
         await page.keyboard.press('Space');
         await page.waitForFunction(
             () =>
@@ -1037,18 +1050,18 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
                 await source('a').focus();
                 await page.keyboard.press('Space');
                 await overlay().waitFor();
-                await keyboardReady('a');
-                await moveKey('ArrowRight', 'c', 'Closed');
-                await moveKey('ArrowRight', 'empty', 'Empty');
+                await keyboardReady('Open');
+                await moveKey('ArrowRight', 'Closed');
+                await moveKey('ArrowRight', 'Empty');
                 await waitForCardFocus('a', 'Empty');
             };
             const before = (await state()).calls.events.length;
-            for (const [key, target, label] of [
-                ['ArrowRight', 'legacy', 'Old choice'],
-                ['ArrowLeft', 'c', 'Closed'],
+            for (const [key, label] of [
+                ['ArrowRight', 'Old choice'],
+                ['ArrowLeft', 'Closed'],
             ]) {
                 await previewNarrowEmpty(4);
-                await moveKey(key, target, label);
+                await moveKey(key, label);
                 await waitForCardFocus('a', label);
                 await page.keyboard.press('Escape');
                 await overlay().waitFor({ state: 'detached' });
@@ -1096,8 +1109,8 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
             await source('c').focus();
             await page.keyboard.press('Space');
             await overlay().waitFor();
-            await keyboardReady('c');
-            await moveKey('ArrowLeft', 'a', 'Open', 'c');
+            await keyboardReady('Closed');
+            await moveKey('ArrowLeft', 'Open', 'c');
             await page.keyboard.press('Space');
             await page.waitForFunction(
                 () =>
@@ -1125,17 +1138,16 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         }
 
         await reset();
+        await replace({ uncategorizedLabel: 'Sans catégorie' });
+        const beforeLocalizedDrop = (await state()).calls.events.length;
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await keyboardReady('a');
-        await moveKey(
-            'ArrowLeft',
-            (await state()).columns.find(
-                (column) => column.label === 'Uncategorized'
-            ).id,
-            'Uncategorized'
-        );
+        await keyboardReady('Open');
+        await moveKey('ArrowLeft', 'Sans catégorie');
+        result.destinationAnnouncements.localized =
+            await destinationAnnouncement('Sans catégorie');
+        assert.equal((await state()).calls.events.length, beforeLocalizedDrop);
         await page.keyboard.press('Space');
         await page.waitForFunction(
             () =>
@@ -1148,15 +1160,10 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
         await source('a').focus();
         await page.keyboard.press('Space');
         await overlay().waitFor();
-        await keyboardReady('a');
-        await moveKey('ArrowRight', 'c', 'Closed');
-        await moveKey(
-            'ArrowRight',
-            (await state()).columns.find((column) => column.label === 'Empty')
-                .id,
-            'Empty'
-        );
-        await moveKey('ArrowRight', 'legacy', 'Old choice');
+        await keyboardReady('Open');
+        await moveKey('ArrowRight', 'Closed');
+        await moveKey('ArrowRight', 'Empty');
+        await moveKey('ArrowRight', 'Old choice');
         assert(
             (await page
                 .locator('.mx-sdk-kanban-board')

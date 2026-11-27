@@ -42,6 +42,9 @@ const percentAnswers = [
     ['fld_review_percent_zero', 'Zero percent', 0],
     ['fld_review_percent_empty', 'Empty percent', null],
 ];
+const currencyId = 'fld_review_currency';
+const currencyName = 'Currency amount';
+const currencyValue = 1234.56789;
 
 /** Exact installed package + copied complete starter, with synthetic transport. */
 export async function checkBrowserReviewExample({
@@ -365,6 +368,28 @@ export async function checkBrowserReviewExample({
                 form.payload.fieldNamesToSchemas[name] = schema;
                 form.payload.formRecord.data[id] = value;
             }
+            const currencySchema = {
+                fieldType: 'currency',
+                airtableField: {
+                    id: currencyId,
+                    name: currencyName,
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: {
+                        type: 'currency',
+                        options: { precision: 2, symbol: 'CHF ' },
+                    },
+                },
+                miniExtConfig: {
+                    numberSeparator: 'period-comma',
+                    showThousandsSeparator: true,
+                },
+            };
+            form.payload.fieldIdsInForm.push(currencyId);
+            form.payload.fieldIdsToSchemas[currencyId] = currencySchema;
+            form.payload.fieldNamesToSchemas[currencyName] = currencySchema;
+            form.payload.formRecord.data[currencyId] = currencyValue;
         }
         const initial = structuredClone(form.payload.formRecord.data);
         const window = new Window({
@@ -1044,11 +1069,12 @@ export async function checkBrowserReviewExample({
                         'Date answer',
                         ...linkedFixture.ids,
                         ...percentAnswers.slice(0, 2).map(([, name]) => name),
+                        currencyName,
                     ]
                 );
                 assert.deepEqual(
                     [...dialog.querySelectorAll('dd')]
-                        .slice(0, -2)
+                        .slice(0, -3)
                         .map((node) => node.textContent),
                     [
                         '••••••••',
@@ -1076,6 +1102,7 @@ export async function checkBrowserReviewExample({
                     numberZero:
                         row('fld_review_number')?.nextElementSibling
                             .textContent,
+                    currency: row(currencyId)?.nextElementSibling.textContent,
                 };
                 assert.equal(
                     dialog.textContent.includes('SecondExactReviewSecret'),
@@ -1097,14 +1124,23 @@ export async function checkBrowserReviewExample({
                 button(dialog, 'Edit').click();
                 await settled();
                 assert.equal(saves().length, 0);
-                const savesAfterCancel = saves().length;
+                assert.equal(
+                    field('fld_review_title').value,
+                    'SecondExactReviewSecret'
+                );
+                const savesAfterEdit = saves().length;
                 dialog = await open();
                 dialog.dispatchEvent(
                     new window.Event('cancel', { cancelable: true })
                 );
                 await settled();
                 assert.equal(saves().length, 0);
+                const savesAfterCancel = saves().length;
                 dialog = await open();
+                assert.equal(
+                    row(currencyId)?.nextElementSibling.textContent,
+                    display.currency
+                );
                 const confirm = button(dialog, 'Confirm');
                 confirm.click();
                 confirm.click();
@@ -1147,8 +1183,11 @@ export async function checkBrowserReviewExample({
                     '[packed review percent] ' +
                         JSON.stringify({
                             ...display,
+                            savesAfterEdit,
                             savesAfterCancel,
                             savesAfterConfirm: saves().length,
+                            savedCurrency:
+                                saves()[0].input.formRecord.data[currencyId],
                             savedPercent: percentAnswers.map(
                                 ([id]) => saves()[0].input.formRecord.data[id]
                             ),
@@ -1165,8 +1204,9 @@ export async function checkBrowserReviewExample({
                             zero: '0%',
                             hasEmpty: false,
                             numberZero: '0',
+                            currency: 'CHF 1.234,57',
                         })),
-                        'Root Review must format read-only Percent answers in both page modes.'
+                        'Root Review must format Percent and Currency answers in both page modes.'
                     );
             } else if (scenario.startsWith('confirmed-')) {
                 const originalControl = field('fld_review_title');

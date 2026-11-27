@@ -204,7 +204,53 @@ try {
      assert.deepEqual(postSaveIntents, []);
  }
 
+ const collaboratorConfiguration = {
+     afterFormSubmission: 'stay', successAction: true,
+     successMessageType: 'airtableField', successMessageField: 'fld_team_message',
+ };
+ const ada = { id: 'usrSyntheticAda', name: 'Ada', email: 'ada@example.invalid' };
+ const grace = { id: 'usrSyntheticGrace', name: 'Grace', email: 'grace@example.invalid' };
+ const blankName = { id: 'usrSyntheticBlank', name: '', email: 'hidden@example.invalid' };
+ const collaboratorFields = {
+     fld_team_message: { airtableField: {
+         id: 'fld_team_message', name: 'Confirmation team',
+         config: { type: 'rollup', options: {
+             isValid: true,
+             result: { type: 'multipleCollaborators', options: { choices: [] } },
+         } },
+     } },
+ };
+ const defaultMessage = forms.makeDefaultSuccessMessage('en');
+ const collaboratorRollupMessages = [];
+ for (const [name, visible, expected] of [
+     ['singleton', [ada], 'Ada'],
+     ['ordered', [ada, null, grace], 'Ada, Grace'],
+     ['empty', [], defaultMessage],
+     ['filtered', undefined, defaultMessage],
+     ['blank-name', [blankName], defaultMessage],
+ ]) {
+     const projection = forms.projectFormCompletion({
+         configuration: collaboratorConfiguration, language: 'en',
+         fields: collaboratorFields, linkedTableStates: {},
+         filteredValues: visible === undefined ? {} : { fld_team_message: visible },
+         unfilteredValues: { fld_team_message: [ada, grace] },
+     });
+     assert.deepEqual(projection.message, { text: expected, format: 'text' });
+     await React.act(async () => root.render(h(ui.CompleteFormCompletion, {
+         key: 'collaborator-' + name, configuration: collaboratorConfiguration,
+         projection, canSubmit: true, onCommand: command => postSaveIntents.push(command),
+     })));
+     const alerts = container.querySelectorAll('[role="alert"]');
+     assert.equal(alerts.length, 1);
+     const text = alerts[0].querySelector('.mx-sdk-form-completion-text')?.textContent;
+     assert.equal(text, expected);
+     collaboratorRollupMessages.push({ name, text });
+ }
+ assert.deepEqual(postSaveIntents, []);
+ assert.deepEqual({ submits, writes }, { submits: 0, writes: 0 });
+
  const delayedConfirmations = [];
+ const immediateRedirect = {};
  const delayedConfiguration = {afterFormSubmission:'stay',successAction:true,successMessageDelay:5};
  mock.timers.enable({apis:['setTimeout','Date'],now:0});
  try {
@@ -230,6 +276,44 @@ try {
          assert.equal(container.textContent, success);
          delayedConfirmations.push({language, name, announcement, confirmation: container.textContent});
      }
+
+     const configuration = {
+         afterFormSubmission: 'redirect', successAction: true,
+         successMessageType: 'airtableField', successMessageField: 'fld_message', successMessageDelay: -5,
+         enableRedirectDelay: true, redirectDelay: 0, redirectURLStatic: '/thanks',
+     };
+     const message = 'Your response was recorded';
+     const values = { fld_message: message };
+     const fields = { fld_message: { airtableField: {
+         id: 'fld_message', name: 'Completion message', description: null,
+         isComputed: false, isPrimaryField: false, config: { type: 'singleLineText', options: null },
+     } } };
+     const projection = forms.projectFormCompletion({ configuration, language: 'en',
+         filteredValues: values, unfilteredValues: values, fields, linkedTableStates: {} });
+     assert.equal(projection.message.text, message);
+     assert.equal(projection.message.format, 'text');
+     const mountedAt = Date.now();
+     const navigations = [];
+     await React.act(async () => root.render(h(ui.CompleteFormCompletion, {
+         key: 'immediate-mixed-delay', configuration, projection, canSubmit: true,
+         onCommand(action) {
+             assert.equal(action, 'navigate');
+             const commands = forms.projectFormCompletionNavigation({
+                 currentURL: domWindow.location.href, redirectURL: projection.redirectURL, inIframe: false,
+             });
+             return forms.dispatchFormCompletionCommands(commands, {
+                 isCurrent: () => true,
+                 dispatch(command) { navigations.push({ ...command, elapsedMilliseconds: Date.now() - mountedAt }); },
+             });
+         },
+     })));
+     const expected = [{ type: 'navigate', route: 'self', url: '/thanks', elapsedMilliseconds: 0 }];
+     await React.act(async () => mock.timers.tick(0));
+     immediateRedirect.atZero = [...navigations];
+     assert.deepEqual(immediateRedirect.atZero, expected);
+     await React.act(async () => mock.timers.tick(5000));
+     immediateRedirect.afterFiveSeconds = [...navigations];
+     assert.deepEqual(immediateRedirect.afterFiveSeconds, expected);
  } finally {
      try {
          await React.act(async () => root.render(null));
@@ -241,7 +325,7 @@ try {
  assert.deepEqual({ submits, writes }, { submits: 0, writes: 0 });
  await React.act(async()=>root.unmount());root=undefined;
  assert.equal(domWindow.location.href,'https://consumer.invalid/form/rec123');assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);
- console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks,footerCases,successCases,delayedConfirmations}));
+ console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks,footerCases,successCases,collaboratorRollupMessages,delayedConfirmations,immediateRedirect}));
 } finally {
  if(root)await React.act(async()=>root.unmount());
  keys.forEach((key,index)=>{if(originals[index])Object.defineProperty(globalThis,key,originals[index]);else Reflect.deleteProperty(globalThis,key);});

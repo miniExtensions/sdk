@@ -1,7 +1,10 @@
 import type { AirtableField, AirtableValue } from '../formulas/types.js';
 import { getReadableStringFromAirtableValue } from '../formulas/valueConversion.js';
 import { hasRenderableHTMLContent } from '../react/html/sanitizeHTML.js';
-import { removeFormTitleMarkdown } from '../formulas/removeMarkdown.js';
+import {
+    removeFormTitleMarkdown,
+    removeRichTextTitleMarkdown,
+} from '../formulas/removeMarkdown.js';
 
 /** One current, condition-filtered field; never a record store or linked cache. */
 export type FormDisplayField =
@@ -61,6 +64,11 @@ export function resolveFormHeaderTitle(
         return source.value?.trim() ? source.value : extensionName;
     if (source.field.status === 'missing') return extensionName;
     if (source.field.value == null) return '';
+    if (
+        source.field.field.config.type === 'richText' &&
+        typeof source.field.value === 'string'
+    )
+        return removeRichTextTitleMarkdown(source.field.value);
     const title = readable(source.field);
     return source.field.field.config.type === 'formula'
         ? removeFormTitleMarkdown(title)

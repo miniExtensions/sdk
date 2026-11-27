@@ -503,6 +503,83 @@ describe('actual starter exact seven peer Portal detail diagnostics', () => {
 });
 
 describe('Portal row summaries use returned display policy', () => {
+    it('formats physical Percent cells without changing stored fractions', async (test) => {
+        const returned = listPage();
+        const state = returned.tableIdsToLinkedTableStates[tableId]!;
+        const columns = [
+            { id: 'fld_tenths', name: 'Tenths', precision: 1, value: 0.126 },
+            { id: 'fld_whole', name: 'Whole', precision: 0, value: 0.126 },
+            { id: 'fld_number', name: 'Number', value: 0.126 },
+            { id: 'fld_zero', name: 'Zero', precision: 0, value: 0 },
+            { id: 'fld_blank', name: 'Blank', precision: 1, value: null },
+            {
+                id: 'fld_masked',
+                name: 'Masked',
+                precision: 1,
+                value: 0.875,
+                masked: true,
+            },
+        ];
+        state.airtableFields = columns.map(({ id, name, precision }) => ({
+            ...physicalField(),
+            id,
+            name,
+            config:
+                precision === undefined
+                    ? {
+                          type: AirtableFieldType.NUMBER,
+                          options: { precision: 0 },
+                      }
+                    : {
+                          type: AirtableFieldType.PERCENT,
+                          options: { precision },
+                      },
+        }));
+        state.recordIdsToAirtableRecords[recordId]!.fields = Object.fromEntries(
+            columns.map(({ id, value }) => [id, value])
+        );
+        returned.customViewDetailFields!.fld_children = columns.map(
+            ({ id, name, masked }) => ({
+                ...detailField(),
+                fieldId: id,
+                fieldName: name,
+                childFormField: null,
+                fieldIsInEditingChildForm: false,
+                miniExtConfig: masked ? { obscurePassword: true } : {},
+            })
+        );
+        const before = structuredClone(returned);
+        const fixture = await mount(test, returned);
+        const node: HTMLElement = fixture.view.node;
+        const table = node.querySelector('table');
+        assert.ok(table);
+        assert.deepEqual(
+            Array.from(
+                table.querySelectorAll('thead th'),
+                (cell) => cell.textContent
+            ),
+            [...columns.map(({ name }) => name), 'Actions']
+        );
+        assert.deepEqual(fixture.routes, [
+            'fetchRecordsForLinkedTableOnPortal',
+        ]);
+        assert.deepEqual(fixture.saves, []);
+        assert.deepEqual(returned, before);
+        const cells = Array.from(table.querySelectorAll('tbody td')).slice(
+            0,
+            columns.length
+        );
+        assert.deepEqual(
+            cells.map((cell) =>
+                Array.from(cell.childNodes)
+                    .filter((node) => node.nodeType === 3)
+                    .map((node) => node.textContent)
+                    .join('')
+            ),
+            ['12.6%', '13%', '0.126', '0%', '', '••••••••']
+        );
+    });
+
     const cases: {
         name: string;
         config: unknown;

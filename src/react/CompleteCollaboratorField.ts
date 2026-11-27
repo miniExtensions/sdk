@@ -116,6 +116,26 @@ const stop = (event: SyntheticEvent) => event.stopPropagation();
 const sameValues = <T>(a: readonly T[], b: readonly T[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);
 
+function sameCollaboratorValues(
+    current: readonly CompleteCollaborator[],
+    proposed: readonly CompleteCollaborator[]
+) {
+    return (
+        current.length === proposed.length &&
+        current.every((person, index) => {
+            const other = proposed[index];
+            return (
+                person === other ||
+                (other !== undefined &&
+                    person.id === other.id &&
+                    person.name === other.name &&
+                    person.email === other.email &&
+                    person.profilePicUrl === other.profilePicUrl)
+            );
+        })
+    );
+}
+
 // Fuse 6's legacy declarations are interpreted differently by NodeNext and
 // CommonJS consumers. Both installed runtimes expose this original constructor.
 function isFuseConstructor(
@@ -275,7 +295,7 @@ function CollaboratorControl<T extends CompleteCollaborator>(
     const [picker, setPicker] = useState<PickerRuntime | null>(null);
     const [loadError, setLoadError] = useState<{ error: unknown } | null>(null);
     const readyFocus = useRef<{
-        proposal: readonly T[];
+        accepts(value: readonly T[]): boolean;
         from: Element | null;
         cleanup(): void;
     } | null>(null);
@@ -286,8 +306,9 @@ function CollaboratorControl<T extends CompleteCollaborator>(
     };
     const [, reconcileFocus] = useState(0);
     const focusRequest = useRef<{
-        proposal: readonly T[];
+        accepts(value: readonly T[]): boolean;
         target: 'selector' | 'remove';
+        from?: Element | null;
     } | null>(null);
     const useCommitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
@@ -319,12 +340,22 @@ function CollaboratorControl<T extends CompleteCollaborator>(
         if (accepted.current !== value || revoked.current) return null;
         return value;
     };
-    const propose = (next: T[], live: ControlProps<T>) => {
+    const propose = (next: T[], live: ControlProps<T>, removal = false) => {
         if (current() !== live) return;
         clearReadyFocus();
+        const target = live.single && next.length ? 'remove' : 'selector';
         focusRequest.current = {
-            proposal: next,
-            target: live.single && next.length ? 'remove' : 'selector',
+            target,
+            from: removal
+                ? root.current?.ownerDocument.activeElement
+                : undefined,
+            accepts(value) {
+                // Hosts may copy a selected person or the survivors of a removal.
+                if (target === 'remove') return value[0]?.id === next[0]?.id;
+                return removal
+                    ? sameCollaboratorValues(value, next)
+                    : sameValues(value, next);
+            },
         };
         try {
             // Canonical selection is never stored here, even on refusal/throw.
@@ -342,7 +373,11 @@ function CollaboratorControl<T extends CompleteCollaborator>(
         const live = current();
         if (!live || !live.value.some((value) => value.id === collaboratorId))
             return;
-        propose(removeCollaboratorSelection(live.value, collaboratorId), live);
+        propose(
+            removeCollaboratorSelection(live.value, collaboratorId),
+            live,
+            true
+        );
     };
     const choose = (proposal: T[]) => {
         const live = current();
@@ -371,13 +406,15 @@ function CollaboratorControl<T extends CompleteCollaborator>(
             clearReadyFocus();
             const live = current();
             // Refusal consumes the intent here; later external values cannot focus.
-            if (!live) return;
-            // An accepted single selection can be returned as a copy by the host.
-            const acceptedProposal =
-                request.target === 'remove'
-                    ? live.value[0]?.id === request.proposal[0]?.id
-                    : sameValues(live.value, request.proposal);
-            if (!acceptedProposal) return;
+            if (!live || !request.accepts(live.value)) return;
+            const document = root.current?.ownerDocument;
+            if (
+                request.from !== undefined &&
+                document &&
+                document.activeElement !== request.from &&
+                document.activeElement !== document.body
+            )
+                return;
             const target =
                 request.target === 'selector'
                     ? input.current
@@ -388,11 +425,10 @@ function CollaboratorControl<T extends CompleteCollaborator>(
             else if (request.target === 'selector' && !picker) {
                 // This write was already accepted. Wait only for its real control,
                 // and never take focus back after the user moved elsewhere.
-                const document = root.current?.ownerDocument;
                 if (document) {
                     const cancel = () => clearReadyFocus();
                     readyFocus.current = {
-                        proposal: request.proposal,
+                        accepts: request.accepts,
                         from: document.activeElement,
                         cleanup: () =>
                             document.removeEventListener(
@@ -413,7 +449,7 @@ function CollaboratorControl<T extends CompleteCollaborator>(
         const live = current();
         if (
             !live ||
-            !sameValues(live.value, waiting.proposal) ||
+            !waiting.accepts(live.value) ||
             root.current?.ownerDocument.activeElement !== waiting.from
         ) {
             clearReadyFocus();

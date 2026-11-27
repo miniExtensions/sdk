@@ -915,6 +915,80 @@ describe(
             assert.equal(h.saves.length, 0);
         });
 
+        for (const reselect of [true, false])
+            it(`Remember Title selection ${reselect ? 'preserves a reselected answer' : 'clears an answer left unchecked'} after a held cleanup`, async (test) => {
+                const h = await fixture(test);
+                await h.rememberTitle();
+                edit(h.window, 'fld_unselected', omittedAnswer);
+                await h.locks.settle();
+                const remembered = progressEntries(h.window);
+                const reads = h.reads.length;
+
+                const release = h.locks.hold();
+                test.after(release);
+                const titlePreference = checkbox(h.window, 'Remember Title');
+                assert.equal(titlePreference.checked, true);
+                titlePreference.checked = false;
+                titlePreference.dispatchEvent(
+                    new h.window.Event('change', { bubbles: true })
+                );
+                await waitFor(() => h.locks.waiting === 1);
+                assert.deepEqual(progressEntries(h.window), remembered);
+                if (reselect) selectCheckbox(h.window, 'Remember Title');
+                assert.equal(
+                    checkbox(h.window, 'Remember Title').checked,
+                    reselect
+                );
+                release();
+                await h.locks.settle();
+
+                assert.deepEqual(
+                    progressEntries(h.window),
+                    reselect ? remembered : []
+                );
+                assert.equal(h.reads.length, reads);
+                assert.equal(h.saves.length, 0);
+                assert.equal(
+                    fieldInput(h.window, 'fld_unselected').value,
+                    omittedAnswer
+                );
+
+                await h.connect();
+                assert.equal(fieldInput(h.window).value, 'Initial title');
+                if (reselect) {
+                    await h.chooseTitle();
+                    const beforeRestore = h.reads.length;
+                    assert.equal(fieldInput(h.window).value, 'Initial title');
+                    button(h.window, 'Restore remembered answers').click();
+                    await waitFor(
+                        () =>
+                            h.reads.length === beforeRestore + 1 &&
+                            idle(h.window)
+                    );
+                    assert.deepEqual(
+                        (h.reads.at(-1)!.context as Record<string, unknown>)
+                            .localStorageRecord,
+                        { fld_title: rememberedTitle }
+                    );
+                    assert.equal(fieldInput(h.window).value, rememberedTitle);
+                } else {
+                    selectCheckbox(
+                        h.window,
+                        'Remember selected answers in this tab'
+                    );
+                    assert.equal(
+                        button(h.window, 'Restore remembered answers').disabled,
+                        true
+                    );
+                    assert.deepEqual(progressEntries(h.window), []);
+                }
+                assert.equal(
+                    fieldInput(h.window, 'fld_unselected').value,
+                    'Initial unselected answer'
+                );
+                assert.equal(h.saves.length, 0);
+            });
+
         it('denied progress cleanup prevents Save transport and retains the current answers', async (test) => {
             const h = await fixture(test);
             await h.rememberTitle();

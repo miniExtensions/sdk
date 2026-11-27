@@ -31,7 +31,10 @@ import {
     type PortalCollectionCriteria,
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
-import { getFormattedDuration } from '@miniextensions/sdk/formulas';
+import {
+    formatAirtablePrimitive,
+    getFormattedDuration,
+} from '@miniextensions/sdk/formulas';
 import { button, element, labeled } from './dom.js';
 import { createLinkedPickerPresentation } from './linkedPickerPresentation.js';
 import {
@@ -1533,6 +1536,17 @@ export const createPortalView = (options: {
                                     config.options.durationFormat,
                                     true
                                 );
+                            }
+                            if (
+                                config.type === AirtableFieldType.PERCENT &&
+                                typeof value === 'number' &&
+                                Number.isFinite(value)
+                            ) {
+                                return formatAirtablePrimitive({
+                                    value,
+                                    airtableFieldConfig: config,
+                                    fieldName: recordField.name,
+                                });
                             }
                             return displayValue(value);
                         },

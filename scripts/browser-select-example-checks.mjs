@@ -283,6 +283,16 @@ export async function checkBrowserSelectExample({
             } else if (scenario.maximum || scenario.adding) {
                 assert(choice);
                 choice.value = 'Green';
+                const enter = new window.KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    bubbles: true,
+                    cancelable: true,
+                });
+                choice.dispatchEvent(enter);
+                assert.equal(enter.defaultPrevented, true);
+                assert.equal(choice.value, 'Green');
+                assert.equal(choiceInputs.length, 0);
+                assert.equal(saves.length, 0);
                 button(window.document, 'Create choice').click();
                 if (scenario.maximum) {
                     await new Promise((resolve) => setImmediate(resolve));

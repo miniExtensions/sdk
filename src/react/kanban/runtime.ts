@@ -13,6 +13,7 @@ export {
     useSensor,
     MeasuringStrategy,
     defaultDropAnimationSideEffects,
+    defaultAnnouncements,
     closestCorners,
     KeyboardCode,
     type CancelDrop,

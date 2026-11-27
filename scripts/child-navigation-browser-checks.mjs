@@ -30,6 +30,8 @@ let submissions = 0;
 let frame = null;
 let icons;
 let heldFocus = null;
+let delayedOpen = false;
+let rejectOpen;
 document.querySelector('form').addEventListener('submit', (event) => {
     event.preventDefault();
     submissions++;
@@ -50,6 +52,8 @@ const props = {
         const session = findAdjacentChildSession(records, request);
         if (!session) throw Error('Missing synthetic target');
         opens.push({type:request.type, recordId:request.recordId, session});
+        if (delayedOpen)
+            return new Promise((_, reject) => { rejectOpen = reject; });
     },
 };
 const render = () => flushSync(() => root.render(
@@ -78,6 +82,8 @@ globalThis.adjacentNavigation = {
         render();
     },
     retainFocus: () => { heldFocus = document.activeElement; },
+    delayOpen: () => { delayedOpen = true; },
+    rejectOpen: () => rejectOpen(new Error('Synthetic rejected open')),
     unmount: () => { root.unmount(); },
     async resolve(index, accept) {
         if (!dismissals[index]) throw Error('No dismissal');
@@ -98,6 +104,225 @@ globalThis.adjacentNavigation = {
     }),
 };
 `;
+
+async function checkBoundaryKeyboardFocus({
+    context,
+    origin,
+    evidence,
+    pageErrors,
+}) {
+    evidence.boundaryFocus = [];
+    for (const [initialName, reverseName, direction, reverse, edge] of [
+        ['Suivant', 'Précédent', 'next', 'previous', 'C'],
+        ['Précédent', 'Suivant', 'previous', 'next', 'A'],
+    ]) {
+        const page = await context.newPage();
+        try {
+            page.setDefaultTimeout(5000);
+            page.on('pageerror', (error) => pageErrors.push(error.message));
+            await page.goto(origin);
+            const initial = page.getByRole('button', {
+                name: initialName,
+                exact: true,
+            });
+            const opposite = page.getByRole('button', {
+                name: reverseName,
+                exact: true,
+            });
+            const summary = () =>
+                page.evaluate(() => globalThis.adjacentNavigation.summary());
+            const approve = (index) =>
+                page.evaluate(
+                    (index) =>
+                        globalThis.adjacentNavigation.resolve(index, true),
+                    index
+                );
+            const offer = (record) =>
+                page.evaluate(
+                    (record) => globalThis.adjacentNavigation.offer(record),
+                    record
+                );
+            const waitForDismissal = (count) =>
+                page.waitForFunction(
+                    (count) =>
+                        globalThis.adjacentNavigation.summary().dismissals
+                            .length === count,
+                    count
+                );
+            await initial.focus();
+            await page.keyboard.press('Enter');
+            await waitForDismissal(1);
+            await approve(0);
+            const first = {
+                type: direction,
+                recordId: edge,
+                session: 'session' + edge,
+            };
+            assert.deepEqual((await summary()).opens, [first]);
+            await offer(edge);
+            assert.equal(await initial.isDisabled(), true);
+            assert.equal(await opposite.isEnabled(), true);
+            await page.evaluate(
+                () =>
+                    new Promise((resolve) =>
+                        requestAnimationFrame(() =>
+                            requestAnimationFrame(resolve)
+                        )
+                    )
+            );
+            const active = await page.evaluate(() => {
+                const node = document.activeElement;
+                return node === document.body
+                    ? 'BODY'
+                    : node.getAttribute('aria-label') || node.textContent;
+            });
+            const item = {
+                edge,
+                active,
+                expected: reverseName,
+                returned: false,
+            };
+            evidence.boundaryFocus.push(item);
+            if (active === reverseName) {
+                await page.keyboard.press('Enter');
+                await waitForDismissal(2);
+                await approve(1);
+                assert.deepEqual((await summary()).opens, [
+                    first,
+                    { type: reverse, recordId: 'B', session: 'sessionB' },
+                ]);
+                await offer('B');
+                item.returned = true;
+            }
+            assert.equal((await summary()).submissions, 0);
+        } finally {
+            await page.close();
+        }
+    }
+    assert.deepEqual(
+        evidence.boundaryFocus.map(({ active, returned }) => [
+            active,
+            returned,
+        ]),
+        [
+            ['Précédent', true],
+            ['Suivant', true],
+        ],
+        'Keyboard navigation should focus the available reverse arrow at both boundaries'
+    );
+}
+
+async function checkBoundaryControls({
+    context,
+    origin,
+    evidence,
+    pageErrors,
+}) {
+    evidence.boundaryControls = [];
+    for (const control of [
+        'focus moved',
+        'pointer',
+        'rejected open',
+        'unrelated frame',
+        'removed frame',
+    ]) {
+        const page = await context.newPage();
+        try {
+            page.setDefaultTimeout(5000);
+            page.on('pageerror', (error) => pageErrors.push(error.message));
+            await page.goto(origin);
+            const next = page.getByRole('button', {
+                name: 'Suivant',
+                exact: true,
+            });
+            const previous = page.getByRole('button', {
+                name: 'Précédent',
+                exact: true,
+            });
+            if (control === 'rejected open')
+                await page.evaluate(() =>
+                    globalThis.adjacentNavigation.delayOpen()
+                );
+            if (control === 'pointer') await next.click();
+            else {
+                await next.focus();
+                await page.keyboard.press('Enter');
+            }
+            await page.waitForFunction(
+                () =>
+                    globalThis.adjacentNavigation.summary().dismissals
+                        .length === 1
+            );
+            await page.evaluate(() =>
+                globalThis.adjacentNavigation.resolve(0, true)
+            );
+            assert.deepEqual(
+                await page.evaluate(
+                    () => globalThis.adjacentNavigation.summary().opens
+                ),
+                [{ type: 'next', recordId: 'C', session: 'sessionC' }]
+            );
+
+            if (control === 'focus moved') {
+                await page.evaluate(() => {
+                    const outside = document.createElement('button');
+                    outside.type = 'button';
+                    outside.textContent = 'Outside navigation';
+                    document.querySelector('form').append(outside);
+                });
+                await page.keyboard.press('Tab');
+                const outside = page.getByRole('button', {
+                    name: 'Outside navigation',
+                    exact: true,
+                });
+                assert.equal(
+                    await outside.evaluate(
+                        (node) => node === document.activeElement
+                    ),
+                    true
+                );
+                await outside.evaluate((node) => node.remove());
+            }
+            if (control === 'unrelated frame')
+                await page.evaluate(() =>
+                    globalThis.adjacentNavigation.offer('A')
+                );
+            if (control === 'removed frame')
+                await page.evaluate(() =>
+                    globalThis.adjacentNavigation.offer(null)
+                );
+            await page.evaluate(() => globalThis.adjacentNavigation.offer('C'));
+            if (control === 'rejected open')
+                await page.evaluate(() =>
+                    globalThis.adjacentNavigation.rejectOpen()
+                );
+            await page.evaluate(
+                () =>
+                    new Promise((resolve) =>
+                        requestAnimationFrame(() =>
+                            requestAnimationFrame(resolve)
+                        )
+                    )
+            );
+            assert.equal(await previous.isEnabled(), true);
+            assert.equal(
+                await previous.evaluate(
+                    (node) => node === document.activeElement
+                ),
+                false,
+                control
+            );
+            const result = await page.evaluate(() =>
+                globalThis.adjacentNavigation.summary()
+            );
+            assert.equal(result.opens.length, 1);
+            assert.equal(result.submissions, 0);
+            evidence.boundaryControls.push({ control, passed: true });
+        } finally {
+            await page.close();
+        }
+    }
+}
 
 export async function checkPortalSidePanelNavigationBrowser({
     browser,
@@ -267,6 +492,13 @@ export async function checkPortalSidePanelNavigationBrowser({
         assert.deepEqual(result.opens, opened);
         assert.equal(result.dismissals[5].aborted, true);
         assert.equal(result.submissions, 0);
+        await checkBoundaryKeyboardFocus({
+            context,
+            origin,
+            evidence,
+            pageErrors,
+        });
+        await checkBoundaryControls({ context, origin, evidence, pageErrors });
         assert.deepEqual(writes, []);
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(blockedRequests, []);

@@ -202,10 +202,13 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
                     Array.isArray(value) &&
                     config.type === AirtableFieldType.ROLLUP &&
                     config.options.isValid &&
-                    config.options.result.type ===
-                        AirtableFieldType.MULTIPLE_SELECTS
+                    (config.options.result.type ===
+                        AirtableFieldType.MULTIPLE_SELECTS ||
+                        (input.admission.cohort === 'portal-grid' &&
+                            config.options.result.type ===
+                                AirtableFieldType.MULTIPLE_RECORD_LINKS))
                 ) {
-                    // Multiple Select formatting needs the complete array.
+                    // Choice and linked-record formatting need the complete array.
                     fieldConfig = config.options.result;
                 } else if (
                     input.admission.cohort === 'portal-grid' &&

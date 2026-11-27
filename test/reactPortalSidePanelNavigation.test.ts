@@ -169,6 +169,62 @@ it('rejects a retired host currentness lease, cancelled dismissal and completion
     assert.deepEqual(opened, []);
 });
 
+for (const outcome of ['opened', 'rejected', 'focus moved'] as const)
+    it(`hands off the keyboard arrow only after its boundary open succeeds: ${outcome}`, async (t) => {
+        const fixture = await htmlPresentationFixture(t);
+        const completion = deferred();
+        const opened: string[] = [];
+        const props: PortalSidePanelNavigationProps = {
+            ...defaults,
+            async openAdjacent(request) {
+                opened.push(request.recordId);
+                if (!(await completion.promise))
+                    throw new Error('Synthetic open rejection');
+            },
+        };
+        const render = (frame: PortalSidePanelNavigationFrame) =>
+            fixture.render(h(PortalSidePanelNavigation, { ...props, frame }));
+        await render(middle);
+        const [previous, next] = fixture.container.querySelectorAll('button');
+        assert(previous && next);
+        await act(async () => {
+            next.focus();
+            next.dispatchEvent(
+                new fixture.window.KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    bubbles: true,
+                })
+            );
+            next.dispatchEvent(
+                new fixture.window.MouseEvent('click', {
+                    bubbles: true,
+                    detail: 0,
+                })
+            );
+        });
+        assert.deepEqual(opened, ['C']);
+        const document = fixture.window.document;
+        if (outcome === 'focus moved') {
+            const outside = document.createElement('button');
+            document.body.append(outside);
+            outside.focus();
+            assert.ok(document.activeElement === outside);
+            outside.remove();
+        }
+        await render({
+            ownerToken: {},
+            sourceExtensionSessionId: 'sessionC',
+            sourceRecordId: 'C',
+            previousRecordId: 'B',
+            nextRecordId: null,
+        });
+        assert.equal(next.disabled, true);
+        assert.ok(document.activeElement !== previous);
+        await act(async () => completion.resolve(outcome !== 'rejected'));
+        assert.equal(document.activeElement === previous, outcome === 'opened');
+        fixture.unchangedEffects();
+    });
+
 it('drops a pending key or pointer press when the exact offered target changes', async (t) => {
     const fixture = await htmlPresentationFixture(t);
     const opened: string[] = [];

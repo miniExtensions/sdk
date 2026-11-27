@@ -1,6 +1,8 @@
 import {
     createElement as h,
     Fragment,
+    useRef,
+    useState,
     type FormEventHandler,
     type ReactElement,
     type ReactNode,
@@ -17,6 +19,7 @@ import {
 } from './CompleteFormHeader.js';
 import {
     CompleteFormPageNavigation,
+    FormNextKeyboardFocusContext,
     FormPageNavigationButton,
     type CompleteFormPageNavigationProps,
     type FormPageNavigationButtonProps,
@@ -132,6 +135,13 @@ function renderItem(item: FormCompositionItem): ReactElement {
 export function CompleteFormComposition<CaptchaOptions = unknown>(
     props: CompleteFormCompositionProps<CaptchaOptions>
 ): ReactElement {
+    const keyboardClick = useRef<{
+        button: HTMLButtonElement;
+        event: MouseEvent;
+    } | null>(null);
+    const [keyboardNext, setKeyboardNext] = useState<{
+        submitter: HTMLButtonElement;
+    } | null>(null);
     const { primary } = props;
     let primaryControl: ReactElement | null = null;
     let admitted = false;
@@ -145,6 +155,22 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
             loading: primary.loading,
             disabled: primary.disabled,
             className: primary.className,
+            onClick(event) {
+                const button = event.currentTarget;
+                if (
+                    event.detail !== 0 ||
+                    button.ownerDocument.activeElement !== button
+                )
+                    return;
+                const activation = { button, event: event.nativeEvent };
+                keyboardClick.current = activation;
+                // The browser can run microtasks before the click's submit
+                // default action. Expire an unsubmitted click in the next task.
+                setTimeout(() => {
+                    if (keyboardClick.current === activation)
+                        keyboardClick.current = null;
+                }, 0);
+            },
         });
     } else if (primary?.kind === 'terminal') {
         admitted = primary.canSubmit && !primary.saving;
@@ -158,9 +184,19 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
     }
 
     const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
+        const activation = keyboardClick.current;
+        keyboardClick.current = null;
         if (event.defaultPrevented) return;
         event.preventDefault();
-        if (admitted) props.onSubmit(event);
+        if (!admitted) return;
+        if (
+            primary?.kind === 'next' &&
+            activation &&
+            !activation.event.defaultPrevented &&
+            (event.nativeEvent as SubmitEvent).submitter === activation.button
+        )
+            setKeyboardNext({ submitter: activation.button });
+        props.onSubmit(event);
     };
     const controls = h(
         'div',
@@ -207,9 +243,13 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
             },
             props.slots?.header ??
                 (props.header && h(CompleteFormHeader, props.header)),
-            props.slots?.pageNavigation ??
-                (props.pageNavigation &&
-                    h(CompleteFormPageNavigation, props.pageNavigation)),
+            h(
+                FormNextKeyboardFocusContext.Provider,
+                { value: keyboardNext },
+                props.slots?.pageNavigation ??
+                    (props.pageNavigation &&
+                        h(CompleteFormPageNavigation, props.pageNavigation))
+            ),
             h('form', {
                 id: props.formId,
                 noValidate: true,

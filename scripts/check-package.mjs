@@ -5037,7 +5037,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(nativePagesProof.tests, 136);
+    assert.equal(nativePagesProof.tests, 140);
     assert.equal(nativePagesProof.hydrationProfiles, 4);
     assert.equal(nativePagesProof.hydrationChecks, 52);
     assert.equal(nativePagesProof.cleanup, 'completed');

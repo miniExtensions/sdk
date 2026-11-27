@@ -120,7 +120,7 @@ export function PortalVisitorViewButtons({
                 h(
                     'span',
                     { className: 'me-portal-visitor-view-button__label' },
-                    label ?? unnamedViewLabel
+                    label?.trim() ? label : unnamedViewLabel
                 )
             )
         )

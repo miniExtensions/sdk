@@ -577,6 +577,64 @@ it('keeps empty currency symbols and empty error messages associated with the ac
     assert.deepEqual(f.writes, []);
 });
 
+it('describes the focused Form Percent input with its unit, help and error', async (t) => {
+    const f = await fixture(t, {
+        kind: 'percent',
+        value: 0.425,
+        separator: 'period-comma',
+        error: 'Check the percentage',
+    });
+    const help = f.window.document.createElement('p');
+    help.id = 'native-description';
+    help.textContent = 'Enter the allocation';
+    f.window.document.body.append(help);
+    const input = f.input();
+    const description = () =>
+        (input.getAttribute('aria-describedby') ?? '').split(' ').map((id) => {
+            const target = f.window.document.getElementById(id);
+            assert.ok(target, `Missing description element ${id}`);
+            return target.textContent;
+        });
+
+    await f.focus();
+    assert.equal(f.window.document.activeElement, input);
+    assert.equal(
+        f.container.querySelector('label[for="numeric-input"]')?.textContent,
+        'Amount'
+    );
+    assert.equal(input.value, '42,50');
+    assert.deepEqual(description(), [
+        '%',
+        'Enter the allocation',
+        'Check the percentage',
+    ]);
+    assert.equal(input.getAttribute('aria-invalid'), 'true');
+
+    f.state.error = null;
+    await f.render();
+    assert.equal(f.input(), input);
+    assert.equal(f.window.document.activeElement, input);
+    assert.equal(input.value, '42,50');
+    assert.deepEqual(description(), ['%', 'Enter the allocation']);
+    assert.equal(input.getAttribute('aria-invalid'), 'false');
+    assert.equal(f.state.value, 0.425);
+    assert.deepEqual(f.writes, []);
+});
+
+it('keeps the Form Number input description free of a unit', async (t) => {
+    const f = await fixture(t, { value: 12 });
+    await f.focus();
+    assert.equal(
+        f.input().getAttribute('aria-describedby'),
+        'native-description'
+    );
+    assert.equal(
+        f.container.querySelector('.mx-sdk-localized-numeric-symbol'),
+        null
+    );
+    assert.deepEqual(f.writes, []);
+});
+
 it('preserves Percent signed zero and fractional precision instead of Number rounding', async (t) => {
     const f = await fixture(t, {
         kind: 'percent',

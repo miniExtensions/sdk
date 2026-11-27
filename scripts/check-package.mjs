@@ -4858,7 +4858,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     consumerDirectory: temporaryDirectory,
                     happyDomModulePath: require.resolve('happy-dom'),
                 }),
-                33
+                35
             );
             await checkFieldBindingRecipe({
                 consumerDirectory: directory,
@@ -5037,7 +5037,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(nativePagesProof.tests, 136);
+    assert.equal(nativePagesProof.tests, 140);
     assert.equal(nativePagesProof.hydrationProfiles, 4);
     assert.equal(nativePagesProof.hydrationChecks, 52);
     assert.equal(nativePagesProof.cleanup, 'completed');
@@ -5052,7 +5052,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     await stop();
     assert.equal(gridProof.profiles.length, 4);
     assert.equal(gridProof.dateTimeCases, 8);
-    assert.equal(gridProof.tests, 88);
+    assert.equal(gridProof.tests, 92);
     assert.equal(gridProof.textCellTests, 24);
     assert.equal(gridProof.multilineCellTests, 20);
     assert.equal(gridProof.ratingCellTests, 32);

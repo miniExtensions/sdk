@@ -372,7 +372,11 @@ export function CompleteLocalizedNumericField({
               ? '%'
               : '';
     const symbolId =
-        field.physicalKind === 'currency' ? `${id}-currency-symbol` : undefined;
+        field.physicalKind === 'currency'
+            ? `${id}-currency-symbol`
+            : field.physicalKind === 'percent' && field.context === 'form'
+              ? `${id}-percent-symbol`
+              : undefined;
     const error =
         field.error ??
         field.validation.map((item) => item.errorMessage).join('\n');

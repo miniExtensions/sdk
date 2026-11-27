@@ -254,6 +254,58 @@ for (const enableInlineEdit of [false, true]) {
     });
 }
 
+it('preserves a deferred URL correction through acknowledgment of the earlier edit', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const original = 'https://example.com/original';
+    const edited = 'https://example.com/edited';
+    const external = 'https://example.com/external';
+    const owner = { token: {}, isCurrent: () => true };
+    const render = (value: string) =>
+        f.render(
+            h(UrlField, {
+                mode: 'controlled',
+                value,
+                enableInlineEdit: true,
+                owner,
+                onChange: (next) => writes.push(next),
+            })
+        );
+
+    await render(external);
+    const input = f.input();
+    await render(original);
+    assert.equal(f.input(), input);
+    assert.equal(input.value, original);
+    await act(async () => input.focus());
+    await f.edit(edited);
+    assert.deepEqual(writes, []);
+    await act(async () => input.blur());
+    assert.deepEqual(writes, [edited]);
+
+    await act(async () => input.focus());
+    await f.edit(original);
+    await act(async () => input.blur());
+    const writesBeforeAcknowledgment = [...writes];
+
+    await render(edited);
+    assert.equal(f.input(), input);
+    assert.deepEqual(
+        { writes: writesBeforeAcknowledgment, visible: input.value },
+        { writes: [edited, original], visible: original }
+    );
+    await render(original);
+    assert.equal(input.value, original);
+    await act(async () => {
+        input.focus();
+        input.blur();
+    });
+    assert.deepEqual(writes, [edited, original]);
+
+    await f.render(null);
+    assert.deepEqual(writes, [edited, original]);
+});
+
 it('a dirty URL writer settles only for the same generation and Clear writes one empty string', async (t) => {
     const f = await fixture(t);
     const previous: string[] = [];

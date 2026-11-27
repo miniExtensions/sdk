@@ -68,6 +68,7 @@ it('server-renders a literal link or blank without mounting an unselected editor
 
 it('selects without writing and commits the literal email on ordinary Enter, not IME Enter', async (t) => {
     const fixture = await htmlPresentationFixture(t);
+    const recipient = 'order#42@example.com';
     const writes: string[] = [];
     let selections = 0;
     const editor = {
@@ -89,7 +90,7 @@ it('selects without writing and commits the literal email on ordinary Enter, not
     assert.deepEqual(writes, []);
 
     await fixture.render(grid({ editor, selected: true }));
-    const input = await change(fixture, edited);
+    const input = await change(fixture, recipient);
     assert.equal(input.type, 'email');
     assert.equal(input.getAttribute('aria-label'), 'Contact email');
     assert.equal(input.form, fixture.container);
@@ -103,12 +104,25 @@ it('selects without writing and commits the literal email on ordinary Enter, not
         });
         await act(async () => input.dispatchEvent(enter));
         assert.equal(enter.defaultPrevented, true);
-        assert.deepEqual(writes, isComposing ? [] : [edited]);
+        assert.deepEqual(writes, isComposing ? [] : [recipient]);
         assert.equal(
             Object.is(fixture.window.document.activeElement, input),
             isComposing
         );
     }
+    await fixture.render(
+        grid({ editor, value: recipient, displayText: recipient })
+    );
+    assert.equal(fixture.container.querySelector('input'), null);
+    const committedLink = fixture.container.querySelector('a');
+    assert.ok(committedLink);
+    assert.equal(committedLink.textContent, recipient);
+    const href = new URL(committedLink.href);
+    assert.equal(href.protocol, 'mailto:');
+    assert.equal(decodeURIComponent(href.pathname), recipient);
+    assert.equal(href.search, '');
+    assert.equal(href.hash, '');
+    assert.deepEqual(writes, [recipient]);
     fixture.unchangedEffects();
 });
 

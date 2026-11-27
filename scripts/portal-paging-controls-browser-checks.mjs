@@ -84,7 +84,7 @@ export async function checkPortalPagingControlsBrowser({
             if (request.url === '/') {
                 response.setHeader('content-type', 'text/html');
                 response.end(
-                    '<!doctype html><html><head><link rel="icon" href="data:,"><style>.paging-controls{position:relative;padding-top:32px}.paging-controls button{position:absolute;top:0;left:0;min-width:140px}</style><script defer src="/app.js"></script></head><body><form><main></main></form></body></html>'
+                    '<!doctype html><html><head><link rel="icon" href="data:,"><style>.paging-controls{position:relative;padding-top:32px}.paging-controls button{position:absolute;top:0;left:0;min-width:140px}</style><script defer src="/app.js"></script></head><body><form><main></main><button type="button">Outside paging</button></form></body></html>'
                 );
             } else if (request.url === '/app.js') {
                 response.setHeader('content-type', 'text/javascript');
@@ -116,6 +116,14 @@ export async function checkPortalPagingControlsBrowser({
         const retry = page.getByRole('button', { name: 'Reintentar' });
         const first = page.getByText('First', { exact: true });
         const status = () => page.evaluate(() => window.pagingProof.snapshot());
+        const pending = page.locator('button[aria-busy="true"][disabled]');
+        const focus = () =>
+            page.evaluate(() => {
+                const target = document.activeElement;
+                return target instanceof HTMLButtonElement
+                    ? target.textContent
+                    : target?.localName;
+            });
         await loadMore.waitFor();
         assert.equal((await status()).react, expectedReactVersion);
         assert.equal((await status()).requests.length, 0);
@@ -130,7 +138,9 @@ export async function checkPortalPagingControlsBrowser({
         });
         await page.mouse.up();
         assert.deepEqual((await status()).activations, []);
-        await loadMore.click();
+        await loadMore.focus();
+        await page.keyboard.press('Enter');
+        await pending.waitFor();
         assert.equal(await loadMore.isDisabled(), true);
         assert.equal(await first.isVisible(), true);
         assert.equal((await status()).requests.length, 1);
@@ -143,15 +153,26 @@ export async function checkPortalPagingControlsBrowser({
             'Next page unavailable'
         );
         assert.equal((await status()).requests.length, 1);
-        await retry.focus();
+        const retryFocus = await focus();
         await page.keyboard.press('Enter');
-        assert.deepEqual((await status()).requests, [
+        const keyboardRetry = await status();
+        evidence.keyboardRetry = {
+            focus: retryFocus,
+            requests: keyboardRetry.requests,
+            keyboard: keyboardRetry.keyboard,
+            firstRowVisible: await first.isVisible(),
+            submits: keyboardRetry.submits,
+        };
+        assert.equal(retryFocus, 'Reintentar');
+        assert.deepEqual(keyboardRetry.requests, [
             { intent: 'next-page', offset: 'page_2' },
             { intent: 'retry-next-page', offset: 'page_2' },
         ]);
-        assert.deepEqual((await status()).keyboard, [
+        assert.deepEqual(keyboardRetry.keyboard, [
+            { trusted: true, label: 'Más registros' },
             { trusted: true, label: 'Reintentar' },
         ]);
+        assert.equal(keyboardRetry.submits, 0);
         await retry.waitFor({ state: 'hidden' });
         assert.equal(await page.getByRole('alert').count(), 0);
         await page.evaluate(() => window.pagingProof.succeed());
@@ -242,6 +263,36 @@ export async function checkPortalPagingControlsBrowser({
             window.pagingProof.unmount()
         );
         assert.deepEqual(doubleClickSubscriptions, subscriptions);
+
+        const movedFocus = [];
+        for (const destination of ['Outside paging', 'body']) {
+            await page.reload();
+            await loadMore.waitFor();
+            await loadMore.focus();
+            await page.keyboard.press('Enter');
+            await pending.waitFor();
+            const outside = page.getByRole('button', {
+                name: 'Outside paging',
+            });
+            await outside.focus();
+            if (destination === 'body')
+                await outside.evaluate((button) => button.blur());
+            await page.evaluate(() => window.pagingProof.fail());
+            await retry.waitFor();
+            assert.equal(await focus(), destination);
+            await page.keyboard.press('Enter');
+            const { requests, submits } = await status();
+            assert.deepEqual(requests, [
+                { intent: 'next-page', offset: 'page_2' },
+            ]);
+            assert.equal(await first.isVisible(), true);
+            assert.equal(submits, 0);
+            movedFocus.push({ focus: destination, requests, submits });
+            assert.deepEqual(
+                await page.evaluate(() => window.pagingProof.unmount()),
+                subscriptions
+            );
+        }
         assert.deepEqual(remote, []);
         assert.deepEqual(transports, []);
         assert.deepEqual(errors, []);
@@ -253,6 +304,7 @@ export async function checkPortalPagingControlsBrowser({
                 afterIntentionalRetry: intentionalRetry.requests,
                 subscriptions: doubleClickSubscriptions,
             },
+            movedFocus,
             remote,
             transports,
             errors,

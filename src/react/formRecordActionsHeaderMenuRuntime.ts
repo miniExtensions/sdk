@@ -9,10 +9,24 @@ import {
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
     createElement as h,
+    forwardRef,
+    type ComponentPropsWithoutRef,
     type ReactElement,
     type ReactNode,
     type RefObject,
 } from 'react';
+
+const DeleteRecordMenuItemButton = forwardRef<
+    HTMLButtonElement,
+    ComponentPropsWithoutRef<'button'> & { 'data-unavailable'?: boolean }
+>(function DeleteRecordMenuItemButton(props, ref) {
+    // Apply the accessible state after Headless UI has merged its menu props.
+    return h('button', {
+        ...props,
+        ref,
+        'aria-disabled': props['data-unavailable'],
+    });
+});
 
 export type FormRecordActionsHeaderMenuRuntimeProps = Readonly<{
     label: string;
@@ -83,10 +97,13 @@ export function FormRecordActionsHeaderMenuRuntime({
             },
             items.map((item) =>
                 h(
-                    MenuItem<'button'>,
+                    MenuItem<'button' | typeof DeleteRecordMenuItemButton>,
                     {
                         key: item.kind,
-                        as: 'button',
+                        as:
+                            item.kind === 'delete'
+                                ? DeleteRecordMenuItemButton
+                                : 'button',
                         type: 'button',
                         className:
                             item.kind === 'delete'

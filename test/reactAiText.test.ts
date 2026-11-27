@@ -985,7 +985,8 @@ it('public controlled AI Text preserves converted literal/link output, locale an
     let activations = 0;
     const display = (
         value: string | null | undefined,
-        language: 'en' | 'fr' = 'en'
+        language: 'en' | 'fr' = 'en',
+        emptyLabel?: string
     ) =>
         h(
             'div',
@@ -994,12 +995,13 @@ it('public controlled AI Text preserves converted literal/link output, locale an
                 mode: 'controlled',
                 value,
                 language,
+                emptyLabel,
                 textSize: 'large',
                 layout: 'cell-short',
             })
         );
     const value = '<img src=x> AI Ω https://example.test/answer';
-    await f.render(display(value));
+    await f.render(display(value, 'en', 'Pas encore généré'));
     assert.equal(
         f.container.querySelector('p.read-only-text')?.textContent,
         value
@@ -1045,6 +1047,14 @@ it('public controlled AI Text preserves converted literal/link output, locale an
             'Pas de Valeur'
         );
         assert.equal(f.container.querySelector('a,input,button'), null);
+        for (const emptyLabel of ['Pas encore généré', '']) {
+            await f.render(display(empty, 'fr', emptyLabel));
+            const emptyState = f.container.querySelector(
+                '[data-testid="no-value-test-id"]'
+            );
+            assert.ok(emptyState);
+            assert.equal(emptyState.textContent, emptyLabel);
+        }
     }
     await f.render(display('  '));
     assert.equal(

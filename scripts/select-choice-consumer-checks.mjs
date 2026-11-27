@@ -50,7 +50,7 @@ export async function checkSelectChoiceConsumer({
         const { createElement, StrictMode, act } = require('react');
         const { createRoot } = require('react-dom/client');
         const fixture = (
-            config = {},
+            { choices = [{ id: 'sel_alpha', name: 'Alpha' }], ...config } = {},
             single = false,
             adapter = {},
             module = forms
@@ -70,9 +70,7 @@ export async function checkSelectChoiceConsumer({
                     description: null,
                     config: {
                         type,
-                        options: {
-                            choices: [{ id: 'sel_alpha', name: 'Alpha' }],
-                        },
+                        options: { choices },
                     },
                 },
                 miniExtConfig: { allowAddingNewOptions: true, ...config },
@@ -528,6 +526,111 @@ export async function checkSelectChoiceConsumer({
         assert(container.textContent.includes('Custom created-not-selected'));
         assert.deepEqual(unselectedBinding.getSnapshot().value, ['Alpha']);
         checks++;
+        await act(async () => root.unmount());
+        root = null;
+        owner.destroy();
+        for (const single of [true, false]) {
+            const names = ['Alpha', 'Beta', 'Gamma'];
+            const choices = names.map((name) => ({
+                id: `sel_${name.toLowerCase()}`,
+                name,
+            }));
+            const configured = fixture({ choices }, single);
+            const field = configured.owner.field('fld_choice');
+            const revision =
+                configured.owner.controller.getState().draftRevision;
+            const requests = [];
+            configured.client.forms.addSelectOption = async (input) => {
+                requests.push(input.newChoiceText);
+                const newChoice =
+                    input.newChoiceText === ' alpha '
+                        ? choices[0]
+                        : { id: 'sel_delta', name: 'Delta' };
+                return { newChoice };
+            };
+            const mount = async () => {
+                root = createRoot(container);
+                await act(async () =>
+                    root.render(
+                        createElement(api.SelectField, { binding: field })
+                    )
+                );
+            };
+            const order = () =>
+                [...container.querySelector('select').options]
+                    .map((item) => item.value)
+                    .filter(Boolean);
+            const schemaOrder = () =>
+                configured.owner
+                    .getLoaded()
+                    .payload.fieldIdsToSchemas.fld_choice.airtableField.config.options.choices.map(
+                        (item) => item.name
+                    );
+            const assertUnchanged = () => {
+                assert.deepEqual(
+                    schemaOrder(),
+                    names,
+                    'reused choice changes schema order'
+                );
+                assert.deepEqual(order(), names);
+                assert.deepEqual(
+                    field.getSnapshot().value,
+                    single ? 'Alpha' : ['Alpha']
+                );
+                assert.equal(
+                    configured.owner.controller.getState().draftRevision,
+                    revision
+                );
+                assert.equal(configured.saves.length, 0);
+            };
+            const add = async (name) => {
+                const input = container.querySelector('input');
+                await act(async () => {
+                    Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype,
+                        'value'
+                    ).set.call(input, name);
+                    input.dispatchEvent(
+                        new window.Event('input', { bubbles: true })
+                    );
+                    input.dispatchEvent(
+                        new window.Event('change', { bubbles: true })
+                    );
+                });
+                const button = [...container.querySelectorAll('button')].find(
+                    (item) => item.textContent === 'Create choice'
+                );
+                assert(button);
+                assert.equal(button.disabled, false);
+                await act(async () => button.click());
+            };
+            await mount();
+            assert.deepEqual(order(), names);
+            await add(' alpha ');
+            assert.deepEqual(requests, [' alpha ']);
+            assertUnchanged();
+            await act(async () => root.unmount());
+            await mount();
+            assertUnchanged();
+            await add('Delta');
+            assert.deepEqual(schemaOrder(), [...names, 'Delta']);
+            assert.deepEqual(
+                order(),
+                single
+                    ? [...names, 'Delta']
+                    : ['Alpha', 'Delta', 'Beta', 'Gamma']
+            );
+            assert.deepEqual(requests, [' alpha ', 'Delta']);
+            assert.deepEqual(
+                field.getSnapshot().value,
+                single ? 'Delta' : ['Alpha', 'Delta']
+            );
+            assert.equal(configured.saves.length, 0);
+            await act(async () => root.unmount());
+            root = null;
+            owner.destroy();
+            checks++;
+        }
         console.log(
             `[installed Add Choice] ${checks} checkpoints passed; synthetic dispatch only`
         );

@@ -238,6 +238,41 @@ for (const initial of [undefined, null, 0, 42, -0.125, 123456.7890123])
         );
     });
 
+it('public controlled AutoNumber honors custom empty labels and retains populated zero', async (t) => {
+    const f = await fixture(t, {}, 42);
+    const customLabel = 'Numéro indisponible';
+    const display = (value: string | null | undefined, emptyLabel?: string) =>
+        h(AutoNumberField, {
+            mode: 'controlled',
+            value,
+            language: 'fr',
+            emptyLabel,
+        });
+    for (const [emptyLabel, expected] of [
+        [undefined, 'Pas de Valeur'],
+        [customLabel, customLabel],
+        ['', ''],
+    ] as const) {
+        for (const value of [null, undefined, '']) {
+            await f.render(display(value, emptyLabel));
+            const emptyState = f.container.querySelector(
+                '[data-testid="no-value-test-id"]'
+            );
+            assert.ok(emptyState);
+            assert.equal(emptyState.textContent, expected);
+            assert.equal(f.container.querySelector('input,button'), null);
+        }
+    }
+    await f.render(display('0', customLabel));
+    assert.equal(f.container.textContent, '0');
+    assert.equal(
+        f.container.querySelector('[data-testid="no-value-test-id"]'),
+        null
+    );
+    assert.equal(f.binding.getSnapshot().value, 42);
+    assert.equal(f.binding.getSnapshot().dirty, false);
+});
+
 it('always disables direct helper props and never reads or invokes a forged editable capability', async (t) => {
     const f = await fixture(t, {}, 7);
     let reads = 0;

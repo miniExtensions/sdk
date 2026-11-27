@@ -205,9 +205,47 @@ export class GeneralPasteHandlerExtension extends Extension {
 
                         if (isUrl(text)) {
                             if (!state.selection.empty) {
-                                toggleMark(this.editor.schema.marks.link, {
-                                    href: text,
-                                })(state, dispatch);
+                                const link = this.editor.schema.marks.link;
+                                const { from, to, $from, $to } =
+                                    state.selection;
+                                const existingLink = link.isInSet(
+                                    $from.nodeAfter?.marks ?? []
+                                );
+                                if (existingLink && $from.sameParent($to)) {
+                                    let coversSelection = true;
+                                    state.doc.nodesBetween(from, to, (node) => {
+                                        if (
+                                            node.isInline &&
+                                            !existingLink.isInSet(node.marks)
+                                        ) {
+                                            coversSelection = false;
+                                        }
+                                        return coversSelection;
+                                    });
+                                    if (coversSelection) {
+                                        view.dispatch(
+                                            state.tr
+                                                .removeMark(
+                                                    from,
+                                                    to,
+                                                    existingLink
+                                                )
+                                                .addMark(
+                                                    from,
+                                                    to,
+                                                    link.create({
+                                                        ...existingLink.attrs,
+                                                        href: text,
+                                                    })
+                                                )
+                                        );
+                                        return true;
+                                    }
+                                }
+                                toggleMark(link, { href: text })(
+                                    state,
+                                    dispatch
+                                );
                                 return true;
                             }
 

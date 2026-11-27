@@ -651,6 +651,42 @@ it('settles pointer resize to measured geometry rather than accumulated delta', 
     f.unchangedEffects();
 });
 
+it('widens on a leftward drag and narrows on a rightward drag in an RTL Grid', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const changes: unknown[] = [];
+    const props = model({
+        columnWidths: { value: 180 },
+        onColumnWidthCommit: (change) => changes.push(change),
+    });
+    await f.render(h(ReadonlyPortalGrid, props));
+    const th = header(f);
+    th.style.direction = 'rtl';
+    Object.defineProperty(th, 'clientWidth', {
+        configurable: true,
+        get: () => Number.parseFloat(th.style.width),
+    });
+    const handle = th.querySelector('[role="separator"]');
+    assert.ok(handle);
+    for (const [end, width] of [
+        [253, 227],
+        [347, 180],
+    ] as const) {
+        const count = changes.length;
+        await pointer(f, handle, 'pointerdown', 300);
+        await pointer(f, f.window.document, 'pointermove', end);
+        assert.equal(th.clientWidth, width);
+        assert.equal(changes.length, count);
+        await pointer(f, f.window.document, 'pointerup', end);
+        assert.equal(changes.length, count + 1);
+        assert.deepEqual(changes.at(-1), { fieldId: 'value', width });
+        await f.render(
+            h(ReadonlyPortalGrid, { ...props, columnWidths: { value: width } })
+        );
+        assert.equal(th.clientWidth, width);
+    }
+    f.unchangedEffects();
+});
+
 it('commits the final measured width when pointer move and release share a React batch', async (t) => {
     const f = await htmlPresentationFixture(t);
     const changes: unknown[] = [];

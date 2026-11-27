@@ -26,6 +26,7 @@ export function ControlledAutoNumberField({
     textSize,
     layout,
     className,
+    emptyLabel,
 }: AutoNumberControlledProps): ReactNode {
     return createElement(CompleteReadOnlyTextField, {
         value,
@@ -33,6 +34,7 @@ export function ControlledAutoNumberField({
         textSize,
         layout,
         className,
+        emptyLabel,
     });
 }
 

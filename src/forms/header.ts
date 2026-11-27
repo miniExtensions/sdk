@@ -60,6 +60,7 @@ export function resolveFormHeaderTitle(
     if (source.type === 'static')
         return source.value?.trim() ? source.value : extensionName;
     if (source.field.status === 'missing') return extensionName;
+    if (source.field.value == null) return '';
     const title = readable(source.field);
     return source.field.field.config.type === 'formula'
         ? removeMarkdown(title)

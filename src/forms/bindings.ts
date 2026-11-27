@@ -36,7 +36,7 @@ import {
     type FormControllerSaveOptions,
     type FormControllerState,
 } from './controller.js';
-import { FormDraftStore } from './drafts.js';
+import { FormDraftStore, upsertSelectChoiceMetadata } from './drafts.js';
 import {
     openLoadedFormDraft,
     type FormValidationMessage,
@@ -986,12 +986,10 @@ export function createFormFieldBindings(
                         store.addChoice(handle, id, choice);
                         config.options = {
                             ...config.options,
-                            choices: [
-                                ...(config.options?.choices ?? []).filter(
-                                    (item) => item.id !== choice.id
-                                ),
-                                structuredClone(choice),
-                            ],
+                            choices: upsertSelectChoiceMetadata(
+                                config.options?.choices ?? [],
+                                choice
+                            ),
                         };
                         accepted();
                     };

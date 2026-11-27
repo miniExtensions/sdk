@@ -97,6 +97,19 @@ function UrlEditor(props: EditorProps): ReactNode {
     const [focused, setFocused] = useState(false);
     const [lease] = useState(() => ({ mounted: false }));
     const committed = useRef<EditorProps | null>(null);
+    const hostValue = props.value ?? '';
+    const [edits, setEdits] = useState(() => ({
+        hostValue,
+        pending: [] as string[],
+    }));
+    let pending = edits.pending;
+    if (props.enableInlineEdit && hostValue !== edits.hostValue) {
+        const acknowledged = pending.indexOf(hostValue);
+        // A host update outside this edit sequence replaces the pending value.
+        pending = acknowledged === -1 ? [] : pending.slice(acknowledged + 1);
+        setEdits({ hostValue, pending });
+    }
+    const value = pending.at(-1) ?? hostValue;
     const disabled =
         props.disabled === true ||
         (props.enableInlineEdit === true && props.owner == null);
@@ -142,6 +155,18 @@ function UrlEditor(props: EditorProps): ReactNode {
         writer(value);
     }
 
+    function publish(value: string) {
+        write(value, (next) => {
+            if (props.enableInlineEdit) {
+                setEdits((current) => ({
+                    ...current,
+                    pending: [...current.pending, next],
+                }));
+            }
+            props.onChange(next);
+        });
+    }
+
     const scanner = useBarcodeScannerButtonInField({
         ...props.scanner,
         autoStartCamera:
@@ -154,7 +179,6 @@ function UrlEditor(props: EditorProps): ReactNode {
             (props.owner == null || props.owner.isCurrent() === true),
         setValue: (value) => write(value, props.onScan ?? props.onChange),
     });
-    const value = props.value ?? '';
     const hasScanner = scanner.barcodeScannerButton != null;
 
     return h(
@@ -185,9 +209,9 @@ function UrlEditor(props: EditorProps): ReactNode {
                 clearLabel: props.clearLabel ?? 'Clear',
                 initialMobile: props.initialMobile ?? false,
                 enableInlineEdit: props.enableInlineEdit === true,
-                onChange: (next) => write(next, props.onChange),
+                onChange: publish,
                 onUnmountChange: (next) => write(next, props.onChange, true),
-                onClear: () => write('', props.onChange),
+                onClear: () => publish(''),
                 onClick: (event) => event.stopPropagation(),
                 onFocus: () => setFocused(true),
                 onBlur: () => setFocused(false),

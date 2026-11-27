@@ -209,7 +209,8 @@ it('controlled public source renders converted text, native links and localized 
     let rowClicks = 0;
     const display = (
         value: string | null | undefined,
-        language: 'en' | 'fr' = 'en'
+        language: 'en' | 'fr' = 'en',
+        emptyLabel?: string
     ) =>
         h(
             'div',
@@ -218,13 +219,14 @@ it('controlled public source renders converted text, native links and localized 
                 mode: 'controlled',
                 value,
                 language,
+                emptyLabel,
                 textSize: 'small',
                 layout: 'cell-short',
                 className: 'source-display',
             })
         );
     const value = 'Unlisted Ω <img src=x> https://example.test/source';
-    await f.render(display(value));
+    await f.render(display(value, 'en', 'Source indisponible'));
     assert.equal(
         f.container.querySelector('p.read-only-text')?.textContent,
         value
@@ -273,6 +275,14 @@ it('controlled public source renders converted text, native links and localized 
             'Pas de Valeur'
         );
         assert.equal(f.container.querySelector('a,input,button'), null);
+        for (const emptyLabel of ['Source indisponible', '']) {
+            await f.render(display(empty, 'fr', emptyLabel));
+            const emptyState = f.container.querySelector(
+                '[data-testid="no-value-test-id"]'
+            );
+            assert.ok(emptyState);
+            assert.equal(emptyState.textContent, emptyLabel);
+        }
     }
     await f.render(display('  '));
     assert.equal(

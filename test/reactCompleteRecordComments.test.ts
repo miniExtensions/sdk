@@ -510,19 +510,36 @@ it('disposing an owner closes its actual dialog and restores focus without cance
 
 it('older-page loading hides the composer and explicit recovery retains its draft and newest sending policy', async (t) => {
     const older = deferred<ListRecordCommentsResult>();
+    const recovered = deferred<ListRecordCommentsResult>();
+    const newerComment: ListRecordCommentsResult['comments'][number] = {
+        id: 'same-id',
+        text: 'B: Meet at Gate 4 after lunch',
+        actor: { type: 'public', extensionId: 'synthetic-comments' },
+        authorLabel: 'Synthetic visitor',
+        createdTime: '2024-01-02',
+        lastUpdatedTime: null,
+    };
+    const olderComment = {
+        ...newerComment,
+        text: 'A: Earlier travel update',
+        createdTime: '2024-01-01',
+    };
     let reads = 0,
-        writes = 0;
+        writes = 0,
+        submits = 0;
     const controller = createRecordCommentsController({
         owner: { isCurrent: () => true },
         childExtensionAccessToken: 'original',
         list: async (input) => {
             reads++;
             if (reads === 1)
-                return { ...empty, nextCursor: 'exact opaque cursor' };
+                return {
+                    ...empty,
+                    comments: [newerComment],
+                    nextCursor: 'exact opaque cursor',
+                };
             assert.equal(input.cursor, 'exact opaque cursor');
-            return reads === 2
-                ? older.promise
-                : { ...empty, disableSending: true };
+            return reads === 2 ? older.promise : recovered.promise;
         },
         append: async () => {
             writes++;
@@ -530,6 +547,7 @@ it('older-page loading hides the composer and explicit recovery retains its draf
         invalidate: () => {},
     });
     const f = await fixture(t, { controller });
+    f.host.addEventListener('submit', () => submits++);
     await act(async () => controller.setDraft('retained raw draft'));
     await f.click(recordCommentsLabels.older);
     assert.equal(f.host.querySelector('textarea'), null);
@@ -544,8 +562,43 @@ it('older-page loading hides the composer and explicit recovery retains its draf
     assert.equal(f.host.querySelector('textarea')?.value, 'retained raw draft');
     assert.equal(reads, 2);
     await f.click(recordCommentsLabels.older);
+    const commentBodies = () => [
+        ...f.host.querySelectorAll('.mx-sdk-comments-text'),
+    ];
+    const originalText = commentBodies()[0]?.querySelector('span')?.firstChild;
+    assert.ok(originalText instanceof f.window.Text);
+    const selection = f.window.document.getSelection();
+    assert.ok(selection);
+    const range = f.window.document.createRange();
+    const gate = 'Gate 4';
+    const start = originalText.data.indexOf(gate);
+    assert.ok(start >= 0);
+    range.setStart(originalText, start);
+    range.setEnd(originalText, start + gate.length);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    assert.equal(selection.toString(), gate);
+    await act(async () =>
+        recovered.resolve({
+            ...empty,
+            comments: [olderComment],
+            disableSending: true,
+        })
+    );
+    assert.deepEqual(
+        commentBodies().map((node) => node.textContent),
+        [olderComment.text, newerComment.text]
+    );
+    assert.equal(
+        commentBodies()[1]?.querySelector('span')?.firstChild === originalText,
+        true
+    );
+    assert.equal(selection.anchorNode === originalText, true);
+    assert.equal(selection.focusNode === originalText, true);
+    assert.equal(selection.toString(), gate);
     assert.equal(f.host.querySelector('textarea')?.value, 'retained raw draft');
     assert.equal(controller.getSnapshot().disableSending, false);
     assert.equal(writes, 0);
+    assert.equal(submits, 0);
     assert.equal(reads, 3);
 });

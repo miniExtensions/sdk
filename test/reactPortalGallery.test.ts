@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Window } from 'happy-dom';
+import { Window, type Element as FixtureElement } from 'happy-dom';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
+    LinkedFinderCard,
     PortalGallery,
     resolvePortalGalleryColumns,
     type PortalGalleryRow,
     type PortalGalleryProps,
 } from '../src/react/index.js';
+import { formatDateInputValue } from '../src/ui/index.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
 function row(id: string): PortalGalleryRow {
@@ -488,13 +490,20 @@ for (const target of [
     });
 }
 
-for (const outcome of [
+const pagingOutcomes = [
     'continuation',
     'terminal',
     'stale',
     'departed',
-] as const) {
-    test(`Gallery keyboard paging handles an empty ${outcome} receipt`, async (t) => {
+] as const;
+const pagingReceipts = [
+    { label: 'an empty', recordIds: [] },
+    { label: 'a duplicate-only', recordIds: ['b', 'b'] },
+] as const;
+for (const { receipt, outcome } of pagingReceipts.flatMap((receipt) =>
+    pagingOutcomes.map((outcome) => ({ receipt, outcome }))
+)) {
+    test(`Gallery keyboard paging handles ${receipt.label} ${outcome} receipt`, async (t) => {
         const f = await htmlPresentationFixture(t);
         const calls = { pages: [] as string[], opens: 0, unlinks: 0 };
         const openRow = (id: string): PortalGalleryRow => ({
@@ -567,7 +576,7 @@ for (const outcome of [
         assert(finishSecondPage);
         await act(async () => {
             finishSecondPage({
-                recordIds: [],
+                recordIds: receipt.recordIds,
                 isCurrent: () => outcome !== 'stale',
             });
         });
@@ -808,6 +817,115 @@ test('Gallery rich cards preserve ordered definition terms and explicit raw-prim
         f.container.querySelector('.mx-sdk-finder-card-primary-with-details'),
         null
     );
+});
+
+test('Gallery formats a mounted card in the supplied date language without changing other layouts, masks or time zones', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const source = row('localized-dates');
+    const projection = source.projection;
+    assert.equal(projection.status, 'present');
+    const fieldsFor = (language: 'fr' | 'en') => {
+        const date = (format: string) => ({
+            kind: 'date' as const,
+            display: {
+                value: '2026-04-07',
+                language,
+                airtableDateConfig: {
+                    type: 'date' as const,
+                    options: { dateFormat: { format } },
+                },
+            },
+        });
+        const dateTime = (format: string) => ({
+            kind: 'dateTime' as const,
+            display: {
+                value: '2026-04-07T02:30:00.000Z',
+                language,
+                airtableDateConfig: {
+                    type: 'dateTime' as const,
+                    options: {
+                        dateFormat: { format },
+                        timeFormat: { format: 'HH:mm' },
+                        timeZone: 'America/Los_Angeles',
+                    },
+                },
+            },
+        });
+        return [
+            { key: 'local', title: null, leaf: date('l') },
+            { key: 'friendly', title: null, leaf: date('LL') },
+            { key: 'iso', title: null, leaf: date('YYYY-MM-DD') },
+            { key: 'local-time', title: null, leaf: dateTime('l') },
+            { key: 'iso-time', title: null, leaf: dateTime('YYYY-MM-DD') },
+        ];
+    };
+    const readDates = (node: FixtureElement) =>
+        [...node.querySelectorAll('.mx-sdk-finder-card-field-value')].map(
+            (element) => element.textContent
+        );
+    const english = [
+        '4/7/2026',
+        'April 7, 2026',
+        '2026-04-07',
+        '4/6/2026 19:30',
+        '2026-04-06 19:30',
+    ];
+    let card = null;
+    for (const [language, expected] of [
+        [
+            'fr',
+            [
+                '7/4/2026',
+                '7 avril 2026',
+                '2026-04-07',
+                '6/4/2026 19:30',
+                '2026-04-06 19:30',
+            ],
+        ],
+        ['en', english],
+    ] as const) {
+        const fields = fieldsFor(language);
+        assert.deepEqual(
+            fields.map(({ leaf: { display } }) =>
+                formatDateInputValue({
+                    airtableValue: display.value,
+                    airtableFieldConfig: display.airtableDateConfig,
+                    language: display.language,
+                })
+            ),
+            expected
+        );
+        await f.render(
+            h(
+                PortalGallery,
+                props([
+                    {
+                        ...source,
+                        projection: { ...projection, fields, language },
+                    },
+                ])
+            )
+        );
+        const current = f.container.querySelector('[data-record-id]');
+        assert(current);
+        if (card) assert.equal(current, card);
+        card = current;
+        assert.deepEqual(readDates(current), expected);
+    }
+    for (const layout of ['list', 'kanban'] as const) {
+        await f.render(
+            h(LinkedFinderCard, {
+                projection: {
+                    ...projection,
+                    layout,
+                    language: 'fr',
+                    fields: fieldsFor('fr'),
+                },
+            })
+        );
+        assert.deepEqual(readDates(f.container), english);
+    }
+    f.unchangedEffects();
 });
 
 test('Gallery rich attachment leaves preserve missing and failed thumbnail filename occurrences without opening', async (t) => {

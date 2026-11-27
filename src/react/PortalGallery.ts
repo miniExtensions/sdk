@@ -160,15 +160,6 @@ function useGalleryPagingFocus(
             return;
         }
 
-        if (focus.recordId === null && receipt.recordIds.length === 0) {
-            // The host can accept the page before it publishes the next cursor.
-            if (!canRequestMore && showSpinner) return;
-            const destination = loadMore.current;
-            focus.clear();
-            if (destination && !destination.disabled && active !== destination)
-                destination.focus({ preventScroll: true });
-            return;
-        }
         const recordIds =
             focus.recordId === null
                 ? receipt.recordIds.filter(
@@ -176,7 +167,13 @@ function useGalleryPagingFocus(
                   )
                 : [focus.recordId];
         if (recordIds.length === 0) {
+            // The host can accept a page with no new records before it
+            // publishes the next cursor.
+            if (!canRequestMore && showSpinner) return;
+            const destination = loadMore.current;
             focus.clear();
+            if (destination && !destination.disabled && active !== destination)
+                destination.focus({ preventScroll: true });
             return;
         }
         const candidate = content.rows.find(

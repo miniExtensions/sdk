@@ -570,19 +570,19 @@ export const createBrowserCreateProgress = (
             const serialized = JSON.stringify(values);
             if (serialized === lastValues) return;
             const selectedBackend = backend;
+            const updateIsCurrent = () =>
+                current() &&
+                enabled &&
+                !suspended &&
+                epoch === writeEpoch &&
+                revision === options.getRevision() &&
+                inputRevision === options.getInputRevision() &&
+                selectedBackend === backend;
             queue = queue.then(async () => {
-                if (
-                    !current() ||
-                    suspended ||
-                    !enabled ||
-                    epoch !== writeEpoch ||
-                    revision !== options.getRevision() ||
-                    inputRevision !== options.getInputRevision() ||
-                    selectedBackend !== backend
-                )
-                    return;
+                if (!updateIsCurrent()) return;
                 if (!Object.keys(values).length) {
-                    if (token) await remove();
+                    // The visitor can reselect a field while cleanup waits for the lock.
+                    if (token) await remove(updateIsCurrent);
                     return;
                 }
                 const writeOwner = createFormProgressStorage({
@@ -590,13 +590,7 @@ export const createBrowserCreateProgress = (
                     getStorage: storage,
                     getLocks: locks,
                     createId: id,
-                    isCurrent: () =>
-                        current() &&
-                        enabled &&
-                        !suspended &&
-                        epoch === writeEpoch &&
-                        revision === options.getRevision() &&
-                        inputRevision === options.getInputRevision(),
+                    isCurrent: updateIsCurrent,
                 });
                 flightWrite = writeOwner;
                 const result = await writeOwner.write({

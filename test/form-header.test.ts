@@ -40,6 +40,11 @@ const formulaField: AirtableField = {
         options: { isValid: true, result: textField.config },
     },
 };
+const richTextField: AirtableField = {
+    id: 'fld_rich_text_header',
+    name: 'Rich Text title',
+    config: { type: AirtableFieldType.RICH_TEXT, options: null },
+};
 const logoField: AirtableField = {
     id: 'fld_logo_header',
     name: 'Logo',
@@ -142,6 +147,27 @@ describe('complete Form display source selection', () => {
             ),
             '#123 alert'
         );
+    });
+
+    it('keeps escaped asterisks in titles projected from physical Rich Text', () => {
+        for (const [value, expected] of [
+            ['\\*\\*Pasted strong\\*\\*', '**Pasted strong**'],
+            ['**Pasted strong**', 'Pasted strong'],
+            ['`**VIP**`', 'VIP'],
+            ['`**VIP**` and \\*', 'VIP and *'],
+            ['**Keep \\* in bold**', 'Keep * in bold'],
+            ['\\\\**Bold**\n\\*Next line\\*', '\\Bold\n\n*Next line*'],
+            ['\uE0000\uE000 then \\*', '\uE0000\uE000 then *'],
+            ['`\\*` then \\*', '\\* then *'],
+        ]) {
+            assert.equal(
+                resolveFormHeaderTitle(
+                    fieldSource(value, richTextField),
+                    'Extension'
+                ),
+                expected
+            );
+        }
     });
 
     it('keeps literal stock comparison signs in a Formula title only', () => {

@@ -83,10 +83,22 @@ async function checkInstalled(directory, happyDomModulePath) {
                 React.createElement(api.PortalSearchGate, props)
             );
         assert.equal(typeof document, 'undefined');
+        const unicodeHtml = renderToString(element());
+        assert(unicodeHtml.includes('Find Name 東京, then Name 東京.'));
+        assert(unicodeHtml.includes('Enter name 東京'));
+        const unicodeProps = props;
+        const literalDescription = 'Enter {fieldName}. Confirm {fieldName}.';
+        const literalFieldName = "Revenue $'000";
+        props = {
+            ...unicodeProps,
+            searchPageField: {
+                ...unicodeProps.searchPageField,
+                fieldName: literalFieldName,
+            },
+            description: literalDescription,
+        };
         const html = renderToString(element());
         assert(html.includes('<dialog'));
-        assert(html.includes('Find Name 東京, then Name 東京.'));
-        assert(html.includes('Enter name 東京'));
         assert.equal(reads, 0);
         assert.deepEqual(navigations, []);
         const window = new Window();
@@ -119,7 +131,42 @@ async function checkInstalled(directory, happyDomModulePath) {
         let root;
         const recoverable = [];
         const { act } = React;
+        const assertLiteralInstruction = (fieldName) => {
+            const expected = `Enter ${fieldName}. Confirm ${fieldName}.`;
+            const instruction = host.querySelector(
+                '.mx-sdk-search-gate-body > p'
+            );
+            assert.equal(host.querySelector('label').textContent, fieldName);
+            assert.equal(instruction.textContent, expected);
+            const descriptionId = host
+                .querySelector('dialog')
+                .getAttribute('aria-describedby');
+            assert.equal(
+                window.document.getElementById(descriptionId),
+                instruction
+            );
+            assert(
+                host
+                    .querySelector('input')
+                    .getAttribute('aria-describedby')
+                    .split(' ')
+                    .includes(descriptionId)
+            );
+        };
         try {
+            assertLiteralInstruction(literalFieldName);
+            // Happy DOM leaves numeric entities encoded in parsed attributes.
+            // Decode the serialized placeholder as a browser would before hydration.
+            const serverInput = host.querySelector('input');
+            const decodedPlaceholder =
+                window.document.createElement('textarea');
+            decodedPlaceholder.innerHTML =
+                serverInput.getAttribute('placeholder');
+            assert.equal(
+                decodedPlaceholder.value,
+                `Enter ${literalFieldName.toLowerCase()}`
+            );
+            serverInput.placeholder = decodedPlaceholder.value;
             const { hydrateRoot } = consumer('react-dom/client');
             await act(async () => {
                 root = hydrateRoot(host, element(), {
@@ -129,11 +176,30 @@ async function checkInstalled(directory, happyDomModulePath) {
                 });
             });
             assert.deepEqual(recoverable, []);
+            assertLiteralInstruction(literalFieldName);
+            for (const fieldName of ['Budget ($$)', 'R&D $&']) {
+                props = {
+                    ...props,
+                    searchPageField: { ...props.searchPageField, fieldName },
+                };
+                await act(async () => root.render(element()));
+                assertLiteralInstruction(fieldName);
+            }
+            props = unicodeProps;
+            await act(async () => root.render(element()));
+            assert.equal(
+                host.querySelector('.mx-sdk-search-gate-body > p').textContent,
+                'Find Name 東京, then Name 東京.'
+            );
+            assert.equal(reads, 0);
+            assert.deepEqual(navigations, []);
+            assert.equal(clears, 0);
             const input = host.querySelector('input');
             const dialog = host.querySelector('dialog');
             assert(input && dialog && dialog.open);
             assert.equal(window.document.activeElement, input);
             assert.equal(host.querySelector('label').htmlFor, input.id);
+            assert.equal(input.placeholder, 'Enter name 東京');
             const change = async (text) => {
                 await act(async () => {
                     Object.getOwnPropertyDescriptor(

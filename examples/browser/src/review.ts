@@ -14,7 +14,10 @@ import {
     describeLoadedFormFields,
 } from '@miniextensions/sdk/forms';
 import type { ConfirmationRow } from './confirmation.js';
-import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
+import {
+    formatNumberInputCompatibility,
+    getSelectFieldPolicy,
+} from '@miniextensions/sdk/ui';
 import { settings } from './dom.js';
 import { hasMaskedValuePolicy } from './privacy.js';
 import {
@@ -172,7 +175,7 @@ export const prepareFormReviewRows = (
     data: Readonly<Record<string, AirtableValue>>,
     linked?: LinkedReviewSnapshot,
     dateContext?: PreparedDateContext,
-    options?: { formatReadOnlyPercent?: boolean }
+    options?: { formatReadOnlyPercent?: boolean; formatCurrency?: boolean }
 ): ConfirmationRow[] => {
     if (linked != null && !linked.forPage(page)) unavailable();
     const configuration = settings(page.payload.publicFields);
@@ -332,6 +335,25 @@ export const prepareFormReviewRows = (
             if (type === AirtableFieldType.RATING && value === 0) continue;
             const config = field.schema.airtableField.config;
             if (
+                options?.formatCurrency &&
+                config.type === AirtableFieldType.CURRENCY
+            ) {
+                const display = field.schema.miniExtConfig;
+                const label = formatNumberInputCompatibility(
+                    value,
+                    config,
+                    display != null && 'numberSeparator' in display
+                        ? display.numberSeparator
+                        : undefined,
+                    display != null &&
+                        'showThousandsSeparator' in display &&
+                        display.showThousandsSeparator === true
+                );
+                const symbol = config.options.symbol;
+                text = label.startsWith('-')
+                    ? `-${symbol}${label.slice(1)}`
+                    : `${symbol}${label}`;
+            } else if (
                 options?.formatReadOnlyPercent &&
                 field.readOnly &&
                 config.type === AirtableFieldType.PERCENT

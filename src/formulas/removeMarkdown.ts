@@ -11,6 +11,7 @@
 
 const markdownCache = new Map<string, string>();
 const formTitleCache = new Map<string, string>();
+const richTextTitleCache = new Map<string, string>();
 const markup = /<[^>]+>/g;
 // A Form title can use angle brackets as comparison signs in plain text.
 const formTitleMarkup =
@@ -23,7 +24,7 @@ function plainTextFromMarkdown(
     markdown: string,
     tags: RegExp,
     cache: Map<string, string>,
-    preserveInlineCode = false
+    literalMode?: 'code' | 'escapedAsterisks'
 ): string {
     if (cache.has(markdown)) {
         return cache.get(markdown)!;
@@ -78,16 +79,26 @@ function plainTextFromMarkdown(
         line = line.replace(/^(\s*)[\*\-\+]\s+/, '$1'); // Unordered
         line = line.replace(/^(\s*)(\d+\.)\s+/, '$1'); // Ordered
 
-        const literals: string[] | undefined = preserveInlineCode
-            ? []
-            : undefined;
+        const literals: string[] | undefined = literalMode ? [] : undefined;
         if (literals) {
-            // Keep code opaque to formatting, and escape authored markers too.
+            const protect = (value: string) => {
+                const index = literals.push(value) - 1;
+                return `\uE000${index}\uE000`;
+            };
+            // Read escapes outside code spans. Keep Formula title code opaque,
+            // and keep existing inline-code formatting for Rich Text titles.
             line = line.replace(
-                /`([^`]+)`|\uE000/g,
-                (match, code: string | undefined) => {
-                    const index = literals.push(code ?? match) - 1;
-                    return `\uE000${index}\uE000`;
+                /`([^`]+)`|\uE000|(\\+)\*/g,
+                (match, code: string | undefined, slashes?: string) => {
+                    if (
+                        literalMode === 'escapedAsterisks' &&
+                        code !== undefined
+                    )
+                        return code.replace(/\uE000/g, protect);
+                    if (slashes === undefined) return protect(code ?? match);
+                    if (literalMode !== 'escapedAsterisks') return match;
+                    const paired = '\\'.repeat(Math.floor(slashes.length / 2));
+                    return paired + (slashes.length % 2 ? protect('*') : '*');
                 }
             );
         } else {
@@ -158,4 +169,14 @@ export const removeMarkdown = (markdown: string): string =>
     plainTextFromMarkdown(markdown, markup, markdownCache);
 
 export const removeFormTitleMarkdown = (markdown: string): string =>
-    plainTextFromMarkdown(markdown, formTitleMarkup, formTitleCache, true);
+    plainTextFromMarkdown(markdown, formTitleMarkup, formTitleCache, 'code');
+
+export const removeRichTextTitleMarkdown = (markdown: string): string =>
+    markdown.includes('\\*')
+        ? plainTextFromMarkdown(
+              markdown,
+              markup,
+              richTextTitleCache,
+              'escapedAsterisks'
+          )
+        : removeMarkdown(markdown);

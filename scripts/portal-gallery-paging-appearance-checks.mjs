@@ -28,7 +28,7 @@ function textRow(title, language, calls) {
     };
 }
 
-function mountEmptyPagingFocus(root) {
+function mountKeyboardPagingFocus(root, secondPageIds) {
     const calls = { requested: [], accepted: [], opens: 0, unlinks: 0, submits: 0, trustedPagingClicks: 0 };
     const rows = ['A', 'B', 'C'].map((title) => textRow(title, 'en', calls));
     let content = { status: 'rows', rows: rows.slice(0, 2), emptyLabel: null };
@@ -75,7 +75,7 @@ function mountEmptyPagingFocus(root) {
             if (pending === null || pending.accepted)
                 throw new Error('Expected one pending continuation');
             pending.accepted = true;
-            const recordIds = pending.page === 'page_2' ? [] : ['C'];
+            const recordIds = pending.page === 'page_2' ? secondPageIds : ['C'];
             calls.accepted.push({ page: pending.page, recordIds });
             pending.resolve({ recordIds, isCurrent: () => current });
         },
@@ -102,8 +102,8 @@ function mountEmptyPagingFocus(root) {
 }
 
 export function mountPagingAppearance(root, language) {
-    if (language === 'empty-keyboard') {
-        mountEmptyPagingFocus(root);
+    if (language === 'empty-keyboard' || language === 'duplicate-keyboard') {
+        mountKeyboardPagingFocus(root, language === 'duplicate-keyboard' ? ['B', 'B'] : []);
         return;
     }
     const vocabulary = ${JSON.stringify(Object.fromEntries(profiles.map(({ language, label }) => [language, label])))};
@@ -289,26 +289,36 @@ export async function checkPortalGalleryPagingAppearance({
             item.cleanup = true;
         }
     }
-    await checkPortalGalleryEmptyPagingFocus({ browser, origin, evidence });
+    await checkPortalGalleryPagingFocus({ browser, origin, evidence });
+    await checkPortalGalleryPagingFocus({
+        browser,
+        origin,
+        evidence,
+        duplicateOnly: true,
+    });
 }
 
-export async function checkPortalGalleryEmptyPagingFocus({
+export async function checkPortalGalleryPagingFocus({
     browser,
     origin,
     evidence,
+    duplicateOnly = false,
 }) {
     const context = await browser.newContext({
         viewport: { width: 1280, height: 800 },
         serviceWorkers: 'block',
     });
-    const fixture = '/portal-gallery-layout.html?paging=empty-keyboard';
+    const mode = duplicateOnly ? 'duplicate-keyboard' : 'empty-keyboard';
+    const secondPageIds = duplicateOnly ? ['B', 'B'] : [];
+    const fixture = '/portal-gallery-layout.html?paging=' + mode;
     const allowed = new Set([
         fixture,
         '/portal-gallery-layout.css',
         '/portal-gallery-layout.js',
     ]);
     const item = { unexpectedRequests: [], pageErrors: [], cleanup: false };
-    evidence.emptyPagingFocus = item;
+    evidence[duplicateOnly ? 'duplicatePagingFocus' : 'emptyPagingFocus'] =
+        item;
     try {
         await context.route('**/*', (route) => {
             const request = route.request();
@@ -357,13 +367,14 @@ export async function checkPortalGalleryEmptyPagingFocus({
         assert.deepEqual((await snapshot()).requested, ['page_2']);
 
         await settle();
-        item.emptyPending = await snapshot();
-        assert.deepEqual(item.emptyPending.accepted, [
-            { page: 'page_2', recordIds: [] },
+        const pending = await snapshot();
+        item[duplicateOnly ? 'duplicatePending' : 'emptyPending'] = pending;
+        assert.deepEqual(pending.accepted, [
+            { page: 'page_2', recordIds: secondPageIds },
         ]);
         assert.equal(await spinner.isVisible(), true);
-        assert.deepEqual(item.emptyPending.rows, ['A', 'B']);
-        assert.equal(item.emptyPending.trustedPagingClicks, 1);
+        assert.deepEqual(pending.rows, ['A', 'B']);
+        assert.equal(pending.trustedPagingClicks, 1);
         await page.evaluate(() => window.galleryEmptyPaging.publish());
         await more.waitFor();
         assert.equal(await more.isEnabled(), true);
@@ -390,7 +401,7 @@ export async function checkPortalGalleryEmptyPagingFocus({
         assert.deepEqual(item.finished, {
             requested: ['page_2', 'page_3'],
             accepted: [
-                { page: 'page_2', recordIds: [] },
+                { page: 'page_2', recordIds: secondPageIds },
                 { page: 'page_3', recordIds: ['C'] },
             ],
             opens: 0,

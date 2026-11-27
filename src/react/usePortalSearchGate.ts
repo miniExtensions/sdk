@@ -34,7 +34,7 @@ export function usePortalSearchGate(props: PortalSearchGateOptions) {
         showError: showError && props.hasNoResults === true,
         title: props.title ?? 'Search',
         description: props.description
-            ? props.description.replace(/{fieldName}/g, fieldName)
+            ? props.description.replace(/{fieldName}/g, () => fieldName)
             : `Please enter a value for ${fieldName} to continue to this interface. This step is required before records are shown.`,
         noResultsMessage:
             props.noResultsMessage ??

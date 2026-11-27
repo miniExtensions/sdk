@@ -33,6 +33,7 @@ const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const forms=format==='esm'?await import('@miniextensions/sdk/forms'):require('@miniextensions/sdk/forms');
 const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
+const formulas=format==='esm'?await import('@miniextensions/sdk/formulas'):require('@miniextensions/sdk/formulas');
 const {renderToString}=await import('react-dom/server');
 const image='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="208" height="48"%3E%3Crect width="208" height="48" fill="green"/%3E%3C/svg%3E';
 const field={id:'accepted-field',name:'Current source',description:null,isPrimaryField:false,isComputed:false,config:{type:'singleLineText',options:null}};
@@ -85,6 +86,24 @@ try {
    {resolver:expected, heading:expected, childElements:0}
   );
  }
+ const richTextField={...field,config:{type:'richText',options:null}};
+ const richTextTitles=[];
+ for (const [value, expected] of [
+  ['\\*\\*Pasted strong\\*\\*', '**Pasted strong**'],
+  ['**Pasted strong**', 'Pasted strong'],
+ ]) {
+  source={type:'field',field:{status:'resolved',field:richTextField,value}};
+  const resolved=forms.resolveFormHeaderTitle(source,'Fallback name');
+  await React.act(async()=>root.render(element()));
+  const heading=container.querySelector('h1');
+  const raw=formulas.getReadableStringFromAirtableValue({
+   value,airtableFieldConfig:richTextField.config,fieldName:richTextField.name,
+   source:{type:'airtableMock',linkedTableStates:{}},doNotRemoveMarkdownFormatting:true,
+  });
+  const actual={resolver:resolved,heading:heading.textContent,childElements:heading.childElementCount,raw};
+  assert.deepEqual(actual,{resolver:expected,heading:expected,childElements:0,raw:value});
+  richTextTitles.push(actual);
+ }
  for(const record of ['B','A']){identity={...identity,record:'table:'+record};source=staticSource('Record '+record);await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1').textContent,'Record '+record);}
  child=true;await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('img').length,0);assert.equal(container.querySelector('h1').textContent,'Record A');
  child=false;enabled=false;source={type:'field',field:{status:'resolved',field,value:''}};await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1'),null);assert(!container.textContent.includes('Safe description'));assert(!container.textContent.includes('Safe footer'));assert.equal(container.querySelectorAll('button').length,0);
@@ -136,7 +155,7 @@ try {
  assert.equal(style(sourceSelector + ':hover')?.background, '#e0f2fe');
  await React.act(async()=>root.unmount());root=undefined;
  assert.equal(domWindow.location.href,'https://consumer.invalid/form');assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);
- console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks}));
+ console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks,richTextTitles}));
 } finally {
  if(root)await React.act(async()=>root.unmount());
  keys.forEach((key,index)=>{if(originals[index])Object.defineProperty(globalThis,key,originals[index]);else Reflect.deleteProperty(globalThis,key);});

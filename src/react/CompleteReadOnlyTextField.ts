@@ -107,14 +107,29 @@ const sizeClasses: Record<CompleteReadOnlyTextSize, string> = {
 };
 
 /** Complete native-compatible literal/link presentation, with no state or I/O. */
-export function CompleteReadOnlyTextField({
-    value,
-    language,
-    textSize,
-    layout,
-    className,
-    emptyLabel,
-}: CompleteReadOnlyTextFieldProps): ReactElement {
+export function CompleteReadOnlyTextField(
+    props: CompleteReadOnlyTextFieldProps
+): ReactElement {
+    return renderReadOnlyTextField(props);
+}
+
+export function ReadOnlyEmailTextField(
+    props: CompleteReadOnlyTextFieldProps
+): ReactElement {
+    return renderReadOnlyTextField(props, true);
+}
+
+function renderReadOnlyTextField(
+    {
+        value,
+        language,
+        textSize,
+        layout,
+        className,
+        emptyLabel,
+    }: CompleteReadOnlyTextFieldProps,
+    encodeEmailRecipient = false
+): ReactElement {
     const layoutAttributes =
         layout === undefined ? {} : { 'data-layout': layout };
     return createElement(LiteralText, {
@@ -161,11 +176,19 @@ export function CompleteReadOnlyTextField({
                     if (!token.isLink || !options.check(token))
                         return token.toString();
                     const link = options.resolve(token);
+                    // A generated recipient is data. An authored mailto URI
+                    // already has its own structure and escaping.
+                    const href =
+                        encodeEmailRecipient &&
+                        token.t === 'email' &&
+                        link.formattedHref === `mailto:${link.formatted}`
+                            ? `mailto:${link.formatted.replace(/[%/?#[\]&;=]/g, encodeURIComponent)}`
+                            : link.formattedHref;
                     return createElement(
                         'a',
                         {
                             key: index,
-                            href: link.formattedHref,
+                            href,
                             target: link.target || undefined,
                             rel: link.rel || undefined,
                             onClick: (event: MouseEvent<HTMLAnchorElement>) =>

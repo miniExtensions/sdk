@@ -10,7 +10,7 @@ import {
 } from 'react';
 import type { RuntimeLanguage } from '../runtime/types.js';
 import { CompleteClearableTextInput } from './CompleteClearableTextInput.js';
-import { CompleteReadOnlyTextField } from './CompleteReadOnlyTextField.js';
+import { ReadOnlyEmailTextField } from './CompleteReadOnlyTextField.js';
 import { useBarcodeScannerButtonInField } from './useBarcodeScannerButton.js';
 import type {
     BarcodeScannerLabels,
@@ -125,7 +125,7 @@ function EmailController(props: ControllerProps): ReactNode {
         buttonAppearance: props.buttonAppearance,
     });
     if (props.displayOnly)
-        return h(CompleteReadOnlyTextField, {
+        return h(ReadOnlyEmailTextField, {
             value: props.value,
             language: props.language,
             className: props.className,

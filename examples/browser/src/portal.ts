@@ -1295,6 +1295,11 @@ export const createPortalView = (options: {
             };
             const moreButton = button('More choices', () => fetchOptions(true));
             moreButton.disabled = true;
+            search.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || event.isComposing) return;
+                event.preventDefault();
+                fetchOptions(false);
+            });
             search.addEventListener('input', () => {
                 if (!editorIsCurrent() || !cell.binding.getSnapshot().canEdit)
                     return;

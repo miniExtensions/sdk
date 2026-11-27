@@ -4765,20 +4765,23 @@ export async function checkBrowserPortalExample({
                         input
                     ) => {
                         optionCalls.push(structuredClone(input));
+                        const second =
+                            input.offset != null ||
+                            input.filter.searchTerm === 'Acme two';
                         return {
                             records: [
                                 {
-                                    id: input.offset
+                                    id: second
                                         ? 'rec_page_two'
                                         : 'rec_page_one',
                                     fields: {
-                                        fld_name: input.offset
+                                        fld_name: second
                                             ? 'Acme Two'
                                             : 'Acme One',
                                     },
                                 },
                             ],
-                            offset: input.offset ? null : 'next',
+                            offset: second ? null : 'next',
                             tableIdsToLinkedTableStates: {
                                 tbl_targets: {
                                     airtableFields: [
@@ -4848,7 +4851,67 @@ export async function checkBrowserPortalExample({
                         ]
                     );
                     const form = first.closest('form');
-                    if (stale === 'owner' || stale === 'owner-return') {
+                    if (stale === null) {
+                        first.checked = true;
+                        change(h.window, first);
+                        assert.deepEqual(JSON.parse(native.value), [
+                            'rec_page_one',
+                        ]);
+                        search.value = 'Acme two';
+                        change(h.window, search, 'input');
+                        let submits = 0;
+                        form.addEventListener('submit', () => submits++);
+                        const composingEnter = new h.window.KeyboardEvent(
+                            'keydown',
+                            {
+                                key: 'Enter',
+                                isComposing: true,
+                                bubbles: true,
+                                cancelable: true,
+                            }
+                        );
+                        assert.equal(
+                            search.dispatchEvent(composingEnter),
+                            true
+                        );
+                        await h.settle();
+                        assert.equal(optionCalls.length, 2);
+                        const enter = new h.window.KeyboardEvent('keydown', {
+                            key: 'Enter',
+                            bubbles: true,
+                            cancelable: true,
+                        });
+                        assert.equal(search.dispatchEvent(enter), false);
+                        await h.settle();
+                        assert.deepEqual(
+                            optionCalls.map((c) => [
+                                c.filter.searchTerm,
+                                c.offset,
+                            ]),
+                            [
+                                ['Acme', null],
+                                ['Acme', 'next'],
+                                ['Acme two', null],
+                            ]
+                        );
+                        assert.equal(submits, 0);
+                        assert.deepEqual(
+                            h.calls.map((call) => call.operation),
+                            ['list']
+                        );
+                        assert.equal(search.closest('form'), form);
+                        assert.equal(form.isConnected, true);
+                        const result = form.querySelectorAll(
+                            '.choice-list input[type=checkbox]'
+                        );
+                        assert.equal(result.length, 1);
+                        assert.equal(result[0].checked, false);
+                        assert.deepEqual(JSON.parse(native.value), [
+                            'rec_page_one',
+                        ]);
+                        await h.click('Save cell');
+                        assert.equal(submits, 1);
+                    } else if (stale === 'owner' || stale === 'owner-return') {
                         h.switchOwner('visitor_B');
                         if (stale === 'owner-return')
                             h.switchOwner('visitor_A');
@@ -4871,10 +4934,12 @@ export async function checkBrowserPortalExample({
                         view.value = 'view_other';
                         change(h.window, view);
                     }
-                    first.checked = true;
-                    change(h.window, first);
-                    submit(h.window, form);
-                    await h.settle();
+                    if (stale !== null) {
+                        first.checked = true;
+                        change(h.window, first);
+                        submit(h.window, form);
+                        await h.settle();
+                    }
                     const writes = h.calls.filter(
                         (c) => c.operation === 'grid'
                     );
@@ -4894,7 +4959,7 @@ export async function checkBrowserPortalExample({
                                 },
                             ]
                         );
-                    assert.equal(optionCalls.length, 2);
+                    assert.equal(optionCalls.length, stale !== null ? 2 : 3);
                     assert.equal(
                         h.calls.filter((call) => call.operation === 'list')
                             .length,

@@ -371,7 +371,13 @@ function CollaboratorControl<T extends CompleteCollaborator>(
             clearReadyFocus();
             const live = current();
             // Refusal consumes the intent here; later external values cannot focus.
-            if (!live || !sameValues(live.value, request.proposal)) return;
+            if (!live) return;
+            // An accepted single selection can be returned as a copy by the host.
+            const acceptedProposal =
+                request.target === 'remove'
+                    ? live.value[0]?.id === request.proposal[0]?.id
+                    : sameValues(live.value, request.proposal);
+            if (!acceptedProposal) return;
             const target =
                 request.target === 'selector'
                     ? input.current

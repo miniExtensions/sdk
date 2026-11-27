@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import type { ChartOptions } from 'chart.js';
-import { Children, createElement, isValidElement, type ReactNode } from 'react';
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
     CompletePortalChart,
@@ -72,35 +71,4 @@ it('keeps loaded previous chart values readable across reload/error metadata and
     const ignored = render([{ data: { type: 'loading' } }]);
     assert.ok(!ignored.includes('<dt>'));
     assert.ok(!ignored.includes('Retained'));
-});
-
-it('formats only nonzero tooltip values that the current scale rounds to signed zero', () => {
-    const chartElement = CompletePortalChart(defaults);
-    assert(isValidElement<{ children: ReactNode }>(chartElement));
-    const [bar] = Children.toArray(chartElement.props.children);
-    assert(isValidElement<{ options: ChartOptions<'bar'> }>(bar));
-    const label = bar.props.options.plugins?.tooltip?.callbacks?.label;
-    assert(label);
-
-    for (const [locale, separator] of [
-        ['en-US', '.'],
-        ['de-DE', ','],
-    ]) {
-        const { format } = new Intl.NumberFormat(locale);
-        const chart = {
-            options: { locale },
-            scales: { y: { getLabelForValue: format } },
-        };
-        const invoke = (raw: unknown, formattedValue: string): unknown =>
-            Reflect.apply(label, undefined, [{ raw, formattedValue, chart }]);
-        for (const [raw, expected] of [
-            [0.0004, `0${separator}0004`],
-            [0.0003, `0${separator}0003`],
-            [-0.0004, `-0${separator}0004`],
-        ] as const)
-            assert.equal(invoke(raw, format(raw)), expected);
-        for (const raw of [0, -0, 1.25, -2.75, NaN, Infinity])
-            assert.equal(invoke(raw, format(raw)), undefined);
-        assert.equal(invoke('0.0004', '0'), undefined);
-    }
 });

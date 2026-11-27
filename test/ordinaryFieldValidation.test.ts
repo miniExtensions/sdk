@@ -71,6 +71,19 @@ const validate = (
     });
 
 describe('ordinary-only discriminators', () => {
+    it('requires Barcode text on visible editable fields', () => {
+        for (const value of [{}, { type: 'qr' }])
+            assert.deepEqual(validate('barcode', value, { required: true }), {
+                status: 'supported',
+                diagnostic: { code: 'required' },
+            });
+        const value = Object.freeze({ type: 'qr', text: '0012' });
+        assert.deepEqual(validate('barcode', value, { required: true }), {
+            status: 'supported',
+            diagnostic: null,
+        });
+        assert.equal(value.text, '0012');
+    });
     for (const [kind, value] of [
         ['singleLineText', ''],
         ['checkbox', false],

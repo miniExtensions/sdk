@@ -4329,7 +4329,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         checkOrdinaryValidationConsumer({
             consumerDirectory: temporaryDirectory,
         }),
-        854
+        870
     );
     assert.equal(
         await checkCanonicalFormConsumer({

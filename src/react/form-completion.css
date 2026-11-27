@@ -26,6 +26,9 @@
 .mx-sdk-form-completion .ql-container {
     font-size: inherit;
 }
+.mx-sdk-form-completion-text {
+    white-space: pre-line;
+}
 .mx-sdk-form-completion-text a {
     text-decoration: underline;
 }

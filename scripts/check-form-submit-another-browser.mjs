@@ -19,6 +19,12 @@ const archive = realpathSync(archiveArg);
 const recordId = 'rec12345678901234';
 const initial = `/record-survey/${recordId}?screen=success&recordIdToCopyFrom=recOld&prefill_Title=Keep&campaign=summer`;
 const target = '/record-survey?prefill_Title=Keep&campaign=summer';
+const successUrl = 'https://example.test/arrival?gate=B#check-in';
+const successMessages = {
+    newline: 'Gate A\nGate B',
+    space: 'Gate A Gate B',
+    link: `Gate A\n${successUrl}`,
+};
 const fixture = `
 import { createElement as h, StrictMode, version } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -30,11 +36,12 @@ import '@miniextensions/sdk/react/form-completion.css';
 const configuration = {
     afterFormSubmission: 'stay', successAction: true,
     successMessageCanCreateNewRecord: true, successMessageNewRecordText: 'Submit another',
+    successMessageType: 'airtableField', successMessageField: 'fldMessage',
 };
-const projection = projectFormCompletion({
-    configuration, language: 'en', filteredValues: {}, unfilteredValues: {},
-    fields: {}, linkedTableStates: {},
-});
+const messageField = {
+    id: 'fldMessage', name: 'Instructions', config: { type: 'multilineText' },
+};
+const successMessages = ${JSON.stringify(successMessages)};
 const events = { enters: [], submits: 0, saves: 0, intents: [] };
 const answer = 'Gate A\\nGate B';
 const confirmations = [];
@@ -43,7 +50,13 @@ document.addEventListener('keydown', event => {
 }, true);
 document.addEventListener('submit', () => events.submits++, true);
 const root = createRoot(document.querySelector('main'));
-function render(reviewOpen = false) {
+function render(reviewOpen = false, successCase = 'newline') {
+const values = { fldMessage: successMessages[successCase] };
+const projection = projectFormCompletion({
+    configuration, language: 'en',
+    filteredValues: values, unfilteredValues: values,
+    fields: { fldMessage: { airtableField: messageField } }, linkedTableStates: {},
+});
 root.render(h(StrictMode, null, h(CompleteFormComposition, {
     formId: 'root-form', items: [], onSubmit: () => events.saves++,
     review: {
@@ -79,6 +92,7 @@ root.render(h(StrictMode, null, h(CompleteFormComposition, {
 })));
 }
 window.reviewProof = { open: () => render(true), confirmations };
+window.successProof = { show: (name) => render(false, name), events };
 render();`;
 
 async function check(browser, react) {
@@ -120,6 +134,7 @@ async function check(browser, react) {
             'react/CompleteFormComposition.js',
             'react/CompleteFormCompletion.js',
             'react/CompleteFormReview.js',
+            'react/form-completion.css',
             'react/form-pages.css',
         ]) {
             assert(
@@ -195,6 +210,7 @@ async function check(browser, react) {
         });
         page.on('pageerror', (error) => errors.push(error.message));
         await page.goto(origin + initial + '#section');
+        const successMessage = await checkSuccessMessage(page);
         const review = await checkReview(page);
         const button = page.getByRole('button', {
             name: 'Submit another',
@@ -233,7 +249,13 @@ async function check(browser, react) {
         ]);
         assert.deepEqual(errors, []);
         assert.deepEqual(unexpected, []);
-        return { react, documents, review, ...receipts[0].events };
+        return {
+            react,
+            documents,
+            successMessage,
+            review,
+            ...receipts[0].events,
+        };
     } finally {
         try {
             await context?.close();
@@ -248,6 +270,55 @@ async function check(browser, react) {
             }
         }
     }
+}
+
+async function checkSuccessMessage(page) {
+    await page.setViewportSize({ width: 960, height: 720 });
+    await page.waitForFunction(() => Boolean(window.successProof));
+    const selector = '.mx-sdk-form-completion-text';
+    const paragraph = page.locator(selector);
+    const lineOffsets = {};
+    for (const [name, message] of Object.entries(successMessages)) {
+        await page.evaluate((name) => window.successProof.show(name), name);
+        await page.waitForFunction(
+            ({ selector, message }) =>
+                document.querySelector(selector)?.textContent === message,
+            { selector, message }
+        );
+        lineOffsets[name] = await paragraph.evaluate((node) => {
+            const measure = (offset) => {
+                const walker = document.createTreeWalker(
+                    node,
+                    NodeFilter.SHOW_TEXT
+                );
+                for (let text; (text = walker.nextNode()); ) {
+                    if (offset < text.length) {
+                        const range = document.createRange();
+                        range.setStart(text, offset);
+                        range.setEnd(text, offset + 1);
+                        const { top, width, height } =
+                            range.getBoundingClientRect();
+                        if (width > 0 && height > 0) return top;
+                        break;
+                    }
+                    offset -= text.length;
+                }
+                throw new Error('Expected visible success message text');
+            };
+            return measure('Gate A '.length) - measure(0);
+        });
+    }
+    const href = await paragraph.getByRole('link').getAttribute('href');
+    assert.equal(href, successUrl);
+    const events = await page.evaluate(() => window.successProof.events);
+    assert.deepEqual(events, { enters: [], submits: 0, saves: 0, intents: [] });
+    assert.equal(lineOffsets.space, 0);
+    assert.ok(
+        lineOffsets.newline > 0 && lineOffsets.link > 0,
+        'Expected line breaks in field-backed success messages: ' +
+            JSON.stringify(lineOffsets)
+    );
+    return { lineOffsets, href, saves: events.saves, submits: events.submits };
 }
 
 async function checkReview(page) {

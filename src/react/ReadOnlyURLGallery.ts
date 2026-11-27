@@ -6,6 +6,7 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    type Context,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
@@ -81,7 +82,8 @@ const defaults: ReadOnlyURLGalleryLabels = {
     empty: 'No Value',
     downloadFailed: 'Could not download attachment',
 };
-export const GridFormulaAttachmentNames = createContext(false);
+export const GridFormulaAttachmentNames: Context<boolean> =
+    createContext(false);
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 const contain = (event: SyntheticEvent) => {
     event.preventDefault();

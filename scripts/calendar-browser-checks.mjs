@@ -37,7 +37,7 @@ function App(){
    h('button',{type:'button','data-calendar-proof':'picker',onClick:()=>select('picker')},'Show picker'),
    h('button',{type:'button','data-calendar-proof':'portal',onClick:()=>select('portal')},'Show Portal'),
    h('button',{type:'button','data-calendar-proof':'remove',onClick:()=>setMounted(false)},'Remove grid')),
-  mounted?h('div',{className:'fixture-grid-host'},h(CalendarMonthGrid,{key:surface,surface,selectedDay,isWide,locale:'en-US',localToday:{year:2026,month:2,day:11},labels:{calendar:'Synthetic appointments',previous:'Previous month',next:'Next month',events:'events'},eventCounts:{'2026-02-12':12},onDayChange(day){dayIntents.push(day);setSelectedDay(day);},onFocusChange(day){focusIntents.push(day);},selectedDayContent:h('p',{'data-calendar-proof':'selected'},'Selected day: '+selectedDay)})):null);
+  mounted?h('div',{className:'fixture-grid-host'},h(CalendarMonthGrid,{key:surface,surface,selectedDay,isWide,locale:'en-US',localToday:{year:2026,month:2,day:11},labels:{calendar:'Synthetic appointments',previous:'Previous month',next:'Next month',events:'events'},eventCounts:surface==='portal'?{'2026-02-12':12,'2026-02-13':40}:{'2026-02-12':12},onDayChange(day){dayIntents.push(day);setSelectedDay(day);},onFocusChange(day){focusIntents.push(day);},selectedDayContent:h('p',{'data-calendar-proof':'selected'},'Selected day: '+selectedDay)})):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
 window.calendarProof={snapshot:()=>observed&&({...observed,reactVersion:React.version,dayIntents:[...dayIntents],focusIntents:[...focusIntents]})};
@@ -408,9 +408,9 @@ export async function checkCalendarBrowser({
         assert.equal(await page.locator('tbody tr').count(), 4);
         assert.deepEqual((await snapshot()).dayIntents, []);
         assert.deepEqual((await snapshot()).focusIntents, []);
-        const geometry = await page
-            .locator('[data-date="2026-02-12"]')
-            .evaluate((cell) => {
+        const cell = (date) => page.locator(`[data-date="${date}"]`);
+        const measureDay = (date) =>
+            cell(date).evaluate((cell) => {
                 const rect = (node) => {
                     const value = node.getBoundingClientRect();
                     return {
@@ -436,6 +436,7 @@ export async function checkCalendarBrowser({
                         .width,
                 };
             });
+        const geometry = await measureDay('2026-02-12');
         assert.equal(geometry.viewport, 375);
         assert(
             geometry.gridWidth <= 270.5 && geometry.gridWidth >= 269.5,
@@ -470,12 +471,54 @@ export async function checkCalendarBrowser({
         });
         await saveScreenshot('portal-375-dense-events');
 
+        const busy = await measureDay('2026-02-13');
+        const empty = await measureDay('2026-02-20');
+        const busyAccessibility = await cell('2026-02-13').ariaSnapshot();
         await day('2026-02-13').click();
         await page.waitForFunction(
             () => window.calendarProof.snapshot().selectedDay === '2026-02-13'
         );
         const selected = await snapshot();
         assert.deepEqual(selected.dayIntents, ['2026-02-13']);
+        const gridHost = page.locator('.fixture-grid-host');
+        await gridHost.evaluate((node) => (node.style.width = '240px'));
+        const tighter = await measureDay('2026-02-13');
+        await gridHost.evaluate((node) => node.style.removeProperty('width'));
+        evidence.results.push({
+            name: 'portal-375-busy-date-containment',
+            busy,
+            empty,
+            tighter,
+            busyAccessibility,
+            dayIntents: selected.dayIntents,
+        });
+        await saveScreenshot('portal-375-busy-date');
+        assert.deepEqual(empty.dots, []);
+        assert.ok(empty.cell.top >= busy.cell.bottom - 0.5);
+        assert.match(busyAccessibility, /gridcell "[^"\n]* 40 events":/);
+        assert.equal(
+            busyAccessibility.match(/^\s*- text: 40 events$/gm)?.length,
+            1
+        );
+        for (const frame of [busy, tighter]) {
+            for (const dot of frame.dots) {
+                assert.ok(dot.width > 0 && dot.height > 0);
+                assert.ok(
+                    dot.top >= frame.number.bottom - 0.5,
+                    'Busy-day dots must stay below the date number'
+                );
+                assert.ok(
+                    dot.left >= frame.cell.left - 0.5 &&
+                        dot.right <= frame.cell.right + 0.5 &&
+                        dot.bottom <= frame.cell.bottom + 0.5,
+                    'Busy-day dots must stay inside February 13'
+                );
+            }
+            assert.equal(frame.dots.length, 12);
+            assert.ok(frame.documentWidth <= frame.viewport);
+        }
+        assert.ok(tighter.gridWidth < busy.gridWidth);
+        assert.ok(tighter.dots[0].width < busy.dots[0].width);
         const transitions = [];
         for (const width of [1023, 1024, 375]) {
             await page.setViewportSize({ width, height: 844 });
@@ -490,6 +533,12 @@ export async function checkCalendarBrowser({
             assert.deepEqual(current.dayIntents, selected.dayIntents);
             assert.deepEqual(current.focusIntents, selected.focusIntents);
             if (width >= 1024) {
+                assert.equal(
+                    await cell('2026-02-13')
+                        .locator('.mx-sdk-calendar__dot')
+                        .count(),
+                    0
+                );
                 assert.equal(
                     await day('2026-02-13').getAttribute('role'),
                     null

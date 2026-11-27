@@ -5,6 +5,7 @@ import {
     useEffect,
     useLayoutEffect,
     useRef,
+    type Context,
     type MouseEventHandler,
     type ReactElement,
 } from 'react';
@@ -28,9 +29,12 @@ export type CompleteFormPageNavigationProps = {
     className?: string;
 };
 
-export const FormNextKeyboardFocusContext = createContext<{
+type FormNextKeyboardFocus = {
     submitter: HTMLButtonElement;
-} | null>(null);
+} | null;
+
+export const FormNextKeyboardFocusContext: Context<FormNextKeyboardFocus> =
+    createContext<FormNextKeyboardFocus>(null);
 
 /** Complete progress, current title and HTML description without a second page index. */
 export function CompleteFormPageNavigation({

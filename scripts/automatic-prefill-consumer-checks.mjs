@@ -26,6 +26,7 @@ const testFiles = [
     'automaticPrefillCoordinator',
     'reactAutomaticPrefillStatus',
 ];
+const expectedTests = 78;
 const publicImports = new Map([
     ['../src/forms/automaticPrefill.js', '@miniextensions/sdk/forms'],
     [
@@ -298,12 +299,18 @@ export async function checkAutomaticPrefillReactMatrix({
                         maxBuffer: 8 * 1024 * 1024,
                     }
                 );
-                assert.match(output, /# tests 72\b/);
-                assert.match(output, /# pass 72\b/);
+                assert.match(
+                    output,
+                    new RegExp(`^# tests ${expectedTests}$`, 'm')
+                );
+                assert.match(
+                    output,
+                    new RegExp(`^# pass ${expectedTests}$`, 'm')
+                );
                 assert.match(output, /# fail 0\b/);
                 formats.push({
                     format,
-                    tests: 72,
+                    tests: expectedTests,
                     originalAssertions: true,
                     publicEntries: true,
                     outputSha256: sha(output),

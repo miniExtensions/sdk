@@ -89,6 +89,9 @@ const people = Object.freeze({
  C:Object.freeze({id:'usrRetired',name:'Retired Person',email:'retired@example.invalid',profilePicUrl:'https://not-approved.invalid/retired.png',extra:'stored C'}),
  Adup:Object.freeze({id:'usrAlpha',name:'Alpha second occurrence',email:'alpha-duplicate@example.invalid',extra:'original duplicate'}),
  literal:Object.freeze({id:'usrLiteral',name:'',email:'<img src=x onerror="identityLookup()">',extra:'literal label'}),
+ AlexFirst:Object.freeze({id:'usrAlexFirst',name:'Alex Person',email:'alex.first@example.invalid'}),
+ AlexSecond:Object.freeze({id:'usrAlexSecond',name:'Alex Person',email:'alex.second@example.invalid'}),
+ AlexSecondStored:Object.freeze({id:'usrAlexSecond',name:'Alex Person',email:'alex.private@example.invalid'}),
 });
 const state={errors:[],requests:0,submits:0,parentClicks:0,parentKeys:0,siblingActions:0,writes:[],mounts:0,cleanups:0,committed:0,creatorForbiddenReads:0};
 window.addEventListener('error',event=>state.errors.push(String(event.error||event.message)));
@@ -1219,6 +1222,78 @@ export async function checkCompleteCollaboratorBrowser({
             'keyboard/pointer removal and reselection preserve scalar null, focus and adjacent draft without Save'
         );
 
+        const alexName = 'Alex Person';
+        const alexAddresses = [
+            'alex.first@example.invalid',
+            'alex.second@example.invalid',
+        ];
+        const privateAlexAddress = 'alex.private@example.invalid';
+        const alexSelected = ['AlexFirst', 'AlexSecondStored'];
+        const alexOffered = ['AlexFirst', 'AlexSecond'];
+        const [firstAlexRemove, secondAlexRemove] = alexAddresses.map((email) =>
+            remove(`${alexName} (${email})`)
+        );
+        const shortAlexRemove = remove(alexName);
+        const field = page.locator('#field');
+        const checkAlexChoices = async (addresses) => {
+            await input().click();
+            const popup = page.getByRole('listbox');
+            const options = popup.getByRole('option');
+            await options.nth(addresses.length - 1).waitFor();
+            assert.equal(await options.count(), addresses.length);
+            for (const email of addresses) {
+                const option = popup.getByRole('option', {
+                    name: `${alexName} ${email}`,
+                    exact: true,
+                });
+                assert.equal(await option.count(), 1);
+                assert.equal(
+                    await option.getAttribute('aria-selected'),
+                    'true'
+                );
+            }
+            assert(!(await field.ariaSnapshot()).includes(privateAlexAddress));
+            assert(!(await field.textContent()).includes(privateAlexAddress));
+            await input().press('Escape');
+            await popup.waitFor({ state: 'hidden' });
+        };
+        await configure({
+            mode: 'multiple',
+            valueTags: alexSelected,
+            choiceTags: alexOffered,
+        });
+        const alexWrites = (await snapshot()).writes.length;
+        await firstAlexRemove.waitFor();
+        await secondAlexRemove.waitFor();
+        assert.equal(await shortAlexRemove.count(), 0);
+        assert.deepEqual((await snapshot()).badges, [alexName, alexName]);
+        await checkAlexChoices(alexAddresses);
+
+        await configure({ choiceTags: ['AlexFirst'] });
+        await firstAlexRemove.waitFor();
+        await shortAlexRemove.waitFor();
+        assert.equal(await secondAlexRemove.count(), 0);
+        assert.deepEqual((await snapshot()).valueTags, alexSelected);
+        assert.deepEqual((await snapshot()).badges, [alexName, alexName]);
+        await checkAlexChoices(alexAddresses.slice(0, 1));
+        assert.equal((await snapshot()).writes.length, alexWrites);
+
+        await configure({ choiceTags: alexOffered });
+        await secondAlexRemove.press('Enter');
+        await canonical(['AlexFirst']);
+        await shortAlexRemove.waitFor();
+        assert.equal(await firstAlexRemove.count(), 0);
+        assert.equal(await secondAlexRemove.count(), 0);
+        assert(
+            await input().evaluate((node) => node === document.activeElement)
+        );
+        await writeCount(alexWrites + 1);
+        value = await record(
+            'trusted keyboard removes the intended same-name collaborator once and restores focus without exposing the retired address'
+        );
+        assert.deepEqual(value.writes.at(-1).valueTags, ['AlexFirst']);
+        assert.deepEqual(value.badges, [alexName]);
+
         await configure({
             mode: 'multiple',
             valueTags: ['C', 'A', 'Adup', 'literal'],
@@ -1666,7 +1741,7 @@ export async function checkCompleteCollaboratorBrowser({
             'CreatedBy is forced readonly with inert capabilities, literal identity, locale/avatar replacement and an edited adjacent draft',
             'Edited creator neighbor'
         );
-        assert.equal(groups.length, 13);
+        assert.equal(groups.length, 14);
         evidence.browserGroups = groups;
         const creatorScreenshot = `controlled-created-by-${format}.png`;
         await page.screenshot({

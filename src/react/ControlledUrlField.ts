@@ -249,6 +249,11 @@ function UrlEditor(props: EditorProps): ReactNode {
                             event.preventDefault();
                             input.current?.focus();
                         },
+                        onAuxClick: (event: MouseEvent<HTMLAnchorElement>) => {
+                            if (event.button !== 1 || disabled) return;
+                            event.preventDefault();
+                            input.current?.focus();
+                        },
                     },
                     value
                 ),

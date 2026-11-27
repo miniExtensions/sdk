@@ -6,23 +6,50 @@ import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const output = resolve(process.argv[2] ?? 'dist/url-browser');
 mkdirSync(output, { recursive: true });
-const bundle = await build({
-    entryPoints: [
-        'examples/react-url/main.ts',
-        'examples/react-url/controlled.ts',
-    ],
+const browserBuild = {
     bundle: true,
     platform: 'browser',
     format: 'esm',
     target: 'es2022',
     outdir: output,
     write: false,
+};
+const bundle = await build({
+    ...browserBuild,
+    entryPoints: [
+        'examples/react-url/main.ts',
+        'examples/react-url/controlled.ts',
+    ],
+});
+const readOnlyBundle = await build({
+    ...browserBuild,
+    entryNames: 'readonly-url',
+    stdin: {
+        resolveDir: resolve('.'),
+        contents: `
+            import { createElement } from 'react';
+            import { createRoot } from 'react-dom/client';
+            import { UrlField } from '@miniextensions/sdk/react';
+            createRoot(document.getElementById('app')).render(
+                createElement(UrlField, {
+                    mode: 'readOnly',
+                    value: new URL('/url-destination', location.origin).href,
+                    displayAsButton: true,
+                    validButtonLabel: 'Open read-only URL',
+                })
+            );
+        `,
+    },
 });
 const assets = new Map(
-    bundle.outputFiles.map((file) => ['/' + basename(file.path), file.contents])
+    [...bundle.outputFiles, ...readOnlyBundle.outputFiles].map((file) => [
+        '/' + basename(file.path),
+        file.contents,
+    ])
 );
 const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname;
@@ -33,6 +60,11 @@ const server = createServer((request, response) => {
         response.setHeader('content-type', 'text/html');
         response.end(
             '<title>Controlled URL proof</title><link rel="stylesheet" href="/controlled.css"><div id="app"></div><script type="module" src="/controlled.js"></script>'
+        );
+    } else if (path === '/readonly-url') {
+        response.setHeader('content-type', 'text/html');
+        response.end(
+            '<title>Read-only URL proof</title><div id="app"></div><script type="module" src="/readonly-url.js"></script>'
         );
     } else if (path === '/url-destination') {
         response.setHeader('content-type', 'text/html');
@@ -529,38 +561,101 @@ try {
     });
     const resting = controlled.locator('a[aria-hidden="true"]');
     const destination = origin + '/url-destination';
+    // Observe late page events after each gesture's expected outcome is visible.
+    const pageEventQuietMs = 500;
     const changes = () =>
         controlled.locator('#controlled-writes').textContent();
     const submitCount = () =>
         controlled.locator('#controlled-submits').textContent();
     await resting.waitFor();
     assert.equal(await resting.getAttribute('href'), destination);
+    assert.equal(await resting.getAttribute('tabindex'), '-1');
     const opened = [];
+    const overlayNavigations = [];
+    const destinationRequests = [];
     const onOpen = (popup) => opened.push(popup);
+    const onNavigate = (frame) => {
+        if (frame === controlled.mainFrame())
+            overlayNavigations.push(frame.url());
+    };
+    const onDestinationRequest = (request) => {
+        if (request.url() === destination)
+            destinationRequests.push(request.method());
+    };
     context.on('page', onOpen);
-    const [destinationPage] = await Promise.all([
-        context.waitForEvent('page'),
-        resting.click({ button: 'middle' }),
-    ]);
-    await destinationPage
-        .getByRole('heading', { name: 'Local URL destination' })
-        .waitFor();
-    assert.equal(destinationPage.url(), destination);
-    assert.equal(opened.length, 1);
-    assert.equal(await controlledUrl.inputValue(), destination);
-    assert.equal(await changes(), '[]');
-    assert.equal(await submitCount(), '0');
-    await destinationPage.close();
-
-    await resting.click();
+    context.on('request', onDestinationRequest);
+    controlled.on('framenavigated', onNavigate);
+    await controlled.evaluate(() => {
+        window.addEventListener(
+            'auxclick',
+            (event) => {
+                window.__urlAuxClick = {
+                    trusted: event.isTrusted,
+                    button: event.button,
+                    bubbles: event.bubbles,
+                    cancelable: event.cancelable,
+                    defaultPrevented: event.defaultPrevented,
+                };
+            },
+            { once: true }
+        );
+    });
+    await resting.click({ button: 'middle' });
+    const middleClick = await controlled.evaluate(() => window.__urlAuxClick);
+    assert.deepEqual(middleClick, {
+        trusted: true,
+        button: 1,
+        bubbles: true,
+        cancelable: true,
+        defaultPrevented: true,
+    });
     assert.equal(
         await controlledUrl.evaluate((node) => node === document.activeElement),
         true
     );
     assert.equal(await controlledUrl.inputValue(), destination);
-    assert.equal(opened.length, 1);
+    assert.equal(await changes(), '[]');
+    assert.equal(await submitCount(), '0');
+    // Keep the observers through the next keyboard action to catch a late tab.
+    await controlledUrl.press('Tab');
+    assert.equal(
+        await controlled
+            .getByRole('button', { name: 'After URL' })
+            .evaluate((node) => node === document.activeElement),
+        true
+    );
+    await delay(pageEventQuietMs);
+    assert.deepEqual(opened, []);
+    assert.deepEqual(overlayNavigations, []);
+    assert.deepEqual(destinationRequests, []);
     assert.equal(controlled.url(), origin + '/controlled');
     assert.equal(await changes(), '[]');
+    assert.equal(await submitCount(), '0');
+    context.off('page', onOpen);
+    context.off('request', onDestinationRequest);
+    controlled.off('framenavigated', onNavigate);
+
+    await controlled.reload();
+    await resting.waitFor();
+    const primaryPages = [];
+    const onPrimaryPage = (popup) => primaryPages.push(popup);
+    context.on('page', onPrimaryPage);
+    await resting.click();
+    assert.equal(
+        await controlledUrl.evaluate((node) => node === document.activeElement),
+        true
+    );
+    await delay(pageEventQuietMs);
+    assert.equal(
+        primaryPages.length,
+        0,
+        'Editable primary click opened a page'
+    );
+    context.off('page', onPrimaryPage);
+    assert.equal(await controlledUrl.inputValue(), destination);
+    assert.equal(controlled.url(), origin + '/controlled');
+    assert.equal(await changes(), '[]');
+    assert.equal(await submitCount(), '0');
     await controlledUrl.fill('https://example.test/unsaved-a');
     await controlled.getByRole('button', { name: 'Show record B' }).click();
     assert.equal(
@@ -573,8 +668,44 @@ try {
     assert.equal(await changes(), '["b: https://example.test/accepted-b"]');
     assert.equal(await submitCount(), '0');
     assert.deepEqual(transports, []);
-    context.off('page', onOpen);
+
+    await controlled.reload();
+    await resting.waitFor();
+    await controlled.getByRole('button', { name: 'After URL' }).focus();
+    await controlled.keyboard.press('Shift+Tab');
+    assert.equal(
+        await controlledUrl.evaluate((node) => node === document.activeElement),
+        true
+    );
+    assert.equal(await controlledUrl.inputValue(), destination);
+    assert.equal(await changes(), '[]');
+    assert.equal(await submitCount(), '0');
     await controlled.close();
+
+    const readOnly = await context.newPage();
+    readOnly.on('pageerror', (error) => errors.push(error.message));
+    await readOnly.goto(origin + '/readonly-url');
+    const readOnlyLink = readOnly.getByRole('link', {
+        name: 'Open read-only URL',
+    });
+    assert.equal(await readOnlyLink.getAttribute('href'), destination);
+    const readOnlyPages = [];
+    const onReadOnlyPage = (popup) => readOnlyPages.push(popup);
+    context.on('page', onReadOnlyPage);
+    const [destinationPage] = await Promise.all([
+        context.waitForEvent('page', { timeout: 10_000 }),
+        readOnlyLink.click({ button: 'middle' }),
+    ]);
+    await destinationPage
+        .getByRole('heading', { name: 'Local URL destination' })
+        .waitFor({ timeout: 10_000 });
+    assert.equal(destinationPage.url(), destination);
+    await delay(pageEventQuietMs);
+    assert.equal(readOnlyPages.length, 1, 'Read-only middle-click page count');
+    assert.equal(readOnlyPages[0], destinationPage);
+    context.off('page', onReadOnlyPage);
+    await destinationPage.close();
+    await readOnly.close();
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     writeFileSync(
@@ -594,6 +725,12 @@ try {
                 nativeEnterHosts,
                 controlled: {
                     deliberateMiddleClickTabs: opened.length,
+                    middleClick,
+                    middleClickNavigations: overlayNavigations.length,
+                    middleClickDestinationRequests: destinationRequests.length,
+                    primaryClickTabs: primaryPages.length,
+                    readOnlyMiddleClickTabs: readOnlyPages.length,
+                    pageEventQuietMs,
                     recordSwitchWrites: 0,
                     currentOwnerWrites: 1,
                     submits: 0,

@@ -49,6 +49,7 @@ export async function checkAttachmentPresentationBrowser({
     output,
     createChooserOwner,
     evidence,
+    chooserOwnershipOnly = false,
 }) {
     assert(evidence && typeof evidence === 'object', 'Proof evidence required');
     const errors = [],
@@ -94,30 +95,62 @@ const row = loaded.payload.formRecord.data[fieldId][0];
 loaded.payload.formRecord.data[fieldId] = [row, {...row, size:501}, row];
 loaded.payload.fieldIdsToSchemas[fieldId].miniExtConfig = {title:'Files', hideAttachmentName:true};
 const calls = [], flights = [];
-let generation = 0, owner, controller;
-const client = createMiniExtensionsClient({apiOrigin:'https://synthetic-sdk.invalid', fetch:async () => {throw Error('Unexpected I/O');}});
+let generation = 0, owner, controller, chooserOwners, refreshHost, submits = 0, fetches = 0;
+const client = createMiniExtensionsClient({apiOrigin:'https://synthetic-sdk.invalid', fetch:async () => {fetches++;throw Error('Unexpected I/O');}});
 client.forms.save = async input => {calls.push({operation:'save', input}); return {type:'error', formValidationErrors:[], formErrors:{}};};
 client.attachments.uploadFile = async (input, options) => {
     calls.push({operation:'upload', name:input.filename});
     return new Promise((resolve,reject) => flights.push({resolve,reject,signal:options.signal}));
 };
+const createOwner = (id, recordId = loaded.payload.formRecord.recordId) => {
+    const input = structuredClone(loaded);
+    input.payload.formRecord.recordId = recordId;
+    const bindings = createFormFieldBindings({client, loaded:input, getScope:() => ({ownerId:id, revision:0}), saveOptions:{captchaVal:null,isComputeMode:false,searchQuery:{},context:{type:'direct-url'},conditionalLinkedRecordFieldIdsToFilteringValues:{}}});
+    return {owner:bindings, controller:bindings.attachment(fieldId, {journal:new RecoveryJournal(),loadVersion:1,scope:{owner:id,parentFieldId:null,tableId:null,childExtensionId:loaded.extensionId,context:'direct-url'}})};
+};
 const replace = () => {
     owner?.destroy();
-    const id = 'owner-' + ++generation;
-    owner = createFormFieldBindings({client, loaded:structuredClone(loaded), getScope:() => ({ownerId:id, revision:0}), saveOptions:{captchaVal:null,isComputeMode:false,searchQuery:{},context:{type:'direct-url'},conditionalLinkedRecordFieldIdsToFilteringValues:{}}});
-    controller = owner.attachment(fieldId, {journal:new RecoveryJournal(),loadVersion:1,scope:{owner:id,parentFieldId:null,tableId:null,childExtensionId:loaded.extensionId,context:'direct-url'}});
+    ({owner,controller} = createOwner('owner-' + ++generation));
 };
 replace();
+const saved = (host) => JSON.stringify(host.owner.field(fieldId).getSnapshot().value);
+const pending = (host) => host.controller.getSnapshot().files;
 window.attachmentProbe = {
     snapshot:() => ({phase:controller.getSnapshot().phase, busy:controller.getSnapshot().busy, pending:controller.getSnapshot().files.map(f=>f.name), native:owner.field(fieldId).getSnapshot().value, calls, aborted:flights.map(f=>f.signal.aborted)}),
     accept:() => flights.shift().resolve({id:null,url:'https://files.invalid/PRIVATE_accepted',filename:'PRIVATE_accepted.txt',size:1,type:'text/plain'}),
     reject:() => flights.shift().reject(Error('Lost response')),
+    startChooserOwners() {
+        const a = {owner,controller};
+        const b = createOwner('chooser-b','rec_chooser_b');
+        const original = new File(['b'],'b.txt',{type:'text/plain'});
+        b.controller.select([original]);
+        const savedA = saved(a), savedB = saved(b);
+        let bChanges = 0, lastFile = original;
+        const unsubscribe = b.controller.subscribe(snapshot => {
+            if(snapshot.files[0] !== lastFile) bChanges++;
+            lastFile = snapshot.files[0];
+        });
+        chooserOwners = {a,b,unsubscribe,snapshot:() => ({a:pending(a).map(f=>f.name), b:pending(b).map(f=>f.name), bRetained:pending(b)[0]===original, bChanges, savedAUnchanged:saved(a)===savedA, savedBUnchanged:saved(b)===savedB, calls:calls.map(x=>x.operation), fetches, submits})};
+    },
+    switchChooserOwner() {
+        ({owner,controller} = chooserOwners.b);
+        refreshHost();
+    },
+    chooserSnapshot: () => chooserOwners.snapshot(),
+    finishChooserOwners() {
+        chooserOwners.unsubscribe();
+        chooserOwners.b.owner.destroy();
+        ({owner,controller} = chooserOwners.a);
+        chooserOwners = undefined;
+        refreshHost();
+    },
 };
 function Host() {
     const [mounted,setMounted] = useState(true);
     const [,refresh] = useState(0);
+    refreshHost = () => refresh(n=>n+1);
     const button = (label,onClick) => h('button',{type:'button',onClick},label);
-    return h('div',null,
+    return h('form',{'data-chooser-owner':owner===chooserOwners?.b.owner?'b':'a',onSubmit:event=>{event.preventDefault();submits++;}},
         h('h1',null,'Attachment presentation'),
         h('p',null,'Synthetic local Form. Upload each file explicitly, then Save.'),
         mounted ? h(AttachmentField,{binding:owner.field(fieldId),controller}) : null,
@@ -131,11 +164,12 @@ function Host() {
 createRoot(document.querySelector('main')).render(h(Host));
 `;
     try {
-        assert.equal(
-            typeof createChooserOwner,
-            'function',
-            'Chooser owner factory required'
-        );
+        if (!chooserOwnershipOnly)
+            assert.equal(
+                typeof createChooserOwner,
+                'function',
+                'Chooser owner factory required'
+            );
         writeFileSync(
             join(consumer, 'attachment-presentation-host.mjs'),
             source
@@ -223,6 +257,90 @@ button:disabled {opacity:.55; cursor:default;} :focus-visible {outline:3px solid
         evidence.phase = 'mounting';
         await page.goto(origin);
         await field.waitFor();
+        evidence.phase = 'chooser-owner-replacement';
+        const chooserSnapshot = () =>
+            page.evaluate(() => window.attachmentProbe.chooserSnapshot());
+        const openChooser = async () => {
+            const [chooser] = await Promise.all([
+                page.waitForEvent('filechooser', { timeout: 5000 }),
+                choose.press('Enter'),
+            ]);
+            return chooser;
+        };
+        const file = (name) => ({
+            name,
+            mimeType: 'text/plain',
+            buffer: Buffer.from(name),
+        });
+        await page.evaluate(() => window.attachmentProbe.startChooserOwners());
+        try {
+            const before = await chooserSnapshot();
+            const oldChooser = await openChooser();
+            const oldInput = oldChooser.element();
+            await page.evaluate(() =>
+                window.attachmentProbe.switchChooserOwner()
+            );
+            await page.locator('form[data-chooser-owner="b"]').waitFor();
+            const connected = await oldInput.evaluate(
+                (node) => node.isConnected
+            );
+            let lateCompletion = 'completed';
+            try {
+                await oldChooser.setFiles(file('a.txt'), { timeout: 5000 });
+            } catch (error) {
+                if (connected || !/detached|not attached/i.test(String(error)))
+                    throw error;
+                lateCompletion = 'detached input';
+            } finally {
+                await oldInput.dispose();
+            }
+            const afterLate = await chooserSnapshot();
+            const fresh = await openChooser();
+            await fresh.setFiles(file('fresh-b.txt'), { timeout: 5000 });
+            await fresh.element().dispose();
+            const afterFresh = await chooserSnapshot();
+            evidence.chooserOwnership = {
+                before,
+                connected,
+                lateCompletion,
+                afterLate,
+                afterFresh,
+            };
+            assert.deepEqual(before, {
+                a: [],
+                b: ['b.txt'],
+                bRetained: true,
+                bChanges: 0,
+                savedAUnchanged: true,
+                savedBUnchanged: true,
+                calls: [],
+                fetches: 0,
+                submits: 0,
+            });
+            assert.deepEqual(afterLate, before);
+            assert.deepEqual(afterFresh, {
+                ...before,
+                b: ['fresh-b.txt'],
+                bRetained: false,
+                bChanges: 1,
+            });
+        } finally {
+            await page.evaluate(() =>
+                window.attachmentProbe.finishChooserOwners()
+            );
+            await page.locator('form[data-chooser-owner="a"]').waitFor();
+        }
+        assert.deepEqual(errors, []);
+        assert.deepEqual(external, []);
+        if (chooserOwnershipOnly) {
+            Object.assign(evidence, {
+                status: 'passed',
+                phase: 'complete',
+                errors,
+                external,
+            });
+            return evidence;
+        }
         traceRequested = true;
         await bounded('Activation trace setup', () =>
             page.evaluate(() => {
@@ -674,8 +792,8 @@ button:disabled {opacity:.55; cursor:default;} :focus-visible {outline:3px solid
                 ],
             ],
         });
+        if (exerciseFailure !== undefined) throw exerciseFailure.error;
     }
-    if (exerciseFailure !== undefined) throw exerciseFailure.error;
     Object.assign(evidence, { status: 'passed', captures, errors, external });
     console.log(
         'Packed attachment presentation: keyboard/focus, selected/uploading/accepted/uncertain, duplicate order, queue/owner replacement, late completion, unmount and narrow layout passed'

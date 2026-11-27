@@ -36,12 +36,27 @@ const projection = projectFormCompletion({
     fields: {}, linkedTableStates: {},
 });
 const events = { enters: [], submits: 0, saves: 0, intents: [] };
+const answer = 'Gate A\\nGate B';
+const confirmations = [];
 document.addEventListener('keydown', event => {
     if (event.key === 'Enter') events.enters.push(event.isTrusted);
 }, true);
 document.addEventListener('submit', () => events.submits++, true);
-createRoot(document.querySelector('main')).render(h(StrictMode, null, h(CompleteFormComposition, {
+const root = createRoot(document.querySelector('main'));
+function render(reviewOpen = false) {
+root.render(h(StrictMode, null, h(CompleteFormComposition, {
     formId: 'root-form', items: [], onSubmit: () => events.saves++,
+    review: {
+        open: reviewOpen, title: 'Review your answers', editLabel: 'Edit',
+        confirmLabel: 'Confirm answers', emptyLabel: 'No answers',
+        items: [
+            {id:'newline',labelId:'review-newline',title:'Multiline answer',semanticTitle:'Multiline answer',value:answer},
+            {id:'space',labelId:'review-space',title:'Space answer',semanticTitle:'Space answer',value:'Gate A Gate B'},
+            {id:'custom',labelId:'review-custom',title:'Custom answer',semanticTitle:'Custom answer',value:h('span',null,answer)},
+        ],
+        onEdit: () => render(), onDismiss: () => render(),
+        onConfirm() { confirmations.push(answer); render(); },
+    },
     completion: {
         configuration, projection, canSubmit: true,
         onCommand(intent) {
@@ -61,7 +76,10 @@ createRoot(document.querySelector('main')).render(h(StrictMode, null, h(Complete
             });
         },
     },
-})));`;
+})));
+}
+window.reviewProof = { open: () => render(true), confirmations };
+render();`;
 
 async function check(browser, react) {
     const directory = mkdtempSync(
@@ -101,6 +119,8 @@ async function check(browser, react) {
             'forms/completion.js',
             'react/CompleteFormComposition.js',
             'react/CompleteFormCompletion.js',
+            'react/CompleteFormReview.js',
+            'react/form-pages.css',
         ]) {
             assert(
                 Object.keys(bundle.metafile.inputs).includes(
@@ -175,6 +195,7 @@ async function check(browser, react) {
         });
         page.on('pageerror', (error) => errors.push(error.message));
         await page.goto(origin + initial + '#section');
+        const review = await checkReview(page);
         const button = page.getByRole('button', {
             name: 'Submit another',
             exact: true,
@@ -212,7 +233,7 @@ async function check(browser, react) {
         ]);
         assert.deepEqual(errors, []);
         assert.deepEqual(unexpected, []);
-        return { react, documents, ...receipts[0].events };
+        return { react, documents, review, ...receipts[0].events };
     } finally {
         try {
             await context?.close();
@@ -227,6 +248,50 @@ async function check(browser, react) {
             }
         }
     }
+}
+
+async function checkReview(page) {
+    await page.setViewportSize({ width: 960, height: 720 });
+    await page.waitForFunction(() => Boolean(window.reviewProof));
+    await page.evaluate(() => window.reviewProof.open());
+    const dialog = page.getByRole('dialog', { name: 'Review your answers' });
+    await dialog.waitFor();
+    const measure = (id) =>
+        dialog
+            .locator(`dd[aria-labelledby="review-${id}"]`)
+            .evaluate((node) => {
+                const text = (node.firstElementChild ?? node).firstChild;
+                const measureRange = (start) => {
+                    const range = document.createRange();
+                    range.setStart(text, start);
+                    range.setEnd(text, start + 'Gate A'.length);
+                    const { top, width, height } =
+                        range.getBoundingClientRect();
+                    return { top, width, height };
+                };
+                return [measureRange(0), measureRange('Gate A '.length)];
+            });
+    const measurements = {};
+    for (const id of ['newline', 'space', 'custom']) {
+        const [first, second] = await measure(id);
+        assert.ok(first.width > 0 && first.height > 0);
+        assert.ok(second.width > 0 && second.height > 0);
+        measurements[id] = second.top - first.top;
+    }
+    assert.ok(measurements.newline > 0, JSON.stringify(measurements));
+    assert.equal(measurements.space, 0);
+    assert.equal(measurements.custom, 0);
+    assert.deepEqual(
+        await page.evaluate(() => window.reviewProof.confirmations),
+        []
+    );
+    await dialog.getByRole('button', { name: 'Confirm answers' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    const confirmations = await page.evaluate(
+        () => window.reviewProof.confirmations
+    );
+    assert.deepEqual(confirmations, ['Gate A\nGate B']);
+    return { lineOffsets: measurements, confirmations };
 }
 
 const browser = await chromium.launch({

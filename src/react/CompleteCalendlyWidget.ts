@@ -192,7 +192,9 @@ export function CompleteCalendlyWidget(props: CompleteCalendlyWidgetProps) {
         ...props,
         frameClassName: 'mx-sdk-calendly-frame',
     });
-    const title = props.schedulingTitle || props.labels?.schedule || 'Schedule';
+    const title = props.schedulingTitle?.trim()
+        ? props.schedulingTitle
+        : props.labels?.schedule || 'Schedule';
     const style: CalendlyStyle = {
         '--mx-sdk-calendly-accent': props.accentColor,
         '--mx-sdk-calendly-hover': props.hoverColor,

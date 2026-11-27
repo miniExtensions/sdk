@@ -924,6 +924,28 @@ window.completeCalendlyProof={
             await reset('french');
             await open('Programme');
             await close('Programme');
+            await change({ title: '   ' });
+            current = await open('Programme');
+            await focusInside(current, 'whitespace-title-iframe-entry');
+            assert.equal(await page.locator('dialog[open]').count(), 1);
+            assert.equal(
+                await current.evaluate(
+                    (node) =>
+                        node.ownerDocument.activeElement ===
+                        node.querySelector('iframe')
+                ),
+                true
+            );
+            await close('Programme');
+            assert.deepEqual((await snapshot()).writes, []);
+            evidence.results.push({
+                mobile,
+                case: 'whitespace-title-localized-name-and-focus-return',
+            });
+            await reset();
+            await change({ title: null });
+            await open('Schedule');
+            await close('Schedule');
             for (const mode of ['http', 'foreign', 'malformed']) {
                 await reset(mode);
                 const error = first().getByRole('alert');

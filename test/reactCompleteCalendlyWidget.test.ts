@@ -524,8 +524,13 @@ for (const example of [
         labels: { schedule: 'Programme' },
         expected: 'Programme',
     },
+    {
+        title: '   ',
+        labels: { schedule: 'Programme' },
+        expected: 'Programme',
+    },
 ])
-    it(`names exactly one dialog and focuses its real iframe for ${example.expected}`, async (t) => {
+    it(`names exactly one dialog for the title ${JSON.stringify(example.title)} and focuses its real iframe`, async (t) => {
         const f = await fixture(t, {
             schedulingTitle: example.title,
             labels: example.labels,

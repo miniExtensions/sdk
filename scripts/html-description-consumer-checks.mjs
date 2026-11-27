@@ -532,6 +532,8 @@ export function prepareHTMLDescriptionEditorReference({
 export const htmlDescriptionBrowserStyle = String.raw`html {font-size:16px}
 body {font-family:Arial,sans-serif;font-size:16px;line-height:24px;margin:16px;color:#111827}
 .description-host {width:360px}
+.description-host[data-text-spacing="normal"] .mx-sdk-quill__editor > p {line-height:24px}
+.description-host[data-text-spacing="increased"] .mx-sdk-quill__editor > p {line-height:32px}
 .fixture-controls {display:flex;gap:12px;margin:12px 0}
 #unrelated {padding:13px;font-size:17px;line-height:25px;white-space:normal}
 `;
@@ -1186,6 +1188,125 @@ export async function checkHTMLDescriptionBrowser({ page, evidence }) {
         'real container layout plus native ResizeObserver/window resize stay synchronized'
     );
 
+    await reset({
+        html: '<p>First instruction</p><p>Second instruction</p><p>Third instruction</p>',
+    });
+    const host = page.locator('.description-host');
+    const draft = page.locator('#adjacent');
+    const setTextSpacing = (spacing) =>
+        host.evaluate(
+            (node, spacing) => node.setAttribute('data-text-spacing', spacing),
+            spacing
+        );
+    const readSpacing = () =>
+        view().evaluate((node) => {
+            const editor = node.querySelector('.mx-sdk-quill__editor');
+            const instructions = [...editor.querySelectorAll('p')];
+            return {
+                width: node.clientWidth,
+                client: node.clientHeight,
+                scroll: node.scrollHeight,
+                maxHeight: getComputedStyle(node).maxHeight,
+                lineHeights: instructions.map(
+                    (line) => getComputedStyle(line).lineHeight
+                ),
+                html: editor.innerHTML,
+                thirdVisible:
+                    instructions[2].getBoundingClientRect().bottom <=
+                    node.getBoundingClientRect().bottom,
+                focus: document.activeElement.id,
+                ...window.__nativeProbe.snapshot(),
+            };
+        });
+    await setTextSpacing('normal');
+    await draft.fill('Keep spacing draft');
+    await page.waitForFunction(() => !window.__nativeProbe.snapshot().toggle);
+    // Settle the initial observation before changing only the fixture stylesheet.
+    await page.evaluate(
+        () =>
+            new Promise((resolve) =>
+                requestAnimationFrame(() => requestAnimationFrame(resolve))
+            )
+    );
+    const beforeSpacing = await readSpacing();
+    assert.deepEqual(
+        [beforeSpacing.client, beforeSpacing.scroll, beforeSpacing.maxHeight],
+        [72, 72, '72px']
+    );
+    assert.deepEqual(beforeSpacing.lineHeights, ['24px', '24px', '24px']);
+    assert.equal(beforeSpacing.focus, 'adjacent');
+
+    await setTextSpacing('increased');
+    const clippedSpacing = await readSpacing();
+    const textSpacing = { before: beforeSpacing, clipped: clippedSpacing };
+    evidence.textSpacing = textSpacing;
+    assert.deepEqual(
+        [
+            clippedSpacing.client,
+            clippedSpacing.scroll,
+            clippedSpacing.maxHeight,
+        ],
+        [72, 96, '72px']
+    );
+    assert.deepEqual(clippedSpacing.lineHeights, ['32px', '32px', '32px']);
+    assert.equal(clippedSpacing.thirdVisible, false);
+    await page.waitForFunction(
+        () => window.__nativeProbe.snapshot().toggle?.label === 'Read more',
+        null,
+        { timeout: 2500 }
+    );
+    textSpacing.disclosed = await readSpacing();
+    assert.equal(textSpacing.disclosed.focus, 'adjacent');
+    assert.equal(textSpacing.disclosed.toggle.expanded, 'false');
+    assert.equal(
+        textSpacing.disclosed.toggle.controls,
+        beforeSpacing.viewport.id
+    );
+
+    await page.locator('#before').focus();
+    await page.keyboard.press('Tab');
+    assert.equal(
+        await toggle().evaluate((node) => node === document.activeElement),
+        true
+    );
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+        () => window.__nativeProbe.snapshot().toggle?.expanded === 'true'
+    );
+    textSpacing.expanded = await readSpacing();
+    assert.equal(textSpacing.expanded.thirdVisible, true);
+    assert.equal(
+        await toggle().evaluate((node) => node === document.activeElement),
+        true
+    );
+
+    await setTextSpacing('normal');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !window.__nativeProbe.snapshot().toggle);
+    textSpacing.restored = await readSpacing();
+    assert.deepEqual(
+        [
+            textSpacing.restored.client,
+            textSpacing.restored.scroll,
+            textSpacing.restored.maxHeight,
+        ],
+        [72, 72, '72px']
+    );
+    for (const state of Object.values(textSpacing)) {
+        assert.equal(state.width, beforeSpacing.width);
+        assert.equal(state.viewport.id, beforeSpacing.viewport.id);
+        assert.equal(state.html, beforeSpacing.html);
+        assert.equal(state.committed, beforeSpacing.committed);
+        assert.equal(state.adjacent, 'Keep spacing draft');
+        assert.equal(state.requests, 0);
+        assert.equal(state.submits, 0);
+    }
+    await host.evaluate((node) => node.removeAttribute('data-text-spacing'));
+    await draft.fill('Keep draft');
+    await check(
+        'text spacing reveals clipped instructions at a constant viewport height'
+    );
+
     await reset({ surface: 'quill', html: '<p>Last help</p>' });
     await page.locator('#adjacent').fill('Keep draft');
     assert.deepEqual(
@@ -1198,7 +1319,7 @@ export async function checkHTMLDescriptionBrowser({ page, evidence }) {
     );
     assert.equal(final.htmlRef, null);
     assert.equal(final.quillRef, null);
-    assert.equal(groups.length, 12);
+    assert.equal(groups.length, 13);
     Object.assign(evidence, {
         groups,
         containment,

@@ -57,17 +57,19 @@ export const getPortalCalendarDateKeys = (args: {
     const values: readonly unknown[] = Array.isArray(args.value)
         ? args.value
         : [args.value];
+    // The grid indexes ISO days independently of the consumer's Moment locale.
     const keys = new Set<string>();
     for (const value of values) {
         if (typeof value !== 'string') continue;
         if (type === 'date') {
             const date = moment.utc(value, 'YYYY-MM-DD', true);
             if (date.isValid()) {
-                keys.add(date.format('YYYY-MM-DD'));
+                keys.add(date.locale('en').format('YYYY-MM-DD'));
                 continue;
             }
             const computed = moment.parseZone(value, moment.ISO_8601, true);
-            if (computed.isValid()) keys.add(computed.format('YYYY-MM-DD'));
+            if (computed.isValid())
+                keys.add(computed.locale('en').format('YYYY-MM-DD'));
             continue;
         }
         const date = moment.utc(value, moment.ISO_8601, true);
@@ -80,7 +82,7 @@ export const getPortalCalendarDateKeys = (args: {
         } else {
             date.utcOffset(args.fallbackClientUtcOffset);
         }
-        keys.add(date.format('YYYY-MM-DD'));
+        keys.add(date.locale('en').format('YYYY-MM-DD'));
     }
     return [...keys];
 };

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
+import moment from 'moment-timezone';
 import {
     createCalendarRecordPickerController,
     createPortalCalendarController,
@@ -656,6 +658,20 @@ test('native default clock exposes the distinct native Date and Moment reads', (
         nativeCalendarClock.clientUtcOffset() + now.getTimezoneOffset(),
         0
     );
+});
+
+test('native local day and month retain machine keys with Arabic Moment digits', (t) => {
+    const priorLocale = moment.locale();
+    t.after(() => {
+        moment.locale(priorLocale);
+    });
+    createRequire(import.meta.url)('moment/locale/ar.js');
+    moment.locale('ar');
+    t.mock.method(moment, 'now', () => new Date(2026, 1, 12, 12).getTime());
+    assert.equal(moment().format('YYYY-MM-DD'), '٢٠٢٦-٠٢-١٢');
+    assert.equal(nativeCalendarClock.localDay(), '2026-02-12');
+    assert.equal(nativeCalendarClock.localMonth(), '2026-02');
+    assert.equal(moment.locale(), 'ar');
 });
 
 test('a host Promise or void return never substitutes for explicit read admission', () => {

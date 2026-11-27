@@ -8,6 +8,7 @@ import {
     lazy,
     Suspense,
     Fragment,
+    type Context,
     type ReactNode,
     type KeyboardEvent,
 } from 'react';
@@ -27,7 +28,7 @@ import {
 
 // Keep optional popup dependencies out of the ordinary leaf import path.
 const FieldTooltipPopup = lazy(() => import('./fieldTooltipPopup.js'));
-export const GridHeaderHelpKeyboard = createContext(false);
+export const GridHeaderHelpKeyboard: Context<boolean> = createContext(false);
 
 export type CompleteFormFieldPresentationProps = {
     /** Already projected by the host. No conditional or writer evaluation occurs here. */

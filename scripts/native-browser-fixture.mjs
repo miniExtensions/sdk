@@ -27,6 +27,7 @@ import {
     useFileSelection,
     useCalendlyBooking,
     RatingInput,
+    RatingField,
     AttachmentField,
     AttachmentDialog,
     PortalList,
@@ -992,6 +993,43 @@ if (mode === 'file-selection') {
         );
     }
     root.render(h(Host));
+} else if (mode === 'rating-readonly-localized') {
+    const items = [
+        { name: 'Blank rating', value: null },
+        { name: 'Stored zero rating', value: 0 },
+        { name: 'Stored three rating', value: 3 },
+    ];
+    /** @type {(number|null)[]} */
+    const changes = [];
+    let submits = 0;
+    snapshot = () => ({ changes: [...changes], submits, errors });
+    root.render(
+        h(
+            'form',
+            {
+                onSubmit: (event) => {
+                    event.preventDefault();
+                    submits++;
+                },
+            },
+            items.map(({ name, value }) =>
+                h(
+                    'div',
+                    { key: name, role: 'group', 'aria-label': name },
+                    h(RatingField, {
+                        mode: 'controlled',
+                        value,
+                        disabled: true,
+                        grid: true,
+                        max: 5,
+                        icon: 'star',
+                        labels: { empty: 'Keine Bewertung' },
+                        onChange: (value) => changes.push(value),
+                    })
+                )
+            )
+        )
+    );
 } else if (mode === 'rating') {
     const initial = {
         value: /** @type {number|null} */ (2),

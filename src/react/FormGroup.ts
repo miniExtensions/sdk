@@ -19,6 +19,8 @@ export type FormGroupProps = Readonly<{
     allFieldsHidden: boolean;
     /** Host resolves canonical error presence by field ID. */
     hasError: boolean;
+    /** Plain-text announcement for a collapsed group with a validation error. */
+    validationErrorDescription?: string;
     /** Original host field nodes retain their controllers, keys and writers. */
     children: ReactNode;
     preview?: FormGroupPreview;
@@ -128,7 +130,8 @@ function VisibleFormGroup(props: FormGroupProps): React.ReactElement {
             ? h(
                   'span',
                   { id: errorDescriptionId, hidden: true },
-                  'This section contains a validation error.'
+                  props.validationErrorDescription?.trim() ||
+                      'This section contains a validation error.'
               )
             : null,
         open

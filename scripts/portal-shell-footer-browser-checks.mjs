@@ -1,25 +1,23 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
-import { chromium } from 'playwright';
+import { join } from 'node:path';
 
-// node scripts/check-portal-shell-footer-geometry.mjs [output] [native-400.png]
-const output = resolve(process.argv[2] ?? 'dist/portal-shell-footer-geometry');
-const root = fileURLToPath(new URL('../', import.meta.url));
-const read = (path) => readFileSync(join(root, path));
+const readFixture = (path) =>
+    readFileSync(new URL('../test/fixtures/' + path, import.meta.url));
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const nativeDigest =
+// Crop the archived 400×780 synthetic native capture at the coordinates below.
+const nativeFrameSha256 =
     '42c742579539986f5f1e85674947e46209ab1b4825d6580d04d4da34b411d844';
-const native = process.argv[3] && readFileSync(process.argv[3]);
-if (native) assert.equal(sha256(native), nativeDigest, 'Native reference PNG');
-
-const shellCss = read('src/react/portal-shell.css');
-const descriptionCss = read('src/react/html/html-description.css');
-const font = read('test/fixtures/inter/inter-latin.woff2');
-const logo = read('test/fixtures/image-annotation-64x32.png');
+const nativeCropSha256 =
+    '5f9b400c16972bfd7d7a40720e87641e1e8fcc4f232b6fad94cc86a273262485';
+const nativeRgbaSha256 =
+    'c8db958fd18020d424dac3e5ec0412a1b0a7ffa4d9c28fb6929f90865650a27f';
+const buttonCrop = { x: 152, y: 622, width: 36, height: 84 };
+const fontSha256 =
+    '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62';
+const font = readFixture('inter/inter-latin.woff2');
+const logo = readFixture('image-annotation-64x32.png');
 const styles = `
     @font-face {
         font-family: Inter;
@@ -28,31 +26,7 @@ const styles = `
     }
     html { font: 16px Inter, sans-serif; }
     body { margin: 0; }
-    ${shellCss}
-    ${descriptionCss}
 `;
-const bundle = await build({
-    stdin: {
-        resolveDir: root,
-        contents: `
-            import { createElement as h } from 'react';
-            import { createRoot } from 'react-dom/client';
-            import { CompletePortalShell } from './src/react/CompletePortalShell.ts';
-
-            createRoot(document.querySelector('#root')).render(
-                h(CompletePortalShell, {
-                    snapshot: window.fixture,
-                    onIntent: intent => window.proof.intents.push(intent.type),
-                }, h('h2', null, 'Fixture body'))
-            );
-        `,
-    },
-    bundle: true,
-    platform: 'browser',
-    format: 'iife',
-    write: false,
-    define: { 'process.env.NODE_ENV': '"production"' },
-});
 
 const plain = {
     layout: 'sidebar',
@@ -100,24 +74,7 @@ const cases = [
     },
 ];
 
-const buttonCrop = { x: 156, y: 626, width: 28, height: 76 };
-const browser = await chromium.launch({
-    ...(process.env.SDK_NATIVE_CHROMIUM
-        ? { executablePath: process.env.SDK_NATIVE_CHROMIUM }
-        : { channel: 'chrome' }),
-    headless: true,
-    chromiumSandbox: true,
-});
-const report = {
-    chrome: browser.version(),
-    cssSha256: sha256(shellCss),
-    fontSha256: sha256(font),
-    nativeComparison: null,
-    closedContexts: 0,
-    measurements: {},
-};
-
-async function measure(scenario) {
+async function measure(browser, assets, output, native, report, scenario) {
     const { name, width = 400 } = scenario;
     const desktop = name === 'desktop';
     const viewport = { width, height: desktop ? 720 : 780 };
@@ -128,6 +85,7 @@ async function measure(scenario) {
         serviceWorkers: 'block',
         locale: 'en-US',
         colorScheme: 'light',
+        forcedColors: 'none',
         reducedMotion: 'reduce',
     });
     try {
@@ -142,58 +100,64 @@ async function measure(scenario) {
         const navigations = [];
         page.on('pageerror', (error) => errors.push(error.message));
         await page.setContent(
-            '<!doctype html><html lang="en"><div id="root"></div></html>'
+            '<!doctype html><html lang="en"><meta charset="utf-8"><div id="app"></div></html>'
         );
         page.on('framenavigated', (frame) => navigations.push(frame.url()));
+        // Inline the ordinary consumer's installed-package bundle in an offline context.
+        const css = Buffer.from(assets.get('/main.css'));
+        const script = Buffer.from(assets.get('/main.js'));
+        await page.addStyleTag({ content: css.toString('utf8') });
         await page.addStyleTag({ content: styles });
-        await page.evaluate(
-            (fixture) => {
-                window.fixture = fixture;
-                const proof = (window.proof = {
-                    clicks: [],
-                    intents: [],
-                    network: [],
-                    submits: 0,
-                });
-                document.addEventListener(
-                    'click',
-                    (event) => {
-                        const button = event.target.closest('button');
-                        proof.clicks.push(button?.className ?? '');
-                        if (!button?.matches('.mx-sdk-portal-toggle')) {
-                            event.preventDefault();
-                            event.stopImmediatePropagation();
-                        }
-                    },
-                    true
-                );
-                document.addEventListener(
-                    'submit',
-                    (event) => {
+        await page.evaluate(() => {
+            const proof = (window.footerProof = {
+                clicks: [],
+                network: [],
+                submits: 0,
+            });
+            document.addEventListener(
+                'click',
+                (event) => {
+                    const button = event.target.closest('button');
+                    proof.clicks.push(button?.className ?? '');
+                    if (!button?.matches('.mx-sdk-portal-toggle')) {
                         event.preventDefault();
-                        proof.submits++;
-                    },
-                    true
-                );
-                const reject = (label) => {
-                    proof.network.push(label);
-                    throw new Error('Unexpected ' + label);
-                };
-                window.fetch = () => reject('fetch');
-                XMLHttpRequest.prototype.open = () => reject('xhr');
-                navigator.sendBeacon = () => reject('beacon');
-            },
-            {
-                scope: 'synthetic-visitor',
-                revision: 1,
-                items: [],
-                selection: null,
-                header: { ...plain, ...scenario.header },
-                user: { ...logout, ...scenario.user },
-                searchAgainEnabled: scenario.searchAgainEnabled ?? false,
-            }
+                        event.stopImmediatePropagation();
+                    }
+                },
+                true
+            );
+            document.addEventListener(
+                'submit',
+                (event) => {
+                    event.preventDefault();
+                    proof.submits++;
+                },
+                true
+            );
+            const reject = (label) => {
+                proof.network.push(label);
+                throw new Error('Unexpected ' + label);
+            };
+            window.fetch = () => reject('fetch');
+            XMLHttpRequest.prototype.open = () => reject('xhr');
+            navigator.sendBeacon = () => reject('beacon');
+        });
+        await page.addScriptTag({
+            type: 'module',
+            content: script.toString('utf8'),
+        });
+        await page.waitForFunction(() => window.fixtureCommittedSnapshot);
+        await page.evaluate((patch) => window.configure(patch), {
+            scope: 'synthetic-visitor',
+            items: [],
+            selection: null,
+            header: { ...plain, ...scenario.header },
+            user: { ...logout, ...scenario.user },
+            searchAgainEnabled: scenario.searchAgainEnabled ?? false,
+        });
+        await page.waitForFunction(
+            () => window.fixtureCommittedSnapshot?.scope === 'synthetic-visitor'
         );
-        await page.addScriptTag({ content: bundle.outputFiles[0].text });
         if (!desktop)
             await page
                 .getByRole('button', { name: 'Open navigation', exact: true })
@@ -235,6 +199,11 @@ async function measure(scenario) {
                 viewport: [innerWidth, innerHeight],
                 dpr: devicePixelRatio,
                 rootFont: getComputedStyle(document.documentElement).fontSize,
+                fontFamily: getComputedStyle(node).fontFamily,
+                light: matchMedia('(prefers-color-scheme: light)').matches,
+                forcedColors: matchMedia('(forced-colors: active)').matches,
+                reducedMotion: matchMedia('(prefers-reduced-motion: reduce)')
+                    .matches,
                 drawer: box(node),
                 rail: box(node.parentElement),
                 footer: box(footer),
@@ -247,6 +216,7 @@ async function measure(scenario) {
                 ),
                 buttonFocused:
                     button != null && document.activeElement === button,
+                buttonHovered: Boolean(button?.matches(':hover')),
                 dialog: node.getAttribute('role') === 'dialog',
                 rich: node.classList.contains(
                     'mx-sdk-portal-navigation--rich-title'
@@ -271,62 +241,76 @@ async function measure(scenario) {
             animations: 'disabled',
         });
         if (name === 'plain-400') {
-            await page.screenshot({
+            const capturedCrop = await page.screenshot({
                 path: join(output, 'plain-400-button.png'),
                 clip: buttonCrop,
+                animations: 'disabled',
+                scale: 'css',
             });
-            if (native) {
-                const pixels = await page.evaluate(
-                    async ({ images, crop }) => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = crop.width;
-                        canvas.height = crop.height;
-                        const context = canvas.getContext('2d');
-                        const crops = [];
-                        for (const png of images) {
-                            const image = new Image();
-                            image.src = 'data:image/png;base64,' + png;
-                            await image.decode();
-                            context.clearRect(0, 0, crop.width, crop.height);
-                            context.drawImage(image, -crop.x, -crop.y);
-                            const rgba = context.getImageData(
-                                0,
-                                0,
-                                crop.width,
-                                crop.height
+            const pixels = await page.evaluate(
+                async ({ images, size }) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = size.width;
+                    canvas.height = size.height;
+                    const context = canvas.getContext('2d');
+                    const crops = [];
+                    for (const png of images) {
+                        const image = new Image();
+                        image.src = 'data:image/png;base64,' + png;
+                        await image.decode();
+                        if (
+                            image.naturalWidth !== size.width ||
+                            image.naturalHeight !== size.height
+                        )
+                            throw new Error(
+                                'Unexpected button crop dimensions'
                             );
-                            crops.push(Array.from(rgba.data));
-                        }
-                        return crops;
-                    },
-                    {
-                        images: [native, screenshot].map((png) =>
-                            png.toString('base64')
-                        ),
-                        crop: buttonCrop,
+                        context.clearRect(0, 0, size.width, size.height);
+                        context.drawImage(image, 0, 0);
+                        const rgba = context.getImageData(
+                            0,
+                            0,
+                            size.width,
+                            size.height
+                        );
+                        crops.push(Array.from(rgba.data));
                     }
-                );
-                const [nativePixels, sdkPixels] = pixels.map((rgba) =>
-                    Buffer.from(rgba)
-                );
-                let differingPixels = 0;
-                for (let index = 0; index < nativePixels.length; index += 4) {
-                    if (
-                        nativePixels.readUInt32BE(index) !==
-                        sdkPixels.readUInt32BE(index)
-                    )
-                        differingPixels++;
+                    return crops;
+                },
+                {
+                    images: [native, capturedCrop].map((png) =>
+                        png.toString('base64')
+                    ),
+                    size: buttonCrop,
                 }
-                report.nativeComparison = {
-                    nativePngSha256: nativeDigest,
-                    crop: buttonCrop,
-                    nativeRgbaSha256: sha256(nativePixels),
-                    sdkRgbaSha256: sha256(sdkPixels),
-                    differingPixels,
-                };
+            );
+            const [nativePixels, sdkPixels] = pixels.map((rgba) =>
+                Buffer.from(rgba)
+            );
+            let differingPixels = 0;
+            for (let index = 0; index < nativePixels.length; index += 4) {
+                if (
+                    nativePixels.readUInt32BE(index) !==
+                    sdkPixels.readUInt32BE(index)
+                )
+                    differingPixels++;
             }
+            report.nativeComparison = {
+                nativeFrameSha256,
+                nativeCropSha256,
+                installedCropSha256: sha256(capturedCrop),
+                crop: buttonCrop,
+                nativeRgbaSha256: sha256(nativePixels),
+                sdkRgbaSha256: sha256(sdkPixels),
+                differingPixels,
+            };
         }
-        const proof = await page.evaluate(() => window.proof);
+        const proof = await page.evaluate(() => ({
+            ...window.footerProof,
+            intents: window.proof.intents,
+            reads: window.proof.reads,
+            writes: window.proof.storage,
+        }));
         return {
             ...bounds,
             fontLoaded,
@@ -345,11 +329,7 @@ async function measure(scenario) {
     }
 }
 
-mkdirSync(output, { recursive: true });
-try {
-    for (const scenario of cases)
-        report.measurements[scenario.name] = await measure(scenario);
-
+function assertMeasurements(report) {
     for (const scenario of cases) {
         const {
             name,
@@ -366,6 +346,8 @@ try {
             {
                 clicks: desktop ? [] : ['mx-sdk-portal-toggle'],
                 intents: [],
+                reads: [],
+                writes: [],
                 network: [],
                 submits: 0,
             },
@@ -376,9 +358,14 @@ try {
         assert.deepEqual(measured.viewport, [width, height]);
         assert.equal(measured.dpr, 1);
         assert.equal(measured.rootFont, '16px');
+        assert.equal(measured.fontFamily, 'Inter, sans-serif');
         assert(measured.fontLoaded);
+        assert(
+            measured.light && !measured.forcedColors && measured.reducedMotion
+        );
         assert.equal(measured.confirmationDialogs, 0);
         assert.equal(measured.buttonFocused, false);
+        assert.equal(measured.buttonHovered, false);
         assert.equal(measured.dialog, !desktop);
         assert.equal(measured.rich, rich);
         assert.deepEqual(
@@ -433,24 +420,61 @@ try {
         288,
         'Desktop outer rail right edge'
     );
-    if (native)
+}
+
+export async function checkPortalShellFooterGeometry(
+    browser,
+    assets,
+    output,
+    provenance
+) {
+    const report = {
+        ...provenance,
+        chrome: browser.version(),
+        platform: process.platform,
+        fontSha256: sha256(font),
+        nativeComparison: null,
+        closedContexts: 0,
+        measurements: {},
+    };
+    mkdirSync(output, { recursive: true });
+    try {
+        const native = readFixture('portal-shell-native-logout-400-crop.png');
+        assert.equal(
+            sha256(native),
+            nativeCropSha256,
+            'Native crop PNG digest'
+        );
+        assert.equal(report.fontSha256, fontSha256, 'Inter font digest');
+        for (const scenario of cases)
+            report.measurements[scenario.name] = await measure(
+                browser,
+                assets,
+                output,
+                native,
+                report,
+                scenario
+            );
+        assert.equal(
+            report.nativeComparison.nativeRgbaSha256,
+            nativeRgbaSha256,
+            'Decoded native crop digest'
+        );
         assert.equal(
             report.nativeComparison.differingPixels,
             0,
-            'Native button crop'
+            'Native padded button crop differing pixels'
         );
-    report.outcome = 'passed';
-} catch (error) {
-    report.outcome = 'failed';
-    report.failure = error.message;
-    throw error;
-} finally {
-    await browser.close();
-    writeFileSync(
-        join(output, 'result.json'),
-        JSON.stringify(report, null, 2) + '\n'
-    );
+        assertMeasurements(report);
+        report.outcome = 'passed';
+    } catch (error) {
+        report.outcome = 'failed';
+        report.failure = error.message;
+        throw error;
+    } finally {
+        writeFileSync(
+            join(output, 'result.json'),
+            JSON.stringify(report, null, 2) + '\n'
+        );
+    }
 }
-console.log(
-    'Portal drawer footer geometry passed. ' + join(output, 'result.json')
-);

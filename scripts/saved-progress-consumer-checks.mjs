@@ -902,6 +902,71 @@ export async function assertSavedProgressConsumer({
         assert.equal(casConflict.locks.length, 0);
         await casConflict.unmount();
 
+        // A recreated draft can reuse a revision while changing its writer.
+        const previousAnswers = { answer: 'previous draft' };
+        const recreatedAnswers = { answer: 'recreated draft' };
+        const staleTab = await fixture({
+            seed: envelope('old-tab', 4, previousAnswers),
+            held: true,
+            withForm: true,
+            initial: {
+                record: { type: 'create', data: previousAnswers },
+                progressRead: {
+                    shareId: 'synthetic',
+                    revision: 4,
+                    writerId: 'old-tab',
+                },
+            },
+        });
+        assert.deepEqual(staleTab.records, []);
+        await staleTab.publish({ answer: 'stale edit' });
+        const recreatedBytes = envelope('other-tab', 4, recreatedAnswers);
+        staleTab.data.set(progressKey, recreatedBytes);
+        const ioBeforeRelease = staleTab.io.length;
+        await staleTab.release();
+        assert.equal(staleTab.data.get(progressKey), recreatedBytes);
+        assert.deepEqual(staleTab.io.slice(ioBeforeRelease), [
+            ['read', progressKey],
+        ]);
+        assert.match(
+            staleTab.container.querySelector('[role=alert]')?.textContent ?? '',
+            /Saved progress changed in another tab/
+        );
+        await staleTab.publish({ answer: 'another stale edit' });
+        assert.equal(staleTab.records.length, 1);
+        assert.equal(staleTab.lockRequests, 1);
+        assert.equal(staleTab.locks.length, 0);
+        assert.equal(staleTab.submits, 0);
+        await staleTab.unmount();
+
+        const restoredTab = await fixture({
+            seed: recreatedBytes,
+            held: true,
+            withForm: true,
+            initial: {
+                record: { type: 'create', data: recreatedAnswers },
+                progressRead: {
+                    shareId: 'synthetic',
+                    revision: 4,
+                    writerId: 'other-tab',
+                },
+            },
+        });
+        assert.deepEqual(restoredTab.records, []);
+        const nextAnswers = { answer: 'edit after Restore' };
+        await restoredTab.publish(nextAnswers);
+        await restoredTab.release();
+        assert.deepEqual(restoredTab.snapshot(), {
+            revision: 5,
+            writerId: 'writer-1',
+            record: nextAnswers,
+        });
+        assert.deepEqual(restoredTab.records, [nextAnswers]);
+        assert.equal(restoredTab.lockRequests, 1);
+        assert.equal(restoredTab.container.querySelector('[role=alert]'), null);
+        assert.equal(restoredTab.submits, 0);
+        await restoredTab.unmount();
+
         // Save owns guarded removal, including preservation of a competing writer.
         const save = await fixture({ held: true });
         await save.publish({ queued: true });

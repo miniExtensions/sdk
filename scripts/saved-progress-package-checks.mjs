@@ -32,7 +32,7 @@ useNativeFormProgress({shareId:'synthetic',record:props.record,ports});
 // @ts-expect-error the SDK owns complete conflict rendering and lifecycle
 useNativeFormProgress({...props,renderConflict(){return null;}});
 // @ts-expect-error every admitted lifecycle write forwards a post-lock guard
-ports.write({shareId:'synthetic',writerId:'writer',record:{},expectedRevision:null});
+ports.write({shareId:'synthetic',writerId:'writer',record:{},expectedRevision:null,expectedWriterId:null});
 void incomplete;
 `;
 

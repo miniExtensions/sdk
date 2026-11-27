@@ -197,7 +197,12 @@ async function fixture(
 it('picker forwards real selection/focus controls, six weeks, capped badges and localized navigation', async (t) => {
     const f = await fixture(t, {
         eventCounts: { '2026-02-13': 12 },
-        labels: { calendar: 'Dates', previous: 'Précédent', next: 'Suivant' },
+        labels: {
+            calendar: 'Dates',
+            previous: 'Précédent',
+            next: 'Suivant',
+            events: 'événements',
+        },
     });
     assert.equal(f.container.querySelectorAll('tbody tr').length, 6);
     assert.equal(
@@ -209,7 +214,42 @@ it('picker forwards real selection/focus controls, six weeks, capped badges and 
     assert.equal(f.day('2026-02-11').getAttribute('data-today'), 'true');
     assert.equal(f.day('2026-02-12').getAttribute('data-today'), 'false');
     assert.equal(f.days.length, 0);
-    await f.click(f.day('2026-02-13'));
+    const emptyDay = f.day('2026-02-12');
+    const populatedDay = f.day('2026-02-13');
+    const keyEvent = (type: string, key: string) =>
+        new f.window.KeyboardEvent(type, {
+            key,
+            bubbles: true,
+            cancelable: true,
+        });
+    assert.ok(emptyDay instanceof f.window.HTMLElement);
+    await act(async () => emptyDay.focus());
+    const focusCount = f.focuses.length;
+    await act(async () =>
+        emptyDay.dispatchEvent(keyEvent('keydown', 'ArrowRight'))
+    );
+    assert.equal(f.window.document.activeElement, populatedDay);
+    const arrowFocus = f.focuses.slice(focusCount);
+    assert.ok(arrowFocus.length > 0);
+    assert.ok(arrowFocus.every((day) => day === '2026-02-13'));
+    assert.deepEqual(f.days, []);
+    assert.equal(emptyDay.getAttribute('data-selected'), 'true');
+    assert.equal(populatedDay.getAttribute('data-selected'), 'false');
+    assert.match(
+        populatedDay.getAttribute('aria-label') ?? '',
+        /Friday, February 13, 2026/
+    );
+    assert.equal(emptyDay.getAttribute('aria-describedby'), null);
+    const description = populatedDay.getAttribute('aria-describedby');
+    assert.ok(description, 'populated day has an accessible description');
+    assert.equal(
+        f.window.document.getElementById(description)?.textContent,
+        '12 événements'
+    );
+    await act(async () => {
+        populatedDay.dispatchEvent(keyEvent('keydown', 'Enter'));
+        populatedDay.dispatchEvent(keyEvent('keyup', 'Enter'));
+    });
     assert.deepEqual(f.days, ['2026-02-13']);
     assert.equal(f.day('2026-02-13').getAttribute('data-selected'), 'true');
     const next = f.container.querySelector('button[aria-label="Suivant"]');

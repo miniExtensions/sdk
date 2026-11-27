@@ -106,6 +106,7 @@ export const TextareaInput = forwardRef<
 >(function TextareaInput({ autoSize, ...props }, forwardedRef) {
     const node = useRef<HTMLTextAreaElement | null>(null);
     const lastHeight = useRef<number | null>(null);
+    const measuredWidth = useRef<number | null>(null);
     const ownedHeight = useRef<string | null>(null);
     const resize = useRef<() => void>(() => {});
     const enabled = autoSize !== undefined;
@@ -143,33 +144,50 @@ export const TextareaInput = forwardRef<
                 current.style.setProperty('height', height, priority);
             lastHeight.current = null;
             ownedHeight.current = null;
+            measuredWidth.current = null;
         };
     }, [enabled]);
     useBrowserLayoutEffect(() => {
         resize.current = () => {
-            if (!enabled || !node.current) return;
-            const height = measuredHeight(node.current, min, max);
+            const current = node.current;
+            if (!enabled || !current) return;
+            measuredWidth.current = current.getBoundingClientRect().width;
+            const height = measuredHeight(current, min, max);
             if (height !== null && lastHeight.current !== height) {
-                node.current.style.setProperty(
-                    'height',
-                    `${height}px`,
-                    'important'
-                );
+                current.style.setProperty('height', `${height}px`, 'important');
                 lastHeight.current = height;
-                ownedHeight.current = node.current.style.height;
+                ownedHeight.current = current.style.height;
             }
         };
         resize.current();
     });
     useEffect(() => {
-        if (!enabled || !node.current) return;
-        const document = node.current.ownerDocument;
+        const current = node.current;
+        if (!enabled || !current) return;
+        const document = current.ownerDocument;
         const view = document.defaultView;
         const fonts = document.fonts;
+        let frame: number | undefined;
         const onResize = () => resize.current();
+        const widthChanged = () =>
+            current.getBoundingClientRect().width !== measuredWidth.current;
+        const observer =
+            view?.ResizeObserver &&
+            new view.ResizeObserver(() => {
+                // Defer height writes past the observer delivery and ignore height-only changes.
+                if (frame === undefined && widthChanged()) {
+                    frame = view.requestAnimationFrame(() => {
+                        frame = undefined;
+                        if (widthChanged()) onResize();
+                    });
+                }
+            });
+        observer?.observe(current);
         view?.addEventListener('resize', onResize);
         fonts?.addEventListener('loadingdone', onResize);
         return () => {
+            observer?.disconnect();
+            if (frame !== undefined) view?.cancelAnimationFrame(frame);
             view?.removeEventListener('resize', onResize);
             fonts?.removeEventListener('loadingdone', onResize);
         };

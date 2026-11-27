@@ -19,9 +19,10 @@ import {
 } from './CompleteFormHeader.js';
 import {
     CompleteFormPageNavigation,
-    FormNextKeyboardFocusContext,
+    FormPageKeyboardFocusContext,
     FormPageNavigationButton,
     type CompleteFormPageNavigationProps,
+    type FormPageKeyboardFocus,
     type FormPageNavigationButtonProps,
 } from './CompleteFormPageNavigation.js';
 import {
@@ -139,10 +140,9 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
         button: HTMLButtonElement;
         event: MouseEvent;
     } | null>(null);
-    const [keyboardNext, setKeyboardNext] = useState<{
-        submitter: HTMLButtonElement;
-    } | null>(null);
-    const { primary } = props;
+    const [keyboardFocus, setKeyboardFocus] =
+        useState<FormPageKeyboardFocus>(null);
+    const { back, primary } = props;
     let primaryControl: ReactElement | null = null;
     let admitted = false;
     if (primary?.kind === 'next') {
@@ -195,7 +195,7 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
             !activation.event.defaultPrevented &&
             (event.nativeEvent as SubmitEvent).submitter === activation.button
         )
-            setKeyboardNext({ submitter: activation.button });
+            setKeyboardFocus({ direction: 'next', button: activation.button });
         props.onSubmit(event);
     };
     const controls = h(
@@ -208,15 +208,25 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
                 .filter(Boolean)
                 .join(' '),
         },
-        props.back &&
+        back &&
             h(FormPageNavigationButton, {
                 direction: 'back',
                 type: 'button',
-                label: props.back.label,
-                loading: props.back.loading,
-                disabled: props.back.disabled,
-                onClick: props.back.onClick,
-                className: props.back.className,
+                label: back.label,
+                loading: back.loading,
+                disabled: back.disabled,
+                onClick(event) {
+                    const button = event.currentTarget;
+                    if (
+                        back.onClick &&
+                        !event.defaultPrevented &&
+                        event.detail === 0 &&
+                        button.ownerDocument.activeElement === button
+                    )
+                        setKeyboardFocus({ direction: 'back', button });
+                    back.onClick?.(event);
+                },
+                className: back.className,
             }),
         primaryControl &&
             (props.decoratePrimary
@@ -244,8 +254,8 @@ export function CompleteFormComposition<CaptchaOptions = unknown>(
             props.slots?.header ??
                 (props.header && h(CompleteFormHeader, props.header)),
             h(
-                FormNextKeyboardFocusContext.Provider,
-                { value: keyboardNext },
+                FormPageKeyboardFocusContext.Provider,
+                { value: keyboardFocus },
                 props.slots?.pageNavigation ??
                     (props.pageNavigation &&
                         h(CompleteFormPageNavigation, props.pageNavigation))

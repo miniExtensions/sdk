@@ -9,7 +9,10 @@ import {
     type CompleteRecordCommentsDialogProps,
 } from '../src/react/index.js';
 import { createRecordCommentsController } from '../src/ui/index.js';
-import type { ListRecordCommentsResult } from '../src/runtime/types.js';
+import type {
+    AddRecordCommentInput,
+    ListRecordCommentsResult,
+} from '../src/runtime/types.js';
 
 const empty: ListRecordCommentsResult = {
     readableVersionOfRecordPrimaryValue: null,
@@ -261,6 +264,52 @@ it('renders source union, escaped mentions and literal unresolved or inherited I
     );
     assert.equal(f.host.querySelectorAll('.mx-sdk-comments-mention').length, 1);
     assert.equal(f.host.querySelector('script,Ops,Verified'), null);
+});
+
+it('renders the full display label from a returned child Form comment', async (t) => {
+    const label = 'North\nTeam';
+    const writes: AddRecordCommentInput[] = [];
+    const controller = createRecordCommentsController({
+        owner: { isCurrent: () => true },
+        childExtensionAccessToken: 'A',
+        list: async () => ({
+            readableVersionOfRecordPrimaryValue: label,
+            comments: writes.map(({ comment }) => ({
+                id: 'returned',
+                text: comment,
+                author: {
+                    id: 'legacy',
+                    name: 'Airtable Author',
+                    email: 'author@example.invalid',
+                },
+                createdTime: '2024-01-01',
+                lastUpdatedTime: null,
+                mentioned: {},
+            })),
+        }),
+        append: async (input) => {
+            writes.push(input);
+        },
+        invalidate: () => {},
+    });
+    const f = await fixture(t, { controller });
+    await act(async () => controller.setDraft('Approved'));
+    await f.click(recordCommentsLabels.send);
+    assert.deepEqual(writes, [
+        {
+            childExtensionAccessToken: 'A',
+            comment: '{{North\nTeam}}: Approved',
+        },
+    ]);
+    const row = f.host.querySelector('.mx-sdk-comments-row');
+    assert.equal(
+        row?.querySelector('.mx-sdk-comments-author')?.textContent,
+        label
+    );
+    assert.equal(
+        row?.querySelector('.mx-sdk-comments-text')?.textContent,
+        'Approved'
+    );
 });
 
 it('pending append keeps Close/backdrop available and settles captured cache after unmount', async (t) => {

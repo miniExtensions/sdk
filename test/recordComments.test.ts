@@ -136,6 +136,29 @@ it('preserves unanchored legacy substring semantics and own-property mentions', 
     );
 });
 
+it('reads a multiline alias only at the exact writer prefix boundary', () => {
+    const label = 'North\nTeam';
+    const body = '  Approved {{body marker}}: literal';
+    assert.deepEqual(presentRecordComment(comment(`{{${label}}}: ${body}`)), {
+        author: label,
+        text: body,
+        mentions: {},
+    });
+
+    for (const text of [
+        `before {{${label}}}: Approved`,
+        `{{${label}}}:Approved }}: later`,
+        `{{${label}}}:\tApproved`,
+        `{{${label}}} Approved`,
+    ]) {
+        assert.deepEqual(presentRecordComment(comment(text)), {
+            author: 'author@example.invalid',
+            text,
+            mentions: {},
+        });
+    }
+});
+
 it('loads only explicitly, prepends exact page order and uses newest sending policy', async () => {
     const reads: ListRecordCommentsInput[] = [];
     const f = fixture({

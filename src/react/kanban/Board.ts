@@ -28,6 +28,7 @@ import {
     MeasuringStrategy,
     KeyboardCoordinateGetter,
     defaultDropAnimationSideEffects,
+    defaultAnnouncements,
 } from './runtime.js';
 import {
     AnimateLayoutChanges,
@@ -382,7 +383,27 @@ export function MultipleContainers({
     }, [disabled, modalOpen, items, keyboardFocus, epoch]);
     return React.createElement(DndContext, {
         id: contextId,
-        accessibility: { restoreFocus: handle },
+        accessibility: {
+            restoreFocus: handle,
+            announcements: {
+                ...defaultAnnouncements,
+                onDragOver(event) {
+                    const { active, over } = event;
+                    if (!over || active.data.current?.type === 'container')
+                        return defaultAnnouncements.onDragOver(event);
+                    const columnId = findContainer(over.id);
+                    const column =
+                        columnId == null
+                            ? undefined
+                            : findColumnById(items, columnId);
+                    if (!column) return defaultAnnouncements.onDragOver(event);
+                    const position = column.recordIds.indexOf(over.id);
+                    return position === -1
+                        ? `Over ${column.label} column.`
+                        : `Over ${column.label} column, position ${position + 1}.`;
+                },
+            },
+        },
         sensors: sensors,
         collisionDetection: collisionDetectionStrategy,
         measuring: {

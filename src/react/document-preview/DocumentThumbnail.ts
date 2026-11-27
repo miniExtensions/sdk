@@ -324,14 +324,18 @@ export function DocumentThumbnail(props: Props): ReactNode {
         content = unavailable;
     else if (!accepted) content = h('span', { role: 'status' }, labels.loading);
     else if (!document || accepted.failed) content = unavailable;
-    else if (document.media === 'text')
+    else if (document.media === 'text') {
+        const { bytes } = document;
+        let encoding = 'utf-8';
+        if (bytes[0] === 0xff && bytes[1] === 0xfe) encoding = 'utf-16le';
+        else if (bytes[0] === 0xfe && bytes[1] === 0xff) encoding = 'utf-16be';
         content = h(LiteralText, {
             as: 'div',
-            value: new TextDecoder().decode(document.bytes),
+            value: new TextDecoder(encoding).decode(bytes),
             preserveWhitespace: false,
             style: { padding: '30px', overflowWrap: 'anywhere' },
         });
-    else if (document.media === 'html')
+    } else if (document.media === 'html')
         content = h(CompleteHTMLRenderer, {
             inline: true,
             html: sanitizeDocumentHTML(

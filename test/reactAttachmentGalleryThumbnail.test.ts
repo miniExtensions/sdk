@@ -335,6 +335,106 @@ test('local failures keep the tile fallback and preloaded bytes bypass the local
     assert.deepEqual(requests, []);
 });
 
+test('renders BOM-marked UTF-16 and both UTF-8 variants as literal text', async (t) => {
+    const f = await fixture(t);
+    const requests = observeRequests(() =>
+        assert.fail('Preloaded text previews must stay offline')
+    );
+    const download = t.mock.method(
+        f.window.HTMLAnchorElement.prototype,
+        'click',
+        () => assert.fail('Rendering a preview must not download a file')
+    );
+    const expected = 'Café — €25';
+    const utf8 = new TextEncoder().encode(expected);
+    const samples = [
+        [
+            'UTF-16LE',
+            Uint8Array.of(
+                0xff,
+                0xfe,
+                0x43,
+                0,
+                0x61,
+                0,
+                0x66,
+                0,
+                0xe9,
+                0,
+                0x20,
+                0,
+                0x14,
+                0x20,
+                0x20,
+                0,
+                0xac,
+                0x20,
+                0x32,
+                0,
+                0x35,
+                0
+            ),
+        ],
+        [
+            'UTF-16BE',
+            Uint8Array.of(
+                0xfe,
+                0xff,
+                0,
+                0x43,
+                0,
+                0x61,
+                0,
+                0x66,
+                0,
+                0xe9,
+                0,
+                0x20,
+                0x20,
+                0x14,
+                0,
+                0x20,
+                0x20,
+                0xac,
+                0,
+                0x32,
+                0,
+                0x35
+            ),
+        ],
+        ['UTF-8 with BOM', Uint8Array.of(0xef, 0xbb, 0xbf, ...utf8)],
+        ['UTF-8', utf8],
+    ] as const;
+    const actual: Record<string, string | null> = {};
+    for (const [revision, [encoding, bytes]] of samples.entries()) {
+        await f.view({
+            document: uriDocument('encoding.txt', {
+                options: {
+                    source: {
+                        kind: 'bytes',
+                        revision,
+                        mimeType: 'text/plain',
+                        bytes,
+                    },
+                },
+            }),
+        });
+        await f.visibility(true);
+        actual[encoding] =
+            f.container.querySelector('[data-document-thumbnail=text]')
+                ?.textContent ?? null;
+        assert.equal(f.container.querySelector('iframe, a[download]'), null);
+    }
+
+    f.unchangedEffects();
+    assert.equal(download.mock.callCount(), 0);
+    assert.deepEqual(requests, []);
+    assert.deepEqual(
+        actual,
+        Object.fromEntries(samples.map(([encoding]) => [encoding, expected]))
+    );
+});
+
 test('legacy Office performs only an admitted HEAD and no SDK GET, while known text is read in place', async (t) => {
     const f = await fixture(t);
     const office = uriDocument('opaque?id=a&selection=1', {

@@ -112,6 +112,7 @@ export function CompleteTruncatedDescription({
     const [isExpanded, setIsExpanded] = useState(false);
     const [isOverflowing, setIsOverflowing] = useState(true);
     const viewportRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
     const viewportId = useId();
     const clippedInteractiveAttributes = useRef(
         new Map<HTMLElement, InteractiveAttributes>()
@@ -221,6 +222,8 @@ export function CompleteTruncatedDescription({
             viewport.querySelectorAll<HTMLImageElement>('img')
         );
         resizeObserver?.observe(viewport);
+        // Content can grow while the collapsed viewport stays at its height cap.
+        if (contentRef.current) resizeObserver?.observe(contentRef.current);
         window.addEventListener('resize', synchronizeLayout);
         for (const image of images) {
             image.addEventListener('load', synchronizeLayout);
@@ -257,7 +260,11 @@ export function CompleteTruncatedDescription({
                     overflow: 'hidden',
                 },
             },
-            createElement(CompleteQuillHTMLRenderer, { html, className })
+            createElement(CompleteQuillHTMLRenderer, {
+                html,
+                className,
+                ref: contentRef,
+            })
         ),
         isOverflowing
             ? createElement(

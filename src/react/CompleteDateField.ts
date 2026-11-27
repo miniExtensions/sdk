@@ -1,6 +1,8 @@
 import type * as React from 'react';
 import {
+    cloneElement,
     createElement as h,
+    isValidElement,
     useEffect,
     useId,
     useLayoutEffect,
@@ -72,6 +74,108 @@ function renderVietnameseMonth(
     );
 }
 
+type TimeCounter = 'hours' | 'minutes' | 'seconds' | 'milliseconds';
+type PinnedTimeView = {
+    getCounters(): (TimeCounter | 'ampm')[];
+    increase(unit: TimeCounter): string;
+    decrease(unit: TimeCounter): string;
+    toggleDayPart(): void;
+    props: { setTime(unit: TimeCounter, value: number): void };
+};
+
+function renderKeyboardTimePicker(
+    pickerView: string,
+    calendar: React.ReactNode,
+    focusTime: { current: boolean },
+    current: () => boolean,
+    timeOpened: () => boolean
+): React.ReactElement {
+    const adjustments = new Map<EventTarget, () => void>();
+    let opener: HTMLElement | null = null;
+    let timeView: PinnedTimeView | null = null;
+    // The pinned renderer supplies the same counter instance and callback used
+    // by its mouse controls, including wraparound and the accepted date.
+    const rendered =
+        pickerView === 'time' &&
+        isValidElement<{ ref?: React.Ref<PinnedTimeView> }>(calendar)
+            ? cloneElement(calendar, {
+                  ref(instance: PinnedTimeView | null): void {
+                      timeView = instance;
+                  },
+              })
+            : calendar;
+    const exposeButton = (node: HTMLElement, label: string) => {
+        node.setAttribute('role', 'button');
+        node.setAttribute('aria-label', label);
+        node.tabIndex = 0;
+    };
+    return h(
+        'div',
+        {
+            className: 'rdtPicker',
+            ref(node: HTMLDivElement | null): void {
+                if (!node) return;
+                opener = node.querySelector<HTMLElement>('.rdtTimeToggle');
+                if (opener) exposeButton(opener, 'Adjust time');
+                const controls = timeView;
+                if (!controls) return;
+                const counters = node.querySelectorAll('.rdtCounter');
+                controls.getCounters().forEach((unit, index) => {
+                    counters[index]
+                        ?.querySelectorAll<HTMLElement>('.rdtBtn')
+                        .forEach((button, direction) => {
+                            const increase = direction === 0;
+                            exposeButton(
+                                button,
+                                unit === 'ampm'
+                                    ? `Change AM or PM ${increase ? 'up' : 'down'}`
+                                    : `${increase ? 'Increase' : 'Decrease'} ${unit.slice(0, -1)}`
+                            );
+                            adjustments.set(button, () => {
+                                if (unit === 'ampm') controls.toggleDayPart();
+                                else {
+                                    const value = increase
+                                        ? controls.increase(unit)
+                                        : controls.decrease(unit);
+                                    controls.props.setTime(unit, Number(value));
+                                }
+                            });
+                        });
+                });
+                if (focusTime.current) {
+                    focusTime.current = false;
+                    node.querySelector<HTMLElement>(
+                        '.rdtCounter .rdtBtn[role="button"]'
+                    )?.focus({ preventScroll: true });
+                }
+            },
+            onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                const target = event.target;
+                const adjust = adjustments.get(target);
+                if (target !== opener && !adjust) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.repeat || event.nativeEvent.isComposing || !current())
+                    return;
+                if (target === opener) opener.click();
+                else adjust?.();
+            },
+            onClickCapture(event: React.MouseEvent<HTMLDivElement>) {
+                if (event.target === opener && event.detail === 0 && current())
+                    focusTime.current = true;
+            },
+            onClick(event: React.MouseEvent<HTMLDivElement>) {
+                if (event.target === opener && !timeOpened())
+                    focusTime.current = false;
+                else if (event.detail === 0 && current())
+                    adjustments.get(event.target)?.();
+            },
+        },
+        rendered
+    );
+}
+
 /** Complete native-compatible picker; the legacy ISO-only controls stay separate. */
 export function CompleteDateField(
     props: CompleteDateFieldProps
@@ -137,6 +241,7 @@ export function CompleteDateField(
     const pickerRef = useRef<Datetime>(null);
     const anchorRef = useRef<HTMLDivElement>(null);
     const view = useRef('days');
+    const focusTime = useRef(false);
     const [popup, setPopup] = useState<{
         lease: object;
         open: boolean;
@@ -144,6 +249,7 @@ export function CompleteDateField(
     }>({ lease, open: false, theme: {} });
     const open = popup.lease === lease && popup.open && !props.readOnly;
     const close = () => {
+        focusTime.current = false;
         if (current()) setPopup((old) => ({ ...old, open: false }));
     };
     commitEffect(() => {
@@ -199,6 +305,7 @@ export function CompleteDateField(
     const onOpen = () => {
         if (!current()) return;
         view.current = 'days';
+        focusTime.current = false;
         const anchor = anchorRef.current;
         const theme = anchor
             ? anchor.ownerDocument.defaultView?.getComputedStyle(anchor)
@@ -306,8 +413,45 @@ export function CompleteDateField(
                                             text: event.currentTarget.value,
                                         });
                                 },
-                                onBlur: blur,
+                                onBlur(event) {
+                                    if (
+                                        props.airtableDateConfig.type ===
+                                            'dateTime' &&
+                                        draft.text === canonicalText() &&
+                                        event.currentTarget.ownerDocument
+                                            .getElementById(calendarId)
+                                            ?.contains(event.relatedTarget)
+                                    )
+                                        return;
+                                    blur();
+                                },
                                 onKeyDown(event) {
+                                    if (
+                                        event.key === 'Tab' &&
+                                        !event.shiftKey &&
+                                        !event.altKey &&
+                                        !event.ctrlKey &&
+                                        !event.metaKey &&
+                                        !event.defaultPrevented &&
+                                        open &&
+                                        props.airtableDateConfig.type ===
+                                            'dateTime' &&
+                                        current()
+                                    ) {
+                                        const timeButton =
+                                            event.currentTarget.ownerDocument
+                                                .getElementById(calendarId)
+                                                ?.querySelector<HTMLElement>(
+                                                    '.rdtTimeToggle[role="button"]'
+                                                );
+                                        if (timeButton) {
+                                            event.preventDefault();
+                                            timeButton.focus({
+                                                preventScroll: true,
+                                            });
+                                            return;
+                                        }
+                                    }
                                     if (event.key === ' ')
                                         event.stopPropagation();
                                     if (event.key === 'Enter') {
@@ -347,7 +491,8 @@ export function CompleteDateField(
                     return h('td', { key }, h('div', attributes, date.date()));
                 },
                 ...(locale === 'vi' && { renderMonth: renderVietnameseMonth }),
-                renderView(_view, renderCalendar) {
+                renderView(pickerView, renderCalendar) {
+                    const calendar = renderCalendar();
                     return h(
                         DatePopoverContent,
                         {
@@ -377,7 +522,15 @@ export function CompleteDateField(
                                     event.preventDefault();
                             },
                         },
-                        h('div', { className: 'rdtPicker' }, renderCalendar())
+                        props.airtableDateConfig.type === 'dateTime'
+                            ? renderKeyboardTimePicker(
+                                  pickerView,
+                                  calendar,
+                                  focusTime,
+                                  () => current() !== null,
+                                  () => view.current === 'time'
+                              )
+                            : h('div', { className: 'rdtPicker' }, calendar)
                     );
                 },
                 value: getDateInputPickerValue(props.value),

@@ -27,6 +27,11 @@
 .mx-sdk-complete-date-popup .rdtPicker .rdtTimeToggle {
     text-align: center;
 }
+.mx-sdk-complete-date-popup .rdtPicker .rdtTimeToggle:focus-visible,
+.mx-sdk-complete-date-popup .rdtPicker .rdtBtn:focus-visible {
+    outline: 2px solid var(--mx-sdk-accent, rgb(var(--theme-500, 59 130 246)));
+    outline-offset: -2px;
+}
 .mx-sdk-complete-date-popup .rdtPicker table {
     width: 100%;
     margin: 0;

@@ -44,13 +44,21 @@ export default class Lexer {
             throw new RangeError('Formula token limit exceeded');
         }
         while (!this.atEnd()) {
+            // Skip separators between tokens without modifying quoted or reference text.
+            const next = this.peek();
+            if (
+                next === ' ' ||
+                next === '\n' ||
+                (next === '\r' &&
+                    this.source[this.currentCharIndex + 1] === '\n')
+            ) {
+                this.advance();
+                continue;
+            }
             // Check before scanning the next token, including long strings/references.
-            // Whitespace emits no token and remains valid at the exact limit.
             if (
                 maxTokens !== undefined &&
-                this.currentTokenStream.length >= maxTokens &&
-                this.peek() !== ' ' &&
-                this.peek() !== '\n'
+                this.currentTokenStream.length >= maxTokens
             ) {
                 throw new RangeError('Formula token limit exceeded');
             }
@@ -68,9 +76,6 @@ export default class Lexer {
         }
 
         switch (currentChar) {
-            case ' ':
-            case '\n':
-                break;
             case '(':
                 this.currentTokenStream.push({
                     type: TokenTypes.LEFT_PAREN,

@@ -41,10 +41,60 @@ export async function checkFormulaCompatibilityConsumer({ consumerDirectory }) {
             )
         ).href
     );
+    const esmUi = await import(
+        pathToFileURL(
+            join(
+                consumerDirectory,
+                'node_modules/@miniextensions/sdk/dist/esm/ui/index.js'
+            )
+        ).href
+    );
     const previousLocale = hostMoment.locale();
     let formats = 0;
     try {
-        for (const api of [esm, consumer('@miniextensions/sdk/formulas')]) {
+        for (const [api, ui] of [
+            [esm, esmUi],
+            [
+                consumer('@miniextensions/sdk/formulas'),
+                consumer('@miniextensions/sdk/ui'),
+            ],
+        ]) {
+            const alpha = { id: 'alpha', name: 'Alpha' };
+            const beta = { id: 'beta', name: 'Beta' };
+            for (const lineEnding of ['\n', '\r\n']) {
+                const result = ui.projectSelectChoices({
+                    choices: [alpha, beta],
+                    selectedValues: [],
+                    getValue: (choice) => choice.name,
+                    allowedOptionIds: null,
+                    retainSelected: true,
+                    evaluation: ui.createSelectFormulaEvaluation({
+                        enabled: true,
+                        context: {
+                            record: { id: 'rec_original', fields: {} },
+                            airtableFields: [],
+                            linkedTableLoadingStates: {},
+                        },
+                        formulaForChoice: (choice) =>
+                            choice === alpha
+                                ? `RECORD_ID() =${lineEnding}'rec_original'`
+                                : 'FALSE()',
+                    }),
+                });
+                assert.deepEqual(result, { status: 'ready', choices: [alpha] });
+                assert.equal(result.choices[0], alpha);
+            }
+            assert.equal(
+                new api.Lexer('1 +\r\n2\r\n').tokenize({
+                    cache: false,
+                    maxTokens: 3,
+                }).length,
+                3
+            );
+            assert.equal(
+                new api.FormulaRunner('"first\r\nsecond"').run(),
+                'first\r\nsecond'
+            );
             const formula = 'DATETIME_FORMAT("2026-05-04", "MMMM")';
             const defaultRunner = new api.FormulaRunner(formula);
             const defaultMonth = defaultRunner.run();

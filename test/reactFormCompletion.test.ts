@@ -418,6 +418,7 @@ it('post-save root actions preserve stay, session, lock, label and disabled rule
         Options,
         boolean,
         string[],
+        string?,
     ][] = [
         ['default labels', {}, {}, true, both],
         [
@@ -439,6 +440,14 @@ it('post-save root actions preserve stay, session, lock, label and disabled rule
             {},
             true,
             [both[0]!],
+        ],
+        [
+            'space-only Copy caption',
+            { allowCopySubmittedToNewFormButtonText: '  ' },
+            {},
+            true,
+            [both[0]!, '  '],
+            both[1],
         ],
         [
             'locked',
@@ -463,7 +472,7 @@ it('post-save root actions preserve stay, session, lock, label and disabled rule
         ),
     ];
     const calls: string[] = [];
-    for (const [name, input, options, canSubmit, labels] of cases) {
+    for (const [name, input, options, canSubmit, labels, copyName] of cases) {
         const configuration = { ...childActionConfiguration, ...input };
         await f.render(
             h(CompleteFormCompletion, {
@@ -482,6 +491,11 @@ it('post-save root actions preserve stay, session, lock, label and disabled rule
         assert.deepEqual(
             buttons.map((button) => button.textContent),
             labels,
+            name
+        );
+        assert.equal(
+            buttons[1]?.getAttribute('aria-label') ?? null,
+            copyName ?? null,
             name
         );
         if (!canSubmit)

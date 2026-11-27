@@ -170,11 +170,14 @@ try {
  assert.deepEqual(footerIntents, ['copy_form', 'submit_another_form', 'copy_form']);
 
  const postSaveIntents = [];
- for (const [configuration, options, canSubmit, labels] of [
+ for (const [configuration, options, canSubmit, labels, accessibleCopy] of [
      [footerSettings, { hasParentExtension: true }, true, []],
      [footerSettings, {}, true, [frenchSubmit, frenchCopy]],
      [locked, {}, true, [frenchSubmit]],
      [emptyCopy, {}, true, [frenchSubmit]],
+     [{ ...footerSettings, allowCopySubmittedToNewFormButtonText: '  ' }, {}, true, [frenchSubmit, '  '], frenchCopy],
+     [{ ...footerSettings, allowCopySubmittedToNewFormButtonText: null }, {}, true, [frenchSubmit, frenchCopy]],
+     [{ ...footerSettings, allowCopySubmittedToNewFormButtonText: ' Dupliquer ' }, {}, true, [frenchSubmit, ' Dupliquer ']],
      [{ ...footerSettings, accessingRecordsMethod: 'loginPage' }, {}, true, []],
      [footerSettings, { hasLogout: true }, true, []],
      [{ ...footerSettings, successAction: false }, {}, true, []],
@@ -190,6 +193,7 @@ try {
      })));
      const buttons = [...container.querySelectorAll('button')];
      assert.deepEqual(buttons.map(button => button.textContent), labels);
+     assert.equal(buttons[1]?.getAttribute('aria-label') ?? null, accessibleCopy ?? null);
      if (!canSubmit) {
          for (const button of buttons) {
              assert(button.disabled);
@@ -307,7 +311,7 @@ export function checkFormCompletionReactMatrix({
                 assert.equal(result.hydrationErrors, 0);
                 assert.equal(result.networkRequests, 0);
                 assert.equal(result.footerCases, 16);
-                assert.equal(result.successCases, 12);
+                assert.equal(result.successCases, 15);
                 assert.deepEqual(result.effects, [
                     'submit_another_form',
                     'copy_form',

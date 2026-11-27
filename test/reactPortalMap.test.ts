@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createElement as h } from 'react';
+import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
     PortalMap,
@@ -149,6 +149,109 @@ test('actual class Map and OverlayViewF preserve controls, initial ordered bound
         f.overlays.filter((overlay) => overlay.map !== null).length,
         0
     );
+});
+
+test('touch chooses a titled co-located Map card once and retires dismissed or removed choices', async (t) => {
+    const f = await portalMapGoogleFixture(t);
+    const root = f.create();
+    const container = root.container as unknown as InstanceType<
+        typeof f.window.HTMLDivElement
+    >;
+    type FixtureButton = InstanceType<typeof f.window.HTMLButtonElement>;
+    const coordinator = createPortalMapProviderCoordinator({
+        inspectRealm: () => ({
+            kind: 'attested-provider',
+            configuration,
+            ready: Promise.resolve(),
+        }),
+        createLoader: () => {
+            throw new Error('Attestation must not construct a loader');
+        },
+    });
+    const provider = bindPortalMapProvider(
+        coordinator,
+        createPortalMapProviderOwnerScope().capture(),
+        configuration
+    );
+    const opened: string[] = [];
+    const openable = (row: PortalMapMarker): PortalMapMarker => ({
+        ...row,
+        card: {
+            ...row.card,
+            open: { label: 'Open', activate: () => opened.push(row.key) },
+        },
+    });
+    const bay = openable(marker('Bay A'));
+    const warehouse = openable(marker('Warehouse B'));
+    const depot = openable(marker('Depot C', 3, 4));
+    const render = (rows: readonly PortalMapMarker[]) =>
+        // Happy DOM emits close synchronously. The packed Chromium test covers
+        // native dialog timing with StrictMode enabled.
+        root.render(h(PortalMap, props(provider, rows)), false);
+    const buttons = () =>
+        [...container.querySelectorAll('.mx-sdk-portal-map-open')].filter(
+            (button) => button instanceof f.window.HTMLButtonElement
+        );
+    const touch = async (button: FixtureButton) => {
+        await act(async () => {
+            button.dispatchEvent(
+                new f.window.PointerEvent('pointerdown', {
+                    bubbles: true,
+                    button: 0,
+                    isPrimary: true,
+                    pointerType: 'touch',
+                })
+            );
+            button.dispatchEvent(
+                new f.window.MouseEvent('click', { bubbles: true, detail: 1 })
+            );
+        });
+    };
+    const openDialog = () => {
+        const dialog = container.querySelector('dialog[open]');
+        assert.ok(dialog);
+        return dialog;
+    };
+
+    await render([bay, warehouse, depot]);
+    await f.waitFor(() => buttons().length === 3);
+    const [bayButton, warehouseButton, depotButton] = buttons();
+    assert.deepEqual(
+        [...buttons()].map((button) => button.getAttribute('aria-label')),
+        ['Open', 'Open', 'Open']
+    );
+    await touch(warehouseButton);
+    const choices = [...openDialog().querySelectorAll('button')];
+    assert.deepEqual(
+        choices.map((button) => button.textContent),
+        ['Bay A', 'Warehouse B']
+    );
+    assert.deepEqual(opened, []);
+    await act(async () => choices[0].click());
+    assert.deepEqual(opened, ['Bay A']);
+    assert.equal(container.querySelector('dialog'), null);
+
+    await touch(warehouseButton);
+    await act(async () => {
+        openDialog().dispatchEvent(
+            new f.window.MouseEvent('click', { bubbles: true })
+        );
+    });
+    assert.equal(container.querySelector('dialog'), null);
+    assert.deepEqual(opened, ['Bay A']);
+
+    await touch(warehouseButton);
+    const removedChoice = openDialog().querySelectorAll('button')[1];
+    await render([bay, depot]);
+    assert.equal(container.querySelector('dialog'), null);
+    await act(async () => removedChoice.click());
+    assert.deepEqual(opened, ['Bay A']);
+
+    await touch(bayButton);
+    await touch(depotButton);
+    assert.equal(container.querySelector('dialog'), null);
+    assert.deepEqual(opened, ['Bay A', 'Bay A', 'Depot C']);
+    assert.equal(f.requests(), 0);
 });
 
 test('actual vendor initial empty bounds are retained when records arrive later', async (t) => {

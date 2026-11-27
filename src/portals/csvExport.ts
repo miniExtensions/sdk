@@ -188,16 +188,30 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
         };
         const format =
             input.formatField ??
-            ((descriptor: CSVExportFieldValue) =>
-                (input.admission.cohort === 'portal-grid'
-                    ? formatPortalCSVExportCollaborator(descriptor)
-                    : undefined) ??
-                getReadableStringFromAirtableValue({
-                    value: descriptor.value,
-                    airtableFieldConfig: descriptor.field.config,
-                    fieldName: descriptor.field.name,
+            ((descriptor: CSVExportFieldValue) => {
+                const collaboratorLabel =
+                    input.admission.cohort === 'portal-grid'
+                        ? formatPortalCSVExportCollaborator(descriptor)
+                        : undefined;
+                if (collaboratorLabel !== undefined) return collaboratorLabel;
+                const { field, value } = descriptor;
+                const { config } = field;
+                // Multiple Select formatting needs the complete array.
+                const fieldConfig =
+                    Array.isArray(value) &&
+                    config.type === AirtableFieldType.ROLLUP &&
+                    config.options.isValid &&
+                    config.options.result.type ===
+                        AirtableFieldType.MULTIPLE_SELECTS
+                        ? config.options.result
+                        : config;
+                return getReadableStringFromAirtableValue({
+                    value,
+                    airtableFieldConfig: fieldConfig,
+                    fieldName: field.name,
                     source,
-                }));
+                });
+            });
         const rows = records.map((record) => {
             const cells = new Map<
                 string,

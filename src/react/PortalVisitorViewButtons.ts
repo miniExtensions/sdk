@@ -1,6 +1,7 @@
 import {
     createElement as h,
     useEffect,
+    useId,
     useLayoutEffect,
     useMemo,
     useRef,
@@ -23,6 +24,8 @@ export type PortalVisitorViewButtonsProps = {
     /** Replace this token whenever the host retires the current view authority. */
     ownerToken: unknown;
     unnamedViewLabel: string;
+    /** Screen-reader description for a view with the maker's badge flag. */
+    viewBadgeDescription?: string;
     groupLabel?: string;
     testId?: string;
     /** A selection intent. The host checks current authority before applying it. */
@@ -39,10 +42,12 @@ export function PortalVisitorViewButtons({
     selectedViewId,
     ownerToken,
     unnamedViewLabel,
+    viewBadgeDescription,
     groupLabel,
     testId,
     onSelect,
 }: PortalVisitorViewButtonsProps): ReactElement | null {
+    const badgeDescriptionId = useId();
     const placement = useMemo(() => ({}), [ownerToken]);
     const pointerPress = useRef<Press | null>(null);
     const keyboardPress = useRef<Press | null>(null);
@@ -75,6 +80,9 @@ export function PortalVisitorViewButtons({
                     type: 'button',
                     className: 'me-portal-visitor-view-button',
                     'aria-pressed': selectedViewId === id,
+                    'aria-describedby': showBadge
+                        ? badgeDescriptionId
+                        : undefined,
                     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
                         if (event.isPrimary && event.button === 0)
                             pointerPress.current = { placement, viewId: id };
@@ -123,6 +131,13 @@ export function PortalVisitorViewButtons({
                     label?.trim() ? label : unnamedViewLabel
                 )
             )
-        )
+        ),
+        views.some(({ showBadge }) => showBadge)
+            ? h(
+                  'span',
+                  { id: badgeDescriptionId, hidden: true },
+                  viewBadgeDescription?.trim() || 'Flagged view'
+              )
+            : null
     );
 }

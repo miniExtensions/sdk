@@ -63,17 +63,16 @@ export function AutomaticPrefillStatus(
         state.phase === 'observing';
     const error = state.phase === 'error' || state.phase === 'unknown';
     const labels = props.labels;
+    const message = state.message?.trim() ? state.message : undefined;
     const text = pending
         ? (labels?.submitting ?? 'Automatically submitting…')
         : state.phase === 'saved'
           ? (labels?.saved ?? 'Form submitted.')
           : state.phase === 'unknown'
-            ? (state.message ??
-              labels?.unknown ??
-              'Submission status is unknown.')
+            ? (message ?? labels?.unknown ?? 'Submission status is unknown.')
             : state.error === 'no-prefills'
               ? (labels?.noPrefills ?? 'No prefills were detected.')
-              : (state.message ?? labels?.failedToSave ?? 'Failed to save.');
+              : (message ?? labels?.failedToSave ?? 'Failed to save.');
     return h(
         'section',
         {

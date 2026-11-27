@@ -666,6 +666,27 @@ it('clears mobile deferred input once to canonical null with no later unmount al
     assert.deepEqual(f.writes, [null]);
 });
 
+it('returns mobile Form Number keyboard Clear focus to the existing input', async (t) => {
+    const f = await fixture(t, { value: 12.5, mobile: true });
+    const original = f.input();
+    await f.focus();
+    const clear = f.container.querySelector('button');
+    assert.ok(clear);
+    await act(async () => clear.focus());
+    assert.equal(f.window.document.activeElement, clear);
+    await act(async () =>
+        clear.dispatchEvent(
+            new f.window.MouseEvent('click', { bubbles: true, detail: 0 })
+        )
+    );
+    assert.equal(f.window.document.activeElement, original);
+    assert.equal(f.input(), original);
+    assert.equal(original.value, '');
+    assert.equal(f.container.querySelector('button'), null);
+    await f.edit('7');
+    assert.deepEqual(f.writes, [null, 7]);
+});
+
 it('keeps percent units/progress and literal currency read-only presentation in the package', async (t) => {
     const f = await fixture(t, {
         kind: 'percent',

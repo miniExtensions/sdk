@@ -1,8 +1,9 @@
 import type { RuntimeLanguage } from '../runtime/types.js';
-import type {
-    AirtableField,
-    AirtableValue,
-    TableIdsToLinkedTableLoadingStates,
+import {
+    AirtableFieldType,
+    type AirtableField,
+    type AirtableValue,
+    type TableIdsToLinkedTableLoadingStates,
 } from '../formulas/types.js';
 import {
     getReadableStringFromAirtableValue,
@@ -211,16 +212,26 @@ export function projectFormCompletion(
                 ? undefined
                 : input.fields[c.successMessageField]?.airtableField;
         const value = field ? input.filteredValues[field.id] : null;
-        const text =
-            field != null && value != null
-                ? getReadableStringFromAirtableValue({
-                      value,
-                      airtableFieldConfig: field.config,
-                      source,
-                      fieldName: field.name,
-                      doNotRemoveMarkdownFormatting: true,
-                  })
-                : '';
+        let text = '';
+        if (field != null && value != null) {
+            const { config } = field;
+            // The collaborator result formatter needs the whole Rollup array.
+            const messageConfig =
+                Array.isArray(value) &&
+                config.type === AirtableFieldType.ROLLUP &&
+                config.options.isValid &&
+                config.options.result.type ===
+                    AirtableFieldType.MULTIPLE_COLLABORATORS
+                    ? config.options.result
+                    : config;
+            text = getReadableStringFromAirtableValue({
+                value,
+                airtableFieldConfig: messageConfig,
+                source,
+                fieldName: field.name,
+                doNotRemoveMarkdownFormatting: true,
+            });
+        }
         message = {
             text: text.trim() === '' ? fallback : text,
             format: 'text',

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
     createFlatScalarFormRecordProjection,
+    createScalarFormRecordProjection,
     type CreateFlatScalarFormRecordProjectionInput,
 } from '../src/forms/index.js';
 import type {
@@ -296,6 +297,36 @@ describe('bounded canonical flat scalar conditional projection', () => {
             );
             assert.deepEqual(options.data, before);
         }
+    });
+
+    it('keeps blocking unconditional schemas that bypass ordered metadata validation', () => {
+        const canonical = text('target');
+        const options = input([canonical]);
+        const { config: _config, ...incompletePhysical } =
+            canonical.airtableField;
+        const incomplete = {
+            ...canonical,
+            airtableField: incompletePhysical,
+        } as RuntimeFieldSchema;
+        const blocked = {
+            type: 'blocked',
+            code: 'evaluation-exception',
+            diagnostics: [],
+        };
+        assert.deepEqual(
+            createFlatScalarFormRecordProjection({
+                ...options,
+                fieldIdsToSchemas: { target: incomplete },
+            }),
+            blocked
+        );
+        assert.deepEqual(
+            createScalarFormRecordProjection({
+                ...options,
+                fieldIdsToSchemas: Object.create({ target: incomplete }),
+            }),
+            blocked
+        );
     });
 
     it('rejects referenced duplicate names and ID/name aliases, while leaving unreferenced metadata duplicates usable', () => {

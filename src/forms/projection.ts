@@ -110,6 +110,7 @@ function project(
     policy: 'legacy-flat' | 'form' = 'legacy-flat'
 ): FlatScalarFormRecordProjection | ScalarFormRecordProjection {
     const diagnostics: FormVisibilityDiagnostic[] = [];
+    const validatedSchemas = new Set<RuntimeFieldSchema>();
     try {
         if (mode === 'sections') {
             if (!Array.isArray(input.fieldIds))
@@ -158,21 +159,19 @@ function project(
                     };
                 seen.add(id);
             }
-            const physicalIds = new Set<string>();
+            const physicalById = new Map<string, RuntimeAirtableField>();
             for (const field of input.airtableFields) {
-                if (!validPhysical(field) || physicalIds.has(field.id))
+                if (!validPhysical(field) || physicalById.has(field.id))
                     return {
                         type: 'blocked',
                         code: 'invalid-metadata',
                         diagnostics,
                     };
-                physicalIds.add(field.id);
+                physicalById.set(field.id, field);
             }
             for (const [id, field] of Object.entries(input.fieldIdsToSchemas)) {
                 if (field == null) continue;
-                const physical = input.airtableFields.find(
-                    (candidate) => candidate.id === id
-                );
+                const physical = physicalById.get(id);
                 if (
                     !validPhysical(field.airtableField) ||
                     field.airtableField.id !== id ||
@@ -187,6 +186,7 @@ function project(
                         code: 'invalid-metadata',
                         diagnostics,
                     };
+                validatedSchemas.add(field);
                 const config = field.miniExtConfig;
                 if (config == null) continue;
                 if (
@@ -253,6 +253,9 @@ function project(
         }
 
         const hiddenFieldIds: string[] = [];
+        const validConditionMode =
+            input.invalidConditionMode === 'strict' ||
+            input.invalidConditionMode === 'compatibility';
         let section: FormFieldVisibility | null = null;
         for (const fieldId of input.fieldIds) {
             const field = input.fieldIdsToSchemas[fieldId];
@@ -281,7 +284,13 @@ function project(
                 }
             }
             // Validate own predicates even beneath a hidden section.
-            const visibility = predicate(field, input, diagnostics, policy);
+            const visibility = predicate(
+                field,
+                input,
+                diagnostics,
+                policy,
+                validConditionMode && validatedSchemas.has(field)
+            );
             if (visibility.type === 'blocked')
                 return { ...visibility, diagnostics };
             if (section?.type === 'hidden' || visibility.type === 'hidden')
@@ -309,18 +318,24 @@ function predicate(
     field: RuntimeFieldSchema,
     input: CreateScalarFormRecordProjectionInput,
     diagnostics: FormVisibilityDiagnostic[],
-    policy: 'legacy-flat' | 'form'
+    policy: 'legacy-flat' | 'form',
+    canSkipUnconditional = false
 ): FormFieldVisibility {
+    const conditions =
+        field.miniExtConfig != null &&
+        'conditionalFields' in field.miniExtConfig
+            ? (field.miniExtConfig.conditionalFields ?? null)
+            : null;
+    // The record projection disables presentation-only empty hiding. With no
+    // condition, a valid request is visible without a runner or draft copy.
+    if (conditions === null && canSkipUnconditional)
+        return { type: 'visible', diagnostics: [] };
     const compile =
         policy === 'form'
             ? compileFormRuntimeConditions
             : compileRuntimeConditions;
     const compiled = compile({
-        conditions:
-            field.miniExtConfig != null &&
-            'conditionalFields' in field.miniExtConfig
-                ? (field.miniExtConfig.conditionalFields ?? null)
-                : null,
+        conditions,
         airtableFields: input.airtableFields,
         invalidConditionMode: input.invalidConditionMode,
     });

@@ -46,8 +46,9 @@ export type PortalPagingControlsProps = Readonly<{
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
-type RetryFocusRequest = {
+type PagingFocusRequest = {
     button: HTMLButtonElement;
+    intent: PortalPagingIntent;
     sawPending: boolean;
     cancel(): void;
 };
@@ -83,7 +84,7 @@ export function PortalPagingControls({
     const pointerPress = useRef<typeof captured>();
     const keyboardPress = useRef<typeof captured>();
     const buttonRef = useRef<HTMLButtonElement>(null);
-    const retryFocus = useRef<RetryFocusRequest | null>(null);
+    const pagingFocus = useRef<PagingFocusRequest | null>(null);
     const [used] = useState(() => new WeakSet<PortalPagingOffer>());
     useCommitEffect(() => {
         current.current = captured;
@@ -91,9 +92,9 @@ export function PortalPagingControls({
             current.current = null;
         };
     }, [captured]);
-    useCommitEffect(() => () => retryFocus.current?.cancel(), []);
+    useCommitEffect(() => () => pagingFocus.current?.cancel(), []);
     useCommitEffect(() => {
-        const request = retryFocus.current;
+        const request = pagingFocus.current;
         if (!request) return;
         const button = buttonRef.current;
         if (state.type === 'next-loading' && button === request.button) {
@@ -102,10 +103,12 @@ export function PortalPagingControls({
         }
         request.cancel();
         if (
-            state.type === 'next-error' &&
             request.sawPending &&
             button === request.button &&
-            captured?.intent === 'retry-next-page' &&
+            captured &&
+            (captured.intent === 'retry-next-page' ||
+                (request.intent === 'next-page' &&
+                    captured.intent === 'next-page')) &&
             !used.has(captured.offer) &&
             button.ownerDocument.activeElement === button.ownerDocument.body
         ) {
@@ -160,7 +163,7 @@ export function PortalPagingControls({
                           )
                               return;
                           used.add(captured.offer);
-                          retryFocus.current?.cancel();
+                          pagingFocus.current?.cancel();
                           const button = event.currentTarget;
                           const document = button.ownerDocument;
                           if (
@@ -178,8 +181,9 @@ export function PortalPagingControls({
                                   )
                                       request.cancel();
                               };
-                              const request: RetryFocusRequest = {
+                              const request: PagingFocusRequest = {
                                   button,
+                                  intent: captured.intent,
                                   sawPending: false,
                                   cancel() {
                                       document.removeEventListener(
@@ -187,18 +191,18 @@ export function PortalPagingControls({
                                           releaseOnFocus,
                                           true
                                       );
-                                      if (retryFocus.current === request)
-                                          retryFocus.current = null;
+                                      if (pagingFocus.current === request)
+                                          pagingFocus.current = null;
                                   },
                               };
-                              retryFocus.current = request;
+                              pagingFocus.current = request;
                               document.addEventListener(
                                   'focusin',
                                   releaseOnFocus,
                                   true
                               );
                           }
-                          const request = retryFocus.current;
+                          const request = pagingFocus.current;
                           try {
                               captured.offer.activate(
                                   captured.intent,

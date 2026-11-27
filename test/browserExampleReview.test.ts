@@ -1512,7 +1512,7 @@ describe('actual browser starter prepared review', () => {
                 '+1 555 0100',
                 '0',
                 '12.5',
-                '0.2',
+                '20%',
                 '3',
                 'Checked',
                 '001',

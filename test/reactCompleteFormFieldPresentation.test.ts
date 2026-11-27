@@ -33,7 +33,11 @@ const imageA =
 const imageB =
     'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="8" height="8"%3E%3Crect width="8" height="8" fill="blue"/%3E%3C/svg%3E';
 const rejectChange = () => assert.fail('Presentation must not write');
-function shell(overrides: Partial<Props> = {}, value = 'Literal answer') {
+function shell(
+    overrides: Partial<Props> = {},
+    value = 'Literal answer',
+    readOnly?: boolean
+) {
     return h(CompleteFormFieldPresentation, {
         fieldName: 'Airtable fallback',
         title: 'Field title',
@@ -47,6 +51,7 @@ function shell(overrides: Partial<Props> = {}, value = 'Literal answer') {
                 value,
                 onChange: rejectChange,
                 presentation,
+                readOnly,
             }),
         ...overrides,
     });
@@ -204,6 +209,49 @@ it('keeps hidden semantic titles and required markers literal without an invente
         f.container.querySelector('label')?.textContent,
         'Airtable fallback'
     );
+});
+
+it('exposes required state only on the editable published Form textarea', async (t) => {
+    const f = await fixture(t);
+    const modes = [
+        { required: true, readOnly: false, preview: false },
+        { required: false, readOnly: false, preview: false },
+        { required: true, readOnly: true, preview: false },
+        { required: true, readOnly: false, preview: true },
+    ];
+    const requiredStates = [];
+    for (const { required, readOnly, preview } of modes) {
+        await f.render(
+            shell(
+                {
+                    title: 'Notes',
+                    description: '<p>Enter notes here</p>',
+                    required,
+                    preview,
+                },
+                '',
+                readOnly
+            )
+        );
+        const control = textarea(f);
+        const label = f.container.querySelector('label');
+        assert.ok(label);
+        assert.equal(label.control, control);
+        assert.equal(label.textContent, required ? 'Notes*' : 'Notes');
+        assert.equal(control.getAttribute('aria-labelledby'), label.id);
+        assert.deepEqual(
+            describedNodes(f, control).map((node) => node.textContent),
+            ['Enter notes here']
+        );
+        assert.equal(control.form, f.container);
+        assert.equal(control.value, '');
+        assert.equal(control.disabled, readOnly);
+        assert.equal(control.hasAttribute('required'), false);
+        assert.equal(control.checkValidity(), true);
+        requiredStates.push(control.getAttribute('aria-required'));
+    }
+    assert.deepEqual(requiredStates, ['true', null, null, null]);
+    f.unchangedEffects();
 });
 
 it('omits absent help/error targets and places real HTML before or after the complete control', async (t) => {

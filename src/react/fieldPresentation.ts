@@ -15,6 +15,8 @@ export type FieldPresentationComposition = {
     association: FieldPresentationAssociation;
     chromeOwner: 'shell';
     required?: boolean;
+    /** Builder preview status for editable field semantics. */
+    preview?: boolean;
 };
 
 /** Native meaningful-content policy; sanitization stays in public HTML renderers. */

@@ -49,11 +49,14 @@ const fieldValidationText = (state: FormFieldSnapshot): string => {
     );
 };
 
+let nextTextValidationId = 0;
+
 export type FieldControl = {
     node: HTMLDivElement;
     read(): AirtableValue;
     write(value: AirtableValue): void;
     editable: boolean;
+    plainTextInput?: HTMLInputElement;
     updateSelectChoices?(choices: readonly SelectFieldChoice[]): void;
     updateSelectAvailability?(availability: SelectFieldAvailability): void;
     selectAvailabilityReady?(): boolean;
@@ -538,6 +541,13 @@ export const fieldControl = (
         node,
         read,
         editable,
+        plainTextInput:
+            !readOnly &&
+            field.config.type === AirtableFieldType.SINGLE_LINE_TEXT &&
+            control instanceof HTMLInputElement &&
+            control.type === 'text'
+                ? control
+                : undefined,
         refreshReadonlyPresentation,
         write: (next) => {
             if (!destroyed) write(next);
@@ -573,7 +583,7 @@ export function mountBoundFormField(
     address?: AddressFieldContext,
     beforeChange?: () => void,
     onError?: (error: unknown) => void,
-    exposeRootReadOnlyText = false
+    directRootForm = false
 ): FieldControl {
     const initial = binding.getSnapshot();
     if (binding.scalar || binding.date) {
@@ -728,12 +738,28 @@ export function mountBoundFormField(
     const status = element('p', '', 'field-hint');
     status.setAttribute('role', 'status');
     control.node.append(status);
+    const plainTextInput = directRootForm ? control.plainTextInput : undefined;
     const allowReadOnlyPresentation =
-        exposeRootReadOnlyText && isUnmaskedReadOnlyText(schema);
+        directRootForm && isUnmaskedReadOnlyText(schema);
     let revision = initial.revision;
     const stop = binding.subscribe((state) => {
         control.node.setAttribute('aria-busy', String(state.pending));
-        status.textContent = fieldValidationText(state);
+        const validation = fieldValidationText(state);
+        status.textContent = validation;
+        if (plainTextInput) {
+            if (
+                validation &&
+                state.canEdit &&
+                canPresentFieldValidation(state)
+            ) {
+                status.id ||= `mx-starter-text-validation-${++nextTextValidationId}`;
+                plainTextInput.setAttribute('aria-invalid', 'true');
+                plainTextInput.setAttribute('aria-describedby', status.id);
+            } else {
+                plainTextInput.removeAttribute('aria-invalid');
+                plainTextInput.removeAttribute('aria-describedby');
+            }
+        }
         control.node.hidden = state.visibility.type !== 'visible';
         const field = state.field;
         const showReadOnlyAnswer =

@@ -58,6 +58,11 @@ export async function checkFieldBindingRecipe({
             childExtensionInfo: { accessType: { type: 'create' } },
         });
         loaded.payload.hasParentExtension = false;
+        const titleError = 'Use the reference printed on your letter';
+        loaded.payload.formErrors = {
+            ...loaded.payload.formErrors,
+            fld_title: titleError,
+        };
         const select = {
             fieldType: 'multipleSelects',
             airtableField: {
@@ -108,16 +113,74 @@ export async function checkFieldBindingRecipe({
             },
         });
         const text = owner.field('fld_title');
-        let stock = mountBoundFormField(
-            text,
-            loaded.payload.fieldIdsToSchemas.fld_title,
-            () => {}
-        );
+        const titleSchema = loaded.payload.fieldIdsToSchemas.fld_title;
+        const mountTitle = (schema = titleSchema, address) =>
+            mountBoundFormField(
+                text,
+                schema,
+                () => {},
+                address,
+                undefined,
+                undefined,
+                true
+            );
+        let stock = mountTitle();
         let custom = mountCustomField(text, window.document);
         window.document.body.append(stock.node, custom.node);
         const input = stock.node.matches('input')
             ? stock.node
             : stock.node.querySelector('input');
+        const status = stock.node.querySelector('[role="status"]');
+        assert.deepEqual(
+            Array.from(input.labels, (label) => label.textContent),
+            ['Title']
+        );
+        assert.equal(input.getAttribute('aria-label'), null);
+        assert.equal(input.getAttribute('aria-labelledby'), null);
+        assert.equal(status.textContent, titleError);
+        assert.equal(status.closest('[hidden]'), null);
+        assert.equal(input.getAttribute('aria-invalid'), 'true');
+        const descriptionId = input.getAttribute('aria-describedby');
+        assert.ok(descriptionId);
+        assert.ok(window.document.getElementById(descriptionId) === status);
+
+        const nonRoot = mountBoundFormField(text, titleSchema, () => {});
+        const nonRootInput = nonRoot.node.querySelector('input');
+        assert.equal(nonRootInput.getAttribute('aria-invalid'), null);
+        assert.equal(nonRootInput.getAttribute('aria-describedby'), null);
+        nonRoot.destroy();
+
+        const address = mountTitle(
+            {
+                ...titleSchema,
+                miniExtConfig: {
+                    ...titleSchema.miniExtConfig,
+                    enableAddressAutocomplete: true,
+                },
+            },
+            {
+                extensionAccessToken: 'synthetic',
+                reads: {
+                    listPredictions: () =>
+                        assert.fail('Unexpected address read'),
+                    getFormattedAddress: () =>
+                        assert.fail('Unexpected address read'),
+                },
+                isCurrent: () => true,
+            }
+        );
+        const combobox = address.node.querySelector('[role="combobox"]');
+        const addressStatus = address.node.querySelector(
+            '[data-ui="address-autocomplete"] [role="status"]'
+        );
+        assert.ok(addressStatus.id);
+        assert.equal(
+            combobox.getAttribute('aria-describedby'),
+            addressStatus.id
+        );
+        assert.equal(combobox.getAttribute('aria-invalid'), null);
+        address.destroy();
+
         input.value = 'Stock edit';
         input.dispatchEvent(new window.Event('change', { bubbles: true }));
         assert.equal(custom.node.querySelector('input').value, 'Stock edit');
@@ -138,11 +201,7 @@ export async function checkFieldBindingRecipe({
         stock.destroy();
         stock.node.remove();
         custom.destroy();
-        stock = mountBoundFormField(
-            text,
-            loaded.payload.fieldIdsToSchemas.fld_title,
-            () => {}
-        );
+        stock = mountTitle();
         custom = mountCustomField(text, window.document);
         window.document.body.append(stock.node, custom.node);
         assert.equal(custom.node.querySelector('input').value, 'Custom edit');
@@ -174,8 +233,29 @@ export async function checkFieldBindingRecipe({
             .click();
         assert.deepEqual(linked.getSnapshot().value, ['rec_user', 'rec_new']);
         assert.equal(saves.length, 0);
+        const currentTitle = stock.node.querySelector(
+            '[data-field-id="fld_title"]'
+        );
+        assert.equal(currentTitle.getAttribute('aria-invalid'), 'true');
+        const currentDescriptionId =
+            currentTitle.getAttribute('aria-describedby');
+        assert.ok(currentDescriptionId);
+        assert.notEqual(currentDescriptionId, descriptionId);
         await owner.save();
         assert.equal(saves.length, 1);
+        const savedTitle = stock.node.querySelector(
+            '[data-field-id="fld_title"]'
+        );
+        assert.deepEqual(
+            Array.from(savedTitle.labels, (label) => label.textContent),
+            ['Title']
+        );
+        assert.equal(savedTitle.getAttribute('aria-invalid'), null);
+        assert.equal(savedTitle.getAttribute('aria-describedby'), null);
+        assert.equal(
+            stock.node.querySelector('[role="status"]').textContent,
+            ''
+        );
         assert.deepEqual(saves[0].formRecord.data, {
             ...loaded.payload.formRecord.data,
             fld_title: 'Custom edit',

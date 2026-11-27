@@ -120,8 +120,11 @@ function useGalleryPagingFocus(
     paging: PortalGalleryProps['paging']
 ) {
     const gallery = useRef<HTMLDivElement>(null);
+    const loadMore = useRef<HTMLButtonElement>(null);
     const pending = useRef<GalleryPagingFocus | null>(null);
     const [settlements, setSettlements] = useState(0);
+    const canRequestMore = paging?.canRequestMore;
+    const showSpinner = paging?.showSpinner;
 
     useEffect(() => () => pending.current?.clear(), []);
     useEffect(() => {
@@ -157,6 +160,15 @@ function useGalleryPagingFocus(
             return;
         }
 
+        if (focus.recordId === null && receipt.recordIds.length === 0) {
+            // The host can accept the page before it publishes the next cursor.
+            if (!canRequestMore && showSpinner) return;
+            const destination = loadMore.current;
+            focus.clear();
+            if (destination && !destination.disabled && active !== destination)
+                destination.focus({ preventScroll: true });
+            return;
+        }
         const recordIds =
             focus.recordId === null
                 ? receipt.recordIds.filter(
@@ -185,7 +197,7 @@ function useGalleryPagingFocus(
             focus.clear();
             destination.focus({ preventScroll: focus.recordId !== null });
         }
-    }, [content, settlements]);
+    }, [canRequestMore, content, settlements, showSpinner]);
 
     function requestMore(event: MouseEvent<HTMLButtonElement>) {
         pending.current?.clear();
@@ -266,7 +278,7 @@ function useGalleryPagingFocus(
             }
         }, focus.clear);
     }
-    return { gallery, requestMore };
+    return { gallery, loadMore, requestMore };
 }
 
 function GalleryUnlinkButton({
@@ -476,7 +488,10 @@ export function PortalGallery(props: PortalGalleryProps): ReactElement {
         .join(' ');
     const content = props.content;
     const paging = props.paging;
-    const { gallery, requestMore } = useGalleryPagingFocus(content, paging);
+    const { gallery, loadMore, requestMore } = useGalleryPagingFocus(
+        content,
+        paging
+    );
     if (content.status !== 'rows')
         return h(
             'div',
@@ -523,6 +538,7 @@ export function PortalGallery(props: PortalGalleryProps): ReactElement {
                           ? h(
                                 'button',
                                 {
+                                    ref: loadMore,
                                     type: 'button',
                                     className:
                                         'mx-sdk-portal-gallery-load-more',

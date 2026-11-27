@@ -175,6 +175,13 @@ const validateOrdinaryPageField = (
     }
     // Canonical ordinary rules use this exact non-null/nonempty gate, not required emptiness.
     if (value == null || value === '') return null;
+    // Native has no ordinary value rule for populated, read-only AI Text.
+    if (
+        type === 'aiText' &&
+        field.readOnly &&
+        field.schema.airtableField.config.type === 'aiText'
+    )
+        return null;
     if (!ordinary.has(type)) return problem('unsupported-validation');
     const dateRangeProblem = validatePageDateRange(
         field,

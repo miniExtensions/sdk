@@ -57,6 +57,11 @@ export const CompleteMultilineTextField = forwardRef<
             : undefined
         : standaloneId;
     const form = presentation?.association.formId ?? standaloneForm;
+    const required =
+        !readOnly &&
+        presentation?.association.kind === 'input' &&
+        presentation.required === true &&
+        presentation.preview !== true;
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const [selectionStart, setSelectionStart] = useState<number | null>(null);
     const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
@@ -127,6 +132,7 @@ export const CompleteMultilineTextField = forwardRef<
                 ? presentation.association.errorId != null
                 : hasErrorMessage,
             'aria-labelledby': presentation?.association.labelId,
+            'aria-required': required || undefined,
             maxLength: characterLimit,
         }),
         characterLimit != null

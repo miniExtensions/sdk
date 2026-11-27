@@ -734,7 +734,98 @@ export async function prepareFieldPresentationBrowserFixtures({
     return { path: '/field-presentation.html' };
 }
 
+export async function checkMultilineRequiredBrowser({ page, evidence }) {
+    const snapshot = () =>
+        page.evaluate(() => window.__fieldPresentationFixture.snapshot());
+    await page.waitForFunction(
+        () => window.__fieldPresentationFixture?.snapshot().committed > 0
+    );
+    const before = await snapshot();
+    const help = 'Enter notes here';
+    const modes = [
+        { required: true, readOnly: false, preview: false },
+        { required: false, readOnly: false, preview: false },
+        { required: true, readOnly: true, preview: false },
+        { required: true, readOnly: false, preview: true },
+    ];
+    const results = [];
+    for (const mode of modes) {
+        await page.evaluate(
+            ({ mode, help }) =>
+                window.__fieldPresentationFixture.update('notes-a', {
+                    ...mode,
+                    title: 'Notes',
+                    showTitle: true,
+                    value: '',
+                    description: '<p>' + help + '</p>',
+                    placement: 'top',
+                    image: null,
+                    error: null,
+                }),
+            { mode, help }
+        );
+        const row = page.locator('#row-notes-a');
+        assert.equal(
+            await row.locator('.mx-sdk-field-required').isVisible(),
+            mode.required
+        );
+        const input = row.getByRole('textbox', {
+            name: mode.required ? /^Notes\s*\*$/ : 'Notes',
+        });
+        const { ariaRequired, ...observed } = await input.evaluate(
+            (textarea) => {
+                const document = textarea.ownerDocument;
+                const label = document.getElementById(
+                    textarea.getAttribute('aria-labelledby')
+                );
+                const description = document.getElementById(
+                    textarea.getAttribute('aria-describedby')
+                );
+                return {
+                    ariaRequired: textarea.getAttribute('aria-required'),
+                    nativeRequired: textarea.hasAttribute('required'),
+                    valid: textarea.checkValidity(),
+                    valueMissing: textarea.validity.valueMissing,
+                    labelMatches: label?.control === textarea,
+                    help: description?.textContent,
+                    disabled: textarea.disabled,
+                    value: textarea.value,
+                    form: textarea.form?.id,
+                };
+            }
+        );
+        assert.deepEqual(observed, {
+            nativeRequired: false,
+            valid: true,
+            valueMissing: false,
+            labelMatches: true,
+            help,
+            disabled: mode.readOnly,
+            value: '',
+            form: 'external-form',
+        });
+        results.push({ mode, ariaRequired, ...observed });
+    }
+    const after = await snapshot();
+    evidence.requiredMultiline = {
+        cases: results,
+        writes: after.writes.length - before.writes.length,
+        submits: after.actions.submits - before.actions.submits,
+        requests: after.requests - before.requests,
+    };
+    assert.deepEqual(after.writes, before.writes);
+    assert.deepEqual(after.actions, before.actions);
+    assert.equal(after.requests, before.requests);
+    assert.deepEqual(after.errors, []);
+    assert.deepEqual(
+        results.map((result) => result.ariaRequired),
+        ['true', null, null, null]
+    );
+}
+
 export async function checkFieldPresentationBrowser({ page, evidence }) {
+    await checkMultilineRequiredBrowser({ page, evidence });
+    await page.reload();
     await page.waitForFunction(
         () => window.__nativeProbe?.snapshot().committed > 0
     );

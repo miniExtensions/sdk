@@ -255,6 +255,7 @@ export function CompleteFormFieldPresentation(
             association,
             chromeOwner: 'shell',
             ...(props.required && { required: true }),
+            ...(props.preview === true && { preview: true }),
         });
     return h(
         Fragment,

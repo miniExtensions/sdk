@@ -46,6 +46,12 @@ export type PortalPagingControlsProps = Readonly<{
 const useCommitEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
+type RetryFocusRequest = {
+    button: HTMLButtonElement;
+    sawPending: boolean;
+    cancel(): void;
+};
+
 function pagingIntent(
     state: PortalPagingControlsState
 ): PortalPagingIntent | null {
@@ -76,6 +82,8 @@ export function PortalPagingControls({
     const current = useRef<typeof captured>(null);
     const pointerPress = useRef<typeof captured>();
     const keyboardPress = useRef<typeof captured>();
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const retryFocus = useRef<RetryFocusRequest | null>(null);
     const [used] = useState(() => new WeakSet<PortalPagingOffer>());
     useCommitEffect(() => {
         current.current = captured;
@@ -83,6 +91,27 @@ export function PortalPagingControls({
             current.current = null;
         };
     }, [captured]);
+    useCommitEffect(() => () => retryFocus.current?.cancel(), []);
+    useCommitEffect(() => {
+        const request = retryFocus.current;
+        if (!request) return;
+        const button = buttonRef.current;
+        if (state.type === 'next-loading' && button === request.button) {
+            request.sawPending = true;
+            return;
+        }
+        request.cancel();
+        if (
+            state.type === 'next-error' &&
+            request.sawPending &&
+            button === request.button &&
+            captured?.intent === 'retry-next-page' &&
+            !used.has(captured.offer) &&
+            button.ownerDocument.activeElement === button.ownerDocument.body
+        ) {
+            button.focus({ preventScroll: true });
+        }
+    }, [captured, state.type, used]);
 
     const pending = state.type === 'next-loading';
     const error = 'message' in state ? state.message : null;
@@ -96,6 +125,7 @@ export function PortalPagingControls({
             ? createElement(
                   'button',
                   {
+                      ref: buttonRef,
                       type: 'button',
                       disabled: captured == null,
                       'aria-busy': pending || undefined,
@@ -130,10 +160,54 @@ export function PortalPagingControls({
                           )
                               return;
                           used.add(captured.offer);
-                          captured.offer.activate(
-                              captured.intent,
-                              () => current.current === captured
-                          );
+                          retryFocus.current?.cancel();
+                          const button = event.currentTarget;
+                          const document = button.ownerDocument;
+                          if (
+                              event.detail === 0 &&
+                              started === captured &&
+                              captured.intent !== 'retry-first-page' &&
+                              document.activeElement === button
+                          ) {
+                              // Native disabling blurs the control. A visitor who
+                              // focuses elsewhere gives up the keyboard handoff.
+                              const releaseOnFocus = (event: FocusEvent) => {
+                                  if (
+                                      event.target !== button &&
+                                      event.target !== document.body
+                                  )
+                                      request.cancel();
+                              };
+                              const request: RetryFocusRequest = {
+                                  button,
+                                  sawPending: false,
+                                  cancel() {
+                                      document.removeEventListener(
+                                          'focusin',
+                                          releaseOnFocus,
+                                          true
+                                      );
+                                      if (retryFocus.current === request)
+                                          retryFocus.current = null;
+                                  },
+                              };
+                              retryFocus.current = request;
+                              document.addEventListener(
+                                  'focusin',
+                                  releaseOnFocus,
+                                  true
+                              );
+                          }
+                          const request = retryFocus.current;
+                          try {
+                              captured.offer.activate(
+                                  captured.intent,
+                                  () => current.current === captured
+                              );
+                          } catch (error) {
+                              request?.cancel();
+                              throw error;
+                          }
                       },
                   },
                   intent === 'next-page' || pending

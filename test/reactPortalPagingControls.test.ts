@@ -160,3 +160,61 @@ it('retires a held pointer or key activation when the host replaces its offer', 
     });
     assert.deepEqual(calls, ['newer']);
 });
+
+it('restores keyboard Retry focus only while it still belongs to paging', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const document = f.window.document;
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    const intents: PortalPagingIntent[] = [];
+    const offer = (): PortalPagingOffer => ({
+        activate: (intent) => {
+            intents.push(intent);
+        },
+    });
+    const render = (
+        state: PortalPagingControlsState,
+        action?: PortalPagingOffer
+    ) => f.render(h(PortalPagingControls, { state, offer: action, labels }));
+    const enter = (button: ReturnType<typeof document.createElement>) =>
+        act(async () => {
+            button.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    bubbles: true,
+                })
+            );
+            button.dispatchEvent(
+                new f.window.MouseEvent('click', { bubbles: true })
+            );
+        });
+
+    for (const movedFocus of [false, true]) {
+        await render(ready, offer());
+        const button = f.container.querySelector('button')!;
+        button.focus();
+        await enter(button);
+        await render({ type: 'next-loading' });
+        assert.equal(button.disabled, true);
+        assert.equal(button.getAttribute('aria-busy'), 'true');
+        // Model the browser's focus fallback on native disabling in happy-dom.
+        document.body.focus();
+        if (movedFocus) {
+            outside.focus();
+            outside.blur();
+        }
+        assert.equal(document.activeElement?.localName, 'body');
+        await render(
+            { type: 'next-error', message: 'Page unavailable' },
+            offer()
+        );
+        assert.equal(button.textContent, labels.retry);
+        assert.equal(
+            document.activeElement?.localName,
+            movedFocus ? 'body' : 'button'
+        );
+        if (!movedFocus) assert.ok(document.activeElement === button);
+        if (!movedFocus) await enter(button);
+    }
+    assert.deepEqual(intents, ['next-page', 'retry-next-page', 'next-page']);
+});

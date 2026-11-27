@@ -500,9 +500,48 @@ export async function checkCompleteDateBrowser({
         assert.equal(await input.inputValue(), '2024-07-02 11:30');
         assert.equal((await snapshot()).saves.length, 0);
         await page.getByRole('button', { name: 'Outside calendar' }).click();
+        const partialDateTime = '2024-07-02 08:';
+        await input.fill(partialDateTime);
+        const beforeIme = await snapshot();
+        const marker = await input.evaluate((node) => {
+            const event = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                keyCode: 229,
+                isComposing: false,
+                bubbles: true,
+                cancelable: true,
+            });
+            node.dispatchEvent(event);
+            return {
+                isTrusted: event.isTrusted,
+                keyCode: event.keyCode,
+                isComposing: event.isComposing,
+                defaultPrevented: event.defaultPrevented,
+                focused: document.activeElement === node,
+            };
+        });
+        assert.deepEqual(marker, {
+            isTrusted: false,
+            keyCode: 229,
+            isComposing: false,
+            defaultPrevented: true,
+            focused: true,
+        });
+        assert.equal(await input.inputValue(), partialDateTime);
+        assert.deepEqual(await snapshot(), beforeIme);
+        evidence.datetimeIme = {
+            ...marker,
+            draft: partialDateTime,
+            writes: 0,
+            saves: 0,
+        };
         await input.fill('2024-07-02 08:15');
         await page.keyboard.press('Enter');
         assert.equal((await snapshot()).value, '2024-07-02T12:15:00.000Z');
+        assert.equal(
+            (await snapshot()).writes.length,
+            beforeIme.writes.length + 1
+        );
         assert.equal((await snapshot()).saves.length, 0);
         await page.keyboard.press('Enter');
         assert.equal((await snapshot()).saves.length, 0);

@@ -1458,6 +1458,7 @@ for (const [input, expected] of [
     ['**Hello** [world](https://example.com)', 'Hello [world](https://example.com)'],
     ['\nFirst\n\n\nSecond\n \nThird\nFourth\nFifth\nSixth\n', 'First\n\nSecond\n\nThird\n\nFourth\n\nFifth\n\nSixth'],
     ['Before\n~~~\n**literal**\n<code>literal</code>\n~~~\nAfter\nLast\nTail', 'Before\n\n**literal**\n\n<code>literal</code>\n\nAfter\n\nLast\n\nTail'],
+    ['#1042\n## C#\n## Heading ##', '#1042\n\nC#\n\nHeading'],
     ['# Title\n**bold** and _italic_\n[link](https://example.com)\n![image](https://example.com/image.png)\n<b>HTML</b>\n~~Last~~', 'Title\n\nbold and italic\n\n[link](https://example.com)\n\n![image](https://example.com/image.png)\n\nHTML\n\nLast'],
 ]) {
     for (let call = 0; call < 2; call++) {

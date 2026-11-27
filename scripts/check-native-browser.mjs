@@ -1625,6 +1625,7 @@ try {
             'scripts/calendar-browser-checks.mjs',
             'scripts/portal-map-browser-checks.mjs',
             'scripts/portal-map-browser-fixture.mjs',
+            'scripts/portal-map-colocation-touch-checks.mjs',
             'scripts/portal-map-google-browser-boundary.mjs',
             'scripts/calendar-complete-style-assets.mjs',
             'scripts/created-time-controlled-browser-checks.mjs',

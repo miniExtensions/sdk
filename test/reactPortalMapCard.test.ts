@@ -9,6 +9,7 @@ import {
 } from '../src/react/LinkedFinderCard.js';
 import {
     PortalMapCard,
+    PortalMapCardView,
     type PortalMapCardData,
 } from '../src/react/PortalMapCard.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
@@ -303,6 +304,43 @@ test('captured host admission guard fences synchronous retirement before allocat
     assert.equal(opened, 0);
     assert.equal(activationAttempts, 1);
     assert.equal(checks, 2);
+});
+
+test('a touch choice that retires the card cannot fall through to Open', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    let active = true;
+    let touches = 0;
+    let opens = 0;
+    await f.render(
+        h(PortalMapCardView, {
+            card: card({
+                owner: { isCurrent: () => active },
+                open: { label: 'Open', activate: () => opens++ },
+            }),
+            onSharedTouch() {
+                touches++;
+                active = false;
+                return false;
+            },
+        })
+    );
+    const button = f.container.querySelector('button');
+    assert.ok(button);
+    await act(async () => {
+        button.dispatchEvent(
+            new f.window.PointerEvent('pointerdown', {
+                bubbles: true,
+                isPrimary: true,
+                pointerType: 'touch',
+                button: 0,
+            })
+        );
+        button.dispatchEvent(
+            new f.window.MouseEvent('click', { bubbles: true, detail: 1 })
+        );
+    });
+    assert.equal(touches, 1);
+    assert.equal(opens, 0);
 });
 
 async function detachedRegistration(t: TestContext) {

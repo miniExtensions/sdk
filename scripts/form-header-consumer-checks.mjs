@@ -69,13 +69,21 @@ try {
  assert.deepEqual(errors,[]);assert.equal(container.firstChild,original);
  assert.equal(container.querySelector('h1').textContent,'Initial <b>title</b>');assert.equal(container.querySelector('h1 b'),null);assert.equal(container.querySelectorAll('img').length,2);
  const comparison = 'Alert if stock < 5 or stock > 30';
- for (const [value, expected] of [[comparison, comparison], ['<p><strong>Formatted title</strong></p>', 'Formatted title']]) {
+ for (const [value, expected] of [
+  [comparison, comparison],
+  ['<p><strong>Formatted title</strong></p>', 'Formatted title'],
+  ['Enter \u0060<NONE>\u0060 if there is no invoice number.', 'Enter <NONE> if there is no invoice number.'],
+  ['Use \u0060**VIP**\u0060 then **Save**.', 'Use **VIP** then Save.'],
+  ['\uE0000\uE000 then \u0060<NONE>\u0060.', '\uE0000\uE000 then <NONE>.'],
+ ]) {
   source={type:'field',field:{status:'resolved',field:formulaField,value}};
-  assert.equal(forms.resolveFormHeaderTitle(source,'Fallback name'),expected);
+  const resolved=forms.resolveFormHeaderTitle(source,'Fallback name');
   await React.act(async()=>root.render(element()));
   const heading=container.querySelector('h1');
-  assert.equal(heading.textContent,expected);
-  assert.equal(heading.childElementCount,0);
+  assert.deepEqual(
+   {resolver:resolved, heading:heading.textContent, childElements:heading.childElementCount},
+   {resolver:expected, heading:expected, childElements:0}
+  );
  }
  for(const record of ['B','A']){identity={...identity,record:'table:'+record};source=staticSource('Record '+record);await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1').textContent,'Record '+record);}
  child=true;await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('img').length,0);assert.equal(container.querySelector('h1').textContent,'Record A');

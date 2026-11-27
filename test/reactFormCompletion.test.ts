@@ -17,6 +17,7 @@ import {
     type FormCompletionConfiguration,
     type ProjectFormCompletionInput,
 } from '../src/forms/index.js';
+import { textField } from './fixtures.js';
 
 const project = (
     configuration: FormCompletionConfiguration,
@@ -692,6 +693,67 @@ it('configured zero message and close clocks complete once through StrictMode', 
     await f.tick(5000);
     assert.deepEqual(calls.slice(), ['close']);
 });
+
+for (const [successMessageDelay, redirectDelay, expectedMs] of [
+    [-5, 0, 0],
+    [-1, 2, 1000],
+] as const) {
+    it(`redirects once at ${expectedMs} ms with Airtable message delay ${successMessageDelay} and redirect delay ${redirectDelay}`, async (t) => {
+        const f = await fixture(t);
+        const message = 'Saved delivery reference A17';
+        const configuration = {
+            afterFormSubmission: 'redirect',
+            successAction: true,
+            successMessageType: 'airtableField',
+            successMessageField: textField.id,
+            successMessageDelay,
+            redirectURLStatic: '/thanks',
+            enableRedirectDelay: true,
+            redirectDelay,
+        } satisfies FormCompletionConfiguration;
+        const projection = projectFormCompletion({
+            configuration,
+            language: 'en',
+            fields: { [textField.id]: { airtableField: textField } },
+            filteredValues: { [textField.id]: message },
+            unfilteredValues: {},
+            linkedTableStates: {},
+        });
+        const navigate = t.mock.fn((_destination: string) => {});
+        await f.render(
+            h(
+                StrictMode,
+                null,
+                h(CompleteFormCompletion, {
+                    configuration,
+                    projection,
+                    canSubmit: true,
+                    onCommand(command) {
+                        assert.equal(command, 'navigate');
+                        assert(projection.redirectURL);
+                        navigate(projection.redirectURL);
+                    },
+                })
+            )
+        );
+        if (expectedMs === 1000) {
+            await f.tick(999);
+            assert.equal(navigate.mock.callCount(), 0);
+            await f.tick(1);
+        } else {
+            await f.tick(0);
+        }
+        assert.deepEqual(
+            navigate.mock.calls.map((call) => call.arguments),
+            [['/thanks']]
+        );
+        assert(f.container.textContent.includes(message));
+
+        await f.tick(5000 - expectedMs);
+        assert.equal(navigate.mock.callCount(), 1);
+    });
+}
+
 it('preview gates automatic and manual commands; later eligible start selects its current duration', async (t) => {
     const f = await fixture(t);
     const calls: string[] = [];

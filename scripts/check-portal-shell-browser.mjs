@@ -17,10 +17,12 @@ import { build } from 'esbuild';
 import ts from 'typescript';
 import { chromium } from 'playwright';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { checkPortalShellFooterGeometry } from './portal-shell-footer-browser-checks.mjs';
 import { checkNativeTopbar } from './portal-shell-topbar-browser-checks.mjs';
 import { checkNativeSidebarOpener } from './portal-shell-sidebar-opener-browser-checks.mjs';
 
 const output = resolve(process.argv[2] ?? 'dist/portal-shell-browser');
+const footerOnly = process.argv[3] === '--footer-geometry-only';
 mkdirSync(output, { recursive: true });
 const temporary = mkdtempSync(join(tmpdir(), 'sdk-portal-shell-browser-'));
 const run = (args, cwd = temporary) =>
@@ -2006,27 +2008,30 @@ try {
     }
     report.packageSha256 = digest(readFileSync(archive));
     const assets = new Map();
-    server = createServer((request, response) => {
-        const path = new URL(request.url, 'http://localhost').pathname;
-        if (path === '/') {
-            response.setHeader('content-type', 'text/html');
-            response.end(
-                '<!doctype html><html lang="en"><meta charset="utf-8"><title>Portal shell synthetic consumer</title><link rel="stylesheet" href="/main.css"><style>body{margin:0;font:16px system-ui}</style><div id="app"></div><script type="module" src="/main.js"></script></html>'
-            );
-        } else if (assets.has(path)) {
-            response.setHeader(
-                'content-type',
-                path.endsWith('.css') ? 'text/css' : 'text/javascript'
-            );
-            response.end(assets.get(path));
-        } else {
-            response.statusCode = 404;
-            response.end();
-        }
-    });
-    await new Promise((done) => server.listen(0, '127.0.0.1', done));
-    const origin = `http://127.0.0.1:${server.address().port}`;
-    report.localhostURL = origin;
+    let origin;
+    if (!footerOnly) {
+        server = createServer((request, response) => {
+            const path = new URL(request.url, 'http://localhost').pathname;
+            if (path === '/') {
+                response.setHeader('content-type', 'text/html');
+                response.end(
+                    '<!doctype html><html lang="en"><meta charset="utf-8"><title>Portal shell synthetic consumer</title><link rel="stylesheet" href="/main.css"><style>body{margin:0;font:16px system-ui}</style><div id="app"></div><script type="module" src="/main.js"></script></html>'
+                );
+            } else if (assets.has(path)) {
+                response.setHeader(
+                    'content-type',
+                    path.endsWith('.css') ? 'text/css' : 'text/javascript'
+                );
+                response.end(assets.get(path));
+            } else {
+                response.statusCode = 404;
+                response.end();
+            }
+        });
+        await new Promise((done) => server.listen(0, '127.0.0.1', done));
+        origin = `http://127.0.0.1:${server.address().port}`;
+        report.localhostURL = origin;
+    }
     browser = await chromium.launch({
         ...(process.env.SDK_NATIVE_CHROMIUM
             ? { executablePath: process.env.SDK_NATIVE_CHROMIUM }
@@ -2035,7 +2040,7 @@ try {
         chromiumSandbox: true,
     });
     report.chrome = browser.version();
-    for (const react of ['18.3.1', '19.2.0']) {
+    for (const react of footerOnly ? ['18.3.1'] : ['18.3.1', '19.2.0']) {
         const directory = join(temporary, react);
         mkdirSync(directory);
         writeFileSync(
@@ -2055,7 +2060,7 @@ try {
             ],
             directory
         );
-        for (const format of ['esm', 'cjs']) {
+        for (const format of footerOnly ? ['esm'] : ['esm', 'cjs']) {
             let fixture = readFileSync(
                 new URL('./portal-shell-browser-fixture.mjs', import.meta.url),
                 'utf8'
@@ -2101,6 +2106,50 @@ try {
                         ),
                     file.contents
                 );
+            if (react === '18.3.1' && format === 'esm') {
+                const installedCss =
+                    'node_modules/@miniextensions/sdk/dist/esm/react/portal-shell.css';
+                const cssOutput = Object.entries(bundled.metafile.outputs).find(
+                    ([path]) => path.endsWith('/main.css')
+                )?.[1];
+                assert(
+                    cssOutput?.inputs[installedCss]?.bytesInOutput > 0,
+                    'The consumer stylesheet must bundle the installed Portal shell CSS export'
+                );
+                const hashFile = (path) =>
+                    digest(readFileSync(new URL(path, import.meta.url)));
+                report.footerGeometryReceipt = 'footer-geometry/result.json';
+                await checkPortalShellFooterGeometry(
+                    browser,
+                    assets,
+                    join(output, 'footer-geometry'),
+                    {
+                        head: report.head,
+                        react,
+                        format,
+                        packageSha256: report.packageSha256,
+                        harnessSha256: digest(
+                            readFileSync(new URL(import.meta.url))
+                        ),
+                        geometryCheckSha256: hashFile(
+                            './portal-shell-footer-browser-checks.mjs'
+                        ),
+                        fixtureSha256: hashFile(
+                            './portal-shell-browser-fixture.mjs'
+                        ),
+                        installedCss,
+                        installedCssSha256: digest(
+                            readFileSync(join(directory, installedCss))
+                        ),
+                        sourceCssSha256: hashFile(
+                            '../src/react/portal-shell.css'
+                        ),
+                        bundledCssSha256: digest(assets.get('/main.css')),
+                        bundledJsSha256: digest(assets.get('/main.js')),
+                    }
+                );
+            }
+            if (footerOnly) continue;
             const context = await browser.newContext({
                 viewport: { width: 1440, height: 1000 },
             });

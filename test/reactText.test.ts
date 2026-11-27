@@ -53,8 +53,7 @@ async function fixture(
     const schema = loaded.payload.fieldIdsToSchemas.fld_title;
     if (schema.fieldType !== 'singleLineText') throw Error('Expected text');
     schema.miniExtConfig = config;
-    let requests = 0,
-        writes = 0;
+    let requests = 0;
     const scope = { writable: true, visible: true, revision: 0 };
     const owner = createFormFieldBindings({
         loaded,
@@ -71,9 +70,10 @@ async function fixture(
         canWriteField: () => scope.visible,
     });
     const binding = owner.field('fld_title');
+    const writes: Parameters<typeof binding.setValue>[0][] = [];
     const setExternal = binding.setValue;
     binding.setValue = (value) => {
-        writes++;
+        writes.push(value);
         return setExternal(value);
     };
     const host = createFormFieldRendererHost({
@@ -113,7 +113,8 @@ async function fixture(
         scope,
         input,
         setExternal,
-        writes: () => writes,
+        writes: () => writes.length,
+        writeValues: () => writes.slice(),
         render: async (node: ReactNode) => {
             await act(async () => root.render(h(StrictMode, null, node)));
         },
@@ -126,11 +127,20 @@ async function fixture(
                 throw Error('Text props expected');
             return snapshot.fields[0];
         },
-        edit: async (value: string) => {
+        edit: async (
+            value: string,
+            eventOptions?: Pick<InputEventInit, 'inputType' | 'isComposing'>
+        ) => {
             await act(async () => {
                 nativeValue(value);
                 input().dispatchEvent(
-                    new window.Event('input', { bubbles: true })
+                    eventOptions
+                        ? new window.InputEvent('input', {
+                              bubbles: true,
+                              data: value,
+                              ...eventOptions,
+                          })
+                        : new window.Event('input', { bubbles: true })
                 );
             });
         },
@@ -434,6 +444,39 @@ it('buffers IME until completion, applies the cap once and ignores the trailing 
     await f.edit('新');
     assert.equal(f.binding.getSnapshot().value, '新');
     assert.equal(f.writes(), 2);
+});
+
+it('accepts the first paste of the same value after an IME commit and Clear', async (t) => {
+    const f = await fixture(t);
+    await f.render(h(TextField, { binding: f.binding }));
+    await f.composition('compositionstart');
+    await f.edit('日本', {
+        inputType: 'insertCompositionText',
+        isComposing: true,
+    });
+    assert.equal(f.input().value, '日本');
+    assert.equal(f.binding.getSnapshot().value, null);
+    assert.deepEqual(f.writeValues(), []);
+    await f.composition('compositionend');
+    assert.equal(f.binding.getSnapshot().value, '日本');
+    assert.deepEqual(f.writeValues(), ['日本']);
+
+    const clear = f.container.querySelector('button[aria-label="Clear Title"]');
+    assert(clear instanceof f.window.HTMLButtonElement);
+    await act(async () => clear.click());
+    assert.equal(f.input().value, '');
+    assert.equal(f.binding.getSnapshot().value, null);
+    assert.deepEqual(f.writeValues(), ['日本', null]);
+
+    await f.edit('日本', { inputType: 'insertFromPaste', isComposing: false });
+    assert.deepEqual(
+        {
+            input: f.input().value,
+            binding: f.binding.getSnapshot().value,
+            writes: f.writeValues(),
+        },
+        { input: '日本', binding: '日本', writes: ['日本', null, '日本'] }
+    );
 });
 
 it('owner/config/value replacements cancel composition, including observed ABA, without writing either owner', async (t) => {

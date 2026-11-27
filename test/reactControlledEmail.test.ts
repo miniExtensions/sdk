@@ -348,6 +348,39 @@ it('reuses the opt-in scanner control and suppresses it for read-only display', 
     assert.deepEqual(f.writes, []);
 });
 
+for (const value of ['order#42@example.com', 'order?42%tax@example.com']) {
+    it(`preserves the approved display-only recipient ${value}`, async (t) => {
+        const f = await fixture(t);
+        await f.render({ readOnly: true, displayOnly: true, value });
+        const link = f.container.querySelector('a');
+        assert.ok(link);
+        assert.equal(link.textContent, value);
+        const href = link.getAttribute('href');
+        assert.ok(href);
+        const { protocol, pathname, search, hash } = new URL(href);
+        assert.deepEqual(
+            { protocol, recipient: decodeURIComponent(pathname), search, hash },
+            { protocol: 'mailto:', recipient: value, search: '', hash: '' }
+        );
+        assert.deepEqual(f.writes, []);
+    });
+}
+
+it('preserves display-only email admission and explicitly authored mailto URLs', async (t) => {
+    const f = await fixture(t);
+    const plain = 'order#42@example.invalid';
+    await f.render({ readOnly: true, displayOnly: true, value: plain });
+    assert.equal(f.container.querySelector('a'), null);
+    assert.equal(f.container.textContent, plain);
+
+    const authored = 'mailto:Seed+Tag@example.com?subject=Hello';
+    await f.render({ value: authored });
+    const link = f.container.querySelector('a');
+    assert.equal(link?.textContent, authored);
+    assert.equal(link?.getAttribute('href'), authored);
+    assert.deepEqual(f.writes, []);
+});
+
 it('genuine dirty unmount settles once through the original mounted writer', async (t) => {
     const f = await fixture(t);
     await f.render({ enableInlineEdit: true });

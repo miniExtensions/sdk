@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+    mkdtempSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
@@ -1051,10 +1058,29 @@ async function checkLocalizedSearch(page) {
             assert.deepEqual(initial.neighbor.firstPageReads, []);
             assert.equal(initial.submits, 0);
 
-            await clearAction.press('Enter');
+            const originalInput = await input.elementHandle();
+            const readInput = () =>
+                input.evaluate(
+                    (node, original) => ({
+                        sameInput: node === original,
+                        focused: document.activeElement === node,
+                        value: node.value,
+                    }),
+                    originalInput
+                );
+            await clearAction.focus();
+            assert.equal(
+                await clearAction.evaluate(
+                    (node) => node === document.activeElement
+                ),
+                true
+            );
+            await page.keyboard.press('Enter');
             await clearAction.waitFor({ state: 'detached' });
-
-            assert.equal(await input.inputValue(), '');
+            const afterClear = await readInput();
+            await page.keyboard.type('next');
+            const afterTyping = await readInput();
+            await originalInput.dispose();
             assert.equal(await neighborInput.inputValue(), '');
             const finished = await snapshot();
             assert.deepEqual(finished.current.firstPageReads, [
@@ -1080,12 +1106,37 @@ async function checkLocalizedSearch(page) {
                 layout,
                 locale,
                 clearLabel,
+                afterClear,
+                afterTyping,
                 firstPageReads: finished.current.firstPageReads,
                 submits: finished.submits,
             });
         }
     }
     return { cases, cleanup: 'completed' };
+}
+
+export function assertPortalSearchClearFocus(profiles) {
+    const observed = profiles.flatMap(({ react, localizedSearch }) =>
+        localizedSearch.cases.map(
+            ({ layout, locale, afterClear, afterTyping }) => ({
+                react,
+                layout,
+                locale,
+                afterClear,
+                afterTyping,
+            })
+        )
+    );
+    assert.deepEqual(
+        observed,
+        observed.map((sample) => ({
+            ...sample,
+            afterClear: { sameInput: true, focused: true, value: '' },
+            afterTyping: { sameInput: true, focused: true, value: 'next' },
+        })),
+        'Direct keyboard Clear must return focus to the original search input and accept the next draft'
+    );
 }
 
 /** Exercise trusted keyboard events on an installed, synthetic host fixture. */
@@ -1095,6 +1146,7 @@ export async function checkPortalVisitorSortBrowser({
     evidence,
     expectedReactVersion,
     includeSearch = false,
+    deferSearchClearFocus = false,
     includeViewButtons = false,
     includeFilter = false,
 }) {
@@ -1133,11 +1185,33 @@ export async function checkPortalVisitorSortBrowser({
             define: { 'process.env.NODE_ENV': '"production"' },
         });
         await assertBrowserInputs(bundle.metafile, consumer);
-        const app = bundle.outputFiles.find((file) =>
-            file.path.endsWith('/app.js')
+        if (includeSearch) {
+            const searchModule = join(
+                'node_modules',
+                '@miniextensions',
+                'sdk',
+                'dist',
+                'esm',
+                'react',
+                'PortalVisitorSearch.js'
+            );
+            const installed = realpathSync(join(consumer, searchModule));
+            const inputs = Object.keys(bundle.metafile.inputs)
+                .filter((input) => basename(input) === 'PortalVisitorSearch.js')
+                .map((input) => realpathSync(resolve(consumer, input)));
+            assert.deepEqual(inputs, [installed]);
+            evidence.installedSearchModule = {
+                member: 'package/dist/esm/react/PortalVisitorSearch.js',
+                sha256: createHash('sha256')
+                    .update(readFileSync(installed))
+                    .digest('hex'),
+            };
+        }
+        const app = bundle.outputFiles.find(
+            (file) => basename(file.path) === 'app.js'
         ).contents;
-        const css = bundle.outputFiles.find((file) =>
-            file.path.endsWith('/app.css')
+        const css = bundle.outputFiles.find(
+            (file) => basename(file.path) === 'app.css'
         )?.contents;
         if (includeViewButtons) assert.ok(css);
         server = createServer((request, response) => {
@@ -1315,6 +1389,8 @@ export async function checkPortalVisitorSortBrowser({
         assert.deepEqual(requests, []);
         assert.deepEqual(errors, []);
         await page.evaluate(() => globalThis.sortFixture.unmount());
+        if (includeSearch && !deferSearchClearFocus)
+            assertPortalSearchClearFocus([evidence]);
         Object.assign(evidence, {
             react: end.version,
             outcomes: end.outcomes,

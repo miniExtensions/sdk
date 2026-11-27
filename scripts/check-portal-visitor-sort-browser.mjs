@@ -12,7 +12,10 @@ import { join } from 'node:path';
 import { stop as stopBuildService } from 'esbuild';
 import { chromium } from 'playwright';
 import { installAgeQualifiedConsumer } from './age-qualified-consumer-install.mjs';
-import { checkPortalVisitorSortBrowser } from './portal-visitor-sort-browser-checks.mjs';
+import {
+    assertPortalSearchClearFocus,
+    checkPortalVisitorSortBrowser,
+} from './portal-visitor-sort-browser-checks.mjs';
 
 const [archive, executablePath, expectedSha256, queryFlag, ...unexpected] =
     process.argv.slice(2);
@@ -57,7 +60,7 @@ try {
                     },
                 })
             );
-            installAgeQualifiedConsumer({
+            evidence.install = installAgeQualifiedConsumer({
                 directory: consumer,
                 args: ['install', '--ignore-scripts'],
             });
@@ -67,6 +70,7 @@ try {
                 evidence,
                 expectedReactVersion: react,
                 includeSearch: queryFlag === '--include-search',
+                deferSearchClearFocus: true,
                 includeViewButtons: queryFlag === '--include-view-buttons',
                 includeFilter: queryFlag === '--include-filter',
             });
@@ -76,6 +80,8 @@ try {
             evidence.consumerCleanup = 'completed';
         }
     }
+    if (queryFlag === '--include-search')
+        assertPortalSearchClearFocus(receipt.profiles);
 } finally {
     try {
         if (browser) {

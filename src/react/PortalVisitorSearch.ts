@@ -64,6 +64,7 @@ export function PortalVisitorSearch({
 }: PortalVisitorSearchProps): ReactElement {
     const names = { ...defaultLabels, ...labels };
     const id = useId();
+    const input = useRef<HTMLInputElement>(null);
     const [visible, setVisible] = useState<{
         entry: Entry;
         text: string;
@@ -171,6 +172,7 @@ export function PortalVisitorSearch({
         h('label', { htmlFor: id }, names.input),
         h('input', {
             id,
+            ref: input,
             type: 'text',
             value: entry ? visible?.text : '',
             placeholder: names.input,
@@ -198,9 +200,10 @@ export function PortalVisitorSearch({
                       disabled: inactive,
                       onClick() {
                           if (!owns(entry)) return;
-                          submit(entry, { source: 'clear' }, () =>
-                              edit(entry, '')
-                          );
+                          submit(entry, { source: 'clear' }, () => {
+                              edit(entry, '');
+                              input.current?.focus();
+                          });
                       },
                   },
                   names.clear

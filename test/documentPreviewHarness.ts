@@ -6,7 +6,11 @@ import type { TestContext } from 'node:test';
 import type { Window } from 'happy-dom';
 
 /** Actual native canvas and PDF.js thread; source proof, distinct from Chromium. */
-export function documentCanvasHarness(t: TestContext, window: Window) {
+export function documentCanvasHarness(
+    t: TestContext,
+    window: Window,
+    holdPageText?: (pageIndex: number) => boolean
+) {
     const require = createRequire(import.meta.url);
     const engineRequire = createRequire(
         require.resolve('pdfjs-dist/package.json')
@@ -78,6 +82,8 @@ export function documentCanvasHarness(t: TestContext, window: Window) {
     class OwnedWorker extends EventTarget {
         readonly thread: NodeWorker;
         terminated = false;
+        heldTextStreamId?: number;
+        cancelledHeldTextRead = false;
         private ready = false;
         private queue: [
             unknown,
@@ -113,6 +119,14 @@ export function documentCanvasHarness(t: TestContext, window: Window) {
                         this.thread.postMessage(message, transfer);
                     this.queue = [];
                 }
+                // Hold this PDF.js text stream's close and enqueued chunks.
+                // Start, cancellation and worker termination still reach the real engine.
+                if (
+                    this.heldTextStreamId !== undefined &&
+                    data.streamId === this.heldTextStreamId &&
+                    (data.stream === 3 || data.stream === 4)
+                )
+                    return;
                 try {
                     this.dispatchEvent(new MessageEvent('message', { data }));
                     this.messages.push({
@@ -133,6 +147,22 @@ export function documentCanvasHarness(t: TestContext, window: Window) {
             transfer: import('node:worker_threads').Transferable[] = []
         ) {
             const data = message as Record<string, unknown>;
+            if (
+                holdPageText &&
+                data.action === 'GetTextContent' &&
+                typeof data.streamId === 'number'
+            ) {
+                const { pageIndex } = data.data as { pageIndex: number };
+                if (holdPageText(pageIndex))
+                    this.heldTextStreamId = data.streamId;
+            }
+            // StreamKind.CANCEL for the owned PDF.js text request.
+            if (
+                this.heldTextStreamId !== undefined &&
+                data.streamId === this.heldTextStreamId &&
+                data.stream === 1
+            )
+                this.cancelledHeldTextRead = true;
             this.messages.push({
                 direction: 'send',
                 action: data.action,

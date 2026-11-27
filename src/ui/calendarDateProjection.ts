@@ -128,6 +128,9 @@ export function projectCalendarRecordPickerDays<
     const first = moment.utc(`${args.queryMonth}-01`, 'YYYY-MM-DD', true);
     if (!first.isValid() || args.startField == null || args.endField == null)
         return days;
+    const compareTimes =
+        getCalendarFieldResultConfig(args.startField).type === 'dateTime' &&
+        getCalendarFieldResultConfig(args.endField).type === 'dateTime';
     const firstDay = first.format('YYYY-MM-DD');
     const lastDay = first.clone().endOf('month').format('YYYY-MM-DD');
     for (const record of args.records) {
@@ -146,6 +149,7 @@ export function projectCalendarRecordPickerDays<
             clientTimeZone: args.clientTimeZone,
         });
         if (start == null || end == null) continue;
+        if (compareTimes && end.isBefore(start)) continue;
         const startDay = start.format('YYYY-MM-DD');
         const endDay = end.format('YYYY-MM-DD');
         const cursor = moment.utc(

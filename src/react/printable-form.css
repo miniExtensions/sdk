@@ -204,6 +204,18 @@
     .mx-sdk-print-rating-summary {
         display: block;
     }
+    /* The interactive description collapses with inline styles. */
+    .mx-sdk-print-document
+        .mx-sdk-field-description
+        .mx-sdk-description__viewport {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    .mx-sdk-print-document
+        .mx-sdk-field-description
+        .mx-sdk-description__toggle {
+        display: none;
+    }
     .mx-sdk-print-document .me-rich-text,
     .mx-sdk-print-document .mx-sdk-print-html,
     .mx-sdk-print-document .mx-sdk-print-html > * {

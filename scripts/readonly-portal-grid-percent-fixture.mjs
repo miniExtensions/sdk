@@ -27,6 +27,10 @@ const cases = [
     { id: 'Null', value: null, label: '', fill: null },
     { id: 'Omitted', label: '', fill: null },
     { id: 'Grouped', value: 12.3456, label: '1.234,56%', fill: 100 },
+    { id: 'BelowHalfway', value: 0.080049, label: '8,00%', fill: 8.0049 },
+    { id: 'Halfway', value: 0.08005, label: '8,01%', fill: 8.005 },
+    { id: 'AboveHalfway', value: 0.080051, label: '8,01%', fill: 8.0051 },
+    { id: 'NegativeHalfway', value: -0.08005, label: '-8,01%', fill: 0 },
 ];
 const freezeRecord = ({ id, fields: values }) =>
     Object.freeze({ id, fields: Object.freeze(values) });
@@ -305,18 +309,19 @@ function capture(expected, checkIdentity) {
             ),
             `Editable or Open/Clear control for ${id}`
         );
+        const displayed = entries.map((entry) => [
+            entry.dataset.fieldId,
+            entry.innerText.trim(),
+        ]);
         equals(
-            entries.map((entry) => [
-                entry.dataset.fieldId,
-                entry.innerText.trim(),
-            ]),
+            displayed,
             [
                 ['fldName', id],
                 ['fldProgress', label],
                 ['fldPlain', label],
                 ['fldNote', `Keep ${id}`],
             ],
-            `Cell IDs, localized text and neighbor for ${id}`
+            `Cell IDs, localized text and neighbor for ${id}: ${JSON.stringify(displayed)}`
         );
         const progress = entries[1].querySelector(
             '.mx-sdk-localized-numeric-fill'
@@ -358,6 +363,12 @@ function capture(expected, checkIdentity) {
         };
     });
     for (const id of ['fldProgress', 'fldPlain']) {
+        for (const { id: name, value } of expected) {
+            assert(
+                delivered.get(id)?.has(value),
+                `Exact stored Percent value for ${name} in ${id}`
+            );
+        }
         assert(
             delivered.get(id)?.has(null) &&
                 delivered.get(id)?.has(undefined) &&

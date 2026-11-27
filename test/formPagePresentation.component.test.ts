@@ -6,6 +6,7 @@ import {
     createElement as h,
     Fragment,
     StrictMode,
+    useSyncExternalStore,
     type ReactNode,
 } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -23,6 +24,7 @@ import {
     type CompleteFormReviewProps,
     type FormReviewDialogFrameProps,
 } from '../src/react/CompleteFormReview.js';
+import { createNativeFormPages } from '../src/ui/nativeFormPages.js';
 
 const pages: readonly FormPageNavigationDescriptor[] = [
     {
@@ -310,6 +312,120 @@ it('keeps composed fields stable and routes only the admitted detached form acti
     assert.equal(f.window.document.getElementById('grouped'), grouped);
     await f.click('Save');
     assert.deepEqual(intents, ['back', 'next', 'save']);
+    assert.equal(f.submits(), 0);
+});
+
+it('focuses each accepted keyboard Next heading through the composed page slot', async (t) => {
+    const f = await fixture(t);
+    const formId = 'titled-form';
+    const titledPages = [
+        { ...pages[0]!, title: 'Start' },
+        pages[1]!,
+        pages[2]!,
+        pages[3]!,
+    ];
+    const intents: string[] = [];
+    let rejected = true;
+    const navigation = createNativeFormPages({
+        pages: titledPages,
+        owner: 'session',
+        configuration: 'form',
+        multiple: true,
+        reviewItems: [],
+        isCurrent: () => true,
+        onNext({ pageIndex, advance }) {
+            intents.push(`next:${pageIndex}`);
+            if (rejected) {
+                f.host.querySelector('input')?.focus();
+                return;
+            }
+            advance();
+        },
+    });
+    function Form({ footerLabel }: { footerLabel: string }) {
+        const snapshot = useSyncExternalStore(
+            navigation.subscribe,
+            navigation.getSnapshot
+        );
+        const fieldId = snapshot.pages[snapshot.activePageIndex]!.fieldIds[0]!;
+        return h(CompleteFormComposition, {
+            formId,
+            footerLabel,
+            onSubmit: () => {
+                if (snapshot.isLastPage) intents.push('save');
+                else snapshot.actions.next();
+            },
+            items: [
+                {
+                    kind: 'field',
+                    key: fieldId,
+                    node: h('input', { id: fieldId, form: formId }),
+                },
+            ],
+            slots: {
+                pageNavigation: h(
+                    'div',
+                    null,
+                    h(CompleteFormPageNavigation, snapshot)
+                ),
+            },
+            primary: snapshot.isLastPage
+                ? {
+                      kind: 'terminal',
+                      mode: 'save',
+                      label: 'Save',
+                      canSubmit: true,
+                      saving: false,
+                  }
+                : { kind: 'next', label: 'Next' },
+        });
+    }
+    async function keyboardNext() {
+        const next = f.button('Next');
+        next.focus();
+        assert.equal(f.window.document.activeElement, next);
+        // Happy DOM does not synthesize a submit click from Enter.
+        await act(async () => {
+            next.dispatchEvent(
+                new f.window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            );
+        });
+    }
+    function expectPage(title: string, fieldId: string) {
+        const heading = f.host.querySelector('h2');
+        assert.equal(heading?.textContent, title);
+        assert.equal(f.host.querySelector('input')?.id, fieldId);
+        assert.equal(f.window.document.activeElement?.tagName, 'H2');
+        assert.equal(f.window.document.activeElement, heading);
+        assert.equal(heading?.tabIndex, -1);
+        assert.equal(heading?.getAttribute('tabindex'), '-1');
+    }
+
+    await f.render(h(Form, { footerLabel: 'Form actions' }));
+    assert.equal(f.window.document.activeElement, f.opener);
+
+    await keyboardNext();
+    assert.equal(f.host.querySelector('h2')?.textContent, 'Start');
+    assert.equal(f.window.document.activeElement?.id, 'leading');
+    await f.render(h(Form, { footerLabel: 'Updated actions' }));
+    assert.equal(f.window.document.activeElement?.id, 'leading');
+
+    rejected = false;
+    await keyboardNext();
+    expectPage('Contact', 'name');
+
+    f.host.querySelector('input')?.focus();
+    await f.render(h(Form, { footerLabel: 'New actions' }));
+    assert.equal(f.window.document.activeElement?.id, 'name');
+
+    await keyboardNext();
+    expectPage('Details', 'detail');
+    assert.equal(f.button('Save').getAttribute('type'), 'submit');
+    assert.deepEqual(intents, ['next:0', 'next:0', 'next:1']);
     assert.equal(f.submits(), 0);
 });
 

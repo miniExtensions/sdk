@@ -1,5 +1,10 @@
 import {
     createElement as h,
+    createContext,
+    useContext,
+    useEffect,
+    useLayoutEffect,
+    useRef,
     type MouseEventHandler,
     type ReactElement,
 } from 'react';
@@ -23,6 +28,10 @@ export type CompleteFormPageNavigationProps = {
     className?: string;
 };
 
+export const FormNextKeyboardFocusContext = createContext<{
+    submitter: HTMLButtonElement;
+} | null>(null);
+
 /** Complete progress, current title and HTML description without a second page index. */
 export function CompleteFormPageNavigation({
     pages,
@@ -33,6 +42,35 @@ export function CompleteFormPageNavigation({
     className,
 }: CompleteFormPageNavigationProps): ReactElement | null {
     const activePage = pages[activePageIndex];
+    const keyboardNext = useContext(FormNextKeyboardFocusContext);
+    const heading = useRef<HTMLHeadingElement>(null);
+    const previous = useRef({ activePageIndex, keyboardNext });
+    const canSelectTitle =
+        onSelectTitle != null && (activePage?.fieldIds.length ?? 0) > 0;
+    const useCommitEffect =
+        typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    useCommitEffect(() => {
+        const before = previous.current;
+        previous.current = { activePageIndex, keyboardNext };
+        const destination = heading.current;
+        // Consume the request on this commit, even when validation keeps the
+        // current page. A later page or visibility update cannot reuse it.
+        if (
+            !destination ||
+            !keyboardNext ||
+            keyboardNext === before.keyboardNext ||
+            activePageIndex <= before.activePageIndex ||
+            activePage?.hidden ||
+            canSelectTitle
+        )
+            return;
+        const document = destination.ownerDocument;
+        const active = document.activeElement;
+        // A final page can replace Next with Save and return focus to body.
+        if (active === keyboardNext.submitter || active === document.body)
+            destination.focus({ preventScroll: true });
+    }, [activePageIndex, activePage?.hidden, canSelectTitle, keyboardNext]);
+
     if (
         !activePage ||
         (activePage.title == null && activePage.description == null)
@@ -44,8 +82,6 @@ export function CompleteFormPageNavigation({
             ({ page }) =>
                 !page.hidden && (page.title != null || page.description != null)
         );
-    const canSelectTitle =
-        onSelectTitle != null && activePage.fieldIds.length > 0;
     return h(
         'div',
         {
@@ -77,7 +113,11 @@ export function CompleteFormPageNavigation({
         activePage.title != null
             ? h(
                   'h2',
-                  { className: 'mx-sdk-form-pages-title' },
+                  {
+                      className: 'mx-sdk-form-pages-title',
+                      ref: heading,
+                      tabIndex: canSelectTitle ? undefined : -1,
+                  },
                   canSelectTitle
                       ? h(
                             'button',

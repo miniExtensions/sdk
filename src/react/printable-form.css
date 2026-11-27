@@ -198,6 +198,22 @@
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
     }
+    .mx-sdk-print-document
+        .mx-sdk-print-attachments-icon
+        .mx-sdk-print-attachment:has(> figcaption) {
+        height: auto;
+        min-height: 3.5rem;
+    }
+    .mx-sdk-print-document
+        .mx-sdk-print-attachments-icon
+        .mx-sdk-print-attachment
+        > figcaption {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        overflow: visible;
+        text-overflow: clip;
+    }
     .mx-sdk-print-document .mx-sdk-print-rating-range {
         display: none;
     }

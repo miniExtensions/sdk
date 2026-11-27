@@ -22,7 +22,8 @@ const emphasis =
 function plainTextFromMarkdown(
     markdown: string,
     tags: RegExp,
-    cache: Map<string, string>
+    cache: Map<string, string>,
+    preserveInlineCode = false
 ): string {
     if (cache.has(markdown)) {
         return cache.get(markdown)!;
@@ -77,8 +78,21 @@ function plainTextFromMarkdown(
         line = line.replace(/^(\s*)[\*\-\+]\s+/, '$1'); // Unordered
         line = line.replace(/^(\s*)(\d+\.)\s+/, '$1'); // Ordered
 
-        // Remove inline code (e.g., `code`)
-        line = line.replace(/`([^`]+)`/g, '$1');
+        const literals: string[] | undefined = preserveInlineCode
+            ? []
+            : undefined;
+        if (literals) {
+            // Keep code opaque to formatting, and escape authored markers too.
+            line = line.replace(
+                /`([^`]+)`|\uE000/g,
+                (match, code: string | undefined) => {
+                    const index = literals.push(code ?? match) - 1;
+                    return `\uE000${index}\uE000`;
+                }
+            );
+        } else {
+            line = line.replace(/`([^`]+)`/g, '$1');
+        }
 
         // Remove bold/italic and nested emphasis
         const MAX_EMPHASIS_ITERATIONS = 10; // Limit the number of iterations
@@ -115,6 +129,11 @@ function plainTextFromMarkdown(
 
         // Remove HTML tags
         line = line.replace(tags, '');
+        if (literals?.length) {
+            line = line.replace(/\uE000(\d+)\uE000/g, (_match, index) => {
+                return literals[Number(index)];
+            });
+        }
 
         // Skip empty lines after processing
         if (line.trim() === '') {
@@ -139,4 +158,4 @@ export const removeMarkdown = (markdown: string): string =>
     plainTextFromMarkdown(markdown, markup, markdownCache);
 
 export const removeFormTitleMarkdown = (markdown: string): string =>
-    plainTextFromMarkdown(markdown, formTitleMarkup, formTitleCache);
+    plainTextFromMarkdown(markdown, formTitleMarkup, formTitleCache, true);

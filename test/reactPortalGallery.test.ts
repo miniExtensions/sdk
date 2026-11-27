@@ -488,6 +488,134 @@ for (const target of [
     });
 }
 
+for (const outcome of [
+    'continuation',
+    'terminal',
+    'stale',
+    'departed',
+] as const) {
+    test(`Gallery keyboard paging handles an empty ${outcome} receipt`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const calls = { pages: [] as string[], opens: 0, unlinks: 0 };
+        const openRow = (id: string): PortalGalleryRow => ({
+            ...row(id),
+            open: { label: `Open ${id}`, activate: () => calls.opens++ },
+            requestUnlink: {
+                label: `Unlink ${id}`,
+                description: 'Remove parent link',
+                activate: () => calls.unlinks++,
+            },
+        });
+        const a = openRow('a');
+        const b = openRow('b');
+        const c = openRow('c');
+        const initial = props([a, b]);
+        const appended = props([a, b, c]);
+        type Receipt = { recordIds: readonly string[]; isCurrent(): boolean };
+        const receipts = new Map<string, (receipt: Receipt) => void>();
+        const render = (
+            gallery: PortalGalleryProps,
+            state: 'ready' | 'loading' | 'done',
+            cursor = 'page_2'
+        ) =>
+            f.render(
+                h(PortalGallery, {
+                    ...gallery,
+                    paging: {
+                        canRequestMore: state === 'ready',
+                        showSpinner: state === 'loading',
+                        requestLabel: 'Load more',
+                        loadingLabel: 'Loading',
+                        requestMore() {
+                            throw new Error('Expected keyboard continuation');
+                        },
+                        requestMoreWithFocus() {
+                            calls.pages.push(cursor);
+                            return new Promise<Receipt>((resolve) => {
+                                receipts.set(cursor, resolve);
+                            });
+                        },
+                    },
+                })
+            );
+        const loadMore = () =>
+            f.container.querySelector('.mx-sdk-portal-gallery-load-more');
+        const activate = (
+            button: InstanceType<typeof f.window.HTMLButtonElement>
+        ) =>
+            act(async () => {
+                button.dispatchEvent(
+                    new f.window.MouseEvent('click', {
+                        bubbles: true,
+                        detail: 0,
+                    })
+                );
+            });
+
+        await render(initial, 'ready');
+        const original = loadMore();
+        assert(original instanceof f.window.HTMLButtonElement);
+        original.focus();
+        await activate(original);
+        await render(initial, 'loading');
+        assert.equal(loadMore(), null);
+
+        const outside = f.window.document.createElement('button');
+        f.window.document.body.append(outside);
+        if (outcome === 'departed') outside.focus();
+        const finishSecondPage = receipts.get('page_2');
+        assert(finishSecondPage);
+        await act(async () => {
+            finishSecondPage({
+                recordIds: [],
+                isCurrent: () => outcome !== 'stale',
+            });
+        });
+        await render(
+            initial,
+            outcome === 'terminal' ? 'done' : 'ready',
+            'page_3'
+        );
+        assert.deepEqual(calls.pages, ['page_2']);
+
+        if (outcome === 'continuation') {
+            const replacement = loadMore();
+            assert(replacement instanceof f.window.HTMLButtonElement);
+            assert.notEqual(replacement, original);
+            assert.equal(replacement.disabled, false);
+            assert.ok(
+                f.window.document.activeElement === replacement,
+                'The replacement Load more button should receive focus'
+            );
+            await activate(replacement);
+            await render(initial, 'loading', 'page_3');
+            await render(appended, 'done');
+            const finishThirdPage = receipts.get('page_3');
+            assert(finishThirdPage);
+            await act(async () => {
+                finishThirdPage({ recordIds: ['c'], isCurrent: () => true });
+            });
+            assert.equal(
+                f.window.document.activeElement,
+                f.container.querySelector('[aria-label="Open c"]')
+            );
+        } else {
+            if (outcome === 'terminal') assert.equal(loadMore(), null);
+            assert.equal(
+                f.window.document.activeElement,
+                outcome === 'departed' ? outside : f.window.document.body
+            );
+        }
+        assert.deepEqual(calls, {
+            pages:
+                outcome === 'continuation' ? ['page_2', 'page_3'] : ['page_2'],
+            opens: 0,
+            unlinks: 0,
+        });
+        f.unchangedEffects();
+    });
+}
+
 test('Gallery reload overlay preserves row nodes, image selection and current Open registration', async (t) => {
     const f = await htmlPresentationFixture(t);
     const active = new Set<unknown>();

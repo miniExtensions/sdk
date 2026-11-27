@@ -157,6 +157,22 @@ describe('complete Form display source selection', () => {
         assert.equal(removeMarkdown(title), 'Alert if stock  30');
     });
 
+    it('preserves inline code punctuation only in Formula titles', () => {
+        const title = 'Use `**VIP**` and **Save** `<NONE>`.';
+        assert.equal(
+            resolveFormHeaderTitle(
+                fieldSource(title, formulaField),
+                'Extension'
+            ),
+            'Use **VIP** and Save <NONE>.'
+        );
+        assert.equal(removeMarkdown(title), 'Use VIP and Save .');
+        assert.equal(
+            resolveFormHeaderTitle(fieldSource(title), 'Extension'),
+            title
+        );
+    });
+
     it('keeps ordinary title HTML as plain text rather than interpreting it', () => {
         assert.equal(
             resolveFormHeaderTitle(

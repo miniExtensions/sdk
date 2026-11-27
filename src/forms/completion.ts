@@ -69,6 +69,8 @@ export type FormCompletionProjection = {
     redirectURL: string | null;
     canSubmitAnother: boolean;
     canCopy: boolean;
+    /** Localized name for a rendered Copy action with a whitespace caption. */
+    copySubmittedAccessibleName?: string;
     /** Seconds selected at the first eligible lifecycle activation. */
     duration: number;
     action: 'close' | 'logout' | 'newForm' | 'redirect' | 'none';
@@ -259,6 +261,9 @@ export function projectFormCompletion(
             rootActions &&
             c.allowCopySubmittedToNewForm === true &&
             c.enableLockingFormAfterSubmission !== true,
+        ...(labels.copySubmitted !== '' && labels.copySubmitted.trim() === ''
+            ? { copySubmittedAccessibleName: defaults.copySubmitted }
+            : {}),
         duration,
         action,
         labels,

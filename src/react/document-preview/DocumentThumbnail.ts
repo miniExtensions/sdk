@@ -394,6 +394,7 @@ export function DocumentThumbnail(props: Props): ReactNode {
             labels,
             inGrid: props.inGrid,
             showAllPages: props.pdfModal,
+            exposePageText: props.pdfModal,
             isCurrent: current,
             onDownload: props.onDownload
                 ? (bytes: Uint8Array) => {

@@ -275,6 +275,8 @@ export function CompleteFormCompletion(
                                 {
                                     type: 'button',
                                     disabled: !canSubmit,
+                                    'aria-label':
+                                        projection.copySubmittedAccessibleName,
                                     onClick: () => {
                                         void dispatch('copy_form');
                                     },

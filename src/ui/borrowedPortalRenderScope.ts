@@ -1,4 +1,5 @@
 import type { PortalRecordPresentation } from '../portals/listOwner.js';
+import type { RuntimeAirtableField } from '../runtime/types.js';
 import type { PortalRenderRow } from './portalRenderScope.js';
 import {
     createRendererProps,
@@ -161,19 +162,30 @@ export function createBorrowedPortalRenderScope<Stamp>(
                     projection.detailProjection === 'present'
                         ? projection.detailFields
                         : [];
+                const detailCounts = new Map<string, number>();
+                for (const { fieldId } of details) {
+                    detailCounts.set(
+                        fieldId,
+                        (detailCounts.get(fieldId) ?? 0) + 1
+                    );
+                }
+                const schemasById = new Map<
+                    string,
+                    RuntimeAirtableField | null
+                >();
+                const schemas =
+                    details.length > 0 ? projection.table.airtableFields : [];
+                for (const schema of schemas) {
+                    const { id } = schema;
+                    schemasById.set(id, schemasById.has(id) ? null : schema);
+                }
                 const prepared = [];
                 for (const detail of details) {
-                    if (
-                        detail.isHidden ||
-                        details.filter((d) => d.fieldId === detail.fieldId)
-                            .length !== 1
-                    )
+                    const { fieldId } = detail;
+                    if (detail.isHidden || detailCounts.get(fieldId) !== 1)
                         continue;
-                    const schemas = projection.table.airtableFields.filter(
-                        (f) => f.id === detail.fieldId
-                    );
-                    if (schemas.length !== 1) continue;
-                    const schema = schemas[0];
+                    const schema = schemasById.get(fieldId);
+                    if (!schema) continue;
                     const override = detail.titleOverride;
                     const title =
                         typeof override === 'string' && !override.trim()
@@ -183,7 +195,7 @@ export function createBorrowedPortalRenderScope<Stamp>(
                     // must not depend on a first row or any cached row value.
                     const props = createRendererProps({
                         physicalKind: schema.config.type,
-                        fieldId: detail.fieldId,
+                        fieldId,
                         title,
                         field: schema,
                         displayConfig: detail.miniExtConfig,

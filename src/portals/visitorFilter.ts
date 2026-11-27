@@ -788,15 +788,29 @@ function createDraftForFrame(
             if (!leaf) return false;
             const setting = projectedSetting(leaf);
             if (setting.type === type) return false;
-            const field = resolvePortalVisitorFilterOperator(
+            const selected = resolvePortalVisitorFilterOperator(
                 captured.fields,
                 setting
-            )?.field;
-            const operator = field?.operators.find(
+            );
+            if (!selected) return false;
+            const operator = selected.field.operators.find(
                 (option) => option.setting.type === type
             );
             if (!operator) return false;
-            editSetting(leaf, operator.setting);
+            const value = getValue(setting);
+            if (
+                selected.operator.operand.kind === 'text' &&
+                operator.operand.kind === 'text' &&
+                setting.fieldType === operator.setting.fieldType &&
+                typeof value === 'string'
+            ) {
+                editSetting(leaf, {
+                    ...operator.setting,
+                    value,
+                } as RuntimeConditionSetting);
+            } else {
+                editSetting(leaf, operator.setting);
+            }
             return true;
         },
         setOperand(id: string, value: unknown) {

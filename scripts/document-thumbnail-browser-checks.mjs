@@ -733,18 +733,57 @@ export async function checkDocumentThumbnailBrowser({
             await click('HTTP PDF modal');
             await untilClosed();
             assert.equal(
+                await display()
+                    .locator('[data-document-pdf-page-text]')
+                    .count(),
+                0
+            );
+            assert.equal(
                 profile.resources.filter(
                     (r) => r.path === '/documents/known.pdf'
                 ).length,
                 0
             );
             await display().locator('button[aria-label]').click();
-            await page.locator('dialog [data-rendered-page="2"]').waitFor();
-            assert.equal(await page.locator('dialog iframe').count(), 0);
-            await page
+            const dialog = page.getByRole('dialog');
+            await dialog.locator('[data-rendered-page="1"]').waitFor();
+            await dialog.locator('[data-rendered-page="2"]').waitFor();
+            const pageText = dialog.locator('[data-document-pdf-page-text]');
+            await pageText.nth(0).waitFor({ state: 'attached' });
+            await pageText.nth(1).waitFor({ state: 'attached' });
+            const ax = await dialog.ariaSnapshot();
+            const phrases = Array.from(
+                ax.matchAll(/First page|Second page/g),
+                (match) => match[0]
+            );
+            assert.deepEqual(phrases, ['First page', 'Second page']);
+            const geometry = await pageText.evaluateAll((nodes) =>
+                nodes.map((node) => {
+                    const { width, height } = node.getBoundingClientRect();
+                    const { position, overflow } = getComputedStyle(node);
+                    return { width, height, position, overflow };
+                })
+            );
+            assert.deepEqual(
+                geometry,
+                Array.from({ length: 2 }, () => ({
+                    width: 1,
+                    height: 1,
+                    position: 'absolute',
+                    overflow: 'hidden',
+                }))
+            );
+            assert.equal(await dialog.locator('iframe').count(), 0);
+            await dialog
                 .getByRole('button', { name: 'Close', exact: true })
                 .click();
+            await dialog.waitFor({ state: 'detached' });
             await untilClosed();
+            assert.equal(
+                await page.locator('[data-document-pdf-page-text]').count(),
+                0
+            );
+            profile.modalPageText = { phrases, geometry, removedOnClose: true };
             await finish(
                 'known-http-pdf-modal-without-iframe-policy-exception'
             );

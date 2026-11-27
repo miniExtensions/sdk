@@ -27,6 +27,7 @@ test('rendered slider actions honor permissions, current attachment ownership, a
     let deletes = 0;
     const errors: unknown[] = [];
     const saved: Array<{ filename: string; href: string }> = [];
+    const savedFilename = () => saved.at(-1)?.filename;
     const requests: Array<{
         url: string;
         resolve(response: Response): void;
@@ -167,6 +168,64 @@ test('rendered slider actions honor permissions, current attachment ownership, a
         requests.map((request) => request.url),
         [url, url, url]
     );
+
+    const download = button(labels.download);
+    const pointer = async (type: string, pointerId: number) => {
+        await act(async () => {
+            download.dispatchEvent(
+                new window.PointerEvent(type, {
+                    bubbles: true,
+                    pointerId,
+                    pointerType: 'mouse',
+                    isPrimary: true,
+                    button: 0,
+                    detail: type === 'click' ? 1 : 0,
+                })
+            );
+        });
+    };
+    const mouseClick = async () => {
+        await act(async () => {
+            download.dispatchEvent(
+                new window.MouseEvent('click', { bubbles: true, detail: 1 })
+            );
+        });
+    };
+    const rear = { url: '/rear-attachment.svg', filename: 'Rear.svg' };
+    const showRear = (attachment = rear) =>
+        render({
+            attachment,
+            downloadIdentity: 'rear-occurrence',
+            presentationOwner: owner,
+        });
+
+    await pointer('pointerdown', 1);
+    await showRear();
+    assert.equal(button(labels.download), download);
+    await pointer('pointerup', 1);
+    await mouseClick();
+    assert.equal(
+        requests.length,
+        3,
+        'The old press must not read the rear file'
+    );
+
+    await pointer('pointerdown', 2);
+    await pointer('pointercancel', 2);
+    assert.equal(requests.length, 3);
+
+    await pointer('pointerdown', 3);
+    await showRear({ ...rear, filename: 'Renamed.svg' });
+    await pointer('pointerup', 3);
+    await pointer('click', 3);
+    assert.equal(requests[3]?.url, rear.url);
+    await complete(3);
+    assert.equal(savedFilename(), 'Renamed.svg');
+
+    await mouseClick();
+    assert.equal(requests[4]?.url, rear.url);
+    await complete(4);
+    assert.equal(savedFilename(), 'Renamed.svg');
 
     await fixture.render(null);
     assert.equal(listeners.size, 0);

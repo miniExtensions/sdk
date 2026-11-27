@@ -316,7 +316,7 @@ it('owns rich header descriptions even for empty rows and uses real keyboard too
                         fieldId: 'value',
                         title: 'Value',
                         description:
-                            '<p><strong>Rich header</strong><script>unsafe()</script></p>',
+                            '<p><strong>Rich header</strong><a href="/notes-help">Help link</a><script>unsafe()</script></p>',
                     },
                 ],
             })
@@ -337,14 +337,39 @@ it('owns rich header descriptions even for empty rows and uses real keyboard too
     assert.ok(tooltip);
     assert.equal(tooltip.querySelector('strong')?.textContent, 'Rich header');
     assert.equal(trigger.getAttribute('aria-describedby'), tooltip.id);
-    await act(async () =>
-        trigger.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                key: 'Escape',
-                bubbles: true,
-            })
-        )
+    const link = tooltip.querySelector('a[href]');
+    assert.ok(link instanceof f.window.HTMLAnchorElement);
+    // Happy DOM needs an explicit layout boundary for the visible link.
+    Object.defineProperty(link, 'getClientRects', { value: () => [{}] });
+    link.style.visibility = 'visible';
+    const press = async (key: string, shiftKey = false) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key,
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            f.window.document.activeElement?.dispatchEvent(event);
+        });
+        return event.defaultPrevented;
+    };
+    assert.equal(await press('Tab'), true);
+    assert.equal(f.window.document.activeElement, link);
+    assert.equal(await press('Tab', true), true);
+    assert.equal(f.window.document.activeElement, trigger);
+    assert.equal(await press('Tab'), true);
+    assert.equal(f.window.document.activeElement, link);
+    // The mounted browser witness checks the native next tab stop after this.
+    assert.equal(await press('Tab'), false);
+    assert.equal(
+        f.window.document.body.querySelector('[role="tooltip"]'),
+        null
     );
+    assert.equal(f.window.document.activeElement, trigger);
+    await act(async () => trigger.click());
+    assert.ok(f.window.document.body.querySelector('[role="tooltip"]'));
+    await press('Escape');
     assert.equal(
         f.window.document.body.querySelector('[role="tooltip"]'),
         null

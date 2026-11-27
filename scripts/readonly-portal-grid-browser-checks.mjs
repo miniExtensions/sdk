@@ -54,6 +54,7 @@ window.addEventListener('pointerdown',e=>pointers.push({type:e.pointerType,trust
 for(const type of ['click','auxclick','contextmenu'])document.addEventListener(type,event=>{if(!(event.target instanceof Element)||!event.target.closest('[role="tooltip"] a'))return;const item={type,button:event.button,trusted:event.isTrusted,atCapture:event.defaultPrevented,microtask:null,final:null};headerEvents.push(item);queueMicrotask(()=>{item.microtask=event.defaultPrevented;});setTimeout(()=>{item.final=event.defaultPrevented;},0);},{capture:true});
 window.addEventListener('error',e=>errors.push(String(e.error||e.message)));window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
 const columns=Object.freeze([{fieldId:'name',title:'<Name>',icon:'text'},{fieldId:'amount',title:'Amount',icon:'number'},{fieldId:'notes',title:'Notes',icon:'multiline-text',description:'<p><strong>Useful header</strong><a href="/stale-help-link">Help link</a><script>window.__headerUnsafe=true</script></p>',descriptionImageUrl:'/grid-header-help.svg'}].map(Object.freeze));
+const plainHelpColumns=columns.map(column=>column.fieldId==='notes'?{...column,description:'<p>Plain header help</p>',descriptionImageUrl:null}:column);
 const leaf=value=>h(CompleteReadOnlyTextField,{value,language:'en'});
 document.querySelector('#child-close').onclick=()=>{document.querySelector('#child').close();if(returnCheck?.()&&activeTrigger?.isConnected)activeTrigger.focus();};
 function App(){const[state,set]=useState({scope:'original',revision:1,ready:true,live:true,copy:false,height:'short',empty:false,hidden:{original:{name:true}},widths:{original:{name:'180',amount:180,notes:220}}});
@@ -61,7 +62,7 @@ function App(){const[state,set]=useState({scope:'original',revision:1,ready:true
  useEffect(()=>{stateRead=state;committed++;});
  const scope=state.scope,revision=state.revision,isCurrent=()=>!retired&&live.current.live&&live.current.ready&&live.current.scope===scope&&live.current.revision===revision;
  const rows=state.empty?[]:records.map(r=>({recordId:r.recordId,label:r.name,cells:['notes','name','amount'].map(fieldId=>({fieldId,node:leaf(r[fieldId])}))}));
- return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,labels:state.hideColumnsLabel?{hideColumns:state.hideColumnsLabel}:undefined,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
+ return h('form',{onSubmit:e=>{e.preventDefault();submits++;}},h('button',{type:'button',id:'before'},'Before Grid'),h(ReadonlyPortalGrid,{columns:state.plainHelp?plainHelpColumns:columns,rows,primaryFieldId:'name',revision,preferenceScopeKey:scope,ready:state.ready,isCurrent,hiddenColumns:state.hidden[scope]||{},columnWidths:state.widths[scope]||{},allowHideColumns:true,labels:state.hideColumnsLabel?{hideColumns:state.hideColumnsLabel}:undefined,doNotAllowUserToCopyTextOnGrid:state.copy,rowHeight:state.height,openRecordTestIds:{second:'native-open-second',first:'native-open-first'},onFieldHiddenChange:change=>{if(!isCurrent())throw Error('Stale hide reached host');hides.push({scope,revision,...change});set(s=>({...s,hidden:{...s.hidden,[scope]:{...s.hidden[scope],[change.fieldId]:change.isHidden}}}));},onColumnWidthCommit:change=>{if(!isCurrent())throw Error('Stale width reached host');widths.push({scope,revision,...change,measuredAtCommit:[...document.querySelectorAll('th[data-field-id]')].find(n=>n.dataset.fieldId===change.fieldId)?.clientWidth});set(s=>({...s,widths:{...s.widths,[scope]:{...s.widths[scope],[change.fieldId]:change.width}}}));},onOpenRecord:(recordId,trigger)=>{if(!isCurrent())throw Error('Stale Open reached host');opens.push({scope,revision,recordId,button:trigger.tagName});activeTrigger=trigger;returnCheck=isCurrent;document.querySelector('#child').showModal();}}),h('input',{id:'editable',defaultValue:'Editable unaffected','aria-label':'Editable control'}));
 }
 function TextCellProbe() {
     const [cell, setCell] = useState(() => ({
@@ -1345,6 +1346,49 @@ export async function checkReadonlyPortalGridBrowser({
         );
     });
     assert.equal(await page.evaluate(() => window.__headerUnsafe), undefined);
+    const keyboard = [];
+    evidence.headerHelpKeyboard = keyboard;
+    const press = async (key, target, popup) => {
+        await page.keyboard.press(key);
+        const result = await page.evaluate(() => {
+            const active = document.activeElement;
+            return {
+                focus:
+                    active?.getAttribute('aria-label') ?? active?.textContent,
+                popup: document.querySelector('[role="tooltip"]') !== null,
+            };
+        });
+        keyboard.push({ key, ...result });
+        assert.equal(result.focus, target);
+        await help.waitFor({ state: popup ? 'visible' : 'detached' });
+        keyboard.at(-1).popup = popup;
+    };
+    const link = help.getByRole('link', { name: 'Help link', exact: true });
+    const notesResize = page
+        .locator('th[data-field-id="notes"]')
+        .getByRole('separator');
+    const resizeLabel = await notesResize.getAttribute('aria-label');
+    await link.waitFor({ state: 'visible' });
+    await press('Tab', 'Help link', true);
+    await press('Shift+Tab', 'Field description for Notes', true);
+    await press('Tab', 'Help link', true);
+    await press('Tab', resizeLabel, false);
+    await description.focus();
+    await link.waitFor({ state: 'visible' });
+    await press('Tab', 'Help link', true);
+    await press('Escape', 'Field description for Notes', false);
+    await patch({ plainHelp: true });
+    await page.keyboard.press('Enter');
+    await help.getByText('Plain header help').waitFor({ state: 'visible' });
+    await press('Tab', resizeLabel, false);
+    const afterKeyboard = await snapshot();
+    assert.deepEqual(afterKeyboard.opens, []);
+    assert.deepEqual(afterKeyboard.widths, []);
+    assert.deepEqual(afterKeyboard.headerEvents, []);
+    assert.equal(afterKeyboard.submits, 0);
+    await patch({ plainHelp: false });
+    await description.focus();
+    await help.waitFor({ state: 'visible' });
     await page.keyboard.press('Escape');
     await help.waitFor({ state: 'detached' });
     assert.equal(

@@ -1664,7 +1664,12 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
                     new Uint8Array(readFileSync(join(assets, relative)))
                 );
             });
-            const harness = documentCanvasHarness(t, f.window);
+            let holdSecondPage = false;
+            const harness = documentCanvasHarness(
+                t,
+                f.window,
+                (pageIndex) => holdSecondPage && pageIndex === 1
+            );
             const props: ControlledCreatedTimeFieldProps = {
                 ...base,
                 value: opaqueURL,
@@ -1695,6 +1700,10 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
                 f.container.querySelector('[data-document-pdf-controls]'),
                 null
             );
+            assert.equal(
+                f.container.querySelector('[data-document-pdf-page-text]'),
+                null
+            );
             await f.open(opaqueURL);
             assert.match(f.dialog()!.textContent ?? '', /Preview unavailable/);
             assert.equal(f.dialog()!.querySelector('canvas'), null);
@@ -1711,6 +1720,17 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
                     f.dialog()!.querySelectorAll('[data-rendered-page]')
                         .length === 2
             );
+            const pageText = '[data-document-pdf-page-text]';
+            await untilDocument(
+                () => f.dialog()?.querySelectorAll(pageText).length === 2
+            );
+            assert.deepEqual(
+                Array.from(
+                    f.dialog()!.querySelectorAll(pageText),
+                    (node) => node.textContent
+                ),
+                ['First page', 'Second page']
+            );
             assert.equal(
                 f
                     .dialog()!
@@ -1719,6 +1739,7 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
             );
             const canvases = Array.from(f.dialog()!.querySelectorAll('canvas'));
             await f.click(f.button('Close'));
+            assert.equal(f.window.document.querySelector(pageText), null);
             await untilDocument(() =>
                 harness.workers.every((worker) => worker.terminated)
             );
@@ -1727,6 +1748,22 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
                     (canvas) => canvas.width === 0 && canvas.height === 0
                 )
             );
+            holdSecondPage = true;
+            await f.open(uri);
+            const pendingWorker = () => harness.workers.at(-1);
+            await untilDocument(
+                () =>
+                    pendingWorker()?.heldTextStreamId !== undefined &&
+                    !!f
+                        .dialog()
+                        ?.querySelector('[data-document-pdf-page-text="1"]')
+            );
+            const worker = pendingWorker()!;
+            assert.equal(f.dialog()!.querySelectorAll(pageText).length, 1);
+            await f.click(f.button('Close'));
+            await untilDocument(() => worker.terminated);
+            assert.equal(worker.cancelledHeldTextRead, true);
+            assert.equal(f.window.document.querySelector(pageText), null);
         });
 
         it('keeps equivalent URI modal successors current and rejects their latent revision changes', async (t) => {

@@ -2653,6 +2653,7 @@ try {
                 calendarEscapeKeptFilterOpen: true,
                 unchangedReopen: true,
             },
+            textOperatorRetainedOperand: true,
             focusRestored: true,
             cleanup: 'completed',
         });

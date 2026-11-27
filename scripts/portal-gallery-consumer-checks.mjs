@@ -61,6 +61,7 @@ export async function checkPortalGalleryReactMatrix({
         'utf8'
     );
     assert(source.includes("'../src/react/index.js'"));
+    const testsPerProfile = 23;
     const profiles = [];
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
@@ -152,15 +153,21 @@ export async function checkPortalGalleryReactMatrix({
                     '--test-reporter=tap',
                     testName,
                 ]);
-                assert.match(output, /# tests 19\b/);
-                assert.match(output, /# pass 19\b/);
+                assert.match(
+                    output,
+                    new RegExp(`^# tests ${testsPerProfile}$`, 'm')
+                );
+                assert.match(
+                    output,
+                    new RegExp(`^# pass ${testsPerProfile}$`, 'm')
+                );
                 assert.match(output, /# fail 0\b/);
                 assert.match(output, /# skipped 0\b/);
                 assert.match(output, /# cancelled 0\b/);
                 profiles.push({
                     react,
                     format,
-                    tests: 19,
+                    tests: testsPerProfile,
                     failures: 0,
                     archiveSha256,
                     lockSha256: receipt.lockSha256,
@@ -201,7 +208,7 @@ export async function checkPortalGalleryReactMatrix({
             completedProfile = {
                 react,
                 profiles: 2,
-                tests: 38,
+                tests: 2 * testsPerProfile,
                 strictTypes: ['ESM', 'CJS'],
                 styles: 'shared card + HTML closure',
                 ...receipt,
@@ -213,5 +220,9 @@ export async function checkPortalGalleryReactMatrix({
             JSON.stringify({ ...completedProfile, cleanup: 'completed' })
         );
     }
-    return { profiles, tests: 76, archiveSha256 };
+    return {
+        profiles,
+        tests: profiles.length * testsPerProfile,
+        archiveSha256,
+    };
 }

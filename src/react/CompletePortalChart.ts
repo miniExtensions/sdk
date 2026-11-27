@@ -89,6 +89,26 @@ export function CompletePortalChart(
         plugins: {
             title: { display: true, text: props.title ?? props.fieldName },
             legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label({ raw, formattedValue, chart }) {
+                        if (
+                            typeof raw !== 'number' ||
+                            !Number.isFinite(raw) ||
+                            raw === 0 ||
+                            formattedValue !==
+                                chart.scales.y?.getLabelForValue(
+                                    raw < 0 ? -0 : 0
+                                )
+                        )
+                            return undefined;
+                        // Only replace a default tooltip that rounded to zero.
+                        return new Intl.NumberFormat(chart.options.locale, {
+                            maximumSignificantDigits: 17,
+                        }).format(raw);
+                    },
+                },
+            },
         },
     };
     return createElement(

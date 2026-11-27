@@ -163,6 +163,7 @@ function snapshot() {
             beginAtZero:chart.options.scales.y.beginAtZero,
             xTitle:chart.options.scales.x.title.text,yTitle:chart.options.scales.y.title.text,
             xTitleDisplayed:chart.options.scales.x.title.display,yTitleDisplayed:chart.options.scales.y.title.display,
+            yTicks:chart.scales.y.ticks.map(({value,label}) => ({value,label})),
             width:chart.width,height:chart.height} : null,
         canvas:canvas ? {width:canvas.width,height:canvas.height,cssWidth:box.width,cssHeight:box.height,
             painted,ariaHidden:canvas.getAttribute('aria-hidden')} : null,
@@ -206,11 +207,25 @@ async function unmount() {
 }
 window.__portalChartFixture = {
     snapshot,
+    barCenter(index) {
+        const chart = candidate(),bar = chart?.getDatasetMeta(0).data[index];
+        if (!bar) return null;
+        const point = bar.getCenterPoint(),final = bar.getCenterPoint(true);
+        if (Math.abs(point.x - final.x) > 0.1 || Math.abs(point.y - final.y) > 0.1) return null;
+        const box = chart.canvas.getBoundingClientRect();
+        return {x:box.x + point.x * box.width / chart.width,y:box.y + point.y * box.height / chart.height};
+    },
+    tooltip() {
+        const chart = candidate(),tooltip = chart?.tooltip;
+        return {locale:chart?.options.locale ?? navigator.language,index:tooltip?.getActiveElements()[0]?.index ?? null,
+            title:tooltip?.title ?? [],lines:tooltip?.body?.flatMap(({lines}) => lines) ?? []};
+    },
     async update(patch) {
         if ('rows' in patch) patch.rows = frozenRows(patch.rows);
         Object.assign(model,patch);inputBefore = JSON.stringify(model.rows);
         return publish();
     },
+    async resetRows() { return this.update({rows:mixedRows()}); },
     capture(entryIndex = 0) {
         saved = {chart:candidate(),canvas:candidateCanvas(),entry:document.querySelector('#root dl')?.children[entryIndex]};
         return snapshot();
@@ -489,6 +504,20 @@ export async function checkCompletePortalChartBrowser({
             (index) => window.__portalChartFixture.capture(index),
             index
         );
+    const hoverBar = async (index) => {
+        const handle = await page.waitForFunction(
+            (index) => window.__portalChartFixture.barCenter(index),
+            index
+        );
+        const { x, y } = await handle.jsonValue();
+        await handle.dispose();
+        await page.mouse.move(x, y);
+        await page.waitForFunction(
+            (index) => window.__portalChartFixture.tooltip().index === index,
+            index
+        );
+        return page.evaluate(() => window.__portalChartFixture.tooltip());
+    };
     const groups = [];
     const clean = (value) => {
         assert.deepEqual(value.errors, []);
@@ -583,6 +612,63 @@ export async function checkCompletePortalChartBrowser({
             'ordered mixed rows, duplicate labels, raw zero/negative/fractional values and accessible literal DL',
             value
         );
+
+        const ordinary = await hoverBar(2);
+        assert.deepEqual(ordinary.title, ['Fraction']);
+        assert.deepEqual(ordinary.lines, [
+            new Intl.NumberFormat(ordinary.locale).format(1.25),
+        ]);
+        const loadedRows = (values) =>
+            values.map(([xAxisValue, yAxisValue]) => ({
+                data: {
+                    type: 'loaded',
+                    data: { viewType: 'chart', xAxisValue, yAxisValue },
+                },
+            }));
+        await update({
+            rows: loadedRows([
+                ['A', 0.0004],
+                ['B', 0.0003],
+            ]),
+        });
+        const beforeHover = await snapshot();
+        const tiny = [await hoverBar(0), await hoverBar(1)];
+        value = await snapshot();
+        evidence.tooltipPrecision = {
+            ordinary,
+            tiny,
+            yTicks: value.chart.yTicks,
+            pairs: value.pairs,
+        };
+        assert.deepEqual(
+            tiny.map(({ title }) => title),
+            [['A'], ['B']]
+        );
+        assert.deepEqual(
+            tiny.map(({ lines }) => lines),
+            [0.0004, 0.0003].map((raw) => [
+                new Intl.NumberFormat(ordinary.locale, {
+                    maximumFractionDigits: 4,
+                }).format(raw),
+            ])
+        );
+        currentChart(value, ['A', 'B'], [0.0004, 0.0003]);
+        assert.deepEqual(value.pairs, [
+            ['A', '0.0004'],
+            ['B', '0.0003'],
+        ]);
+        assert.deepEqual(value.chart.yTicks, beforeHover.chart.yTicks);
+        clean(value);
+        await update({ rows: loadedRows([['Negative', -0.0004]]) });
+        const negative = await hoverBar(0);
+        assert.deepEqual(negative.title, ['Negative']);
+        assert.deepEqual(negative.lines, [
+            new Intl.NumberFormat(ordinary.locale, {
+                maximumFractionDigits: 4,
+            }).format(-0.0004),
+        ]);
+        evidence.tooltipPrecision.negative = negative;
+        await page.evaluate(() => window.__portalChartFixture.resetRows());
 
         await capture();
         value = await update({

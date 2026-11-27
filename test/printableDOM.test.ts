@@ -37,6 +37,157 @@ function fixture(t: TestContext) {
 const dom = (value: unknown) => value as HTMLElement;
 const turn = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+const collaboratorBadge = (label: string) => `
+    <ul><li class="mx-sdk-collaborator-badge">
+        <div class="mx-sdk-collaborator-badge-avatar">
+            <img class="mx-sdk-collaborator-avatar" alt="" loading="lazy">
+        </div>
+        <div class="mx-sdk-collaborator-badge-body">
+            <span class="mx-sdk-collaborator-name">${label}</span>
+        </div>
+    </li></ul>
+`;
+
+test('prints the named collaborator and the rest of the form after an optional photo fails', async (t) => {
+    const f = fixture(t);
+    f.source.innerHTML =
+        collaboratorBadge('Rae') + '<p>Project: Review day</p>';
+    const photo = f.source.querySelector('img')!;
+    Object.defineProperties(photo, {
+        complete: { value: true },
+        naturalWidth: { value: 0 },
+    });
+    const print = t.mock.fn();
+    const prototype = f.window.HTMLIFrameElement.prototype;
+    const getWindow = Object.getOwnPropertyDescriptor(
+        prototype,
+        'contentWindow'
+    )!.get!;
+    t.mock.getter(prototype, 'contentWindow', function (this: unknown) {
+        const view = getWindow.call(this);
+        if (view)
+            Object.defineProperty(view, 'print', {
+                configurable: true,
+                value: print,
+            });
+        return view;
+    });
+    const prepared = await preparePrintableDOM(dom(f.source), {
+        ...f.options,
+        preparationTimeoutMs: 75,
+    }).catch((error) => {
+        assert.equal(print.mock.callCount(), 0);
+        assert.equal(
+            f.document.querySelector('[data-mx-sdk-print-frame]'),
+            null
+        );
+        throw error;
+    });
+    const frame = f.document.querySelector('iframe[data-mx-sdk-print-frame]');
+    assert.ok(frame instanceof f.window.HTMLIFrameElement);
+    try {
+        const printed = frame.contentDocument!;
+        assert.equal(
+            printed.querySelector('.mx-sdk-collaborator-name')!.textContent,
+            'Rae'
+        );
+        assert.equal(
+            printed.querySelector('p')!.textContent,
+            'Project: Review day'
+        );
+        assert.equal(printed.querySelector('img'), null);
+        assert.equal(f.source.querySelector('img'), photo);
+        prepared.invoke((invoke) => {
+            invoke();
+            return { status: 'invoked' };
+        });
+        assert.equal(print.mock.callCount(), 1);
+    } finally {
+        await prepared.dispose();
+    }
+    assert.equal(frame.isConnected, false);
+});
+
+test('waits for a pending collaborator photo and preserves it after load', async (t) => {
+    const f = fixture(t);
+    f.source.innerHTML = collaboratorBadge('Rae');
+    const photo = f.source.querySelector('img')!;
+    let loaded = false;
+    const prototype = f.window.HTMLImageElement.prototype;
+    t.mock.getter(prototype, 'complete', () => loaded);
+    t.mock.getter(prototype, 'naturalWidth', () => (loaded ? 32 : 0));
+    const pending = preparePrintableDOM(dom(f.source), f.options);
+    await turn();
+    assert.equal(f.document.querySelector('[data-mx-sdk-print-frame]'), null);
+    assert.equal(photo.loading, 'eager');
+    loaded = true;
+    photo.dispatchEvent(new f.window.Event('load'));
+    const prepared = await pending;
+    try {
+        const frame = f.document.querySelector(
+            'iframe[data-mx-sdk-print-frame]'
+        );
+        assert.ok(frame instanceof f.window.HTMLIFrameElement);
+        assert.ok(
+            frame.contentDocument!.querySelector('.mx-sdk-collaborator-avatar')
+        );
+    } finally {
+        await prepared.dispose();
+    }
+});
+
+test('keeps the visible email when a collaborator photo fails only in the print frame', async (t) => {
+    const f = fixture(t);
+    f.source.innerHTML = collaboratorBadge('rae@example.test');
+    const photo = f.source.querySelector('img')!;
+    const prototype = f.window.HTMLImageElement.prototype;
+    t.mock.getter(prototype, 'complete', () => true);
+    t.mock.getter(prototype, 'naturalWidth', function (this: unknown) {
+        return this === photo ? 32 : 0;
+    });
+    const prepared = await preparePrintableDOM(dom(f.source), f.options);
+    try {
+        const frame = f.document.querySelector(
+            'iframe[data-mx-sdk-print-frame]'
+        );
+        assert.ok(frame instanceof f.window.HTMLIFrameElement);
+        const printed = frame.contentDocument!;
+        assert.equal(
+            printed.querySelector('.mx-sdk-collaborator-name')!.textContent,
+            'rae@example.test'
+        );
+        assert.equal(printed.querySelector('img'), null);
+        assert.equal(f.source.querySelector('img'), photo);
+    } finally {
+        await prepared.dispose();
+    }
+});
+
+test('a failed content image or a photo without an independent label still blocks printing', async (t) => {
+    const f = fixture(t);
+    const prototype = f.window.HTMLImageElement.prototype;
+    t.mock.getter(prototype, 'complete', () => true);
+    t.mock.getter(prototype, 'naturalWidth', () => 0);
+    for (const content of [
+        '<p>Project: Review day</p><img alt="">',
+        collaboratorBadge('   '),
+        collaboratorBadge('Rae').replace('<span ', '<span hidden '),
+    ]) {
+        f.source.innerHTML = content;
+        await assert.rejects(
+            preparePrintableDOM(dom(f.source), {
+                ...f.options,
+                preparationTimeoutMs: 25,
+            }),
+            /Print preparation failed/
+        );
+        assert.equal(
+            f.document.querySelector('[data-mx-sdk-print-frame]'),
+            null
+        );
+    }
+});
+
 test('owned DOM engine copies live inputs/styles and preserves its frame until explicit cleanup', async (t) => {
     const f = fixture(t);
     f.document.head.innerHTML = '<style></style>';

@@ -37,7 +37,22 @@ function preparationScope(options: PrintableDOMOptions) {
     };
 }
 
-/** Await an actual retained DOM, including asynchronous rich-text and image recovery. */
+function isFailedOptionalCollaboratorPhoto(image: HTMLImageElement): boolean {
+    if (
+        !image.complete ||
+        image.naturalWidth !== 0 ||
+        !image.matches(
+            '.mx-sdk-collaborator-badge > .mx-sdk-collaborator-badge-avatar > img.mx-sdk-collaborator-avatar[alt=""]'
+        )
+    )
+        return false;
+    const label = image.parentElement?.parentElement?.querySelector(
+        ':scope > .mx-sdk-collaborator-badge-body > .mx-sdk-collaborator-name'
+    );
+    return Boolean(label?.textContent?.trim() && !label.closest('[hidden]'));
+}
+
+/** Await retained content and identify settled badge photos to omit from print. */
 async function waitForContent(
     root: HTMLElement,
     scope: ReturnType<typeof preparationScope>
@@ -69,7 +84,10 @@ async function waitForContent(
                     return;
                 if (
                     [...root.querySelectorAll('img')].some(
-                        (image) => !image.complete || image.naturalWidth === 0
+                        (image) =>
+                            !image.complete ||
+                            (image.naturalWidth === 0 &&
+                                !isFailedOptionalCollaboratorPhoto(image))
                     )
                 )
                     return;
@@ -91,12 +109,15 @@ async function waitForContent(
         scope.signal.addEventListener('abort', fail, { once: true });
         inspect();
     });
+    const failedPhotos = new Set<HTMLImageElement>();
     for (const image of root.querySelectorAll('img')) {
         scope.check();
-        if (typeof image.decode === 'function')
+        if (isFailedOptionalCollaboratorPhoto(image)) failedPhotos.add(image);
+        else if (typeof image.decode === 'function')
             await abortable(image.decode(), scope.signal);
     }
     scope.check();
+    return failedPhotos;
 }
 
 function abortable<T>(
@@ -179,7 +200,7 @@ export async function preparePrintableDOM(
             source.querySelector('iframe,audio,video')
         )
             throw new Error('Unsupported print content');
-        await waitForContent(source, scope);
+        const failedSourcePhotos = await waitForContent(source, scope);
         scope.check();
         if (
             options.embeddedContent !== 'retain-native' &&
@@ -244,6 +265,13 @@ export async function preparePrintableDOM(
             head.appendChild(cloned);
         }
         const cloned = source.cloneNode(true) as HTMLElement;
+        if (failedSourcePhotos.size) {
+            const clonedImages = cloned.querySelectorAll('img');
+            source.querySelectorAll('img').forEach((image, index) => {
+                if (failedSourcePhotos.has(image))
+                    clonedImages[index]?.remove();
+            });
+        }
         // The source's staging position must not become print layout.
         cloned.style.position = '';
         cloned.style.left = '';
@@ -257,7 +285,7 @@ export async function preparePrintableDOM(
         body.appendChild(cloned);
         copyLiveValues(source, cloned);
         await abortable(Promise.all(styles), scope.signal);
-        await waitForContent(cloned, scope);
+        for (const photo of await waitForContent(cloned, scope)) photo.remove();
         // Force style/layout discovery before waiting for all used fonts.
         cloned.getBoundingClientRect();
         if (document.fonts) await abortable(document.fonts.ready, scope.signal);

@@ -165,8 +165,8 @@ const cases: [Result, AirtableValue | undefined, string][] = [
                 prefersSingleRecordLink: false,
             },
         },
-        ['rec12345678901234', 'Supplied label'],
-        'Unavailable, Supplied label',
+        ['rec12345678901234', 'recording session', 'Evening'],
+        'Unavailable, recording session, Evening',
     ],
     [
         {

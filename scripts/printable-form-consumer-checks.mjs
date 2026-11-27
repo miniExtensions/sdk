@@ -28,6 +28,7 @@ const testFiles = [
     'printableDOM',
     'reactPrintableForm',
 ];
+const expectedTestCount = 49;
 const publicImports = new Map([
     ['../src/ui/readonlyPrintDocument.js', '@miniextensions/sdk/ui'],
     ['../src/ui/printableForm.js', '@miniextensions/sdk/ui'],
@@ -298,12 +299,18 @@ export async function checkPrintableFormReactMatrix({
                         maxBuffer: 8 * 1024 * 1024,
                     }
                 );
-                assert.match(output, /# tests 45\b/);
-                assert.match(output, /# pass 45\b/);
+                assert.match(
+                    output,
+                    new RegExp(`^# tests ${expectedTestCount}$`, 'm')
+                );
+                assert.match(
+                    output,
+                    new RegExp(`^# pass ${expectedTestCount}$`, 'm')
+                );
                 assert.match(output, /# fail 0\b/);
                 formats.push({
                     format,
-                    tests: 45,
+                    tests: expectedTestCount,
                     originalAssertions: true,
                     publicEntries: true,
                     outputSha256: sha(output),

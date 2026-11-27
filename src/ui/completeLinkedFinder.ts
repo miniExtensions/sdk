@@ -89,6 +89,8 @@ export type CompleteLinkedFinderSnapshot<Row, Owner extends object> = {
     readonly owner: Owner | null;
     /** Opaque latest-read identity for fencing retained presentation callbacks. */
     readonly readIdentity: object | null;
+    /** The first public reset read for the current owner is still pending. */
+    readonly initialReadPending?: boolean;
     readonly phase: 'idle' | 'loading' | 'ready' | 'error' | 'retired';
     readonly loadingMore: boolean;
     /** Ordered accepted raw occurrences, never deduplicated for scan authority. */
@@ -172,6 +174,7 @@ export function createCompleteLinkedFinderCoordinator<
     let readOffset: string | null = null;
     let error: string | null = null;
     let latest: Ticket | null = null;
+    let firstPublicReadIdentity: object | null = null;
     let queued: ReturnType<typeof setTimeout> | null = null;
     let lastPublicAllocation: number | null = null;
     let destroyed = false;
@@ -235,6 +238,7 @@ export function createCompleteLinkedFinderCoordinator<
             owner = next && !retiredOwners.has(next) ? next : null;
             ownerRevision++;
             lastPublicAllocation = null;
+            firstPublicReadIdentity = null;
             clearPresentation(owner ? 'idle' : 'retired');
         }
         return owner && owns(owner) ? owner : null;
@@ -271,6 +275,12 @@ export function createCompleteLinkedFinderCoordinator<
         return {
             owner: currentOwner,
             readIdentity: latest?.identity ?? null,
+            initialReadPending:
+                currentOwner !== null &&
+                phase === 'loading' &&
+                latest !== null &&
+                latest.identity === firstPublicReadIdentity &&
+                latest.resetOffset,
             phase,
             loadingMore,
             rawRecords,
@@ -387,6 +397,7 @@ export function createCompleteLinkedFinderCoordinator<
         clearQueued();
         latest = ticket;
         if (ticket.read.mode !== 'authenticated-preview') {
+            firstPublicReadIdentity ??= ticket.identity;
             phase = 'loading';
             loadingMore = ticket.append;
             error = null;

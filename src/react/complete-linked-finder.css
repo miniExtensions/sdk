@@ -651,6 +651,41 @@
     height: 24px;
     color: #9ca3af;
 }
+.mx-sdk-finder-initial-loading {
+    margin-block: 1rem;
+    color: #111827;
+    text-align: center;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+.mx-sdk-finder-initial-loading > svg {
+    display: block;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0 auto 0.5rem;
+    color: #6b7280;
+    animation: mx-sdk-finder-spin 1s linear infinite;
+}
+.mx-sdk-finder-initial-loading > p {
+    margin: 0;
+}
+.mx-sdk-finder-initial-loading button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #2563eb;
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline;
+}
+.mx-sdk-finder-initial-loading button:hover {
+    color: #1e40af;
+}
+@keyframes mx-sdk-finder-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
 .mx-sdk-native-form-list-finder .mx-sdk-finder-feedback--terminal {
     padding: 0;
     text-align: center;

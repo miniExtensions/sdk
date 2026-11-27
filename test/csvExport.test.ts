@@ -498,6 +498,47 @@ it('keeps linked Formula values together for the default Portal Grid formatter',
     );
 });
 
+it('exports linked Rollup labels without exposing opaque record IDs in Portal Grid', async () => {
+    const descriptor: CSVExportFieldValue = {
+        field: {
+            id: 'rollup-links',
+            name: 'Related',
+            config: {
+                type: AirtableFieldType.ROLLUP,
+                options: {
+                    isValid: true,
+                    result: {
+                        type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                        options: { linkedTableId: 'tblLinked' },
+                    },
+                },
+            },
+        },
+        value: ['rec12345678901234', 'Supplied label'],
+    };
+    const document = ready({
+        ...input(),
+        columns: [
+            { key: 'Company', title: 'Company' },
+            { key: 'Related', title: 'Related' },
+        ],
+        rows: [row([field('Company', 'Acme'), descriptor])],
+        unavailableLinkedRecordPlaceholder: 'Unavailable',
+    });
+    const csv = await serializeCSVExportDocument(document);
+    const parsed = Papa.parse(csv.trimEnd(), {
+        delimiter: ',',
+        dynamicTyping: false,
+        worker: false,
+        download: false,
+    });
+    assert.deepEqual(parsed.errors, []);
+    assert.deepEqual(parsed.data, [
+        ['Company', 'Related'],
+        ['Acme', 'Unavailable, Supplied label'],
+    ]);
+});
+
 it('downloads admitted collaborator labels in order without recovering unavailable email', async () => {
     const zeta = {
         id: 'usrZeta',

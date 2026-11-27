@@ -271,7 +271,7 @@ export function projectFormCompletion(
         ...(labels.copySubmitted !== '' && labels.copySubmitted.trim() === ''
             ? { copySubmittedAccessibleName: defaults.copySubmitted }
             : {}),
-        duration,
+        duration: Number.isFinite(duration) ? Math.max(0, duration) : duration,
         action,
         labels,
     };

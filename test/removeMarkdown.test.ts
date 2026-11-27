@@ -70,4 +70,13 @@ describe('Markdown display text', () => {
         assert.equal(removeMarkdown(input), expected);
         assert.equal(removeMarkdown(input), expected);
     });
+
+    it('keeps underscores in identifiers while stripping surrounding emphasis', () => {
+        const input =
+            'Part **PO_US_1042**, status _open_ and __ready__. _**Å_B_2**_ [details](https://example.com/PO_US_1042)';
+        assert.equal(
+            removeMarkdown(input),
+            'Part PO_US_1042, status open and ready. Å_B_2 [details](https://example.com/PO_US_1042)'
+        );
+    });
 });

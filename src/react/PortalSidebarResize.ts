@@ -28,6 +28,13 @@ export function portalSidebarWidth(width: number | undefined): number {
     return Number.isFinite(width) ? Math.min(600, Math.max(120, width!)) : 288;
 }
 
+function sidebarResizeEdge(element: HTMLElement): 'left' | 'right' {
+    return element.ownerDocument.defaultView?.getComputedStyle(element)
+        .direction === 'rtl'
+        ? 'left'
+        : 'right';
+}
+
 /** Only resize presentation is transient; storage and accepted width stay host-owned. */
 export function PortalSidebarResize(props: {
     scope: string;
@@ -40,6 +47,7 @@ export function PortalSidebarResize(props: {
     const [loaded, setLoaded] = useState<
         { component: EngineConstructor } | { error: unknown } | null
     >(null);
+    const [edge, setEdge] = useState<'left' | 'right'>('right');
     useEffect(() => {
         let current = true;
         // React 18's vendor main eagerly imports React DOM. Importing the public
@@ -58,12 +66,13 @@ export function PortalSidebarResize(props: {
     }, []);
     const token = useMemo(
         () => ({
+            edge,
             scope: props.scope,
             revision: props.revision,
             width: props.width,
             onCommit: props.onCommit,
         }),
-        [props.scope, props.revision, props.width, props.onCommit]
+        [edge, props.scope, props.revision, props.width, props.onCommit]
     );
     const accepted = useRef<typeof token | null>(null);
     const gesture = useRef<typeof token | null>(null);
@@ -71,6 +80,34 @@ export function PortalSidebarResize(props: {
     const engine = useRef<Resizable>(null);
     const useCommitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    useCommitEffect(() => {
+        const element = engine.current?.resizable;
+        const view = element?.ownerDocument.defaultView;
+        if (!element || !view) return;
+        let previous: typeof edge | undefined;
+        const sync = () => {
+            const next = sidebarResizeEdge(element);
+            if (previous === next) return;
+            previous = next;
+            setEdge(next);
+        };
+        sync();
+        const observer = new view.MutationObserver(sync);
+        for (
+            let owner = element.parentElement;
+            owner;
+            owner = owner.parentElement
+        )
+            observer.observe(owner, {
+                attributes: true,
+                attributeFilter: ['dir', 'class', 'style'],
+            });
+        view.addEventListener('resize', sync);
+        return () => {
+            observer.disconnect();
+            view.removeEventListener('resize', sync);
+        };
+    }, [loaded]);
     useCommitEffect(() => {
         // Retire an old gesture through the pinned engine's own stop/cleanup
         // path. Clearing its authority first suppresses the stop notification.
@@ -132,18 +169,18 @@ export function PortalSidebarResize(props: {
         size: { width: props.width, height: '100%' },
         minWidth: 120,
         maxWidth: 600,
-        enable: { right: true },
+        enable: { [token.edge]: true },
         className: 'mx-sdk-portal-sidebar-resize',
         style: {
             position: 'absolute',
             top: 0,
-            left: 0,
+            insetInlineStart: 0,
             pointerEvents: 'none',
             zIndex: 2,
         },
-        handleStyles: { right: { pointerEvents: 'auto' } },
+        handleStyles: { [token.edge]: { pointerEvents: 'auto' } },
         handleComponent: {
-            right: h('button', {
+            [token.edge]: h('button', {
                 type: 'button',
                 role: 'separator',
                 'aria-label': props.label,
@@ -159,18 +196,31 @@ export function PortalSidebarResize(props: {
                 onBlur: () => plainArrowKeys.current.clear(),
             }),
         },
-        onResizeStart: () => {
-            if (accepted.current !== token) return false;
+        onResizeStart: (_event, direction, element) => {
+            if (
+                accepted.current !== token ||
+                direction !== sidebarResizeEdge(element)
+            )
+                return false;
             gesture.current = token;
         },
-        onResize: (_event, _direction, element) => {
-            if (gesture.current !== token || accepted.current !== token) return;
+        onResize: (_event, direction, element) => {
+            if (
+                gesture.current !== token ||
+                accepted.current !== token ||
+                direction !== sidebarResizeEdge(element)
+            )
+                return;
             props.onPreview(portalSidebarWidth(element.offsetWidth));
         },
-        onResizeStop: (_event, _direction, element) => {
+        onResizeStop: (_event, direction, element) => {
             const current = gesture.current;
             gesture.current = null;
             if (current !== token) return;
+            if (direction !== sidebarResizeEdge(element)) {
+                props.onPreview(token.width);
+                return;
+            }
             commit(element.offsetWidth);
         },
     });

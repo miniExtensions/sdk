@@ -66,6 +66,7 @@ try {
             `/${name}.docx`,
             readFileSync(`test/fixtures/attachment-preview/${name}.docx`)
         );
+    assets.set('/invalid.docx', Buffer.from('invalid zip'));
     assets.set(
         '/pixel.svg',
         Buffer.from(
@@ -254,6 +255,30 @@ render({url:'/pixel.svg',type:'image/svg+xml'});`
                     path: join(directory, `${react}-${format}-word.png`),
                     fullPage: true,
                 });
+                const wordStatus = page.locator('#app').getByRole('status');
+                await page.evaluate(() =>
+                    window.preview.render(window.preview.word('invalid'), {
+                        previewNotAvailable: 'Aperçu Word indisponible',
+                    })
+                );
+                await wordStatus.waitFor({ state: 'visible', timeout: 7000 });
+                assert.equal(await wordStatus.count(), 1);
+                assert.equal(
+                    await wordStatus.textContent(),
+                    'Aperçu Word indisponible'
+                );
+                assert.equal(
+                    await page.locator('#app .docx-wrapper').count(),
+                    0
+                );
+                await page.evaluate(() =>
+                    window.preview.render(window.preview.word('B'))
+                );
+                await wordStatus.waitFor({ state: 'detached' });
+                await page
+                    .locator('#app .docx-wrapper')
+                    .getByText('Controlled attachment B')
+                    .waitFor();
                 await page.evaluate(() =>
                     window.preview.render(
                         {
@@ -293,6 +318,7 @@ render({url:'/pixel.svg',type:'image/svg+xml'});`
                     loadedEmbeddedFont: true,
                     retiredTargetIsolation: true,
                     stableRerender: true,
+                    localizedWordFailureAndRecovery: true,
                     submits: 0,
                     externalRequests: 0,
                 });

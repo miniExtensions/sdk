@@ -174,12 +174,17 @@ export function createBorrowedPortalRenderScope<Stamp>(
                     );
                     if (schemas.length !== 1) continue;
                     const schema = schemas[0];
+                    const override = detail.titleOverride;
+                    const title =
+                        typeof override === 'string' && !override.trim()
+                            ? detail.fieldName
+                            : (override ?? detail.fieldName);
                     // Validate presentation metadata with a null value; headers
                     // must not depend on a first row or any cached row value.
                     const props = createRendererProps({
                         physicalKind: schema.config.type,
                         fieldId: detail.fieldId,
-                        title: detail.titleOverride ?? detail.fieldName,
+                        title,
                         field: schema,
                         displayConfig: detail.miniExtConfig,
                         value: null,

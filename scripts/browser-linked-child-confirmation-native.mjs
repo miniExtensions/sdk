@@ -159,6 +159,213 @@ await import('./src/main.ts');
     };
 }
 
+export async function checkRootReadonlyText({
+    browser,
+    fixtures,
+    origin,
+    evidence = {},
+}) {
+    const apiOrigin = 'https://synthetic-sdk.invalid';
+    const readonlySelector = '#screen [data-field-id="fld_delivery_reference"]';
+    const hiddenLabel = 'Conditional private note';
+    const hiddenValue = 'Hidden note H13';
+    const loaded = fixtures.parentForm('edit');
+    const payload = loaded.payload;
+    const editable = payload.fieldIdsToSchemas.fld_title;
+    const textField = (id, name, config) => ({
+        ...editable,
+        airtableField: {
+            ...editable.airtableField,
+            id,
+            name,
+            isPrimaryField: false,
+        },
+        miniExtConfig: config,
+    });
+    payload.fieldIdsToSchemas = {
+        fld_delivery_reference: textField(
+            'fld_delivery_reference',
+            'Delivery ID',
+            {
+                title: 'Delivery reference',
+                readOnly: true,
+            }
+        ),
+        fld_title: editable,
+        fld_conditional_note: textField('fld_conditional_note', hiddenLabel, {
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'synthetic-note-visible',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'singleLineText',
+                            idOrName: { type: 'id', id: 'fld_title' },
+                            value: 'Reveal note',
+                        },
+                    },
+                ],
+            },
+        }),
+    };
+    payload.fieldIdsInForm = Object.keys(payload.fieldIdsToSchemas);
+    payload.fieldNamesToSchemas = Object.fromEntries(
+        Object.values(payload.fieldIdsToSchemas).map((schema) => [
+            schema.airtableField.name,
+            structuredClone(schema),
+        ])
+    );
+    payload.formRecord.data = {
+        fld_delivery_reference: 'A17',
+        fld_title: 'Editable sibling',
+        fld_conditional_note: hiddenValue,
+    };
+    payload.formFieldIdsWithUnsavedChanges = [];
+
+    const calls = { loads: 0, saves: 0 };
+    const pageErrors = [];
+    const unexpectedRequests = [];
+    Object.assign(evidence, {
+        mode: 'edit',
+        scenario: 'root-readonly-text-accessibility',
+        calls,
+        pageErrors,
+        unexpectedRequests,
+    });
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+        const page = await context.newPage();
+        page.setDefaultTimeout(10000);
+        page.on('pageerror', (error) => pageErrors.push(error.message));
+        await context.route('**/*', async (route) => {
+            const request = route.request();
+            const url = new URL(request.url());
+            const method = request.method();
+            if (
+                url.origin === origin &&
+                method === 'GET' &&
+                ['/', '/main.js', '/styles.css', '/favicon.ico'].includes(
+                    url.pathname
+                )
+            )
+                return route.continue();
+            const headers = {
+                'access-control-allow-origin': origin,
+                'access-control-allow-headers': '*',
+                'access-control-allow-methods': 'POST, OPTIONS',
+            };
+            if (url.origin === apiOrigin) {
+                if (method === 'OPTIONS')
+                    return route.fulfill({ status: 204, headers });
+                const operation = url.searchParams.get('route');
+                if (
+                    method === 'POST' &&
+                    operation === 'fetchExtensionForEndUser'
+                ) {
+                    calls.loads++;
+                    const {
+                        shareId,
+                        recordId,
+                        context: loadContext,
+                    } = request.postDataJSON();
+                    assert.equal(shareId, 'share_synthetic_parent');
+                    assert.equal(recordId, 'rec_parent');
+                    assert.deepEqual(loadContext, { type: 'direct-url' });
+                    return route.fulfill({ json: loaded, headers });
+                }
+                if (operation === 'saveForm') {
+                    calls.saves++;
+                    return route.fulfill({ status: 409, headers });
+                }
+            }
+            unexpectedRequests.push(`${method} ${url.origin}${url.pathname}`);
+            return route.abort();
+        });
+        await page.goto(origin);
+        await page.locator('#api-origin').fill(apiOrigin);
+        await page.locator('#share-id').fill('share_synthetic_parent');
+        await page.locator('#record-id').fill('rec_parent');
+        await page.locator('#connection-form button[type=submit]').click();
+        const readOnly = page.locator(readonlySelector);
+        await readOnly.waitFor();
+        await page.waitForFunction(
+            () =>
+                document.querySelector('#screen')?.getAttribute('aria-busy') ===
+                'false'
+        );
+
+        const cdp = await context.newCDPSession(page);
+        const { root } = await cdp.send('DOM.getDocument');
+        const { nodeId } = await cdp.send('DOM.querySelector', {
+            nodeId: root.nodeId,
+            selector: readonlySelector,
+        });
+        const { node } = await cdp.send('DOM.describeNode', { nodeId });
+        const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+        const exposed = nodes.filter((node) => !node.ignored);
+        const ax = exposed.find(
+            (item) => item.backendDOMNodeId === node.backendNodeId
+        );
+        evidence.accessibility =
+            ax == null
+                ? null
+                : {
+                      role: ax.role?.value,
+                      name: ax.name?.value,
+                      value: ax.value?.value,
+                  };
+        evidence.hiddenField = {
+            visible: await page
+                .locator('#screen [data-field-id="fld_conditional_note"]')
+                .isVisible(),
+            exposed: exposed.some((item) =>
+                [item.name?.value, item.value?.value].some(
+                    (text) => text === hiddenLabel || text === hiddenValue
+                )
+            ),
+        };
+        await readOnly.focus();
+        evidence.readOnlyFocused = await readOnly.evaluate(
+            (node) => node === document.activeElement
+        );
+        if (evidence.readOnlyFocused) await page.keyboard.type('X');
+        evidence.readOnlyEditable = await readOnly.isEditable();
+        evidence.readOnlyValue = await readOnly.inputValue();
+        const sibling = page.getByRole('textbox', {
+            name: 'Title',
+            exact: true,
+        });
+        assert.equal(await sibling.inputValue(), 'Editable sibling');
+        await sibling.press('End');
+        await page.keyboard.type(' edited');
+        await page.keyboard.press('Tab');
+        evidence.siblingValue = await sibling.inputValue();
+
+        assert.deepEqual(evidence.accessibility, {
+            role: 'textbox',
+            name: 'Delivery reference',
+            value: 'A17',
+        });
+        assert.deepEqual(evidence.hiddenField, {
+            visible: false,
+            exposed: false,
+        });
+        assert.equal(evidence.readOnlyEditable, false);
+        assert.equal(evidence.readOnlyValue, 'A17');
+        assert.equal(await readOnly.inputValue(), 'A17');
+        assert.equal(evidence.siblingValue, 'Editable sibling edited');
+        assert.deepEqual(calls, { loads: 1, saves: 0 });
+        assert.deepEqual(pageErrors, []);
+        assert.deepEqual(unexpectedRequests, []);
+        return evidence;
+    } finally {
+        await context.close();
+        evidence.cleanup = true;
+    }
+}
+
 async function checkPortalRelatedEdit({ browser, fixtures, origin }) {
     const apiOrigin = 'https://synthetic-sdk.invalid';
     const linkFieldId = 'fld_children_a';
@@ -1226,6 +1433,14 @@ export async function checkStarterConfirmationRecovery({
             console.log(
                 'Installed starter Portal Project Related Edit: passed'
             );
+            if (reactVersion == null) {
+                report.cases.push(
+                    await checkRootReadonlyText({ browser, fixtures, origin })
+                );
+                console.log(
+                    'Installed starter root read-only text accessibility: passed'
+                );
+            }
         }
         return report;
     } finally {

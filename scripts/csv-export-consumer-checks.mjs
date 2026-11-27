@@ -53,15 +53,64 @@ const markup=renderToString(element());assert(markup.includes('Download'));asser
 const {Window}=require(process.argv[3]);const window=new Window({settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true,disableIframePageLoading:true}});
 const globals={window,document:window.document,navigator:window.navigator,HTMLElement:window.HTMLElement,HTMLDialogElement:window.HTMLDialogElement,IS_REACT_ACT_ENVIRONMENT:true};const originals=Object.keys(globals).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]);for(const[key,value]of Object.entries(globals))Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});
 const errors=[],recoverable=[];const oldError=console.error;console.error=(...args)=>errors.push(args.map(String).join(' '));
-let root, confirmationResources, rollupDownload;
+let root, confirmationResources, rollupDownload, formulaLinksDownload;
+
+const Papa = createRequire(require.resolve('@miniextensions/sdk/portals'))('papaparse');
+const parseRows = (text) => {
+    const parsed = Papa.parse(text, { delimiter: ',', skipEmptyLines: true });
+    assert.deepEqual(parsed.errors, []);
+    return parsed.data;
+};
+
+async function clickMountedCSV(container, trigger, input, filename) {
+    const before = { resources, texts: texts.length, filenames: filenames.length, revoked: revoked.length };
+    const createdUrls = [];
+    let settle, timer, outcome;
+    const settled = new Promise((resolve) => { settle = resolve; });
+    props = {
+        ...props,
+        request: {
+            input,
+            filename,
+            platform: {
+                ...platform,
+                createObjectURL(blob) {
+                    const url = platform.createObjectURL(blob);
+                    createdUrls.push(url);
+                    return url;
+                },
+                revokeObjectURL(url) {
+                    platform.revokeObjectURL(url);
+                    settle({ status: 'delivered' });
+                },
+            },
+        },
+        onFailure: ({ reason }) => settle({ status: 'blocked', reason }),
+    };
+    await act(async () => root.render(element()));
+    try {
+        await act(async () => {
+            const timeout = new Promise((_, reject) => {
+                timer = setTimeout(() => reject(Error('Mounted CSV did not settle')), 5000);
+            });
+            trigger.click();
+            outcome = await Promise.race([settled, timeout]);
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+    return {
+        outcome,
+        blobs: resources - before.resources,
+        createdUrls,
+        filenames: filenames.slice(before.filenames),
+        revoked: revoked.slice(before.revoked),
+        csv: texts.slice(before.texts),
+        alert: container.querySelector('[role="alert"]')?.textContent ?? null,
+    };
+}
 
 async function checkMountedRollup(container, trigger) {
-    const Papa = createRequire(require.resolve('@miniextensions/sdk/portals'))('papaparse');
-    const parseRows = (text) => {
-        const parsed = Papa.parse(text, { delimiter: ',', skipEmptyLines: true });
-        assert.deepEqual(parsed.errors, []);
-        return parsed.data;
-    };
     let hiddenReads = 0;
     const hidden = {
         field: { id: 'fldHidden', name: 'Private column', config: { type: 'singleLineText' } },
@@ -124,54 +173,13 @@ async function checkMountedRollup(container, trigger) {
         }),
     };
 
-    const before = { resources, texts: texts.length, filenames: filenames.length, revoked: revoked.length };
-    const createdUrls = [];
-    let settle, timer, outcome;
-    const settled = new Promise((resolve) => { settle = resolve; });
-    props = {
-        ...props,
-        request: {
-            input: defaultInput,
-            filename: 'Synthetic Rollup.csv',
-            platform: {
-                ...platform,
-                createObjectURL(blob) {
-                    const url = platform.createObjectURL(blob);
-                    createdUrls.push(url);
-                    return url;
-                },
-                revokeObjectURL(url) {
-                    platform.revokeObjectURL(url);
-                    settle({ status: 'delivered' });
-                },
-            },
-        },
-        onFailure: ({ reason }) => settle({ status: 'blocked', reason }),
-    };
-    await act(async () => root.render(element()));
-    try {
-        await act(async () => {
-            const timeout = new Promise((_, reject) => {
-                timer = setTimeout(() => reject(Error('Mounted Rollup CSV did not settle')), 5000);
-            });
-            trigger.click();
-            outcome = await Promise.race([settled, timeout]);
-        });
-    } finally {
-        clearTimeout(timer);
-    }
+    const downloaded = await clickMountedCSV(container, trigger, defaultInput, 'Synthetic Rollup.csv');
     const actual = {
-        outcome,
+        ...downloaded,
         controls,
         formatCalls,
         hiddenReads,
-        blobs: resources - before.resources,
-        createdUrls,
-        filenames: filenames.slice(before.filenames),
-        revoked: revoked.slice(before.revoked),
-        csv: texts.slice(before.texts),
-        rows: texts.slice(before.texts).map(parseRows),
-        alert: container.querySelector('[role="alert"]')?.textContent ?? null,
+        rows: downloaded.csv.map(parseRows),
     };
     assert.deepEqual(actual, {
         outcome: { status: 'delivered' },
@@ -193,13 +201,73 @@ async function checkMountedRollup(container, trigger) {
     return actual;
 }
 
+async function checkMountedFormulaLinks(container, trigger) {
+    let hiddenReads = 0;
+    const result = { type: 'multipleRecordLinks', options: { linkedTableId: 'tbl_linked', isReversed: false, prefersSingleRecordLink: false } };
+    const formula = { type: 'formula', options: { isValid: true, formula: '{fldLinked}', referencedFieldIds: ['fldLinked'], result } };
+    const company = { field: { id: 'fldCompany', name: 'Company', config: { type: 'singleLineText' } }, value: 'Acme' };
+    const hidden = { field: { id: 'fldHidden', name: 'Private column', config: { type: 'singleLineText' } }, get value() { hiddenReads++; return 'Hidden synthetic value'; } };
+    const related = Object.freeze(['rec12345678901234', 'Supplied label']);
+    const formulaInput = (value) => ({
+        admission: { cohort: 'portal-grid', allowed: true, borrowedRecords: false },
+        unavailableLinkedRecordPlaceholder: 'Unavailable',
+        columns: [
+            { key: 'Company', title: 'Company' },
+            { key: 'Related', title: 'Related' },
+            { key: 'Private column', title: 'Private column', isHidden: true },
+        ],
+        rows: [{ status: 'loaded', viewType: 'list', fields: [company, {
+            field: { id: 'fldFormula', name: 'Related', config: formula }, value,
+        }, hidden] }],
+    });
+    const readControl = async (input) => {
+        const projection = api.projectCSVExport(input);
+        assert.equal(projection.status, 'ready');
+        return parseRows(await api.serializeCSVExportDocument(projection.document));
+    };
+    const input = formulaInput(related);
+    const downloaded = await clickMountedCSV(container, trigger, input, 'Synthetic Formula.csv');
+    const override = [];
+    const controls = {
+        empty: await readControl(formulaInput([])),
+        scalarLabel: await readControl(formulaInput('Supplied label')),
+        scalarId: await readControl(formulaInput('rec12345678901234')),
+        custom: await readControl({ ...input, formatField({ field, value }) {
+            if (field.name !== 'Related') return value;
+            override.push({ config: field.config, value });
+            return 'Host-formatted links';
+        } }),
+    };
+    const actual = { ...downloaded, rows: downloaded.csv.map(parseRows), controls, hiddenReads };
+    assert.deepEqual(override, [{ config: formula, value: related }]);
+    assert.deepEqual(actual, {
+        outcome: { status: 'delivered' },
+        blobs: 1,
+        createdUrls: ['blob:synthetic'],
+        filenames: ['Synthetic Formula.csv'],
+        revoked: ['blob:synthetic'],
+        csv: ['Company,Related\nAcme,"Unavailable, Supplied label"\n'],
+        rows: [[['Company', 'Related'], ['Acme', 'Unavailable, Supplied label']]],
+        controls: {
+            empty: [['Company', 'Related'], ['Acme', '']],
+            scalarLabel: [['Company', 'Related'], ['Acme', 'Supplied label']],
+            scalarId: [['Company', 'Related'], ['Acme', 'Unavailable']],
+            custom: [['Company', 'Related'], ['Acme', 'Host-formatted links']],
+        },
+        hiddenReads: 0,
+        alert: null,
+    });
+    return actual;
+}
+
 try{const container=window.document.createElement('div');window.document.body.append(container);container.innerHTML=markup;const{hydrateRoot}=await import('react-dom/client');await act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>recoverable.push(error.name)});});const trigger=container.querySelector('button');assert.equal(trigger.type,'button');await act(async()=>trigger.click());const dialog=container.querySelector('dialog');assert(dialog.open);const cancel=[...dialog.querySelectorAll('button')].find(button=>button.textContent==='Cancel');assert.equal(window.document.activeElement,cancel);await act(async()=>cancel.click());assert.equal(resources,0);await act(async()=>trigger.click());props={...props,request:{...props.request,input:makeInput(1,'Current'),filename:'Current filename'}};await act(async()=>root.render(element()));const confirm=[...container.querySelectorAll('dialog button')].find(button=>button.textContent==='Continue');await act(async()=>{confirm.click();await clicked;});assert.deepEqual(texts,["'=Header\nCurrent\n"]);assert.deepEqual(filenames,['Current filename']);assert.deepEqual(revoked,['blob:synthetic']);assert.equal(container.querySelector('dialog'),null);
     confirmationResources = resources;
     rollupDownload = await checkMountedRollup(container, trigger);
+    formulaLinksDownload = await checkMountedFormulaLinks(container, trigger);
     assert.deepEqual(recoverable,[]);
     assert.deepEqual(errors,[]);
 }finally{if(root)await act(async()=>root.unmount());console.error=oldError;for(const[key,value]of originals){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}await window.happyDOM.close();}
-console.log(JSON.stringify({format,react:React.version,hydrationErrors:recoverable.length,resources:confirmationResources,rollupDownload,cleanup:'completed'}));
+console.log(JSON.stringify({format,react:React.version,hydrationErrors:recoverable.length,resources:confirmationResources,rollupDownload,formulaLinksDownload,cleanup:'completed'}));
 `;
 
 export function assertCSVBrowserInputs(metafile) {

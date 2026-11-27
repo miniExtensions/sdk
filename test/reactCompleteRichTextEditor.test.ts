@@ -1070,6 +1070,35 @@ it('cleans real NodeView portals and editor roots across StrictMode mount, unmou
     }
 });
 
+it('keeps selected code and its draft when pasting only an image', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '```\nAlpha Beta\n```',
+        })
+    );
+    const { view } = await f.editor(ref);
+    await f.select(view, 7, 11);
+    const before = view.state;
+    const image = new f.window.File(['owned test bytes'], 'owned.png', {
+        type: 'image/png',
+    });
+    const paste = await f.paste(view, {}, ['Files'], [image]);
+    assert.equal(paste.defaultPrevented, true);
+    assert.equal(view.state.doc, before.doc);
+    assert(view.state.selection.eq(before.selection));
+    assert.deepEqual(writes, []);
+    assert.equal(view.dom.querySelector('img'), null);
+
+    await f.paste(view, { 'text/plain': '*literal*' });
+    assert.equal(view.state.doc.textContent, 'Alpha *literal*');
+    assert.deepEqual(writes, ['```\nAlpha *literal*\n```\n\n\n']);
+});
+
 for (const code of [
     { name: 'indented code', initial: '    Alpha Beta', fence: false },
     { name: 'fenced code', initial: '```\nAlpha Beta\n```', fence: false },

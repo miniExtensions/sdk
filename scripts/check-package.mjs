@@ -4858,7 +4858,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     consumerDirectory: temporaryDirectory,
                     happyDomModulePath: require.resolve('happy-dom'),
                 }),
-                33
+                35
             );
             await checkFieldBindingRecipe({
                 consumerDirectory: directory,

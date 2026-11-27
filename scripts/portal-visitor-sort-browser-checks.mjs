@@ -303,6 +303,7 @@ const currentTitle = {
     fieldType: 'singleLineText', type: 'contains',
     idOrName: {type: 'id', id: 'title'}, value: 'Keep',
 };
+const excludedTitle = { ...currentTitle, type: 'doesNotContain', value: '' };
 const dateOperators = [
     {label: 'Is before', setting: {fieldType: 'date', type: 'isBefore', idOrName: {type: 'id', id: 'before'}, value: '2024-02-01'}},
     {label: 'Is after', setting: {fieldType: 'dateTime', type: 'isAfter', idOrName: {type: 'id', id: 'after'}, value: '2024-02-01'}},
@@ -312,7 +313,10 @@ let filterFrame = {
     stamp: {...frame.stamp, fieldId: 'filter-portal'},
     fields: [{
         id: 'title', name: 'Title',
-        operators: [{label: 'Contains', setting: currentTitle, operand: {kind: 'text'}}],
+        operators: [
+            {label: 'Contains', setting: currentTitle, operand: {kind: 'text'}},
+            {label: 'Does not contain', setting: excludedTitle, operand: {kind: 'text'}},
+        ],
     }, {
         id: 'status', name: 'Status',
         operators: [{label: 'Is', operand: {kind: 'choice', choices: quickChoices},
@@ -362,6 +366,14 @@ filterRoot.render(h(StrictMode, null, h(PortalVisitorFilter, {
 })));
 globalThis.filterFixture = {
     summary: () => ({commands: filterCommands, outcomes: filterOutcomes, listeners: filterListeners.size, submits: filterFormSubmits, heldSelectKeys, heldSelectChanges}),
+    seedTitleOperator() {
+        const criteria = {logicalOperator: 'and', conditions: [
+            {id: 'saved-title', type: 'singleCondition', setting: currentTitle},
+            {id: 'sibling', type: 'singleCondition', setting: dateOperators[0].setting},
+        ]};
+        publishFilter({...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1}, criteria, effectiveSettings: {}});
+        return criteria;
+    },
     seedDates() {
         const sibling = {id: 'legacy', type: 'singleCondition', setting: {...currentTitle, idOrName: {type: 'name', name: 'Former title'}}};
         const criteria = {logicalOperator: 'and', conditions: [{
@@ -745,6 +757,38 @@ async function checkFilter(page) {
         done,
         summary,
     });
+    const saved = await page.evaluate(() =>
+        globalThis.filterFixture.seedTitleOperator()
+    );
+    const beforeOperatorChange = await summary();
+    await open();
+    const operator = dialog.getByRole('combobox', { name: 'Operator' }).first();
+    assert.equal(await operator.inputValue(), 'contains');
+    assert.equal(await firstValue.inputValue(), 'Keep');
+    await operator.selectOption('doesNotContain');
+    assert.deepEqual((await summary()).commands, beforeOperatorChange.commands);
+    assert.equal(
+        await firstValue.inputValue(),
+        'Keep',
+        'Changing a text operator must retain its operand'
+    );
+    await done.press('Enter');
+    await closed(beforeOperatorChange.outcomes.length + 1);
+    const afterOperatorChange = await summary();
+    assert.equal(
+        afterOperatorChange.commands.length,
+        beforeOperatorChange.commands.length + 1
+    );
+    const [title, sibling] = saved.conditions;
+    assert.deepEqual(afterOperatorChange.commands.at(-1).criteria, {
+        ...saved,
+        conditions: [
+            { ...title, setting: { ...title.setting, type: 'doesNotContain' } },
+            sibling,
+        ],
+    });
+    assert.equal(afterOperatorChange.outcomes.at(-1).type, 'allocated');
+    assert.equal(afterOperatorChange.submits, 0);
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -758,6 +802,7 @@ async function checkFilter(page) {
         quick,
         heldQuick,
         date,
+        textOperatorRetainedOperand: true,
         focusRestored: true,
         cleanup: 'completed',
     };

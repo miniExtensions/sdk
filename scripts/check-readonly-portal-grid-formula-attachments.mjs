@@ -231,6 +231,14 @@ async function imageView(page, dialog, path, position) {
 }
 
 async function exercise(browser, origin, assets, mode, screenshotPath) {
+    const grid = mode !== 'standalone';
+    const spanish = mode === 'grid-spanish';
+    const secondPath = spanish ? '/first.png' : '/second.jpg';
+    const expectedNames = spanish
+        ? ['Abrir archivo 1', 'Abrir archivo 2']
+        : grid
+          ? ['Open attachment 1', 'Open attachment 2']
+          : [origin + '/first.png', origin + secondPath];
     const context = await browser.newContext({
         viewport: { width: 1000, height: 700 },
         serviceWorkers: 'block',
@@ -270,27 +278,32 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
         page.setDefaultTimeout(8000);
         page.on('pageerror', (error) => errors.push(error.message));
         await page.goto(
-            mode === 'standalone' ? origin + '/?standalone' : origin
+            origin + (spanish ? '/?spanish' : grid ? '/' : '/?standalone')
         );
         page.on('framenavigated', (frame) => navigations.push(frame.url()));
-        const trigger = page.getByRole('button', {
-            name: origin + '/first.png',
-            exact: true,
-        });
-        await trigger.waitFor({ state: 'attached' });
+        const thumbnailButtons = page.locator('.mx-sdk-url-gallery__open');
+        await thumbnailButtons.nth(1).waitFor({ state: 'attached' });
+        const names = await thumbnailButtons.evaluateAll((nodes) =>
+            nodes.map((node) => node.getAttribute('aria-label'))
+        );
+        assert.deepEqual(names, expectedNames);
+        const [trigger, secondTrigger] = expectedNames.map((name) =>
+            page.getByRole('button', { name, exact: true })
+        );
+        assert.equal(await trigger.count(), 1);
+        assert.equal(await secondTrigger.count(), 1);
         interactive = true;
         assert.equal(
             await trigger.evaluate((node) =>
                 node.closest('.mx-sdk-url-gallery').getAttribute('data-grid')
             ),
-            String(mode === 'grid')
+            String(grid)
         );
         const exactTrigger = await trigger.elementHandle();
         const neighbor = page.locator('[data-record-id="recNeighbor"]');
-        const neighborNode =
-            mode === 'grid' ? await neighbor.elementHandle() : null;
+        const neighborNode = grid ? await neighbor.elementHandle() : null;
         const viewport = page.locator('.mx-sdk-readonly-grid__viewport');
-        if (mode === 'grid') {
+        if (grid) {
             assert.equal(
                 await neighbor.locator('[data-primary="true"]').textContent(),
                 'Keep neighbor'
@@ -301,11 +314,10 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
         }
         await page.locator('#before-gallery').focus();
         const tabsToThumbnail = await tabTo(page, trigger);
-        const scrollLeft =
-            mode === 'grid'
-                ? await viewport.evaluate((node) => node.scrollLeft)
-                : null;
-        if (mode === 'grid')
+        const scrollLeft = grid
+            ? await viewport.evaluate((node) => node.scrollLeft)
+            : null;
+        if (grid)
             assert(
                 scrollLeft > 0,
                 'Thumbnail must be activated in a horizontally scrolled Grid'
@@ -328,7 +340,7 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
         const next = dialog.getByRole('button', { name: 'Next', exact: true });
         const tabsToNext = await tabTo(page, next);
         await page.keyboard.press('Enter');
-        const second = await imageView(page, dialog, '/second.jpg', '2 / 2');
+        const second = await imageView(page, dialog, secondPath, '2 / 2');
         assert(
             await close.evaluate((node) => document.activeElement === node),
             'Next focuses Close at the final attachment'
@@ -342,11 +354,27 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
             exactFocusReturn,
             'Escape must return focus to the original thumbnail node'
         );
-        if (mode === 'grid')
+        let directSecond = null;
+        if (grid) {
+            const originalSecond = await secondTrigger.elementHandle();
+            const tabsToSecond = await tabTo(page, secondTrigger);
+            await page.keyboard.press('Enter');
+            const view = await imageView(page, dialog, secondPath, '2 / 2');
+            await page.keyboard.press('Escape');
+            await dialog.waitFor({ state: 'detached' });
+            const focusReturned = await originalSecond.evaluate(
+                (node) => node.isConnected && document.activeElement === node
+            );
+            assert(
+                focusReturned,
+                'Escape must return focus to the second occurrence'
+            );
+            directSecond = { tabsToSecond, view, focusReturned };
             assert.equal(
                 await viewport.evaluate((node) => node.scrollLeft),
                 scrollLeft
             );
+        }
         let neighborStable = null;
         if (neighborNode) {
             neighborStable = await neighborNode.evaluate(
@@ -367,7 +395,7 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
             runtimeRequests: 0,
         });
         assert(state.recordsUnchanged);
-        if (mode === 'grid')
+        if (grid)
             assert.deepEqual(state.deliveries.fldFormula, {
                 context: 'portal-detail',
                 physicalKind: 'formula',
@@ -377,13 +405,22 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
             });
         const actionKeys = state.trusted.filter(({ key }) => key !== 'Tab');
         assert.deepEqual(actionKeys.slice(0, 2), [
-            { key: 'Enter', trusted: true, action: origin + '/first.png' },
+            { key: 'Enter', trusted: true, action: names[0] },
             { key: 'Enter', trusted: true, action: 'Next' },
         ]);
-        assert.equal(actionKeys.length, 3);
+        assert.equal(actionKeys.length, grid ? 5 : 3);
         assert(
             actionKeys[2].key === 'Escape' && actionKeys[2].trusted === true
         );
+        if (grid) {
+            assert.deepEqual(actionKeys[3], {
+                key: 'Enter',
+                trusted: true,
+                action: names[1],
+            });
+            assert.equal(actionKeys[4].key, 'Escape');
+            assert.equal(actionKeys[4].trusted, true);
+        }
         assert(
             state.trusted
                 .filter(({ key }) => key === 'Tab')
@@ -392,19 +429,21 @@ async function exercise(browser, origin, assets, mode, screenshotPath) {
         assert(imageRequests.every(({ type }) => type === 'image'));
         assert.deepEqual(
             [...new Set(imageRequests.map(({ path }) => path))].sort(),
-            Object.keys(images)
+            spanish ? ['/first.png'] : Object.keys(images)
         );
         assert.deepEqual(unexpected, []);
         assert.deepEqual(errors, []);
         assert.deepEqual(navigations, []);
         return {
             mode,
+            names,
             scrollLeft,
             tabsToThumbnail,
             tabsToNext,
             first,
             second,
             exactFocusReturn,
+            directSecond,
             neighborStable,
             state,
             imageRequests,
@@ -439,7 +478,7 @@ async function runProfile(browser, assets, react, format) {
     const origin = 'http://127.0.0.1:' + server.address().port;
     try {
         const results = [];
-        for (const mode of ['standalone', 'grid']) {
+        for (const mode of ['standalone', 'grid', 'grid-spanish']) {
             try {
                 const screenshotPath =
                     react === '19.2.0' && format === 'esm'

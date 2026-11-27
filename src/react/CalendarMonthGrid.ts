@@ -55,6 +55,8 @@ export type CalendarMonthGridProps = {
     className?: string;
 };
 
+const compactPortalDotLimit = 12;
+
 const defaultLabels: CalendarMonthGridLabels = {
     calendar: 'Calendar',
     previous: 'Previous',
@@ -302,11 +304,14 @@ function DayCell({
                           'aria-hidden': true,
                           className: 'mx-sdk-calendar__dots',
                       },
-                      Array.from({ length: count }, (_, index) =>
-                          h('span', {
-                              key: index,
-                              className: 'mx-sdk-calendar__dot',
-                          })
+                      // The display fits three rows while the accessible count stays exact.
+                      Array.from(
+                          { length: Math.min(count, compactPortalDotLimit) },
+                          (_, index) =>
+                              h('span', {
+                                  key: index,
+                                  className: 'mx-sdk-calendar__dot',
+                              })
                       )
                   )
               )

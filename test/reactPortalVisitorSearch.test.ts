@@ -320,6 +320,44 @@ it('uses the localized Clear label for a populated owner while leaving an empty 
     }
 });
 
+it('leaves focus with the neighboring control on an external clear publication', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    await f.render(
+        h(
+            'div',
+            null,
+            h(PortalVisitorSearch, { port: owner.port }),
+            h('button', { type: 'button', id: 'neighbor' }, 'Neighbor')
+        )
+    );
+    const input = f.container.querySelector('input');
+    const neighbor = [...f.container.querySelectorAll('button')].find(
+        (button) => button.id === 'neighbor'
+    );
+    assert.ok(input && neighbor);
+    const clear = [...f.container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Clear search'
+    );
+    assert.ok(clear);
+    assert.equal(input.value, 'previous');
+    neighbor.focus();
+    assert.equal(f.window.document.activeElement, neighbor);
+
+    await act(async () => {
+        assert.deepEqual(owner.commit('', false), {
+            generation: 1,
+            revision: 2,
+        });
+    });
+
+    assert.equal(clear.isConnected, false);
+    assert.equal(f.container.querySelector('input'), input);
+    assert.equal(input.value, '');
+    assert.equal(f.window.document.activeElement, neighbor);
+    assert.deepEqual(owner.commands, []);
+});
+
 it('fences a scanner callback to its opened owner and accepts one result', async (t) => {
     const f = await htmlPresentationFixture(t);
     const owner = host();

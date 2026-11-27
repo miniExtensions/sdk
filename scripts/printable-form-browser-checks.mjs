@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+const sharedAttachmentPrefix = 'SharedAttachmentName'.repeat(21);
+const attachmentNames = ['-SIGNED.pdf', '-DRAFT.pdf'].map(
+    (suffix) => sharedAttachmentPrefix + suffix
+);
+
 export const printableFormBrowserEntry = String.raw`
 import React,{createElement as h,useLayoutEffect,StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -12,6 +17,8 @@ window.addEventListener('error',e=>errors.push(String(e.error||e.message)));
 window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
 const field=(key,title,facet,extra={})=>({key,title,fieldName:title,semanticTitle:title,showTitle:true,required:false,sameRow:false,enableSideBySideOnMobile:false,facet,...extra});
 const image=new URL('/printable-form-image.svg',location.href).href;
+const iconItems=${JSON.stringify(attachmentNames)}.map((label,index)=>({key:'attachment-'+index,label,url:image,kind:'file',imageSources:[]}));
+const iconAttachments={kind:'attachments',items:iconItems,layout:'icon',columns:1,fit:'contain',thumbnailSize:'medium',showNames:true,emptyLabel:'None'};
 const instructions = Array.from({length: 7}, (_, index) =>
     '<p>' + (index + 1) + '. Follow instruction ' + (index + 1) + '.</p>'
 ).join('') + '<p>8. END OF INSTRUCTIONS</p>';
@@ -19,6 +26,8 @@ const document={language:'en',fields:[
  field('name','Name',{kind:'text',value:'Synthetic Person',emptyLabel:'None'},{description:{html:instructions,imageUrl:null,placement:'top',truncate:true}}),
  field('password','Password',{kind:'text',value:'••••••••',emptyLabel:'None'},{description:{html:'<p>Complete configured-order document.</p>',imageUrl:null,placement:'top',truncate:false}}),
  field('images','Synthetic images',{kind:'attachments',items:[{key:'first',label:'First synthetic image',kind:'image',url:image,imageSources:[image]},{key:'duplicate',label:'Second synthetic image',kind:'image',url:image,imageSources:[image]}],layout:'grid',columns:2,fit:'contain',thumbnailSize:'medium',showNames:true,emptyLabel:'None'}),
+ field('attachment-names','Named attachments',iconAttachments),
+ field('hidden-attachment-names','Hidden attachment names',{...iconAttachments,showNames:false}),
 ]};
 const rect=n=>{if(!n)return null;const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,width:r.width,height:r.height};};
 function describeHelp(field) {
@@ -38,7 +47,7 @@ function describeHelp(field) {
         } : null,
     };
 }
-window.__nativeProbe={snapshot(){const fields=[...globalThis.document.querySelectorAll('.mx-sdk-print-field')],name=fields[0];return {react:React.version,committed,errors:[...errors],name:rect(name),help:rect(name?.querySelector('.mx-sdk-field-description')),description:describeHelp(name),value:rect(name?.querySelector('.mx-sdk-field-control')),next:rect(fields[1]),images:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment img')].map(n=>({complete:n.complete,naturalWidth:n.naturalWidth,...rect(n)})),labels:fields.map(n=>n.querySelector('.mx-sdk-field-title')?.textContent),imageLabels:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment figcaption')].map(n=>n.textContent)};}};
+window.__nativeProbe={snapshot(){const fields=[...globalThis.document.querySelectorAll('.mx-sdk-print-field')],name=fields[0];return {react:React.version,committed,errors:[...errors],name:rect(name),help:rect(name?.querySelector('.mx-sdk-field-description')),description:describeHelp(name),value:rect(name?.querySelector('.mx-sdk-field-control')),next:rect(fields[1]),images:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachment img')].map(n=>({complete:n.complete,naturalWidth:n.naturalWidth,...rect(n)})),labels:fields.map(n=>n.querySelector('.mx-sdk-field-title')?.textContent),imageLabels:[...globalThis.document.querySelectorAll('.mx-sdk-print-attachments-grid figcaption')].map(n=>n.textContent)};}};
 function Ready(){useLayoutEffect(()=>{committed++;},[]);return null;}
 createRoot(globalThis.document.getElementById('root')).render(h(StrictMode,null,h(ReadonlyPrintDocumentView,{document}),h(Ready)));
 `;
@@ -128,7 +137,116 @@ export async function preparePrintableFormBrowserFixtures({
     };
 }
 
+export async function checkPrintableAttachmentNames({ page, evidence }) {
+    await page.waitForFunction(
+        () => window.__nativeProbe?.snapshot().committed > 0
+    );
+    await page.locator('.mx-sdk-print-attachments-icon').nth(1).waitFor();
+    const cases = [];
+    evidence.attachmentNames = cases;
+    try {
+        for (const media of ['screen', 'print']) {
+            await page.emulateMedia({ media });
+            const geometry = await page.evaluate(() => {
+                const [named, hidden] = document.querySelectorAll(
+                    '.mx-sdk-print-attachments-icon'
+                );
+                const inside = (box, boundary) =>
+                    box.left >= boundary.left - 1 &&
+                    box.right <= boundary.right + 1 &&
+                    box.top >= boundary.top - 1 &&
+                    box.bottom <= boundary.bottom + 1;
+                const rows = [...named.querySelectorAll('figure')].map(
+                    (row) => {
+                        const caption = row.querySelector('figcaption');
+                        const text = caption.firstChild;
+                        const rowBox = row.getBoundingClientRect().toJSON();
+                        const captionBox = caption
+                            .getBoundingClientRect()
+                            .toJSON();
+                        const style = getComputedStyle(caption);
+                        const range = document.createRange();
+                        range.selectNodeContents(caption);
+                        const lines = new Set(
+                            [...range.getClientRects()].map((box) => box.top)
+                        ).size;
+                        range.setStart(text, text.data.lastIndexOf('-'));
+                        range.setEnd(text, text.length);
+                        const suffixBoxes = [...range.getClientRects()].map(
+                            (box) => box.toJSON()
+                        );
+                        return {
+                            label: text.data,
+                            suffix: range.toString(),
+                            rowBox,
+                            captionBox,
+                            suffixBoxes,
+                            lines,
+                            whiteSpace: style.whiteSpace,
+                            textOverflow: style.textOverflow,
+                            suffixVisible:
+                                suffixBoxes.length > 0 &&
+                                suffixBoxes.every(
+                                    (box) =>
+                                        box.width > 0 &&
+                                        box.height > 0 &&
+                                        inside(box, rowBox) &&
+                                        inside(box, captionBox)
+                                ),
+                        };
+                    }
+                );
+                return {
+                    rows,
+                    hiddenRows: hidden.querySelectorAll('figure').length,
+                    hiddenCaptions:
+                        hidden.querySelectorAll('figcaption').length,
+                };
+            });
+            cases.push({ media, ...geometry });
+            assert.deepEqual(
+                geometry.rows.map((row) => row.label),
+                attachmentNames
+            );
+            assert.deepEqual(
+                geometry.rows.map((row) => row.suffix),
+                ['-SIGNED.pdf', '-DRAFT.pdf']
+            );
+            assert.equal(geometry.hiddenRows, 2);
+            assert.equal(geometry.hiddenCaptions, 0);
+            const [first, second] = geometry.rows;
+            assert(
+                second.rowBox.top >= first.rowBox.bottom - 1,
+                media + ': separate ordered rows'
+            );
+        }
+        for (const row of cases[0].rows) {
+            assert.equal(row.lines, 1);
+            assert.equal(row.whiteSpace, 'nowrap');
+            assert.equal(row.textOverflow, 'ellipsis');
+            assert.equal(row.suffixVisible, false);
+        }
+        for (const [index, row] of cases[1].rows.entries()) {
+            assert.equal(
+                row.suffixVisible,
+                true,
+                'print: complete ' +
+                    row.suffix +
+                    ' must fit inside its caption and row'
+            );
+            assert(
+                row.lines > 1,
+                'print: full filename occupies multiple lines'
+            );
+            assert(row.rowBox.height > cases[0].rows[index].rowBox.height);
+        }
+    } finally {
+        await page.emulateMedia({ media: 'screen' });
+    }
+}
+
 export async function checkPrintableFormBrowser({ page, evidence }) {
+    await checkPrintableAttachmentNames({ page, evidence });
     await page.emulateMedia({ media: 'screen' });
     await page.waitForFunction(() => {
         const s = window.__nativeProbe?.snapshot();
@@ -174,6 +292,8 @@ export async function checkPrintableFormBrowser({ page, evidence }) {
                 'Name',
                 'Password',
                 'Synthetic images',
+                'Named attachments',
+                'Hidden attachment names',
             ]);
             assert.deepEqual(state.imageLabels, [
                 'First synthetic image',

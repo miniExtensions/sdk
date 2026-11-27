@@ -1844,7 +1844,10 @@ try {
         allowed.set('/native.js', code);
         allowed.set(
             '/native-rating.css',
-            regular('scripts/native-rating-fixture.css')
+            Buffer.concat([
+                regular('scripts/native-rating-fixture.css'),
+                regular(join(installed, 'dist/esm/react/rating.css')),
+            ])
         );
         const html = Buffer.from(
             `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Native synthetic SDK consumer</title><link rel="stylesheet" href="/native-rating.css"></head><body><main></main><script type="module" src="/native.js"></script></body></html>`
@@ -3790,6 +3793,40 @@ try {
             assert.equal((await ratingState(page)).refConnected, false);
             assert.equal((await ratingState(page)).submits, 0);
         });
+        await run('rating-readonly-localized', async (page, origin) => {
+            await page.goto(
+                `${origin}/native.html?mode=rating-readonly-localized`
+            );
+            const blank = page.getByRole('group', { name: 'Blank rating' });
+            await blank.getByTestId('no-value-test-id').waitFor();
+            const blankSnapshot = await blank.ariaSnapshot();
+            assert.equal(blankSnapshot.match(/Keine Bewertung/g)?.length, 1);
+            assert.doesNotMatch(blankSnapshot, /\(null\/5\)/);
+            assert.equal(
+                await blank.getByTestId('no-value-test-id').innerText(),
+                'Keine Bewertung'
+            );
+            const zero = page.getByRole('group', {
+                name: 'Stored zero rating',
+            });
+            const three = page.getByRole('group', {
+                name: 'Stored three rating',
+            });
+            assert.match(await zero.ariaSnapshot(), /\(0\/5\)/);
+            assert.match(await three.ariaSnapshot(), /\(3\/5\)/);
+            assert.equal(
+                await page
+                    .locator('form input,form button,form [tabindex="0"]')
+                    .count(),
+                0
+            );
+            await three.locator('.mx-sdk-rating-icon').first().click();
+            await page.keyboard.press('Tab');
+            await page.keyboard.press('Enter');
+            const state = await ratingState(page);
+            assert.deepEqual(state.changes, []);
+            assert.equal(state.submits, 0);
+        });
         await run('rating-explicit-repair-print', async (page, origin) => {
             await openRating(page, origin);
             await page
@@ -4354,8 +4391,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, the multiline counter, layouts, CSV, section groups and the Form header.
-            33 +
+            // Include complete fields, localized readonly Rating, layouts, CSV, section groups and the Form header.
+            34 +
                 portalChartFixtures.formats.length +
                 2 * collaboratorFixtures.formats.length +
                 storageEventCases.length +

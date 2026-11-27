@@ -90,6 +90,10 @@ export const RatingInput = forwardRef<HTMLInputElement, RatingInputProps>(
         const id = props.inputProps?.id ?? generated;
         const feedbackId = `${generated}-feedback`;
         const summary = `(${props.value}/${props.max})`;
+        const gridSummary =
+            disabled && props.value == null
+                ? (props.inputProps?.['aria-valuetext'] ?? summary)
+                : summary;
         const commit = (value: number | null) => {
             if (
                 current() &&
@@ -116,7 +120,7 @@ export const RatingInput = forwardRef<HTMLInputElement, RatingInputProps>(
                 ? createElement(
                       'span',
                       { className: props.gridSummaryClassName },
-                      summary
+                      gridSummary
                   )
                 : createElement('input', {
                       ...props.inputProps,

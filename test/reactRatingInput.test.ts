@@ -341,6 +341,33 @@ it('owns localized readonly empty and grid/print summaries without coercing zero
         h(
             RatingField,
             controlledRating({
+                value: null,
+                disabled: true,
+                grid: true,
+                labels: { empty: 'Keine Bewertung' },
+                onChange: (v) => changes.push(v),
+            })
+        )
+    );
+    assert.equal(f.container.querySelector('input'), null);
+    assert.equal(
+        f.container.querySelector('.mx-sdk-rating-sr-only')?.textContent,
+        'Keine Bewertung'
+    );
+    assert.equal(
+        f.container
+            .querySelector('.mx-sdk-rating-icons')
+            ?.getAttribute('aria-hidden'),
+        'true'
+    );
+    assert.equal(
+        f.container.querySelector('.mx-sdk-rating-empty')?.textContent,
+        'Keine Bewertung'
+    );
+    await f.render(
+        h(
+            RatingField,
+            controlledRating({
                 value: 0,
                 disabled: true,
                 grid: true,

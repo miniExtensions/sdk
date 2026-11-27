@@ -10,10 +10,9 @@
  */
 
 const cache = new Map<string, string>();
-const asteriskEmphasis = /(\*){1,3}(.+?)\1{1,3}/g;
 // Underscores within an identifier do not open or close Markdown emphasis.
-const underscoreEmphasis =
-    /(?<![\p{L}\p{M}\p{N}_])(_{1,3})(?![_\s])(.+?)(?<![_\s])\1(?![\p{L}\p{M}\p{N}_])/gu;
+const emphasis =
+    /(\*){1,3}(.+?)\1{1,3}|(?<![\p{L}\p{M}\p{N}_])(_{1,3})(?![_\s])(.+?)(?<![_\s])\3(?![\p{L}\p{M}\p{N}_])/gu;
 
 export const removeMarkdown = (markdown: string): string => {
     if (cache.has(markdown)) {
@@ -78,9 +77,16 @@ export const removeMarkdown = (markdown: string): string => {
             iteration <= MAX_EMPHASIS_ITERATIONS;
             iteration++
         ) {
-            const stripped = line
-                .replace(asteriskEmphasis, '$2')
-                .replace(underscoreEmphasis, '$2');
+            const stripped = line.replace(
+                emphasis,
+                (
+                    _match,
+                    _asterisk,
+                    asteriskText,
+                    _underscore,
+                    underscoreText
+                ) => asteriskText ?? underscoreText
+            );
             if (stripped === line) break;
             line = stripped;
             if (iteration === MAX_EMPHASIS_ITERATIONS) {

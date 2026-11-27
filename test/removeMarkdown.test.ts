@@ -79,4 +79,9 @@ describe('Markdown display text', () => {
             'Part PO_US_1042, status open and ready. Å_B_2 [details](https://example.com/PO_US_1042)'
         );
     });
+
+    it('strips adjacent asterisk and underscore emphasis in either order', () => {
+        assert.equal(removeMarkdown('*bold*_italic_'), 'bolditalic');
+        assert.equal(removeMarkdown('_italic_*bold*'), 'italicbold');
+    });
 });

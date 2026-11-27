@@ -27,6 +27,7 @@ export function ControlledExternalSyncSourceField(
         textSize: props.textSize,
         layout: props.layout,
         className: props.className,
+        emptyLabel: props.emptyLabel,
     });
 }
 

@@ -637,7 +637,110 @@ async function checkDateFilter(page, { open, closed, dialog, done, summary }) {
     };
 }
 
-async function checkFilter(page) {
+async function checkFilterTabFocus(
+    page,
+    { open, closed, dialog, done, summary },
+    evidence
+) {
+    const close = dialog.getByRole('button', { name: 'Close', exact: true });
+    const isFocused = (locator) =>
+        locator.evaluate((node) => node === node.ownerDocument.activeElement);
+    const active = () =>
+        dialog.evaluate((node) => {
+            const focused = node.ownerDocument.activeElement;
+            return {
+                tag: focused.tagName,
+                name:
+                    focused.tagName === 'BODY'
+                        ? ''
+                        : (focused.getAttribute('aria-label') ??
+                          focused.textContent.trim()),
+                inside: node.contains(focused),
+                modal: node.matches(':modal'),
+            };
+        });
+
+    await open();
+    const before = await summary();
+    await close.focus();
+    await page.keyboard.press('Tab');
+    const match = dialog
+        .getByRole('combobox', { name: 'Match', exact: true })
+        .first();
+    assert.equal(
+        await isFocused(match),
+        true,
+        'Tab advances to the first interior control'
+    );
+    const interior = await active();
+    for (let step = 0; step < 32 && !(await isFocused(done)); step++) {
+        assert.equal(
+            (await active()).inside,
+            true,
+            'Interior Tab stays in Filter'
+        );
+        await page.keyboard.press('Tab');
+    }
+    assert.equal(await isFocused(done), true, 'Sequential Tab reaches Done');
+    await page.keyboard.press('Tab');
+    const forward = await active();
+    await close.focus();
+    await page.keyboard.press('Shift+Tab');
+    const backward = await active();
+
+    const date = dialog.locator('input[aria-haspopup="dialog"]').first();
+    const calendar = dialog.getByRole('dialog', {
+        name: 'Calendar',
+        exact: true,
+    });
+    await date.click();
+    await calendar.waitFor({ state: 'visible' });
+    await calendar.focus();
+    assert.equal(
+        await isFocused(calendar),
+        true,
+        'Calendar owns focus before its Tab'
+    );
+    await page.keyboard.press('Tab');
+    const calendarKeptFocus = await isFocused(calendar);
+    assert.equal(await calendar.isVisible(), true);
+    await page.keyboard.press('Escape');
+    await calendar.waitFor({ state: 'hidden' });
+    assert.equal(await isFocused(date), true);
+    assert.equal(await dialog.isVisible(), true);
+    await page.keyboard.press('Escape');
+    await closed(before.outcomes.length + 1);
+    const after = await summary();
+    assert.deepEqual(after.commands, before.commands);
+    assert.equal(after.submits, 0);
+    assert.deepEqual(after.outcomes.at(-1), { type: 'unchanged' });
+    evidence.filterTabFocus = {
+        forward,
+        backward,
+        interior,
+        calendarKeptFocus,
+        escapeRestoredOpener: true,
+        commands: after.commands.length - before.commands.length,
+        submits: after.submits,
+    };
+    assert.equal(
+        calendarKeptFocus,
+        true,
+        'Outer Filter leaves Calendar-owned Tab alone'
+    );
+    assert.deepEqual(
+        backward,
+        { tag: 'BUTTON', name: 'Done', inside: true, modal: true },
+        'Filter Shift+Tab from Close must focus Done'
+    );
+    assert.deepEqual(
+        forward,
+        { tag: 'BUTTON', name: 'Close', inside: true, modal: true },
+        'Filter Tab from Done must focus Close'
+    );
+}
+
+async function checkFilter(page, evidence) {
     const trigger = page.getByRole('button', { name: 'Filter', exact: true });
     const dialog = page.getByRole('dialog', { name: 'Filter records' });
     const firstValue = dialog.getByRole('textbox', { name: 'Value' }).first();
@@ -797,6 +900,11 @@ async function checkFilter(page) {
     });
     assert.equal(afterOperatorChange.outcomes.at(-1).type, 'allocated');
     assert.equal(afterOperatorChange.submits, 0);
+    await checkFilterTabFocus(
+        page,
+        { open, closed, dialog, done, summary },
+        evidence
+    );
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -1426,7 +1534,7 @@ export async function checkPortalVisitorSortBrowser({
             }
             evidence.localizedSearch = await checkLocalizedSearch(page);
         }
-        if (includeFilter) evidence.filter = await checkFilter(page);
+        if (includeFilter) evidence.filter = await checkFilter(page, evidence);
         const end = await summary();
         assert.equal(end.version, expectedReactVersion);
         assert.deepEqual(

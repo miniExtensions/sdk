@@ -173,6 +173,7 @@ function FilterDialog({
     const { draft, port } = shown;
     const dialog = useRef<HTMLDialogElement>(null);
     const title = useRef<HTMLHeadingElement>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
     const done = useRef<HTMLButtonElement>(null);
     const backdrop = useRef(false);
     const focusNext = useRef<string | null>(null);
@@ -562,6 +563,18 @@ function FilterDialog({
                 event.preventDefault();
                 close();
             },
+            onKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => {
+                if (event.key !== 'Tab' || event.defaultPrevented) return;
+                const boundary = event.shiftKey
+                    ? closeButton.current
+                    : done.current;
+                const next = event.shiftKey
+                    ? done.current
+                    : closeButton.current;
+                if (event.target !== boundary || !next) return;
+                event.preventDefault();
+                next.focus();
+            },
             onPointerDown: (event) => {
                 backdrop.current = event.button === 0 && hitsBackdrop(event);
             },
@@ -578,7 +591,11 @@ function FilterDialog({
             'header',
             { style: buttons },
             h('h2', { id: titleId, tabIndex: -1, ref: title }, labels.title),
-            h('button', { type: 'button', onClick: close }, labels.close)
+            h(
+                'button',
+                { type: 'button', onClick: close, ref: closeButton },
+                labels.close
+            )
         ),
         inactive ? h('p', { role: 'status' }, labels.stale) : null,
         editor(criteria, null),

@@ -730,6 +730,37 @@ it('empty-input pointer opening and focused reopening retain the offered rows wi
     assert.equal(f.window.document.activeElement, f.removal(second));
 });
 
+it('clicking the open Single collaborator input keeps the query and corrects its selection', async (t) => {
+    const f = await fixture(t);
+    const input = f.input();
+    await f.search(first.email);
+    assert.equal(input.getAttribute('aria-expanded'), 'true');
+    assert.equal(f.options().length, 1);
+    assert.equal(f.option(first).textContent, first.name + first.email);
+    assert.equal(f.window.document.activeElement, input);
+    assert.equal(f.count(), 0);
+
+    await f.pointer(input);
+    assert.equal(f.input(), input);
+    assert.equal(input.value, first.email);
+    assert.equal(input.getAttribute('aria-expanded'), 'true');
+    assert.equal(f.window.document.activeElement, input);
+    assert.equal(f.options().length, 1);
+    assert.equal(f.option(first).textContent, first.name + first.email);
+    assert.equal(f.count(), 0);
+
+    await f.search(second.email);
+    assert.equal(input.value, second.email);
+    assert.equal(f.options().length, 1);
+    assert.equal(f.option(second).textContent, second.name + second.email);
+    assert.equal(f.count(), 0);
+    await f.key('ArrowDown');
+    await f.key('Enter');
+    assert.equal(f.count(), 1);
+    assert.equal(f.invocations[0]?.value, second);
+    assert.equal(f.state.single, second);
+});
+
 it('mouse use of the arrow preserves focused input reopening and Space typing before keyboard selection', async (t) => {
     const f = await fixture(t);
     const input = f.input();

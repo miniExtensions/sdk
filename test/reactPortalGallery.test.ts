@@ -488,13 +488,20 @@ for (const target of [
     });
 }
 
-for (const outcome of [
+const pagingOutcomes = [
     'continuation',
     'terminal',
     'stale',
     'departed',
-] as const) {
-    test(`Gallery keyboard paging handles an empty ${outcome} receipt`, async (t) => {
+] as const;
+const pagingReceipts = [
+    { label: 'an empty', recordIds: [] },
+    { label: 'a duplicate-only', recordIds: ['b', 'b'] },
+] as const;
+for (const { receipt, outcome } of pagingReceipts.flatMap((receipt) =>
+    pagingOutcomes.map((outcome) => ({ receipt, outcome }))
+)) {
+    test(`Gallery keyboard paging handles ${receipt.label} ${outcome} receipt`, async (t) => {
         const f = await htmlPresentationFixture(t);
         const calls = { pages: [] as string[], opens: 0, unlinks: 0 };
         const openRow = (id: string): PortalGalleryRow => ({
@@ -567,7 +574,7 @@ for (const outcome of [
         assert(finishSecondPage);
         await act(async () => {
             finishSecondPage({
-                recordIds: [],
+                recordIds: receipt.recordIds,
                 isCurrent: () => outcome !== 'stale',
             });
         });

@@ -70,6 +70,7 @@ async function fixture(
         choices?: readonly Person[];
         props?: Partial<Common>;
         expectedParentEvents?: readonly string[];
+        acceptSingle?: (person: Person) => Person;
         /** Let a cold-runtime scenario arrange real synchronous commits first. */
         deferInitialRender?: boolean;
     } = {}
@@ -237,7 +238,10 @@ async function fixture(
                 state.many = value;
             } else {
                 assert.ok(!Array.isArray(value));
-                state.single = value;
+                state.single =
+                    value && args.acceptSingle
+                        ? args.acceptSingle(value)
+                        : value;
             }
             publish();
         };
@@ -633,6 +637,38 @@ it('single keyboard selection/removal/reselection publishes original objects and
     assert.equal(f.count(), 3);
     assert.equal(f.invocations[2]?.value, second);
     assert.equal(f.window.document.activeElement, f.removal(second));
+});
+
+it('single keyboard focus follows an accepted shallow copy of the selected collaborator', async (t) => {
+    const f = await fixture(t, { acceptSingle: (person) => ({ ...person }) });
+    await f.search(first.email);
+    await f.key('ArrowDown');
+    await f.key('Enter');
+    assert.equal(f.count(), 1);
+    assert.equal(f.invocations[0]?.value, first);
+    assert.notEqual(f.state.single, first);
+    assert.deepEqual(f.state.single, first);
+    assert.ok(
+        f.window.document.activeElement === f.removal(first),
+        'Remove has focus as soon as the copied value is accepted'
+    );
+    await f.keyboardRemove(first);
+    assert.equal(f.count(), 2);
+    assert.equal(f.invocations[1]?.value, null);
+    assert.equal(f.state.single, null);
+    assert.equal(f.window.document.activeElement, f.input());
+});
+
+it('single keyboard focus does not follow a different collaborator with the same label', async (t) => {
+    const replacement = { ...first, id: second.id };
+    const f = await fixture(t, { acceptSingle: () => replacement });
+    await f.search(first.email);
+    await f.key('ArrowDown');
+    await f.key('Enter');
+    assert.equal(f.count(), 1);
+    assert.equal(f.invocations[0]?.value, first);
+    assert.equal(f.state.single, replacement);
+    assert.ok(f.window.document.activeElement !== f.removal(replacement));
 });
 
 it('single pointer selection/removal uses the same complete picker and never submits', async (t) => {

@@ -442,11 +442,22 @@ it('uses only visible titled pages for progress and delegates preview title sele
         })
     );
     const progress = f.host.querySelector('[data-testid="native-progress"]');
-    assert.equal(progress?.getAttribute('aria-hidden'), 'true');
+    assert.equal(progress?.getAttribute('role'), 'progressbar');
+    assert.equal(f.host.querySelectorAll('[role="progressbar"]').length, 1);
+    assert.equal(progress?.getAttribute('tabindex'), null);
+    assert.equal(progress?.getAttribute('aria-hidden'), null);
+    assert.equal(progress?.getAttribute('aria-label'), 'Form progress');
+    assert.equal(progress?.getAttribute('aria-valuemin'), '0');
+    assert.equal(progress?.getAttribute('aria-valuenow'), '1');
+    assert.equal(progress?.getAttribute('aria-valuemax'), '2');
+    assert.equal(progress?.getAttribute('aria-valuetext'), 'Step 1 of 2');
     const items = f.host.querySelectorAll(
         '[data-testid="native-progress-item"]'
     );
     assert.equal(items.length, 2);
+    assert.ok(
+        [...items].every((item) => item.getAttribute('aria-hidden') === 'true')
+    );
     assert.ok(
         items[0]?.classList.contains('mx-sdk-form-pages-progress-item--reached')
     );
@@ -460,10 +471,26 @@ it('uses only visible titled pages for progress and delegates preview title sele
     assert.equal(selections, 1);
     assert.equal(f.submits(), 0);
     await f.render(
-        h(CompleteFormPageNavigation, { pages, activePageIndex: 3 })
+        h(CompleteFormPageNavigation, {
+            pages,
+            activePageIndex: 3,
+            progressLabel: 'Progression du formulaire',
+            formatProgressValue: (step, total) => `Étape ${step} sur ${total}`,
+        })
     );
     assert.equal(f.host.querySelector('button'), null);
     assert.equal(f.host.querySelector('h2')?.textContent, 'Details');
+    const localizedProgress = f.host.querySelector('[role="progressbar"]');
+    assert.equal(
+        localizedProgress?.getAttribute('aria-label'),
+        'Progression du formulaire'
+    );
+    assert.equal(localizedProgress?.getAttribute('aria-valuenow'), '2');
+    assert.equal(localizedProgress?.getAttribute('aria-valuemax'), '2');
+    assert.equal(
+        localizedProgress?.getAttribute('aria-valuetext'),
+        'Étape 2 sur 2'
+    );
     assert.equal(
         f.host.querySelectorAll('.mx-sdk-form-pages-progress-item--reached')
             .length,

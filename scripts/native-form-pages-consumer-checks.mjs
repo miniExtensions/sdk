@@ -78,7 +78,7 @@ const ui=format==='esm'?await import('@miniextensions/sdk/ui'):require('@miniext
 const view=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
 const {Window}=require('happy-dom');
 let checks=0,nextRequests=[],backRequests=[],saveCallbacks=0,canonical='Initial accepted value',allocation,result;
-const payloads=[],owner={},configuration={};
+const payloads=[],progressSteps=[],owner={},configuration={};
 const descriptors=[
  {title:'First page',description:'<p>Safe <strong>description</strong><script>privateCode()</script></p>',fieldIds:['answer'],hidden:false},
  {title:'Hidden page',description:null,fieldIds:['hidden'],hidden:true},
@@ -94,7 +94,10 @@ function App(){
  const snapshot=React.useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot);
  if(snapshot.retired)return React.createElement('p',{'data-testid':'retired'},'Retired');
  return React.createElement(React.Fragment,null,
-  React.createElement(view.CompleteFormPageNavigation,{pages:snapshot.pages,activePageIndex:snapshot.activePageIndex}),
+  React.createElement(view.CompleteFormPageNavigation,{
+   pages:snapshot.pages,activePageIndex:snapshot.activePageIndex,
+   progressLabel:'Progression du formulaire',formatProgressValue:(step,total)=>'Étape '+step+' sur '+total,
+  }),
   React.createElement('form',{id:'live-form',onSubmit(event){event.preventDefault();if(snapshot.isLastPage)snapshot.actions.openReview(submit);else snapshot.actions.next();}},React.createElement('span',{'data-testid':'canonical'},canonical)),
   !snapshot.isFirstPage?React.createElement(view.FormPageNavigationButton,{direction:'back',label:'Back',onClick:snapshot.actions.back}):null,
   React.createElement(view.FormPageNavigationButton,{direction:'next',label:snapshot.isLastPage?'Review':'Next',form:'live-form'}),
@@ -114,6 +117,23 @@ const original=container.firstChild,errors=[];
 const {hydrateRoot}=await import('react-dom/client');let root;
 const button=label=>{const node=Array.from(container.querySelectorAll('button')).find(node=>node.getAttribute('aria-label')===label||node.textContent===label);assert(node,'Missing '+label);return node;};
 const click=async label=>React.act(async()=>{const control=button(label);control.focus();control.click();});
+function assertProgress(step){
+ const indicators=container.querySelectorAll('[role="progressbar"]');
+ assert.equal(indicators.length,1);
+ const progress=indicators[0];
+ assert.equal(progress.getAttribute('aria-label'),'Progression du formulaire');
+ assert.equal(progress.getAttribute('aria-valuemin'),'0');
+ assert.equal(progress.getAttribute('aria-valuenow'),String(step));
+ assert.equal(progress.getAttribute('aria-valuemax'),'2');
+ assert.equal(progress.getAttribute('aria-valuetext'),'Étape '+step+' sur 2');
+ assert.equal(progress.getAttribute('tabindex'),null);
+ const segments=[...progress.querySelectorAll('[data-testid="form-page-progress-item"]')];
+ assert.equal(segments.length,2);
+ assert(segments.every(segment=>segment.getAttribute('aria-hidden')==='true'));
+ assert.equal(progress.querySelectorAll('.mx-sdk-form-pages-progress-item--reached').length,step);
+ assert.equal(saveCallbacks,0);
+ progressSteps.push(step);
+}
 // Heroicons 2.1.1 24-solid, used by the archived native Form at 0d1c7057.
 const nativeChevronPaths={
  back:'M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z',
@@ -136,6 +156,7 @@ function renderNavigationButton(props){
 try{
  await React.act(async()=>{root=hydrateRoot(container,tree(),{onRecoverableError:error=>errors.push(error.message)});});
  assert.deepEqual(errors,[]);assert.ok(container.firstChild===original,'Hydration must preserve the original first node');assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(saveCallbacks,0);checks++;
+ assertProgress(1);
  assertNativeChevron(button('Next'),'next');
  for(const [direction,label] of [['back','Back'],['next','Next']]){
   const disabled=renderNavigationButton({direction,label,disabled:true});
@@ -145,9 +166,12 @@ try{
   assert.ok(loading.querySelector('.mx-sdk-form-page-button-spinner circle'));
  }
  await click('Next');assert.equal(nextRequests.length,1);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(button('Next').type,'submit');assert.equal(button('Next').form.id,'live-form');checks++;
+ assertProgress(1);
  await React.act(async()=>nextRequests[0].advance());assert.equal(controller.getSnapshot().activePageIndex,2);assert.equal(container.querySelector('h2').textContent,'Final page');assert.equal(container.querySelectorAll('[data-testid="form-page-progress-item"]').length,2);checks++;
+ assertProgress(2);
  assertNativeChevron(button('Back'),'back');
  await click('Back');assert.deepEqual(backRequests,[0]);assert.equal(controller.getSnapshot().activePageIndex,0);assert.equal(button('Next').textContent,'Next');checks++;
+ assertProgress(1);
  await click('Next');await React.act(async()=>nextRequests[1].advance());await click('Review');assert.equal(controller.getSnapshot().reviewing,true);assert.equal(container.querySelectorAll('dialog[open]').length,1);assert.equal(saveCallbacks,0);checks++;
  const oldReview=controller.getSnapshot().actions;
  canonical='Edited while Review is open';await React.act(async()=>controller.update(publication()));assert.equal(container.querySelector('dd').textContent,canonical);assert.equal(controller.getSnapshot().reviewing,true);assert.equal(saveCallbacks,0);checks++;
@@ -157,7 +181,7 @@ try{
  await click('Review');await React.act(async()=>domWindow.document.activeElement.dispatchEvent(new domWindow.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));assert.equal(controller.getSnapshot().reviewing,false);assert.ok(domWindow.document.activeElement===button('Review'),'Dismissal must return focus to the Review trigger');assert.equal(saveCallbacks,1);checks++;
  const retained=controller.getSnapshot().actions;await React.act(async()=>controller.update({...publication(),owner:{}}));await React.act(async()=>controller.update(publication()));retained.openReview(submit);assert.equal(controller.getSnapshot().retired,true);assert.equal(container.querySelector('[data-testid="retired"]').textContent,'Retired');assert.equal(saveCallbacks,1);checks++;
  await React.act(async()=>root.unmount());root=undefined;assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);assert.equal(domWindow.location.href,'https://native-pages-consumer.example.test/');assert.deepEqual(errors,[]);checks++;
- console.log(JSON.stringify({format,react:React.version,checks,hydrationErrors:errors.length,saveCallbacks,payloads,networkRequests:networks}));
+ console.log(JSON.stringify({format,react:React.version,checks,hydrationErrors:errors.length,saveCallbacks,payloads,progressSteps,networkRequests:networks}));
 }catch(error){
  process.stderr.write(JSON.stringify({completedCheckpoints:checks})+'\n');
  throw error;
@@ -319,6 +343,7 @@ export async function checkNativeFormPagesReactMatrix({
                 assert.equal(hydration.format, format);
                 assert.equal(hydration.checks, hydrationChecksPerProfile);
                 assert.equal(hydration.hydrationErrors, 0);
+                assert.deepEqual(hydration.progressSteps, [1, 1, 2, 1]);
                 assert.equal(hydration.saveCallbacks, 1);
                 assert.equal(hydration.networkRequests, 0);
                 assert.deepEqual(hydration.payloads, [

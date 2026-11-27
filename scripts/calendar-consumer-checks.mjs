@@ -717,7 +717,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             })
         );
     try {
-        const { hydrateRoot } = consumer('react-dom/client');
+        const { createRoot, hydrateRoot } = consumer('react-dom/client');
         await React.act(async () => {
             root = hydrateRoot(host, element(), {
                 onRecoverableError(error) {
@@ -1320,6 +1320,122 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         );
         await React.act(async () => root.unmount());
         root = undefined;
+        const utcPicker = pickerFixture();
+        const utcDateTimeField = (field) => ({
+            ...field,
+            config: {
+                type: 'dateTime',
+                options: {
+                    ...field.config.options,
+                    timeFormat: { name: '24hour', format: 'HH:mm' },
+                    timeZone: 'client',
+                },
+            },
+        });
+        const ranges = [
+            { id: 'reversed', title: 'Reversed appointment', hours: [16, 9] },
+            { id: 'valid', title: 'Valid appointment', hours: [9, 16] },
+            { id: 'equal', title: 'Equal appointment', hours: [12, 12] },
+        ];
+        const utcTime = (hour) =>
+            `2026-02-15T${String(hour).padStart(2, '0')}:00:00.000Z`;
+        const utcFrame = utcPicker.publish({
+            clientTimeZone: 'UTC',
+            startField: utcDateTimeField(utcPicker.initialFrame.startField),
+            endField: utcDateTimeField(utcPicker.initialFrame.endField),
+            records: ranges.map(({ id, hours: [start, end] }) => ({
+                id,
+                fields: { start: utcTime(start), end: utcTime(end) },
+            })),
+            presentationByRecordId: Object.fromEntries(
+                ranges.map(({ id, title }) => [
+                    id,
+                    { type: 'calendar', primary: title, subtitle: '' },
+                ])
+            ),
+            canLoadMore: false,
+        });
+        await React.act(async () => {
+            root = createRoot(host);
+            root.render(
+                React.createElement(
+                    React.StrictMode,
+                    null,
+                    React.createElement(api.CalendarRecordPicker, {
+                        frame: utcFrame,
+                        clock: utcPicker.clock,
+                        locale: 'en-US',
+                    })
+                )
+            );
+        });
+        const utcDay = host.querySelector(
+            '[data-date="2026-02-15"] .mx-sdk-calendar__day'
+        );
+        const utcOptions = Array.from(
+            host.querySelectorAll(
+                '.mx-sdk-calendar-picker__records [role=option]'
+            )
+        );
+        const optionTitle = (option) =>
+            option.querySelector('.mx-sdk-calendar-picker__primary')
+                ?.textContent ?? null;
+        const utcObservation = {
+            selectedDay: utcDay?.getAttribute('data-selected') ?? null,
+            badge:
+                utcDay?.querySelector('.mx-sdk-calendar__badge')?.textContent ??
+                null,
+            badgeDescription:
+                utcDay
+                    ?.getAttribute('aria-describedby')
+                    ?.split(' ')
+                    .map(
+                        (id) => window.document.getElementById(id)?.textContent
+                    )
+                    .find((text) => /^\d+ events$/.test(text ?? '')) ?? null,
+            options: utcOptions.map(optionTitle),
+            readsBefore: [...utcPicker.reads],
+            callbacksBefore: [...utcPicker.attempts],
+            selectionBefore: [...utcPicker.canonical],
+        };
+        const validOption = utcOptions.find(
+            (option) => optionTitle(option) === 'Valid appointment'
+        );
+        await React.act(async () =>
+            validOption?.dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 0,
+                })
+            )
+        );
+        await React.act(async () => root.unmount());
+        root = undefined;
+        const utcRecordPickerReversal = {
+            ...utcObservation,
+            readsAfter: [...utcPicker.reads],
+            callbacksAfter: [...utcPicker.attempts],
+            accepted: [...utcPicker.accepted],
+            selectionAfter: [...utcPicker.canonical],
+        };
+        assert.deepEqual(
+            utcRecordPickerReversal,
+            {
+                selectedDay: 'true',
+                badge: '2',
+                badgeDescription: '2 events',
+                options: ['Valid appointment', 'Equal appointment'],
+                readsBefore: [],
+                callbacksBefore: [],
+                selectionBefore: ['off-day'],
+                readsAfter: [],
+                callbacksAfter: ['valid'],
+                accepted: ['valid'],
+                selectionAfter: ['off-day', 'valid'],
+            },
+            `UTC same-day Form Calendar picker: ${JSON.stringify(utcRecordPickerReversal)}`
+        );
         return {
             react: React.version,
             format,
@@ -1328,6 +1444,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             ambientArabicDateKeys: true,
             hydration: true,
             visibleRecordRegistration: true,
+            utcRecordPickerReversal,
             scope: 'Installed complete Calendar picker/Portal composition and shared rich leaves; synthetic host ports only, no native or hosted acceptance.',
         };
     } finally {

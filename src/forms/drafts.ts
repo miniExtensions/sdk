@@ -17,6 +17,19 @@ export type FormDraftSnapshot<Value> = {
     dirtyFieldIds: string[];
 };
 export type DraftSelectChoice = SelectFieldChoice;
+
+export function upsertSelectChoiceMetadata(
+    existing: readonly SelectFieldChoice[],
+    returned: SelectFieldChoice
+): SelectFieldChoice[] {
+    const choices = [...existing];
+    const index = choices.findIndex((choice) => choice.id === returned.id);
+    const choice = structuredClone(returned);
+    if (index < 0) choices.push(choice);
+    else choices[index] = choice;
+    return choices;
+}
+
 type Draft<Value> = {
     handle: FormDraftHandle;
     data: Record<string, Value>;
@@ -115,12 +128,10 @@ export class FormDraftStore<Value> {
     ): boolean {
         const draft = this.owned(handle);
         if (draft == null) return false;
-        draft.choices.set(fieldId, [
-            ...(draft.choices.get(fieldId) ?? []).filter(
-                (previous) => previous.id !== choice.id
-            ),
-            structuredClone(choice),
-        ]);
+        draft.choices.set(
+            fieldId,
+            upsertSelectChoiceMetadata(draft.choices.get(fieldId) ?? [], choice)
+        );
         return true;
     }
 

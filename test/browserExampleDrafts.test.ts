@@ -131,6 +131,28 @@ describe('browser example Form drafts', () => {
         ]);
     });
 
+    it('restores the original order of previously added choices when metadata is reused', () => {
+        const visitor = new FormDraftStore<Value>();
+        const draft = visitor.open(scope, { category: null }, []);
+        const delta: DraftSelectChoice = { id: 'sel_delta', name: 'Delta' };
+        const epsilon: DraftSelectChoice = {
+            id: 'sel_epsilon',
+            name: 'Epsilon',
+        };
+        visitor.addChoice(draft, 'category', delta);
+        visitor.addChoice(draft, 'category', epsilon);
+        const updated: DraftSelectChoice = { ...delta, color: 'blueLight2' };
+        visitor.addChoice(draft, 'category', updated);
+
+        const restored = visitor.open(scope, { category: null }, []);
+        assert.deepEqual(visitor.choices(restored, 'category'), [
+            updated,
+            epsilon,
+        ]);
+        assert.equal(visitor.revision(restored), 0);
+        assert.deepEqual(visitor.snapshot(restored)?.dirtyFieldIds, []);
+    });
+
     it('discards only the saved or explicitly discarded Form and rejects its old asynchronous handle', () => {
         const visitor = new FormDraftStore<Value>();
         const first = visitor.open(

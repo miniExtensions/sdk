@@ -7,6 +7,7 @@ import type { FormFieldBindings } from './bindings.js';
 import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
 import { resolveSelectFieldAvailability } from '../ui/selectAvailability.js';
 import { formChoiceConditionRecord } from './choiceRecord.js';
+import { upsertSelectChoiceMetadata } from './drafts.js';
 import {
     RecoveryJournal,
     type RecoveryScope,
@@ -382,12 +383,10 @@ export function createFormSelectChoiceController(
                     return false;
                 config.options = {
                     ...config.options,
-                    choices: [
-                        ...(config.options?.choices ?? []).filter(
-                            (item) => item.id !== returned.id
-                        ),
-                        structuredClone(returned),
-                    ],
+                    choices: upsertSelectChoiceMetadata(
+                        config.options?.choices ?? [],
+                        returned
+                    ),
                 };
                 getSelectFieldPolicy(schema); // Validate the whole returned canonical choice map.
                 const availability = resolveSelectFieldAvailability({

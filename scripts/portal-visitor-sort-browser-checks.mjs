@@ -231,7 +231,7 @@ const viewRoot = createRoot(viewHost);
 const otherViewRoot = createRoot(otherViewHost);
 const choices = [
     { id: 'list', label: 'Long List View' },
-    { id: 'grid', label: null, showBadge: true },
+    { id: 'grid', label: '   ', showBadge: true },
     { id: 'gallery', label: 'Gallery' }
 ];
 let selection = 'list';
@@ -770,7 +770,10 @@ async function checkViewButtons(page) {
         'Gallery',
     ]);
     const first = buttons.first();
-    const second = buttons.nth(1);
+    const second = root.getByRole('button', {
+        name: 'Vue sans nom',
+        exact: true,
+    });
     const third = buttons.nth(2);
     assert.equal(await first.getAttribute('aria-pressed'), 'true');
     assert.equal(await second.getAttribute('aria-pressed'), 'false');

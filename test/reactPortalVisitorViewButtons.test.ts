@@ -57,7 +57,10 @@ it('waits for the host to publish selection and sends one intent from its own ro
             commands.push(id);
         },
     };
-    const tree = (selectedViewId: string, available = views) =>
+    const tree = (
+        selectedViewId: string,
+        available: PortalVisitorViewButtonsProps['views'] = views
+    ) =>
         h(
             'div',
             null,
@@ -71,6 +74,19 @@ it('waits for the host to publish selection and sends one intent from its own ro
                 groupLabel: 'Other root',
             })
         );
+    for (const [label, expected] of [
+        ['', 'Vue sans nom'],
+        ['   ', 'Vue sans nom'],
+        [null, 'Vue sans nom'],
+        ['  Vue rédigée  ', '  Vue rédigée  '],
+    ] as const) {
+        await fixture.render(tree('grid', [views[0], { ...views[1], label }]));
+        assert.equal(
+            fixture.container.querySelectorAll('button')[1].textContent,
+            expected,
+            `view label ${JSON.stringify(label)}`
+        );
+    }
     await fixture.render(tree('grid'));
     let [grid, list, gallery, otherGrid] =
         fixture.container.querySelectorAll('button');

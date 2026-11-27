@@ -18,8 +18,9 @@ export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPag
  const [first,second]=records.initial.records.map((record,index)=>({
   ...record,fields:{...record.fields,fld_title:index?'Second':'First'},
  }));
- const acceptedFirstPage=emptyAcceptedPage?[]:[first];
- records.replace({...records.initial,records:acceptedFirstPage});
+ const third={...second,id:'rec_C',fields:{...second.fields,fld_title:'Third'}};
+ let acceptedRecords=emptyAcceptedPage?[]:[first];
+ records.replace({...records.initial,records:acceptedRecords});
 
  const requests=[];
  const activations=[];
@@ -80,18 +81,21 @@ export function createPagingFixture({React,api,ui,layout='list',emptyAcceptedPag
   replaceOffer(){publish({type:'ready',hasNextPage:true},'next-page');},
   fail,
   failNextPageImmediately(){failNextPageImmediately=true;},
-  succeed({empty=false}={}) {
+  succeed({empty=false,nextCursor=null}={}) {
    if(!currentRequest) throw new Error('No read to complete');
-   const firstPage=currentRequest.offset===null;
+   const {offset}=currentRequest;
+   const firstPage=offset===null;
    currentRequest=undefined;
-   cursor=null;
-   const page=empty?[]:[firstPage?first:second];
-   records.replace({...records.initial,records:firstPage?page:[...acceptedFirstPage,...page]});
-   publish({type:'ready',hasNextPage:false});
+   cursor=nextCursor;
+   const page=empty?[]:[firstPage?first:offset==='page_3'?third:second];
+   acceptedRecords=firstPage?page:[...acceptedRecords,...page];
+   records.replace({...records.initial,records:acceptedRecords});
+   publish({type:'ready',hasNextPage:cursor!==null},cursor===null?undefined:'next-page');
   },
   firstFailure() {
    currentRequest=undefined;
-   records.replace({...records.initial,records:[]});
+   acceptedRecords=[];
+   records.replace({...records.initial,records:acceptedRecords});
    publish({type:'first-error',message:'First page unavailable'},'retry-first-page');
   },
   configurationError() {

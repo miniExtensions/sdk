@@ -32,7 +32,7 @@ redraw();
 window.pagingProof={
  fail:()=>fixture.fail(),
  failNextPageImmediately:()=>fixture.failNextPageImmediately(),
- succeed:()=>fixture.succeed(),
+ succeed:options=>fixture.succeed(options),
  replaceOffer:()=>fixture.replaceOffer(),
  firstFailure:()=>fixture.firstFailure(),
  configurationError:()=>fixture.configurationError(),
@@ -288,6 +288,96 @@ export async function checkPortalPagingControlsBrowser({
             assert.equal(await first.isVisible(), true);
             assert.equal(submits, 0);
             movedFocus.push({ focus: destination, requests, submits });
+            assert.deepEqual(
+                await page.evaluate(() => window.pagingProof.unmount()),
+                subscriptions
+            );
+        }
+
+        const pageTwo = { intent: 'next-page', offset: 'page_2' };
+        const pageThree = { intent: 'next-page', offset: 'page_3' };
+        const moreLabel = 'Más registros';
+        const outside = page.getByRole('button', { name: 'Outside paging' });
+        const second = page.getByText('Second', { exact: true });
+        const third = page.getByText('Third', { exact: true });
+        evidence.successfulContinuation = [];
+        for (const mode of [
+            'keyboard',
+            'pointer',
+            'outside',
+            'outside-and-blur',
+        ]) {
+            await page.reload();
+            await first.waitFor();
+            if (mode === 'pointer') await loadMore.click();
+            else {
+                await loadMore.focus();
+                await page.keyboard.press('Enter');
+            }
+            await pending.waitFor();
+            assert.equal(await loadMore.isDisabled(), true);
+            assert.equal(await first.isVisible(), true);
+            await page.waitForFunction(
+                () => document.activeElement === document.body
+            );
+            const active = await status();
+            assert.deepEqual(active.requests, [pageTwo]);
+            assert.deepEqual(active.clicks, [
+                {
+                    trusted: true,
+                    detail: mode === 'pointer' ? 1 : 0,
+                    label: moreLabel,
+                },
+            ]);
+            if (mode === 'outside' || mode === 'outside-and-blur') {
+                await outside.click();
+                if (mode === 'outside-and-blur')
+                    await outside.evaluate((button) => button.blur());
+            }
+            const pendingFocus = await focus();
+            assert.equal(
+                pendingFocus,
+                mode === 'outside' ? 'Outside paging' : 'body'
+            );
+            await page.evaluate(() =>
+                window.pagingProof.succeed({ nextCursor: 'page_3' })
+            );
+            await second.waitFor();
+            await pending.waitFor({ state: 'detached' });
+            assert.equal(await first.isVisible(), true);
+            assert.equal(await loadMore.isEnabled(), true);
+            const continuedFocus = await focus();
+            const observation = { mode, pendingFocus, continuedFocus };
+            evidence.successfulContinuation.push(observation);
+            assert.equal(
+                continuedFocus,
+                mode === 'keyboard' ? moreLabel : pendingFocus,
+                'Focus after a successful page with another cursor'
+            );
+
+            await page.keyboard.press('Enter');
+            if (mode === 'keyboard') {
+                await pending.waitFor();
+                const next = await status();
+                assert.deepEqual(next.requests, [pageTwo, pageThree]);
+                assert.deepEqual(next.keyboard, [
+                    { trusted: true, label: moreLabel },
+                    { trusted: true, label: moreLabel },
+                ]);
+                await page.evaluate(() => window.pagingProof.succeed());
+                await third.waitFor();
+                await loadMore.waitFor({ state: 'detached' });
+                assert.equal(await focus(), 'body');
+                assert.equal(await first.isVisible(), true);
+                assert.equal(await second.isVisible(), true);
+            }
+            const { requests, submits } = await status();
+            assert.deepEqual(
+                requests,
+                mode === 'keyboard' ? [pageTwo, pageThree] : [pageTwo]
+            );
+            assert.equal(submits, 0);
+            Object.assign(observation, { requests, submits });
             assert.deepEqual(
                 await page.evaluate(() => window.pagingProof.unmount()),
                 subscriptions

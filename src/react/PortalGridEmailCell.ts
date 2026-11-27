@@ -7,7 +7,7 @@ import {
     type ReactElement,
 } from 'react';
 import type { RuntimeLanguage } from '../runtime/types.js';
-import { CompleteReadOnlyTextField } from './CompleteReadOnlyTextField.js';
+import { ReadOnlyEmailTextField } from './CompleteReadOnlyTextField.js';
 import {
     ControlledEmailField,
     type ControlledEmailFieldProps,
@@ -115,7 +115,7 @@ export function PortalGridEmailCell({
               })
             : displayText === ''
               ? h('span', { className: 'read-only-text' })
-              : h(CompleteReadOnlyTextField, {
+              : h(ReadOnlyEmailTextField, {
                     value: displayText,
                     language,
                 }),

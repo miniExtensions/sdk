@@ -374,6 +374,43 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
                 fullPage: true,
             });
         };
+        const exerciseKeyboardClear = async () => {
+            const amount = await open('mobile', true);
+            const clear = page.getByRole('button', {
+                name: 'Clear synthetic amount',
+                exact: true,
+            });
+            await clear.waitFor();
+            const original = await amount.elementHandle();
+            assert.equal(await page.evaluate(() => window.innerWidth), 390);
+            assert.equal(await amount.inputValue(), '12,50');
+            await amount.focus();
+            await page.keyboard.press('Tab');
+            assert(
+                await clear.evaluate((node) => node === document.activeElement)
+            );
+            await page.keyboard.press('Space');
+            await clear.waitFor({ state: 'detached' });
+            const focusAfterClear = await amount.evaluate(
+                (node, first) =>
+                    node === first && document.activeElement === node,
+                original
+            );
+            const clearedValue = await amount.inputValue();
+            await page.keyboard.type('7');
+            const afterTyping = await amount.inputValue();
+            const state = await snapshot();
+            await original.dispose();
+            const result = {
+                focusAfterClear,
+                clearedValue,
+                afterTyping,
+                writes: state.writes,
+                submits: state.submits,
+            };
+            await finish('mobile-clear-keyboard');
+            return result;
+        };
         let input = await open('number');
         assert.equal(await input.inputValue(), '1.234,50');
         await input.focus();
@@ -499,7 +536,15 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         assert.equal(await input.inputValue(), '');
         await page.emulateMedia({ forcedColors: 'active' });
         await finish('mobile-clear-forced-colors');
-        assert.equal(evidence.results.length, 6);
+        evidence.keyboardClear = await exerciseKeyboardClear();
+        assert.deepEqual(evidence.keyboardClear, {
+            focusAfterClear: true,
+            clearedValue: '',
+            afterTyping: '7',
+            writes: [null, 7],
+            submits: 0,
+        });
+        assert.equal(evidence.results.length, 7);
 
         evidence.readonlyNumber = [];
         for (const width of [375, 1280]) {

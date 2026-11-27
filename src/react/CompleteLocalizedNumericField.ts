@@ -590,9 +590,32 @@ export function CompleteLocalizedNumericField({
                               'mx-sdk-localized-numeric-clear-indicator',
                           iconClassName: 'mx-sdk-localized-numeric-clear-icon',
                           onMouseDown: (event) => event.preventDefault(),
-                          onClick: () => {
+                          onClick: (event) => {
+                              const button = event.currentTarget;
+                              const ownerDocument = button.ownerDocument;
+                              const focusInput =
+                                  field.context === 'form' &&
+                                  field.physicalKind === 'number' &&
+                                  event.detail === 0 &&
+                                  ownerDocument.activeElement === button
+                                      ? button.parentElement?.querySelector(
+                                            'input'
+                                        )
+                                      : null;
                               if (write('')) {
                                   pending.current = null;
+                                  if (
+                                      focusInput?.isConnected &&
+                                      !focusInput.disabled &&
+                                      current() &&
+                                      (ownerDocument.activeElement === button ||
+                                          (!button.isConnected &&
+                                              ownerDocument.activeElement ===
+                                                  ownerDocument.body))
+                                  ) {
+                                      // Run the input's focus handler before applying the empty draft.
+                                      focusInput.focus({ preventScroll: true });
+                                  }
                                   setInput('');
                               }
                           },

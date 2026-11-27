@@ -105,11 +105,13 @@ export function projectPortalShellMenu(
             if (item.type === 'external' || item.type === 'embedded')
                 return isPortalShellUrl(item.url) ? [item] : [];
             if (item.views === undefined) return [item];
-            const views = item.views.filter(
-                (view, _index, all) =>
-                    view.id.trim() !== '' &&
-                    all.filter((other) => other.id === view.id).length === 1
-            );
+            const viewCounts = new Map<string, number>();
+            item.views.forEach(({ id }) => {
+                viewCounts.set(id, (viewCounts.get(id) ?? 0) + 1);
+            });
+            const views = item.views.filter(({ id }) => {
+                return id.trim() !== '' && viewCounts.get(id) === 1;
+            });
             return views.length ? [{ ...item, views }] : [];
         });
     return project(items);

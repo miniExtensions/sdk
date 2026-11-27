@@ -744,7 +744,7 @@ export async function checkStarterConfirmationRecovery({
                 : close
                   ? 'dirty Close and explicit resume'
                   : mouseBlur
-                    ? 'mouse-blur confirmation recovery'
+                    ? 'first-click Review with a focused Title'
                     : multiPage
                       ? 'multi-page Review'
                       : 'confirmation recovery';
@@ -785,7 +785,7 @@ export async function checkStarterConfirmationRecovery({
                 const page = await context.newPage();
                 page.setDefaultTimeout(10000);
                 page.on('pageerror', (error) => errors.push(error.message));
-                if (editDialog)
+                if (editDialog || mouseBlur)
                     await page.addInitScript(() => {
                         let parentSubmits = 0;
                         document.addEventListener(
@@ -801,7 +801,7 @@ export async function checkStarterConfirmationRecovery({
                             },
                             true
                         );
-                        window.selectedEditParentSubmits = () => parentSubmits;
+                        window.linkedChildParentSubmits = () => parentSubmits;
                     });
                 await context.route('**/*', async (route) => {
                     const request = route.request();
@@ -934,7 +934,7 @@ export async function checkStarterConfirmationRecovery({
                 const parentTitle = page
                     .locator('#screen [data-field-id="fld_title"]')
                     .first();
-                if (editDialog)
+                if (editDialog || mouseBlur)
                     assert(
                         await parentTitle.evaluate((node) =>
                             Boolean(
@@ -1138,7 +1138,7 @@ export async function checkStarterConfirmationRecovery({
                             expected.parentLinks
                         );
                         const parentSubmits = await page.evaluate(() =>
-                            window.selectedEditParentSubmits()
+                            window.linkedChildParentSubmits()
                         );
                         assert.equal(parentSubmits, 0);
                         assert.deepEqual(errors, []);
@@ -1192,8 +1192,14 @@ export async function checkStarterConfirmationRecovery({
                     });
                     continue;
                 }
+                const review = () =>
+                    page.getByRole('button', {
+                        name: 'Review child',
+                        exact: true,
+                    });
                 let mouseCommitted;
                 if (mouseBlur) {
+                    await review().scrollIntoViewIfNeeded();
                     const focusedBefore = await childTitle.evaluate((node) => {
                         window.childMouseChanges = 0;
                         node.addEventListener(
@@ -1202,9 +1208,22 @@ export async function checkStarterConfirmationRecovery({
                         );
                         return document.activeElement === node;
                     });
-                    // A real mouse click outside the child commits native change.
-                    // Resolve Review only afterward: change replaces its controls.
-                    await parentTitle.click();
+                    assert.equal(await review().isEnabled(), true);
+                    const target = await review().boundingBox();
+                    assert(target, 'Review is visible before the first click');
+                    const point = {
+                        x: target.x + target.width / 2,
+                        y: target.y + target.height / 2,
+                    };
+                    assert(
+                        await review().evaluate(
+                            (node, { x, y }) =>
+                                node.contains(document.elementFromPoint(x, y)),
+                            point
+                        ),
+                        'The first physical click hits Review'
+                    );
+                    await page.mouse.click(point.x, point.y);
                     mouseCommitted = {
                         focusedBefore,
                         focusedAfter: await childTitle.evaluate(
@@ -1218,12 +1237,40 @@ export async function checkStarterConfirmationRecovery({
                         reads: calls.reads,
                     };
                     assertMouseBlurCommit(mouseCommitted, expected);
-                } else await childTitle.press('Tab');
-                const review = () =>
-                    page.getByRole('button', {
-                        name: 'Review child',
-                        exact: true,
+                    const firstReview = page.getByRole('dialog', {
+                        name: 'Review child answers',
                     });
+                    await firstReview.waitFor({
+                        state: 'visible',
+                        timeout: 2000,
+                    });
+                    mouseCommitted.dialogs = await page
+                        .locator('dialog[data-form-review]')
+                        .count();
+                    mouseCommitted.reviewedTitle = await firstReview
+                        .getByText(expected.childTitle, { exact: true })
+                        .textContent();
+                    mouseCommitted.childLoads = calls.childLoads;
+                    mouseCommitted.parentSubmits = await page.evaluate(() =>
+                        window.linkedChildParentSubmits()
+                    );
+                    assert.equal(mouseCommitted.dialogs, 1);
+                    assert.equal(
+                        mouseCommitted.reviewedTitle,
+                        expected.childTitle
+                    );
+                    assert.equal(mouseCommitted.childLoads, 1);
+                    assert.equal(mouseCommitted.parentSubmits, 0);
+                    await firstReview
+                        .getByRole('button', { name: 'Edit', exact: true })
+                        .click();
+                    await firstReview.waitFor({ state: 'detached' });
+                    assert.equal(
+                        await childTitle.inputValue(),
+                        expected.childTitle
+                    );
+                    await childTitle.press('Tab');
+                } else await childTitle.press('Tab');
                 let failed;
                 let edited;
                 const answers = { fld_title: expected.childTitle };
@@ -1404,12 +1451,21 @@ export async function checkStarterConfirmationRecovery({
                         : [...expected.parentLinks, 'rec_created']
                 );
                 assert.equal(calls.reads, expected.reads);
+                if (mouseBlur) {
+                    assert.equal(calls.childLoads, 1);
+                    assert.equal(
+                        await page.evaluate(() =>
+                            window.linkedChildParentSubmits()
+                        ),
+                        0
+                    );
+                }
                 assert.deepEqual(errors, []);
                 assert.deepEqual(unexpectedRequests, []);
                 report.cases.push({
                     mode,
                     scenario: mouseBlur
-                        ? 'mouse-blur-then-recovery-and-explicit-confirm'
+                        ? 'first-click-mouse-blur-edit-and-explicit-confirm'
                         : multiPage
                           ? 'multi-page-edit-then-explicit-confirm'
                           : 'show-modal-failure-then-explicit-confirm',

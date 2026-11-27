@@ -456,6 +456,48 @@ it('keeps unresolved linked labels private with the standalone formatter', () =>
     assert(!JSON.stringify(document).includes('recSecret'));
 });
 
+it('keeps linked Formula values together for the default Portal Grid formatter', () => {
+    const descriptor: CSVExportFieldValue = {
+        field: {
+            id: 'formula-links',
+            name: 'Name',
+            config: {
+                type: AirtableFieldType.FORMULA,
+                options: {
+                    isValid: true,
+                    result: {
+                        type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                        options: { linkedTableId: 'table' },
+                    },
+                },
+            },
+        },
+        value: ['rec12345678901234', 'Supplied label'],
+    };
+    const data = {
+        ...input(),
+        unavailableLinkedRecordPlaceholder: 'Unavailable',
+        rows: [
+            row([descriptor]),
+            row([{ ...descriptor, value: [] }]),
+            row([{ ...descriptor, value: null }]),
+            row([{ ...descriptor, value: 'Supplied label' }]),
+            row([{ ...descriptor, value: 'rec12345678901234' }]),
+        ],
+    };
+    assert.deepEqual(
+        ready(data).rows.map(([cell]) => cell.readableValue),
+        ['Unavailable, Supplied label', '', '', 'Supplied label', 'Unavailable']
+    );
+    assert.deepEqual(
+        projectCSVExport({
+            ...data,
+            admission: { ...data.admission, cohort: 'form-linked-grid' },
+        }).status,
+        'blocked'
+    );
+});
+
 it('downloads admitted collaborator labels in order without recovering unavailable email', async () => {
     const zeta = {
         id: 'usrZeta',

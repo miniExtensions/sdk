@@ -17,11 +17,12 @@ const fixture = String.raw`
 import React from 'react';import{createRoot}from'react-dom/client';import{flushSync}from'react-dom';
 import * as api from '@miniextensions/sdk/react';import * as ui from '@miniextensions/sdk/ui';
 import '@miniextensions/sdk/react/readonly-portal-list.css';import'@miniextensions/sdk/react/readonly-portal-grid.css';import{createListFixture}from'./fixture.mjs';
-const h=React.createElement,f=createListFixture(ui),root=createRoot(document.querySelector('#root'));
+const params = new URLSearchParams(location.search);
+const h=React.createElement,f=createListFixture(ui,params.get('detail-title') ?? undefined),root=createRoot(document.querySelector('#root'));
 const proof={opens:[],submits:0,held:0,retiredRefusals:0,presenterStarts:0,presenterActive:0,preferences:[],nestedActivations:0};window.proof=proof;
 const scope={getSnapshot:()=>f.scope.getSnapshot(),subscribe(listener){proof.presenterStarts++;proof.presenterActive++;const stop=f.scope.subscribe(listener);return()=>{proof.presenterActive--;stop();};}};
 let layout='list',preview=false,noChild=false,hold=false,pending,child=null,commands;
-const namingEntryPoint = new URLSearchParams(location.search).get('list-entry');
+const namingEntryPoint = params.get('list-entry');
 let namedRows = false, nullBetaLabel = false;
 const rowLabels = {rec_A: 'Account North', rec_B: 'Account South', rec_C: 'Account West'};
 const replacement = {id: 'rec_C', fields: {fld_title: 'Gamma', fld_detail: 'C detail'}};
@@ -196,6 +197,80 @@ async function checkNamedRows(page, origin, entryPoint) {
         opens: after.opens,
         submits: after.submits,
     };
+}
+
+async function checkDetailTitles(page, origin, evidence) {
+    const control = (name) => page.getByRole('button', { name, exact: true });
+    const snapshot = () => page.evaluate(() => window.listProofSnapshot());
+    const cases = [
+        { override: '', expected: 'Detail' },
+        { override: '  ', expected: 'Detail' },
+        { override: 'Detail label', expected: 'Detail label' },
+    ];
+    const observed = [];
+    evidence.detailTitles = observed;
+
+    for (const { override, expected } of cases) {
+        const params = new URLSearchParams({ 'detail-title': override });
+        await page.goto(`${origin}/?${params}`);
+        await control('Grid').click();
+        const grid = page.getByRole('table', { name: 'Accepted grid' });
+        const header = grid.locator('th[data-field-id="fld_detail"]');
+        const title = header.locator('.mx-sdk-field-title');
+        const hide = control('Hide columns');
+        await header.waitFor();
+        assert.deepEqual(
+            await grid
+                .locator('tbody td[data-field-id="fld_detail"]')
+                .allTextContents(),
+            ['B detail', 'A detail']
+        );
+        const before = await snapshot();
+        const heading = await title.textContent();
+        const headingVisible = await title.evaluate(
+            (node) => !node.classList.contains('mx-sdk-field-sr-only')
+        );
+        await hide.click();
+        const picker = page.getByRole('dialog', { name: 'Hide columns' });
+        const detail = picker.getByRole('switch');
+        const pickerName = await detail.getAttribute('aria-label');
+        const pickerAccessible = await picker
+            .getByRole('switch', { name: expected, exact: true })
+            .count();
+        assert.equal(await detail.getAttribute('aria-checked'), 'true');
+        await picker
+            .getByRole('button', { name: 'Close', exact: true })
+            .click();
+        assert(await hide.evaluate((node) => node === document.activeElement));
+        await header.waitFor();
+        await control('List').click();
+        await control('Empty').click();
+        const listHeadings = await page.getByRole('heading').allTextContents();
+        const after = await snapshot();
+        assert.deepEqual(after.preferences, before.preferences);
+        assert.deepEqual(after.opens, before.opens);
+        assert.deepEqual(after.scopeCalls, before.scopeCalls);
+        assert.equal(after.submits, 0);
+        observed.push({
+            override,
+            heading,
+            headingVisible,
+            pickerName,
+            pickerAccessible,
+            listHeadings,
+        });
+    }
+    assert.deepEqual(
+        observed,
+        cases.map(({ override, expected }) => ({
+            override,
+            heading: expected,
+            headingVisible: true,
+            pickerName: expected,
+            pickerAccessible: 1,
+            listHeadings: ['Name label', expected],
+        }))
+    );
 }
 
 export async function checkReadonlyPortalListBrowser({
@@ -564,6 +639,7 @@ export async function checkReadonlyPortalListBrowser({
                     await checkNamedRows(page, origin, entryPoint)
                 );
             }
+            await checkDetailTitles(page, origin, profile);
             assert.deepEqual(errors, []);
             assert.deepEqual(warnings, []);
             assert.deepEqual(external, []);

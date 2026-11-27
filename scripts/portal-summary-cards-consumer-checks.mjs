@@ -233,6 +233,7 @@ try {
       exactText: value.textContent === cards[index].readable,
       exactTooltip: value.title === cards[index].readable,
       height: value.clientHeight,
+      clamp: getComputedStyle(value).webkitLineClamp,
       wrapped: end.top > start.top,
       digitVisible: end.width > 0 && end.height > 0 &&
        end.left >= bounds.left && end.right <= bounds.right &&
@@ -240,18 +241,35 @@ try {
      };
     });
    };
-   return {tall: measure('tall'), short: measure('short')};
+   const tall = measure('tall');
+   const extraTall = measure('extra tall');
+   const short = measure('short');
+   window.renderSummary(cards, 'extra tall');
+   return {tall, extraTall, short};
   });
   references.push({viewport, ...referenceLayout});
+  if(proofDirectory){
+   const summary=await page.locator('#summary-owner').boundingBox();
+   assert(summary);
+   await page.screenshot({
+    path:resolve(proofDirectory,'portal-summary-react'+expectedReact+'-extra-tall-reference-'+viewport.width+'.png'),
+    clip:{x:0,y:0,width:viewport.width,height:Math.ceil(summary.y+summary.height+16)},
+   });
+  }
  }
- for (const {tall, short} of references) {
+ for (const {tall, extraTall, short} of references) {
   assert.deepEqual(tall.map(value => value.digit), ['8', '9']);
+  assert.deepEqual(extraTall.map(value => value.digit), ['8', '9']);
   assert.deepEqual(short.map(value => value.digit), ['8', '9']);
   assert(tall.every(value => value.exactText && value.exactTooltip && value.height <= 84));
+  assert(extraTall.every(value =>
+   value.exactText && value.exactTooltip && value.clamp === '4' && value.height <= 112));
   assert(short.every(value => value.exactText && value.exactTooltip && value.height === 28));
  }
- assert(references.every(({tall, short}) =>
+ assert(references.every(({tall, extraTall, short}) =>
   tall.every(value => value.digitVisible && value.wrapped) &&
+  extraTall.every((value, index) =>
+   value.digitVisible && value.wrapped && value.height === tall[index].height) &&
   short.every(value => !value.digitVisible && !value.wrapped)
  ), 'Reference digit layout: ' + JSON.stringify(references));
  await page.setViewportSize({width:240,height:700});

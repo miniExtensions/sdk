@@ -476,6 +476,17 @@ describe('actual Form starter configured scalar choices', () => {
             );
             assert.ok(choice instanceof window.HTMLInputElement);
             choice.value = ' blue ';
+            const enter = new window.KeyboardEvent('keydown', {
+                key: 'Enter',
+                bubbles: true,
+                cancelable: true,
+            });
+            choice.dispatchEvent(enter);
+            assert.equal(enter.defaultPrevented, true);
+            assert.equal(choice.value, ' blue ');
+            assert.deepEqual(selected(colorSelect(window)).filter(Boolean), []);
+            assert.equal(creationCalls, 0);
+            assert.equal(saves.length, 1);
             button(window, 'Create choice').click();
             await waitFor(
                 () =>

@@ -60,7 +60,8 @@ const api=format==='esm'?await import('@miniextensions/sdk/react'):require('@min
 const ui=format==='esm'?await import('@miniextensions/sdk/ui'):require('@miniextensions/sdk/ui');
 const {renderToString}=format==='esm'?await import('react-dom/server'):require('react-dom/server');
 const f=createListFixture(ui),h=React.createElement;
-const renderers={renderSingleLineTextField(field){assert.equal(field.capability.type,'readonly');return h('span',null,String(field.value??''));}};
+let renderedCells=0;
+const renderers={renderSingleLineTextField(field){renderedCells++;assert.equal(field.capability.type,'readonly');return h('span',null,String(field.value??''));}};
 let actions;const element=()=>h(React.StrictMode,null,h(api.ReadonlyPortalList,{scope:f.scope,renderers,openActions:actions,label:'Records'}));
 const html=renderToString(element());
 assert(html.indexOf('Beta')<html.indexOf('B detail'));assert(html.indexOf('B detail')<html.indexOf('Alpha'));assert(!html.includes('<button'));
@@ -85,10 +86,67 @@ try{
  assert.equal(container.querySelectorAll('button').length,0);assert.equal(container.querySelector('li').dataset.recordId,'rec_A');
  actions=undefined;await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('button,input').length,0);
  await React.act(async()=>f.replace({...f.initial,records:[]}));assert.deepEqual([...container.querySelectorAll('h3')].map(node=>node.textContent),['Name label','Detail label']);
+
+ const schema=(id)=>({...f.initial.table.airtableFields[0],id});
+ const detail=(fieldId,fieldName,titleOverride,isHidden=false)=>({
+     ...f.initial.detailFields[0],fieldId,fieldName,titleOverride,isHidden,
+ });
+ async function assertEmptyHeadings(schemas,details,expected){
+     const before={opens:f.calls.length,submits,requests,renderedCells};
+     await React.act(async()=>f.replace({
+         ...f.initial,records:[],table:{airtableFields:schemas},detailFields:details,
+     }));
+     const headings=Array.from(container.querySelectorAll('h3'),node=>node.textContent);
+     assert.deepEqual(headings,expected);
+     assert.equal(container.querySelectorAll('li,button,input,select,textarea').length,0);
+     assert.deepEqual({opens:f.calls.length,submits,requests,renderedCells},before);
+ }
+
+ const emptyHeadingReads=[];
+ for(const size of [100,200]){
+     let schemaIdReads=0,detailIdReads=0;
+     const ids=Array.from({length:size},(_,index)=>'fld_'+index);
+     const headings=ids.map((_,index)=>'Accepted column '+index);
+     const schemas=ids.map(id=>Object.defineProperty(schema(id),'id',{
+         enumerable:true,get(){schemaIdReads++;return id;},
+     }));
+     const details=ids.map((id,index)=>Object.defineProperty(
+         detail(id,'Original title',headings[index]),'fieldId',{
+             enumerable:true,get(){detailIdReads++;return id;},
+         }
+     ));
+     await assertEmptyHeadings(schemas,details,headings);
+     emptyHeadingReads.push({size,schemaIdReads,detailIdReads});
+ }
+ const totalReads=({schemaIdReads,detailIdReads})=>schemaIdReads+detailIdReads;
+ assert(
+     emptyHeadingReads.every((sample)=>totalReads(sample)<=10*sample.size) &&
+         totalReads(emptyHeadingReads[1])<=2.1*totalReads(emptyHeadingReads[0]),
+     'Empty heading ID reads must scale linearly: '+JSON.stringify(emptyHeadingReads)
+ );
+
+ const policyHeadings=['Configured label','Whitespace fallback','Empty fallback'];
+ await assertEmptyHeadings(
+     ['empty','hidden','conflict','duplicateDetail','duplicateSchema','whitespace','first','duplicateSchema'].map(schema),
+     [
+         detail('first','Original label',policyHeadings[0]),
+         detail('duplicateSchema','Ambiguous schema','Ambiguous schema'),
+         detail('missing','Missing schema','Missing schema'),
+         detail('conflict','Hidden conflict','Hidden conflict',true),
+         detail('duplicateDetail','Duplicate detail A','Duplicate detail A'),
+         detail('whitespace',policyHeadings[1],' \t '),
+         detail('conflict','Visible conflict','Visible conflict'),
+         detail('hidden','Hidden only','Hidden only',true),
+         detail('duplicateDetail','Duplicate detail B','Duplicate detail B'),
+         detail('empty',policyHeadings[2],''),
+     ],
+     policyHeadings
+ );
+
  await React.act(async()=>{f.scope.destroy();});assert.equal(container.textContent,'');
  await React.act(async()=>root.unmount());root=undefined;
  assert.equal(f.subscriptions,0);assert.equal(submits,0);assert.equal(requests,0);assert.equal(window.document.cookie,'');assert.equal(window.localStorage.length,0);assert.equal(window.sessionStorage.length,0);
- console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,submits,requests,opens:f.calls.length,stableHydration:true,retirement:true,emptyLabels:true}));
+ console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,submits,requests,opens:f.calls.length,stableHydration:true,retirement:true,emptyLabels:true,emptyHeadingReads,policyHeadings}));
 }finally{if(root)await React.act(async()=>root.unmount());f.scope.destroy();globalThis.fetch=originalFetch;for(const[key,descriptor]of originals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}await window.happyDOM.close();}
 `;
 

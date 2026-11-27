@@ -366,26 +366,61 @@ it('retires delayed A across A-B-A without overwriting the fresh actual Word ren
     assert.equal(f.submits(), 0);
 });
 
-it('contains active actual parser failure and suppresses retired transport rejection', async (t) => {
+it('shows the localized status for an active parser failure and suppresses retired and closed rejections', async (t) => {
     const f = await fixture(t);
     const diagnostics = t.mock.method(console, 'error', () => {
         queueMicrotask(f.notifyProgress);
     });
     const retired = deferred<Response>();
-    let calls = 0;
-    t.mock.method(globalThis, 'fetch', async () =>
-        ++calls === 1
-            ? retired.promise
-            : ({
-                  blob: async () => new f.window.Blob(['invalid zip']),
-              } as unknown as Response)
-    );
-    await f.render(h(AttachmentPreview, { attachment: source('A') }));
-    await f.render(h(AttachmentPreview, { attachment: source('B') }));
+    const closed = deferred<Response>();
+    const label = 'Aperçu Word indisponible';
+    const fetch = t.mock.method(globalThis, 'fetch', async (url: string) => {
+        if (url === source('A').url) return retired.promise;
+        if (url === source('closed').url) return closed.promise;
+        if (url === source('valid').url) return f.response('B');
+        return {
+            blob: async () => new f.window.Blob(['invalid zip']),
+        } as unknown as Response;
+    });
+    const render = (name: string) =>
+        f.render(
+            h(AttachmentPreview, {
+                attachment: source(name),
+                labels: { previewNotAvailable: label },
+            })
+        );
+    const statuses = () => [...f.host.querySelectorAll('[role="status"]')];
+
+    await render('A');
+    await render('B');
     await f.waitUntil(() => diagnostics.mock.callCount() > 0);
     assert.equal(diagnostics.mock.callCount(), 1);
+    assert.deepEqual(
+        statuses().map((status) => ({
+            text: status.textContent,
+            hidden: status.hasAttribute('hidden'),
+        })),
+        [{ text: label, hidden: false }]
+    );
+    assert.equal(f.host.querySelector('.docx-wrapper'), null);
+
+    await render('valid');
+    assert.deepEqual(statuses(), []);
+    await f.ready('Controlled attachment B');
+    assert.ok(f.host.querySelector('.docx-wrapper'));
     await act(async () => retired.reject(new Error('retired transport')));
+    assert.deepEqual(statuses(), []);
+    assert.ok(f.host.querySelector('.docx-wrapper'));
+
+    await render('closed');
+    await f.render(null);
+    await act(async () => closed.reject(new Error('closed transport')));
+    assert.deepEqual(statuses(), []);
     assert.equal(diagnostics.mock.callCount(), 1);
+    assert.deepEqual(
+        fetch.mock.calls.map(({ arguments: args }) => args[0]),
+        ['A', 'B', 'valid', 'closed'].map((name) => source(name).url)
+    );
     assert.equal(f.submits(), 0);
 });
 

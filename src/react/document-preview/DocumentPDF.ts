@@ -1,5 +1,6 @@
 import {
     createElement as h,
+    Fragment,
     useEffect,
     useRef,
     useState,
@@ -9,6 +10,7 @@ import {
 import type {
     PDFDocumentProxy,
     PDFDocumentLoadingTask,
+    PDFPageProxy,
     PDFWorker,
     RenderTask,
 } from 'pdfjs-dist';
@@ -49,15 +51,95 @@ type PDFProps = {
     labels: DocumentThumbnailLabels;
     inGrid: boolean;
     showAllPages?: boolean;
+    exposePageText?: boolean;
     isCurrent(): boolean;
     onDownload?: (bytes: Uint8Array) => void;
 };
+
+function PDFPageText({
+    document,
+    pageNumber,
+    isCurrent,
+}: {
+    document: PDFDocumentProxy;
+    pageNumber: number;
+    isCurrent(): boolean;
+}): ReactNode {
+    const [content, setContent] = useState<{
+        document: PDFDocumentProxy;
+        text: string;
+    } | null>(null);
+    useEffect(() => {
+        if (!isCurrent()) return;
+        let active = true;
+        type TextContent = Awaited<ReturnType<PDFPageProxy['getTextContent']>>;
+        let reader: ReadableStreamDefaultReader<TextContent> | undefined;
+        const current = () => active && isCurrent();
+        const cancel = () => {
+            const pending = reader;
+            reader = undefined;
+            void pending
+                ?.cancel(Error('PDF page text retired'))
+                .catch(() => {});
+        };
+        void (async () => {
+            const page = await document.getPage(pageNumber);
+            if (!current()) return;
+            const stream = page.streamTextContent().getReader();
+            reader = stream;
+            const chunks: string[] = [];
+            try {
+                while (current()) {
+                    const { done, value } = await stream.read();
+                    if (done) {
+                        reader = undefined;
+                        break;
+                    }
+                    if (!current()) break;
+                    for (const item of value.items) {
+                        if ('str' in item)
+                            chunks.push(item.str + (item.hasEOL ? '\n' : ''));
+                    }
+                }
+                if (current())
+                    setContent({ document, text: chunks.join('').trim() });
+            } finally {
+                cancel();
+                stream.releaseLock();
+            }
+        })().catch(() => {
+            // Text extraction must not retire a working canvas or worker.
+        });
+        return () => {
+            active = false;
+            cancel();
+        };
+    }, [document, pageNumber, isCurrent]);
+    if (content?.document !== document || !content.text) return null;
+    return h(
+        'div',
+        {
+            'data-document-pdf-page-text': pageNumber,
+            style: {
+                position: 'absolute',
+                width: 1,
+                height: 1,
+                margin: -1,
+                overflow: 'hidden',
+                clip: 'rect(0, 0, 0, 0)',
+                whiteSpace: 'pre',
+            },
+        },
+        content.text
+    );
+}
 
 function PDFPage({
     document,
     pageNumber,
     zoom,
     widthRevision,
+    exposePageText,
     isCurrent,
     failed,
 }: {
@@ -65,6 +147,7 @@ function PDFPage({
     pageNumber: number;
     zoom: number;
     widthRevision: number;
+    exposePageText?: boolean;
     isCurrent(): boolean;
     failed(): void;
 }): ReactNode {
@@ -106,11 +189,21 @@ function PDFPage({
             canvas.height = 0;
         };
     }, [document, pageNumber, zoom, widthRevision, isCurrent, failed]);
-    return h('canvas', {
-        ref,
-        'aria-label': `PDF ${pageNumber}`,
-        style: { display: 'block', maxWidth: zoom === 1 ? '100%' : undefined },
-    });
+    return h(
+        Fragment,
+        null,
+        h('canvas', {
+            ref,
+            'aria-label': `PDF ${pageNumber}`,
+            style: {
+                display: 'block',
+                maxWidth: zoom === 1 ? '100%' : undefined,
+            },
+        }),
+        exposePageText
+            ? h(PDFPageText, { document, pageNumber, isCurrent })
+            : null
+    );
 }
 
 /** PDF.js receives owned bytes and an instance worker, never a document URL. */
@@ -435,6 +528,7 @@ export function DocumentPDF(props: PDFProps): ReactNode {
                             pageNumber: number,
                             zoom,
                             widthRevision,
+                            exposePageText: props.exposePageText,
                             isCurrent: props.isCurrent,
                             failed: failPage,
                         })

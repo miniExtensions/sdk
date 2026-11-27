@@ -52,6 +52,8 @@ function VisibleFormGroup(props: FormGroupProps): React.ReactElement {
     const id = useId();
     const buttonId = `${id}-disclosure`;
     const panelId = `${id}-panel`;
+    const errorDescriptionId =
+        props.hasError && !open ? `${id}-error-description` : undefined;
     const preview = props.preview;
     const startFieldId = preview?.startFieldId;
     const selectable = preview != null && startFieldId != null;
@@ -71,6 +73,7 @@ function VisibleFormGroup(props: FormGroupProps): React.ReactElement {
         type: 'button' as const,
         'aria-expanded': open,
         'aria-controls': open ? panelId : undefined,
+        'aria-describedby': errorDescriptionId,
         onClick: () => setOpen((current) => !current),
     };
 
@@ -121,6 +124,13 @@ function VisibleFormGroup(props: FormGroupProps): React.ReactElement {
                       h(Chevron, { open })
                   )
         ),
+        errorDescriptionId
+            ? h(
+                  'span',
+                  { id: errorDescriptionId, hidden: true },
+                  'This section contains a validation error.'
+              )
+            : null,
         open
             ? h(
                   'div',

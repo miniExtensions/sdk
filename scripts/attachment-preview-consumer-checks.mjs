@@ -92,6 +92,14 @@ assert.match(render({url:'/photo.jpg'}),/<img/);
 assert.match(render({url:'/audio',type:'audio/mpeg'}),/<audio[^>]*controls/);
 assert.match(render({url:'/video',type:'video/mp4'}),/<video[^>]*controls/);
 assert.match(render({url:'/file.pdf'}),/title="Attachments"/);
+const pdf = render({
+    url: '/guide.pdf?revision=2#page=4',
+    type: 'application/pdf',
+    filename: 'Guide & notes.pdf',
+});
+assert.match(pdf, /^<iframe /);
+assert.ok(pdf.includes(' src="/guide.pdf?revision=2#page=4&amp;toolbar=0"'), pdf);
+assert.ok(pdf.includes(' title="Guide &amp; notes.pdf"'), pdf);
 assert.match(render({url:'/file.PDF'}),/Preview Not Available/);
 assert.ok(require.resolve('@miniextensions/sdk/react/attachment-preview.css'));
 console.log(JSON.stringify({react:React.version,format:'${format}',ssr:true,explicitURL:true}));`

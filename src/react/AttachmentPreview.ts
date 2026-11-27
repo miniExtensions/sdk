@@ -26,6 +26,15 @@ export type AttachmentPreviewProps = {
     identity?: unknown;
 };
 
+function pdfPreviewUrl(url: string): string {
+    const hash = url.indexOf('#');
+    if (hash === -1) return `${url}#toolbar=0`;
+    const fragment = url.slice(hash + 1);
+    if (new URLSearchParams(fragment).has('toolbar')) return url;
+    const separator = fragment === '' || fragment.endsWith('&') ? '' : '&';
+    return `${url}${separator}toolbar=0`;
+}
+
 /** Complete media presentation; the caller retains navigation and attachments. */
 export function AttachmentPreview({
     attachment,
@@ -117,7 +126,7 @@ export function AttachmentPreview({
     if (isAudio) return h('audio', { src: attachment.url, controls: true });
     if (isPdf) {
         return h('iframe', {
-            src: attachment.url + '#toolbar=0',
+            src: pdfPreviewUrl(attachment.url),
             title: attachment.filename?.trim()
                 ? attachment.filename
                 : (labels?.attachments ?? 'Attachments'),

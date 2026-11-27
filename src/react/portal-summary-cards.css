@@ -38,6 +38,7 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
     overflow: hidden;
+    white-space: pre-line;
     font-size: 18px;
     line-height: 28px;
     font-weight: 600;

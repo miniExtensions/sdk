@@ -4391,8 +4391,8 @@ try {
             });
         assert.equal(
             results.length,
-            // Include complete fields, the multiline counter, layouts, CSV, section groups and the Form header.
-            33 +
+            // Include complete fields, localized readonly Rating, layouts, CSV, section groups and the Form header.
+            34 +
                 portalChartFixtures.formats.length +
                 2 * collaboratorFixtures.formats.length +
                 storageEventCases.length +

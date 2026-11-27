@@ -3400,7 +3400,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             happyDomModulePath: require.resolve('happy-dom'),
         }
     );
-    assert.equal(linkedRecordsRendererProof.checks, 6);
+    assert.equal(linkedRecordsRendererProof.checks, 10);
     console.log(
         `Installed bounded Linked Records renderer, Form/Grid/List declarations, CSS and example: ${linkedRecordsRendererProof.checks} ESM/CJS groups passed.`
     );

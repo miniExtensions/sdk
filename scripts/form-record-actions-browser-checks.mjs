@@ -361,6 +361,17 @@ async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
     await openDelete();
     assert.equal(await deletion.getAttribute('data-unavailable'), 'true');
     assert.equal(
+        await popup
+            .getByRole('menuitem', {
+                name: 'Delete record',
+                exact: true,
+                disabled: true,
+            })
+            .count(),
+        1,
+        'The unavailable Delete record row must be exposed as disabled'
+    );
+    assert.equal(
         await deletion.evaluate((action) => getComputedStyle(action).cursor),
         'not-allowed'
     );
@@ -371,9 +382,20 @@ async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
     await page.evaluate(() => window.recordActionsProof.setDelete(false));
 
     await openDelete();
+    assert.equal(
+        await popup
+            .getByRole('menuitem', {
+                name: 'Delete record',
+                exact: true,
+                disabled: false,
+            })
+            .count(),
+        1
+    );
     const keyboardFocus = await capture('delete-keyboard-focus');
     await page.keyboard.press('Enter');
     await confirmation.waitFor();
+    assert.equal(await confirmation.count(), 1);
     assert.equal(await focused(cancel), true);
     await page.keyboard.press('Enter');
     await confirmation.waitFor({ state: 'hidden' });

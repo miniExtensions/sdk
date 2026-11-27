@@ -552,6 +552,19 @@ export const fieldControl = (
     };
 };
 
+const isUnmaskedReadOnlyText = (schema: RuntimeFieldSchema): boolean => {
+    const config = schema.miniExtConfig;
+    return (
+        schema.fieldType === AirtableFieldType.SINGLE_LINE_TEXT &&
+        schema.airtableField.config.type ===
+            AirtableFieldType.SINGLE_LINE_TEXT &&
+        config != null &&
+        'readOnly' in config &&
+        config.readOnly === true &&
+        !hasMaskedValuePolicy(config)
+    );
+};
+
 /** Stock renderer for a caller-owned binding; unmount leaves draft/model ownership intact. */
 export function mountBoundFormField(
     binding: FormFieldBinding,
@@ -559,7 +572,8 @@ export function mountBoundFormField(
     changed: () => void,
     address?: AddressFieldContext,
     beforeChange?: () => void,
-    onError?: (error: unknown) => void
+    onError?: (error: unknown) => void,
+    exposeRootReadOnlyText = false
 ): FieldControl {
     const initial = binding.getSnapshot();
     if (binding.scalar || binding.date) {
@@ -714,12 +728,22 @@ export function mountBoundFormField(
     const status = element('p', '', 'field-hint');
     status.setAttribute('role', 'status');
     control.node.append(status);
+    const allowReadOnlyPresentation =
+        exposeRootReadOnlyText && isUnmaskedReadOnlyText(schema);
     let revision = initial.revision;
     const stop = binding.subscribe((state) => {
         control.node.setAttribute('aria-busy', String(state.pending));
         status.textContent = fieldValidationText(state);
         control.node.hidden = state.visibility.type !== 'visible';
-        control.node.inert = !state.canEdit;
+        const field = state.field;
+        const showReadOnlyAnswer =
+            allowReadOnlyPresentation &&
+            !state.retired &&
+            state.visibility.type === 'visible' &&
+            field?.fieldId === schema.airtableField.id &&
+            field.schema.airtableField.id === field.fieldId &&
+            isUnmaskedReadOnlyText(field.schema);
+        control.node.inert = !state.canEdit && !showReadOnlyAnswer;
         if (control.refreshReadonlyPresentation) {
             // Accepted computed replacements need not change draft revision.
             // Install the current value before applying its current policy.

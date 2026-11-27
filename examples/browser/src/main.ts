@@ -1306,7 +1306,7 @@ const renderForm = (page: FormLoadedResult): void => {
         updateValidationPresentation();
         updateRecoveryReferences();
     };
-    const directLinkedChildren =
+    const directRootForm =
         !page.payload.hasParentExtension &&
         context.type === 'direct-url' &&
         visitor.root === null &&
@@ -1404,7 +1404,8 @@ const renderForm = (page: FormLoadedResult): void => {
                                         : 'Invalid field value.',
                                     true
                                 );
-                        }
+                        },
+                        directRootForm
                     );
         controls.set(fieldId, control);
         if (manualPages) {
@@ -1419,10 +1420,10 @@ const renderForm = (page: FormLoadedResult): void => {
             bindingOwner != null &&
             schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS &&
             config != null &&
-            ((directLinkedChildren &&
+            ((directRootForm &&
                 'allowCreatingRecords' in config &&
                 config.allowCreatingRecords === true) ||
-                ((directLinkedChildren || portalLinkedEdit) &&
+                ((directRootForm || portalLinkedEdit) &&
                     'allowEditingRecords' in config &&
                     config.allowEditingRecords === true))
         ) {

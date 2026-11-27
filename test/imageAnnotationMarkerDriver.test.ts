@@ -53,6 +53,8 @@ function fixture(t: TestContext, throwingClose = false) {
         detached = false;
         container = window.document.createElement('div');
         clicks = 0;
+        edits = ['A', 'B', 'C'];
+        undone: Array<string | undefined> = [];
         constructor() {
             areas.push(this);
         }
@@ -82,10 +84,15 @@ function fixture(t: TestContext, throwingClose = false) {
         show() {
             this.container.className = 'annotation-base annotation-test';
             this.container.innerHTML =
-                '<div class="annotation-testtoolbar-button" data-type-name="ArrowMarker" title="Arrow"></div><a href="https://markerjs.com">Powered by marker.js</a>';
+                '<div class="annotation-testtoolbar-button" data-type-name="ArrowMarker" title="Arrow"></div><div class="annotation-testtoolbar-button" data-action="undo" title="Undo"></div><a href="https://markerjs.com">Powered by marker.js</a>';
             this.container
                 .querySelector('div')
                 ?.addEventListener('click', () => this.clicks++);
+            this.container
+                .querySelector('[data-action="undo"]')
+                ?.addEventListener('click', () => {
+                    this.undone.push(this.edits.pop());
+                });
             window.document.body.append(this.container);
         }
         close() {
@@ -230,11 +237,112 @@ it('installs eight natural-size PNG tools with scoped localized keyboard semanti
         })
     );
     assert.equal(area.clicks, 1);
+    button.dispatchEvent(
+        new f.window.KeyboardEvent('keydown', {
+            key: ' ',
+            repeat: true,
+            bubbles: true,
+            cancelable: true,
+        })
+    );
+    assert.equal(area.clicks, 2);
     assert.equal(
         area.container.querySelector('a')?.href,
         'https://markerjs.com/'
     );
     assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
+});
+
+async function openUndoFixture(t: TestContext) {
+    const f = fixture(t);
+    const unexpectedFetch = () => {
+        throw new Error('Undo must not request network resources');
+    };
+    const globalFetch = t.mock.method(globalThis, 'fetch', unexpectedFetch);
+    const windowFetch = t.mock.method(f.window, 'fetch', unexpectedFetch);
+    await openImageAnnotationMarkerEditor(
+        {
+            image: f.image,
+            lease: f.lease,
+            labels: { title: 'Annotation', moreTools: 'More tools' },
+        },
+        async () => f.vendor
+    );
+    const area = f.areas[0];
+    assert.ok(area);
+    const undo = area.container.querySelector('div[data-action="undo"]');
+    assert(undo instanceof f.window.HTMLDivElement);
+    assert.equal(undo.getAttribute('role'), 'button');
+    undo.focus();
+    assert.equal(f.window.document.activeElement, undo);
+    return {
+        area,
+        undo,
+        window: f.window,
+        assertNoSideEffects() {
+            assert.deepEqual(f.counts(), { uploads: 0, reads: 0, appends: 0 });
+            assert.deepEqual(f.errors, []);
+            assert.equal(globalFetch.mock.callCount(), 0);
+            assert.equal(windowFetch.mock.callCount(), 0);
+        },
+    };
+}
+
+it('Undo removes one edit per distinct Space press while keeping focus', async (t) => {
+    const f = await openUndoFixture(t);
+    const steps = [
+        ['keydown', false],
+        ['keydown', true],
+        ['keydown', true],
+        ['keyup', false],
+        ['keydown', false],
+        ['keyup', false],
+    ] as const;
+    const cumulative = steps.map(([type, repeat]) => {
+        const event = new f.window.KeyboardEvent(type, {
+            key: ' ',
+            repeat,
+            bubbles: true,
+            cancelable: true,
+        });
+        f.undo.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, type === 'keydown');
+        assert.equal(f.window.document.activeElement, f.undo);
+        return f.area.undone.length;
+    });
+    f.assertNoSideEffects();
+    assert.deepEqual(cumulative, [1, 1, 1, 1, 2, 2]);
+    assert.deepEqual(f.area.undone, ['C', 'B']);
+    assert.deepEqual(f.area.edits, ['A']);
+});
+
+it('Undo removes one edit on Enter', async (t) => {
+    const f = await openUndoFixture(t);
+    const event = new f.window.KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+    });
+    f.undo.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(f.window.document.activeElement, f.undo);
+    assert.deepEqual(f.area.undone, ['C']);
+    assert.deepEqual(f.area.edits, ['A', 'B']);
+    f.assertNoSideEffects();
+});
+
+it('Undo removes one edit on a pointer click', async (t) => {
+    const f = await openUndoFixture(t);
+    const event = new f.window.MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+    });
+    f.undo.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(f.window.document.activeElement, f.undo);
+    assert.deepEqual(f.area.undone, ['C']);
+    assert.deepEqual(f.area.edits, ['A', 'B']);
+    f.assertNoSideEffects();
 });
 
 it('actual driver render-then-close preserves upload continuation and removes stale listeners', async (t) => {

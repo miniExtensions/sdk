@@ -37,6 +37,7 @@ type Result = NonNullable<
 >;
 const number = { type: 'number', options: { precision: 2 } } as const;
 const text: Result = { type: 'singleLineText', options: null };
+const richText: Result = { type: 'richText', options: null };
 const date: Result = {
     type: 'date',
     options: { dateFormat: { name: 'iso', format: 'YYYY-MM-DD' } },
@@ -59,6 +60,12 @@ const cases: [Result, AirtableValue | undefined, string][] = [
     ],
     [number, [1.234, null, -2.345, 1.234], '1.23, -2.35, 1.23'],
     [text, ['a', '', 'b'], 'a, , b'],
+    [
+        richText,
+        'Part PO_US_1042, status _open_.',
+        'Part PO_US_1042, status open.',
+    ],
+    [richText, 'Part POUS1042, status _open_.', 'Part POUS1042, status open.'],
     [{ type: 'percent', options: { precision: 1 } }, 0.1256, '12.6%'],
     [
         { type: 'currency', options: { symbol: '$', precision: 2 } },
@@ -354,9 +361,10 @@ for (const [index, [result, value, expected]] of cases.entries())
         const before = f.binding.getSnapshot();
         assert.equal(before.canEdit, false);
         assert.equal(f.props().capability.type, 'readonly');
+        const output = [];
         for (const node of [h(RollupField, { binding: f.binding }), f.tree()]) {
             await f.render(node);
-            assert.equal(f.output().textContent, expected);
+            output.push(f.output().textContent);
             assert.equal(
                 f.container.querySelector(
                     'input,button,a,img,iframe,object,embed'
@@ -371,6 +379,7 @@ for (const [index, [result, value, expected]] of cases.entries())
             assert.equal(f.binding.getSnapshot().dirty, before.dirty);
             await f.render(null);
         }
+        assert.deepEqual(output, [expected, expected]);
     });
 
 it('rejects malformed direct values and metadata without displaying exception details', async (t) => {

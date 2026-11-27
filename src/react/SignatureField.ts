@@ -226,7 +226,19 @@ function SignatureSession(props: SignatureFieldProps) {
                     context.font = `48px ${font}`;
                     context.textAlign = 'center';
                     context.textBaseline = 'middle';
-                    context.fillText(typed, 300, 100);
+                    const centerX = surface.width / 2;
+                    const centerY = surface.height / 2;
+                    const ink = context.measureText(typed);
+                    const horizontalExtent = Math.max(
+                        ink.actualBoundingBoxLeft,
+                        ink.actualBoundingBoxRight
+                    );
+                    if (horizontalExtent > centerX) {
+                        const scale = (centerX - 1) / horizontalExtent;
+                        context.translate(centerX, centerY);
+                        context.scale(scale, scale);
+                        context.fillText(typed, 0, 0);
+                    } else context.fillText(typed, centerX, centerY);
                     data = surface.toDataURL('image/png');
                 }
                 if (data == null)

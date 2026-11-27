@@ -10,6 +10,10 @@
  */
 
 const cache = new Map<string, string>();
+// Underscores within an identifier do not open or close Markdown emphasis.
+const emphasis =
+    /(\*){1,3}(.+?)\1{1,3}|(?<![\p{L}\p{M}\p{N}_])(_{1,3})(?![_\s])(.+?)(?<![_\s])\3(?![\p{L}\p{M}\p{N}_])/gu;
+
 export const removeMarkdown = (markdown: string): string => {
     if (cache.has(markdown)) {
         return cache.get(markdown)!;
@@ -67,16 +71,28 @@ export const removeMarkdown = (markdown: string): string => {
         line = line.replace(/`([^`]+)`/g, '$1');
 
         // Remove bold/italic and nested emphasis
-        let emphasisIterations = 0; // Safeguard against infinite loops
         const MAX_EMPHASIS_ITERATIONS = 10; // Limit the number of iterations
-        while (/(\*|_){1,3}(.+?)\1{1,3}/.test(line)) {
-            line = line.replace(/(\*|_){1,3}(.+?)\1{1,3}/g, '$2');
-            emphasisIterations++;
-            if (emphasisIterations >= MAX_EMPHASIS_ITERATIONS) {
+        for (
+            let iteration = 1;
+            iteration <= MAX_EMPHASIS_ITERATIONS;
+            iteration++
+        ) {
+            const stripped = line.replace(
+                emphasis,
+                (
+                    _match,
+                    _asterisk,
+                    asteriskText,
+                    _underscore,
+                    underscoreText
+                ) => asteriskText ?? underscoreText
+            );
+            if (stripped === line) break;
+            line = stripped;
+            if (iteration === MAX_EMPHASIS_ITERATIONS) {
                 console.warn(
                     'Exceeded emphasis processing limit, skipping further replacements.'
                 );
-                break;
             }
         }
 

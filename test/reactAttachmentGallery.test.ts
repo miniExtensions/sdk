@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { act, createElement as h } from 'react';
+import { act, createElement as h, useState } from 'react';
 import type {
     AttachmentGalleryProps,
     AttachmentGalleryRow,
@@ -158,6 +158,77 @@ test('gallery projects native layouts, names and independently admitted tile con
     );
     assert.equal(list.querySelectorAll('li svg').length, 3); // document, video, annotate
     assert.equal(list.querySelectorAll('button[data-testid]').length, 0);
+
+    const hiddenForm = {};
+    const removedWithNamesHidden: number[] = [];
+    const receipt = row('Receipt.pdf');
+    const invoice = row('Invoice.pdf');
+    function HiddenNames({ unnamed = false }: { unnamed?: boolean }) {
+        const [rows, setRows] = useState(
+            unnamed ? [{ ...receipt, filename: undefined }] : [receipt, invoice]
+        );
+        return h(AttachmentGallery, {
+            ...defaults,
+            rows,
+            showNames: false,
+            showOpen: false,
+            formRemovalOwner: hiddenForm,
+            labels: { ...labels, remove: 'Retirer la tuile' },
+            canRemoveFromTile: () => true,
+            onRemove(index) {
+                removedWithNamesHidden.push(index);
+                setRows((current) => current.filter((_, i) => i !== index));
+            },
+        });
+    }
+    await f.render(h(HiddenNames));
+    assert.equal(
+        f.container.querySelector(
+            '[data-testid=attachmentThumbnailCaptionTestId]'
+        ),
+        null
+    );
+    const receiptRemove = f.container.querySelector(
+        'button[aria-label="Retirer la tuile: Receipt.pdf"]'
+    );
+    const invoiceRemove = f.container.querySelector(
+        'button[aria-label="Retirer la tuile: Invoice.pdf"]'
+    );
+    assert(
+        invoiceRemove instanceof f.window.HTMLButtonElement,
+        'The hidden-caption Invoice button must expose its filename'
+    );
+    assert(receiptRemove instanceof f.window.HTMLButtonElement);
+    assert.equal(invoiceRemove.type, 'button');
+    await act(async () => {
+        invoiceRemove.focus();
+        invoiceRemove.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: ' ',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+        assert(
+            invoiceRemove.dispatchEvent(
+                new f.window.KeyboardEvent('keyup', {
+                    key: ' ',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+    });
+    await f.click(invoiceRemove); // Happy DOM does not synthesize the native Space click.
+    assert.deepEqual(removedWithNamesHidden, [1]);
+    assert.equal(invoiceRemove.isConnected, false);
+    assert.equal(receiptRemove.isConnected, true);
+    await f.render(h(HiddenNames, { key: 'unnamed', unnamed: true }));
+    const unnamedRemove = f.container.querySelector('button');
+    assert(unnamedRemove);
+    assert.equal(unnamedRemove.getAttribute('aria-label'), null);
+    assert.equal(unnamedRemove.textContent, 'Retirer la tuile');
+    f.unchangedEffects();
 });
 
 test('tile removal accepts matching gestures and retires held pointers and Space with their owner', async (t) => {

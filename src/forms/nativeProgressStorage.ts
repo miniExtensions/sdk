@@ -2,6 +2,7 @@ import type { AirtableFieldSet } from '../runtime/types.js';
 
 const kind = 'miniExtensions-form-progress';
 const schemaVersion = 1;
+const readUnavailable = Symbol('readUnavailable');
 type Envelope = {
     kind: typeof kind;
     schemaVersion: typeof schemaVersion;
@@ -146,7 +147,10 @@ export const createNativeFormProgressStorage = (
             return false;
         }
     };
-    const read = (): NativeFormProgressSnapshot | undefined => {
+    const readSnapshot = ():
+        | NativeFormProgressSnapshot
+        | undefined
+        | typeof readUnavailable => {
         let storedValue: string | null;
         try {
             storedValue = options
@@ -154,13 +158,17 @@ export const createNativeFormProgressStorage = (
                 .getItem(makeNativeFormProgressKey(options.shareId));
         } catch {
             warn('read');
-            return undefined;
+            return readUnavailable;
         }
         if (storedValue == null) return undefined;
         const snapshot = parseNativeFormProgressValue(storedValue);
         if (snapshot != null) return snapshot;
         remove();
         return undefined;
+    };
+    const read = (): NativeFormProgressSnapshot | undefined => {
+        const snapshot = readSnapshot();
+        return snapshot === readUnavailable ? undefined : snapshot;
     };
     function write(
         args: NativeFormProgressLegacyWriteArgs
@@ -180,9 +188,16 @@ export const createNativeFormProgressStorage = (
         const lockManager = options.getLocks?.();
         const writeIfCurrent = (): NativeFormProgressEligibleWriteResult => {
             // Match the native integration's post-lock admission check before I/O.
-            if (args.isWriteStillEligible?.() === false)
+            const isWriteStillEligible = args.isWriteStillEligible;
+            if (
+                isWriteStillEligible != null &&
+                Reflect.apply(isWriteStillEligible, args, []) === false
+            )
                 return { status: 'cancelled' };
-            const currentSnapshot = read();
+            const currentSnapshot =
+                isWriteStillEligible == null ? read() : readSnapshot();
+            if (currentSnapshot === readUnavailable)
+                return { status: 'unavailable' };
             const currentRevision = currentSnapshot?.revision ?? null;
             if (currentRevision !== args.expectedRevision)
                 return { status: 'conflict' };

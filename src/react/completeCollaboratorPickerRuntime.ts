@@ -27,6 +27,7 @@ import { removeCollaboratorSelection } from '../ui/collaboratorSelection.js';
 export type CollaboratorPickerProps<T extends CompleteCollaborator> = {
     value: readonly T[];
     choices: readonly T[];
+    single: boolean;
     query: string;
     onChange(value: T[]): void;
     onQueryChange(query: string): void;
@@ -107,7 +108,14 @@ export function CollaboratorPicker<T extends CompleteCollaborator>(
                 onChange: (event: ChangeEvent<HTMLInputElement>) =>
                     props.onQueryChange(event.target.value),
                 onFocus: props.onInputFocus,
-                onClick: () => button.current?.click(),
+                onClick: (event: MouseEvent<HTMLInputElement>) => {
+                    if (
+                        !props.single ||
+                        event.currentTarget.getAttribute('aria-expanded') ===
+                            'false'
+                    )
+                        button.current?.click();
+                },
                 placeholder: props.labels?.placeholder ?? 'Select',
                 autoComplete: 'off',
                 'aria-label': props.ariaLabel,

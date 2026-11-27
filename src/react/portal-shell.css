@@ -337,6 +337,7 @@
     gap: 0.5rem;
 }
 .mx-sdk-portal-dialog-actions[data-native-direct-logout] > button {
+    padding-block: calc(0.5rem - 1px);
     font-size: 0.875rem;
     line-height: 1.25rem;
     font-weight: 600;
@@ -444,6 +445,17 @@
         height: 100%;
         overflow: auto;
         background: var(--mx-portal-background);
+    }
+    .mx-sdk-portal-shell--sidebar.mx-sdk-portal-shell--layout-actions
+        > .mx-sdk-portal-navigation-wrap
+        > .mx-sdk-portal-navigation[role='dialog']
+        > .mx-sdk-portal-brand:has(> div > h1.mx-sdk-portal-title):not(
+            :has(> img)
+        )
+        ~ .mx-sdk-portal-actions:has(
+            > button.mx-sdk-portal-user-direct--logout-text:only-child
+        ) {
+        margin-inline: 0.5rem;
     }
     .mx-sdk-portal-navigation.mx-sdk-portal-navigation--rich-title {
         --mx-portal-drawer-close-size: 2.75rem;

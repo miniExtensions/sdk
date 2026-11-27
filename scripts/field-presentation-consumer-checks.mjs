@@ -1063,6 +1063,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
         showTitle: false,
         placement: 'tooltip',
         error: null,
+        description: '<p>Read <a href="#guide">Guide</a></p>',
     });
     const hidden = row('notes-a').locator('.mx-sdk-field-title');
     assert(
@@ -1074,7 +1075,25 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     const trigger = row('notes-a').getByRole('button', {
         name: 'Field description for Notes <b>literal</b>',
     });
-    await trigger.focus();
+    const writesBeforeHelp = value.writes;
+    const accessibility = await page.context().newCDPSession(page);
+    try {
+        const { root } = await accessibility.send('DOM.getDocument');
+        const { nodeId } = await accessibility.send('DOM.querySelector', {
+            nodeId: root.nodeId,
+            selector: '#row-notes-a textarea',
+        });
+        const { nodes } = await accessibility.send(
+            'Accessibility.getPartialAXTree',
+            { nodeId, fetchRelatives: false }
+        );
+        assert.equal(nodes[0]?.description?.value, 'Read Guide');
+    } finally {
+        await accessibility.detach();
+    }
+    await input('notes-a').focus();
+    await page.keyboard.press('Shift+Tab');
+    assert(await trigger.evaluate((node) => node === document.activeElement));
     await page.getByRole('tooltip').waitFor();
     assert.equal(await page.getByRole('tooltip').count(), 1);
     value = await verify('hidden title and separate accessible tooltip copy');
@@ -1091,6 +1110,29 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     await trigger.press('Escape');
     await page.getByRole('tooltip').waitFor({ state: 'detached' });
     assert.equal(await page.getByRole('tooltip').count(), 0);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(
+        await page.evaluate(() =>
+            Boolean(document.activeElement?.matches('a[href="#guide"]'))
+        ),
+        false,
+        'Reverse Tab must skip the closed help link'
+    );
+    await trigger.focus();
+    const popup = page.getByRole('tooltip');
+    const guide = popup.getByRole('link', { name: 'Guide', exact: true });
+    await guide.waitFor();
+    assert.equal(
+        await page.getByRole('link', { name: 'Guide', exact: true }).count(),
+        1
+    );
+    assert.equal(await guide.getAttribute('href'), '#guide');
+    await guide.focus();
+    assert(await guide.evaluate((node) => node === document.activeElement));
+    await guide.press('Escape');
+    await popup.waitFor({ state: 'detached' });
+    value = await verify('closed linked help skips keyboard focus');
+    assert.deepEqual(value.writes, writesBeforeHelp);
 
     // Ordinary pointer travel must cross the popup gap without losing it.
     await input('notes-b').focus();

@@ -166,6 +166,8 @@ export function CompleteFormFieldPresentation(
                           hidden || placement !== 'tooltip'
                               ? association.descriptionId
                               : undefined,
+                      // The control can reference hidden text with aria-describedby.
+                      hidden,
                       className: hidden
                           ? 'mx-sdk-field-sr-only sr-only'
                           : 'mx-sdk-field-description-text',

@@ -798,6 +798,75 @@ it('SSR preserves null and loaded values without reads or a document', () => {
     assert.equal(reads, 0);
 });
 
+for (const blank of ['', '   ']) {
+    it(`keeps the keyboard-selected address and offers Retry when formatting returns ${JSON.stringify(blank)}`, async (t) => {
+        const selected = { description: '14 Main Street', placeId: 'place-14' };
+        const formatted = '14 Main Street, Test City';
+        const firstDetail = deferred<string>();
+        const places: string[] = [];
+        const queries: string[] = [];
+        const f = await fixture(t, {
+            reads: {
+                async listPredictions(query) {
+                    queries.push(query);
+                    return [selected];
+                },
+                async getFormattedAddress(placeId) {
+                    places.push(placeId);
+                    return places.length === 1
+                        ? firstDetail.promise
+                        : formatted;
+                },
+            },
+        });
+        await f.change('14 Main');
+        await f.tick();
+        const input = f.container.querySelector('input')!;
+        const active = input.getAttribute('aria-activedescendant');
+        assert.ok(active);
+        assert.equal(
+            f.window.document.getElementById(active)?.textContent,
+            selected.description
+        );
+        await act(async () =>
+            input.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(input.value, selected.description);
+        assert.deepEqual(f.writes, ['14 Main', selected.description]);
+
+        await act(async () => firstDetail.resolve(blank));
+        assert.deepEqual(f.writes, ['14 Main', selected.description]);
+        assert.equal(input.value, selected.description);
+        assert.deepEqual(places, [selected.placeId]);
+        assert.equal(
+            f.container.querySelector('[role=alert]')?.textContent,
+            labels.failed
+        );
+        const retry = Array.from(f.container.querySelectorAll('button')).find(
+            (button) => button.textContent === labels.retry
+        );
+        assert.ok(retry);
+        assert.equal(retry.type, 'button');
+
+        await act(async () => retry.click());
+        assert.equal(input.value, formatted);
+        assert.deepEqual(f.writes, [
+            '14 Main',
+            selected.description,
+            formatted,
+        ]);
+        assert.deepEqual(places, [selected.placeId, selected.placeId]);
+        assert.deepEqual(queries, ['14 Main']);
+        assert.equal(f.container.querySelector('[role=alert]'), null);
+    });
+}
+
 for (const locale of [
     {
         clear: 'Borrar',

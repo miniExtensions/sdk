@@ -157,7 +157,8 @@ export const createAddressAutocompleteRequests = (
                 signal: controller.signal,
             });
             if (!owned()) return;
-            if (typeof result !== 'string') throw new TypeError();
+            if (typeof result !== 'string' || result.trim() === '')
+                throw new TypeError();
             if (options.onValue(result, 'detail') === false) {
                 if (owned()) retire();
                 return;

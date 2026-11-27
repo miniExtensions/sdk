@@ -1128,6 +1128,108 @@ async function checkHideColumnsTrigger({ page, patch, snapshot, output }) {
     return profiles;
 }
 
+async function checkReadonlyPortalGridRtlResize({ page, evidence }) {
+    const probe = await page.context().newPage();
+    const observed = [];
+    evidence.rtlPointerResize = observed;
+    try {
+        await probe.setViewportSize({ width: 1200, height: 900 });
+        await probe.goto(
+            new URL('/readonly-portal-grid.html', page.url()).href
+        );
+        const amount = probe.locator('th[data-field-id="amount"]');
+        const handle = amount.getByRole('separator');
+        await handle.waitFor();
+        await probe.waitForFunction(
+            () => window.__nativeProbe?.snapshot().committed > 0
+        );
+        await probe.locator('#root').evaluate((container) => {
+            container.dir = 'rtl';
+        });
+        assert.equal(
+            await amount.evaluate((cell) => getComputedStyle(cell).direction),
+            'rtl'
+        );
+        const snapshot = () =>
+            probe.evaluate(() => window.__nativeProbe.snapshot());
+        const width = () => amount.evaluate((cell) => cell.clientWidth);
+        for (const delta of [-47, 47]) {
+            const initial = await width();
+            const count = (await snapshot()).widths.length;
+            assert.equal(
+                (await snapshot()).state.widths.original.amount,
+                initial
+            );
+            const bounds = await handle.boundingBox();
+            const cellBounds = await amount.boundingBox();
+            assert(bounds && cellBounds);
+            const x = bounds.x + bounds.width / 2;
+            const y = bounds.y + bounds.height / 2;
+            assert(Math.abs(x - cellBounds.x) <= bounds.width / 2);
+            await probe.mouse.move(x, y);
+            await probe.mouse.down();
+            let interim;
+            let pendingCommits;
+            try {
+                await probe.mouse.move(x + delta, y, { steps: 8 });
+                await probe.evaluate(
+                    () =>
+                        new Promise((resolve) =>
+                            requestAnimationFrame(() =>
+                                requestAnimationFrame(resolve)
+                            )
+                        )
+                );
+                interim = await width();
+                pendingCommits = (await snapshot()).widths.length - count;
+            } finally {
+                await probe.mouse.up();
+            }
+            await probe.waitForFunction(
+                (previous) =>
+                    window.__nativeProbe.snapshot().widths.length > previous,
+                count
+            );
+            await probe.waitForFunction(() => {
+                const { state, widths } = window.__nativeProbe.snapshot();
+                return state.widths.original.amount === widths.at(-1).width;
+            });
+            const after = await snapshot();
+            observed.push({
+                delta,
+                initial,
+                interim,
+                pendingCommits,
+                commits: after.widths.slice(count),
+                echoed: await width(),
+            });
+        }
+        for (const {
+            delta,
+            initial,
+            interim,
+            pendingCommits,
+            commits,
+            echoed,
+        } of observed) {
+            assert.equal(
+                interim,
+                initial - delta,
+                'In RTL, an outward left drag widens and an inward right drag narrows'
+            );
+            assert.equal(pendingCommits, 0);
+            assert.equal(commits.length, 1);
+            assert.equal(commits[0].fieldId, 'amount');
+            assert.equal(commits[0].width, interim);
+            assert.equal(commits[0].measuredAtCommit, interim);
+            assert.equal(echoed, interim);
+        }
+        assert.equal((await snapshot()).submits, 0);
+    } finally {
+        await probe.close();
+    }
+}
+
 export async function checkReadonlyPortalGridBrowser({
     page,
     evidence,
@@ -1268,6 +1370,7 @@ export async function checkReadonlyPortalGridBrowser({
         width: ordinaryWidth,
         passed: true,
     });
+    await checkReadonlyPortalGridRtlResize({ page, evidence });
 
     await handle.focus();
     const initialKeyboardWidth = await amount.evaluate(

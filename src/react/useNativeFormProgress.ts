@@ -90,12 +90,11 @@ export function useNativeFormProgress({
     const enabled = surfaceEnabled;
 
     useEffect(() => {
-        if (!enabled) {
-            // Builder previews must not acquire or remove runtime draft authority.
+        if (!enabled || shareId == null) {
+            // Retire queued writes on inactive surfaces without deleting drafts.
             writerStateRef.current = null;
             return;
         }
-        if (shareId == null) return;
 
         if (!progressConfigurationIsEligible) {
             // Revoke queued writes before removing this share’s draft. A writer

@@ -306,6 +306,92 @@ export async function assertSavedProgressConsumer({
             assert.equal(t.ids, 0);
             await t.unmount();
         }
+
+        // Losing the direct share in the same mount retires a held writer
+        // without removing either stored draft. Returning admits a fresh edit.
+        const directKey = 'form-progress-synthetic';
+        const neighborKey = 'form-progress-adjacent';
+        const directBytes = envelope('original-writer', 4, legacy);
+        const neighborBytes = envelope('neighbor-writer', 9, {
+            neighbor: true,
+        });
+        const direct = await fixture({ seed: directBytes, held: true });
+        direct.data.set(neighborKey, neighborBytes);
+        const queuedEdit = { ...legacy, visible: 'held old edit' };
+        const freshEdit = { ...legacy, visible: 'fresh direct edit' };
+        await direct.publish(queuedEdit);
+        const queued = {
+            locks: direct.locks.length,
+            attempts: [...direct.records],
+        };
+        const beforeDeactivation = direct.io.length;
+        await direct.render({ shareId: null });
+        await direct.release();
+        const afterRetirement = {
+            io: direct.io.slice(beforeDeactivation),
+            directBytes: direct.data.get(directKey),
+            neighborBytes: direct.data.get(neighborKey),
+            locks: direct.locks.length,
+            attempts: [...direct.records],
+        };
+
+        // Read back the retained draft for reactivation in both red and green
+        // cases, so the next real edit is measured even if retirement failed.
+        await direct.render({
+            shareId: 'synthetic',
+            record: { type: 'create', data: direct.snapshot().record },
+        });
+        const reactivated = {
+            locks: direct.locks.length,
+            attempts: [...direct.records],
+        };
+        const beforeFreshEdit = direct.io.length;
+        await direct.publish(freshEdit);
+        await direct.release();
+        const resumed = {
+            io: direct.io.slice(beforeFreshEdit),
+            snapshot: direct.snapshot(),
+            neighborBytes: direct.data.get(neighborKey),
+            locks: direct.locks.length,
+            attempts: [...direct.records],
+        };
+        await direct.unmount();
+        const directShareRetirement = {
+            queued,
+            retired: afterRetirement,
+            reactivated,
+            resumed,
+        };
+        assert.deepEqual(
+            directShareRetirement,
+            {
+                queued: { locks: 1, attempts: [queuedEdit] },
+                retired: {
+                    io: [],
+                    directBytes,
+                    neighborBytes,
+                    locks: 0,
+                    attempts: [queuedEdit],
+                },
+                reactivated: { locks: 0, attempts: [queuedEdit] },
+                resumed: {
+                    io: [
+                        ['read', directKey],
+                        ['write', directKey],
+                    ],
+                    snapshot: {
+                        revision: 5,
+                        writerId: 'writer-2',
+                        record: freshEdit,
+                    },
+                    neighborBytes,
+                    locks: 0,
+                    attempts: [queuedEdit, freshEdit],
+                },
+            },
+            'Held work must retire when the direct share disappears'
+        );
+
         for (const cutoff of ['unmount', 'off', 'save']) {
             const t = await fixture({ held: true });
             await t.publish({ edited: cutoff });
@@ -671,6 +757,7 @@ export async function assertSavedProgressConsumer({
         return {
             fixtures: fixtures.length,
             ssrCalls,
+            directShareRetirement,
             pendingLocks: fixtures.reduce(
                 (count, f) => count + f.locks.length,
                 0

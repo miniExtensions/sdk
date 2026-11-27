@@ -65,6 +65,8 @@ export async function assertSavedProgressConsumer({
         strict = false,
         initial = {},
         readDenied = false,
+        beforeLockLookup,
+        withForm = false,
     } = {}) {
         const data = new Map(
             seed == null ? [] : [['form-progress-synthetic', seed]]
@@ -76,6 +78,8 @@ export async function assertSavedProgressConsumer({
         let denied = false,
             ids = 0,
             lockRequests = 0,
+            storageLookups = 0,
+            submits = 0,
             subscriptions = 0,
             teardowns = 0,
             unmounted = false;
@@ -99,10 +103,14 @@ export async function assertSavedProgressConsumer({
             forms.createNativeFormProgressStorage({
                 shareId,
                 writerId,
-                getStorage: () => storage,
+                getStorage() {
+                    storageLookups++;
+                    return storage;
+                },
                 onWarning() {},
-                getLocks: () =>
-                    held
+                getLocks() {
+                    beforeLockLookup?.();
+                    return held
                         ? {
                               request(name, callback) {
                                   lockRequests++;
@@ -121,7 +129,8 @@ export async function assertSavedProgressConsumer({
                                   );
                               },
                           }
-                        : undefined,
+                        : undefined;
+                },
             });
         const ports = {
             readSnapshot: (share) => factory(share).read(),
@@ -155,7 +164,18 @@ export async function assertSavedProgressConsumer({
         const root = createRoot(container);
         function Consumer() {
             const { hasConflict } = ui.useNativeFormProgress(props);
-            return hasConflict ? h(ui.FormProgressConflictAlert) : null;
+            const alert = hasConflict ? h(ui.FormProgressConflictAlert) : null;
+            if (!withForm) return alert;
+            return h(
+                'form',
+                {
+                    onSubmit(event) {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                alert
+            );
         }
         const element = () =>
             strict ? h(StrictMode, null, h(Consumer)) : h(Consumer);
@@ -173,6 +193,12 @@ export async function assertSavedProgressConsumer({
             },
             get lockRequests() {
                 return lockRequests;
+            },
+            get storageLookups() {
+                return storageLookups;
+            },
+            get submits() {
+                return submits;
             },
             get ids() {
                 return ids;
@@ -640,6 +666,151 @@ export async function assertSavedProgressConsumer({
             undefined
         );
         await readRetry.unmount();
+
+        // A rejected lookup leaves this mounted writer's queue available for a new edit.
+        const lookupFailure = new Error('Synthetic lock lookup failure');
+        let lookupOutage = false;
+        let lockLookups = 0;
+        let failedLookups = 0;
+        const recovery = await fixture({
+            held: true,
+            withForm: true,
+            beforeLockLookup() {
+                lockLookups++;
+                if (lookupOutage && failedLookups === 0) {
+                    failedLookups++;
+                    throw lookupFailure;
+                }
+            },
+        });
+        assert(recovery.container.querySelector('form'));
+        const draftA = { visible: 'A', hidden: 'retained' };
+        const draftB = { visible: 'B', hidden: 'retained' };
+        const draftC = { visible: 'C', hidden: 'retained' };
+        const draftD = { visible: 'D', hidden: 'retained' };
+        const rejectionReasons = [];
+        const onRejection = (reason) => rejectionReasons.push(reason);
+        const observeRejections = () =>
+            new Promise((resolve) => setImmediate(() => setImmediate(resolve)));
+        process.on('unhandledRejection', onRejection);
+        let lookupRecovery;
+        try {
+            await recovery.publish(draftA);
+            await recovery.release();
+            const storedA = recovery.data.get(progressKey);
+            const savedA = recovery.snapshot();
+            assert.equal(typeof storedA, 'string');
+            assert.deepEqual(savedA, {
+                record: draftA,
+                revision: 1,
+                writerId: 'writer-1',
+            });
+            assert.equal(lockLookups, 1);
+            assert.equal(recovery.lockRequests, 1);
+            const ioBeforeB = recovery.io.length;
+            const storageBeforeB = recovery.storageLookups;
+            lookupOutage = true;
+            await recovery.publish(draftB);
+            await observeRejections();
+            assert.equal(failedLookups, 1);
+            assert.equal(lockLookups, 2);
+            assert.equal(recovery.lockRequests, 1);
+            assert.equal(recovery.storageLookups, storageBeforeB);
+            assert.deepEqual(recovery.io.slice(ioBeforeB), []);
+            assert.equal(recovery.data.get(progressKey), storedA);
+            assert.deepEqual(recovery.records, [draftA, draftB]);
+            assert.equal(
+                recovery.container.querySelector('[role=alert]'),
+                null
+            );
+            assert.equal(recovery.submits, 0);
+
+            lookupOutage = false;
+            await observeRejections();
+            assert.equal(recovery.data.get(progressKey), storedA);
+            // An equal publication is still not a new edit after a rejected port.
+            await recovery.publish({ ...draftB });
+            await observeRejections();
+            assert.equal(recovery.data.get(progressKey), storedA);
+            assert.equal(lockLookups, 2);
+            assert.equal(recovery.lockRequests, 1);
+            assert.equal(recovery.storageLookups, storageBeforeB);
+            assert.deepEqual(recovery.io.slice(ioBeforeB), []);
+            assert.deepEqual(recovery.records, [draftA, draftB]);
+
+            await recovery.publish(draftC);
+            // The failing baseline never admits C, so capture its state as well.
+            if (recovery.locks.length > 0) await recovery.release();
+            await observeRejections();
+            const savedC = recovery.snapshot();
+            assert.deepEqual(
+                {
+                    rejected: rejectionReasons.map((reason) => reason?.message),
+                    attempted: recovery.records,
+                    saved: savedC,
+                },
+                {
+                    rejected: [],
+                    attempted: [draftA, draftB, draftC],
+                    saved: {
+                        record: draftC,
+                        revision: 2,
+                        writerId: savedA.writerId,
+                    },
+                },
+                'Rejected lock lookup must not block the next draft write'
+            );
+            assert.equal(lockLookups, 3);
+            assert.equal(recovery.lockRequests, 2);
+            assert.equal(recovery.locks.length, 0);
+            assert.deepEqual(recovery.io.slice(ioBeforeB), [
+                ['read', progressKey],
+                ['write', progressKey],
+            ]);
+            assert.equal(
+                recovery.container.querySelector('[role=alert]'),
+                null
+            );
+
+            const foreignDraft = envelope('foreign', 9, { visible: 'other' });
+            recovery.data.set(progressKey, foreignDraft);
+            const ioBeforeConflict = recovery.io.length;
+            await recovery.publish(draftD);
+            await recovery.release();
+            assert(recovery.container.querySelector('[role=alert]'));
+            assert.equal(recovery.data.get(progressKey), foreignDraft);
+            assert.deepEqual(recovery.io.slice(ioBeforeConflict), [
+                ['read', progressKey],
+            ]);
+            await recovery.publish({ visible: 'later' });
+            await observeRejections();
+            assert.equal(recovery.data.get(progressKey), foreignDraft);
+            assert.deepEqual(recovery.records, [
+                draftA,
+                draftB,
+                draftC,
+                draftD,
+            ]);
+            assert.equal(lockLookups, 4);
+            assert.equal(recovery.lockRequests, 3);
+            assert.equal(recovery.ids, 1);
+            assert.deepEqual(rejectionReasons, []);
+            assert.equal(recovery.submits, 0);
+            lookupRecovery = {
+                revisions: [savedA.revision, savedC.revision, 9],
+                writerId: savedC.writerId,
+                lockLookups,
+                lockRequests: recovery.lockRequests,
+                writes: recovery.io.filter(
+                    ([operation]) => operation === 'write'
+                ).length,
+                submits: recovery.submits,
+            };
+        } finally {
+            process.off('unhandledRejection', onRejection);
+        }
+        await recovery.unmount();
+
         // Cancellation cannot arm a newly acquired writer.
         const retired = await fixture({ held: true });
         await retired.publish({ old: true });
@@ -758,6 +929,7 @@ export async function assertSavedProgressConsumer({
             fixtures: fixtures.length,
             ssrCalls,
             directShareRetirement,
+            lookupRecovery,
             pendingLocks: fixtures.reduce(
                 (count, f) => count + f.locks.length,
                 0

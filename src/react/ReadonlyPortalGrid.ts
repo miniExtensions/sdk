@@ -273,6 +273,10 @@ function GridHeader({
         let requestedWidth: number | undefined;
         const pointerId = event.pointerId;
         const document = cell.ownerDocument;
+        const widthDirection =
+            document.defaultView?.getComputedStyle(cell).direction === 'rtl'
+                ? -1
+                : 1;
         const cleanup = () => {
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', end);
@@ -285,7 +289,7 @@ function GridHeader({
                 return;
             }
             next.preventDefault();
-            const delta = next.clientX - lastX;
+            const delta = (next.clientX - lastX) * widthDirection;
             lastX = next.clientX;
             requestedWidth =
                 (requestedWidth ?? localWidth ?? cell.clientWidth) + delta;

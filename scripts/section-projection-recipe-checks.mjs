@@ -19,6 +19,136 @@ const settle = async () => {
         await new Promise((resolve) => setImmediate(resolve));
 };
 
+/** Deterministic work counters for the installed scalar Form projection. */
+export function measureScalarProjectionGrowth(project) {
+    const measure = (count) => {
+        let fieldArrayReads = 0,
+            idReads = 0;
+        const ids = Array.from({ length: count }, (_, i) => 'fld' + i);
+        const first = ids[0],
+            last = ids.at(-1);
+        const physical = ids.map((id) => ({
+            id,
+            name: id,
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: { type: 'singleLineText', options: null },
+        }));
+        const fields = physical.map(
+            (field) =>
+                new Proxy(field, {
+                    get(target, key, receiver) {
+                        if (key === 'id') idReads++;
+                        return Reflect.get(target, key, receiver);
+                    },
+                })
+        );
+        const airtableFields = new Proxy(fields, {
+            get(target, key, receiver) {
+                if (typeof key === 'string' && /^\d+$/.test(key))
+                    fieldArrayReads++;
+                return Reflect.get(target, key, receiver);
+            },
+        });
+        const settings = {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'only-rule',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'is',
+                        fieldType: 'singleLineText',
+                        idOrName: { type: 'id', id: first },
+                        value: 'show',
+                    },
+                },
+            ],
+        };
+        const schemas = Object.fromEntries(
+            physical.map((field) => [
+                field.id,
+                {
+                    fieldType: 'singleLineText',
+                    airtableField: field,
+                    miniExtConfig:
+                        field.id === last
+                            ? { conditionalFields: settings }
+                            : {},
+                },
+            ])
+        );
+        const data = Object.fromEntries(
+            ids.map((id) => [
+                id,
+                id === first
+                    ? 'show'
+                    : id === last
+                      ? 'retained draft'
+                      : 'filled',
+            ])
+        );
+        const input = {
+            fieldIds: ids,
+            fieldIdsToSchemas: schemas,
+            airtableFields,
+            data,
+            recordId: 'rec_synthetic',
+            invalidConditionMode: 'strict',
+        };
+        const shown = project(input);
+        const counts = { fieldArrayReads, idReads };
+        assert.equal(shown.type, 'available');
+        assert.deepEqual(shown.hiddenFieldIds, []);
+        assert.equal(shown.record.fields[last], 'retained draft');
+        data[first] = 'hide';
+        const hidden = project(input);
+        assert.equal(hidden.type, 'available');
+        assert.deepEqual(hidden.hiddenFieldIds, [last]);
+        assert.deepEqual(Object.keys(hidden.record.fields), ids.slice(0, -1));
+        assert.equal(data[last], 'retained draft');
+        data[first] = 'show';
+        const restored = project(input);
+        assert.equal(restored.type, 'available');
+        assert.deepEqual(restored.record.fields, data);
+        assert.equal(
+            project({ ...input, airtableFields: [...fields, fields[0]] }).code,
+            'invalid-metadata'
+        );
+        assert.equal(
+            project({
+                ...input,
+                fieldIdsToSchemas: {
+                    ...schemas,
+                    [last]: {
+                        ...schemas[last],
+                        airtableField: {
+                            ...schemas[last].airtableField,
+                            name: 'mismatch',
+                        },
+                    },
+                },
+            }).code,
+            'invalid-metadata'
+        );
+        return counts;
+    };
+    const fields32 = measure(32),
+        fields64 = measure(64);
+    return {
+        fields32,
+        fields64,
+        ratio: {
+            fieldArrayReads:
+                fields64.fieldArrayReads / fields32.fieldArrayReads,
+            idReads: fields64.idReads / fields32.idReads,
+        },
+        hideShow: 'passed',
+        validation: 'passed',
+    };
+}
+
 /** Actual shipped typed custom recipe plus complete installed starter; closed synthetic transport. */
 export async function checkSectionProjectionRecipe({
     consumerDirectory,
@@ -59,6 +189,18 @@ export async function checkSectionProjectionRecipe({
         '@miniextensions/sdk/forms'
     );
     assert.equal(typeof commonJs.createScalarFormRecordProjection, 'function');
+    const formats = [forms, commonJs];
+    for (const module of formats) {
+        const { ratio } = measureScalarProjectionGrowth(
+            module.createScalarFormRecordProjection
+        );
+        assert(
+            ratio.fieldArrayReads <= 2.5,
+            'Physical array reads must grow linearly'
+        );
+        assert(ratio.idReads <= 2.5, 'Physical ID reads must grow linearly');
+    }
+
     const canonical = JSON.parse(
         readFileSync('test/fixtures/sectionProjection.json', 'utf8')
     );
@@ -123,7 +265,7 @@ export async function checkSectionProjectionRecipe({
         logLevel: 'silent',
     });
     await assertBrowserInputs(main.metafile, browserDirectory);
-    let cases = canonical.cases.length;
+    let cases = canonical.cases.length + formats.length;
     for (const scenario of [
         'express-choice',
         'scalar-review',

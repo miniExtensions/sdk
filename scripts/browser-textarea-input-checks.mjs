@@ -134,16 +134,104 @@ window.textareaProbe.update = next => update(next);
         evidence.results.push(
             'min/content/max rows, overflow, shrink and placeholder preserve literal draft'
         );
-        await update({
-            value: Array(60).fill('word').join(' '),
-            placeholder: '',
-        });
+        const wrappedDraft = Array(60).fill('word').join(' ');
+        await update({ value: wrappedDraft, placeholder: '' });
         const wide = (await snapshot()).height;
         await page.locator('textarea').evaluate((node) => {
             node.style.width = '140px';
             window.dispatchEvent(new Event('resize'));
         });
         assert((await snapshot()).height > wide);
+
+        await page.locator('main').evaluate((container) => {
+            container.style.width = '320px';
+        });
+        await update({ width: '100%' });
+        const textarea = page.locator('textarea');
+        await textarea.focus();
+        await textarea.evaluate((element) => {
+            const viewport = {
+                width: innerWidth,
+                height: innerHeight,
+                resizes: 0,
+            };
+            const onResize = () => viewport.resizes++;
+            window.textareaContainerProbe = { element, viewport, onResize };
+            addEventListener('resize', onResize);
+            element.setSelectionRange(5, 23, 'backward');
+        });
+        const geometry = () =>
+            page.evaluate(() => {
+                const node = window.textareaProbe.current();
+                return {
+                    ...window.textareaProbe.snapshot(),
+                    width: node.getBoundingClientRect().width,
+                    viewport: {
+                        ...window.textareaContainerProbe.viewport,
+                        currentWidth: innerWidth,
+                        currentHeight: innerHeight,
+                    },
+                    sameNode: node === window.textareaContainerProbe.element,
+                };
+            });
+        const containerWidth = (width) =>
+            page.locator('main').evaluate(async (container, width) => {
+                container.style.width = width + 'px';
+                for (let frame = 0; frame < 4; frame++)
+                    await new Promise((resolve) =>
+                        requestAnimationFrame(resolve)
+                    );
+            }, width);
+        try {
+            const before = await geometry();
+            await containerWidth(140);
+            const narrow = await geometry();
+            await containerWidth(320);
+            const restored = await geometry();
+            evidence.containerResize = [before, narrow, restored].map(
+                ({ value, ...state }) => ({
+                    ...state,
+                    draftPreserved: value === wrappedDraft,
+                })
+            );
+            assert.deepEqual(
+                [before.width, narrow.width, restored.width],
+                [320, 140, 320]
+            );
+            assert(
+                narrow.height > before.height,
+                'Narrowing the container must grow the textarea'
+            );
+            near(restored.height, before.height);
+            for (const state of [before, narrow, restored]) {
+                assert.equal(state.value, wrappedDraft);
+                assert.equal(state.sameNode, true);
+                assert.equal(state.focused, true);
+                assert.deepEqual(state.selection, [5, 23, 'backward']);
+                assert.deepEqual(state.events, []);
+                assert.equal(state.textareas, 1);
+                assert.deepEqual(state.viewport, {
+                    width: before.viewport.width,
+                    height: before.viewport.height,
+                    resizes: 0,
+                    currentWidth: before.viewport.width,
+                    currentHeight: before.viewport.height,
+                });
+            }
+        } finally {
+            await page.evaluate(() => {
+                removeEventListener(
+                    'resize',
+                    window.textareaContainerProbe.onResize
+                );
+                delete window.textareaContainerProbe;
+                document.querySelector('main').style.removeProperty('width');
+            });
+        }
+        evidence.results.push(
+            'container-only width changes resize the focused draft without edits'
+        );
+
         // Native rows=3 clone is an independent wrapping oracle; it has no SDK sizing.
         evidence.wrapping = [];
         const wrappingFailures = [];

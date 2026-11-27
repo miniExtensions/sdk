@@ -272,6 +272,79 @@ it('keeps native node/focus/caret across opt-in changes, updates resize/font lis
     assert.equal(boundary.reads, removed);
 });
 
+it('coalesces only observed width changes and releases scheduled work on unmount', async (t) => {
+    const f = await fixture(t);
+    const boundary = layout(f);
+    t.after(boundary.restore);
+    const props = { value: 'a\nb\nc\nd\ne', style: sizingStyle };
+    await f.render(h(TextareaInput, props));
+    const original = f.textarea();
+    let width = 320;
+    t.mock.method(
+        original,
+        'getBoundingClientRect',
+        () => new f.window.DOMRect(0, 0, width, 0)
+    );
+    const observers = new Set<() => void>();
+    class TestResizeObserver {
+        constructor(private readonly notify: () => void) {}
+        observe(target: unknown) {
+            assert.ok(target === original);
+            observers.add(this.notify);
+        }
+        disconnect() {
+            observers.delete(this.notify);
+        }
+    }
+    Object.defineProperty(f.window, 'ResizeObserver', {
+        value: TestResizeObserver,
+    });
+    const frames = new Map<number, () => void>();
+    let next = 0;
+    t.mock.method(
+        f.window,
+        'requestAnimationFrame',
+        (callback: (time: number) => void) => {
+            frames.set(++next, () => callback(0));
+            return next;
+        }
+    );
+    t.mock.method(f.window, 'cancelAnimationFrame', (id: number) => {
+        frames.delete(id);
+    });
+    await f.render(h(TextareaInput, { ...props, autoSize: {} }));
+    assert.equal(observers.size, 1);
+    const notify = () => observers.forEach((listener) => listener());
+
+    const before = boundary.reads;
+    original.style.height = '240px';
+    notify();
+    assert.equal(frames.size, 0);
+    assert.equal(boundary.reads, before);
+    assert.equal(original.style.height, '240px');
+
+    width = 200;
+    notify();
+    width = 140;
+    notify();
+    assert.equal(frames.size, 1);
+    assert.equal(boundary.reads, before);
+    const [frameId, flush] = [...frames.entries()][0];
+    frames.delete(frameId);
+    flush();
+    assert.ok(boundary.reads > before);
+    assert.equal(original.style.height, '240px');
+
+    width = 320;
+    await f.render(h(TextareaInput, { ...props, autoSize: {} }));
+    width = 140;
+    notify();
+    assert.equal(frames.size, 1);
+    await f.render(null);
+    assert.equal(observers.size, 0);
+    assert.equal(frames.size, 0);
+});
+
 it('does not size hidden/unmeasurable nodes and leaves disabled/read-only policy with the caller', async (t) => {
     const f = await fixture(t);
     const boundary = layout(f);

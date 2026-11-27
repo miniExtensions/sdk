@@ -109,12 +109,81 @@ it('renders native metadata, the supplied error dot and the existing Quill HTML 
     const dot = f.container.querySelector('.mx-sdk-form-group__error');
     assert.ok(dot);
     assert.equal(dot.getAttribute('aria-hidden'), 'true');
+    assert.equal(publicToggle(f).getAttribute('aria-describedby'), null);
     const child = f.container.querySelector('#fld_email');
     assert.ok(child);
     await f.render(group({ isExpanded: true, hasError: false }, node));
     assert.equal(f.container.querySelector('.mx-sdk-form-group__error'), null);
     assert.equal(f.container.querySelector('#fld_email'), child);
     assert.equal(publicToggle(f).getAttribute('type'), 'button');
+    f.unchangedEffects();
+});
+
+it('describes only the collapsed section with a validation error', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const writes: string[] = [];
+    const render = (hasError: boolean) =>
+        f.render(
+            h(
+                'div',
+                null,
+                group(
+                    { title: 'Billing', hasError },
+                    h(CompleteMultilineTextField, {
+                        id: 'fld_billing',
+                        value: 'Billing details',
+                        onChange: (value: string) => writes.push(value),
+                    })
+                ),
+                group({ title: 'Delivery' })
+            )
+        );
+    const disclosures = () => [
+        ...f.container.querySelectorAll('button[aria-expanded]'),
+    ];
+    await render(false);
+    const [billing, delivery] = disclosures();
+    assert.ok(billing instanceof f.window.HTMLButtonElement);
+    assert.ok(delivery instanceof f.window.HTMLButtonElement);
+    await act(async () => billing.focus());
+
+    for (const hasError of [false, true, false]) {
+        await render(hasError);
+        const [currentBilling, currentDelivery] = disclosures();
+        assert.equal(currentBilling, billing);
+        assert.equal(currentDelivery, delivery);
+        assert.equal(f.window.document.activeElement, billing);
+        assert.equal(billing.textContent, 'Billing');
+        assert.equal(delivery.textContent, 'Delivery');
+        for (const button of [billing, delivery]) {
+            assert.equal(button.getAttribute('aria-label'), null);
+            assert.equal(button.getAttribute('aria-labelledby'), null);
+            assert.equal(button.getAttribute('aria-expanded'), 'false');
+        }
+        assert.equal(panel(f), null);
+        assert.equal(delivery.getAttribute('aria-describedby'), null);
+        const errorId = billing.getAttribute('aria-describedby');
+        if (hasError) {
+            assert.ok(errorId);
+            const description = f.window.document.getElementById(errorId);
+            assert.ok(description);
+            assert.equal(description.hasAttribute('hidden'), true);
+            assert.equal(
+                description.textContent,
+                'This section contains a validation error.'
+            );
+        } else {
+            assert.equal(errorId, null);
+        }
+        assert.equal(
+            billing
+                .querySelector('.mx-sdk-form-group__error')
+                ?.getAttribute('aria-hidden'),
+            hasError ? 'true' : undefined
+        );
+    }
+    assert.equal(f.container.querySelector('[id$="-error-description"]'), null);
+    assert.deepEqual(writes, []);
     f.unchangedEffects();
 });
 

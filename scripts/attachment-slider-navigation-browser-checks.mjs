@@ -5,9 +5,10 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { readInlineDocumentText } from './document-thumbnail-browser-checks.mjs';
 
 const galleryDocumentPath = '/gallery-owned.txt';
-const galleryDocumentText = 'Synthetic gallery document owned bytes';
+const galleryDocumentText = 'A\nB';
 const galleryRetryImagePath = '/gallery-retry.svg';
 const galleryOfficePath = '/gallery-office-original';
 const galleryOfficeOrigin = 'https://view.officeapps.live.com';
@@ -1543,11 +1544,16 @@ async function checkAttachmentGallery(page, requests) {
     );
     assert.equal(requests.document, 0);
     await tiles.first().scrollIntoViewIfNeeded();
-    await tiles
+    const text = tiles
         .first()
-        .locator('[data-document-thumbnail="text"]')
-        .getByText(galleryDocumentText, { exact: true })
-        .waitFor();
+        .locator('[data-document-thumbnail="text"] > div');
+    await text.waitFor();
+    const textLayout = await readInlineDocumentText(text);
+    assert.equal(textLayout.text, galleryDocumentText);
+    assert.equal(textLayout.renderedText, galleryDocumentText);
+    assert.equal(textLayout.enoughWidth, true);
+    assert.equal(textLayout.secondLineBelow, true);
+    assert.equal(textLayout.childElements, 0);
     assert.equal(requests.document, 1);
 
     const office = await checkGalleryOffice({
@@ -1581,7 +1587,7 @@ async function checkAttachmentGallery(page, requests) {
         document: {
             ownedReads: requests.document,
             offscreenReads: 0,
-            renderedText: galleryDocumentText,
+            ...textLayout,
         },
     };
 }

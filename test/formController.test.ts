@@ -171,6 +171,68 @@ describe('headless Form controller', () => {
         await assert.rejects(f.controller.save(), errorCode('reload-required'));
     });
 
+    it('keeps an acknowledged create and refuses another Save when acceptance aborts the request signal', async () => {
+        const f = fixture();
+        const request = new AbortController();
+        const recordId = savedForm().record.id;
+        const acceptedIds: string[] = [];
+        const dispositions: string[] = [];
+        try {
+            const [first] = await Promise.allSettled([
+                f.controller.save({
+                    signal: request.signal,
+                    lifecycle: {
+                        dispatch: () => ({
+                            accepted(result) {
+                                assert.equal(result.type, 'saved');
+                                acceptedIds.push(result.raw.record.id);
+                                request.abort();
+                            },
+                            finish(disposition) {
+                                dispositions.push(disposition);
+                            },
+                        }),
+                    },
+                }),
+            ]);
+            const state = f.controller.getState();
+            const [second] = await Promise.allSettled([
+                f.controller.save({ signal: new AbortController().signal }),
+            ]);
+            assert.deepEqual(
+                {
+                    first: first.status,
+                    state: state.status,
+                    second: second.status,
+                    transports: f.calls.length,
+                },
+                {
+                    first: 'fulfilled',
+                    state: 'saved',
+                    second: 'rejected',
+                    transports: 1,
+                }
+            );
+            assert(first.status === 'fulfilled');
+            assert.equal(first.value.type, 'saved');
+            assert.equal(first.value.raw.record.id, recordId);
+            assert(
+                second.status === 'rejected' &&
+                    errorCode('reload-required')(second.reason)
+            );
+            assert.equal(state.canSave, false);
+            assert.deepEqual(acceptedIds, [recordId]);
+            assert.deepEqual(dispositions, ['dispatched']);
+            await assert.rejects(
+                f.controller.save({ signal: request.signal }),
+                errorCode('reload-required')
+            );
+            assert.equal(f.calls.length, 1);
+        } finally {
+            f.controller.destroy();
+        }
+    });
+
     it('keeps validation errors, concurrent errors and dirty values until an explicit corrected save', async () => {
         let number = 0;
         const f = fixture(async () =>
@@ -255,6 +317,48 @@ describe('headless Form controller', () => {
         assert.equal(state.result, null);
         assert.equal(state.draft, null);
         assert.equal(f.calls[0].options?.signal?.aborted, true);
+    });
+
+    it('does not publish an acknowledged create to the Form installed by its acceptance callback', async () => {
+        const f = fixture();
+        const request = new AbortController();
+        const replacement = loadedForm();
+        replacement.payload.formRecord.data.fld_title = 'Replacement Form';
+        const dispositions: string[] = [];
+        try {
+            await assert.rejects(
+                f.controller.save({
+                    signal: request.signal,
+                    lifecycle: {
+                        dispatch: () => ({
+                            accepted() {
+                                f.setScope({
+                                    ownerId: 'visitor_A',
+                                    revision: 1,
+                                });
+                                f.controller.reset({
+                                    ...f.options,
+                                    loaded: replacement,
+                                });
+                                request.abort();
+                            },
+                            finish(disposition) {
+                                dispositions.push(disposition);
+                            },
+                        }),
+                    },
+                }),
+                errorCode('scope-changed')
+            );
+            const state = f.controller.getState();
+            assert.equal(state.status, 'ready');
+            assert.equal(state.result, null);
+            assert.equal(state.draft?.data.fld_title, 'Replacement Form');
+            assert.equal(f.calls.length, 1);
+            assert.deepEqual(dispositions, ['dispatched']);
+        } finally {
+            f.controller.destroy();
+        }
     });
 
     it('uses owner revision for anonymous and A→B→A transitions that session-content checks cannot detect', () => {

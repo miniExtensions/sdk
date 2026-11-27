@@ -4670,7 +4670,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
                 consumerDirectory: temporaryDirectory,
             });
-            assert.equal(formSaveIdentityProof, 34);
+            assert.equal(formSaveIdentityProof, 36);
             console.log(
                 `Installed Form Save response identity: ${formSaveIdentityProof} ESM/CJS checkpoints passed; synthetic transport only.`
             );

@@ -9,24 +9,144 @@ import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
 const fixture = String.raw`
-const stats={stores:[],rasters:[],writes:[],releases:[],recoveries:[]};
-let patch,resolveReceipt,referenceRef,adapterRef,adapterEmpty=true;let canonical={owner:'A',value:[{id:'old',url:'https://example.invalid/old'}]};
+const stats={stores:[],rasters:[],writes:[],releases:[],recoveries:[],submits:0};
+let patch,resolveReceipt,referenceRef,adapterRef,capturedRaster,adapterEmpty=true;let canonical={owner:'A',value:[{id:'old',url:'https://example.invalid/old'}]};
 const all={allowTypedSignature:true,allowDrawnSignature:true,allowUploadedSignature:true};
 const attachment={id:null,url:'https://example.invalid/signature.png',filename:'signature.png',type:'image/png'};
 function App(){referenceRef=React.useRef();adapterRef=React.useRef();const [state,setState]=React.useState({owner:'A',config:all,value:canonical.value,mounted:true});
 patch=next=>{Object.assign(canonical,next);flushSync(()=>setState(old=>({...old,...next})));};
 const storage={async store(file,authority){stats.stores.push({name:file.name,type:file.type,size:file.size,authority});
-const image=await createImageBitmap(file);const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);image.close();const pixels=ctx.getImageData(0,0,c.width,c.height).data;let painted=0,transparent=0;for(let i=0;i<pixels.length;i+=4){if(pixels[i+3]===0)transparent++;if(pixels[i]<128&&pixels[i+3]>0)painted++;}stats.rasters.push({width:c.width,height:c.height,corner:[...pixels.slice(0,4)],painted,transparent});
+const image=await createImageBitmap(file);const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);image.close();capturedRaster=c;const pixels=ctx.getImageData(0,0,c.width,c.height).data;let painted=0,transparent=0;for(let i=0;i<pixels.length;i+=4){if(pixels[i+3]===0)transparent++;if(pixels[i]<128&&pixels[i+3]>0)painted++;}stats.rasters.push({width:c.width,height:c.height,corner:[...pixels.slice(0,4)],painted,transparent});
 return new Promise(resolve=>{resolveReceipt=()=>resolve({attachment,release:async()=>{stats.releases.push(authority.operationId);return 'released';}});});}};
-return h('form',{onSubmit:e=>{e.preventDefault();throw Error('Signature submitted form');}},
+return h('form',{onSubmit:e=>{e.preventDefault();stats.submits++;throw Error('Signature submitted form');}},
 h('section',{id:'first'},state.mounted&&h(SignatureField,{id:'first-canvas',ownerIdentity:state.owner,value:state.value,config:state.config,storage,onRecovery:r=>stats.recoveries.push(r.phase),appendCurrent(request){if(canonical.owner!==request.ownerIdentity)return 'retired';canonical.value=canonical.value.concat(request.attachment);stats.writes.push([...canonical.value]);flushSync(()=>setState(old=>({...old,value:canonical.value})));return 'appended';}})),
 withReference&&h('section',{id:'adapter-reference'},h(SignatureCanvas,{ref:adapterRef,id:'adapter-canvas',label:'Adapter reference',onDraft:empty=>{adapterEmpty=empty;}})),
 withReference&&h('section',{id:'wrapper-reference'},h(ReferencePad,{ref:referenceRef,canvasProps:{className:'mx-sdk-signature-canvas'}})),
 h('section',{id:'second'},h(SignatureField,{id:'second-canvas',ownerIdentity:'independent',value:[],storage,onRecovery:r=>stats.recoveries.push(r.phase),appendCurrent(){throw Error('Second canvas unexpectedly appended');}})));
 }
 const root=createRoot(document.querySelector('main'));root.render(h(React.StrictMode,null,h(App)));
-window.signatureProof={snapshot:()=>JSON.parse(JSON.stringify(stats)),patch:next=>patch(next),resolve:()=>resolveReceipt(),destroy:()=>root.unmount(),parity:()=>({adapter:adapterRef.current.toDataURL(),wrapper:referenceRef.current.toDataURL(),adapterEmpty,wrapperEmpty:referenceRef.current.isEmpty()})};
+window.signatureProof={snapshot:()=>JSON.parse(JSON.stringify(stats)),raster:()=>capturedRaster,patch:next=>patch(next),resolve:()=>resolveReceipt(),destroy:()=>root.unmount(),parity:()=>({adapter:adapterRef.current.toDataURL(),wrapper:referenceRef.current.toDataURL(),adapterEmpty,wrapperEmpty:referenceRef.current.isEmpty()})};
 `;
+
+async function checkTypedRaster(context, origin, evidence) {
+    const page = await context.newPage();
+    page.on('pageerror', (error) => evidence.pageErrors.push(error.message));
+    try {
+        for (const name of [
+            'Ada',
+            'Alexandria Montgomery Penelope Rutherford',
+        ]) {
+            await page.goto(origin);
+            const field = page.locator('#first');
+            const input = field.getByPlaceholder('Type your name here');
+            await input.fill(name);
+            assert.equal(await input.inputValue(), name);
+            await field
+                .getByRole('button', { name: 'Sign', exact: true })
+                .click();
+            await page.waitForFunction(
+                () => window.signatureProof.snapshot().rasters.length === 1
+            );
+            await page.evaluate(() => window.signatureProof.resolve());
+            await page.waitForFunction(
+                () => window.signatureProof.snapshot().writes.length === 1
+            );
+            const result = await page.evaluate((value) => {
+                const saved = window.signatureProof.raster();
+                const savedPixels = saved
+                    .getContext('2d')
+                    .getImageData(0, 0, 600, 200).data;
+                const font =
+                    '48px "Brush Script MT", "Lucida Handwriting", cursive';
+                const draw = (width, scale, text = value) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = 200;
+                    const context = canvas.getContext('2d');
+                    context.fillStyle = '#fff';
+                    context.fillRect(0, 0, width, 200);
+                    context.fillStyle = '#000';
+                    context.font = font;
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.translate(width / 2, 100);
+                    context.scale(scale, scale);
+                    context.fillText(text, 0, 0);
+                    return context;
+                };
+                const metrics = draw(600, 1, '').measureText(value);
+                const maximumExtent = Math.max(
+                    metrics.actualBoundingBoxLeft,
+                    metrics.actualBoundingBoxRight
+                );
+                const fullWidth = Math.max(
+                    604,
+                    2 * Math.ceil(maximumExtent) + 4
+                );
+                const full = draw(fullWidth, 1);
+                const cropLeft = (fullWidth - 600) / 2;
+                const fullPixels = full.getImageData(0, 0, fullWidth, 200).data;
+                const crop = full.getImageData(cropLeft, 0, 600, 200).data;
+                const expected = draw(
+                    600,
+                    maximumExtent > 300 ? 299 / maximumExtent : 1
+                ).getImageData(0, 0, 600, 200).data;
+                let first = fullWidth;
+                let last = -1;
+                let clippedInk = 0;
+                for (let pixel = 0; pixel < fullWidth * 200; pixel++) {
+                    if (fullPixels[pixel * 4] >= 128) continue;
+                    const x = pixel % fullWidth;
+                    first = Math.min(first, x);
+                    last = Math.max(last, x);
+                    if (x < cropLeft || x >= cropLeft + 600) clippedInk++;
+                }
+                const snapshot = window.signatureProof.snapshot();
+                return {
+                    width: saved.width,
+                    height: saved.height,
+                    opaque: savedPixels.every(
+                        (value, i) => i % 4 !== 3 || value === 255
+                    ),
+                    referenceInkWidth: last - first + 1,
+                    clippedInk,
+                    matchesCenterCrop: savedPixels.every(
+                        (value, i) => value === crop[i]
+                    ),
+                    matchesWholeName: savedPixels.every(
+                        (value, i) => value === expected[i]
+                    ),
+                    stores: snapshot.stores.length,
+                    appends: snapshot.writes.length,
+                    submits: snapshot.submits,
+                };
+            }, name);
+            evidence.results.push({
+                typedRaster: name === 'Ada' ? 'short' : 'long',
+                ...result,
+            });
+            assert.deepEqual(
+                [result.width, result.height, result.opaque],
+                [600, 200, true]
+            );
+            assert.deepEqual(
+                [result.stores, result.appends, result.submits],
+                [1, 1, 0]
+            );
+            if (name === 'Ada') assert(result.matchesCenterCrop);
+            else {
+                assert(result.referenceInkWidth > 600);
+                assert(result.clippedInk > 0);
+            }
+            assert(
+                result.matchesWholeName,
+                `Saved PNG differs from the fitted whole name: ${JSON.stringify(result)}`
+            );
+        }
+    } finally {
+        await page.close();
+    }
+}
 
 async function checkSignatureTabs(page, field, width) {
     const type = field.getByRole('tab', { name: 'Type', exact: true });
@@ -224,6 +344,8 @@ export async function checkSignatureBrowser({
                     evidence.unexpectedRequests.push(url.origin + url.pathname);
                     return route.abort();
                 });
+                if (ratio === 1)
+                    await checkTypedRaster(context, origin, evidence);
                 const tabWidth = ratio === 1 ? 375 : 1280;
                 const tabPage = await context.newPage();
                 try {

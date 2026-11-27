@@ -332,8 +332,7 @@ export function DocumentThumbnail(props: Props): ReactNode {
         content = h(LiteralText, {
             as: 'div',
             value: new TextDecoder(encoding).decode(bytes),
-            preserveWhitespace: false,
-            style: { padding: '30px', overflowWrap: 'anywhere' },
+            style: { padding: '30px' },
         });
     } else if (document.media === 'html')
         content = h(CompleteHTMLRenderer, {

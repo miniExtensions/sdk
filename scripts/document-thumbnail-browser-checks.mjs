@@ -28,6 +28,36 @@ const fixtures = JSON.parse(
 const assetPrefix = `/pdf-assets/pdfjs-${documentPDFVersion}/`;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+export async function readInlineDocumentText(locator) {
+    return locator.evaluate((node) => {
+        const content = node.firstChild;
+        const text = node.textContent;
+        const newline = text.indexOf('\n');
+        const bounds = (start, end) => {
+            const range = document.createRange();
+            range.setStart(content, start);
+            range.setEnd(content, end);
+            return range.getBoundingClientRect();
+        };
+        const first = bounds(0, newline);
+        const second = bounds(newline + 1, text.length);
+        const style = getComputedStyle(node);
+        const available =
+            node.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight);
+        return {
+            text,
+            renderedText: node.innerText,
+            enoughWidth: available > first.width + second.width + 8,
+            availableWidth: available,
+            textWidth: first.width + second.width,
+            secondLineBelow: second.top > first.top,
+            childElements: node.childElementCount,
+        };
+    });
+}
+
 function hostSource(format, field = 'createdTime') {
     const component =
         field === 'createdTime' ? 'CreatedTimeField' : 'LastModifiedTimeField';
@@ -479,6 +509,19 @@ export async function checkDocumentThumbnailBrowser({
                     .querySelector('#document-host')
                     ?.textContent.includes('A readonly document')
             );
+            const inlineWidth = await page.addStyleTag({
+                content:
+                    '#document-host { width: 960px !important } #document-host ul { grid-template-columns: minmax(0, 1fr) !important }',
+            });
+            profile.inlineText = await readInlineDocumentText(
+                display().locator('[data-document-thumbnail="text"] > div')
+            );
+            await inlineWidth.evaluate((node) => node.remove());
+            assert.equal(profile.inlineText.text, fixtures.text);
+            assert.equal(profile.inlineText.renderedText, fixtures.text);
+            assert.equal(profile.inlineText.enoughWidth, true);
+            assert.equal(profile.inlineText.secondLineBelow, true);
+            assert.equal(profile.inlineText.childElements, 0);
             await finish('literal-text-and-sibling');
             await click('CSV');
             await display().locator('table').waitFor();

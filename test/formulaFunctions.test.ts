@@ -62,6 +62,33 @@ describe('formula functions', () => {
         });
     }
 
+    it('compares DATEADD results as instants through grouping and chained additions', () => {
+        const noon = 'DATEADD("2026-05-04T12:00:00Z", 0, "seconds")';
+        const later = 'DATEADD("2026-05-04T12:00:00Z", 1, "second")';
+        const latest = `DATEADD((${later}), 1, "second")`;
+        const forward = `IS_AFTER(${later}, ${noon})`;
+        assert.equal(new FormulaRunner(forward).run(), 1);
+        assert.equal(new FormulaRunner(`IS_AFTER(${noon}, ${later})`).run(), 0);
+        assert.equal(
+            new FormulaRunner(`IS_AFTER(${later}, ${later})`).run(),
+            0
+        );
+        assert.equal(
+            new FormulaRunner(`IS_BEFORE(${noon}, (${later}))`).run(),
+            1
+        );
+        assert.equal(
+            new FormulaRunner(`IS_AFTER(${latest}, ${later})`).run(),
+            1
+        );
+        assert.equal(new FormulaRunner(later).run(), '2026-05-04 12:00pm');
+        const legacy = new FormulaRunner(forward, false, {
+            legacyRuntime: true,
+        });
+        assert.equal(legacy.run(), 0);
+        assert.deepEqual(legacy.runWithOutcome(), { type: 'value', value: 1 });
+    });
+
     const typeErrors = [
         'LOWER(42)',
         'TRIM(42)',

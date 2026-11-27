@@ -286,8 +286,13 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
     visitFunctionCallExpr(node: FunctionCall): string | number {
         const name = node.callee as FormulaFunctionType;
         try {
-            const functionArguments = node.arguments.map((argument) =>
-                argument.accept(this)
+            const compareInstants =
+                !this.options.legacyRuntime &&
+                (name === 'IS_BEFORE' || name === 'IS_AFTER');
+            const functionArguments = node.arguments.map((argument, index) =>
+                compareInstants && index < 2
+                    ? this.evaluateDateOperand(argument)
+                    : argument.accept(this)
             );
             return this.handleFunctionCall(name, functionArguments);
         } catch (e) {
@@ -297,6 +302,23 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                 throw e;
             }
         }
+    }
+
+    private evaluateDateOperand(argument: Expr): AirtablePrimitive {
+        let expression = argument;
+        while (expression instanceof Grouping) expression = expression.expr;
+        if (
+            !(expression instanceof FunctionCall) ||
+            expression.callee !== 'DATEADD'
+        )
+            return argument.accept(this);
+
+        const values = expression.arguments.map((operand, index) =>
+            index === 0
+                ? this.evaluateDateOperand(operand)
+                : operand.accept(this)
+        );
+        return this.handleFunctionCall('DATEADD', values, true);
     }
 
     /**
@@ -416,7 +438,17 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
     private handleFunctionCall(
         functionName: FormulaFunctionType,
         unconvertedArgs: AirtablePrimitive[]
-    ) {
+    ): string | number;
+    private handleFunctionCall(
+        functionName: 'DATEADD',
+        unconvertedArgs: AirtablePrimitive[],
+        keepDateAddInstant: true
+    ): AirtablePrimitive;
+    private handleFunctionCall(
+        functionName: FormulaFunctionType,
+        unconvertedArgs: AirtablePrimitive[],
+        keepDateAddInstant = false
+    ): AirtablePrimitive {
         const moment = this.options.dateRuntime ?? sdkMoment;
         const convertedArgs = unconvertedArgs.map((arg) =>
             this.convertPrimitiveToStringOrNumber(arg)
@@ -571,6 +603,12 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                 }
 
                 const result = moment.utc(date).add(howMuchToAdd, unit);
+
+                // Date comparisons can consume the instant before formatting.
+                if (keepDateAddInstant && result.isValid()) {
+                    const exactDate = new Date(result.valueOf());
+                    if (Number.isFinite(exactDate.getTime())) return exactDate;
+                }
 
                 const format =
                     // Airtable doesn't display time if it's the start of day (00:00)

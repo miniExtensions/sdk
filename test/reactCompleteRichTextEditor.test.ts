@@ -1118,6 +1118,71 @@ for (const code of [
     });
 }
 
+for (const reverse of [false, true]) {
+    it(`pastes a URL over code ending at the following paragraph start (${reverse ? 'reverse' : 'forward'})`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        const requests = t.mock.method(f.window, 'fetch', () =>
+            assert.fail('Pasting a URL into code must not fetch it')
+        );
+        let submits = 0;
+        await f.render(
+            h(
+                'form',
+                {
+                    onSubmit(event: FormEvent<HTMLFormElement>) {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                h(ControlledCompleteEditor, {
+                    editorRef: ref,
+                    writes,
+                    initial: '```\nAlpha Beta\n```\n\nAfter',
+                })
+            )
+        );
+        const editor = await f.editor(ref);
+        const { view } = editor;
+        const { dom, state } = view;
+        const code = state.doc.firstChild;
+        assert.ok(code);
+        assert.equal(code.type.name, 'code_block');
+        assert.equal(state.doc.child(1).textContent, 'After');
+        const start = 1 + 'Alpha '.length;
+        const afterStart = code.nodeSize + 1;
+        const [anchor, head] = reverse
+            ? [afterStart, start]
+            : [start, afterStart];
+        await f.select(view, anchor, head);
+        assert.equal(view.state.selection.anchor, anchor);
+        assert.equal(view.state.selection.head, head);
+        const { from, to } = view.state.selection;
+        assert.equal(view.state.doc.textBetween(from, to), 'Beta');
+        assert.equal(f.document.activeElement, dom);
+
+        const url = 'https://example.test/path';
+        const event = await f.paste(view, { 'text/plain': url });
+        assert.equal(event.defaultPrevented, true);
+        assert.deepEqual(writes, ['```\nAlpha ' + url + '\n```\n\nAfter']);
+        assert.equal(view.state.doc.childCount, 2);
+        assert.equal(view.state.doc.child(0).type.name, 'code_block');
+        assert.equal(view.state.doc.child(0).textContent, 'Alpha ' + url);
+        assert.equal(view.state.doc.child(1).textContent, 'After');
+        assert.equal(dom.querySelector('a'), null);
+        assert.equal(view.state.selection.empty, true);
+        assert.equal(view.state.selection.head, start + url.length);
+        assert.equal(view.state.selection.$head.parent.type.name, 'code_block');
+        assert.equal(ref.current, editor);
+        assert.equal(editor.view, view);
+        assert.equal(view.dom, dom);
+        assert.equal(f.document.activeElement, dom);
+        assert.equal(submits, 0);
+        assert.equal(requests.mock.callCount(), 0);
+    });
+}
+
 for (const selected of [true, false]) {
     it(`keeps native paragraph URL behavior at a ${selected ? 'text selection' : 'caret'}`, async (t) => {
         const f = await completeRichTextFixture(t);

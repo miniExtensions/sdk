@@ -2759,6 +2759,11 @@ const renderForm = (page: FormLoadedResult): void => {
         return true;
     };
     if (manualPages && bindingOwner != null) {
+        const fieldTitles = new Map(
+            bindingOwner.controller
+                .getState()
+                .fields.map(({ fieldId, title }) => [fieldId, title])
+        );
         formPages = createFormPageOwner({
             fields: bindingOwner,
             isCurrent: () => ownsLinkedRender() && !formRetired,
@@ -2946,8 +2951,10 @@ const renderForm = (page: FormLoadedResult): void => {
                 const title =
                     problem.fieldId == null
                         ? 'Form'
-                        : (page.payload.fieldIdsToSchemas[problem.fieldId]
-                              ?.airtableField.name ?? 'Field');
+                        : (fieldTitles.get(problem.fieldId) ??
+                          page.payload.fieldIdsToSchemas[problem.fieldId]
+                              ?.airtableField.name ??
+                          'Field');
                 pageProblems.append(
                     element(
                         'li',

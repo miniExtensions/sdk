@@ -12,6 +12,10 @@ const galleryRetryImagePath = '/gallery-retry.svg';
 const galleryOfficePath = '/gallery-office-original';
 const galleryOfficeOrigin = 'https://view.officeapps.live.com';
 const galleryOfficeFrameText = 'Synthetic Office iframe';
+const frontDownloadSvg =
+    '<svg xmlns="http://www.w3.org/2000/svg"><title>Front</title></svg>';
+const rearDownloadSvg =
+    '<svg xmlns="http://www.w3.org/2000/svg"><title>Rear</title></svg>';
 
 const hostSource = (format, nativeConfirm) => `
 ${
@@ -163,6 +167,8 @@ const fullscreenRows=[
     {...first,id:'fullscreen-front',thumbnailUrl:first.url},
     {...second,id:'fullscreen-rear',thumbnailUrl:second.url},
 ];
+const fullscreenDownloadRows=fullscreenRows.map((row)=>({...row,filename:row.filename+'.svg'}));
+const fullscreenDownloadReads=[];
 const fullscreenLabels={
     attachments:'Pièces jointes plein écran',previewNotAvailable:'Aucun aperçu',
     previous:'Précédent',next:'Suivant',delete:'Effacer la pièce jointe',
@@ -172,6 +178,7 @@ const fullscreenLabels={
 function FullscreenHost(){
     const [mode,setMode]=useState(null);
     const [index,setIndex]=useState(0);
+    const [downloadRows,setDownloadRows]=useState(fullscreenDownloadRows);
     const [intercomOpen,setIntercomOpen]=useState(false);
     const [confirm,setConfirm]=useState(false);
     const cancel=useRef(null);
@@ -179,17 +186,25 @@ function FullscreenHost(){
     window.fullscreenProbe={
         intercom:setIntercomOpen,
         stats:()=>({...fullscreenStats,dismissals:[...fullscreenStats.dismissals]}),
+        downloadReads:()=>[...fullscreenDownloadReads],
+        selectDownloadRow:setIndex,
+        renameDownload(){setDownloadRows((rows)=>[rows[0],{...rows[1],filename:'Vue arrière actualisée.svg'}]);},
     };
     return h('section',{className:'attachment-fullscreen-host'},
         h('button',{type:'button',onClick:()=>open('standalone')},'Ouvrir le plein écran'),
+        h('button',{type:'button',onClick:()=>open('download')},'Ouvrir les fichiers à télécharger'),
         NativeDialog&&h('button',{type:'button',onClick:()=>open('native')},'Ouvrir avec confirmation native'),
         mode&&h(AttachmentSlider,{
-            rows:fullscreenRows,currentIndex:index,
+            rows:mode==='download'?downloadRows:fullscreenRows,currentIndex:index,
             setCurrentIndex(next){fullscreenStats.selections++;setIndex(next);},
             navigationOwner:mode,downloadIdentity:index,
             canDownload:true,canOpen:true,
-            readDownload(){calls.fetch++;throw Error('Unexpected fullscreen download');},
-            onDelete(){fullscreenStats.deleteRequests++;if(mode==='native')setConfirm(true);},
+            readDownload(url){
+                if (mode!=='download') {calls.fetch++;throw Error('Unexpected fullscreen download');}
+                fullscreenDownloadReads.push(url);
+                return Promise.resolve(new Response(url===first.url?${JSON.stringify(frontDownloadSvg)}:${JSON.stringify(rearDownloadSvg)}));
+            },
+            onDelete:mode==='download'?undefined:()=>{fullscreenStats.deleteRequests++;if(mode==='native')setConfirm(true);},
             onDismiss(){fullscreenStats.dismissals.push(mode);setMode(null);},
             covered:confirm,intercomOpen,labels:fullscreenLabels,
         }),
@@ -892,6 +907,10 @@ export async function checkAttachmentSliderNavigationBrowser({
                 unexpectedRequests,
                 pageErrors,
             };
+            evidence.formats[format].fullscreenDownloadPress =
+                await checkFullscreenDownloadPress(page);
+            assert.deepEqual(unexpectedRequests, []);
+            assert.deepEqual(pageErrors, []);
         } finally {
             try {
                 await context?.close();
@@ -1794,6 +1813,139 @@ async function checkFullscreenSlider(page, nativeConfirm) {
         await page.evaluate((overflow) => {
             document.documentElement.style.overflow = overflow;
         }, baseline.oldOverflow);
+    }
+}
+
+async function checkFullscreenDownloadPress(page) {
+    const viewer = page.locator(fullscreenClass);
+    const download = viewer.getByRole('button', {
+        name: 'Télécharger la pièce jointe',
+    });
+    const rail = viewer.locator('.mx-sdk-attachment-thumbnail-rail');
+    const selected = rail.locator('button[data-selected="true"]');
+    const reads = () =>
+        page.evaluate(() => window.fullscreenProbe.downloadReads());
+    await page
+        .getByRole('button', { name: 'Ouvrir les fichiers à télécharger' })
+        .click();
+    await selected.getByText('Vue avant.svg', { exact: true }).waitFor();
+    const saves = [];
+    const capture = (file) => saves.push(file);
+    page.on('download', capture);
+    async function holdDownload(change) {
+        const original = await download.elementHandle();
+        await download.hover();
+        await page.mouse.down();
+        try {
+            await change();
+            assert.ok(
+                await download.evaluate(
+                    (button, held) => button === held,
+                    original
+                )
+            );
+            await original.evaluate((button) => {
+                window.fullscreenDownloadClick = null;
+                document.addEventListener(
+                    'click',
+                    (event) => {
+                        window.fullscreenDownloadClick = {
+                            sameButton: event.composedPath().includes(button),
+                            trusted: event.isTrusted,
+                            pointerType: event.pointerType,
+                            detail: event.detail,
+                        };
+                    },
+                    { capture: true, once: true }
+                );
+            });
+            await download.hover();
+        } finally {
+            try {
+                await page.mouse.up();
+                assert.deepEqual(
+                    await page.evaluate(() => window.fullscreenDownloadClick),
+                    {
+                        sameButton: true,
+                        trusted: true,
+                        pointerType: 'mouse',
+                        detail: 1,
+                    },
+                    'Release must deliver a trusted click to the held Download button'
+                );
+            } finally {
+                await original.dispose();
+            }
+        }
+    }
+    async function expectDownload(activate, filename) {
+        const [file] = await Promise.all([
+            page.waitForEvent('download'),
+            activate(),
+        ]);
+        assert.equal(file.suggestedFilename(), filename);
+        assert.equal(readFileSync(await file.path(), 'utf8'), rearDownloadSvg);
+        await download.waitFor();
+    }
+    try {
+        await holdDownload(async () => {
+            await page.evaluate(() =>
+                window.fullscreenProbe.selectDownloadRow(1)
+            );
+            await selected
+                .getByText('Vue arrière.svg', { exact: true })
+                .waitFor();
+        });
+        assert.deepEqual(
+            await reads(),
+            [],
+            'A held Download press must not read the newly selected attachment'
+        );
+        assert.equal(saves.length, 0);
+        await expectDownload(() => download.click(), 'Vue arrière.svg');
+        assert.deepEqual(await reads(), ['/rear.svg']);
+        assert.equal(saves.length, 1);
+        await expectDownload(
+            () =>
+                holdDownload(async () => {
+                    await page.evaluate(() =>
+                        window.fullscreenProbe.renameDownload()
+                    );
+                    await selected
+                        .getByText('Vue arrière actualisée.svg', {
+                            exact: true,
+                        })
+                        .waitFor();
+                }),
+            'Vue arrière actualisée.svg'
+        );
+        assert.deepEqual(await reads(), ['/rear.svg', '/rear.svg']);
+        assert.equal(saves.length, 2);
+        await expectDownload(
+            () => download.press('Enter'),
+            'Vue arrière actualisée.svg'
+        );
+        assert.deepEqual(await reads(), [
+            '/rear.svg',
+            '/rear.svg',
+            '/rear.svg',
+        ]);
+        assert.equal(saves.length, 3);
+        return {
+            staleReads: 0,
+            staleDownloads: 0,
+            trustedReleaseOnSameButton: true,
+            freshRear: true,
+            metadataRefresh: true,
+            keyboardDownload: true,
+        };
+    } finally {
+        page.off('download', capture);
+        for (const file of saves) await file.delete();
+        await viewer
+            .getByRole('button', { name: 'Fermer la visionneuse' })
+            .click();
+        await viewer.waitFor({ state: 'detached' });
     }
 }
 

@@ -12,7 +12,7 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 const unavailable = 'Attachment presentation unavailable';
 const mask = '••••••••';
-export const multipleAttachmentsConsumerCheckCount = 146;
+export const multipleAttachmentsConsumerCheckCount = 148;
 
 export const multipleAttachmentsSaveOptions = {
     captchaVal: null,
@@ -1673,6 +1673,92 @@ export const importPackage = name => import(name);
                         assert.equal(protectedReads, 0);
                         assert.equal(genericWrites, 0);
                         assert.equal(rowEvents, 0);
+                    }
+                );
+                await check(
+                    'mixed PNG selection retains the original eligible File and signals rejection without relaxing the count limit',
+                    async () => {
+                        const mixed = make({
+                            config: {
+                                allowedAttachmentTypes: ['images'],
+                                allowedFiles: 2,
+                                sizeLimit: 1,
+                            },
+                            values: [],
+                        });
+                        await act(async () => root.render(mixed.tree()));
+                        const bytes = Buffer.from(
+                            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aPs0AAAAASUVORK5CYII=',
+                            'base64'
+                        );
+                        const file = (name, padding = 0) =>
+                            new window.File(
+                                [bytes, new Uint8Array(padding)],
+                                name,
+                                { type: 'image/png' }
+                            );
+                        const small = file('PRIVATE_small.png');
+                        const oversized = file(
+                            'PRIVATE_large.png',
+                            1024 * 1024
+                        );
+                        const pick = async (files) => {
+                            const input =
+                                container.querySelector('input[type=file]');
+                            Object.defineProperty(input, 'files', {
+                                configurable: true,
+                                value: files,
+                            });
+                            await act(async () =>
+                                input.dispatchEvent(
+                                    new window.Event('change', {
+                                        bubbles: true,
+                                    })
+                                )
+                            );
+                        };
+                        const savesBefore = saves;
+                        const uploadsBefore = uploadCalls;
+                        await pick([
+                            small,
+                            file('second.png'),
+                            file('third.png'),
+                        ]);
+                        assert.deepEqual(
+                            mixed.controller.getSnapshot().files,
+                            []
+                        );
+                        assert(button('Upload next file').disabled);
+                        await pick([oversized, small]);
+                        assert.deepEqual(mixed.controller.getSnapshot().files, [
+                            small,
+                        ]);
+                        assert.equal(
+                            mixed.controller.getSnapshot().files[0],
+                            small
+                        );
+                        const status = container.querySelector('[role=status]');
+                        assert.match(status.textContent, /1 pending file/);
+                        assert.match(
+                            status.textContent,
+                            /Attachment activity could not be completed/
+                        );
+                        assert(!status.textContent.includes(oversized.name));
+                        assert.equal(mixed.requests.length, 0);
+                        assert.equal(uploadCalls, uploadsBefore);
+                        assert.equal(saves, savesBefore);
+                        await act(async () =>
+                            button('Upload next file').click()
+                        );
+                        assert.equal(mixed.requests.length, 1);
+                        assert.equal(mixed.requests[0].input.file, small);
+                        assert.equal(uploadCalls, uploadsBefore + 1);
+                        assert.equal(saves, savesBefore);
+                        assert.deepEqual(
+                            mixed.controller.getSnapshot().files,
+                            []
+                        );
+                        noResources();
                     }
                 );
                 formats.push({

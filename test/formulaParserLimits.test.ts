@@ -144,6 +144,25 @@ describe('opt-in formula parsing bounds', () => {
             3
         );
         assert.deepEqual(new Lexer(' \n').tokenize({ maxTokens: 0 }), []);
+        assert.equal(
+            new Lexer('1 +\r\n 2\r\n').tokenize({ cache: false, maxTokens: 3 })
+                .length,
+            3
+        );
+        assert.deepEqual(new Lexer('\r\n').tokenize({ maxTokens: 0 }), []);
+        assert.deepEqual(
+            new Lexer('"first\r\nsecond"\r\n').tokenize({ maxTokens: 1 }),
+            [{ type: TokenTypes.STRING, value: 'first\r\nsecond' }]
+        );
+        assert.throws(
+            () =>
+                new Lexer('1\r\n + 2').tokenize({ cache: false, maxTokens: 1 }),
+            tokenLimit
+        );
+        assert.throws(
+            () => new Lexer('1\r+ 2').tokenize({ cache: false }),
+            /Unknown token/
+        );
         assert.throws(
             () => new Lexer('1 + 2').tokenize({ maxTokens: 2 }),
             tokenLimit

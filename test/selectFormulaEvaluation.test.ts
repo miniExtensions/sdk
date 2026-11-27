@@ -4,6 +4,7 @@ import {
     createSelectFormulaEvaluation,
     createSelectConditionEvaluation,
 } from '../src/ui/selectFormulaEvaluation.js';
+import { projectSelectChoices } from '../src/ui/selectChoiceProjection.js';
 import type { InterpreterContext } from '../src/formulas/interpreter/interpreter.js';
 
 const context: InterpreterContext = {
@@ -59,6 +60,34 @@ describe('portable Select formula evaluation', () => {
         assert.equal(result.matches('good'), true);
         assert.throws(() => result.matches('bad'), /compile failed/);
         assert.deepEqual(visited, ['good', 'bad']);
+    });
+    it('retains the same unselected choices for LF and CRLF formula line endings', () => {
+        const alpha = { id: 'alpha', name: 'Alpha' };
+        const beta = { id: 'beta', name: 'Beta' };
+        const project = (formula: string) =>
+            projectSelectChoices({
+                choices: [alpha, beta],
+                selectedValues: [],
+                getValue: (choice) => choice.name,
+                allowedOptionIds: null,
+                retainSelected: true,
+                evaluation: createSelectFormulaEvaluation({
+                    enabled: true,
+                    context,
+                    formulaForChoice: (choice: typeof alpha) =>
+                        choice === alpha ? formula : 'FALSE()',
+                }),
+            });
+        for (const lineEnding of ['\n', '\r\n']) {
+            const result = project(`RECORD_ID() =${lineEnding}'rec_original'`);
+            assert.deepEqual(result, { status: 'ready', choices: [alpha] });
+            assert.equal(result.choices[0], alpha);
+        }
+        assert.deepEqual(project('RECORD_ID() =\r\n'), {
+            status: 'retained-selected',
+            reason: 'evaluation-error',
+            choices: [],
+        });
     });
     it('distinguishes empty linked state from all-loading without eager conversion', () => {
         const linkedContext: InterpreterContext = {

@@ -176,6 +176,8 @@ export async function openImageAnnotationMarkerEditor(
                 const keydown = (event: KeyboardEvent) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return;
                     event.preventDefault();
+                    if (action === 'undo' && event.key === ' ' && event.repeat)
+                        return;
                     control.click();
                 };
                 control.addEventListener('keydown', keydown);

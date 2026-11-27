@@ -48,7 +48,6 @@ const useCommitEffect =
 
 type PagingFocusRequest = {
     button: HTMLButtonElement;
-    intent: PortalPagingIntent;
     sawPending: boolean;
     cancel(): void;
 };
@@ -107,8 +106,7 @@ export function PortalPagingControls({
             button === request.button &&
             captured &&
             (captured.intent === 'retry-next-page' ||
-                (request.intent === 'next-page' &&
-                    captured.intent === 'next-page')) &&
+                captured.intent === 'next-page') &&
             !used.has(captured.offer) &&
             button.ownerDocument.activeElement === button.ownerDocument.body
         ) {
@@ -183,7 +181,6 @@ export function PortalPagingControls({
                               };
                               const request: PagingFocusRequest = {
                                   button,
-                                  intent: captured.intent,
                                   sawPending: false,
                                   cancel() {
                                       document.removeEventListener(

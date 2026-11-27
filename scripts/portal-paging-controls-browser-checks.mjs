@@ -295,24 +295,34 @@ export async function checkPortalPagingControlsBrowser({
         }
 
         const pageTwo = { intent: 'next-page', offset: 'page_2' };
+        const retryTwo = { intent: 'retry-next-page', offset: 'page_2' };
         const pageThree = { intent: 'next-page', offset: 'page_3' };
         const moreLabel = 'Más registros';
+        const retryLabel = 'Reintentar';
         const outside = page.getByRole('button', { name: 'Outside paging' });
         const second = page.getByText('Second', { exact: true });
         const third = page.getByText('Third', { exact: true });
         evidence.successfulContinuation = [];
-        for (const mode of [
-            'keyboard',
-            'pointer',
-            'outside',
-            'outside-and-blur',
-        ]) {
+        evidence.successfulRetryContinuation = [];
+        const modes = ['keyboard', 'pointer', 'outside', 'outside-and-blur'];
+        const cases = [false, true].flatMap((afterRetry) =>
+            modes.map((mode) => ({ afterRetry, mode }))
+        );
+        for (const { afterRetry, mode } of cases) {
             await page.reload();
             await first.waitFor();
-            if (mode === 'pointer') await loadMore.click();
+            if (!afterRetry && mode === 'pointer') await loadMore.click();
             else {
                 await loadMore.focus();
                 await page.keyboard.press('Enter');
+            }
+            if (afterRetry) {
+                await pending.waitFor();
+                await page.evaluate(() => window.pagingProof.fail());
+                await retry.waitFor();
+                assert.equal(await focus(), retryLabel);
+                if (mode === 'pointer') await retry.click();
+                else await page.keyboard.press('Enter');
             }
             await pending.waitFor();
             assert.equal(await loadMore.isDisabled(), true);
@@ -321,14 +331,24 @@ export async function checkPortalPagingControlsBrowser({
                 () => document.activeElement === document.body
             );
             const active = await status();
-            assert.deepEqual(active.requests, [pageTwo]);
-            assert.deepEqual(active.clicks, [
-                {
-                    trusted: true,
-                    detail: mode === 'pointer' ? 1 : 0,
-                    label: moreLabel,
-                },
-            ]);
+            const requestsBeforeContinuation = afterRetry
+                ? [pageTwo, retryTwo]
+                : [pageTwo];
+            const activationClick = {
+                trusted: true,
+                detail: mode === 'pointer' ? 1 : 0,
+                label: afterRetry ? retryLabel : moreLabel,
+            };
+            assert.deepEqual(active.requests, requestsBeforeContinuation);
+            assert.deepEqual(
+                active.clicks,
+                afterRetry
+                    ? [
+                          { trusted: true, detail: 0, label: moreLabel },
+                          activationClick,
+                      ]
+                    : [activationClick]
+            );
             if (mode === 'outside' || mode === 'outside-and-blur') {
                 await outside.click();
                 if (mode === 'outside-and-blur')
@@ -348,20 +368,31 @@ export async function checkPortalPagingControlsBrowser({
             assert.equal(await loadMore.isEnabled(), true);
             const continuedFocus = await focus();
             const observation = { mode, pendingFocus, continuedFocus };
-            evidence.successfulContinuation.push(observation);
+            const observations = afterRetry
+                ? evidence.successfulRetryContinuation
+                : evidence.successfulContinuation;
+            observations.push(observation);
             assert.equal(
                 continuedFocus,
                 mode === 'keyboard' ? moreLabel : pendingFocus,
-                'Focus after a successful page with another cursor'
+                afterRetry
+                    ? 'Focus after a successful Retry with another cursor'
+                    : 'Focus after a successful page with another cursor'
             );
 
             await page.keyboard.press('Enter');
             if (mode === 'keyboard') {
                 await pending.waitFor();
                 const next = await status();
-                assert.deepEqual(next.requests, [pageTwo, pageThree]);
+                assert.deepEqual(next.requests, [
+                    ...requestsBeforeContinuation,
+                    pageThree,
+                ]);
                 assert.deepEqual(next.keyboard, [
                     { trusted: true, label: moreLabel },
+                    ...(afterRetry
+                        ? [{ trusted: true, label: retryLabel }]
+                        : []),
                     { trusted: true, label: moreLabel },
                 ]);
                 await page.evaluate(() => window.pagingProof.succeed());
@@ -374,7 +405,9 @@ export async function checkPortalPagingControlsBrowser({
             const { requests, submits } = await status();
             assert.deepEqual(
                 requests,
-                mode === 'keyboard' ? [pageTwo, pageThree] : [pageTwo]
+                mode === 'keyboard'
+                    ? [...requestsBeforeContinuation, pageThree]
+                    : requestsBeforeContinuation
             );
             assert.equal(submits, 0);
             Object.assign(observation, { requests, submits });

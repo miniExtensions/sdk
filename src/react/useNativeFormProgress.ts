@@ -174,15 +174,23 @@ export function useNativeFormProgress({
                 async () => {
                     if (writerState.hasConflict) return;
 
-                    const result = await ports.write({
-                        isWriteStillEligible: () =>
-                            writerStateRef.current === writerState &&
-                            !writerState.hasConflict,
-                        expectedRevision: writerState.revision,
-                        record,
-                        shareId,
-                        writerId: writerState.writerId,
-                    });
+                    let result: Awaited<
+                        ReturnType<NativeFormProgressPorts['write']>
+                    >;
+                    try {
+                        result = await ports.write({
+                            isWriteStillEligible: () =>
+                                writerStateRef.current === writerState &&
+                                !writerState.hasConflict,
+                            expectedRevision: writerState.revision,
+                            record,
+                            shareId,
+                            writerId: writerState.writerId,
+                        });
+                    } catch {
+                        // Finish the failed attempt so a later edit can use the last saved revision.
+                        return;
+                    }
 
                     if (result.status === 'written') {
                         writerState.revision = result.revision;

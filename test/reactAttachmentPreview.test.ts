@@ -3,13 +3,21 @@ import { readFileSync } from 'node:fs';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { JSDOM } from 'jsdom';
-import { act, createElement as h, StrictMode, type ReactNode } from 'react';
+import {
+    act,
+    createElement as h,
+    StrictMode,
+    useState,
+    type ReactElement,
+    type ReactNode,
+} from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Root } from 'react-dom/client';
 import {
     AttachmentPreview,
     type AttachmentPreviewSource,
 } from '../src/react/index.js';
+import { renderAttachmentSlider } from '../src/react/AttachmentSlider.js';
 import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
 const word =
@@ -525,6 +533,121 @@ it('cancels a revoked owned Word response before reading or publishing its bytes
     assert.equal(f.host.querySelector('.docx-wrapper'), null);
     assert.equal(f.assets.length, 0);
     assert.equal(f.submits(), 0);
+});
+
+it('cancels unread late Word bodies after the stock slider moves or closes', async (t) => {
+    const f = await fixture(t);
+    const retired = [deferred<Response>(), deferred<Response>()];
+    const observations = retired.map(() => ({ cancels: 0, blobReads: 0 }));
+    let nextRetired = 0;
+    let currentReads = 0;
+    let dismisses = 0;
+    let deletes = 0;
+    let downloads = 0;
+    const requests: string[] = [];
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requests.push(url);
+        if (url === source('A').url) return retired[nextRetired++].promise;
+        assert.equal(url, source('B').url);
+        return {
+            blob: async () => {
+                currentReads++;
+                return new f.window.Blob([bytes('B')]);
+            },
+        } as unknown as Response;
+    });
+    const rows = ['A', 'B'].map((id) => ({
+        ...source(id),
+        id,
+        filename: `${id}.docx`,
+    }));
+    const labels = {
+        attachments: 'Attachments',
+        previewNotAvailable: 'Preview unavailable',
+        previous: 'Previous attachment',
+        next: 'Next attachment',
+        close: 'Close',
+        delete: 'Delete',
+        download: 'Download',
+        open: 'Open',
+    };
+    const inlinePortal = ({ children }: { children: ReactElement }) => children;
+    function Viewer() {
+        const [currentIndex, setCurrentIndex] = useState(0);
+        const [open, setOpen] = useState(true);
+        return renderAttachmentSlider(
+            {
+                rows: open ? rows : [],
+                currentIndex,
+                setCurrentIndex,
+                labels,
+                navigationOwner: 'word-preview',
+                downloadIdentity: currentIndex,
+                canDownload: false,
+                canOpen: false,
+                readDownload: async () => {
+                    downloads++;
+                    throw Error('Unexpected download');
+                },
+                onDelete: () => deletes++,
+                onDismiss: () => {
+                    dismisses++;
+                    setOpen(false);
+                },
+            },
+            inlinePortal
+        );
+    }
+    const resolveRetired = (index: number) =>
+        act(async () => {
+            const receipt = observations[index];
+            retired[index].resolve({
+                body: {
+                    cancel: async () => {
+                        receipt.cancels++;
+                    },
+                },
+                blob: async () => {
+                    receipt.blobReads++;
+                    return new f.window.Blob([bytes('A')]);
+                },
+            } as unknown as Response);
+        });
+    const click = async (selector: string) => {
+        const button = f.host.querySelector(selector);
+        assert.ok(button instanceof f.window.HTMLButtonElement, selector);
+        await act(async () => button.click());
+    };
+
+    await f.render(h(Viewer, { key: 'navigation' }));
+    await click('button[aria-label="Next attachment"]');
+    await f.ready('Controlled attachment B');
+    const currentDocument = f.host.querySelector('.docx-wrapper');
+    assert.ok(currentDocument);
+    await resolveRetired(0);
+    assert.equal(f.host.querySelector('.docx-wrapper'), currentDocument);
+    assert.equal(f.host.textContent.includes('Controlled attachment A'), false);
+
+    await f.render(h(Viewer, { key: 'dismissal' }));
+    await click('button[data-testid="close-dialog"]');
+    await resolveRetired(1);
+    assert.equal(f.host.querySelector('[role="dialog"]'), null);
+    assert.equal(f.host.querySelector('.docx-wrapper'), null);
+    assert.equal(dismisses, 1);
+    assert.deepEqual(requests, [
+        source('A').url,
+        source('B').url,
+        source('A').url,
+    ]);
+    assert.equal(currentReads, 1);
+    assert.equal(deletes, 0);
+    assert.equal(downloads, 0);
+    assert.equal(f.submits(), 0);
+    assert.deepEqual(observations, [
+        { cancels: 1, blobReads: 0 },
+        { cancels: 1, blobReads: 0 },
+    ]);
 });
 
 for (const strict of [false, true]) {

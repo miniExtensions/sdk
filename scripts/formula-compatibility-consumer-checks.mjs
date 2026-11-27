@@ -24,6 +24,41 @@ new HostedFormulaRunner('1',false,{legacyRuntime:false});
 new HostedFormulaRunner('1',false,{resolveFieldReference:()=>({nativeValue:1,toPrimitive:async()=>1})});
 `;
 
+export function checkFormulaDatePrecision({ FormulaRunner }, receipt = {}) {
+    const second = 'DATEADD("2026-05-04T12:00:00Z", 1, "second")';
+    const noon = 'DATEADD("2026-05-04T12:00:00Z", 0, "seconds")';
+    const after = `IS_AFTER(${second}, ${noon})`;
+    const legacy = new FormulaRunner(after, false, { legacyRuntime: true });
+    Object.assign(receipt, {
+        forward: new FormulaRunner(after).run(),
+        reverse: new FormulaRunner(`IS_AFTER(${noon}, ${second})`).run(),
+        equal: new FormulaRunner(`IS_AFTER(${second}, ${second})`).run(),
+        before: new FormulaRunner(`IS_BEFORE(${noon}, (${second}))`).run(),
+        chained: new FormulaRunner(
+            `IS_AFTER(DATEADD((${second}), 1, "second"), ${second})`
+        ).run(),
+        secondDisplay: new FormulaRunner(second).run(),
+        wholeMinuteDisplay: new FormulaRunner(
+            'DATEADD("2026-05-04T12:00:00Z", 30, "minutes")'
+        ).run(),
+        dayDisplay: new FormulaRunner('DATEADD("2026-05-04", 1, "day")').run(),
+        legacy: legacy.run(),
+        strictOutcome: legacy.runWithOutcome(),
+    });
+    assert.deepEqual(receipt, {
+        forward: 1,
+        reverse: 0,
+        equal: 0,
+        before: 1,
+        chained: 1,
+        secondDisplay: '2026-05-04 12:00pm',
+        wholeMinuteDisplay: '2026-05-04 12:30pm',
+        dayDisplay: '2026-05-05',
+        legacy: 0,
+        strictOutcome: { type: 'value', value: 1 },
+    });
+}
+
 /** Public installed exports; separate Moment versions model a real host. */
 export async function checkFormulaCompatibilityConsumer({ consumerDirectory }) {
     const consumer = createRequire(join(consumerDirectory, 'package.json'));
@@ -59,6 +94,7 @@ export async function checkFormulaCompatibilityConsumer({ consumerDirectory }) {
                 consumer('@miniextensions/sdk/ui'),
             ],
         ]) {
+            checkFormulaDatePrecision(api);
             const alpha = { id: 'alpha', name: 'Alpha' };
             const beta = { id: 'beta', name: 'Beta' };
             for (const lineEnding of ['\n', '\r\n']) {

@@ -348,6 +348,7 @@ export function createFormPageOwner(
                     });
                     continue;
                 }
+                const onCurrentPage = currentIds.includes(id);
                 const issue = validatePageField(
                     snapshot.field,
                     control.draft?.data[id],
@@ -356,13 +357,14 @@ export function createFormPageOwner(
                     {
                         data: control.draft?.data ?? {},
                         fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,
+                        validatingNext: active < last && onCurrentPage,
                     },
                     openHistory?.get(id)
                 );
-                if (issue && (active === last || currentIds.includes(id)))
+                if (issue && (active === last || onCurrentPage))
                     problems.push(issue);
                 if (
-                    (active === last || currentIds.includes(id)) &&
+                    (active === last || onCurrentPage) &&
                     snapshot.visibility.type === 'visible' &&
                     !snapshot.readOnly &&
                     (snapshot.scalar?.valid === false ||

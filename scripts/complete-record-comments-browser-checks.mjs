@@ -46,6 +46,13 @@ export async function checkRecordCommentsBrowser({
     try {
         const root = realpathSync(consumer);
         directory = mkdtempSync(join(root, '.record-comments-browser-'));
+        const historyFixture = {
+            cursor: 'synthetic older /+=',
+            id: 'shared-comment-id',
+            older: 'A – The flight is boarding.',
+            newer: 'B – Meet me at Gate 4 after landing.',
+            selected: 'Gate 4',
+        };
         const source = `
 import React,{createElement as h,useState,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -56,19 +63,40 @@ const mode=new URLSearchParams(location.search).get('mode');
 const nativeAppearance=mode?.startsWith('native-');
 const emptyHistory=mode?.endsWith('-empty')||mode==='native-send-error';
 const comparePopulated=mode?.endsWith('-populated');
+const historySelection=mode==='native-history-selection';
+const historyFixture=${JSON.stringify(historyFixture)};
 const stableInvoker=emptyHistory||comparePopulated||mode==='stable-invoker';
 if (comparePopulated) document.body.style.lineHeight = '1.5';
-const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,openSecond;
+const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,releaseOlder,openSecond,submits=0;
 const labels=mode==='spanish'?{...recordCommentsLabels,title:'Comentarios',addComment:'Añadir comentario',send:'Enviar',close:'Cerrar'}:mode==='literal'?{...recordCommentsLabels,title:'<Comentarios>'}:recordCommentsLabels;
 function commentText(index) {
     if (comparePopulated && index === 0) return 'W'.repeat(160);
     return 'Literal row ' + index + ' @[missing]';
 }
-function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:emptyHistory?0:40},(_,index)=>({id:String(index),text:commentText(index),createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='native-send-error')throw new Error('Synthetic append failure');if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
+function historyPage(text,createdTime) {
+    return {
+        readableVersionOfRecordPrimaryValue:'Ada',
+        comments:[{id:historyFixture.id,text,createdTime,lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}],
+    };
+}
+function listHistory(input) {
+    if (input.cursor===undefined)
+        return {...historyPage(historyFixture.newer,'2024-01-02'),nextCursor:historyFixture.cursor};
+    if (input.cursor!==historyFixture.cursor||releaseOlder)
+        throw new Error('Unexpected synthetic history cursor');
+    return new Promise(resolve=>{
+        releaseOlder=()=>{
+            releaseOlder=undefined;
+            resolve(historyPage(historyFixture.older,'2024-01-01'));
+        };
+    });
+}
+function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(historySelection)return listHistory(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:emptyHistory?0:40},(_,index)=>({id:String(index),text:commentText(index),createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='native-send-error')throw new Error('Synthetic append failure');if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
 const first=controller('captured-A'),second=controller('captured-B');
-function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,stableInvoker?h('button',{ref:invoker},'Record options'):null,stableInvoker&&open?null:h('button',{onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,...(nativeAppearance?{appearance:'native'}:{}),returnFocusTo:stableInvoker?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
-createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),openSecond:()=>openSecond()};
+function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,stableInvoker?h('button',{ref:invoker},'Record options'):null,stableInvoker&&open?null:h('button',{type:'button',onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,...(nativeAppearance?{appearance:'native'}:{}),returnFocusTo:stableInvoker?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
+const app=h(App);
+createRoot(document.querySelector('main')).render(h(React.StrictMode,null,historySelection?h('form',{onSubmit(event){event.preventDefault();submits++;}},app):app));
+window.commentsProof={snapshot:()=>structuredClone(historySelection?{...stats,submits}:stats),release:()=>release(),openSecond:()=>openSecond(),hasPendingOlder:()=>releaseOlder!==undefined,releaseOlder:()=>releaseOlder()};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
         const bundle = await build({
@@ -739,6 +767,148 @@ window.commentsProof={snapshot:()=>structuredClone(stats),release:()=>release(),
             .click({ position: { x: 2, y: 2 } });
         assert.equal(await page.getByRole('dialog').count(), 0);
         evidence.results.push({ group: 'two-dialog-escape-backdrop' });
+
+        await open('native-history-selection');
+        const newerComment = page.getByText(historyFixture.newer, {
+            exact: true,
+        });
+        const olderComments = page.getByRole('button', {
+            name: 'Load older comments',
+            exact: true,
+        });
+        await newerComment.waitFor({ state: 'visible' });
+        assert.deepEqual(
+            await page.locator('.mx-sdk-comments-text').allTextContents(),
+            [historyFixture.newer]
+        );
+        await olderComments.click();
+        await page.waitForFunction(() =>
+            window.commentsProof.hasPendingOlder()
+        );
+        await newerComment.waitFor({ state: 'visible' });
+        const selectionEvidence = await page.evaluate(
+            async ({ newer, selected }) => {
+                const history = document.querySelector(
+                    'dialog[open] .mx-sdk-comments-history'
+                );
+                const rows = () =>
+                    Array.from(history.querySelectorAll('article'));
+                const textNode = (row) =>
+                    row?.querySelector('.mx-sdk-comments-text span')
+                        ?.firstChild;
+                const retainedArticle = rows()[0];
+                const retainedText = textNode(retainedArticle);
+                if (
+                    !(retainedText instanceof Text) ||
+                    retainedText.data !== newer ||
+                    !window.commentsProof.hasPendingOlder()
+                )
+                    throw new Error(
+                        'Expected visible B while older A is pending'
+                    );
+                const offset = retainedText.data.indexOf(selected);
+                if (offset < 0) throw new Error('Missing selection text in B');
+                const range = document.createRange();
+                range.setStart(retainedText, offset);
+                range.setEnd(retainedText, offset + selected.length);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                const snapshot = () => ({
+                    text: selection.toString(),
+                    anchorIsRetainedText: selection.anchorNode === retainedText,
+                    focusIsRetainedText: selection.focusNode === retainedText,
+                    anchorOffset: selection.anchorOffset,
+                    focusOffset: selection.focusOffset,
+                    rangeCount: selection.rangeCount,
+                });
+                const before = snapshot();
+                let observer, timeout;
+                try {
+                    await new Promise((resolve, reject) => {
+                        observer = new MutationObserver(() => {
+                            if (rows().length === 2) resolve();
+                        });
+                        observer.observe(history, { childList: true });
+                        timeout = window.setTimeout(
+                            () =>
+                                reject(
+                                    new Error('Older comments did not render')
+                                ),
+                            5000
+                        );
+                        window.commentsProof.releaseOlder();
+                    });
+                } finally {
+                    observer?.disconnect();
+                    window.clearTimeout(timeout);
+                }
+                const currentRows = rows();
+                return {
+                    before,
+                    after: snapshot(),
+                    order: currentRows.map(
+                        (row) =>
+                            row.querySelector('.mx-sdk-comments-text')
+                                .textContent
+                    ),
+                    sameArticle: currentRows[1] === retainedArticle,
+                    sameTextNode: textNode(currentRows[1]) === retainedText,
+                    retainedTextConnected: retainedText.isConnected,
+                    retainedText: retainedText.data,
+                };
+            },
+            historyFixture
+        );
+        const selectionStats = await page.evaluate(() =>
+            window.commentsProof.snapshot()
+        );
+        evidence.historySelection = {
+            ...selectionEvidence,
+            sharedCommentId: historyFixture.id,
+            cursor: historyFixture.cursor,
+            ...selectionStats,
+        };
+        const anchorOffset = historyFixture.newer.indexOf(
+            historyFixture.selected
+        );
+        const expectedSelection = {
+            text: historyFixture.selected,
+            anchorIsRetainedText: true,
+            focusIsRetainedText: true,
+            anchorOffset,
+            focusOffset: anchorOffset + historyFixture.selected.length,
+            rangeCount: 1,
+        };
+        assert.deepEqual(selectionEvidence.before, expectedSelection);
+        assert.deepEqual(selectionEvidence.order, [
+            historyFixture.older,
+            historyFixture.newer,
+        ]);
+        assert.equal(selectionEvidence.sameArticle, true);
+        assert.equal(selectionEvidence.sameTextNode, true);
+        assert.equal(selectionEvidence.retainedTextConnected, true);
+        assert.equal(selectionEvidence.retainedText, historyFixture.newer);
+        assert.deepEqual(selectionEvidence.after, expectedSelection);
+        assert.deepEqual(selectionStats, {
+            reads: [
+                { childExtensionAccessToken: 'captured-A' },
+                {
+                    childExtensionAccessToken: 'captured-A',
+                    cursor: historyFixture.cursor,
+                },
+            ],
+            writes: [],
+            invalidations: [],
+            dismissals: 0,
+            submits: 0,
+        });
+        assert.equal(await olderComments.count(), 0);
+        assert.equal(await page.getByRole('textbox').inputValue(), '');
+        evidence.results.push({
+            group: 'deferred-older-page-retains-selection',
+        });
+
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =

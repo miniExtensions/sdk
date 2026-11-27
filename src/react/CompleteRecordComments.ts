@@ -149,9 +149,15 @@ export function CompleteRecordComments(
                 : null,
             ...state.history.map((comment, index) => {
                 const presentation = presentRecordComment(comment);
+                // Older pages prepend rows. Count from the newest end to keep
+                // the existing DOM, including repeated comment IDs, in place.
+                const newestOffset = state.history.length - 1 - index;
                 return h(
                     'article',
-                    { key: index, className: 'mx-sdk-comments-row' },
+                    {
+                        key: `${comment.id}-${newestOffset}`,
+                        className: 'mx-sdk-comments-row',
+                    },
                     h(
                         'div',
                         { className: 'mx-sdk-comments-author' },

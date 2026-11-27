@@ -110,7 +110,7 @@ const sourcePolicy={type:'source',getSource(url){
 const tag=value=>value===null?null:Object.keys(people).find(key=>people[key]===value)||'FOREIGN';
 const tags=value=>Array.isArray(value)?value.map(tag):tag(value);
 let model={mode:'single',value:null,choices:[people.A,people.B],ownerKey:'A',readOnly:false,
- visible:true,mounted:true,refuseChanges:false,images:'source',writer:'initial',revision:0,
+ visible:true,mounted:true,refuseChanges:false,copyAfterWrite:false,images:'source',writer:'initial',revision:0,
  placeholder:'Find a colleague',availableOptions:'Offered people',helpId:'collaborator-help',errorId:'collaborator-error',invalid:true,portableTheme:false};
 let root,setModel,saved;
 const settled=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
@@ -146,7 +146,10 @@ function App({initial}){
    const values=Array.isArray(next)?next:next===null?[]:[next];
    state.writes.push({mode:current.mode,valueTags:tags(next),originalObjects:values.every(value=>tag(value)!=='FOREIGN'),
     writer:current.writer,adjacent:document.getElementById('adjacent')?.value});
-   if(!current.refuseChanges)update(previous=>({...previous,value:next,revision:previous.revision+1}));
+   if(!current.refuseChanges){
+    const value=current.copyAfterWrite&&Array.isArray(next)?next.map(person=>({...person})):next;
+    update(previous=>({...previous,value,revision:previous.revision+1}));
+   }
   }};
  const component=current.mode==='single'?SingleCollaboratorField:MultipleCollaboratorsField;
  let field=null;
@@ -1294,11 +1297,38 @@ export async function checkCompleteCollaboratorBrowser({
         assert.deepEqual(value.writes.at(-1).valueTags, ['AlexFirst']);
         assert.deepEqual(value.badges, [alexName]);
 
+        const copyStart = await configure({
+            valueTags: ['A', 'C'],
+            choiceTags: ['A', 'B'],
+            copyAfterWrite: true,
+        });
+        await remove('Alpha Person').press('Enter');
+        await writeCount(copyStart.writes.length + 1);
+        const copied = await snapshot();
+        assert.deepEqual(copied.valueTags, ['FOREIGN']);
+        assert.deepEqual(copied.badges, ['Retired Person']);
+        assert.deepEqual(copied.writes.at(-1).valueTags, ['C']);
+        assert.equal(copied.writes.at(-1).originalObjects, true);
+        assert.equal(copied.submits - copyStart.submits, 0);
+        evidence.copiedRemoval = {
+            focusedId: copied.focusedId,
+            badges: copied.badges,
+            writes: copied.writes.length - copyStart.writes.length,
+            originalSurvivor: copied.writes.at(-1).originalObjects,
+            submits: copied.submits - copyStart.submits,
+        };
+        assert.equal(
+            copied.focusedId,
+            'native-collaborator',
+            'Accepted removal with a copied survivor must restore focus'
+        );
+
         await configure({
             mode: 'multiple',
             valueTags: ['C', 'A', 'Adup', 'literal'],
             choiceTags: ['A', 'B'],
             readOnly: true,
+            copyAfterWrite: false,
         });
         assert.equal(await input().count(), 0);
         assert.equal(await page.locator('#field button').count(), 0);

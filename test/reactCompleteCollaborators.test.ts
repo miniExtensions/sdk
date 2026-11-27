@@ -71,6 +71,7 @@ async function fixture(
         props?: Partial<Common>;
         expectedParentEvents?: readonly string[];
         acceptSingle?: (person: Person) => Person;
+        acceptMultiple?: (people: Person[]) => Person[];
         /** Let a cold-runtime scenario arrange real synchronous commits first. */
         deferInitialRender?: boolean;
     } = {}
@@ -235,7 +236,7 @@ async function fixture(
             if (!state.accept) return;
             if (state.multiple) {
                 assert.ok(Array.isArray(value));
-                state.many = value;
+                state.many = args.acceptMultiple?.(value) ?? value;
             } else {
                 assert.ok(!Array.isArray(value));
                 state.single =
@@ -1064,6 +1065,33 @@ it('multiple accepted badge removal returns focus to its input while refusal can
     assert.deepEqual(f.state.many, []);
     assert.equal(f.window.document.activeElement === f.input(), true);
     assert.equal(f.count(), 3);
+});
+
+it('multiple removal restores focus after the host copies the remaining collaborator', async (t) => {
+    let moveFocus: (() => void) | undefined;
+    const f = await fixture(t, {
+        multiple: true,
+        value: [first, retired],
+        acceptMultiple: (people) => {
+            moveFocus?.();
+            return people.map((person) => ({ ...person }));
+        },
+    });
+    await f.keyboardRemove(first);
+    assert.equal(f.count(), 1);
+    assert.deepEqual(f.invocations[0]?.value, [retired]);
+    assert.ok(Array.isArray(f.invocations[0]?.value));
+    assert.equal(f.invocations[0].value[0], retired);
+    assert.deepEqual(f.state.many, [retired]);
+    assert.notEqual(f.state.many[0], retired);
+    assert.equal(f.window.document.activeElement, f.input());
+
+    f.state.many = [first, retired];
+    await f.render();
+    moveFocus = () => f.adjacent.focus();
+    await f.keyboardRemove(first);
+    assert.equal(f.count(), 2);
+    assert.equal(f.window.document.activeElement, f.adjacent);
 });
 
 it('stored retired identities remain removable but are never discovered or merged into offered choices', async (t) => {

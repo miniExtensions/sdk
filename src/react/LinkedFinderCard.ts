@@ -643,6 +643,11 @@ function Carousel({
                           key: attempt.failureKey,
                           src: attempt.source,
                           alt: attempt.image.filename,
+                          'aria-hidden':
+                              card.layout === 'gallery' &&
+                              attemptIndex !== index
+                                  ? true
+                                  : undefined,
                           'data-visible':
                               attemptIndex === index ? 'true' : 'false',
                           style: { objectFit: card.imageFit },

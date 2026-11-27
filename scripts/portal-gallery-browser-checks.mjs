@@ -20,7 +20,7 @@ const triggers=new Map();const registrations=Array.from({length:12},(_,id)=>elem
 function App(){
  const [state,change]=useState({columns:undefined,width:'full',height:112,fit:'cover',phase:'initial',titles:true,fields:1,status:'rows',empty:false,reload:false,pending:null,detail:'broken',filename:'Broken document.pdf',unlinkParity:false});set=patch=>change(old=>({...old,...patch}));
  useLayoutEffect(()=>{committed++;});
- const images=state.phase==='shrink'?[baseImages[1]]:state.phase==='reorder'?[baseImages[1],baseImages[0]]:state.phase==='all-broken'?baseImages.map((item,index)=>index<6?{...item,url:new URL('/gallery-broken.svg#'+index,location.href).href}:item):baseImages;
+ const images=state.phase==='shrink'?[baseImages[1]]:state.phase==='reorder'?[baseImages[1],baseImages[0]]:state.phase==='pair'?baseImages.slice(0,2):state.phase==='all-broken'?baseImages.map((item,index)=>index<6?{...item,url:new URL('/gallery-broken.svg#'+index,location.href).href}:item):baseImages;
  const rows=state.empty?[]:Array.from({length:12},(_,i)=>({key:'row-'+i,recordId:'row-'+i,accessibleLabel:'Record '+i,testId:'synthetic-gallery-row',projection:{status:'present',layout:'gallery',primary:i===1?'Unnamed':'Project '+i,primaryIsEmpty:i===1,fields:[{key:'detail',title:state.titles?'Detail':null,leaf:{kind:'literal',text:i===2?'Long detail '.repeat(100):'Short detail'}},{key:'files',title:state.titles?'Files':null,leaf:{kind:'attachmentImages',images:[],entries:[{id:'missing',thumbnailUrl:null,filename:'Missing document.pdf'},{id:'broken',thumbnailUrl:state.detail==='missing'?null:new URL(state.detail==='valid'?'/gallery-3.svg':'/gallery-broken.svg',location.href).href,filename:state.filename}],empty:'none',emptyLabel:'No files'}}],language:'en',images:i===0?images:[],shouldRenderThumbnail:true,imageHeight:state.height,imageFit:state.fit,thumbnailLocation:'left',fieldsPerCardRow:state.fields,labels:{previousImage:'Previous image',nextImage:'Next image',viewImage:'View image {index}',noImage:'No image'}},open:{label:'Open '+i,registerTrigger:registrations[i],activate:()=>{opens++;document.getElementById('before').focus();}},requestUnlink:i===0?{label:'Unlink first',description:'Unlink membership',activate:()=>{unlinks++;}}:null,needsReviewLabel:null}));
  const displayedRows = state.unlinkParity ? rows.slice(0, 2).map(row => ({
     ...row,
@@ -389,6 +389,35 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
     assert(previousViewport);
     const indicatorStrip = [];
     const populatedBacking = [];
+    const selectedPhotoAccessibility = [];
+    evidence.selectedPhotoAccessibility = selectedPhotoAccessibility;
+    await patch({ phase: 'pair' });
+    const carousel = first.locator('.mx-sdk-finder-carousel');
+    const track = carousel.locator('.mx-sdk-finder-carousel-track');
+    const images = track.locator('img');
+    const photoState = async () => {
+        const { opens, unlinks, pages, submits } = await snapshot();
+        const roleNames = [];
+        for (const name of ['Image 1', 'Image 2']) {
+            if (await track.getByRole('img', { name, exact: true }).count())
+                roleNames.push(name);
+        }
+        return {
+            roleNames,
+            roleCount: await track.getByRole('img').count(),
+            domNames: await images.evaluateAll((nodes) =>
+                nodes.map((node) => node.getAttribute('alt'))
+            ),
+            selectedName: await track
+                .locator('img[data-visible="true"]')
+                .getAttribute('alt'),
+            geometry: await carousel.evaluate((node) => {
+                const { width, height } = node.getBoundingClientRect();
+                return { width, height };
+            }),
+            operations: { opens, unlinks, pages, submits },
+        };
+    };
     for (const width of [375, 1280]) {
         await page.setViewportSize({ ...previousViewport, width });
         const strip = first.locator('.mx-sdk-finder-carousel-dots');
@@ -421,6 +450,8 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         assert.deepEqual(pointerBacking, populated);
         await firstIndicator.click();
         await firstIndicator.focus();
+        const initialPhotos = await photoState();
+        const initialNodes = await images.elementHandles();
         await page.keyboard.press('Tab');
         const keyboardFocus = await secondIndicator.evaluate(
             (button) =>
@@ -429,13 +460,34 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         );
         assert(keyboardFocus);
         await page.keyboard.press('Enter');
+        const keyboardPhotos = await photoState();
+        const focusRetained = await secondIndicator.evaluate(
+            (button) =>
+                button === document.activeElement &&
+                button.matches(':focus-visible') &&
+                button.getAttribute('aria-current') === 'true'
+        );
+        const sameNodes = await images.evaluateAll(
+            (nodes, initial) =>
+                nodes.length === initial.length &&
+                nodes.every((node, index) => node === initial[index]),
+            initialNodes
+        );
+        await Promise.all(initialNodes.map((node) => node.dispose()));
+        selectedPhotoAccessibility.push({
+            width,
+            initial: initialPhotos,
+            keyboard: keyboardPhotos,
+            focusRetained,
+            sameNodes,
+        });
         assert.equal(
             await secondIndicator.getAttribute('aria-current'),
             'true'
         );
         assert.equal(
             await media.locator('img[data-visible="true"]').getAttribute('alt'),
-            'Image 1'
+            'Image 2'
         );
         const keyboardBacking = await readBacking(media);
         assert.deepEqual(keyboardBacking, populated);
@@ -455,6 +507,41 @@ export async function checkPortalGalleryBrowser({ page, evidence, output }) {
         });
     }
     await page.setViewportSize(previousViewport);
+    await patch({ phase: 'reorder' });
+    for (const {
+        width,
+        initial,
+        keyboard,
+        focusRetained,
+        sameNodes,
+    } of selectedPhotoAccessibility) {
+        assert.deepEqual(initial.domNames, ['Image 1', 'Image 2']);
+        assert.deepEqual(keyboard.domNames, initial.domNames);
+        assert.equal(sameNodes, true);
+        assert.equal(initial.selectedName, 'Image 1');
+        assert.equal(keyboard.selectedName, 'Image 2');
+        assert.equal(focusRetained, true);
+        assert.deepEqual(keyboard.geometry, initial.geometry);
+        assert.deepEqual(initial.operations, {
+            opens: 0,
+            unlinks: 0,
+            pages: 0,
+            submits: 0,
+        });
+        assert.deepEqual(keyboard.operations, initial.operations);
+        assert.deepEqual(
+            initial.roleNames,
+            ['Image 1'],
+            `Initially exposed photo at ${width}px`
+        );
+        assert.deepEqual(
+            keyboard.roleNames,
+            ['Image 2'],
+            `Keyboard-selected exposed photo at ${width}px`
+        );
+        assert.equal(initial.roleCount, 1);
+        assert.equal(keyboard.roleCount, 1);
+    }
     await page.waitForFunction(() =>
         [...document.querySelectorAll('.mx-sdk-portal-gallery-row')].every(
             (n) =>

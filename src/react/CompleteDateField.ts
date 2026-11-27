@@ -57,6 +57,21 @@ export type CompleteDateFieldProps = {
     inputTestId?: string;
 };
 
+function renderVietnameseMonth(
+    cellProps: React.ComponentProps<'td'> & {
+        key: number;
+        'data-value': number;
+    },
+    month: number,
+    year: number
+): React.ReactElement {
+    return h(
+        'td',
+        cellProps,
+        moment.utc([year, month, 1]).locale('vi').format('MMM')
+    );
+}
+
 /** Complete native-compatible picker; the legacy ISO-only controls stay separate. */
 export function CompleteDateField(
     props: CompleteDateFieldProps
@@ -64,6 +79,7 @@ export function CompleteDateField(
     const calendarId = `${useId()}-calendar`;
     const clientTimeZone = useMemo(() => moment.tz.guess(), []);
     const format = getDateInputFormat(props.airtableDateConfig);
+    const locale = getDateInputMomentLocale(props.language) ?? 'en';
     const zone =
         props.airtableDateConfig.type === 'dateTime'
             ? getDateInputTimeZone(props.airtableDateConfig)
@@ -322,6 +338,7 @@ export function CompleteDateField(
                     const { key, ...attributes } = dayProps;
                     return h('td', { key }, h('div', attributes, date.date()));
                 },
+                ...(locale === 'vi' && { renderMonth: renderVietnameseMonth }),
                 renderView(_view, renderCalendar) {
                     return h(
                         DatePopoverContent,
@@ -411,7 +428,7 @@ export function CompleteDateField(
                 onNavigate(next) {
                     if (current()) view.current = next;
                 },
-                locale: getDateInputMomentLocale(props.language) ?? 'en',
+                locale,
                 displayTimeZone: zone,
             }),
             props.description != null

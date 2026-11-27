@@ -25,7 +25,7 @@ function App(){
  const latest=useRef(state);useLayoutEffect(()=>{latest.current=state;});observed=state;change=patch=>setState(old=>({...old,...patch}));
  const dialog=useRef(null);useLayoutEffect(()=>{if(state.dialog&&!dialog.current.open)dialog.current.showModal();},[state.dialog]);
  const owner=state.owner;
- const field=state.mounted?h(state.config.type==='date'?DateField:CompleteDateField,{id:state.id,sessionId:state.session,airtableDateConfig:state.config,value:state.value,setValue(value){if(!latest.current.current||latest.current.readonly||latest.current.owner!==owner)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},owner:{token:owner,isCurrent:()=>latest.current.current&&latest.current.owner===owner},readOnly:state.readonly,dateRange:state.readonly?'today or in the future':undefined,language:'en',title:'Appointment',description:'Choose a synthetic date',formId:'date-form',calendarAlign:state.align}):null;
+ const field=state.mounted?h(state.config.type==='date'?DateField:CompleteDateField,{id:state.id,sessionId:state.session,airtableDateConfig:state.config,value:state.value,setValue(value){if(!latest.current.current||latest.current.readonly||latest.current.owner!==owner)return false;writes.push({value,writer:state.writer});setState(old=>({...old,value}));return true;},owner:{token:owner,isCurrent:()=>latest.current.current&&latest.current.owner===owner},readOnly:state.readonly,dateRange:state.readonly?'today or in the future':undefined,language:mode==='vietnamese'?'vi':'en',title:'Appointment',description:'Choose a synthetic date',formId:'date-form',calendarAlign:state.align}):null;
  const controls=h(React.Fragment,null,
   h('div',{className:'fixture-toolbar'},
    h('button',{type:'button'},'Outside calendar'),
@@ -393,6 +393,42 @@ export async function checkCompleteDateBrowser({
         await page.keyboard.press('Tab');
         assert.equal(await input.inputValue(), '31/1/2025');
         await finish('month-boundary-dismiss-reset-recover');
+
+        input = await open('vietnamese');
+        assert.equal(await input.inputValue(), '2025-02-01');
+        await input.click();
+        await page.locator('.rdtDays .rdtSwitch').click();
+        const months = page.locator('.rdtMonth:visible');
+        const labels = Array.from(
+            { length: 12 },
+            (_, month) => `Thg ${String(month + 1).padStart(2, '0')}`
+        );
+        assert.deepEqual(await months.allTextContents(), labels);
+        assert.equal(
+            await page.locator('.rdtMonth.rdtActive').textContent(),
+            'Thg 02'
+        );
+        const beforeMonthSelection = await snapshot();
+        assert.equal(beforeMonthSelection.value, '2025-02-01');
+        // Pointer focus leaving the input can recommit its unchanged text.
+        assert(beforeMonthSelection.writes.length <= 1);
+        for (const write of beforeMonthSelection.writes)
+            assert.deepEqual(write, { value: '2025-02-01', writer: 'first' });
+        await finish('vietnamese-month-labels');
+        await page.getByRole('cell', { name: 'Thg 07', exact: true }).click();
+        assert.deepEqual(
+            (await snapshot()).writes,
+            beforeMonthSelection.writes
+        );
+        await page
+            .locator('.rdtDay:not(.rdtOld):not(.rdtNew)[data-value="15"]')
+            .click();
+        assert.deepEqual((await snapshot()).writes, [
+            ...beforeMonthSelection.writes,
+            { value: '2025-07-15', writer: 'first' },
+        ]);
+        assert.deepEqual((await snapshot()).saves, []);
+        await finish('vietnamese-july-day-selection');
 
         input = await open('datetime');
         assert.equal(await input.inputValue(), '2024-07-01 10:30');

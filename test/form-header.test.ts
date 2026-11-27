@@ -8,6 +8,7 @@ import {
 } from '../src/forms/index.js';
 import {
     AirtableFieldType,
+    removeMarkdown,
     type AirtableField,
     type AirtableValue,
 } from '../src/formulas/index.js';
@@ -122,13 +123,38 @@ describe('complete Form display source selection', () => {
             ),
             'First\n\nSecond\n\nThird\n\nFourth\n\nFifth\n\nLast'
         );
+        for (const markup of [
+            '<p>Formula title</p>',
+            '<p title="5 > 3">Formula title</p>',
+        ]) {
+            assert.equal(
+                resolveFormHeaderTitle(
+                    fieldSource(markup, formulaField),
+                    'Extension'
+                ),
+                'Formula title'
+            );
+        }
         assert.equal(
             resolveFormHeaderTitle(
-                fieldSource('<p>Formula title</p>', formulaField),
+                fieldSource('#123 **alert**', formulaField),
                 'Extension'
             ),
-            'Formula title'
+            '#123 alert'
         );
+    });
+
+    it('keeps literal stock comparison signs in a Formula title only', () => {
+        const title = 'Alert if stock < 5 or stock > 30';
+        assert.equal(removeMarkdown(title), 'Alert if stock  30');
+        assert.equal(
+            resolveFormHeaderTitle(
+                fieldSource(title, formulaField),
+                'Extension'
+            ),
+            title
+        );
+        assert.equal(removeMarkdown(title), 'Alert if stock  30');
     });
 
     it('keeps ordinary title HTML as plain text rather than interpreting it', () => {

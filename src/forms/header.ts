@@ -1,7 +1,7 @@
 import type { AirtableField, AirtableValue } from '../formulas/types.js';
 import { getReadableStringFromAirtableValue } from '../formulas/valueConversion.js';
 import { hasRenderableHTMLContent } from '../react/html/sanitizeHTML.js';
-import { removeMarkdown } from '../formulas/removeMarkdown.js';
+import { removeFormTitleMarkdown } from '../formulas/removeMarkdown.js';
 
 /** One current, condition-filtered field; never a record store or linked cache. */
 export type FormDisplayField =
@@ -63,7 +63,7 @@ export function resolveFormHeaderTitle(
     if (source.field.value == null) return '';
     const title = readable(source.field);
     return source.field.field.config.type === 'formula'
-        ? removeMarkdown(title)
+        ? removeFormTitleMarkdown(title)
         : title;
 }
 

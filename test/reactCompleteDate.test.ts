@@ -549,6 +549,34 @@ it('navigates actual year/month controls without an early commit and can interru
     assert.deepEqual(f.writes, ['2024-01-31']);
 });
 
+it('gives each Vietnamese month a distinct visible label and writes only the chosen day', async (t) => {
+    const f = await fixture(t, { value: '2025-02-01', language: 'vi' });
+    await f.open();
+    await f.click('.rdtDays .rdtSwitch');
+    const months = Array.from(f.window.document.querySelectorAll('.rdtMonth'));
+    const labels = Array.from(
+        { length: 12 },
+        (_, month) => `Thg ${String(month + 1).padStart(2, '0')}`
+    );
+    assert.deepEqual(
+        months.map((month) => month.textContent),
+        labels
+    );
+    assert.equal(
+        f.window.document.querySelector('.rdtMonth.rdtActive')?.textContent,
+        'Thg 02'
+    );
+    assert.deepEqual(f.writes, []);
+    const july = months.find((month) => month.textContent === 'Thg 07');
+    assert.ok(july);
+    await act(async () => {
+        july.dispatchEvent(new f.window.MouseEvent('click', { bubbles: true }));
+    });
+    assert.deepEqual(f.writes, []);
+    await f.click('.rdtDay:not(.rdtOld):not(.rdtNew)[data-value="15"]');
+    assert.deepEqual(f.writes, ['2025-07-15']);
+});
+
 for (const identity of ['field', 'session', 'kind', 'owner'] as const)
     it(`resets unfinished drafts across committed ${identity} A-to-B-to-A without writing`, async (t) => {
         const f = await fixture(t);

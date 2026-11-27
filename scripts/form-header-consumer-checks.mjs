@@ -36,6 +36,7 @@ const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@mini
 const {renderToString}=await import('react-dom/server');
 const image='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="208" height="48"%3E%3Crect width="208" height="48" fill="green"/%3E%3C/svg%3E';
 const field={id:'accepted-field',name:'Current source',description:null,isPrimaryField:false,isComputed:false,config:{type:'singleLineText',options:null}};
+const formulaField={...field,isComputed:true,config:{type:'formula',options:{isValid:true,result:field.config}}};
 let identity={owner:'consumer',configuration:'v1',record:'table:A'},source={type:'static',value:'Initial <b>title</b>'},enabled=true,child=false,preview;
 const calls=[];
 const staticSource=value=>({type:'static',value});
@@ -67,6 +68,15 @@ try {
  await React.act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>errors.push(error.message)});});
  assert.deepEqual(errors,[]);assert.equal(container.firstChild,original);
  assert.equal(container.querySelector('h1').textContent,'Initial <b>title</b>');assert.equal(container.querySelector('h1 b'),null);assert.equal(container.querySelectorAll('img').length,2);
+ const comparison = 'Alert if stock < 5 or stock > 30';
+ for (const [value, expected] of [[comparison, comparison], ['<p><strong>Formatted title</strong></p>', 'Formatted title']]) {
+  source={type:'field',field:{status:'resolved',field:formulaField,value}};
+  assert.equal(forms.resolveFormHeaderTitle(source,'Fallback name'),expected);
+  await React.act(async()=>root.render(element()));
+  const heading=container.querySelector('h1');
+  assert.equal(heading.textContent,expected);
+  assert.equal(heading.childElementCount,0);
+ }
  for(const record of ['B','A']){identity={...identity,record:'table:'+record};source=staticSource('Record '+record);await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1').textContent,'Record '+record);}
  child=true;await React.act(async()=>root.render(element()));assert.equal(container.querySelectorAll('img').length,0);assert.equal(container.querySelector('h1').textContent,'Record A');
  child=false;enabled=false;source={type:'field',field:{status:'resolved',field,value:''}};await React.act(async()=>root.render(element()));assert.equal(container.querySelector('h1'),null);assert(!container.textContent.includes('Safe description'));assert(!container.textContent.includes('Safe footer'));assert.equal(container.querySelectorAll('button').length,0);

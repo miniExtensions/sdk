@@ -9,12 +9,21 @@
  * based on https://github.com/stiang/remove-markdown
  */
 
-const cache = new Map<string, string>();
+const markdownCache = new Map<string, string>();
+const formTitleCache = new Map<string, string>();
+const markup = /<[^>]+>/g;
+// A Form title can use angle brackets as comparison signs in plain text.
+const formTitleMarkup =
+    /<!--.*?-->|<!doctype\s+[^<>]*>|<\/?[a-z][\w:-]*(?=[\s/>])(?:[^<>"']|"[^"]*"|'[^']*')*>/gi;
 // Underscores within an identifier do not open or close Markdown emphasis.
 const emphasis =
     /(\*){1,3}(.+?)\1{1,3}|(?<![\p{L}\p{M}\p{N}_])(_{1,3})(?![_\s])(.+?)(?<![_\s])\3(?![\p{L}\p{M}\p{N}_])/gu;
 
-export const removeMarkdown = (markdown: string): string => {
+function plainTextFromMarkdown(
+    markdown: string,
+    tags: RegExp,
+    cache: Map<string, string>
+): string {
     if (cache.has(markdown)) {
         return cache.get(markdown)!;
     }
@@ -105,7 +114,7 @@ export const removeMarkdown = (markdown: string): string => {
         line = line.replace(/\[.*?\]\(.*?\)/g, (match) => match); // Preserve links
 
         // Remove HTML tags
-        line = line.replace(/<[^>]+>/g, '');
+        line = line.replace(tags, '');
 
         // Skip empty lines after processing
         if (line.trim() === '') {
@@ -124,4 +133,10 @@ export const removeMarkdown = (markdown: string): string => {
 
     cache.set(markdown, res);
     return res;
-};
+}
+
+export const removeMarkdown = (markdown: string): string =>
+    plainTextFromMarkdown(markdown, markup, markdownCache);
+
+export const removeFormTitleMarkdown = (markdown: string): string =>
+    plainTextFromMarkdown(markdown, formTitleMarkup, formTitleCache);

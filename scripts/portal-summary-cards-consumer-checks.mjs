@@ -159,6 +159,7 @@ try {
   assert.equal(observation.clamp,String(lines));assert.equal(observation.height,28*lines);assert(observation.scrollHeight>observation.height);assert.equal(observation.tooltip,observation.full);assert.equal(observation.titleSibling,'DD');heights.push({height,lines,pixels:observation.height});
  }
  const borders=[];
+ const authoredBreaks = [];
  for (const viewport of [{width:375,height:780},{width:1280,height:720}]) {
   await page.setViewportSize(viewport);
   const colors=await page.evaluate(()=>{
@@ -181,6 +182,34 @@ try {
    restored:'rgb(229, 231, 235)',
   });
   borders.push({viewport,colors});
+  const multiline = await page.evaluate(() => {
+   const lines = ['Dock A', 'Dock B', 'Dock C'];
+   const readable = lines.join('\n');
+   const cards = [{fieldId: 'stops', fieldName: 'Stops', readable}];
+   window.renderSummary(cards, 'tall');
+   const tall = document.querySelector('dd');
+   const range = document.createRange();
+   const tops = lines.map(line => {
+    const start = readable.indexOf(line);
+    range.setStart(tall.firstChild, start);
+    range.setEnd(tall.firstChild, start + line.length);
+    return range.getBoundingClientRect().top;
+   });
+   const tallResult = {
+    height: tall.clientHeight,
+    lineOffsets: tops.map(top => top - tops[0]),
+    tooltip: tall.title,
+   };
+   window.renderSummary(cards, 'short');
+   const short = document.querySelector('dd');
+   return {tall: tallResult, short: {height: short.clientHeight, tooltip: short.title}};
+  });
+  const expectedTooltip = 'Dock A\nDock B\nDock C';
+  assert.deepEqual(multiline, {
+   tall: {height: 84, lineOffsets: [0, 28, 56], tooltip: expectedTooltip},
+   short: {height: 28, tooltip: expectedTooltip},
+  }, 'Authored summary line breaks at ' + viewport.width + 'px');
+  authoredBreaks.push({viewport, ...multiline});
  }
  await page.setViewportSize({width:240,height:700});
  const mobile=await page.evaluate(()=>{window.renderSummary([{fieldId:'long',fieldName:'Long title for truncation at mobile width',readable:window.summaryLongText},{fieldId:'zero',fieldName:'Zero',readable:'0.00'}],'medium');const slots=Array.from(document.querySelectorAll('.mx-sdk-portal-summary-slot')),title=document.querySelector('dt');return {pageWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,slots:slots.map(element=>({left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right,top:element.getBoundingClientRect().top})),titleStyle:{overflow:getComputedStyle(title).overflow,ellipsis:getComputedStyle(title).textOverflow,whiteSpace:getComputedStyle(title).whiteSpace},titleClipped:title.scrollWidth>title.clientWidth};});
@@ -193,7 +222,7 @@ try {
  assert.equal(await page.locator('#summary-owner button,#summary-owner input,#summary-owner a').count(),0);
  assert.deepEqual(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie,href:location.href})),{local:0,session:0,cookies:'',href:origin+'/'});
  assert.deepEqual(pageErrors,[]);assert.deepEqual(externalRequests,[]);assert.deepEqual(unexpectedPaths,[]);assert.equal(documentRequests,1);
- console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),heights,borders,mobileClipping:true,desktopColumns:3,documentRequests,pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
+ console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),heights,borders,authoredBreaks,mobileClipping:true,desktopColumns:3,documentRequests,pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
 } finally {if(browser)await browser.close();if(server.listening)await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));}
 `;
 

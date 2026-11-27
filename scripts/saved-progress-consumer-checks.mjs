@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 
 /** Synthetic storage/locks only. This is SDK evidence, not installed native acceptance. */
 export async function assertSavedProgressConsumer({
@@ -74,6 +75,7 @@ export async function assertSavedProgressConsumer({
             listeners = new Set();
         let denied = false,
             ids = 0,
+            lockRequests = 0,
             subscriptions = 0,
             teardowns = 0,
             unmounted = false;
@@ -103,6 +105,7 @@ export async function assertSavedProgressConsumer({
                     held
                         ? {
                               request(name, callback) {
+                                  lockRequests++;
                                   return new Promise((resolve, reject) =>
                                       locks.push((failure) => {
                                           if (failure) {
@@ -168,14 +171,17 @@ export async function assertSavedProgressConsumer({
             get teardowns() {
                 return teardowns;
             },
+            get lockRequests() {
+                return lockRequests;
+            },
             get ids() {
                 return ids;
             },
             deny(value) {
                 denied = value;
             },
-            allowReads() {
-                readDenied = false;
+            denyReads(value) {
+                readDenied = value;
             },
             snapshot: () =>
                 forms.parseNativeFormProgressValue(
@@ -413,7 +419,7 @@ export async function assertSavedProgressConsumer({
             });
             assert.equal(t.container.querySelector('[role=alert]'), null);
             assert.equal(t.records.length, 0);
-            t.allowReads();
+            t.denyReads(false);
             await t.publish({ changed: true });
             assert(t.container.querySelector('[role=alert]'));
             assert.equal(t.data.get('form-progress-synthetic'), envelope());
@@ -472,6 +478,82 @@ export async function assertSavedProgressConsumer({
         await stale.release();
         assert.deepEqual(stale.snapshot().record, { x: 2 });
         await stale.unmount();
+        // A transient read failure inside the held lock leaves the saved revision intact.
+        const readRetry = await fixture({ held: true });
+        const progressKey = 'form-progress-synthetic';
+        const firstEdit = { edit: 'A' };
+        const failedEdit = { edit: 'B' };
+        const recoveredEdit = { edit: 'C' };
+        await readRetry.publish(firstEdit);
+        await readRetry.release();
+        assert.deepEqual(readRetry.snapshot(), {
+            record: firstEdit,
+            revision: 1,
+            writerId: 'writer-1',
+        });
+        const savedBytes = readRetry.data.get(progressKey);
+
+        const browserTimers = [];
+        mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'] });
+        try {
+            for (const name of [
+                'setTimeout',
+                'clearTimeout',
+                'setInterval',
+                'clearInterval',
+            ]) {
+                browserTimers.push(mock.method(window, name, globalThis[name]));
+            }
+            await readRetry.publish(failedEdit);
+            assert.equal(readRetry.locks.length, 1);
+            const beforeFailedRead = readRetry.io.length;
+            readRetry.denyReads(true);
+            await readRetry.release();
+            for (const readDenied of [true, false]) {
+                readRetry.denyReads(readDenied);
+                await act(async () => mock.timers.tick(60_000));
+                assert.equal(
+                    readRetry.container.querySelector('[role=alert]')
+                        ?.textContent,
+                    undefined
+                );
+                assert.equal(readRetry.data.get(progressKey), savedBytes);
+                assert.deepEqual(readRetry.records, [firstEdit, failedEdit]);
+                assert.equal(readRetry.lockRequests, 2);
+                assert.equal(readRetry.locks.length, 0);
+                assert.deepEqual(readRetry.io.slice(beforeFailedRead), [
+                    ['read', progressKey],
+                ]);
+            }
+        } finally {
+            for (const timer of browserTimers) timer.mock.restore();
+            mock.timers.reset();
+        }
+
+        const beforeRecovery = readRetry.io.length;
+        await readRetry.publish(recoveredEdit);
+        await readRetry.release();
+        assert.equal(readRetry.lockRequests, 3);
+        assert.equal(readRetry.locks.length, 0);
+        assert.deepEqual(readRetry.records, [
+            firstEdit,
+            failedEdit,
+            recoveredEdit,
+        ]);
+        assert.deepEqual(readRetry.io.slice(beforeRecovery), [
+            ['read', progressKey],
+            ['write', progressKey],
+        ]);
+        assert.deepEqual(readRetry.snapshot(), {
+            record: recoveredEdit,
+            revision: 2,
+            writerId: 'writer-1',
+        });
+        assert.equal(
+            readRetry.container.querySelector('[role=alert]')?.textContent,
+            undefined
+        );
+        await readRetry.unmount();
         // Cancellation cannot arm a newly acquired writer.
         const retired = await fixture({ held: true });
         await retired.publish({ old: true });

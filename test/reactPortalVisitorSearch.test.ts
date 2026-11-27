@@ -185,24 +185,54 @@ it('commits exact draft text on Enter or button click and clears without submitt
     assert.ok(input);
     assert.equal(label?.htmlFor, input.id);
     assert.equal(input.value, 'previous');
-    await act(async () => {
-        Object.getOwnPropertyDescriptor(
-            f.window.HTMLInputElement.prototype,
-            'value'
-        )?.set?.call(input, '  latest café  ');
-        input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
-    });
+    const edit = async (value: string) => {
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(
+                f.window.HTMLInputElement.prototype,
+                'value'
+            )?.set?.call(input, value);
+            input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+        });
+    };
+    const enter = async (keyCode: number, isComposing: boolean) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Enter',
+            keyCode,
+            isComposing,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => {
+            input.dispatchEvent(event);
+        });
+        return event;
+    };
+    input.focus();
+    await edit('に');
+    for (const [keyCode, isComposing] of [
+        [13, true],
+        [229, false],
+    ] as const) {
+        const event = await enter(keyCode, isComposing);
+        assert.deepEqual(
+            {
+                defaultPrevented: event.defaultPrevented,
+                commands: owner.commands.map(({ searchTerm }) => searchTerm),
+            },
+            { defaultPrevented: false, commands: [] }
+        );
+        assert.equal(input.value, 'に');
+        assert.equal(f.window.document.activeElement, input);
+    }
+
+    await edit('  latest café  ');
     assert.equal(input.value, '  latest café  ');
     assert.deepEqual(owner.commands, []);
-    await act(async () => {
-        input.dispatchEvent(
-            new f.window.KeyboardEvent('keydown', {
-                key: 'Enter',
-                bubbles: true,
-                cancelable: true,
-            })
-        );
-    });
+    assert.equal((await enter(13, false)).defaultPrevented, true);
+    assert.deepEqual(
+        owner.commands.map(({ source, searchTerm }) => [source, searchTerm]),
+        [['submit', '  latest café  ']]
+    );
     await f.click(button('Search'));
     await f.click(button('Clear search'));
     assert.deepEqual(

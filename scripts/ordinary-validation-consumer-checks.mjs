@@ -51,7 +51,35 @@ for(const c of corpus.conservativeRefusal){
  assert.equal(r.status,'native-fallback',c.name);
 }
 assert.deepEqual(api.validateOrdinaryFormField({fieldType:'singleLineText',airtableFieldConfig:{type:'singleLineText'},miniExtConfig:{characterLimit:0},value:'x',storedValue:undefined,isConditionallyHidden:false,isComputeMode:true}),{status:'supported',diagnostic:{code:'character-limit',limit:0}});
-console.log(process.argv[2]+': 427 installed ordinary validation cases passed without browser globals');
+const barcodeInput = {
+    fieldType: 'barcode',
+    airtableFieldConfig: { type: 'barcode', options: null },
+    miniExtConfig: { required: true },
+    storedValue: undefined,
+    isConditionallyHidden: false,
+    isComputeMode: false,
+    value: Object.freeze({ type: 'qr' }),
+};
+const populated = Object.freeze({ type: 'qr', text: '0012' });
+const required = { status: 'supported', diagnostic: { code: 'required' } };
+const valid = { status: 'supported', diagnostic: null };
+for (const [description, patch, expected] of [
+    ['empty Barcode object', { value: {} }, required],
+    ['Barcode with type but no text', {}, required],
+    ['populated Barcode', { value: populated }, valid],
+    ['optional Barcode', { miniExtConfig: {} }, valid],
+    ['hidden Barcode', { isConditionallyHidden: true }, valid],
+    ['readonly Barcode', { miniExtConfig: { required: true, readOnly: true } }, valid],
+    ['Compute Barcode', { isComputeMode: true }, valid],
+    ['unsupported Barcode text', { value: { type: 'qr', text: 12 } }, {
+        status: 'native-fallback',
+        reason: 'unproven-value',
+    }],
+]) {
+    assert.deepEqual(api.validateOrdinaryFormField({ ...barcodeInput, ...patch }), expected, description);
+}
+assert.equal(populated.text, '0012');
+console.log(process.argv[2]+': 435 installed ordinary validation cases passed without browser globals');
 `
     );
     try {
@@ -60,7 +88,7 @@ console.log(process.argv[2]+': 427 installed ordinary validation cases passed wi
                 cwd: consumerDirectory,
                 stdio: 'inherit',
             });
-        return 854;
+        return 870;
     } finally {
         rmSync(script);
         rmSync(fixture);

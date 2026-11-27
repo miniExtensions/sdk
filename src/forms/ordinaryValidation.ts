@@ -102,7 +102,7 @@ const empty = (kind: string, value: unknown): boolean => {
         (value.length === 0 || value.every((v) => v == null))
     )
         return true;
-    if (object(value) && 'text' in value)
+    if (object(value) && (kind === 'barcode' || 'text' in value))
         return (
             value.text == null ||
             (typeof value.text === 'string' && value.text.trim() === '')

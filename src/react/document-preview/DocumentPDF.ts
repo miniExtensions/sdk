@@ -57,12 +57,14 @@ function PDFPage({
     document,
     pageNumber,
     zoom,
+    widthRevision,
     isCurrent,
     failed,
 }: {
     document: PDFDocumentProxy;
     pageNumber: number;
     zoom: number;
+    widthRevision: number;
     isCurrent(): boolean;
     failed(): void;
 }): ReactNode {
@@ -103,7 +105,7 @@ function PDFPage({
             canvas.width = 0;
             canvas.height = 0;
         };
-    }, [document, pageNumber, zoom, isCurrent, failed]);
+    }, [document, pageNumber, zoom, widthRevision, isCurrent, failed]);
     return h('canvas', {
         ref,
         'aria-label': `PDF ${pageNumber}`,
@@ -119,6 +121,7 @@ export function DocumentPDF(props: PDFProps): ReactNode {
     const [page, setPage] = useState(1);
     const [zoom, setZoom] = useState(1);
     const [allPages, setAllPages] = useState(props.showAllPages === true);
+    const [widthRevision, setWidthRevision] = useState(0);
     const disposer = useRef(() => {});
     const failed = useRef(() => {});
     failed.current = () => {
@@ -126,6 +129,27 @@ export function DocumentPDF(props: PDFProps): ReactNode {
         disposer.current();
     };
     const failPage = useRef(() => failed.current()).current;
+    useEffect(() => {
+        if (!props.inGrid) return;
+        const element = host.current;
+        const Observer = element?.ownerDocument.defaultView?.ResizeObserver;
+        if (!element || !Observer || !props.isCurrent()) return;
+        let active = true;
+        let previous = element.offsetWidth;
+        const observer = new Observer(() => {
+            if (!active || !props.isCurrent()) return;
+            // Canvas height and scrollbar changes must not cause another fit.
+            const width = element.offsetWidth;
+            if (width === previous) return;
+            previous = width;
+            if (width > 0) setWidthRevision((value) => value + 1);
+        });
+        observer.observe(element, { box: 'border-box' });
+        return () => {
+            active = false;
+            observer.disconnect();
+        };
+    }, [props.inGrid, props.isCurrent]);
     useEffect(() => {
         const element = host.current;
         const ownerDocument = element?.ownerDocument;
@@ -410,6 +434,7 @@ export function DocumentPDF(props: PDFProps): ReactNode {
                             document,
                             pageNumber: number,
                             zoom,
+                            widthRevision,
                             isCurrent: props.isCurrent,
                             failed: failPage,
                         })

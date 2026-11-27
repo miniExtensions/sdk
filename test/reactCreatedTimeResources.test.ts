@@ -1468,6 +1468,23 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
                 );
             });
             const harness = documentCanvasHarness(t, f.window);
+            const widthObservers = new Set<OwnedWidthObserver>();
+            class OwnedWidthObserver {
+                target?: Element;
+                constructor(readonly notify: () => void) {}
+                observe(target: Element, options: ResizeObserverOptions) {
+                    assert.equal(options.box, 'border-box');
+                    this.target = target;
+                    widthObservers.add(this);
+                }
+                disconnect() {
+                    widthObservers.delete(this);
+                }
+            }
+            Object.defineProperty(f.window, 'ResizeObserver', {
+                configurable: true,
+                value: OwnedWidthObserver,
+            });
             const bytes = Buffer.from(documentFixtures.pdf, 'base64');
             const props: ControlledCreatedTimeFieldProps = {
                 ...base,
@@ -1533,18 +1550,66 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
             await untilDocument(
                 () => f.container.querySelector('canvas')?.width === 200
             );
+            const pageTwo = f.container.querySelector('canvas')!;
+            const pdfHost = f.container.querySelector('[data-document-pdf]')!;
+            const [observer] = widthObservers;
+            assert.equal(widthObservers.size, 1);
+            assert.equal(observer.target, pdfHost);
+            let width = 280;
+            Object.defineProperty(pdfHost, 'offsetWidth', { get: () => width });
+            Object.defineProperty(pageTwo.parentElement, 'clientWidth', {
+                get: () => width,
+            });
+            const fitWidth = async (value: number) => {
+                width = value;
+                await act(async () => observer.notify());
+                await untilDocument(
+                    () =>
+                        pageTwo.width === value &&
+                        pageTwo.dataset.renderedPage === '2'
+                );
+            };
+            await fitWidth(280);
+            await fitWidth(520);
+            await act(async () => observer.notify());
+            assert.equal(pageTwo.width, 520);
+            assert.equal(f.container.querySelector('canvas'), pageTwo);
+            assert.equal(harness.workers.length, 1);
+            await f.click(f.button('+'));
+            await untilDocument(() => pageTwo.width > 520);
+            width = 400;
+            await act(async () => observer.notify());
+            await untilDocument(
+                () =>
+                    Math.abs(pageTwo.width - 440) <= 1 &&
+                    pageTwo.dataset.renderedPage === '2'
+            );
             await f.click(f.button('Show all pages'));
             await untilDocument(
                 () =>
                     f.container.querySelectorAll('[data-rendered-page]')
                         .length === 2
             );
+            width = 280;
+            await act(async () => observer.notify());
+            await untilDocument(() => {
+                const canvases = [
+                    ...f.container.querySelectorAll('canvas'),
+                ].filter((canvas) => canvas.hasAttribute('data-rendered-page'));
+                return (
+                    canvases.length === 2 &&
+                    canvases.every(
+                        (canvas) => Math.abs(canvas.width - 308) <= 1
+                    )
+                );
+            });
             await f.click(f.button('Show one page'));
             await untilDocument(
                 () =>
                     f.container.querySelectorAll('[data-rendered-page]')
                         .length === 1
             );
+            assert.equal(pageTwo.dataset.renderedPage, '2');
             const oldClick = f.window.HTMLAnchorElement.prototype.click;
             let downloads = 0;
             f.window.HTMLAnchorElement.prototype.click = function () {
@@ -1578,6 +1643,9 @@ for (const kind of ['createdTime', 'lastModifiedTime'] as const) {
             await untilDocument(() =>
                 harness.workers.every((worker) => worker.terminated)
             );
+            assert.equal(widthObservers.size, 0);
+            await act(async () => observer.notify());
+            assert.equal(pageTwo.width, 0);
         });
 
         it('keeps MIME private in form thumbnails and renders known HTTP PDF modals without weakening iframe policy', async (t) => {

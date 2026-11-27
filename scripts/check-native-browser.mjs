@@ -61,6 +61,7 @@ import { join, resolve, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
+import { measureNativePhase } from './native-phase-timing.mjs';
 import {
     checkAttachmentPresentationBrowser,
     cleanupAttachmentPresentation,
@@ -1526,6 +1527,8 @@ assert(
     ['18.3.1', '19.2.0'].includes(nativeReactVersion),
     'Unsupported native React matrix version'
 );
+const timePhase = (phase, format, operation) =>
+    measureNativePhase({ react: nativeReactVersion, format, phase }, operation);
 const packageDirectory = resolve(process.env.SDK_NATIVE_PACKAGE_DIR ?? '');
 const proofDirectory = resolve(process.env.SDK_NATIVE_PROOF_DIR ?? '');
 const output = resolve(process.env.SDK_NATIVE_RESULT_DIR ?? '');
@@ -2296,188 +2299,261 @@ try {
                 encoding: 'utf8',
             }).trim(),
         };
-        browser = await chromium.launch({
-            executablePath,
-            headless: true,
-            chromiumSandbox: true,
-        });
+        browser = await timePhase('chromium.launch', 'shared', () =>
+            chromium.launch({
+                executablePath,
+                headless: true,
+                chromiumSandbox: true,
+            })
+        );
         report.chromium = browser.version();
         report.multipleAttachmentsHeldRemove = {};
-        await checkMultipleAttachmentsHeldRemoveBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.multipleAttachmentsHeldRemove,
-        });
+        await timePhase(
+            'checkMultipleAttachmentsHeldRemoveBrowser',
+            'esm',
+            () =>
+                checkMultipleAttachmentsHeldRemoveBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.multipleAttachmentsHeldRemove,
+                })
+        );
         report.canonicalRichText = {};
-        await checkCanonicalRichTextBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.canonicalRichText,
-        });
+        await timePhase('checkCanonicalRichTextBrowser', 'esm', () =>
+            checkCanonicalRichTextBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.canonicalRichText,
+            })
+        );
         report.completeRichText = {};
-        await checkCompleteRichTextBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeRichText,
-            output,
-        });
+        await timePhase('checkCompleteRichTextBrowser', 'esm', () =>
+            checkCompleteRichTextBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.completeRichText,
+                output,
+            })
+        );
         report.numberInputMask = {};
-        await checkNumberInputMaskBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.numberInputMask,
-        });
+        await timePhase('checkNumberInputMaskBrowser', 'esm', () =>
+            checkNumberInputMaskBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.numberInputMask,
+            })
+        );
         report.textareaInput = {};
-        await checkTextareaInputBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.textareaInput,
-        });
+        await timePhase('checkTextareaInputBrowser', 'esm', () =>
+            checkTextareaInputBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.textareaInput,
+            })
+        );
         report.attachmentPresentation = {};
         report.completeLocalizedNumeric = {};
-        await checkCompleteLocalizedNumericBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeLocalizedNumeric,
-            output,
-        });
+        await timePhase('checkCompleteLocalizedNumericBrowser', 'esm', () =>
+            checkCompleteLocalizedNumericBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.completeLocalizedNumeric,
+                output,
+            })
+        );
         report.urlClear = {};
-        await checkUrlClearBrowser({
-            browser,
-            consumer: temporary,
-            readArchiveMember,
-            evidence: report.urlClear,
-        });
+        await timePhase('checkUrlClearBrowser', 'esm', () =>
+            checkUrlClearBrowser({
+                browser,
+                consumer: temporary,
+                readArchiveMember,
+                evidence: report.urlClear,
+            })
+        );
         report.completeDate = {};
-        await checkCompleteDateBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeDate,
-            output,
-        });
+        await timePhase('checkCompleteDateBrowser', 'esm', () =>
+            checkCompleteDateBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.completeDate,
+                output,
+            })
+        );
         report.calendar = {};
-        await checkCalendarBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.calendar,
-            output,
-            readArchiveMember,
-        });
+        await timePhase('checkCalendarBrowser', 'esm', () =>
+            checkCalendarBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.calendar,
+                output,
+                readArchiveMember,
+            })
+        );
         report.archiveMemberReads = readArchiveMember.stats();
         report.createdTime = {};
-        await checkCreatedTimeControlledBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.createdTime,
-            output,
-        });
+        await timePhase(
+            'checkCreatedTimeControlledBrowser:createdTime',
+            'esm',
+            () =>
+                checkCreatedTimeControlledBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.createdTime,
+                    output,
+                })
+        );
         report.lastModifiedTime = {};
-        await checkCreatedTimeControlledBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.lastModifiedTime,
-            output,
-            field: 'lastModifiedTime',
-        });
+        await timePhase(
+            'checkCreatedTimeControlledBrowser:lastModifiedTime',
+            'esm',
+            () =>
+                checkCreatedTimeControlledBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.lastModifiedTime,
+                    output,
+                    field: 'lastModifiedTime',
+                })
+        );
         report.lastModifiedTimeDocuments = {};
-        await checkDocumentThumbnailBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.lastModifiedTimeDocuments,
-            output,
-            field: 'lastModifiedTime',
-        });
+        await timePhase(
+            'checkDocumentThumbnailBrowser:lastModifiedTime',
+            'esm+cjs',
+            () =>
+                checkDocumentThumbnailBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.lastModifiedTimeDocuments,
+                    output,
+                    field: 'lastModifiedTime',
+                })
+        );
         report.createdTimeDocuments = {};
-        await checkDocumentThumbnailBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.createdTimeDocuments,
-            output,
-        });
+        await timePhase(
+            'checkDocumentThumbnailBrowser:createdTime',
+            'esm+cjs',
+            () =>
+                checkDocumentThumbnailBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.createdTimeDocuments,
+                    output,
+                })
+        );
         report.controlledSelect = {};
-        await checkControlledSelectBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.controlledSelect,
-            output,
-        });
+        await timePhase('checkControlledSelectBrowser', 'esm+cjs', () =>
+            checkControlledSelectBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.controlledSelect,
+                output,
+            })
+        );
         report.controlledLookup = {};
-        await checkControlledLookupBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.controlledLookup,
-            output,
-            readArchiveMember,
-        });
+        await timePhase('checkControlledLookupBrowser', 'esm+cjs', () =>
+            checkControlledLookupBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.controlledLookup,
+                output,
+                readArchiveMember,
+            })
+        );
         report.externalSyncSourceControlled = {};
         report.computed = {};
-        await checkComputedBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.computed,
-            output,
-            readArchiveMember,
-        });
-        await checkExternalSyncSourceControlledBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.externalSyncSourceControlled,
-            output,
-        });
+        await timePhase('checkComputedBrowser', 'esm+cjs', () =>
+            checkComputedBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.computed,
+                output,
+                readArchiveMember,
+            })
+        );
+        await timePhase(
+            'checkExternalSyncSourceControlledBrowser',
+            'esm+cjs',
+            () =>
+                checkExternalSyncSourceControlledBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.externalSyncSourceControlled,
+                    output,
+                })
+        );
         report.aiTextControlled = {};
-        await checkAiTextControlledBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.aiTextControlled,
-            output,
-        });
+        await timePhase('checkAiTextControlledBrowser', 'esm+cjs', () =>
+            checkAiTextControlledBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.aiTextControlled,
+                output,
+            })
+        );
         report.completeDuration = {};
-        await checkCompleteDurationBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeDuration,
-            output,
-        });
+        await timePhase('checkCompleteDurationBrowser', 'esm', () =>
+            checkCompleteDurationBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.completeDuration,
+                output,
+            })
+        );
         report.attachmentUploadProgress = {};
-        await checkAttachmentUploadProgressBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.attachmentUploadProgress,
-        });
+        await timePhase('checkAttachmentUploadProgressBrowser', 'esm+cjs', () =>
+            checkAttachmentUploadProgressBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.attachmentUploadProgress,
+            })
+        );
         report.attachmentSliderNavigation = {};
-        await checkAttachmentSliderNavigationBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.attachmentSliderNavigation,
-        });
+        await timePhase(
+            'checkAttachmentSliderNavigationBrowser',
+            'esm+cjs',
+            () =>
+                checkAttachmentSliderNavigationBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.attachmentSliderNavigation,
+                })
+        );
         report.theme = {};
-        await checkThemeBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.theme,
-            output,
-        });
+        await timePhase('checkThemeBrowser', 'esm+cjs', () =>
+            checkThemeBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.theme,
+                output,
+            })
+        );
         report.searchGate = {};
-        await checkSearchGateBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.searchGate,
-            output,
-        });
+        await timePhase('checkSearchGateBrowser', 'esm', () =>
+            checkSearchGateBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.searchGate,
+                output,
+            })
+        );
         report.recordComments = {};
-        await checkRecordCommentsBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.recordComments,
-            output,
-        });
+        await timePhase('checkRecordCommentsBrowser', 'esm', () =>
+            checkRecordCommentsBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.recordComments,
+                output,
+            })
+        );
         report.completeCalendly = {};
-        await checkCompleteCalendlyBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeCalendly,
-            output,
-        });
+        await timePhase('checkCompleteCalendlyBrowser', 'esm', () =>
+            checkCompleteCalendlyBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.completeCalendly,
+                output,
+            })
+        );
         for (const control of ['complete', 'natural']) {
             for (const format of ['esm', 'cjs']) {
                 const key =
@@ -2489,133 +2565,167 @@ try {
                           ? 'completeAddress'
                           : 'completeAddressCommonJS';
                 report[key] = {};
-                await checkCompleteAddressBrowser({
-                    browser,
-                    consumer: temporary,
-                    evidence: report[key],
-                    output,
+                await timePhase(
+                    `checkCompleteAddressBrowser:${control}`,
                     format,
-                    control,
-                });
+                    () =>
+                        checkCompleteAddressBrowser({
+                            browser,
+                            consumer: temporary,
+                            evidence: report[key],
+                            output,
+                            format,
+                            control,
+                        })
+                );
             }
         }
         for (const format of ['esm', 'cjs']) {
             const key = 'signature' + format;
             report[key] = {};
-            await checkSignatureBrowser({
-                browser,
-                consumer: temporary,
-                evidence: report[key],
-                output,
-                format,
-                reference: nativeReactVersion === '18.3.1',
-            });
+            await timePhase('checkSignatureBrowser', format, () =>
+                checkSignatureBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report[key],
+                    output,
+                    format,
+                    reference: nativeReactVersion === '18.3.1',
+                })
+            );
         }
         report.formSubmit = {};
         report.formCaptcha = {};
-        await checkFormCaptchaBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.formCaptcha,
-            output,
-        });
-        await checkFormSubmitBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.formSubmit,
-            output,
-        });
+        await timePhase('checkFormCaptchaBrowser', 'esm', () =>
+            checkFormCaptchaBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.formCaptcha,
+                output,
+            })
+        );
+        await timePhase('checkFormSubmitBrowser', 'esm', () =>
+            checkFormSubmitBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.formSubmit,
+                output,
+            })
+        );
         report.formRecordActions = {};
-        await checkFormRecordActionsBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.formRecordActions,
-            output,
-        });
+        await timePhase('checkFormRecordActionsBrowser', 'esm', () =>
+            checkFormRecordActionsBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.formRecordActions,
+                output,
+            })
+        );
         report.formTracking = {};
-        await checkFormTrackingBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.formTracking,
-            output,
-        });
+        await timePhase('checkFormTrackingBrowser', 'esm', () =>
+            checkFormTrackingBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.formTracking,
+                output,
+            })
+        );
         report.completeBarcode = {};
         report.singleLineText = [];
         for (const format of ['esm', 'cjs']) {
             const evidence = {};
             report.singleLineText.push(evidence);
-            await checkSingleLineTextBrowser({
+            await timePhase('checkSingleLineTextBrowser', format, () =>
+                checkSingleLineTextBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence,
+                    output,
+                    format,
+                })
+            );
+        }
+        await timePhase('checkCompleteBarcodeBrowser', 'esm+cjs', () =>
+            checkCompleteBarcodeBrowser({
                 browser,
                 consumer: temporary,
-                evidence,
+                evidence: report.completeBarcode,
                 output,
-                format,
-            });
-        }
-        await checkCompleteBarcodeBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeBarcode,
-            output,
-        });
+            })
+        );
         report.completeVerification = {};
-        await checkCompleteVerificationBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeVerification,
-            output,
-        });
+        await timePhase('checkCompleteVerificationBrowser', 'esm', () =>
+            checkCompleteVerificationBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.completeVerification,
+                output,
+            })
+        );
         report.completeExtensionPassword = {};
-        await checkCompleteExtensionPasswordBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeExtensionPassword,
-            output,
-            expectedReactVersion: nativeReactVersion,
-        });
+        await timePhase(
+            'checkCompleteExtensionPasswordBrowser',
+            'esm+cjs',
+            () =>
+                checkCompleteExtensionPasswordBrowser({
+                    browser,
+                    consumer: temporary,
+                    evidence: report.completeExtensionPassword,
+                    output,
+                    expectedReactVersion: nativeReactVersion,
+                })
+        );
         report.loginExistingValues = {};
-        await checkLoginExistingValuesBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.loginExistingValues,
-            output,
-            expectedReactVersion: nativeReactVersion,
-        });
+        await timePhase('checkLoginExistingValuesBrowser', 'esm', () =>
+            checkLoginExistingValuesBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.loginExistingValues,
+                output,
+                expectedReactVersion: nativeReactVersion,
+            })
+        );
         assert.equal(report.loginExistingValues.passed, true);
         assert.equal(report.loginExistingValues.contextClosed, true);
         assert.equal(report.loginExistingValues.scratchRemoved, true);
         report.readonlyPortalList = {};
-        await checkReadonlyPortalListBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.readonlyPortalList,
-            output,
-            expectedReactVersion: nativeReactVersion,
-        });
+        await timePhase('checkReadonlyPortalListBrowser', 'esm', () =>
+            checkReadonlyPortalListBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.readonlyPortalList,
+                output,
+                expectedReactVersion: nativeReactVersion,
+            })
+        );
         assert.equal(report.readonlyPortalList.passed, true);
         assert.equal(report.readonlyPortalList.contextClosed, true);
         assert.equal(report.readonlyPortalList.serverClosed, true);
         assert.equal(report.readonlyPortalList.scratchRemoved, true);
         report.portalSidePanelNavigation = {};
-        await checkPortalSidePanelNavigationBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.portalSidePanelNavigation,
-            expectedReactVersion: nativeReactVersion,
-        });
+        await timePhase('checkPortalSidePanelNavigationBrowser', 'esm', () =>
+            checkPortalSidePanelNavigationBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.portalSidePanelNavigation,
+                expectedReactVersion: nativeReactVersion,
+            })
+        );
         assert.equal(report.portalSidePanelNavigation.passed, true);
         assert.equal(report.portalSidePanelNavigation.contextClosed, true);
         assert.equal(report.portalSidePanelNavigation.serverClosed, true);
         report.portalVisitorSort = {};
-        await checkPortalVisitorSortBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.portalVisitorSort,
-            expectedReactVersion: nativeReactVersion,
-            includeSearch: true,
-            includeViewButtons: true,
-            includeFilter: true,
-        });
+        await timePhase('checkPortalVisitorSortBrowser', 'esm', () =>
+            checkPortalVisitorSortBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.portalVisitorSort,
+                expectedReactVersion: nativeReactVersion,
+                includeSearch: true,
+                includeViewButtons: true,
+                includeFilter: true,
+            })
+        );
         assert.equal(report.portalVisitorSort.passed, true);
         assert.deepEqual(report.portalVisitorSort.viewButtons, {
             intents: 3,
@@ -2661,30 +2771,36 @@ try {
             cleanup: 'completed',
         });
         report.portalPagingControls = {};
-        await checkPortalPagingControlsBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.portalPagingControls,
-            expectedReactVersion: nativeReactVersion,
-        });
+        await timePhase('checkPortalPagingControlsBrowser', 'esm', () =>
+            checkPortalPagingControlsBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.portalPagingControls,
+                expectedReactVersion: nativeReactVersion,
+            })
+        );
         assert.equal(report.portalPagingControls.passed, true);
         assert.equal(report.portalPagingControls.contextClosed, true);
         assert.equal(report.portalPagingControls.serverClosed, true);
         assert.equal(report.portalPagingControls.scratchRemoved, true);
         report.imageAnnotation = {};
-        await checkImageAnnotationBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.imageAnnotation,
-            output,
-        });
+        await timePhase('checkImageAnnotationBrowser', 'esm+cjs', () =>
+            checkImageAnnotationBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.imageAnnotation,
+                output,
+            })
+        );
         report.portalMap = {};
-        await checkPortalMapBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.portalMap,
-            output,
-        });
+        await timePhase('checkPortalMapBrowser', 'esm+cjs', () =>
+            checkPortalMapBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.portalMap,
+                output,
+            })
+        );
         assert.equal(report.portalMap.status, 'passed');
         assert.deepEqual(
             report.portalMap.profiles.map(({ format }) => format),
@@ -2704,26 +2820,30 @@ try {
         assert.equal(report.portalMap.cleanup.server, 'completed');
         assert.equal(report.portalMap.cleanup.directory, 'completed');
         report.radioInput = {};
-        await checkRadioInputBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.radioInput,
-            output,
-        });
-        await checkAttachmentPresentationBrowser({
-            browser,
-            consumer: temporary,
-            fixture: form,
-            output,
-            evidence: report.attachmentPresentation,
-            createChooserOwner: (page, evidence) =>
-                createFileChooserOwner(
-                    page,
-                    evidence,
-                    undefined,
-                    'input[type=file]'
-                ),
-        });
+        await timePhase('checkRadioInputBrowser', 'esm', () =>
+            checkRadioInputBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report.radioInput,
+                output,
+            })
+        );
+        await timePhase('checkAttachmentPresentationBrowser', 'esm', () =>
+            checkAttachmentPresentationBrowser({
+                browser,
+                consumer: temporary,
+                fixture: form,
+                output,
+                evidence: report.attachmentPresentation,
+                createChooserOwner: (page, evidence) =>
+                    createFileChooserOwner(
+                        page,
+                        evidence,
+                        undefined,
+                        'input[type=file]'
+                    ),
+            })
+        );
         const run = async (name, exercise) => {
             const context = await browser.newContext({
                 serviceWorkers: 'block',

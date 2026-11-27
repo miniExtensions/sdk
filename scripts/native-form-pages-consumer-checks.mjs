@@ -174,7 +174,7 @@ try{
  assertProgress(1);
  await click('Next');await React.act(async()=>nextRequests[1].advance());await click('Review');assert.equal(controller.getSnapshot().reviewing,true);assert.equal(container.querySelectorAll('dialog[open]').length,1);assert.equal(saveCallbacks,0);checks++;
  const oldReview=controller.getSnapshot().actions;
- canonical='Edited while Review is open';await React.act(async()=>controller.update(publication()));assert.equal(container.querySelector('dd').textContent,canonical);assert.equal(controller.getSnapshot().reviewing,true);assert.equal(saveCallbacks,0);checks++;
+ canonical='Gate A\nGate B';await React.act(async()=>controller.update(publication()));assert.equal(container.querySelector('dd').textContent,canonical);assert(container.querySelector('dd').classList.contains('mx-sdk-form-review-value--text'));assert.equal(controller.getSnapshot().reviewing,true);assert.equal(saveCallbacks,0);checks++;
  await click('Submit');assert.equal(saveCallbacks,1);assert.equal(controller.getSnapshot().reviewing,false);assert.ok(container.querySelector('dialog')===null,'Consumed Review must remove its dialog');assert(result instanceof Promise);assert.equal(oldReview.confirmReview(),undefined);assert.equal(saveCallbacks,1);checks++;
  canonical='Edited after Confirm before allocation';await React.act(async()=>controller.update(publication()));await React.act(async()=>allocation());assert.deepEqual(await result,{payload:canonical});assert.deepEqual(payloads,[canonical]);assert.equal(saveCallbacks,1);checks++;
  await click('Review');await React.act(async()=>oldReview.confirmReview());assert.equal(controller.getSnapshot().reviewing,true);await click('Edit');assert.equal(controller.getSnapshot().reviewing,false);assert.equal(saveCallbacks,1);checks++;
@@ -401,6 +401,10 @@ export async function checkNativeFormPagesReactMatrix({
                 '80vh',
             ])
                 assert(css.includes(token), `Missing public CSS: ${token}`);
+            assert.match(
+                css,
+                /\.mx-sdk-form-review-value--text\s*\{\s*white-space:\s*pre-line/
+            );
             assert.doesNotMatch(
                 css,
                 /\.mx-sdk-form-page-button(?:--back)?:focus-visible\b/,

@@ -236,7 +236,10 @@ export function CompleteFormReview(
                               h(
                                   'dd',
                                   {
-                                      className: 'mx-sdk-form-review-value',
+                                      className:
+                                          typeof item.value === 'string'
+                                              ? 'mx-sdk-form-review-value mx-sdk-form-review-value--text'
+                                              : 'mx-sdk-form-review-value',
                                       'aria-labelledby': labelId,
                                   },
                                   item.value

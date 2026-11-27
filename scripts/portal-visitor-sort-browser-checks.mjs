@@ -33,6 +33,7 @@ const listeners = new Set();
 const commands = [];
 const outcomes = [];
 let submits = 0;
+let paging;
 function publish(next) {
     frame = next;
     for (const listener of listeners) listener();
@@ -52,6 +53,7 @@ const port = {
             return {type:'stale'};
         const requestId = allocate(command);
         const generation = frame.stamp.generation + 1;
+        if (paging) paging = {page:1, cursor:null, rows:['first']};
         publish({ ...frame, stamp:{ ...frame.stamp, generation }, criteria:command.criteria });
         return {type:'allocated', requestId, generation};
     },
@@ -63,7 +65,13 @@ document.querySelector('form').addEventListener('submit', (event) => {
 const root = createRoot(document.getElementById('root'));
 root.render(h(StrictMode, null, h(PortalVisitorSort, {port, onOutcome: (outcome) => outcomes.push(outcome)})));
 globalThis.sortFixture = {
-    summary: () => ({ version, commands, outcomes, listeners:listeners.size, submits }),
+    summary: () => ({ version, commands, outcomes, listeners:listeners.size, submits,
+        criteria:frame.criteria, generation:frame.stamp.generation, paging }),
+    seedLegacySort() {
+        paging = {page:2, cursor:'page-3', rows:['first','second']};
+        publish({ ...frame, criteria:[{type:'asc',idOrName:{type:'name',name:'Title'}}],
+            stamp:{...frame.stamp,generation:frame.stamp.generation+1} });
+    },
     cycleViews() {
         const change = (viewId) => publish({
             ...frame,
@@ -1430,6 +1438,89 @@ export async function checkPortalVisitorSortBrowser({
         assert.equal(end.commands[1].criteria[0].type, 'desc');
         assert.equal(end.listeners, 0);
         assert.equal(end.submits, 0);
+
+        const legacySort = [];
+        evidence.legacySort = legacySort;
+        for (const scenario of [
+            'undo field edit',
+            'change field',
+            'change direction',
+        ]) {
+            await page.evaluate(() => globalThis.sortFixture.seedLegacySort());
+            const before = await summary();
+            await open();
+            const field = dialog.getByRole('combobox', { name: 'Field 1' });
+            assert.equal(await field.inputValue(), 'title');
+            if (scenario === 'change direction') {
+                await dialog
+                    .getByRole('combobox', { name: 'Direction 1' })
+                    .selectOption('desc');
+            } else {
+                await field.selectOption('detail');
+                if (scenario === 'undo field edit')
+                    await field.selectOption('title');
+            }
+            await done.press('Enter');
+            await dialog.waitFor({ state: 'hidden' });
+            await page.waitForFunction(
+                (count) =>
+                    globalThis.sortFixture.summary().outcomes.length ===
+                    count + 1,
+                before.outcomes.length
+            );
+            const after = await summary();
+            const changes = after.commands.slice(before.commands.length);
+            const outcome = after.outcomes.at(-1);
+            legacySort.push({
+                scenario,
+                before: {
+                    criteria: before.criteria,
+                    generation: before.generation,
+                    paging: before.paging,
+                },
+                after: {
+                    criteria: after.criteria,
+                    generation: after.generation,
+                    paging: after.paging,
+                },
+                changes,
+                outcome,
+            });
+            if (scenario === 'undo field edit') {
+                assert.deepEqual(outcome, { type: 'unchanged' });
+                assert.deepEqual(changes, []);
+                assert.deepEqual(after.criteria, before.criteria);
+                assert.deepEqual(after.paging, before.paging);
+                assert.equal(after.generation, before.generation);
+            } else {
+                const expected =
+                    scenario === 'change field'
+                        ? [
+                              {
+                                  type: 'asc',
+                                  idOrName: { type: 'id', id: 'detail' },
+                              },
+                          ]
+                        : [
+                              {
+                                  type: 'desc',
+                                  idOrName: { type: 'name', name: 'Title' },
+                              },
+                          ];
+                assert.equal(outcome.type, 'allocated');
+                assert.equal(changes.length, 1);
+                assert.deepEqual(changes[0].criteria, expected);
+                assert.deepEqual(after.criteria, expected);
+                assert.equal(after.generation, before.generation + 1);
+                assert.deepEqual(after.paging, {
+                    page: 1,
+                    cursor: null,
+                    rows: ['first'],
+                });
+            }
+            assert.equal(after.submits, before.submits);
+            assert.equal(after.listeners, 0);
+        }
         assert.deepEqual(external, []);
         assert.deepEqual(requests, []);
         assert.deepEqual(errors, []);

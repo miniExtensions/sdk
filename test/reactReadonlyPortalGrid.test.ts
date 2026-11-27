@@ -1138,6 +1138,46 @@ it('preserves history shortcuts and supports keyboard resize with measured settl
     await pointer(f, f.window.document, 'pointerup', 217);
     assert.equal(changes.length, 6);
     assert.deepEqual(changes.at(-1), { fieldId: 'value', width: dragged });
+
+    // The host still supplies 240 while the first 250px commit awaits its echo.
+    const pendingScope = 'keyboard resize with host echo pending';
+    await render(pendingScope, 240);
+    const pending = await focusResizeSeparator();
+    const start = changes.length;
+    const shiftRight = { ...right, shiftKey: true };
+    await send(pending.separator, 'keydown', shiftRight);
+    await send(pending.separator, 'keyup', right);
+    assert.deepEqual(pending.widths(), [250, 220]);
+    assert.deepEqual(changes.slice(start), [{ fieldId: 'value', width: 250 }]);
+
+    await send(pending.separator, 'keydown', shiftRight);
+    assert.deepEqual(pending.widths(), [260, 220]);
+    await send(pending.separator, 'keydown', { key: 'Escape', code: 'Escape' });
+    assert.deepEqual(
+        await send(pending.separator, 'keyup', right),
+        passThrough
+    );
+    assert.deepEqual(pending.widths(), [250, 220]);
+    assert.deepEqual(changes.slice(start), [{ fieldId: 'value', width: 250 }]);
+
+    await send(pending.separator, 'keydown', right);
+    await send(pending.separator, 'keyup', right);
+    assert.deepEqual(pending.widths(), [251, 220]);
+    assert.deepEqual(changes.slice(start), [
+        { fieldId: 'value', width: 250 },
+        { fieldId: 'value', width: 251 },
+    ]);
+
+    // A genuinely changed host width still wins after Escape.
+    await send(pending.separator, 'keydown', shiftRight);
+    await render(pendingScope, 252);
+    await send(pending.separator, 'keydown', { key: 'Escape', code: 'Escape' });
+    assert.deepEqual(
+        await send(pending.separator, 'keyup', right),
+        passThrough
+    );
+    assert.deepEqual(pending.widths(), [252, 220]);
+    assert.equal(changes.length, start + 2);
     assert.deepEqual(opens, []);
     f.unchangedEffects();
 });

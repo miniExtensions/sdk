@@ -161,10 +161,11 @@ async function fixture(
             input().dispatchEvent(new window.Event('input', { bubbles: true }));
         });
     };
-    const key = async (key: string, isComposing = false) => {
+    const key = async (key: string, isComposing = false, keyCode?: number) => {
         const event = new window.KeyboardEvent('keydown', {
             key,
             isComposing,
+            keyCode,
             bubbles: true,
             cancelable: true,
         });
@@ -285,6 +286,23 @@ for (const row of [
         assert.equal((await f.key('Enter')).defaultPrevented, true);
         assert.deepEqual(f.writes, [row.expected]);
     });
+
+it('retains a partial Form DateTime for IME Enter reported with keyCode 229', async (t) => {
+    const f = await fixture(t, { airtableDateConfig: datetime });
+    const original = f.input();
+    await act(async () => original.focus());
+    await f.edit('2024-02-29 13:');
+    const imeEnter = await f.key('Enter', false, 229);
+    assert.equal(imeEnter.isComposing, false);
+    assert.equal(imeEnter.keyCode, 229);
+    assert.equal(imeEnter.defaultPrevented, true);
+    assert.equal(f.window.document.activeElement, original);
+    assert.equal(f.input().value, '2024-02-29 13:');
+    assert.deepEqual(f.writes, []);
+    await f.edit('2024-02-29 13:45');
+    assert.equal((await f.key('Enter')).defaultPrevented, true);
+    assert.deepEqual(f.writes, ['2024-02-29T13:45:00.000Z']);
+});
 
 it('recovers partial and invalid drafts on blur, while equivalent/cosmetic metadata preserves the same input and caret', async (t) => {
     const f = await fixture(t);

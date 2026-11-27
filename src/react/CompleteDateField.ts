@@ -313,7 +313,15 @@ export function CompleteDateField(
                                     if (event.key === 'Enter') {
                                         event.preventDefault();
                                         event.stopPropagation();
-                                        if (!event.nativeEvent.isComposing)
+                                        const { isComposing, keyCode } =
+                                            event.nativeEvent;
+                                        // DateTime IME confirmation can report 229 after isComposing clears.
+                                        if (
+                                            !isComposing &&
+                                            (props.airtableDateConfig.type !==
+                                                'dateTime' ||
+                                                keyCode !== 229)
+                                        )
                                             blur();
                                     }
                                     inputProps.onKeyDown?.(event);

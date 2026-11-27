@@ -12,7 +12,7 @@ import {
 import type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';
 import { ActionButton } from './ActionButton.js';
 import {
-    AttachmentPreview,
+    AttachmentSliderPreview,
     type AttachmentPreviewLabels,
 } from './AttachmentPreview.js';
 import { AttachmentSliderNavigation } from './AttachmentSliderNavigation.js';
@@ -286,7 +286,7 @@ export function AttachmentSliderBody({
     const preview = h(
         'div',
         { className: `${body}__preview` },
-        h(AttachmentPreview, { attachment, labels })
+        h(AttachmentSliderPreview, { attachment, labels })
     );
 
     return h(AttachmentSliderFocus, {

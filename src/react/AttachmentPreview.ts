@@ -36,12 +36,30 @@ function pdfPreviewUrl(url: string): string {
 }
 
 /** Complete media presentation; the caller retains navigation and attachments. */
-export function AttachmentPreview({
+export function AttachmentPreview(
+    props: AttachmentPreviewProps
+): React.ReactElement {
+    return h(AttachmentPreviewContent, props);
+}
+
+export function AttachmentSliderPreview(
+    props: Pick<AttachmentPreviewProps, 'attachment' | 'labels'>
+): React.ReactElement {
+    return h(AttachmentPreviewContent, {
+        ...props,
+        cancelRetiredWordResponse: true,
+    });
+}
+
+function AttachmentPreviewContent({
     attachment,
     labels,
     owner,
     identity,
-}: AttachmentPreviewProps): React.ReactElement {
+    cancelRetiredWordResponse = false,
+}: AttachmentPreviewProps & {
+    cancelRetiredWordResponse?: boolean;
+}): React.ReactElement {
     const docContainerRef = useRef<HTMLDivElement>(null);
     const { isImage, isHEIC, isVideo, isAudio, isWordDocument, isPdf } =
         classifyAttachmentPreview(attachment);
@@ -77,7 +95,10 @@ export function AttachmentPreview({
                         : await fetch(attachment.url, {
                               signal: controller.signal,
                           });
-                if (owner !== undefined && !current()) {
+                if (
+                    (owner !== undefined || cancelRetiredWordResponse) &&
+                    !current()
+                ) {
                     await response.body?.cancel();
                     return;
                 }
@@ -99,7 +120,13 @@ export function AttachmentPreview({
             controller.abort();
             container.remove();
         };
-    }, [attachment.url, isWordDocument, generation, identity]);
+    }, [
+        attachment.url,
+        isWordDocument,
+        generation,
+        identity,
+        cancelRetiredWordResponse,
+    ]);
 
     if (!resourceOwnerCurrent(owner))
         return h(

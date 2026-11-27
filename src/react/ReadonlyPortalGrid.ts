@@ -200,12 +200,14 @@ function GridHeader({
     // Translate only at the CSS boundary so settlement/host echoes cannot shrink
     // border-box headers or cancel ordinary one-pixel keyboard movement.
     const [localWidth, setLocalWidth] = useState(() => admittedWidth(width));
+    const settledWidth = useRef(localWidth);
     const [cssWidthAdjustment, setCssWidthAdjustment] = useState(0);
     const [releaseSequence, setReleaseSequence] = useState(0);
 
     useEffect(() => {
+        settledWidth.current = admittedWidth(width);
         if (stopDrag.current == null && !keyboardMove.current)
-            setLocalWidth(admittedWidth(width));
+            setLocalWidth(settledWidth.current);
     }, [width]);
     useEffect(
         () => () => {
@@ -224,16 +226,17 @@ function GridHeader({
         if (!commit || !cell?.isConnected || !current(isCurrent)) return;
         const measured = cell.clientWidth;
         if (!Number.isFinite(measured)) return;
+        settledWidth.current = measured;
         setLocalWidth(measured);
         commit({ fieldId: column.fieldId, width: measured });
     };
-    const cancel = () => {
+    const cancel = (widthToRestore = admittedWidth(width)) => {
         stopDrag.current?.();
         stopDrag.current = null;
         pointerSettlement.current = null;
         keyboardMove.current = false;
         keyboardKeys.current.clear();
-        setLocalWidth(admittedWidth(width));
+        setLocalWidth(widthToRestore);
     };
     const commitEffect =
         typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -332,7 +335,17 @@ function GridHeader({
     const keyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
         if (event.key === 'Escape') {
             event.preventDefault();
-            cancel();
+            if (
+                keyboardMove.current &&
+                !stopDrag.current &&
+                !pointerSettlement.current &&
+                current(isCurrent)
+            ) {
+                // The host can still be acknowledging the last completed resize.
+                cancel(settledWidth.current);
+            } else {
+                cancel();
+            }
             return;
         }
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;

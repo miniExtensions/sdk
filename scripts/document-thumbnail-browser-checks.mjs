@@ -166,6 +166,133 @@ export async function prepareDocumentThumbnailBrowser(
     }
 }
 
+async function checkGridPDFRefit({ context, origin, profile }) {
+    const draft = 'independent unsaved draft';
+    const openPageTwo = async (page, width) => {
+        await page.goto(origin);
+        await page.locator('#neighbor').fill(draft);
+        const narrow =
+            width === 280
+                ? await page.addStyleTag({
+                      content: '#document-host{width:280px!important}',
+                  })
+                : null;
+        const click = (name) =>
+            page.getByRole('button', { name, exact: true }).click();
+        const host = page.locator('#document-host');
+        await click('Grid PDF');
+        await host.locator('[data-rendered-page="1"]').waitFor();
+        assert.equal(await host.evaluate((node) => node.clientWidth), width);
+        await click('Next page');
+        await host.locator('[data-rendered-page="2"]').waitFor();
+        return narrow;
+    };
+    const read = async (page) => ({
+        ...(await page.locator('#document-host').evaluate((host) => {
+            const canvas = host.querySelector('canvas');
+            return {
+                hostWidth: host.clientWidth,
+                fitWidth: canvas.parentElement.clientWidth,
+                bitmapWidth: canvas.width,
+                displayedWidth: canvas.getBoundingClientRect().width,
+                renderedPage: canvas.getAttribute('data-rendered-page'),
+                color: Array.from(
+                    canvas.getContext('2d').getImageData(5, 5, 1, 1).data
+                ),
+                submits: window.documentFixture.snapshot().submits,
+            };
+        })),
+        draft: await page.locator('#neighbor').inputValue(),
+        workers: page.workers().length,
+    });
+    const resized = await context.newPage();
+    let fresh;
+    resized.on('pageerror', (error) => profile.pageErrors.push(error.message));
+    try {
+        const narrow = await openPageTwo(resized, 280);
+        const before = await read(resized);
+        const canvas = await resized
+            .locator('#document-host canvas')
+            .elementHandle();
+        const [worker] = resized.workers();
+        assert.ok(canvas && worker);
+        const pageMode = resized.getByRole('button', {
+            name: 'Show all pages',
+            exact: true,
+        });
+        await pageMode.focus();
+
+        fresh = await context.newPage();
+        fresh.on('pageerror', (error) =>
+            profile.pageErrors.push(error.message)
+        );
+        await openPageTwo(fresh, 520);
+        const reference = await read(fresh);
+        await narrow.evaluate((style) => style.remove());
+        await resized.waitForFunction(
+            () => document.querySelector('#document-host').clientWidth === 520
+        );
+        const fitCompleted = await resized
+            .waitForFunction(
+                (baseline) => {
+                    const rendered = document.querySelector(
+                        '#document-host [data-rendered-page="2"]'
+                    );
+                    return rendered && Math.abs(rendered.width - baseline) <= 1;
+                },
+                reference.bitmapWidth,
+                { timeout: 3000 }
+            )
+            .then(() => true)
+            .catch((error) => {
+                if (error.name !== 'TimeoutError') throw error;
+                return false;
+            });
+        const after = await read(resized);
+        profile.gridRefit = {
+            before,
+            after,
+            reference,
+            fitCompleted,
+            sameCanvas: await resized
+                .locator('#document-host canvas')
+                .evaluate((node, original) => node === original, canvas),
+            sameWorker: resized.workers()[0] === worker,
+            retainedFocus: await pageMode.evaluate(
+                (button) => button.ownerDocument.activeElement === button
+            ),
+        };
+        assert.deepEqual(
+            [before.hostWidth, after.hostWidth, reference.hostWidth],
+            [280, 520, 520]
+        );
+        for (const state of [before, after, reference]) {
+            assert.equal(state.renderedPage, '2');
+            assert.deepEqual(state.color, [0, 0, 255, 255]);
+            assert.equal(state.draft, draft);
+            assert.equal(state.submits, 0);
+            assert.equal(state.workers, 1);
+        }
+        assert.equal(profile.gridRefit.sameCanvas, true);
+        assert.equal(profile.gridRefit.sameWorker, true);
+        assert.equal(profile.gridRefit.retainedFocus, true);
+        assert.ok(reference.bitmapWidth > before.bitmapWidth);
+        assert.ok(
+            fitCompleted,
+            'Existing page 2 bitmap did not refit to the widened Grid column'
+        );
+        assert.ok(Math.abs(after.bitmapWidth - reference.bitmapWidth) <= 1);
+        assert.ok(
+            Math.abs(after.displayedWidth - reference.displayedWidth) <= 1
+        );
+        assert.deepEqual(profile.pageErrors, []);
+        assert.deepEqual(profile.unexpectedRequests, []);
+    } finally {
+        await fresh?.close();
+        await resized.close();
+    }
+}
+
 /** Actual installed ESM and CJS fields, real browser worker/canvas and owned data. */
 export async function checkDocumentThumbnailBrowser({
     browser,
@@ -173,6 +300,7 @@ export async function checkDocumentThumbnailBrowser({
     evidence,
     output,
     field = 'createdTime',
+    gridRefitOnly = false,
 }) {
     Object.assign(evidence, { status: 'running', profiles: [], cleanup: {} });
     let failure;
@@ -338,6 +466,14 @@ export async function checkDocumentThumbnailBrowser({
             };
             await page.goto(origin);
             await page.locator('#neighbor').fill('independent unsaved draft');
+            if (gridRefitOnly) {
+                await checkGridPDFRefit({ context, origin, profile });
+                profile.react = (
+                    await page.evaluate(() => window.documentFixture.snapshot())
+                ).react;
+                profile.status = 'passed';
+                continue;
+            }
             await page.waitForFunction(() =>
                 document
                     .querySelector('#document-host')
@@ -683,6 +819,8 @@ export async function checkDocumentThumbnailBrowser({
                 profile.resources.every((resource) => resource.cookie === null)
             );
             await finish('payload-revision-owner-and-resource-disposal');
+            if (field === 'createdTime')
+                await checkGridPDFRefit({ context, origin, profile });
             profile.react = snapshot.react;
             profile.status = 'passed';
         } catch (error) {
@@ -720,7 +858,7 @@ export async function checkDocumentThumbnailBrowser({
     if (!failure) {
         assert.equal(evidence.profiles.length, 2);
         for (const profile of evidence.profiles)
-            assert.equal(profile.results.length, 13);
+            assert.equal(profile.results.length, gridRefitOnly ? 0 : 13);
     }
     evidence.cleanup.profiles = evidence.profiles.map(
         (profile) => profile.cleanup

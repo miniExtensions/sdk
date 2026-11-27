@@ -315,7 +315,7 @@ it('keeps composed fields stable and routes only the admitted detached form acti
     assert.equal(f.submits(), 0);
 });
 
-it('focuses each accepted keyboard Next heading through the composed page slot', async (t) => {
+it('focuses each accepted keyboard navigation heading through the composed page slot', async (t) => {
     const f = await fixture(t);
     const formId = 'titled-form';
     const titledPages = [
@@ -325,7 +325,14 @@ it('focuses each accepted keyboard Next heading through the composed page slot',
         pages[3]!,
     ];
     const intents: string[] = [];
+    const drafts: Record<string, string> = {
+        leading: 'Start draft',
+        name: 'Contact draft',
+        detail: 'Details draft',
+    };
     let rejected = true;
+    let allowBack = true;
+    let moveFocusAfterBack = false;
     const navigation = createNativeFormPages({
         pages: titledPages,
         owner: 'session',
@@ -340,6 +347,10 @@ it('focuses each accepted keyboard Next heading through the composed page slot',
                 return;
             }
             advance();
+        },
+        onBack(pageIndex) {
+            intents.push(`back:${pageIndex}`);
+            if (moveFocusAfterBack) f.opener.focus();
         },
     });
     function Form({ footerLabel }: { footerLabel: string }) {
@@ -359,7 +370,11 @@ it('focuses each accepted keyboard Next heading through the composed page slot',
                 {
                     kind: 'field',
                     key: fieldId,
-                    node: h('input', { id: fieldId, form: formId }),
+                    node: h('input', {
+                        id: fieldId,
+                        form: formId,
+                        defaultValue: drafts[fieldId],
+                    }),
                 },
             ],
             slots: {
@@ -369,6 +384,14 @@ it('focuses each accepted keyboard Next heading through the composed page slot',
                     h(CompleteFormPageNavigation, snapshot)
                 ),
             },
+            back: snapshot.isFirstPage
+                ? undefined
+                : {
+                      label: 'Back',
+                      onClick: () => {
+                          if (allowBack) snapshot.actions.back();
+                      },
+                  },
             primary: snapshot.isLastPage
                 ? {
                       kind: 'terminal',
@@ -380,17 +403,17 @@ it('focuses each accepted keyboard Next heading through the composed page slot',
                 : { kind: 'next', label: 'Next' },
         });
     }
-    async function keyboardNext() {
-        const next = f.button('Next');
-        next.focus();
-        assert.equal(f.window.document.activeElement, next);
+    async function activate(label: string, detail = 0) {
+        const button = f.button(label);
+        button.focus();
+        assert.equal(f.window.document.activeElement, button);
         // Happy DOM does not synthesize a submit click from Enter.
         await act(async () => {
-            next.dispatchEvent(
+            button.dispatchEvent(
                 new f.window.MouseEvent('click', {
                     bubbles: true,
                     cancelable: true,
-                    detail: 0,
+                    detail,
                 })
             );
         });
@@ -408,24 +431,79 @@ it('focuses each accepted keyboard Next heading through the composed page slot',
     await f.render(h(Form, { footerLabel: 'Form actions' }));
     assert.equal(f.window.document.activeElement, f.opener);
 
-    await keyboardNext();
+    await activate('Next');
     assert.equal(f.host.querySelector('h2')?.textContent, 'Start');
     assert.equal(f.window.document.activeElement?.id, 'leading');
     await f.render(h(Form, { footerLabel: 'Updated actions' }));
     assert.equal(f.window.document.activeElement?.id, 'leading');
 
     rejected = false;
-    await keyboardNext();
+    await activate('Next');
     expectPage('Contact', 'name');
 
     f.host.querySelector('input')?.focus();
     await f.render(h(Form, { footerLabel: 'New actions' }));
     assert.equal(f.window.document.activeElement?.id, 'name');
 
-    await keyboardNext();
+    await activate('Next');
     expectPage('Details', 'detail');
     assert.equal(f.button('Save').getAttribute('type'), 'submit');
     assert.deepEqual(intents, ['next:0', 'next:0', 'next:1']);
+
+    const backResults = [];
+    for (const [title, fieldId] of [
+        ['Contact', 'name'],
+        ['Start', 'leading'],
+    ] as const) {
+        assert.equal(f.button('Back').type, 'button');
+        await activate('Back');
+        const heading = f.host.querySelector('h2');
+        const field = f.host.querySelector('input');
+        assert.equal(heading?.textContent, title);
+        assert.equal(field?.id, fieldId);
+        assert.equal(field?.value, drafts[fieldId]);
+        backResults.push({
+            focusedTag: f.window.document.activeElement?.tagName,
+            headingFocused: f.window.document.activeElement === heading,
+            tabIndex: heading?.tabIndex,
+        });
+    }
+    assert.equal(f.host.querySelector('.mx-sdk-form-page-button--back'), null);
+    assert.deepEqual(intents, [
+        'next:0',
+        'next:0',
+        'next:1',
+        'back:1',
+        'back:0',
+    ]);
+    assert.deepEqual(backResults, [
+        { focusedTag: 'H2', headingFocused: true, tabIndex: -1 },
+        { focusedTag: 'H2', headingFocused: true, tabIndex: -1 },
+    ]);
+
+    await activate('Next');
+    allowBack = false;
+    await activate('Back');
+    assert.equal(f.host.querySelector('h2')?.textContent, 'Contact');
+    await f.render(h(Form, { footerLabel: 'Unrelated actions update' }));
+    assert.equal(f.window.document.activeElement === f.button('Back'), true);
+
+    allowBack = true;
+    await activate('Back', 1);
+    assert.equal(f.host.querySelector('h2')?.textContent, 'Start');
+    assert.equal(f.window.document.activeElement?.tagName === 'H2', false);
+
+    await activate('Next');
+    moveFocusAfterBack = true;
+    await activate('Back');
+    assert.equal(f.host.querySelector('h2')?.textContent, 'Start');
+    assert.equal(f.window.document.activeElement === f.opener, true);
+    assert.deepEqual(intents.slice(5), [
+        'next:0',
+        'back:0',
+        'next:0',
+        'back:0',
+    ]);
     assert.equal(f.submits(), 0);
 });
 

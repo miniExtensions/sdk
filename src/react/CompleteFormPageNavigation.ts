@@ -31,12 +31,13 @@ export type CompleteFormPageNavigationProps = {
     className?: string;
 };
 
-type FormNextKeyboardFocus = {
-    submitter: HTMLButtonElement;
+export type FormPageKeyboardFocus = {
+    button: HTMLButtonElement;
+    direction: 'next' | 'back';
 } | null;
 
-export const FormNextKeyboardFocusContext: Context<FormNextKeyboardFocus> =
-    createContext<FormNextKeyboardFocus>(null);
+export const FormPageKeyboardFocusContext: Context<FormPageKeyboardFocus> =
+    createContext<FormPageKeyboardFocus>(null);
 
 /** Complete progress, current title and HTML description without a second page index. */
 export function CompleteFormPageNavigation({
@@ -51,34 +52,43 @@ export function CompleteFormPageNavigation({
     className,
 }: CompleteFormPageNavigationProps): ReactElement | null {
     const activePage = pages[activePageIndex];
-    const keyboardNext = useContext(FormNextKeyboardFocusContext);
+    const keyboardFocus = useContext(FormPageKeyboardFocusContext);
     const heading = useRef<HTMLHeadingElement>(null);
-    const previous = useRef({ activePageIndex, keyboardNext });
+    const previous = useRef({ activePageIndex, keyboardFocus });
     const canSelectTitle =
         onSelectTitle != null && (activePage?.fieldIds.length ?? 0) > 0;
     const useCommitEffect =
         typeof document === 'undefined' ? useEffect : useLayoutEffect;
     useCommitEffect(() => {
         const before = previous.current;
-        previous.current = { activePageIndex, keyboardNext };
+        previous.current = { activePageIndex, keyboardFocus };
         const destination = heading.current;
+        const movedInRequestedDirection =
+            keyboardFocus?.direction === 'back'
+                ? activePageIndex < before.activePageIndex
+                : activePageIndex > before.activePageIndex;
         // Consume the request on this commit, even when validation keeps the
         // current page. A later page or visibility update cannot reuse it.
         if (
             !destination ||
-            !keyboardNext ||
-            keyboardNext === before.keyboardNext ||
-            activePageIndex <= before.activePageIndex ||
+            !keyboardFocus ||
+            keyboardFocus === before.keyboardFocus ||
+            !movedInRequestedDirection ||
             activePage?.hidden ||
             canSelectTitle
         )
             return;
         const document = destination.ownerDocument;
         const active = document.activeElement;
-        // A final page can replace Next with Save and return focus to body.
-        if (active === keyboardNext.submitter || active === document.body)
+        // Next can become Save, and Back disappears on the first page.
+        if (
+            active === keyboardFocus.button ||
+            (active === document.body &&
+                (keyboardFocus.direction === 'next' ||
+                    !keyboardFocus.button.isConnected))
+        )
             destination.focus({ preventScroll: true });
-    }, [activePageIndex, activePage?.hidden, canSelectTitle, keyboardNext]);
+    }, [activePageIndex, activePage?.hidden, canSelectTitle, keyboardFocus]);
 
     if (
         !activePage ||

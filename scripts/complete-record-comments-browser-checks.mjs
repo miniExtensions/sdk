@@ -61,13 +61,14 @@ import {CompleteRecordCommentsDialog,recordCommentsLabels} from '@miniextensions
 import {createRecordCommentsController} from '@miniextensions/sdk/ui';
 const mode=new URLSearchParams(location.search).get('mode');
 const nativeAppearance=mode?.startsWith('native-');
-const emptyHistory=mode?.endsWith('-empty')||mode==='native-send-error';
+const deferredSendError=mode==='native-deferred-send-error';
+const emptyHistory=mode?.endsWith('-empty')||mode==='native-send-error'||deferredSendError;
 const comparePopulated=mode?.endsWith('-populated');
 const historySelection=mode==='native-history-selection';
 const historyFixture=${JSON.stringify(historyFixture)};
 const stableInvoker=emptyHistory||comparePopulated||mode==='stable-invoker';
 if (comparePopulated) document.body.style.lineHeight = '1.5';
-const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,releaseOlder,openSecond,submits=0;
+const stats={reads:[],writes:[],invalidations:[],dismissals:0};let release,rejectAppend,releaseOlder,openSecond,submits=0;
 const labels=mode==='spanish'?{...recordCommentsLabels,title:'Comentarios',addComment:'Añadir comentario',send:'Enviar',close:'Cerrar'}:mode==='literal'?{...recordCommentsLabels,title:'<Comentarios>'}:recordCommentsLabels;
 function commentText(index) {
     if (comparePopulated && index === 0) return 'W'.repeat(160);
@@ -91,12 +92,59 @@ function listHistory(input) {
         };
     });
 }
-function controller(token){return createRecordCommentsController({owner:{isCurrent:()=>true},childExtensionAccessToken:token,async list(input){stats.reads.push(input);if(historySelection)return listHistory(input);if(mode==='refresh-failure'&&stats.reads.length===2)throw new Error('Synthetic refresh failure');return {readableVersionOfRecordPrimaryValue:'Ada',comments:Array.from({length:emptyHistory?0:40},(_,index)=>({id:String(index),text:commentText(index),createdTime:'2024-01-01',lastUpdatedTime:null,authorLabel:'Verified author',actor:{type:'public',extensionId:'synthetic'}}))};},async append(input){stats.writes.push(input);if(mode==='native-send-error')throw new Error('Synthetic append failure');if(mode==='pending')await new Promise(resolve=>{release=resolve;});},invalidate(input){stats.invalidations.push(input);}});}
+function controller(token) {
+    return createRecordCommentsController({
+        owner: { isCurrent: () => true },
+        childExtensionAccessToken: token,
+        async list(input) {
+            stats.reads.push(input);
+            if (historySelection) return listHistory(input);
+            if (mode === 'refresh-failure' && stats.reads.length === 2)
+                throw new Error('Synthetic refresh failure');
+            return {
+                readableVersionOfRecordPrimaryValue: 'Ada',
+                comments: Array.from({ length: emptyHistory ? 0 : 40 }, (_, index) => ({
+                    id: String(index),
+                    text: commentText(index),
+                    createdTime: '2024-01-01',
+                    lastUpdatedTime: null,
+                    authorLabel: 'Verified author',
+                    actor: { type: 'public', extensionId: 'synthetic' },
+                })),
+            };
+        },
+        async append(input) {
+            stats.writes.push(input);
+            if (mode === 'native-send-error')
+                throw new Error('Synthetic append failure');
+            if (mode === 'pending') await new Promise((resolve) => { release = resolve; });
+            if (deferredSendError) {
+                await new Promise((_, reject) => {
+                    rejectAppend = () => {
+                        rejectAppend = undefined;
+                        reject(new Error('Synthetic append failure'));
+                    };
+                });
+            }
+        },
+        invalidate(input) {
+            stats.invalidations.push(input);
+        },
+    });
+}
 const first=controller('captured-A'),second=controller('captured-B');
 function App(){const invoker=useRef(null);const [open,setOpen]=useState(false),[two,setTwo]=useState(false);openSecond=()=>flushSync(()=>setTwo(true));return h('div',null,stableInvoker?h('button',{ref:invoker},'Record options'):null,stableInvoker&&open?null:h('button',{type:'button',onClick:()=>setOpen(true)},'Open comments'),open?h(CompleteRecordCommentsDialog,{controller:first,labels,...(nativeAppearance?{appearance:'native'}:{}),returnFocusTo:stableInvoker?invoker:undefined,reservedInlineEndWidth:mode==='inset'?'440px':undefined,dismiss(){stats.dismissals++;setOpen(false);}}):null,two?h(CompleteRecordCommentsDialog,{controller:second,labels:{...recordCommentsLabels,title:'Second comments'},dismiss(){stats.dismissals++;setTwo(false);}}):null);}
 const app=h(App);
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,historySelection?h('form',{onSubmit(event){event.preventDefault();submits++;}},app):app));
-window.commentsProof={snapshot:()=>structuredClone(historySelection?{...stats,submits}:stats),release:()=>release(),openSecond:()=>openSecond(),hasPendingOlder:()=>releaseOlder!==undefined,releaseOlder:()=>releaseOlder()};
+window.commentsProof = {
+    snapshot: () => structuredClone(historySelection ? { ...stats, submits } : stats),
+    release: () => release(),
+    hasPendingAppend: () => rejectAppend !== undefined,
+    rejectAppend: () => rejectAppend(),
+    openSecond: () => openSecond(),
+    hasPendingOlder: () => releaseOlder !== undefined,
+    releaseOlder: () => releaseOlder(),
+};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
         const bundle = await build({
@@ -650,6 +698,115 @@ window.commentsProof={snapshot:()=>structuredClone(historySelection?{...stats,su
         assert.equal(failedSend.writes.length, 1);
         assert.deepEqual(failedSend.invalidations, []);
         evidence.results.push({ group: 'native-composer-append-error' });
+
+        const retryPayload = {
+            childExtensionAccessToken: 'captured-A',
+            comment: '{{Ada}}: Retained draft',
+        };
+        const retryFocus = [];
+        for (const moveToClose of [false, true]) {
+            await open('native-deferred-send-error', 375, 640);
+            const retryDraft = page.getByRole('textbox', {
+                name: 'Add a comment',
+            });
+            const retrySend = page.getByRole('button', {
+                name: 'Send',
+                exact: true,
+            });
+            const close = page.getByRole('button', {
+                name: 'Close',
+                exact: true,
+            });
+            const retryAlert = page.getByRole('alert');
+            const snapshot = () =>
+                page.evaluate(() => window.commentsProof.snapshot());
+            const activeName = () =>
+                page.evaluate(() => {
+                    const active = document.activeElement;
+                    return active === document.body
+                        ? 'BODY'
+                        : active.getAttribute('aria-label') ||
+                              active.textContent?.trim();
+                });
+            const waitForPending = () =>
+                page.waitForFunction(() =>
+                    window.commentsProof.hasPendingAppend()
+                );
+            const rejectAppend = async () => {
+                await page.evaluate(() => window.commentsProof.rejectAppend());
+                await retryAlert.waitFor();
+                assert.equal(
+                    await retryAlert.textContent(),
+                    'Synthetic append failure'
+                );
+                assert.equal(await retryDraft.inputValue(), 'Retained draft');
+                assert.equal(await retrySend.isEnabled(), true);
+            };
+            const focused = (locator) =>
+                locator.evaluate(
+                    (node) => node.ownerDocument.activeElement === node
+                );
+            await retryDraft.pressSequentially('Retained draft');
+            await page.keyboard.press('Tab');
+            assert.equal(await focused(retrySend), true);
+            await page.keyboard.press('Enter');
+            await waitForPending();
+            await page.evaluate(
+                () =>
+                    new Promise((resolve) =>
+                        requestAnimationFrame(() =>
+                            requestAnimationFrame(() => resolve())
+                        )
+                    )
+            );
+            assert.equal(await retrySend.isDisabled(), true);
+            const whilePending = await snapshot();
+            assert.deepEqual(whilePending.writes, [retryPayload]);
+            assert.deepEqual(whilePending.invalidations, []);
+            const activeWhilePending = await activeName();
+            if (moveToClose) {
+                await page.keyboard.press('Tab');
+                assert.equal(await focused(close), true);
+            }
+            await rejectAppend();
+            const afterFailure = await snapshot();
+            assert.deepEqual(afterFailure.writes, [retryPayload]);
+            assert.deepEqual(afterFailure.invalidations, []);
+            const expectedFocus = moveToClose ? close : retrySend;
+            const result = {
+                moveToClose,
+                focused: await focused(expectedFocus),
+                activeWhilePending,
+                activeAfterFailure: await activeName(),
+                afterFailure,
+            };
+            if (!moveToClose && result.focused) {
+                await page.keyboard.press('Enter');
+                await waitForPending();
+                assert.deepEqual((await snapshot()).writes, [
+                    retryPayload,
+                    retryPayload,
+                ]);
+                await rejectAppend();
+                result.afterRetry = await snapshot();
+                assert.deepEqual(result.afterRetry.writes, [
+                    retryPayload,
+                    retryPayload,
+                ]);
+                assert.deepEqual(result.afterRetry.invalidations, []);
+                assert.equal(await focused(retrySend), true);
+            }
+            retryFocus.push(result);
+        }
+        evidence.retryFocus = retryFocus;
+        assert.deepEqual(
+            retryFocus.map(({ focused }) => focused),
+            [true, true],
+            'A rejected keyboard send must keep Send focused for retry or preserve Close focus'
+        );
+        evidence.results.push({
+            group: 'deferred-append-error-keyboard-retry',
+        });
 
         await open('pending');
         await page.getByRole('textbox').fill('pending');

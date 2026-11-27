@@ -7,6 +7,7 @@ import {
     useRef,
     useSyncExternalStore,
     type CSSProperties,
+    type MouseEvent,
     type ReactNode,
     type ReactElement,
     type SyntheticEvent,
@@ -114,6 +115,25 @@ export function CompleteRecordComments(
     const { appearance, controller, labels } = props;
     const { state, act } = useCommentsView(controller);
     const titleId = useId();
+    const retryFocus = useRef<HTMLButtonElement | null>(null);
+    useCommitEffect(
+        () => () => {
+            retryFocus.current = null;
+        },
+        [controller]
+    );
+    useCommitEffect(() => {
+        if (state.sending) return;
+        const button = retryFocus.current;
+        retryFocus.current = null;
+        if (!state.sendError || !button?.isConnected || button.disabled) return;
+
+        // Disabling a focused Send can move focus to the document body.
+        // Leave focus alone when the user has already moved to another control.
+        const document = button.ownerDocument;
+        if (document.activeElement === document.body)
+            button.focus({ preventScroll: true });
+    }, [state.sending, state.sendError]);
     if (state.retired) return null;
     const loading =
         state.readStatus === 'idle' || state.readStatus === 'loading';
@@ -227,7 +247,26 @@ export function CompleteRecordComments(
                           type: 'button',
                           className: 'mx-sdk-comments-send',
                           disabled: state.sending || state.draft.length === 0,
-                          onClick: () => act(() => controller.send()),
+                          onClick: (event: MouseEvent<HTMLButtonElement>) => {
+                              const button = event.currentTarget;
+                              const keyboardActivation = event.detail === 0;
+                              act(() => {
+                                  const before = controller.getSnapshot();
+                                  if (
+                                      keyboardActivation &&
+                                      !before.sending &&
+                                      button.ownerDocument.activeElement ===
+                                          button
+                                  )
+                                      retryFocus.current = button;
+                                  void controller.send();
+                                  if (
+                                      !before.sending &&
+                                      controller.getSnapshot() === before
+                                  )
+                                      retryFocus.current = null;
+                              });
+                          },
                       },
                       labels.send
                   ),

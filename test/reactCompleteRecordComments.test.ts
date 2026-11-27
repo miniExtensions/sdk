@@ -349,6 +349,62 @@ it('pending append keeps Close/backdrop available and settles captured cache aft
     assert.equal(writes, 1);
 });
 
+it('restores keyboard retry focus after rejection only when no control has focus', async (t) => {
+    const first = deferred<void>();
+    const second = deferred<void>();
+    const writes: AddRecordCommentInput[] = [];
+    let invalidations = 0;
+    const controller = createRecordCommentsController({
+        owner: { isCurrent: () => true },
+        childExtensionAccessToken: 'A',
+        list: async () => empty,
+        append: (input) => {
+            writes.push(input);
+            return writes.length === 1 ? first.promise : second.promise;
+        },
+        invalidate: () => {
+            invalidations++;
+        },
+    });
+    const f = await fixture(t, { controller, appearance: 'native' });
+    await act(async () => controller.setDraft('Retained draft'));
+    const send = f.button(recordCommentsLabels.send);
+    const close = f.button(recordCommentsLabels.close);
+    const activate = (dropFocus = false) =>
+        act(async () => {
+            send.dispatchEvent(
+                new f.window.MouseEvent('click', { bubbles: true, detail: 0 })
+            );
+            // Happy DOM does not remove focus when a button becomes disabled.
+            if (dropFocus) send.blur();
+        });
+
+    send.focus();
+    await activate(true);
+    assert.equal(send.disabled, true);
+    assert.ok(f.window.document.activeElement === f.window.document.body);
+    await act(async () => first.reject(new Error('Synthetic append failure')));
+    assert.equal(send.disabled, false);
+    assert.ok(f.window.document.activeElement === send);
+    assert.equal(f.host.querySelector('textarea')?.value, 'Retained draft');
+    assert.equal(
+        f.host.querySelector('[role=alert]')?.textContent,
+        'Synthetic append failure'
+    );
+
+    await activate();
+    assert.equal(send.disabled, true);
+    close.focus();
+    await act(async () => second.reject(new Error('Synthetic append failure')));
+    assert.equal(send.disabled, false);
+    assert.ok(f.window.document.activeElement === close);
+    assert.deepEqual(writes, [
+        { childExtensionAccessToken: 'A', comment: 'Retained draft' },
+        { childExtensionAccessToken: 'A', comment: 'Retained draft' },
+    ]);
+    assert.equal(invalidations, 0);
+});
+
 it('restores a stable host invoker after a temporary activation control is removed', async (t) => {
     const returnFocusTo: { current: HTMLElement | null } = { current: null };
     let temporary: HTMLButtonElement | undefined;

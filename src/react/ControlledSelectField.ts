@@ -300,6 +300,27 @@ function SelectControl(props: ControlProps): ReactNode {
                 color: '#f3f4f6',
             }
     );
+    const checkboxList = props.multiple && !props.limitToOneSelection;
+    let listChoices = props.availableChoices;
+    if (
+        props.presentation === 'list' &&
+        checkboxList &&
+        !disabled &&
+        props.maxSelections != null
+    ) {
+        const listedNames = new Set([
+            ...lookup.keys(),
+            ...props.availableChoices.map((choice) => choice.name),
+        ]);
+        const removableChoices = [...listChoices];
+        // Retired values still count toward the cap and need a way to be removed.
+        for (const choice of selected) {
+            if (listedNames.has(choice.name)) continue;
+            listedNames.add(choice.name);
+            removableChoices.push(choice);
+        }
+        listChoices = removableChoices;
+    }
     const candidates = portalFilter
         ? props.availableChoices
         : props.availableChoices.filter(
@@ -754,7 +775,7 @@ function SelectControl(props: ControlProps): ReactNode {
                       { className: 'mx-sdk-select-sr-only' },
                       props.ariaLabel
                   ),
-                  ...props.availableChoices.map((choice) => {
+                  ...listChoices.map((choice) => {
                       const checked = props.values.includes(choice.name);
                       const optionId = `${id}-${generatedId}-${key(choice)}`;
                       return h(
@@ -763,7 +784,7 @@ function SelectControl(props: ControlProps): ReactNode {
                               key: key(choice),
                               className: 'mx-sdk-select-list-option',
                           },
-                          props.multiple && !props.limitToOneSelection
+                          checkboxList
                               ? h('input', {
                                     type: 'checkbox',
                                     className: 'mx-sdk-select-list-input',

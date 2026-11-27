@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { it } from 'node:test';
-import { createElement as h } from 'react';
+import { createElement as h, type FormEvent } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
     SingleSelectField,
@@ -219,25 +219,42 @@ it('real controlled list publishes exact ordered values, permits cap reduction, 
             else Reflect.deleteProperty(globalThis, key);
         }
     });
-    let value = ['Alpha', 'Pending'];
+    let value: readonly string[] = ['Alpha', 'Pending'];
+    let availableChoices = choices;
+    let readOnly = false;
+    let maxSelections: number | null = 1;
+    let submits = 0;
     const writes: string[][] = [];
     let current = true;
     let limitToOneSelection = false;
     const owner = { token: {}, isCurrent: () => current };
     const render = () =>
         root.render(
-            h(MultipleSelectsField, {
-                ...common,
-                value,
-                owner,
-                maxSelections: 1,
-                limitToOneSelection,
-                onValueChange: (next) => {
-                    writes.push(next);
-                    value = next;
-                    render();
+            h(
+                'form',
+                {
+                    id: common.formId,
+                    onSubmit: (event: FormEvent<HTMLFormElement>) => {
+                        event.preventDefault();
+                        submits++;
+                    },
                 },
-            })
+                h(MultipleSelectsField, {
+                    ...common,
+                    choices: availableChoices,
+                    availableChoices,
+                    value,
+                    owner,
+                    readOnly,
+                    maxSelections,
+                    limitToOneSelection,
+                    onValueChange: (next) => {
+                        writes.push(next);
+                        value = next;
+                        render();
+                    },
+                })
+            )
         );
     await act(async () => render());
     const checked = container.querySelectorAll('input');
@@ -257,6 +274,59 @@ it('real controlled list publishes exact ordered values, permits cap reduction, 
     await act(async () => render());
     await act(async () => container.querySelectorAll('input')[1]!.click());
     assert.deepEqual(writes, [['Pending'], [], ['Pending']]);
+
+    writes.length = 0;
+    limitToOneSelection = false;
+    const loaded = Object.freeze(['Retired', 'Alpha']);
+    availableChoices = [
+        { id: 'alpha', name: 'Alpha', displayName: 'Alpha' },
+        { id: 'beta', name: 'Beta', displayName: 'Beta' },
+    ];
+    Object.freeze(availableChoices);
+    value = loaded;
+    const labels = () =>
+        [...container.querySelectorAll('label')].map((label) =>
+            label.textContent?.trim()
+        );
+    const inputs = () => [...container.querySelectorAll('input')];
+    readOnly = true;
+    await act(async () => render());
+    assert.deepEqual(labels(), ['Alpha', 'Beta']);
+    assert.equal(container.querySelector('fieldset')?.disabled, true);
+
+    readOnly = false;
+    maxSelections = null;
+    await act(async () => render());
+    assert.deepEqual(labels(), ['Alpha', 'Beta']);
+    assert.equal(inputs()[1]?.disabled, false);
+
+    maxSelections = 1;
+    await act(async () => render());
+    assert.deepEqual(writes, []);
+    assert.deepEqual(labels(), ['Alpha', 'Beta', 'Retired']);
+    assert.deepEqual(
+        inputs().map(({ checked, disabled }) => [checked, disabled]),
+        [
+            [true, false],
+            [false, true],
+            [true, false],
+        ]
+    );
+    await act(async () => inputs()[1]!.click());
+    assert.deepEqual(writes, []);
+    await act(async () => inputs()[2]!.click());
+    assert.deepEqual(writes, [['Alpha']]);
+    assert.deepEqual(labels(), ['Alpha', 'Beta']);
+    assert.equal(inputs()[0]?.checked, true);
+    assert.equal(inputs()[1]?.disabled, true);
+    await act(async () => inputs()[1]!.click());
+    assert.deepEqual(writes, [['Alpha']]);
+    await act(async () => inputs()[0]!.click());
+    assert.equal(inputs()[1]?.disabled, false);
+    await act(async () => inputs()[1]!.click());
+    assert.deepEqual(writes, [['Alpha'], [], ['Beta']]);
+    assert.deepEqual(loaded, ['Retired', 'Alpha']);
+    assert.equal(submits, 0);
 });
 
 it('same-field list instances retain unique option IDs and label targets', () => {

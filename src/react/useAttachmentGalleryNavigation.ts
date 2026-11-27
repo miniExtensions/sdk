@@ -34,7 +34,7 @@ export function useAttachmentGalleryNavigation(
         const matchesSelected = (row: AttachmentGalleryRowIdentity) =>
             selected != null &&
             row.url === selected.url &&
-            (selected.id == null || row.id === selected.id);
+            (row.id ?? null) === (selected.id ?? null);
         const occurrence = selection.rows
             .slice(0, selection.index)
             .filter(matchesSelected).length;
@@ -45,15 +45,20 @@ export function useAttachmentGalleryNavigation(
         let retainedIndex =
             matchingIndices[Math.min(occurrence, matchingIndices.length - 1)] ??
             -1;
-        if (
-            retainedIndex < 0 &&
-            selected?.id != null &&
-            selection.rows.filter((row) => row.id === selected.id).length === 1
-        ) {
-            const sameIdIndices = rows.flatMap((row, index) =>
-                row.id === selected.id ? [index] : []
-            );
-            if (sameIdIndices.length === 1) retainedIndex = sameIdIndices[0];
+        if (retainedIndex < 0 && selected != null) {
+            // A unique saved row can receive a new URL, and a unique prefill
+            // can receive an ID. A shared URL alone cannot resolve either.
+            const matchesFallback = (row: AttachmentGalleryRowIdentity) =>
+                selected.id == null
+                    ? row.url === selected.url
+                    : row.id === selected.id;
+            if (selection.rows.filter(matchesFallback).length === 1) {
+                const fallbackIndices = rows.flatMap((row, index) =>
+                    matchesFallback(row) ? [index] : []
+                );
+                if (fallbackIndices.length === 1)
+                    retainedIndex = fallbackIndices[0];
+            }
         }
 
         currentSliderIndex =

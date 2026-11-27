@@ -61,7 +61,7 @@ export async function checkPortalGalleryReactMatrix({
         'utf8'
     );
     assert(source.includes("'../src/react/index.js'"));
-    const testsPerProfile = 23;
+    const testsPerProfile = 27;
     const profiles = [];
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],

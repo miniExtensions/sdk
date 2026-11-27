@@ -137,6 +137,7 @@ export function AiTextField(props: AiTextComponentProps): ReactNode {
               textSize: props.textSize,
               layout: props.layout,
               className: props.className,
+              emptyLabel: props.emptyLabel,
           })
         : createElement(BoundAiTextField, props);
 }

@@ -9,10 +9,24 @@ import {
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
     createElement as h,
+    forwardRef,
+    type ButtonHTMLAttributes,
     type ReactElement,
     type ReactNode,
     type RefObject,
 } from 'react';
+
+const HeaderActionButton = forwardRef<
+    HTMLButtonElement,
+    ButtonHTMLAttributes<HTMLButtonElement> & { unavailable?: boolean }
+>(function HeaderActionButton({ unavailable, ...props }, ref) {
+    // Apply ARIA after MenuItem merges its props so the row stays in arrow order.
+    return h('button', {
+        ...props,
+        ref,
+        'aria-disabled': unavailable || props['aria-disabled'],
+    });
+});
 
 export type FormRecordActionsHeaderMenuRuntimeProps = Readonly<{
     label: string;
@@ -83,10 +97,10 @@ export function FormRecordActionsHeaderMenuRuntime({
             },
             items.map((item) =>
                 h(
-                    MenuItem<'button'>,
+                    MenuItem<typeof HeaderActionButton>,
                     {
                         key: item.kind,
-                        as: 'button',
+                        as: HeaderActionButton,
                         type: 'button',
                         className:
                             item.kind === 'delete'
@@ -95,6 +109,7 @@ export function FormRecordActionsHeaderMenuRuntime({
                         'aria-busy': item.pending || undefined,
                         // The native menu keeps unavailable actions in arrow order.
                         ...{ 'data-unavailable': item.disabled || undefined },
+                        unavailable: item.kind === 'delete' && item.disabled,
                         onClick: item.disabled ? undefined : item.onSelect,
                     },
                     h(

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { Window } from 'happy-dom';
-import { createElement, StrictMode, act } from 'react';
+import { createElement, StrictMode, act, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AttachmentDialog, AttachmentField } from '../src/react/index.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
@@ -9,7 +9,7 @@ import { RecoveryJournal } from '../src/forms/recovery.js';
 import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import { loadedForm, formSaveOptions } from './formsFixtures.js';
 
-it('picker cancellation preserves owner-held queue and draft across StrictMode remounts', async () => {
+function attachmentTestDom() {
     const window = new Window();
     const globals = [
         'window',
@@ -32,6 +32,21 @@ it('picker cancellation preserves owner-held queue and draft across StrictMode r
                     : window[key as keyof Window],
         })
     );
+    return {
+        window,
+        async close() {
+            globals.forEach((key, index) => {
+                const previous = original[index];
+                if (previous) Object.defineProperty(globalThis, key, previous);
+                else Reflect.deleteProperty(globalThis, key);
+            });
+            await window.happyDOM.close();
+        },
+    };
+}
+
+it('picker cancellation preserves owner-held queue and draft across StrictMode remounts', async () => {
+    const { window, close } = attachmentTestDom();
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         fetch: async () => {
@@ -234,11 +249,166 @@ it('picker cancellation preserves owner-held queue and draft across StrictMode r
     } finally {
         await act(async () => root.unmount());
         owner.destroy();
-        globals.forEach((key, index) => {
-            const previous = original[index];
-            if (previous) Object.defineProperty(globalThis, key, previous);
-            else Reflect.deleteProperty(globalThis, key);
-        });
-        await window.happyDOM.close();
+        await close();
     }
 });
+
+for (const gesture of ['mouse', 'Space'] as const) {
+    it(`preserves a same-row attachment replacement during a held ${gesture} Remove`, async () => {
+        const { window, close } = attachmentTestDom();
+        const original = {
+            id: 'attOriginal',
+            filename: 'Shared.txt',
+            url: 'https://files.example.test/original',
+        };
+        const replacement = {
+            ...original,
+            id: 'attReplacement',
+            url: 'https://files.example.test/replacement',
+        };
+        const keeper = {
+            id: 'attKeeper',
+            filename: 'Keeper.txt',
+            url: 'https://files.example.test/keep',
+        };
+        const calls = { fetch: 0, upload: 0, save: 0, submit: 0 };
+        const client = createMiniExtensionsClient({
+            apiOrigin: 'https://sdk.example.test',
+            fetch: async () => {
+                calls.fetch++;
+                throw Error('Unexpected request');
+            },
+        });
+        client.attachments.uploadFile = async () => {
+            calls.upload++;
+            throw Error('Unexpected upload');
+        };
+        client.forms.save = async () => {
+            calls.save++;
+            throw Error('Unexpected Save');
+        };
+        const loaded = loadedForm();
+        loaded.payload.formRecord.data.fld_files = [original, keeper];
+        const owner = createFormFieldBindings({
+            client,
+            loaded,
+            saveOptions: formSaveOptions(),
+            getScope: () => ({ ownerId: 'held-remove', revision: 0 }),
+        });
+        const binding = owner.field('fld_files');
+        const attachment = owner.attachment('fld_files', {
+            journal: new RecoveryJournal(),
+            loadVersion: 1,
+            scope: {
+                owner: 'held-remove',
+                parentFieldId: null,
+                tableId: null,
+                childExtensionId: 'form',
+                context: 'modal',
+            },
+        });
+        const root = createRoot(window.document.body as unknown as HTMLElement);
+        const removeButton = () =>
+            [...window.document.querySelectorAll('button')].find(
+                (button) =>
+                    button.getAttribute('aria-label') === 'Remove attachment 1'
+            )!;
+        const pointer = {
+            bubbles: true,
+            cancelable: true,
+            isPrimary: true,
+            button: 0,
+            pointerId: 1,
+            pointerType: 'mouse',
+        };
+        const space = {
+            bubbles: true,
+            cancelable: true,
+            key: ' ',
+            code: 'Space',
+        };
+        const press = (button: ReturnType<typeof removeButton>) => {
+            button.focus();
+            button.dispatchEvent(
+                gesture === 'Space'
+                    ? new window.KeyboardEvent('keydown', space)
+                    : new window.PointerEvent('pointerdown', pointer)
+            );
+        };
+        const release = (button: ReturnType<typeof removeButton>) => {
+            if (gesture === 'Space') {
+                if (
+                    button.dispatchEvent(
+                        new window.KeyboardEvent('keyup', space)
+                    )
+                )
+                    button.click();
+                return;
+            }
+            button.dispatchEvent(new window.PointerEvent('pointerup', pointer));
+            button.dispatchEvent(
+                new window.MouseEvent('click', { ...pointer, detail: 1 })
+            );
+        };
+        try {
+            await act(async () =>
+                root.render(
+                    createElement(
+                        'form',
+                        {
+                            onSubmit(event: FormEvent<HTMLFormElement>) {
+                                event.preventDefault();
+                                calls.submit++;
+                            },
+                        },
+                        createElement(AttachmentField, {
+                            binding,
+                            controller: attachment,
+                        })
+                    )
+                )
+            );
+            const button = removeButton();
+            await act(async () => press(button));
+            await act(async () =>
+                assert.equal(
+                    binding.setValue([replacement, keeper]).accepted,
+                    true
+                )
+            );
+            assert.equal(removeButton(), button);
+            assert.equal(button.isConnected, true);
+            assert.equal(window.document.activeElement, button);
+            const refreshedRevision = owner.controller.getState().draftRevision;
+            assert(refreshedRevision !== null);
+            await act(async () => release(button));
+            assert.deepEqual(binding.getSnapshot().value, [
+                replacement,
+                keeper,
+            ]);
+            assert.equal(
+                owner.controller.getState().draftRevision,
+                refreshedRevision
+            );
+            await act(async () => {
+                press(button);
+                release(button);
+            });
+            assert.deepEqual(binding.getSnapshot().value, [keeper]);
+            assert.equal(
+                owner.controller.getState().draftRevision,
+                refreshedRevision + 1
+            );
+            assert.deepEqual(calls, {
+                fetch: 0,
+                upload: 0,
+                save: 0,
+                submit: 0,
+            });
+        } finally {
+            await act(async () => root.unmount());
+            owner.destroy();
+            await close();
+        }
+    });
+}

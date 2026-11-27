@@ -233,6 +233,9 @@ import {
     useSyncExternalStore,
     type ReactNode,
     type ChangeEvent,
+    type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
@@ -658,6 +661,8 @@ export type AttachmentFieldProps = {
     render?(state: AttachmentRenderState): ReactNode;
 };
 
+type AttachmentRemovePointer = { pointerId: number; pointerType: string };
+
 /** Unmount removes subscriptions, never the owner-held queue or uncertainty journal. */
 export function AttachmentField({
     binding,
@@ -692,6 +697,87 @@ export function AttachmentField({
         store.getSnapshot,
         store.getSnapshot
     );
+    // A held gesture belongs to the rendered attachment values and owner.
+    const removePress = useMemo(
+        () => ({
+            pointers: new Map<
+                string,
+                { pointerId: number; button: HTMLButtonElement }
+            >(),
+            releasedPointer: null as AttachmentRemovePointer | null,
+            space: null as HTMLButtonElement | null,
+        }),
+        [binding, controller, attachment.valuesRevision]
+    );
+    const takeRemovePointer = ({
+        pointerId,
+        pointerType,
+    }: AttachmentRemovePointer) => {
+        const press = removePress.pointers.get(pointerType);
+        if (press?.pointerId !== pointerId) return;
+        removePress.pointers.delete(pointerType);
+        return press.button;
+    };
+    const removePressHandlers = {
+        onPointerDown(event: PointerEvent<HTMLButtonElement>) {
+            removePress.releasedPointer = null;
+            if (event.isPrimary && event.button === 0)
+                removePress.pointers.set(event.pointerType, {
+                    pointerId: event.pointerId,
+                    button: event.currentTarget,
+                });
+        },
+        onPointerUp(event: PointerEvent<HTMLButtonElement>) {
+            // Older browsers dispatch click as a MouseEvent.
+            removePress.releasedPointer = {
+                pointerId: event.pointerId,
+                pointerType: event.pointerType,
+            };
+        },
+        onPointerCancel(event: PointerEvent<HTMLButtonElement>) {
+            takeRemovePointer(event);
+        },
+        onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+            if (event.key === ' ' && !event.repeat)
+                removePress.space = event.currentTarget;
+        },
+        onKeyUp(event: KeyboardEvent<HTMLButtonElement>) {
+            if (event.key !== ' ') return;
+            const pressed = removePress.space;
+            removePress.space = null;
+            if (pressed !== event.currentTarget) event.preventDefault();
+        },
+        onBlur() {
+            removePress.space = null;
+        },
+    };
+    const removeOnClick = (
+        event: MouseEvent<HTMLButtonElement>,
+        nativeIndex: number
+    ) => {
+        const released = removePress.releasedPointer;
+        removePress.releasedPointer = null;
+        const click = event.nativeEvent;
+        // Click-only activation covers Enter and assistive technology.
+        if (
+            event.detail > 0 ||
+            ('pointerType' in click && click.pointerType !== '')
+        ) {
+            const pointer =
+                'pointerId' in click &&
+                typeof click.pointerId === 'number' &&
+                'pointerType' in click &&
+                typeof click.pointerType === 'string'
+                    ? {
+                          pointerId: click.pointerId,
+                          pointerType: click.pointerType,
+                      }
+                    : released;
+            if (!pointer || takeRemovePointer(pointer) !== event.currentTarget)
+                return;
+        }
+        controller.remove(attachment.valuesRevision, nativeIndex);
+    };
     useLayoutEffect(() => {
         const node = section.current;
         const previous = focus.element;
@@ -831,11 +917,12 @@ export function AttachmentField({
                                       'data-attachment-remove': row.nativeIndex,
                                       'aria-label': `Remove attachment ${row.nativeIndex + 1}`,
                                       disabled: !row.removeAllowed,
-                                      onClick: () =>
-                                          controller.remove(
-                                              attachment.valuesRevision,
-                                              row.nativeIndex
-                                          ),
+                                      ...removePressHandlers,
+                                      onClick(
+                                          event: MouseEvent<HTMLButtonElement>
+                                      ) {
+                                          removeOnClick(event, row.nativeIndex);
+                                      },
                                   },
                                   'Remove attachment'
                               )

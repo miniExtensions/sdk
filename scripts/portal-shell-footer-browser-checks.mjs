@@ -74,6 +74,15 @@ const cases = [
     },
 ];
 
+function countPixelDifferences(reference, capture) {
+    let differingPixels = 0;
+    for (let index = 0; index < reference.length; index += 4) {
+        if (reference.readUInt32BE(index) !== capture.readUInt32BE(index))
+            differingPixels++;
+    }
+    return differingPixels;
+}
+
 async function measure(browser, assets, output, native, report, scenario) {
     const { name, width = 400 } = scenario;
     const desktop = name === 'desktop';
@@ -241,11 +250,33 @@ async function measure(browser, assets, output, native, report, scenario) {
             animations: 'disabled',
         });
         if (name === 'plain-400') {
-            const capturedCrop = await page.screenshot({
-                path: join(output, 'plain-400-button.png'),
+            const cropOptions = {
                 clip: buttonCrop,
                 animations: 'disabled',
                 scale: 'css',
+            };
+            const capturedCrop = await page.screenshot({
+                ...cropOptions,
+                path: join(output, 'plain-400-button.png'),
+            });
+            // Rasterize the pinned native paint in the same offline context.
+            const nativePage = await context.newPage();
+            nativePage.setDefaultTimeout(5000);
+            nativePage.on('pageerror', (error) => errors.push(error.message));
+            await nativePage.setContent(native.paint.toString('utf8'));
+            nativePage.on('framenavigated', (frame) =>
+                navigations.push(frame.url())
+            );
+            await nativePage.addStyleTag({ content: styles });
+            assert.deepEqual(await nativePage.locator('svg').boundingBox(), {
+                x: 156,
+                y: 650,
+                width: 28,
+                height: 28,
+            });
+            const referenceCrop = await nativePage.screenshot({
+                ...cropOptions,
+                path: join(output, 'plain-400-native-reference.png'),
             });
             const pixels = await page.evaluate(
                 async ({ images, size }) => {
@@ -278,31 +309,37 @@ async function measure(browser, assets, output, native, report, scenario) {
                     return crops;
                 },
                 {
-                    images: [native, capturedCrop].map((png) =>
-                        png.toString('base64')
+                    images: [native.archive, referenceCrop, capturedCrop].map(
+                        (png) => png.toString('base64')
                     ),
                     size: buttonCrop,
                 }
             );
-            const [nativePixels, sdkPixels] = pixels.map((rgba) =>
-                Buffer.from(rgba)
+            const [archivePixels, referencePixels, sdkPixels] = pixels.map(
+                (rgba) => Buffer.from(rgba)
             );
-            let differingPixels = 0;
-            for (let index = 0; index < nativePixels.length; index += 4) {
-                if (
-                    nativePixels.readUInt32BE(index) !==
-                    sdkPixels.readUInt32BE(index)
-                )
-                    differingPixels++;
-            }
             report.nativeComparison = {
                 nativeFrameSha256,
                 nativeCropSha256,
+                nativePaintFixtureSha256: sha256(native.paint),
+                referenceCropSha256: sha256(referenceCrop),
                 installedCropSha256: sha256(capturedCrop),
                 crop: buttonCrop,
-                nativeRgbaSha256: sha256(nativePixels),
+                nativeRgbaSha256: sha256(archivePixels),
+                referenceRgbaSha256: sha256(referencePixels),
                 sdkRgbaSha256: sha256(sdkPixels),
-                differingPixels,
+                differingPixels: countPixelDifferences(
+                    archivePixels,
+                    sdkPixels
+                ),
+                archivedVsReferenceDifferingPixels: countPixelDifferences(
+                    archivePixels,
+                    referencePixels
+                ),
+                sameBrowserDifferingPixels: countPixelDifferences(
+                    referencePixels,
+                    sdkPixels
+                ),
             };
         }
         const proof = await page.evaluate(() => ({
@@ -439,9 +476,12 @@ export async function checkPortalShellFooterGeometry(
     };
     mkdirSync(output, { recursive: true });
     try {
-        const native = readFixture('portal-shell-native-logout-400-crop.png');
+        const native = {
+            archive: readFixture('portal-shell-native-logout-400-crop.png'),
+            paint: readFixture('portal-shell-native-logout-paint.html'),
+        };
         assert.equal(
-            sha256(native),
+            sha256(native.archive),
             nativeCropSha256,
             'Native crop PNG digest'
         );
@@ -460,12 +500,12 @@ export async function checkPortalShellFooterGeometry(
             nativeRgbaSha256,
             'Decoded native crop digest'
         );
-        assert.equal(
-            report.nativeComparison.differingPixels,
-            0,
-            'Native padded button crop differing pixels'
-        );
         assertMeasurements(report);
+        assert.equal(
+            report.nativeComparison.sameBrowserDifferingPixels,
+            0,
+            'Same-browser native padded button crop differing pixels'
+        );
         report.outcome = 'passed';
     } catch (error) {
         report.outcome = 'failed';

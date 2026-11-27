@@ -491,12 +491,15 @@ import * as api from'@miniextensions/sdk/react';
 ` +
     assembly +
     String.raw`
-const models=makeModels(),writes=[],actions={schedule:0,submits:0},errors=[];
+const models=makeModels(),writes=[],actions={schedule:0,submits:0,helpLinkClicks:0},errors=[];
 let root,revision=0,committed=0,requests=0,resetSerial=0;
 const fixtureOptions={constrained:false};
 const pending=new Map();
 window.addEventListener('error',event=>errors.push(String(event.error||event.message)));
 window.addEventListener('unhandledrejection',event=>errors.push(String(event.reason)));
+document.addEventListener('click',event=>{
+ if(event.target instanceof Element&&event.target.closest('a[href="#guide"]'))actions.helpLinkClicks++;
+},true);
 window.fetch=async()=>{requests++;throw Error('Field fixture cannot fetch');};
 XMLHttpRequest.prototype.open=function(){requests++;throw Error('Field fixture cannot use XHR');};
 function snapshot() {
@@ -543,7 +546,7 @@ function resetFixture() {
  for(const key of Object.keys(models))delete models[key];
  Object.assign(models,makeModels());
  for(const model of Object.values(models))model.key='fixture-reset-'+(++resetSerial);
- writes.length=0;actions.schedule=0;actions.submits=0;
+ writes.length=0;actions.schedule=0;actions.submits=0;actions.helpLinkClicks=0;
  fixtureOptions.constrained=false;void publish();
 }
 function FixtureControls() {
@@ -821,6 +824,87 @@ export async function checkMultilineRequiredBrowser({ page, evidence }) {
         results.map((result) => result.ariaRequired),
         ['true', null, null, null]
     );
+}
+
+export async function checkFormFieldHelpKeyboardBrowser({ page, evidence }) {
+    await page.waitForFunction(
+        () => window.__nativeProbe?.snapshot().committed > 0
+    );
+    const row = page.locator('#row-notes-a');
+    const textarea = row.locator('textarea');
+    const popup = page.getByRole('tooltip');
+    const linked = '<p>Read <a href="#guide">Guide</a></p>';
+    const update = (description) =>
+        page.evaluate(
+            (description) =>
+                window.__fieldPresentationFixture.update('notes-a', {
+                    showTitle: false,
+                    placement: 'tooltip',
+                    error: null,
+                    description,
+                }),
+            description
+        );
+    const snapshot = () =>
+        page.evaluate(() => window.__fieldPresentationFixture.flush());
+    const steps = [];
+    evidence.formHelpKeyboard = { steps };
+    const press = async (key, expected) => {
+        await page.keyboard.press(key);
+        const focused = await page.evaluate(() => {
+            const active = document.activeElement;
+            if (active?.matches('#row-notes-a textarea')) return 'textarea';
+            if (active?.matches('#row-notes-a .mx-sdk-field-tooltip-trigger'))
+                return 'help';
+            if (active?.matches('[role="tooltip"] a[href="#guide"]'))
+                return 'Guide';
+            return active?.tagName ?? null;
+        });
+        steps.push({ key, expected, focused });
+        assert.equal(focused, expected, 'Form instructions keyboard path');
+    };
+    await update(linked);
+    await textarea.focus();
+    const before = await snapshot();
+    const originalUrl = page.url();
+    const description = await textarea.getAttribute('aria-describedby');
+    assert(description);
+    await press('Shift+Tab', 'help');
+    await popup.getByRole('link', { name: 'Guide', exact: true }).waitFor();
+    await press('Tab', 'Guide');
+    await press('Shift+Tab', 'help');
+    assert(await popup.isVisible());
+    await press('Tab', 'Guide');
+    await press('Tab', 'textarea');
+    await popup.waitFor({ state: 'detached' });
+    assert.equal(await textarea.getAttribute('aria-describedby'), description);
+    const closedDescription = row.locator('[id="' + description + '"]');
+    assert.equal(await closedDescription.getAttribute('hidden'), '');
+    assert.equal((await closedDescription.textContent()).trim(), 'Read Guide');
+
+    await update('<p>Plain notes instructions</p>');
+    await press('Shift+Tab', 'help');
+    await popup.waitFor();
+    assert.equal(await popup.getByRole('link').count(), 0);
+    await press('Tab', 'textarea');
+    await popup.waitFor({ state: 'detached' });
+    await update(linked);
+    const after = await snapshot();
+    assert.equal(page.url(), originalUrl);
+    assert.equal(after.rows['notes-a'].id, before.rows['notes-a'].id);
+    assert.equal(after.rows['notes-a'].value, before.rows['notes-a'].value);
+    assert.deepEqual(after.writes, before.writes);
+    assert.deepEqual(after.actions, before.actions);
+    assert.equal(after.actions.helpLinkClicks, 0);
+    assert.equal(after.actions.submits, 0);
+    assert.equal(after.requests, 0);
+    assert.deepEqual(after.errors, []);
+    Object.assign(evidence.formHelpKeyboard, {
+        passed: true,
+        linkActivations: after.actions.helpLinkClicks,
+        writes: after.writes.length - before.writes.length,
+        submits: after.actions.submits,
+    });
 }
 
 export async function checkFieldPresentationBrowser({ page, evidence }) {
@@ -1224,6 +1308,7 @@ export async function checkFieldPresentationBrowser({ page, evidence }) {
     await popup.waitFor({ state: 'detached' });
     value = await verify('closed linked help skips keyboard focus');
     assert.deepEqual(value.writes, writesBeforeHelp);
+    await checkFormFieldHelpKeyboardBrowser({ page, evidence });
 
     // Ordinary pointer travel must cross the popup gap without losing it.
     await input('notes-b').focus();

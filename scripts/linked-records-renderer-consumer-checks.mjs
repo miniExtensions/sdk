@@ -50,6 +50,7 @@ export async function checkLinkedRecordsRendererConsumer({
     const { createElement: h, act, StrictMode } = require('react');
     const { createRoot } = require('react-dom/client');
     let checks = 0;
+    const additionResults = [];
     try {
         assert.match(
             readFileSync(
@@ -58,7 +59,13 @@ export async function checkLinkedRecordsRendererConsumer({
             ),
             /\.mx-sdk-linked-records-field/
         );
-        for (const format of ['esm', 'cjs']) {
+        const cases = ['esm', 'cjs'].flatMap((format) =>
+            ['presentation', 'one-record', 'unlimited'].map((scenario) => ({
+                format,
+                scenario,
+            }))
+        );
+        for (const { format, scenario } of cases) {
             const load = (name) =>
                 format === 'cjs'
                     ? require(`@miniextensions/sdk/${name}`)
@@ -82,11 +89,10 @@ export async function checkLinkedRecordsRendererConsumer({
             });
             loaded.payload.hasParentExtension = false;
             loaded.payload.fieldIdsInForm = ['links'];
-            loaded.payload.formRecord.data.links = [
-                'rec_one',
-                'rec_hidden',
-                'rec_one',
-            ];
+            loaded.payload.formRecord.data.links =
+                scenario === 'presentation'
+                    ? ['rec_one', 'rec_hidden', 'rec_one']
+                    : ['rec_one'];
             const primary = {
                 id: 'name',
                 name: 'Name',
@@ -111,7 +117,10 @@ export async function checkLinkedRecordsRendererConsumer({
                         },
                     },
                 },
-                miniExtConfig: {},
+                miniExtConfig:
+                    scenario === 'one-record'
+                        ? { maxRecordsToSelectOrCreate: '1' }
+                        : {},
             };
             loaded.payload.linkedRecordFieldIdToDetailFields.links = [
                 {
@@ -201,6 +210,51 @@ export async function checkLinkedRecordsRendererConsumer({
                     )
                 );
                 assert.equal(reads, 0);
+                if (scenario !== 'presentation') {
+                    await act(async () => button('Load selected').click());
+                    assert.equal(reads, 1);
+                    assert.equal(
+                        container.querySelector(
+                            '.mx-sdk-linked-records-values li span'
+                        )?.textContent,
+                        'Visible'
+                    );
+                    await act(async () =>
+                        owner.setLinkedOptions('links', [
+                            { value: 'rec_new', label: 'New record' },
+                        ])
+                    );
+                    const value = () =>
+                        owner.field('links').getSnapshot().value;
+                    const add = button('New record');
+                    const initiallyDisabled = add.disabled;
+                    await act(async () => add.click());
+                    const afterFirstAdd = value();
+                    let afterRemove = null;
+                    let replacement = null;
+                    if (scenario === 'one-record') {
+                        await act(async () =>
+                            button('Remove selected record 1').click()
+                        );
+                        afterRemove = value();
+                        if (afterRemove.length === 0) {
+                            assert.equal(button('New record').disabled, false);
+                            await act(async () => button('New record').click());
+                            replacement = value();
+                        }
+                    }
+                    additionResults.push({
+                        format,
+                        scenario,
+                        initiallyDisabled,
+                        afterFirstAdd,
+                        afterRemove,
+                        replacement,
+                        saves,
+                    });
+                    checks++;
+                    continue;
+                }
                 assert.equal(
                     container.querySelectorAll(
                         '.mx-sdk-linked-records-values li'
@@ -253,5 +307,28 @@ export async function checkLinkedRecordsRendererConsumer({
         });
         await window.happyDOM.close();
     }
-    return { checks };
+    assert.deepEqual(
+        additionResults,
+        ['esm', 'cjs'].flatMap((format) => [
+            {
+                format,
+                scenario: 'one-record',
+                initiallyDisabled: true,
+                afterFirstAdd: ['rec_one'],
+                afterRemove: [],
+                replacement: ['rec_new'],
+                saves: 0,
+            },
+            {
+                format,
+                scenario: 'unlimited',
+                initiallyDisabled: false,
+                afterFirstAdd: ['rec_one', 'rec_new'],
+                afterRemove: null,
+                replacement: null,
+                saves: 0,
+            },
+        ])
+    );
+    return { checks, additionResults };
 }

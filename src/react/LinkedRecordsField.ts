@@ -156,6 +156,23 @@ function LinkedRecordsControl({
         form?.state.phase === 'retired' ||
         form?.state.phase === 'unavailable';
     const value = props.value ?? [];
+    const config = (props.writeConfig ?? props.displayConfig) as Record<
+        string,
+        unknown
+    > | null;
+    const conditionalFilters = config?.conditionalLinkedRecordFilterFields;
+    const atOneRecordLimit =
+        props.context === 'form' &&
+        config?.maxRecordsToSelectOrCreate === '1' &&
+        value.length > 0 &&
+        (config.filterLinkedRecordsToggle === false ||
+            config.filterLinkedRecordsConditionFields == null) &&
+        config.dynamicFilteringToggle !== true &&
+        config.loggedInUserRecordsViewMode !== 'only-record-linked-to-user' &&
+        (conditionalFilters == null ||
+            (Array.isArray(conditionalFilters) &&
+                conditionalFilters.length === 0));
+    const addDisabled = disabled || atOneRecordLimit;
     const labels = selectedLabels(props);
     // Feedback may contain native IDs or filtered labels; keep it generic even
     // on unmasked fields. The owner retains detailed validation diagnostics.
@@ -313,7 +330,7 @@ function LinkedRecordsControl({
                                       {
                                           type: 'button',
                                           disabled:
-                                              disabled ||
+                                              addDisabled ||
                                               option.disabled === true,
                                           'aria-label': password
                                               ? `Select masked record ${index + 1}`
@@ -321,7 +338,7 @@ function LinkedRecordsControl({
                                           onClick: () => {
                                               if (
                                                   current() &&
-                                                  !disabled &&
+                                                  !addDisabled &&
                                                   !option.disabled
                                               )
                                                   selection.choose(

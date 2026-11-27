@@ -228,27 +228,13 @@ function SelectControl(props: ControlProps): ReactNode {
         epoch,
         text: '',
         open: false,
-        active: -1,
+        // Multiple Select keyboard navigation stores the choice key, or null if it disappears.
+        active: -1 as number | string | null,
     });
     const state =
         draft.epoch === epoch
             ? draft
             : { epoch, text: '', open: false, active: -1 };
-    const update = (change: Partial<typeof state>) => {
-        // Retained blur/search/hover callbacks must not erase a successor's draft.
-        if (live.current !== props || generation.current.epoch !== epoch)
-            return;
-        const next = { ...state, ...change };
-        if (
-            next.text !== state.text ||
-            next.open !== state.open ||
-            next.active !== state.active
-        ) {
-            revision.current++;
-            pendingSettlement.current = null;
-        }
-        setDraft(next);
-    };
     const writable = () =>
         live.current === props &&
         generation.current.epoch === epoch &&
@@ -336,6 +322,31 @@ function SelectControl(props: ControlProps): ReactNode {
     const found = state.text
         ? (fuse?.search(state.text).map((result) => result.item) ?? [])
         : candidates;
+    const resolveActiveIndex = (active: typeof state.active) =>
+        typeof active === 'string'
+            ? found.findIndex((choice) => key(choice) === active)
+            : active;
+    const resolvedActiveIndex = resolveActiveIndex(state.active);
+    const activeIndex = resolvedActiveIndex ?? -1;
+    // Retire a vanished choice even if a later refresh offers it again.
+    if (typeof state.active === 'string' && activeIndex === -1)
+        setDraft({ ...state, active: null });
+    const update = (change: Partial<typeof state>) => {
+        // Retained blur/search/hover callbacks must not erase a successor's draft.
+        if (live.current !== props || generation.current.epoch !== epoch)
+            return;
+        const next = { ...state, ...change };
+        if (
+            next.text !== state.text ||
+            next.open !== state.open ||
+            (next.active !== state.active &&
+                resolveActiveIndex(next.active) !== resolvedActiveIndex)
+        ) {
+            revision.current++;
+            pendingSettlement.current = null;
+        }
+        setDraft(next);
+    };
     const openingIndex = (
         choices: readonly ControlledSelectChoice[],
         fallback: number
@@ -347,24 +358,27 @@ function SelectControl(props: ControlProps): ReactNode {
         return selectedIndex < 0 ? fallback : selectedIndex;
     };
     const moveActiveWithKeyboard = (index: number) => {
+        const choice = found[index];
         if (nativeDropdown && writable()) {
-            const choice = found[index];
             revealAfterKey.current = choice
                 ? { epoch, index, choiceKey: key(choice) }
                 : null;
         }
-        update({ open: true, active: index });
+        update({
+            open: true,
+            active: props.multiple && choice ? key(choice) : index,
+        });
     };
     commitEffect(() => {
         const pending = revealAfterKey.current;
         if (!pending) return;
         revealAfterKey.current = null;
         const target = input.current;
-        const choice = found[state.active];
+        const choice = found[activeIndex];
         if (
             !nativeDropdown ||
             pending.epoch !== epoch ||
-            pending.index !== state.active ||
+            pending.index !== activeIndex ||
             !state.open ||
             !choice ||
             key(choice) !== pending.choiceKey ||
@@ -836,9 +850,9 @@ function SelectControl(props: ControlProps): ReactNode {
                       'aria-activedescendant':
                           props.presentation === 'dropdown' &&
                           state.open &&
-                          (found[state.active] ||
-                              (showCreate && state.active === found.length))
-                              ? `${id}-option-${state.active}`
+                          (found[activeIndex] ||
+                              (showCreate && activeIndex === found.length))
+                              ? `${id}-option-${activeIndex}`
                               : undefined,
                       autoComplete: 'off',
                       placeholder:
@@ -882,14 +896,14 @@ function SelectControl(props: ControlProps): ReactNode {
                               const direction =
                                   event.key === 'ArrowDown' ? 1 : -1;
                               const next =
-                                  !state.open || state.active < 0
+                                  !state.open || activeIndex < 0
                                       ? openingIndex(
                                             found,
                                             direction === 1
                                                 ? 0
                                                 : optionCount - 1
                                         )
-                                      : state.active + direction;
+                                      : activeIndex + direction;
                               moveActiveWithKeyboard(
                                   Math.max(-1, Math.min(optionCount - 1, next))
                               );
@@ -903,13 +917,17 @@ function SelectControl(props: ControlProps): ReactNode {
                               );
                           } else if (event.key === 'Enter') {
                               event.preventDefault();
-                              if (!state.open || (portalFilter && event.repeat))
+                              if (
+                                  !state.open ||
+                                  state.active === null ||
+                                  (portalFilter && event.repeat)
+                              )
                                   return;
-                              if (found[state.active])
-                                  choose(found[state.active]!.name);
+                              if (found[activeIndex])
+                                  choose(found[activeIndex]!.name);
                               else if (
                                   showCreate &&
-                                  (state.active === found.length ||
+                                  (activeIndex === found.length ||
                                       found.length === 0)
                               )
                                   create();
@@ -945,7 +963,7 @@ function SelectControl(props: ControlProps): ReactNode {
                                         id: `${id}-option-${index}`,
                                         role: 'option',
                                         'data-active':
-                                            state.active === index || undefined,
+                                            activeIndex === index || undefined,
                                         'aria-selected': props.values.includes(
                                             choice.name
                                         ),
@@ -997,7 +1015,7 @@ function SelectControl(props: ControlProps): ReactNode {
                                           'aria-selected': false,
                                           'aria-disabled': busy,
                                           'data-active':
-                                              state.active === found.length ||
+                                              activeIndex === found.length ||
                                               undefined,
                                           onMouseDown: (
                                               event: import('react').MouseEvent

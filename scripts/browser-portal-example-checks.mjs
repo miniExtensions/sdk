@@ -754,12 +754,17 @@ export async function checkBrowserPortalExample({
     });
     try {
         await check(
-            'formats physical Duration columns in the installed starter',
+            'formats physical Duration and Percent columns in the installed starter',
             async () => {
                 const portal = editablePortal();
                 const values = record('rec_one', 'Timed record', 3661);
                 values.fields.fld_elapsed = 3661;
                 values.fields.fld_minutes = 60;
+                values.fields.fld_percent_tenths = 0.126;
+                values.fields.fld_percent_whole = 0.126;
+                values.fields.fld_fraction = 0.126;
+                values.fields.fld_percent_zero = 0;
+                values.fields.fld_percent_masked = 0.875;
                 const loaded = page([values]);
                 const table = loaded.tableIdsToLinkedTableStates.tbl_children;
                 const source = structuredClone(
@@ -770,15 +775,36 @@ export async function checkBrowserPortalExample({
                     ['fld_minutes', 'Minutes', 'h:mm'],
                     ['fld_blank', 'Blank duration', 'h:mm:ss'],
                 ];
-                for (const [id, name, durationFormat] of durations) {
+                const percents = [
+                    ['fld_percent_tenths', 'Tenths percent', 1],
+                    ['fld_percent_whole', 'Whole percent', 0],
+                    ['fld_percent_zero', 'Zero percent', 0],
+                    ['fld_percent_blank', 'Blank percent', 1],
+                    ['fld_percent_masked', 'Masked percent', 1],
+                ];
+                const numericColumns = [
+                    ...durations.map(([id, name, durationFormat]) => [
+                        id,
+                        name,
+                        { type: 'duration', options: { durationFormat } },
+                    ]),
+                    ...percents.map(([id, name, precision]) => [
+                        id,
+                        name,
+                        { type: 'percent', options: { precision } },
+                    ]),
+                    [
+                        'fld_fraction',
+                        'Fraction',
+                        { type: 'number', options: { precision: 0 } },
+                    ],
+                ];
+                for (const [id, name, config] of numericColumns) {
                     table.airtableFields.push({
                         id,
                         name,
                         isComputed: false,
-                        config: {
-                            type: 'duration',
-                            options: { durationFormat },
-                        },
+                        config,
                     });
                     portal.payload.linkedRecordFieldIdToDetailFields.fld_children.push(
                         {
@@ -787,6 +813,9 @@ export async function checkBrowserPortalExample({
                             isHidden: false,
                             childFormField: null,
                             fieldIsInEditingChildForm: false,
+                            ...(id === 'fld_percent_masked'
+                                ? { miniExtConfig: { obscurePassword: true } }
+                                : {}),
                         }
                     );
                 }
@@ -820,6 +849,12 @@ export async function checkBrowserPortalExample({
                         'Minutes',
                         'Count',
                         'Blank duration',
+                        'Tenths percent',
+                        'Whole percent',
+                        'Fraction',
+                        'Zero percent',
+                        'Blank percent',
+                        'Masked percent',
                     ].map((name) => {
                         const index = headings.indexOf(name);
                         assert.ok(
@@ -837,6 +872,12 @@ export async function checkBrowserPortalExample({
                         '0:01',
                         '3661',
                         '',
+                        '12.6%',
+                        '13%',
+                        '0.126',
+                        '0%',
+                        '',
+                        '••••••••',
                     ]);
                 } finally {
                     await h.dispose();

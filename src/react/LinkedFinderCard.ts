@@ -399,6 +399,7 @@ export function LinkedFinderRichLeaf({
                     value: formatDateInputValue({
                         airtableValue: leaf.display.value,
                         airtableFieldConfig: leaf.display.airtableDateConfig,
+                        language: leaf.display.language,
                     }),
                     language: leaf.display.language,
                 })

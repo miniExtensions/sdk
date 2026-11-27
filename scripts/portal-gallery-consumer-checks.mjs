@@ -61,7 +61,7 @@ export async function checkPortalGalleryReactMatrix({
         'utf8'
     );
     assert(source.includes("'../src/react/index.js'"));
-    const testsPerProfile = 27;
+    const testsPerProfile = 28;
     const profiles = [];
     for (const [react, types, domTypes] of [
         ['18.3.1', '18.3.12', '18.3.1'],
@@ -134,6 +134,7 @@ export async function checkPortalGalleryReactMatrix({
                         '../src/react/index.js',
                         '@miniextensions/sdk/react'
                     )
+                    .replaceAll('../src/ui/index.js', '@miniextensions/sdk/ui')
                     .replaceAll(
                         './fixtures/htmlPresentationFixture.js',
                         `./gallery-fixture.${extension}`

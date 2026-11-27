@@ -96,7 +96,7 @@ export function checkPortalShellReactMatrix({
 import assert from 'node:assert/strict';import{createRequire}from'node:module';
 import React from'react';import{createRoot}from'react-dom/client';import{renderToString}from'react-dom/server';
 import{assertPortalShellConsumer,assertPortalShellSidebarConsumer,assertPortalShellPresentationConsumer,assertPortalShellSettingsConsumer}from'./scenarios.mjs';
-import{assertPortalShellNavigationConsumer}from'./navigation-scenarios.mjs';
+import{assertPortalShellNavigationConsumer,assertPortalShellSubmenuProjection}from'./navigation-scenarios.mjs';
 const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
 const ui=format==='esm'?await import('@miniextensions/sdk/react'):require('@miniextensions/sdk/react');
@@ -111,7 +111,8 @@ const settings=await assertPortalShellSettingsConsumer({React,ui,Window,createRo
 assert.deepEqual(settings,{settingsRequests:11,siblingRequests:1,ordinaryIntents:0,submitEvents:0,implicitNetworkRequests:0,precommitAdmission:'rejected'});
 const navigation=await assertPortalShellNavigationConsumer({React,ui,Window,createRoot,renderToString});
 assert.deepEqual(navigation,{activations:6,legacyNavigationIntents:1,hoverNotifications:4,settingsRequests:1,precommitAdmission:'rejected',providerRequests:0,submitEvents:0,preservedIframe:true,externalLinkClosure:'passed',tabExitHandoff:'passed',accountKeyboardAndMobileTrap:'passed',hostSelectionAcrossMenuDrift:'passed',closedNavigationKeyboard:'passed',liveNavigationRevision:'passed',editorDirectionalFocus:'passed',navigationBrand:'passed'});
-console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation,settings,navigation}));
+const submenuReads=assertPortalShellSubmenuProjection(portals);
+console.log(JSON.stringify({format,react:React.version,...result,sidebar,presentation,settings,navigation,submenuReads}));
 `
         );
         runAgeQualifiedConsumerInstall(run, [

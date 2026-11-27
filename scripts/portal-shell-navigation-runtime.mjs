@@ -1,5 +1,83 @@
 import assert from 'node:assert/strict';
 
+export function assertPortalShellSubmenuProjection(portals) {
+    const samples = [64, 128].map((n) => {
+        let reads = 0;
+        const views = Array.from({ length: n }, (_, index) => ({
+            get id() {
+                reads++;
+                return `v${index}`;
+            },
+            label: `View ${index}`,
+        }));
+        const projected = portals.projectPortalShellMenu([
+            { type: 'table', id: 'bench', label: 'Views', views },
+        ]);
+        const projectionReads = reads;
+        assert.equal(projected[0].views.length, n);
+        projected[0].views.forEach((view, index) => {
+            assert.equal(view, views[index]);
+        });
+
+        reads = 0;
+        const selection = {
+            type: 'table',
+            itemId: 'bench',
+            viewId: `v${n - 1}`,
+        };
+        assert.deepEqual(
+            portals.resolvePortalShellSelection({
+                items: projected,
+                selection,
+                phase: 'reconcile',
+            }),
+            selection
+        );
+        return { n, projectionReads, reconcileReads: reads };
+    });
+
+    const unpadded = { id: 'same', label: 'Unpadded' };
+    const padded = { id: ' same ', label: 'Padded' };
+    const omitted = { type: 'table', id: 'omitted', label: 'Omitted' };
+    const projected = portals.projectPortalShellMenu([
+        {
+            type: 'table',
+            id: 'a',
+            label: 'A',
+            views: [
+                unpadded,
+                { id: 'duplicate', label: 'First' },
+                padded,
+                { id: 'duplicate', label: 'Second' },
+                { id: 'duplicate', label: 'Third' },
+                { id: ' ', label: 'Blank' },
+                { id: '', label: 'Empty' },
+            ],
+        },
+        { type: 'table', id: 'b', label: 'B', views: [unpadded] },
+        { type: 'table', id: 'empty', label: 'Empty', views: [] },
+        omitted,
+    ]);
+    assert.deepEqual(
+        projected.map(({ id }) => id),
+        ['a', 'b', 'omitted']
+    );
+    assert.equal(projected[0].views.length, 2);
+    assert.equal(projected[0].views[0], unpadded);
+    assert.equal(projected[0].views[1], padded);
+    assert.equal(projected[1].views[0], unpadded);
+    assert.equal(projected[2], omitted);
+
+    for (const metric of ['projectionReads', 'reconcileReads']) {
+        assert(
+            samples.every((sample) => sample[metric] <= 4 * sample.n + 8) &&
+                samples[1][metric] <= 2 * samples[0][metric] + 8,
+            `Portal submenu read budget exceeded: ${JSON.stringify(samples)}`
+        );
+    }
+    return samples;
+}
+
 /** Real public controls; the synthetic host records, rather than performs, native operations. */
 export async function assertPortalShellNavigationConsumer({
     React,
@@ -1139,6 +1217,84 @@ export async function assertPortalShellNavigationConsumer({
             null,
             'Ordinary disclosure mode still closes on revision changes'
         );
+
+        const invalid = new Map([
+            [1, 'repeat'],
+            [25, 'repeat'],
+            [76, 'repeat'],
+            [2, ''],
+            [95, '   '],
+        ]);
+        const manyViews = Array.from({ length: 128 }, (_, index) => ({
+            id: invalid.get(index) ?? `v${index}`,
+            label: `View ${index}`,
+        }));
+        const expectedLabels = manyViews.flatMap((view, index) =>
+            invalid.has(index) ? [] : [view.label]
+        );
+        assert.equal(expectedLabels.length, 123);
+        const submenuSnapshot = {
+            scope: 'navigation:many-views',
+            revision: 1,
+            selectionPolicy: 'host',
+            items: [
+                {
+                    type: 'table',
+                    id: 'bench',
+                    label: 'Many views',
+                    views: manyViews,
+                },
+            ],
+            selection: { type: 'table', itemId: 'bench', viewId: 'v0' },
+            header: { layout: 'topbar', menuInteraction: 'menu' },
+        };
+        const submenuActivations = [];
+        await React.act(async () => {
+            window.happyDOM.setWindowSize({ width: 1280, height: 900 });
+            root.render(
+                h(ui.CompletePortalShell, {
+                    snapshot: submenuSnapshot,
+                    onIntent: (request) => ordinary.push(request),
+                    onSelectionActivate: (request) =>
+                        submenuActivations.push(request),
+                })
+            );
+        });
+        const submenu = container.querySelector('summary');
+        assert.equal(submenu?.textContent, 'Many views');
+        submenu.focus();
+        assert.equal(
+            (await press(submenu, 'ArrowDown')).defaultPrevented,
+            true
+        );
+        assert.deepEqual(submenuActivations, []);
+        const details = submenu.closest('details');
+        assert.equal(details.open, true);
+        const choices = [...details.querySelectorAll('button')];
+        assert.deepEqual(
+            choices.map((node) => node.textContent),
+            expectedLabels
+        );
+        await click(choices.at(-1));
+        assert.deepEqual(
+            submenuActivations.map(({ scope, revision, selection }) => ({
+                scope,
+                revision,
+                selection,
+            })),
+            [
+                {
+                    scope: submenuSnapshot.scope,
+                    revision: 1,
+                    selection: {
+                        type: 'table',
+                        itemId: 'bench',
+                        viewId: 'v127',
+                    },
+                },
+            ]
+        );
+
         await React.act(async () => root.unmount());
         mounted = false;
         assert.equal(activations.length, 6);

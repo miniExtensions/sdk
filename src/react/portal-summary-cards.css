@@ -51,6 +51,7 @@
 }
 .mx-sdk-portal-summary-cards[data-height='tall'] .mx-sdk-portal-summary-value {
     -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
 }
 .mx-sdk-portal-summary-cards[data-height='extra tall']
     .mx-sdk-portal-summary-value {

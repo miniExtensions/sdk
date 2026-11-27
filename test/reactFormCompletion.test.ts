@@ -622,6 +622,48 @@ it('zero action delay is immediate and the independently mounted message clock s
     assert.equal(f.container.textContent, 'Delayed body');
     assert.equal(calls, 1);
 });
+
+it('announces a delayed confirmation in the Form language until its five-second deadline', async (t) => {
+    const f = await fixture(t);
+    const fetch = t.mock.method(globalThis, 'fetch', () => {
+        throw new Error('Unexpected network request');
+    });
+    const calls: string[] = [];
+    const configuration = {
+        afterFormSubmission: 'stay',
+        successAction: true,
+        successMessageDelay: 5,
+    } satisfies FormCompletionConfiguration;
+    for (const [language, loading, success] of [
+        ['en', 'Loading', 'Form submitted successfully'],
+        ['fr', 'Chargement', 'Formulaire soumis avec succès'],
+    ] as const) {
+        await f.render(
+            h(CompleteFormCompletion, {
+                key: language,
+                ...props(configuration, (command) => {
+                    calls.push(command);
+                }),
+                projection: project(configuration, { language }),
+            })
+        );
+        await f.tick(4999);
+        const status = f.container.querySelector('[role="status"]');
+        assert(status);
+        assert.deepEqual(
+            [status.getAttribute('aria-label'), status.textContent],
+            [loading, `${loading}...`],
+            language
+        );
+        assert(!f.container.textContent.includes(success));
+        await f.tick(1);
+        assert(!f.container.querySelector('[role="status"]'));
+        assert.equal(f.container.textContent, success);
+    }
+    assert.deepEqual(calls, []);
+    assert.equal(fetch.mock.callCount(), 0);
+});
+
 it('configured zero message and close clocks complete once through StrictMode', async (t) => {
     const f = await fixture(t);
     const calls: string[] = [];

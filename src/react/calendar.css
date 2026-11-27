@@ -166,11 +166,12 @@
     padding: 0.25rem 0.125rem;
 }
 .mx-sdk-calendar__dot {
+    aspect-ratio: 1;
     background: #9ca3af;
     border-radius: 50%;
     display: block;
-    height: 0.375rem;
-    width: 0.375rem;
+    flex: none;
+    width: min(0.375rem, calc((100% - 0.375rem) / 4));
 }
 .mx-sdk-calendar[data-wide='true'] .mx-sdk-calendar__day {
     cursor: default;

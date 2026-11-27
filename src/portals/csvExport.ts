@@ -196,17 +196,31 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
                 if (collaboratorLabel !== undefined) return collaboratorLabel;
                 const { field, value } = descriptor;
                 const { config } = field;
-                // Multiple Select formatting needs the complete array.
-                const fieldConfig =
+                let fieldConfig = config;
+                let fieldValue = value;
+                if (
                     Array.isArray(value) &&
                     config.type === AirtableFieldType.ROLLUP &&
                     config.options.isValid &&
                     config.options.result.type ===
                         AirtableFieldType.MULTIPLE_SELECTS
-                        ? config.options.result
-                        : config;
+                ) {
+                    // Multiple Select formatting needs the complete array.
+                    fieldConfig = config.options.result;
+                } else if (
+                    input.admission.cohort === 'portal-grid' &&
+                    config.type === AirtableFieldType.FORMULA &&
+                    config.options.isValid &&
+                    config.options.result.type ===
+                        AirtableFieldType.MULTIPLE_RECORD_LINKS &&
+                    (Array.isArray(value) || typeof value === 'string')
+                ) {
+                    // Keep the linked-record collection intact for the default formatter.
+                    fieldConfig = config.options.result;
+                    fieldValue = typeof value === 'string' ? [value] : value;
+                }
                 return getReadableStringFromAirtableValue({
-                    value,
+                    value: fieldValue,
                     airtableFieldConfig: fieldConfig,
                     fieldName: field.name,
                     source,

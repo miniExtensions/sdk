@@ -1,4 +1,11 @@
-import { createElement as h, Fragment, useEffect, useRef } from 'react';
+import {
+    createElement as h,
+    Fragment,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import type * as React from 'react';
 import { renderAsync } from 'docx-preview/dist/docx-preview.mjs';
 import { AttachmentPaperClip } from './AttachmentPaperClip.js';
@@ -64,11 +71,25 @@ function AttachmentPreviewContent({
     const { isImage, isHEIC, isVideo, isAudio, isWordDocument, isPdf } =
         classifyAttachmentPreview(attachment);
     const generation = resourceOwnerGeneration(owner);
+    const wordLifetime = useMemo(
+        () => ({}),
+        [
+            attachment.url,
+            isWordDocument,
+            generation,
+            identity,
+            cancelRetiredWordResponse,
+        ]
+    );
+    const [failedWord, setFailedWord] = useState<object | null>(null);
+    const unavailable = labels?.previewNotAvailable ?? 'Preview Not Available';
 
     useEffect(() => {
         const host = docContainerRef.current;
         if (!isWordDocument || host == null || !resourceOwnerCurrent(owner))
             return;
+        // An effect can reconnect while React retains the last request's state.
+        setFailedWord(null);
         // The vendor may still write after retirement. Only this detachable
         // lifetime target is handed to it, never the retained React host.
         const container = document.createElement('div');
@@ -76,6 +97,7 @@ function AttachmentPreviewContent({
         // Legacy callers retain their existing incremental presentation.
         if (owner === undefined) host.appendChild(container);
         let retired = false;
+        let failed = false;
         const controller = new AbortController();
         const current = () =>
             !retired &&
@@ -85,6 +107,7 @@ function AttachmentPreviewContent({
             retired = true;
             controller.abort();
             container.remove();
+            if (failed) setFailedWord(null);
         });
         const loadDocument = async () => {
             try {
@@ -109,8 +132,11 @@ function AttachmentPreviewContent({
                     host.appendChild(container);
                 else if (!current()) container.remove();
             } catch (error) {
-                if (current())
-                    console.error('Error rendering document:', error);
+                if (!current()) return;
+                failed = true;
+                container.remove();
+                setFailedWord(wordLifetime);
+                console.error('Error rendering document:', error);
             }
         };
         void loadDocument();
@@ -120,20 +146,10 @@ function AttachmentPreviewContent({
             controller.abort();
             container.remove();
         };
-    }, [
-        attachment.url,
-        isWordDocument,
-        generation,
-        identity,
-        cancelRetiredWordResponse,
-    ]);
+    }, [wordLifetime]);
 
     if (!resourceOwnerCurrent(owner))
-        return h(
-            'p',
-            { role: 'status' },
-            labels?.previewNotAvailable ?? 'Preview Not Available'
-        );
+        return h('p', { role: 'status' }, unavailable);
 
     if (isHEIC && attachment.thumbnails?.full != null) {
         return h('img', {
@@ -164,10 +180,27 @@ function AttachmentPreviewContent({
         });
     }
     if (isWordDocument) {
-        return h('div', {
-            ref: docContainerRef,
-            className: 'mx-sdk-attachment-preview__word',
-        });
+        const failed = failedWord === wordLifetime;
+        return h(
+            Fragment,
+            null,
+            h('div', {
+                ref: docContainerRef,
+                className: 'mx-sdk-attachment-preview__word',
+                hidden: failed,
+            }),
+            failed
+                ? h(
+                      'p',
+                      {
+                          role: 'status',
+                          className:
+                              'mx-sdk-attachment-preview__unsupported-message',
+                      },
+                      unavailable
+                  )
+                : null
+        );
     }
     return h(
         Fragment,
@@ -178,7 +211,7 @@ function AttachmentPreviewContent({
         h(
             'p',
             { className: 'mx-sdk-attachment-preview__unsupported-message' },
-            labels?.previewNotAvailable ?? 'Preview Not Available'
+            unavailable
         )
     );
 }

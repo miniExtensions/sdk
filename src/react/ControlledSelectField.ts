@@ -427,6 +427,9 @@ function SelectControl(props: ControlProps): ReactNode {
     };
     const moveActiveWithKeyboard = (index: number) => {
         const choice = found[index];
+        const retainChoice =
+            props.multiple ||
+            (nativeFormEditable && !props.allowAddingNewOptions);
         if (nativeDropdown && writable()) {
             revealAfterKey.current = choice
                 ? { epoch, index, choiceKey: key(choice) }
@@ -434,7 +437,7 @@ function SelectControl(props: ControlProps): ReactNode {
         }
         update({
             open: true,
-            active: props.multiple && choice ? key(choice) : index,
+            active: retainChoice && choice ? key(choice) : index,
         });
     };
     commitEffect(() => {

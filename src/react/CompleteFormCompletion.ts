@@ -81,17 +81,23 @@ export function CompleteFormCompletionMessage({
         const timer = setTimeout(() => setWaiting(false), initialDelay * 1000);
         return () => clearTimeout(timer);
     }, [initialDelay, waiting]);
-    if (waiting)
+    if (waiting) {
+        const loadingLabel = message.loadingLabel ?? 'Loading';
         return h(
             'span',
             {
                 role: 'status',
-                'aria-label': 'Loading',
+                'aria-label': loadingLabel,
                 className: 'mx-sdk-form-completion-spinner',
                 'data-testid': 'spinner',
             },
-            h('span', { className: 'mx-sdk-completion-sr-only' }, 'Loading...')
+            h(
+                'span',
+                { className: 'mx-sdk-completion-sr-only' },
+                `${loadingLabel}...`
+            )
         );
+    }
     if (message.format === 'html')
         return h(CompleteQuillHTMLRenderer, { html: message.text });
     const options = new LinkifyOptions({

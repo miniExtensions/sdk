@@ -247,6 +247,11 @@
     width: 100%;
     transition: transform 0.3s;
 }
+.mx-sdk-finder-card-gallery
+    > .mx-sdk-finder-carousel
+    > .mx-sdk-finder-carousel-track {
+    transform: translateX(var(--mx-sdk-finder-carousel-offset, 0%));
+}
 .mx-sdk-finder-carousel-track > img {
     width: 100%;
     height: 100%;

@@ -58,7 +58,11 @@ export type PortalVisitorSortPort = {
     ): PortalVisitorSortOutcome | Promise<PortalVisitorSortOutcome>;
 };
 
-type Rule = { key: number; value: RuntimeSortField };
+type Rule = {
+    key: number;
+    value: RuntimeSortField;
+    originalReference?: RuntimeSortField['idOrName'];
+};
 export type PortalVisitorSortRule = Readonly<{
     key: number;
     fieldId: string | null;
@@ -202,6 +206,7 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
     const rules: Rule[] = captured.criteria.map((value) => ({
         key: nextKey++,
         value,
+        originalReference: value.idOrName,
     }));
     const current = () => {
         if (retired) return false;
@@ -216,8 +221,7 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
         retired = true;
         return false;
     };
-    const resolvedField = (rule: Rule) => {
-        const ref = rule.value.idOrName;
+    const resolveField = (ref: RuntimeSortField['idOrName']) => {
         if (ref.type === 'id')
             return captured.fields.find((field) => field.id === ref.id);
         const fits = captured.fields.filter((field) => field.name === ref.name);
@@ -227,7 +231,7 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
         const used = new Set(
             rules
                 .filter((rule) => rule.key !== key)
-                .map((rule) => resolvedField(rule)?.id)
+                .map((rule) => resolveField(rule.value.idOrName)?.id)
         );
         return captured.fields.filter((field) => !used.has(field.id));
     };
@@ -238,7 +242,7 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
             return {
                 canAdd: available().length > 0,
                 rules: rules.map((rule): PortalVisitorSortRule => {
-                    const selected = resolvedField(rule);
+                    const selected = resolveField(rule.value.idOrName);
                     const fields = available(rule.key);
                     if (
                         selected &&
@@ -268,17 +272,21 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
         setField(key: number, id: string): boolean {
             if (!current()) return false;
             const rule = find(key);
-            const original = rule && resolvedField(rule);
+            const selected = rule && resolveField(rule.value.idOrName);
             if (
                 !rule ||
-                !original ||
-                original.id === id ||
+                !selected ||
+                selected.id === id ||
                 !available(key).some((field) => field.id === id)
             )
                 return false;
+            const original = rule.originalReference;
             rule.value = {
                 type: rule.value.type,
-                idOrName: { type: 'id', id },
+                idOrName:
+                    original && resolveField(original)?.id === id
+                        ? original
+                        : { type: 'id', id },
             };
             return true;
         },
@@ -289,7 +297,7 @@ export function createPortalVisitorSortDraft(port: PortalVisitorSortPort) {
             if (!current() || (direction !== 'asc' && direction !== 'desc'))
                 return false;
             const rule = find(key);
-            if (!rule || !resolvedField(rule)) return false;
+            if (!rule || !resolveField(rule.value.idOrName)) return false;
             rule.value = { ...rule.value, type: direction };
             return true;
         },

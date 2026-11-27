@@ -671,6 +671,22 @@ export function AttachmentField({
 }: AttachmentFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     const input = useRef<HTMLInputElement>(null);
+    // A native chooser can finish after this field binds to another record.
+    const [inputOwner, setInputOwner] = useState({
+        binding,
+        controller,
+        generation: 0,
+    });
+    if (
+        inputOwner.binding !== binding ||
+        inputOwner.controller !== controller
+    ) {
+        setInputOwner({
+            binding,
+            controller,
+            generation: inputOwner.generation + 1,
+        });
+    }
     const section = useRef<HTMLElement>(null);
     const choose = useRef<HTMLButtonElement>(null);
     const upload = useRef<HTMLButtonElement>(null);
@@ -935,6 +951,7 @@ export function AttachmentField({
             ? createElement('p', null, 'Attachment presentation unavailable')
             : null,
         createElement('input', {
+            key: inputOwner.generation,
             ref: input,
             type: 'file',
             hidden: true,

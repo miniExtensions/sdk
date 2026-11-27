@@ -41,6 +41,7 @@ void noAdapter;void nativeRenderer;
 const runtime = String.raw`
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {mock} from 'node:test';
 import React from 'react';
 const require=createRequire(import.meta.url),format=process.argv[2];
 assert.equal(typeof window,'undefined');assert.equal(typeof document,'undefined');
@@ -202,10 +203,45 @@ try {
      }
      assert.deepEqual(postSaveIntents, []);
  }
+
+ const delayedConfirmations = [];
+ const delayedConfiguration = {afterFormSubmission:'stay',successAction:true,successMessageDelay:5};
+ mock.timers.enable({apis:['setTimeout','Date'],now:0});
+ try {
+     for (const [language, loading, success] of [
+         ['en', 'Loading', 'Form submitted successfully'],
+         ['fr', 'Chargement', 'Formulaire soumis avec succès'],
+     ]) {
+         const projection = forms.projectFormCompletion({ configuration: delayedConfiguration, language,
+             filteredValues: {}, unfilteredValues: {}, fields: {}, linkedTableStates: {} });
+         await React.act(async () => root.render(h(ui.CompleteFormCompletion, {
+             key: language, configuration: delayedConfiguration, projection, canSubmit: true,
+             onCommand: command => postSaveIntents.push(command),
+         })));
+         await React.act(async () => mock.timers.tick(4999));
+         const status = container.querySelector('[role="status"]');
+         assert(status);
+         const name = status.getAttribute('aria-label');
+         const announcement = status.textContent;
+         assert.deepEqual([name, announcement], [loading, loading + '...'], language);
+         assert(!container.textContent.includes(success));
+         await React.act(async () => mock.timers.tick(1));
+         assert(!container.querySelector('[role="status"]'));
+         assert.equal(container.textContent, success);
+         delayedConfirmations.push({language, name, announcement, confirmation: container.textContent});
+     }
+ } finally {
+     try {
+         await React.act(async () => root.render(null));
+     } finally {
+         mock.timers.reset();
+     }
+ }
+ assert.deepEqual(postSaveIntents, []);
  assert.deepEqual({ submits, writes }, { submits: 0, writes: 0 });
  await React.act(async()=>root.unmount());root=undefined;
  assert.equal(domWindow.location.href,'https://consumer.invalid/form/rec123');assert.equal(networks,0);assert.equal(domWindow.localStorage.length,0);assert.equal(domWindow.sessionStorage.length,0);
- console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks,footerCases,successCases}));
+ console.log(JSON.stringify({format,react:React.version,hydrationErrors:errors.length,effects:calls,networkRequests:networks,footerCases,successCases,delayedConfirmations}));
 } finally {
  if(root)await React.act(async()=>root.unmount());
  keys.forEach((key,index)=>{if(originals[index])Object.defineProperty(globalThis,key,originals[index]);else Reflect.deleteProperty(globalThis,key);});
@@ -312,6 +348,7 @@ export function checkFormCompletionReactMatrix({
                 assert.equal(result.networkRequests, 0);
                 assert.equal(result.footerCases, 16);
                 assert.equal(result.successCases, 15);
+                assert.equal(result.delayedConfirmations.length, 2);
                 assert.deepEqual(result.effects, [
                     'submit_another_form',
                     'copy_form',

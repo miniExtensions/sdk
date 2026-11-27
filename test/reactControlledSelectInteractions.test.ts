@@ -302,6 +302,74 @@ it('matches equivalent Korean names in a closed Form dropdown and writes the exa
     assert.equal(f.parentEvents.includes('submit'), false);
 });
 
+for (const availability of ['expanded', 'removed'] as const) {
+    it(`closed Form Single Select preserves keyboard intent when availability is ${availability}`, async (t) => {
+        const keep = { id: 'keep', name: 'Keep' };
+        const gated = { id: 'gated', name: 'Gated' };
+        const neighbor = { id: 'neighbor', name: 'Neighbor' };
+        const f = await fixture(t, {
+            choices: [keep, gated, neighbor],
+            closedNativeForm: true,
+        });
+        f.setAvailableChoices([keep, neighbor]);
+        await f.rerender();
+        await f.type('e');
+        const input = f.input();
+        input.setSelectionRange(0, 0);
+        await f.key('End');
+        assert.equal(
+            input.getAttribute('aria-activedescendant'),
+            f.option('Neighbor').id
+        );
+
+        const next =
+            availability === 'expanded'
+                ? [keep, gated, { ...neighbor }]
+                : [keep, gated];
+        f.setAvailableChoices(next);
+        await f.rerender();
+        assert.equal(f.input(), input);
+        assert.equal(f.window.document.activeElement, input);
+        assert.equal(input.value, 'e');
+        assert.equal(input.selectionStart, 0);
+        assert.equal(input.selectionEnd, 0);
+        assert.deepEqual(
+            [...f.container.querySelectorAll('[role=option]')].map(
+                (option) => option.textContent
+            ),
+            next.map(({ name }) => name)
+        );
+        assert.deepEqual(f.writes, []);
+
+        const highlighted = input.getAttribute('aria-activedescendant');
+        const expected =
+            availability === 'expanded' ? f.option('Neighbor').id : null;
+        await f.key('Enter');
+        assert.deepEqual(
+            { highlighted, writes: f.writes },
+            {
+                highlighted: expected,
+                writes: availability === 'expanded' ? ['Neighbor'] : [],
+            }
+        );
+
+        if (availability === 'removed') {
+            assert.equal(f.window.document.activeElement, input);
+            assert.equal(input.value, 'e');
+            await f.key('Home');
+            assert.equal(
+                input.getAttribute('aria-activedescendant'),
+                f.option('Keep').id
+            );
+            await f.key('Enter');
+            assert.deepEqual(f.writes, ['Keep']);
+        }
+        assert.equal(f.window.document.activeElement, input);
+        assert.deepEqual(f.metadata, []);
+        assert.equal(f.parentEvents.includes('submit'), false);
+    });
+}
+
 function retainedClick(node: object) {
     const key = Object.keys(node).find((key) =>
         key.startsWith('__reactProps$')

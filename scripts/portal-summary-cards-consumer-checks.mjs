@@ -160,6 +160,7 @@ try {
  }
  const borders=[];
  const authoredBreaks = [];
+ const references = [];
  for (const viewport of [{width:375,height:780},{width:1280,height:720}]) {
   await page.setViewportSize(viewport);
   const colors=await page.evaluate(()=>{
@@ -210,7 +211,49 @@ try {
    short: {height: 28, tooltip: expectedTooltip},
   }, 'Authored summary line breaks at ' + viewport.width + 'px');
   authoredBreaks.push({viewport, ...multiline});
+  const referenceLayout = await page.evaluate(() => {
+   const prefix = '1234567890'.repeat(4) + '1234567';
+   const cards = ['8', '9'].map((digit, index) => ({
+    fieldId: 'reference-' + index, fieldName: 'Reference ' + (index + 1), readable: prefix + digit,
+   }));
+   const measure = height => {
+    window.renderSummary(cards, height);
+    return Array.from(document.querySelectorAll('dd'), (value, index) => {
+     const text = value.firstChild;
+     const range = document.createRange();
+     range.setStart(text, 0);
+     range.setEnd(text, 1);
+     const start = range.getBoundingClientRect();
+     range.setStart(text, text.length - 1);
+     range.setEnd(text, text.length);
+     const end = range.getBoundingClientRect();
+     const bounds = value.getBoundingClientRect();
+     return {
+      digit: range.toString(),
+      exactText: value.textContent === cards[index].readable,
+      exactTooltip: value.title === cards[index].readable,
+      height: value.clientHeight,
+      wrapped: end.top > start.top,
+      digitVisible: end.width > 0 && end.height > 0 &&
+       end.left >= bounds.left && end.right <= bounds.right &&
+       end.top >= bounds.top && end.bottom <= bounds.bottom,
+     };
+    });
+   };
+   return {tall: measure('tall'), short: measure('short')};
+  });
+  references.push({viewport, ...referenceLayout});
  }
+ for (const {tall, short} of references) {
+  assert.deepEqual(tall.map(value => value.digit), ['8', '9']);
+  assert.deepEqual(short.map(value => value.digit), ['8', '9']);
+  assert(tall.every(value => value.exactText && value.exactTooltip && value.height <= 84));
+  assert(short.every(value => value.exactText && value.exactTooltip && value.height === 28));
+ }
+ assert(references.every(({tall, short}) =>
+  tall.every(value => value.digitVisible && value.wrapped) &&
+  short.every(value => !value.digitVisible && !value.wrapped)
+ ), 'Reference digit layout: ' + JSON.stringify(references));
  await page.setViewportSize({width:240,height:700});
  const mobile=await page.evaluate(()=>{window.renderSummary([{fieldId:'long',fieldName:'Long title for truncation at mobile width',readable:window.summaryLongText},{fieldId:'zero',fieldName:'Zero',readable:'0.00'}],'medium');const slots=Array.from(document.querySelectorAll('.mx-sdk-portal-summary-slot')),title=document.querySelector('dt');return {pageWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,slots:slots.map(element=>({left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right,top:element.getBoundingClientRect().top})),titleStyle:{overflow:getComputedStyle(title).overflow,ellipsis:getComputedStyle(title).textOverflow,whiteSpace:getComputedStyle(title).whiteSpace},titleClipped:title.scrollWidth>title.clientWidth};});
  assert.equal(mobile.scrollWidth,mobile.pageWidth);assert(mobile.slots.every(slot=>slot.left>=0&&slot.right<=mobile.pageWidth));assert(mobile.slots[1].top>mobile.slots[0].top);assert.equal(mobile.titleClipped,true);assert.deepEqual(mobile.titleStyle,{overflow:'hidden',ellipsis:'ellipsis',whiteSpace:'nowrap'});
@@ -222,7 +265,7 @@ try {
  assert.equal(await page.locator('#summary-owner button,#summary-owner input,#summary-owner a').count(),0);
  assert.deepEqual(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie,href:location.href})),{local:0,session:0,cookies:'',href:origin+'/'});
  assert.deepEqual(pageErrors,[]);assert.deepEqual(externalRequests,[]);assert.deepEqual(unexpectedPaths,[]);assert.equal(documentRequests,1);
- console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),heights,borders,authoredBreaks,mobileClipping:true,desktopColumns:3,documentRequests,pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
+ console.log(JSON.stringify({react:expectedReact,chromium:browser.version(),heights,borders,authoredBreaks,references,mobileClipping:true,desktopColumns:3,documentRequests,pageErrors:pageErrors.length,externalRequests:externalRequests.length,computedStyles:true}));
 } finally {if(browser)await browser.close();if(server.listening)await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));}
 `;
 
@@ -381,6 +424,7 @@ export function checkPortalSummaryCardsReactMatrix({
                 assert.equal(localhost.mobileClipping, true);
                 assert.equal(localhost.heights.length, 4);
                 assert.equal(localhost.borders.length, 2);
+                assert.equal(localhost.references.length, 2);
             }
             versions.push({
                 react: version.react,

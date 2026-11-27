@@ -6,6 +6,7 @@ import {
     useId,
     useRef,
     useState,
+    type CSSProperties,
     type ReactElement,
     type ReactNode,
 } from 'react';
@@ -597,6 +598,7 @@ function Carousel({
         selection.index
     );
     const image = images[index];
+    const offset = `-${index * 100}%`;
     useCommittedEffect(() => {
         const identity = image?.identity ?? null;
         if (selection.identity !== identity || selection.index !== index)
@@ -636,7 +638,12 @@ function Carousel({
                   'div',
                   {
                       className: 'mx-sdk-finder-carousel-track',
-                      style: { transform: `translateX(-${index * 100}%)` },
+                      style:
+                          card.layout === 'gallery'
+                              ? ({
+                                    '--mx-sdk-finder-carousel-offset': offset,
+                                } as CSSProperties)
+                              : { transform: `translateX(${offset})` },
                   },
                   images.map((attempt, attemptIndex) =>
                       h('img', {

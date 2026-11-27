@@ -499,6 +499,7 @@ function CollaboratorControl<T extends CompleteCollaborator>(
                 ? h(picker.CollaboratorPicker<T>, {
                       value: props.value,
                       choices,
+                      single: props.single,
                       query,
                       onChange: choose,
                       onQueryChange: setQuery,

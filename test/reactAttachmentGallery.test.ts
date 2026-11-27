@@ -430,3 +430,101 @@ test('gallery opens the selected occurrence and an old confirmation cannot delet
     assert.deepEqual(removed, [1, 0]);
     assert.equal(f.document.querySelector('[role=dialog]'), null);
 });
+
+test('gallery keeps the selected URL-only prefill separate from a saved row with the same URL', async (t) => {
+    const f = await scannerDom(t);
+    const { AttachmentGallery } = await import(
+        '../src/react/attachment-slider.js'
+    );
+    const readDownload = t.mock.fn(defaults.readDownload);
+    const write = t.mock.fn();
+    const fetch = t.mock.method(globalThis, 'fetch', async () => {
+        assert.fail('The synthetic preview must stay provider-free');
+    });
+    t.after(() => {
+        assert.equal(readDownload.mock.callCount(), 0);
+        assert.equal(write.mock.callCount(), 0);
+        assert.equal(fetch.mock.callCount(), 0);
+    });
+    const other = row('Other');
+    const saved = { ...row('Saved'), canDownloadInSlider: true };
+    const prefill = {
+        ...saved,
+        id: undefined,
+        filename: 'Prefill',
+        canDownloadInSlider: false,
+    };
+    const render = (rows: readonly AttachmentGalleryRow[]) =>
+        f.render(
+            h(AttachmentGallery, {
+                ...defaults,
+                rows,
+                readDownload,
+                canRemoveFromSlider: () => true,
+                onRemove: write,
+                confirmRemove: async () => true,
+            })
+        );
+    const open = () =>
+        f.document.querySelector('[role=dialog][aria-modal=true]');
+    const selection = () => {
+        const dialog = open();
+        assert.ok(dialog);
+        const options = [
+            ...dialog.querySelectorAll(
+                '.mx-sdk-attachment-thumbnail-rail__select'
+            ),
+        ];
+        const index = options.findIndex(
+            (option) => option.getAttribute('data-selected') === 'true'
+        );
+        return {
+            index,
+            label: options[index]?.textContent,
+            filename: dialog.querySelector('[role=group] p[aria-live=polite]')
+                ?.textContent,
+            download: [...dialog.querySelectorAll('button')].some(
+                (button) => button.textContent === labels.download
+            ),
+        };
+    };
+
+    await render([other, saved, prefill]);
+    const tile = f.host.querySelectorAll('li')[2]?.querySelector('button');
+    assert.ok(tile);
+    await act(async () => tile.click());
+    await f.tick();
+    const initialDialog = open();
+    assert.ok(initialDialog);
+    assert.deepEqual(selection(), {
+        index: 2,
+        label: 'Prefill',
+        filename: 'Prefill',
+        download: false,
+    });
+
+    await render([{ ...prefill }, { ...saved }]);
+    assert.equal(open(), initialDialog);
+    assert.deepEqual(selection(), {
+        index: 0,
+        label: 'Prefill',
+        filename: 'Prefill',
+        download: false,
+    });
+    await f.click(labels.next);
+    assert.deepEqual(selection(), {
+        index: 1,
+        label: 'Saved',
+        filename: 'Saved',
+        download: true,
+    });
+    await f.click(labels.previous);
+    assert.deepEqual(selection(), {
+        index: 0,
+        label: 'Prefill',
+        filename: 'Prefill',
+        download: false,
+    });
+    await render([]);
+    assert.equal(open(), null);
+});

@@ -194,6 +194,10 @@ async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
         await page.keyboard.press('ArrowDown');
         await waitForActive(deletion);
     };
+    const readDeleteAvailability = async () => ({
+        ariaDisabled: await deletion.getAttribute('aria-disabled'),
+        disabled: await deletion.isDisabled(),
+    });
 
     await opener.locator('svg[aria-hidden="true"]').waitFor();
     const trigger = await opener.evaluate((button) => {
@@ -359,6 +363,8 @@ async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
 
     await page.evaluate(() => window.recordActionsProof.setDelete(true));
     await openDelete();
+    const unavailable = await readDeleteAvailability();
+    assert.deepEqual(unavailable, { ariaDisabled: 'true', disabled: true });
     assert.equal(await deletion.getAttribute('data-unavailable'), 'true');
     assert.equal(
         await deletion.evaluate((action) => getComputedStyle(action).cursor),
@@ -371,9 +377,12 @@ async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
     await page.evaluate(() => window.recordActionsProof.setDelete(false));
 
     await openDelete();
+    const available = await readDeleteAvailability();
+    assert.deepEqual(available, { ariaDisabled: null, disabled: false });
     const keyboardFocus = await capture('delete-keyboard-focus');
     await page.keyboard.press('Enter');
     await confirmation.waitFor();
+    assert.equal(await confirmation.count(), 1);
     assert.equal(await focused(cancel), true);
     await page.keyboard.press('Enter');
     await confirmation.waitFor({ state: 'hidden' });
@@ -436,6 +445,7 @@ async function checkHeaderMenu(page, viewport, output, hash, spacious = false) {
         viewport,
         trigger,
         geometry,
+        deleteAvailability: { unavailable, available },
         cancelRestoredFocus: true,
         staleReplacementFocus: false,
         staleConfirmationRequests: 0,

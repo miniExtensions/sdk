@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import { JSDOM } from 'jsdom';
+import moment from 'moment-timezone';
 import {
     act,
     createElement as h,
@@ -357,6 +359,36 @@ it('StrictMode hydration remains actionable and responsive presentation preserve
         f.container.querySelector('[data-record-id="second"]'),
         'Only a new accepted native frame removes a record from presentation'
     );
+});
+
+it('keeps loaded Portal records on the same ISO day with ambient Arabic Moment digits', async (t) => {
+    const priorLocale = moment.locale();
+    t.after(() => {
+        moment.locale(priorLocale);
+    });
+    createRequire(import.meta.url)('moment/locale/ar.js');
+    moment.locale('ar');
+    assert.match(moment.utc('2026-02-12').format('YYYY-MM-DD'), /١٢$/);
+
+    const f = await fixture(t, { isWide: true, locale: 'ar-EG' });
+    const first = 'article[data-record-id="first"]';
+    const day = f.container.querySelector('td[data-date="2026-02-12"]');
+    assert.ok(day);
+    const dayNumber = day.querySelector('.mx-sdk-calendar__number');
+    assert.equal(dayNumber?.textContent, '١٢');
+    const wideCount = day.querySelectorAll(first).length;
+
+    await f.update({ isWide: false });
+    const selected = f.container.querySelector(
+        '.mx-sdk-calendar__selected-day'
+    );
+    assert.ok(selected);
+    const narrowCount = selected.querySelectorAll(first).length;
+    assert.deepEqual([wideCount, narrowCount], [1, 1]);
+    assert.equal(f.container.querySelectorAll(first).length, 1);
+    assert.equal(selected.querySelector('[data-record-id="second"]'), null);
+    assert.deepEqual(f.native.state.events, []);
+    assert.equal(moment.locale(), 'ar');
 });
 
 it('a stable native month control continues its forced read after exact display admission retires', async (t) => {

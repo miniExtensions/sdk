@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { it } from 'node:test';
+import moment from 'moment-timezone';
 import type { RuntimeAirtableField } from '../src/runtime/types.js';
 import {
     getCalendarFieldUtcOffset,
@@ -145,6 +147,48 @@ it('keeps field zones and DST endpoint offsets distinct from the Portal viewer z
         }),
         0
     );
+});
+
+it('keeps Portal date keys ASCII after each timezone policy with Arabic Moment digits', (t) => {
+    const priorLocale = moment.locale();
+    t.after(() => {
+        moment.locale(priorLocale);
+    });
+    createRequire(import.meta.url)('moment/locale/ar.js');
+    moment.locale('ar');
+    const fallbackClientUtcOffset = -480;
+    const value = '2026-09-01T06:30:00.000Z';
+    const field = datetime('America/Los_Angeles');
+    assert.deepEqual(
+        getPortalCalendarDateKeys({
+            field: date,
+            value: ['2026-02-12', '2026-02-12', 'not-a-date'],
+            fallbackClientUtcOffset,
+        }),
+        ['2026-02-12']
+    );
+    assert.deepEqual(
+        getPortalCalendarDateKeys({
+            field: computed,
+            value: '2026-09-01T00:00:00.000+14:00',
+            fallbackClientUtcOffset,
+        }),
+        ['2026-09-01']
+    );
+    assert.deepEqual(
+        getPortalCalendarDateKeys({
+            field,
+            value,
+            clientTimeZone: 'Pacific/Kiritimati',
+            fallbackClientUtcOffset,
+        }),
+        ['2026-09-01']
+    );
+    assert.deepEqual(
+        getPortalCalendarDateKeys({ field, value, fallbackClientUtcOffset }),
+        ['2026-08-31']
+    );
+    assert.equal(moment.locale(), 'ar');
 });
 
 it('clips inclusive picker ranges to the query month and rejects malformed pairs independently', () => {

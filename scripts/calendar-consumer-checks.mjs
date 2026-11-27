@@ -518,6 +518,33 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
         }),
         ['2026-09-01']
     );
+    const sdkRequire = createRequire(
+        consumer.resolve('@miniextensions/sdk/ui')
+    );
+    const moment = sdkRequire('moment-timezone');
+    const requireMoment = createRequire(sdkRequire.resolve('moment-timezone'));
+    const previousLocale = moment.locale();
+    const previousNow = moment.now;
+    try {
+        requireMoment('moment/locale/ar.js');
+        moment.locale('ar');
+        moment.now = () => new Date(2026, 1, 12, 12).getTime();
+        assert.equal(moment().format('YYYY-MM-DD'), '٢٠٢٦-٠٢-١٢');
+        assert.equal(policy.nativeCalendarClock.localDay(), '2026-02-12');
+        assert.equal(policy.nativeCalendarClock.localMonth(), '2026-02');
+        assert.deepEqual(
+            policy.getPortalCalendarDateKeys({
+                field,
+                value,
+                fallbackClientUtcOffset: 0,
+            }),
+            ['2026-09-01']
+        );
+        assert.equal(moment.locale(), 'ar');
+    } finally {
+        moment.now = previousNow;
+        moment.locale(previousLocale);
+    }
     const clock = {
         utcDay: () => '2026-09-01',
         localDay: () => '2026-08-31',
@@ -1298,6 +1325,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             format,
             groups: 5,
             completeStyleInputs: completeStyles.inputs.length,
+            ambientArabicDateKeys: true,
             hydration: true,
             visibleRecordRegistration: true,
             scope: 'Installed complete Calendar picker/Portal composition and shared rich leaves; synthetic host ports only, no native or hosted acceptance.',
@@ -1401,6 +1429,7 @@ export function checkCalendarReactMatrix({
                 );
                 assert.equal(result.react, version.react);
                 assert.equal(result.groups, 5);
+                assert.equal(result.ambientArabicDateKeys, true);
                 assert.equal(result.visibleRecordRegistration, true);
                 profiles.push(result);
             }

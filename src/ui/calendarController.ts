@@ -11,8 +11,8 @@ export type CalendarClock = Readonly<{
 
 export const nativeCalendarClock: CalendarClock = Object.freeze({
     utcDay: () => new Date().toISOString().slice(0, 10),
-    localDay: () => moment().format('YYYY-MM-DD'),
-    localMonth: () => moment().format('YYYY-MM'),
+    localDay: () => moment().locale('en').format('YYYY-MM-DD'),
+    localMonth: () => moment().locale('en').format('YYYY-MM'),
     localToday: () => {
         const today = new Date();
         return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;

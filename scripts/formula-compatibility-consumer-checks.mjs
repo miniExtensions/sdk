@@ -95,6 +95,62 @@ export async function checkFormulaCompatibilityConsumer({ consumerDirectory }) {
                 new api.FormulaRunner('"first\r\nsecond"').run(),
                 'first\r\nsecond'
             );
+            const suppliedLabel = 'recording session';
+            const missingRecordId = 'rec12345678901234';
+            const resolvedRecordId = 'rec00000000000001';
+            assert.equal(suppliedLabel.length, missingRecordId.length);
+            const recordReads = [];
+            const records = new Proxy(
+                {
+                    [resolvedRecordId]: {
+                        id: resolvedRecordId,
+                        fields: { fld_label: 'Evening' },
+                    },
+                },
+                {
+                    get(target, key, receiver) {
+                        recordReads.push(key);
+                        return Reflect.get(target, key, receiver);
+                    },
+                }
+            );
+            assert.equal(
+                api.getReadableStringFromAirtableValue({
+                    value: [missingRecordId, suppliedLabel, resolvedRecordId],
+                    airtableFieldConfig: {
+                        type: 'multipleRecordLinks',
+                        options: { linkedTableId: 'tbl_linked' },
+                    },
+                    fieldName: 'Related',
+                    source: {
+                        type: 'airtableMock',
+                        doNotReturnRecordIdsForLinkedRecords: true,
+                        unavailableLinkedRecordPlaceholder: 'Unavailable',
+                        linkedTableStates: {
+                            tbl_linked: {
+                                type: 'loaded',
+                                data: {
+                                    state: {
+                                        airtableFields: [
+                                            {
+                                                id: 'fld_label',
+                                                name: 'Label',
+                                                isPrimaryField: true,
+                                                config: {
+                                                    type: 'singleLineText',
+                                                },
+                                            },
+                                        ],
+                                        recordIdsToAirtableRecords: records,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                }),
+                'Unavailable, recording session, Evening'
+            );
+            assert.deepEqual(recordReads, [missingRecordId, resolvedRecordId]);
             const formula = 'DATETIME_FORMAT("2026-05-04", "MMMM")';
             const defaultRunner = new api.FormulaRunner(formula);
             const defaultMonth = defaultRunner.run();

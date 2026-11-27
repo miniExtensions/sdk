@@ -81,7 +81,7 @@ const notEmptyInArray = <T>(value: T | null | undefined): value is T =>
     value != null;
 
 const isRecordId = (value: string): boolean =>
-    value.startsWith('rec') && value.length === 17;
+    /^rec[A-Za-z0-9]{14}$/.test(value);
 
 const getPrimaryFieldInFields = (args: {
     fields: AirtableField[];

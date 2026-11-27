@@ -446,6 +446,17 @@
         overflow: auto;
         background: var(--mx-portal-background);
     }
+    .mx-sdk-portal-shell--sidebar.mx-sdk-portal-shell--layout-actions
+        > .mx-sdk-portal-navigation-wrap
+        > .mx-sdk-portal-navigation[role='dialog']
+        > .mx-sdk-portal-brand:has(> div > h1.mx-sdk-portal-title):not(
+            :has(> img)
+        )
+        ~ .mx-sdk-portal-actions:has(
+            > button.mx-sdk-portal-user-direct--logout-text:only-child
+        ) {
+        margin-inline: 0.5rem;
+    }
     .mx-sdk-portal-navigation.mx-sdk-portal-navigation--rich-title {
         --mx-portal-drawer-close-size: 2.75rem;
         width: calc(min(100vi, 24rem) - var(--mx-portal-drawer-close-size));

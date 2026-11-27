@@ -156,11 +156,13 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
         pathToFileURL(join(esm, 'runtime/index.js'))
     );
     let checks = 0;
+    const aiTextPages = [];
     const esmUi = await import(pathToFileURL(join(esm, 'ui/index.js')));
     const esmReact = await import(pathToFileURL(join(esm, 'react/index.js')));
-    for (const [forms, runtime, reactApi, ui] of [
-        [esmForms, esmRuntime, esmReact, esmUi],
+    for (const [format, forms, runtime, reactApi, ui] of [
+        ['ESM', esmForms, esmRuntime, esmReact, esmUi],
         [
+            'CommonJS',
             require('@miniextensions/sdk/forms'),
             require('@miniextensions/sdk'),
             require('@miniextensions/sdk/react'),
@@ -214,10 +216,12 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 predicate = () => true,
                 scopeRead = () => {};
             const calls = [];
+            let requests = 0;
             const client = runtime.createMiniExtensionsClient({
                 apiOrigin: 'https://sdk.example.test',
                 session: { visitor: 'A' },
                 fetch: async () => {
+                    requests++;
                     throw Error('No request');
                 },
             });
@@ -267,6 +271,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 loaded,
                 client,
                 calls,
+                requestCount: () => requests,
                 fields,
                 pages,
                 setPredicate: (fn) => (predicate = fn),
@@ -282,6 +287,80 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             return f;
         };
         try {
+            const { createElement } = require('react');
+            const { renderToStaticMarkup } = require('react-dom/server');
+            const nextDisabled = (snapshot) =>
+                renderToStaticMarkup(
+                    createElement(reactApi.FormPageNavigationButton, {
+                        direction: 'next',
+                        label: 'Next',
+                        disabled: !snapshot.canNext,
+                    })
+                ).includes(' disabled=""');
+            const stored = {
+                state: 'generated',
+                value: 'Shipping note',
+                isStale: false,
+            };
+            for (const isComputed of [false, undefined]) {
+                const f = fixture(({ payload }) => {
+                    const field = payload.fieldIdsToSchemas.a;
+                    field.fieldType = 'aiText';
+                    field.airtableField.config = {
+                        type: 'aiText',
+                        options: {},
+                    };
+                    if (isComputed === undefined)
+                        delete field.airtableField.isComputed;
+                    else field.airtableField.isComputed = isComputed;
+                    field.miniExtConfig = { readOnly: true };
+                    payload.formRecord.data.a = stored;
+                });
+                assert.equal(f.fields.field('a').getSnapshot().readOnly, true);
+                const before = structuredClone(
+                    f.fields.controller.getState().draft
+                );
+                assert.deepEqual(before.data.a, stored);
+                assert.deepEqual(before.dirtyFieldIds, ['unrendered']);
+                const snapshot = f.pages.getSnapshot();
+                assert.equal(snapshot.pages.length, 3);
+                assert.equal(snapshot.activePageIndex, 0);
+                const action = f.pages.next(snapshot.revision);
+                const after = f.pages.getSnapshot();
+                aiTextPages.push({
+                    format,
+                    isComputed:
+                        isComputed === undefined ? 'omitted' : isComputed,
+                    status: snapshot.status,
+                    problems: snapshot.problems,
+                    disabled: nextDisabled(snapshot),
+                    accepted: action.accepted,
+                    activePageIndex: after.activePageIndex,
+                    currentFieldIds: after.currentFieldIds,
+                });
+                assert.deepEqual(f.fields.controller.getState().draft, before);
+                assert.equal(f.calls.length, 0);
+                assert.equal(f.requestCount(), 0);
+                checks++;
+            }
+            const empty = fixture(({ payload }) => {
+                payload.fieldIdsToSchemas.a.miniExtConfig = { required: true };
+                payload.formRecord.data.a = '';
+            });
+            const emptySnapshot = empty.pages.getSnapshot();
+            assert.deepEqual(emptySnapshot.problems, [
+                { fieldId: 'a', code: 'required' },
+            ]);
+            assert.equal(nextDisabled(emptySnapshot), true);
+            assert.equal(
+                empty.pages.next(emptySnapshot.revision).accepted,
+                false
+            );
+            assert.equal(empty.pages.getSnapshot().activePageIndex, 0);
+            assert.equal(empty.calls.length, 0);
+            assert.equal(empty.requestCount(), 0);
+            checks++;
+
             // Exercise both installed ESM and CommonJS without a review receipt.
             for (const value of [undefined, null, [], ['rec_child']]) {
                 for (const hidden of [false, true]) {
@@ -3219,5 +3298,22 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             }
         }
     }
+    console.log(
+        'Installed read-only AI Text page Next:',
+        JSON.stringify(aiTextPages)
+    );
+    for (const { format, isComputed, ...observed } of aiTextPages)
+        assert.deepEqual(
+            observed,
+            {
+                status: 'ready',
+                problems: [],
+                disabled: false,
+                accepted: true,
+                activePageIndex: 1,
+                currentFieldIds: ['b'],
+            },
+            `${format}, isComputed=${isComputed}`
+        );
     return checks;
 }

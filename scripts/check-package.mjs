@@ -4636,7 +4636,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 await checkFormPageConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
-                1118
+                1124
             );
             assert.equal(
                 await checkFormRequiredOpenConsumer({

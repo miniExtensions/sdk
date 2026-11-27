@@ -1621,6 +1621,7 @@ const renderForm = (page: FormLoadedResult): void => {
             const search = element('input');
             search.placeholder = 'Search available linked records';
             const choices = element('div', undefined, 'choice-list');
+            const renderedChoiceIds = new Set<string>();
             let offset: string | null = null;
             let generation = 0;
             let requestVersion = 0;
@@ -1636,6 +1637,7 @@ const renderForm = (page: FormLoadedResult): void => {
                     offset = null;
                     currentLoader = null;
                     choices.replaceChildren();
+                    renderedChoiceIds.clear();
                     finder.hidden = true;
                     bindingOwner?.field(fieldId).selection?.cancel();
                 }
@@ -1708,6 +1710,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 requestVersion += 1;
                 offset = null;
                 choices.replaceChildren();
+                renderedChoiceIds.clear();
                 moreButton.disabled = true;
                 if (bindingOwner != null) {
                     bindingOwner.setLinkedLoader(fieldId, (request) => {
@@ -1830,6 +1833,7 @@ const renderForm = (page: FormLoadedResult): void => {
                         );
                         offset = result.offset;
                         for (const record of result.records) {
+                            if (renderedChoiceIds.has(record.id)) continue;
                             const choice = element('input');
                             choice.type = 'checkbox';
                             const selectedValue = control.read();
@@ -1905,6 +1909,7 @@ const renderForm = (page: FormLoadedResult): void => {
                             );
                             if (!accepted()) return;
                             choices.append(labeled(caption, choice));
+                            renderedChoiceIds.add(record.id);
                         }
                         moreButton.disabled = offset == null;
                         status(

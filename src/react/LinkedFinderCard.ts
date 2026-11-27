@@ -1,6 +1,8 @@
 import {
+    createContext,
     createElement as h,
     Fragment,
+    useContext,
     useEffect,
     useLayoutEffect,
     useId,
@@ -342,6 +344,8 @@ function Rating({
     );
 }
 
+const GalleryDateLanguage = createContext(false);
+
 /** Leaves are real SDK components. No native JSX slot, client or cache lookup. */
 export function LinkedFinderRichLeaf({
     leaf,
@@ -349,6 +353,7 @@ export function LinkedFinderRichLeaf({
     leaf: LinkedFinderCardLeaf;
 }): ReactNode {
     const id = useId();
+    const useVisitorDateLanguage = useContext(GalleryDateLanguage);
     switch (leaf.kind) {
         case 'literal':
             return h('span', { className: 'mx-sdk-finder-literal' }, leaf.text);
@@ -399,7 +404,9 @@ export function LinkedFinderRichLeaf({
                     value: formatDateInputValue({
                         airtableValue: leaf.display.value,
                         airtableFieldConfig: leaf.display.airtableDateConfig,
-                        language: leaf.display.language,
+                        language: useVisitorDateLanguage
+                            ? leaf.display.language
+                            : undefined,
                     }),
                     language: leaf.display.language,
                 })
@@ -896,22 +903,26 @@ function PresentCard({
             ),
             projection.layout !== 'gallery' || projection.fields.length
                 ? h(
-                      'div',
-                      {
-                          className: `mx-sdk-finder-card-fields mx-sdk-finder-card-fields-${projection.layout}`,
-                          style:
-                              projection.layout === 'list'
-                                  ? undefined
-                                  : {
-                                        gridTemplateColumns: `repeat(${projection.fieldsPerCardRow}, minmax(150px, 1fr))`,
-                                    },
-                      },
-                      projection.fields.map((field) =>
-                          h(CardDetail, {
-                              key: field.key,
-                              field,
-                              layout: projection.layout,
-                          })
+                      GalleryDateLanguage.Provider,
+                      { value: projection.layout === 'gallery' },
+                      h(
+                          'div',
+                          {
+                              className: `mx-sdk-finder-card-fields mx-sdk-finder-card-fields-${projection.layout}`,
+                              style:
+                                  projection.layout === 'list'
+                                      ? undefined
+                                      : {
+                                            gridTemplateColumns: `repeat(${projection.fieldsPerCardRow}, minmax(150px, 1fr))`,
+                                        },
+                          },
+                          projection.fields.map((field) =>
+                              h(CardDetail, {
+                                  key: field.key,
+                                  field,
+                                  layout: projection.layout,
+                              })
+                          )
                       )
                   )
                 : null

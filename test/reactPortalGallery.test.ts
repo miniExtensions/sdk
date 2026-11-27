@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Window } from 'happy-dom';
+import { Window, type Element as FixtureElement } from 'happy-dom';
 import { act, createElement as h } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
+    LinkedFinderCard,
     PortalGallery,
     resolvePortalGalleryColumns,
     type PortalGalleryRow,
@@ -818,35 +819,12 @@ test('Gallery rich cards preserve ordered definition terms and explicit raw-prim
     );
 });
 
-test('Gallery formats a mounted card in the supplied date language without changing masks or time zones', async (t) => {
+test('Gallery formats a mounted card in the supplied date language without changing other layouts, masks or time zones', async (t) => {
     const f = await htmlPresentationFixture(t);
     const source = row('localized-dates');
     const projection = source.projection;
     assert.equal(projection.status, 'present');
-    let card = null;
-
-    for (const [language, expected] of [
-        [
-            'fr',
-            [
-                '7/4/2026',
-                '7 avril 2026',
-                '2026-04-07',
-                '6/4/2026 19:30',
-                '2026-04-06 19:30',
-            ],
-        ],
-        [
-            'en',
-            [
-                '4/7/2026',
-                'April 7, 2026',
-                '2026-04-07',
-                '4/6/2026 19:30',
-                '2026-04-06 19:30',
-            ],
-        ],
-    ] as const) {
+    const fieldsFor = (language: 'fr' | 'en') => {
         const date = (format: string) => ({
             kind: 'date' as const,
             display: {
@@ -873,13 +851,40 @@ test('Gallery formats a mounted card in the supplied date language without chang
                 },
             },
         });
-        const fields = [
+        return [
             { key: 'local', title: null, leaf: date('l') },
             { key: 'friendly', title: null, leaf: date('LL') },
             { key: 'iso', title: null, leaf: date('YYYY-MM-DD') },
             { key: 'local-time', title: null, leaf: dateTime('l') },
             { key: 'iso-time', title: null, leaf: dateTime('YYYY-MM-DD') },
         ];
+    };
+    const readDates = (node: FixtureElement) =>
+        [...node.querySelectorAll('.mx-sdk-finder-card-field-value')].map(
+            (element) => element.textContent
+        );
+    const english = [
+        '4/7/2026',
+        'April 7, 2026',
+        '2026-04-07',
+        '4/6/2026 19:30',
+        '2026-04-06 19:30',
+    ];
+    let card = null;
+    for (const [language, expected] of [
+        [
+            'fr',
+            [
+                '7/4/2026',
+                '7 avril 2026',
+                '2026-04-07',
+                '6/4/2026 19:30',
+                '2026-04-06 19:30',
+            ],
+        ],
+        ['en', english],
+    ] as const) {
+        const fields = fieldsFor(language);
         assert.deepEqual(
             fields.map(({ leaf: { display } }) =>
                 formatDateInputValue({
@@ -905,12 +910,20 @@ test('Gallery formats a mounted card in the supplied date language without chang
         assert(current);
         if (card) assert.equal(current, card);
         card = current;
-        assert.deepEqual(
-            [
-                ...current.querySelectorAll('.mx-sdk-finder-card-field-value'),
-            ].map((element) => element.textContent),
-            expected
+        assert.deepEqual(readDates(current), expected);
+    }
+    for (const layout of ['list', 'kanban'] as const) {
+        await f.render(
+            h(LinkedFinderCard, {
+                projection: {
+                    ...projection,
+                    layout,
+                    language: 'fr',
+                    fields: fieldsFor('fr'),
+                },
+            })
         );
+        assert.deepEqual(readDates(f.container), english);
     }
     f.unchangedEffects();
 });

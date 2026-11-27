@@ -180,6 +180,24 @@ it('retains and displays both existing aliases of the same field without offerin
     assert.equal(f.commands.length, 0);
 });
 
+it('restores the original name reference when a field edit is undone', async () => {
+    const f = fixture([named]);
+    const undo = f.draft();
+    assert.equal(undo.setField(0, 'priority'), true);
+    assert.equal(undo.setField(0, 'status'), true);
+    assert.deepEqual(await undo.commit(), { type: 'unchanged' });
+    assert.deepEqual(f.commands, []);
+
+    const withDirection = f.draft();
+    assert.equal(withDirection.setField(0, 'priority'), true);
+    assert.equal(withDirection.setDirection(0, 'asc'), true);
+    assert.equal(withDirection.setField(0, 'status'), true);
+    assert.deepEqual(await withDirection.commit(), f.allocated);
+    assert.deepEqual(f.commands, [
+        { stamp, criteria: [{ ...named, type: 'asc' }] },
+    ]);
+});
+
 it('distinguishes definite refusal and lost receipts, with no retry or invented allocation', async () => {
     for (const type of ['refused', 'stale', 'unchanged'] as const) {
         const f = fixture();

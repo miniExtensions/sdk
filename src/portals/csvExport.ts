@@ -143,7 +143,15 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
 
     try {
         const schema = new Map<string, CSVExportFieldValue['field']>();
-        const records: Map<string, CSVExportFieldValue>[] = [];
+        const hiddenKeys = new Set(
+            input.columns
+                .filter((column) => column.isHidden)
+                .map(({ key }) => key)
+        );
+        const records: {
+            fields: Map<string, CSVExportFieldValue>;
+            aliases: Map<string, CSVExportFieldValue | null>;
+        }[] = [];
         for (const row of input.rows) {
             if (row.status !== 'loaded' || row.viewType !== 'list')
                 return failure('schema');
@@ -155,7 +163,19 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
                 schema.set(descriptor.field.name, descriptor.field);
                 fields.set(descriptor.field.name, descriptor);
             }
-            records.push(fields);
+            const aliases = new Map<string, CSVExportFieldValue | null>();
+            for (const descriptor of fields.values()) {
+                const { id, name } = descriptor.field;
+                if (
+                    typeof id !== 'string' ||
+                    id.length === 0 ||
+                    hiddenKeys.has(name)
+                )
+                    continue;
+                // Multiple possible names in one row cannot resolve a missing key.
+                aliases.set(id, aliases.has(id) ? null : descriptor);
+            }
+            records.push({ fields, aliases });
         }
         if (columns.some((column) => !schema.has(column.key)))
             return failure('schema');
@@ -185,9 +205,11 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
             >();
             for (const column of columns) {
                 if (cells.has(column.key)) continue;
-                const descriptor = record.get(column.key);
                 // Native formatting resolves the union's current schema.
                 const field = schema.get(column.key);
+                const descriptor =
+                    record.fields.get(column.key) ??
+                    (field && record.aliases.get(field.id));
                 const readableValue =
                     descriptor && field
                         ? format({ field, value: descriptor.value })

@@ -207,6 +207,81 @@ it('validates the full schema union including hidden conflicts while allowing mi
         result.status === 'blocked' && result.failure.reason,
         'schema'
     );
+    const delivery = platform();
+    const conflictingName = createCSVExportController({
+        readCurrent: () => ({
+            input: {
+                ...base,
+                rows: [
+                    row([field('Name', 'First')]),
+                    row([field('Name', 'Second', 'other')]),
+                ],
+                formatField: () =>
+                    assert.fail(
+                        'Conflicting schema must refuse before formatting'
+                    ),
+            },
+            filename: 'Synthetic CSV',
+            platform: delivery.boundary,
+        }),
+    });
+    const refusal = await conflictingName.request();
+    assert.equal(
+        refusal.status === 'blocked' && refusal.failure.reason,
+        'schema'
+    );
+    assert.deepEqual(delivery.texts, []);
+    assert.deepEqual(delivery.clicks, []);
+    assert.equal(delivery.urls, 0);
+});
+
+it('falls back only to a unique nonhidden alias of the visible field identity', async () => {
+    const current = field('Name', 'Current', 'fldName');
+    const legacy = field('Former name', 'Renamed', 'fldName');
+    const unread = (name: string, id: string) => ({
+        field: field(name, null, id).field,
+        get value(): AirtableValue {
+            return assert.fail(`Ineligible descriptor was read: ${name}`);
+        },
+    });
+    const source: CSVExportInput = {
+        ...input(),
+        columns: [
+            { key: 'Name', title: 'Visible name' },
+            { key: 'Hidden alias', title: 'Hidden', isHidden: true },
+        ],
+        rows: [
+            row([legacy]),
+            row([current, unread('Later alias', 'fldName')]),
+            row([unread('Hidden alias', 'fldName')]),
+            row([unread('Other field', 'fldOther')]),
+            row([
+                unread('Another alias', 'fldName'),
+                unread('Ambiguous alias', 'fldName'),
+            ]),
+            row([]),
+        ],
+        formatField({ field: metadata, value }) {
+            assert.equal(metadata, current.field);
+            return String(value);
+        },
+    };
+    assert.equal(
+        await serializeCSVExportDocument(ready(source)),
+        'Visible name\nRenamed\nCurrent\n\n\n\n\n'
+    );
+    assert.equal(
+        await serializeCSVExportDocument(
+            ready({
+                ...input(),
+                rows: [
+                    row([field('Name', 'Exact', '')]),
+                    row([unread('No identity', '')]),
+                ],
+            })
+        ),
+        'Name\nExact\n\n'
+    );
 });
 
 it('uses the last compatible union metadata for every row and permits zero visible columns', async () => {

@@ -113,10 +113,27 @@ it(
     async (t) => {
         const f = await htmlPresentationFixture(t),
             delivery = boundary();
+        const rows: CSVExportInput['rows'] = [
+            { name: 'Old name', value: 'First' },
+            { name: 'Name', value: 'Second' },
+        ].map(({ name, value }) => ({
+            status: 'loaded',
+            viewType: 'list',
+            fields: [
+                {
+                    field: {
+                        id: 'fldName',
+                        name,
+                        config: { type: AirtableFieldType.SINGLE_LINE_TEXT },
+                    },
+                    value,
+                },
+            ],
+        }));
         await f.render(
             h(CSVExportButton, {
                 request: {
-                    input: input(),
+                    input: { ...input(), rows },
                     filename: 'Exact filename',
                     platform: delivery.platform,
                 },
@@ -130,7 +147,7 @@ it(
             button.click();
             await delivery.clicked;
         });
-        assert.deepEqual(delivery.texts, ['Visible name\nOriginal\n']);
+        assert.deepEqual(delivery.texts, ['Visible name\nFirst\nSecond\n']);
         assert.deepEqual(delivery.filenames, ['Exact filename']);
         assert.deepEqual(delivery.revoked, ['blob:owned-synthetic']);
         assert.equal(f.container.querySelector('[role=status]'), null);

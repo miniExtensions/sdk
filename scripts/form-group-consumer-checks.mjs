@@ -22,6 +22,7 @@ const sections=groupFormFieldsBySections(descriptors);
 const preview:FormGroupPreview={startFieldId:field.id,onSelectSection(id){const target:string=id;void target;}};
 const props:FormGroupProps={title:'Contact',description:'<p>Details</p>',allFieldsHidden:false,hasError:true,isExpanded:false,isReadOnlyPage:true,preview,children:createElement(CompleteMultilineTextField,{id:field.id,value:null,onChange(value){const scalar:string=value;void scalar;}})};
 createElement(FormGroup,props);
+createElement(FormGroup,{...props,validationErrorDescription:'Revisa los datos de contacto.'});
 for(const section of sections)if(section.kind==='group'){const group:FormFieldsGroup<typeof field>=section;const original:typeof field=group.fieldsInSection[0];void original;}
 // @ts-expect-error visibility is already resolved by the host
 createElement(FormGroup,{...props,selectFieldVisibility(){return {};}});
@@ -57,6 +58,21 @@ const assembly = String.raw`
 const model={value:'ada@example.com',sibling:'Adjacent draft',expanded:false,readonly:false,hidden:false,error:true,preview:false,mode:'one-page',theme:'indigo'};
 const actions={writes:[],selected:[],submits:0};
 let root;
+let localizedSection;
+function localizedComposition() {
+ return React.createElement(api.CompleteFormComposition, {
+  formId: 'localized-group-form',
+  onSubmit(event) { event.preventDefault(); actions.submits++; },
+  items: [
+   { kind: 'group', key: 'contact', group: {
+    title: 'Datos de contacto', allFieldsHidden: false, ...localizedSection,
+   }, fields: [{ kind: 'field', key: 'email', node: React.createElement('span', null, 'Correo electrónico') }] },
+   { kind: 'group', key: 'delivery', group: {
+    title: 'Entrega', allFieldsHidden: false, hasError: false,
+   }, fields: [{ kind: 'field', key: 'address', node: React.createElement('span', null, 'Dirección') }] },
+  ],
+ });
+}
 function sections(){
  const prefix=React.createElement('span',{id:'ungrouped-prefix'},'Ungrouped prefix');
  const field=React.createElement(api.CompleteMultilineTextField,{key:'email',id:'fld_email',form:'group-form',value:model.value,readOnly:model.readonly,onChange(value){actions.writes.push(value);model.value=value;rerender();}});
@@ -66,6 +82,7 @@ function sections(){
  return projected;
 }
 function element(){return React.createElement(React.StrictMode,null,
+ localizedSection ? localizedComposition() :
  React.createElement('form',{id:'group-form',onSubmit(event){event.preventDefault();actions.submits++;}},
   React.createElement('label',{htmlFor:'adjacent-field'},'Adjacent field'),
   React.createElement('input',{id:'adjacent-field',value:model.sibling,onChange(event){model.sibling=event.target.value;rerender();}}),
@@ -299,7 +316,7 @@ control('Hide all fields',()=>{model.hidden=!model.hidden;rerender();});
 control('Host canonical replacement',()=>{model.value='host-update-while-hidden@example.com';rerender();});
 control('Page mode',()=>{model.mode=model.mode==='one-page'?'multi-page':'one-page';rerender();});
 control('Teal theme',()=>{model.theme='teal';rerender();});
-window.__formGroupFixture={snapshot(){return{model:{...model},actions:JSON.parse(JSON.stringify(actions)),errors:[...errors],requests,storage:{local:localStorage.length,session:sessionStorage.length}};},unmount(){flushSync(()=>root.unmount());}};
+window.__formGroupFixture={snapshot(){return{model:{...model},actions:JSON.parse(JSON.stringify(actions)),errors:[...errors],requests,storage:{local:localStorage.length,session:sessionStorage.length}};},setLocalizedSection(section){flushSync(()=>{localizedSection=section;rerender();});},unmount(){flushSync(()=>root.unmount());}};
 window.__nativeProbe={snapshot:()=>window.__formGroupFixture.snapshot()};
 `;
 
@@ -444,6 +461,88 @@ export async function checkFormGroupBrowser({ page, evidence }) {
         groups.push({ name, snapshot });
         return snapshot;
     };
+    const contact = page.getByRole('button', {
+        name: 'Datos de contacto',
+        exact: true,
+    });
+    const configureSection = (section) =>
+        page.evaluate(
+            (next) => window.__formGroupFixture.setLocalizedSection(next),
+            section
+        );
+    await configureSection({ hasError: true });
+    await contact.focus();
+    const accessibility = await page.context().newCDPSession(page);
+    const disclosureAccessibility = async (name) => {
+        const button = page.getByRole('button', { name, exact: true });
+        const id = await button.getAttribute('id');
+        assert(id);
+        const { root } = await accessibility.send('DOM.getDocument');
+        const { nodeId } = await accessibility.send('DOM.querySelector', {
+            nodeId: root.nodeId,
+            selector: `button[id="${id}"]`,
+        });
+        const { nodes } = await accessibility.send(
+            'Accessibility.getPartialAXTree',
+            {
+                nodeId,
+                fetchRelatives: false,
+            }
+        );
+        const [node] = nodes;
+        assert.equal(node?.role?.value, 'button');
+        assert.equal(node.name?.value, name);
+        return { name, description: node.description?.value ?? null };
+    };
+    const localized = (evidence.localized = {});
+    const validateDisclosureState = async () => {
+        const expanded = await contact.getAttribute('aria-expanded');
+        const focused = await contact.evaluate(
+            (node) => node === document.activeElement
+        );
+        const neighbor = await disclosureAccessibility('Entrega');
+        assert.equal(expanded, 'false');
+        assert.equal(focused, true);
+        assert.equal(neighbor.description, null);
+        return { expanded: false, focused, neighbor };
+    };
+    try {
+        localized.default = await disclosureAccessibility('Datos de contacto');
+        assert.equal(
+            localized.default.description,
+            'This section contains a validation error.'
+        );
+        Object.assign(localized.default, await validateDisclosureState());
+        const descriptionId = await contact.getAttribute('aria-describedby');
+        assert(descriptionId);
+        const spanish = 'Revisa los datos de contacto.';
+        await configureSection({
+            hasError: true,
+            validationErrorDescription: spanish,
+        });
+        localized.spanish = await disclosureAccessibility('Datos de contacto');
+        assert.equal(localized.spanish.description, spanish);
+        assert.equal(
+            await contact.getAttribute('aria-describedby'),
+            descriptionId
+        );
+        Object.assign(localized.spanish, await validateDisclosureState());
+        await configureSection({
+            hasError: false,
+            validationErrorDescription: spanish,
+        });
+        localized.resolved = await disclosureAccessibility('Datos de contacto');
+        assert.equal(localized.resolved.description, null);
+        assert.equal(await contact.getAttribute('aria-describedby'), null);
+        assert.equal(await page.locator(`[id="${descriptionId}"]`).count(), 0);
+        Object.assign(localized.resolved, await validateDisclosureState());
+        await verify(
+            'localized collapsed error description without host actions'
+        );
+    } finally {
+        await accessibility.detach();
+        await configureSection(null);
+    }
     assert.equal(await page.locator('#fld_email').count(), 0);
     assert.deepEqual(await measurePublicChevron(), nativeChevronPaint);
     assert.equal(

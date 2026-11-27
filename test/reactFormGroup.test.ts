@@ -122,13 +122,13 @@ it('renders native metadata, the supplied error dot and the existing Quill HTML 
 it('describes only the collapsed section with a validation error', async (t) => {
     const f = await htmlPresentationFixture(t);
     const writes: string[] = [];
-    const render = (hasError: boolean) =>
+    const render = (hasError: boolean, validationErrorDescription?: string) =>
         f.render(
             h(
                 'div',
                 null,
                 group(
-                    { title: 'Billing', hasError },
+                    { title: 'Billing', hasError, validationErrorDescription },
                     h(CompleteMultilineTextField, {
                         id: 'fld_billing',
                         value: 'Billing details',
@@ -147,8 +147,15 @@ it('describes only the collapsed section with a validation error', async (t) => 
     assert.ok(delivery instanceof f.window.HTMLButtonElement);
     await act(async () => billing.focus());
 
-    for (const hasError of [false, true, false]) {
-        await render(hasError);
+    const spanish = 'Revisa los datos de facturación.';
+    for (const [hasError, description, expected] of [
+        [false, undefined, undefined],
+        [true, undefined, 'This section contains a validation error.'],
+        [true, spanish, spanish],
+        [true, '   ', 'This section contains a validation error.'],
+        [false, spanish, undefined],
+    ] as const) {
+        await render(hasError, description);
         const [currentBilling, currentDelivery] = disclosures();
         assert.equal(currentBilling, billing);
         assert.equal(currentDelivery, delivery);
@@ -165,13 +172,10 @@ it('describes only the collapsed section with a validation error', async (t) => 
         const errorId = billing.getAttribute('aria-describedby');
         if (hasError) {
             assert.ok(errorId);
-            const description = f.window.document.getElementById(errorId);
-            assert.ok(description);
-            assert.equal(description.hasAttribute('hidden'), true);
-            assert.equal(
-                description.textContent,
-                'This section contains a validation error.'
-            );
+            const descriptionNode = f.window.document.getElementById(errorId);
+            assert.ok(descriptionNode);
+            assert.equal(descriptionNode.hasAttribute('hidden'), true);
+            assert.equal(descriptionNode.textContent, expected);
         } else {
             assert.equal(errorId, null);
         }

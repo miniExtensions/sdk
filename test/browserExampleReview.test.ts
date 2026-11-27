@@ -1511,7 +1511,7 @@ describe('actual browser starter prepared review', () => {
                 'https://example.test/path',
                 '+1 555 0100',
                 '0',
-                '12.5',
+                '$12.50',
                 '20%',
                 '3',
                 'Checked',

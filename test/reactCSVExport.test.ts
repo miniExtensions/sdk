@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { Window } from 'happy-dom';
+import Papa from 'papaparse';
 import { act, createElement as h, useLayoutEffect, useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
@@ -113,8 +114,10 @@ it(
     async (t) => {
         const f = await htmlPresentationFixture(t),
             delivery = boundary();
+        const title = 'Zone\rLabel';
+        const firstValue = 'North\rWest';
         const rows: CSVExportInput['rows'] = [
-            { name: 'Old name', value: 'First' },
+            { name: 'Old name', value: firstValue },
             { name: 'Name', value: 'Second' },
         ].map(({ name, value }) => ({
             status: 'loaded',
@@ -133,7 +136,11 @@ it(
         await f.render(
             h(CSVExportButton, {
                 request: {
-                    input: { ...input(), rows },
+                    input: {
+                        ...input(),
+                        columns: [{ key: 'Name', title }],
+                        rows,
+                    },
                     filename: 'Exact filename',
                     platform: delivery.platform,
                 },
@@ -147,9 +154,24 @@ it(
             button.click();
             await delivery.clicked;
         });
-        assert.deepEqual(delivery.texts, ['Visible name\nFirst\nSecond\n']);
         assert.deepEqual(delivery.filenames, ['Exact filename']);
         assert.deepEqual(delivery.revoked, ['blob:owned-synthetic']);
+        assert.deepEqual(delivery.texts, [
+            '"Zone\rLabel"\n"North\rWest"\nSecond\n',
+        ]);
+        const parsed = Papa.parse(delivery.texts[0]!, {
+            delimiter: ',',
+            dynamicTyping: false,
+            worker: false,
+            download: false,
+        });
+        assert.deepEqual(parsed.errors, []);
+        assert.deepEqual(parsed.data, [
+            [title],
+            [firstValue],
+            ['Second'],
+            [''],
+        ]);
         assert.equal(f.container.querySelector('[role=status]'), null);
         f.unchangedEffects();
     }

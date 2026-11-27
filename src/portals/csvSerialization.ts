@@ -21,10 +21,15 @@ export async function serializeCSVExportDocument(
         }));
         const { stringify } = await import('csv-stringify');
         return await new Promise<string>((resolve, reject) => {
-            stringify(records, { columns, header: true }, (error, output) => {
-                if (error) reject(error);
-                else resolve(output);
-            });
+            stringify(
+                records,
+                // Quote bare carriage returns while keeping LF record separators.
+                { columns, header: true, quoted_match: '\r' },
+                (error, output) => {
+                    if (error) reject(error);
+                    else resolve(output);
+                }
+            );
         });
     } catch (error) {
         throw new CSVExportFailure(

@@ -74,6 +74,10 @@ async function fixture(
             const context: Record<string, unknown> = {
                 fillStyle: '',
                 font: '',
+                measureText: () => ({
+                    actualBoundingBoxLeft: 40,
+                    actualBoundingBoxRight: 40,
+                }),
             };
             for (const operation of [
                 'fillRect',

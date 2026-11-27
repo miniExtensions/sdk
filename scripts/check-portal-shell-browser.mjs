@@ -20,6 +20,7 @@ import { assertBrowserInputs } from './package-checks.mjs';
 import { checkPortalShellFooterGeometry } from './portal-shell-footer-browser-checks.mjs';
 import { checkNativeTopbar } from './portal-shell-topbar-browser-checks.mjs';
 import { checkNativeSidebarOpener } from './portal-shell-sidebar-opener-browser-checks.mjs';
+import { checkPortalWelcomeGuideFocus } from './portal-welcome-guide-browser-checks.mjs';
 
 const output = resolve(process.argv[2] ?? 'dist/portal-shell-browser');
 const footerOnly = process.argv[3] === '--footer-geometry-only';
@@ -2682,6 +2683,15 @@ try {
                 await page.evaluate(() => window.remount());
                 await page.waitForTimeout(50);
                 assert.equal(await page.getByRole('dialog').count(), 0);
+                const welcomeGuide = { react, format };
+                (report.welcomeGuideProfiles ??= []).push(welcomeGuide);
+                await checkPortalWelcomeGuideFocus({
+                    browser,
+                    origin,
+                    evidence: welcomeGuide,
+                    output,
+                    label: `${react}-${format}`,
+                });
                 await summary('Synthetic user').click();
                 await button('User settings').click();
                 assert.equal(

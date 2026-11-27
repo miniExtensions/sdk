@@ -128,6 +128,31 @@ function formatted(field: CompleteLocalizedNumericRendererProps) {
     );
 }
 
+function formatReadonlyPercent(
+    value: number,
+    precision: number,
+    separator: NumberInputSeparator | undefined,
+    useGrouping: boolean
+) {
+    const commaDecimal =
+        separator === 'period-comma' || separator === 'space-comma';
+    const spaceGrouping =
+        separator === 'space-comma' || separator === 'space-period';
+    // Percent style scales the canonical fraction during decimal rounding.
+    return new Intl.NumberFormat(commaDecimal ? 'de-DE' : 'en-US', {
+        style: 'percent',
+        minimumFractionDigits: precision,
+        maximumFractionDigits: precision,
+        useGrouping,
+    })
+        .formatToParts(value)
+        .filter(({ type }) => type !== 'literal' && type !== 'percentSign')
+        .map((part) =>
+            spaceGrouping && part.type === 'group' ? ' ' : part.value
+        )
+        .join('');
+}
+
 function ungroup(input: string, separator: NumberInputSeparator | undefined) {
     return input.replace(
         separator === 'period-comma'
@@ -390,7 +415,6 @@ export function CompleteLocalizedNumericField({
             field.displayConfig.showTitle === false
         );
     const showProgress = config.progress && !focused;
-    const label = formatted(field);
     const progressValue = field.value == null ? 0 : field.value * 100;
     const displayedProgress =
         parseNumberInputCompatibility(
@@ -404,6 +428,17 @@ export function CompleteLocalizedNumericField({
         ) ?? 0;
 
     if (options.presentation === 'display') {
+        const label =
+            field.value != null &&
+            field.physicalKind === 'percent' &&
+            config.readonly
+                ? formatReadonlyPercent(
+                      field.value,
+                      field.field.config.options.precision,
+                      config.separator,
+                      config.grouping
+                  )
+                : formatted(field);
         const text =
             field.value == null
                 ? ''

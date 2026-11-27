@@ -141,7 +141,10 @@ function Facet({
                 value: facet.value,
                 emptyLabel: facet.emptyLabel,
             });
-        case 'numeric':
+        case 'numeric': {
+            const fraction = facet.progress?.fraction ?? 0;
+            const boundedFraction = Math.max(0, Math.min(1, fraction));
+            const percent = boundedFraction * 100;
             return h(
                 'div',
                 { className: 'mx-sdk-print-numeric' },
@@ -151,13 +154,17 @@ function Facet({
                           {
                               className: 'mx-sdk-print-progress',
                               role: 'progressbar',
-                              'aria-valuenow': facet.progress.fraction * 100,
+                              'aria-valuenow': percent,
                               'aria-valuemin': 0,
                               'aria-valuemax': 100,
+                              'aria-valuetext':
+                                  boundedFraction === fraction
+                                      ? undefined
+                                      : facet.text,
                           },
                           h('div', {
                               style: {
-                                  width: `${Math.max(0, Math.min(1, facet.progress.fraction)) * 100}%`,
+                                  width: `${percent}%`,
                                   backgroundColor: facet.progress.color,
                               },
                           })
@@ -169,6 +176,7 @@ function Facet({
                     emptyLabel: facet.emptyLabel,
                 })
             );
+        }
         case 'html':
             return facet.value
                 ? h(

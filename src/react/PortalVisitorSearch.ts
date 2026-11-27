@@ -179,7 +179,11 @@ export function PortalVisitorSearch({
                 if (owns(entry)) edit(entry, event.currentTarget.value);
             },
             onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-                if (event.key !== 'Enter' || event.nativeEvent.isComposing)
+                if (
+                    event.key !== 'Enter' ||
+                    event.nativeEvent.isComposing ||
+                    event.nativeEvent.keyCode === 229
+                )
                     return;
                 event.preventDefault();
                 if (owns(entry))

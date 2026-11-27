@@ -12,6 +12,28 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+// Host copy from the native 09f4b08f Address field and translation catalog.
+const localizedCopy = {
+    es: {
+        clear: 'Borrar',
+        loadingPredictions: 'Cargando sugerencias de direcciones',
+        loadingDetails: 'Cargando la dirección seleccionada',
+        failed: 'No se pudieron cargar las sugerencias de direcciones. Puedes seguir escribiendo manualmente o intentarlo de nuevo.',
+        retry: 'Intentar de nuevo',
+        preview:
+            'Las sugerencias de direcciones están disponibles en el formulario independiente. Puedes escribir una dirección aquí.',
+    },
+    ja: {
+        clear: 'クリア',
+        loadingPredictions: '住所の候補を読み込み中',
+        loadingDetails: '選択した住所を読み込み中',
+        failed: '住所の候補を読み込めませんでした。手動で入力を続けるか、もう一度お試しください。',
+        retry: 'もう一度試す',
+        preview:
+            '単独で開いたフォームでは住所の候補を利用できます。ここでは住所を手入力できます。',
+    },
+};
+
 /** Installed control, synthetic authorized reads, trusted keyboard and real CSS. */
 export async function checkCompleteAddressBrowser({
     browser,
@@ -73,17 +95,19 @@ const {${componentName}:AddressControl}=require('@miniextensions/sdk/react');
         const source =
             imports +
             `const natural=${control === 'natural'};\n` +
+            `const localizedCopy=${JSON.stringify(localizedCopy)};\n` +
             String.raw`
-const mode=new URLSearchParams(location.search).get('mode')||'normal';
+const params=new URLSearchParams(location.search);
+const mode=params.get('mode')||'normal';
+const locale=params.get('locale')||'en';
 const en={clear:'Clear',loadingPredictions:'Loading address suggestions',loadingDetails:'Loading selected address',failed:'Address suggestions could not be loaded. Keep typing or retry.',retry:'Try again'};
-const es={clear:'Borrar',loadingPredictions:'Cargando sugerencias de direcciones',loadingDetails:'Cargando la dirección seleccionada',failed:'No se pudieron cargar las sugerencias de direcciones.',retry:'Intentar de nuevo'};
-const ja={clear:'クリア',loadingPredictions:'住所の候補を読み込み中',loadingDetails:'選択した住所を読み込み中',failed:'住所の候補を読み込めませんでした。',retry:'もう一度試す'};
-const labels=mode==='es'?es:mode==='ja'?ja:en;
+const labels=localizedCopy[locale]||en;
+const explanation=localizedCopy[locale]?.preview||'Suggestions are disabled in this preview';
 const stats={queries:[],details:[],writes:[],submits:0,signals:[],trusted:[]};let patch,heldPrediction,heldDetail,lastRef,refStable=true;
 function App(){const [state,setState]=useState({value:'',readScope:'A',mounted:true,fieldMode:mode==='manual'?'manual':'autocomplete'});patch=next=>flushSync(()=>setState(old=>({...old,...next})));
 return h('form',{id:'proof-form',onSubmit:e=>{e.preventDefault();stats.submits++;},onInputCapture:e=>stats.trusted.push(e.nativeEvent.isTrusted)},
 h('label',{htmlFor:'proof-address'},'Synthetic Address'),h('p',{id:'proof-help'},'Synthetic address help'),
-state.mounted?(natural&&state.fieldMode==='readonly'?h(AddressControl,{mode:'readonly',value:state.value,language:'ja'}):natural&&state.fieldMode==='manual'?h(AddressControl,{mode:'manual',value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},labels:{clear:labels.clear},explanation:'Suggestions are disabled in this preview',initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}}}):h(AddressControl,{identity:{session:'s',field:'f',readScope:state.readScope},value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},reads:{async listPredictions(query,{signal}){stats.queries.push(query);stats.signals.push(signal);if(mode==='predictions'&&stats.queries.length===1)throw Error('Private provider failure');if(mode==='loading')await new Promise(resolve=>heldPrediction=resolve);return [{placeId:'p',description:'Selected address'},{placeId:'p2',description:'Second address'}];},async getFormattedAddress(placeId,{signal}){stats.details.push({placeId,prior:[...stats.writes]});stats.signals.push(signal);if(mode==='retry'||mode==='es'||mode==='ja'){if(stats.details.length===1)throw Error('Private detail failure');return 'Canonical address';}return new Promise(resolve=>heldDetail=resolve);}},labels,initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}},theme:{activeBackground:'#dbeafe',activeText:'#1e3a8a'}})):null,
+state.mounted?(natural&&state.fieldMode==='readonly'?h(AddressControl,{mode:'readonly',value:state.value,language:'ja'}):natural&&state.fieldMode==='manual'?h(AddressControl,{mode:'manual',value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},labels:{clear:labels.clear},explanation,initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}}}):h(AddressControl,{identity:{session:'s',field:'f',readScope:state.readScope},value:state.value,onChange(value){stats.writes.push(value);setState(old=>({...old,value}));},reads:{async listPredictions(query,{signal}){stats.queries.push(query);stats.signals.push(signal);if(mode==='predictions'&&stats.queries.length===1)throw Error('Private provider failure');if(mode==='loading')await new Promise(resolve=>heldPrediction=resolve);return [{placeId:'p',description:'Selected address'},{placeId:'p2',description:'Second address'}];},async getFormattedAddress(placeId,{signal}){stats.details.push({placeId,prior:[...stats.writes]});stats.signals.push(signal);if(mode==='retry'){if(stats.details.length===1)throw Error('Private detail failure');return 'Canonical address';}return new Promise(resolve=>heldDetail=resolve);}},labels,initialMobile:true,id:'proof-address',form:'proof-form','aria-describedby':'proof-help','aria-label':'Synthetic Address',maxLength:60,ref:node=>{if(node){if(lastRef&&lastRef!==node)refStable=false;lastRef=node;}},theme:{activeBackground:'#dbeafe',activeText:'#1e3a8a'}})):null,
 h('input',{'aria-label':'Adjacent draft',defaultValue:'Unchanged adjacent draft'}));}
 const root=createRoot(document.querySelector('main'));root.render(h(React.StrictMode,null,h(App)));
 window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.queries],details:[...stats.details],writes:[...stats.writes],submits:stats.submits,aborted:stats.signals.map(s=>s.aborted),trusted:[...stats.trusted],refStable}),patch,update:next=>patch(next),resolveDetail:value=>heldDetail(value),resolvePredictions:()=>heldPrediction(),destroy:()=>root.unmount()};
@@ -207,7 +231,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
             assert.equal(step.previous, firstId);
             await input.press('Enter');
         };
-        const open = async (mode, narrow = false) => {
+        const open = async (mode, narrow = false, locale = 'en') => {
             if (context) await context.close();
             context = await browser.newContext({
                 serviceWorkers: 'block',
@@ -230,7 +254,9 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
                 evidence.unexpectedRequests.push(url.origin + url.pathname);
                 return route.abort();
             });
-            await page.goto(origin + '?mode=' + mode);
+            await page.goto(
+                origin + '?' + new URLSearchParams({ mode, locale })
+            );
             const input =
                 control === 'natural' && mode === 'manual'
                     ? page.getByRole('textbox', { name: 'Synthetic Address' })
@@ -238,7 +264,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
             await input.waitFor();
             return input;
         };
-        const finish = async (name) => {
+        const finish = async (name, checks = {}) => {
             const state = await snapshot();
             assert.equal(state.submits, 0);
             assert.equal(state.refStable, true);
@@ -251,7 +277,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
             );
             assert.deepEqual(evidence.pageErrors, []);
             assert.deepEqual(evidence.unexpectedRequests, []);
-            evidence.results.push({ name, ...state });
+            evidence.results.push({ name, ...state, ...checks });
             await page.evaluate(() => window.addressProof.destroy());
         };
         let input = await open('normal');
@@ -368,12 +394,66 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         await finish(
             'explicit prediction retry and keyboard reopening with editable canonical input'
         );
-        for (const [mode, retry] of [
-            ['retry', 'Try again'],
+        for (const [locale, copy] of Object.entries(localizedCopy)) {
+            const query = 'Query';
+            input = await open('predictions', locale === 'ja', locale);
+            await page.clock.install();
+            await input.fill(query);
+            const alert = page.getByRole('alert');
+            await alert.waitFor();
+            const error = await alert.textContent();
+            assert.equal(error, copy.failed);
+            assert.deepEqual((await snapshot()).queries, [query]);
+            assert.equal(await input.inputValue(), query);
+            assert.equal(await input.isEditable(), true);
+
+            const clear = page.getByRole('button', {
+                name: copy.clear,
+                exact: true,
+            });
+            const retry = page.getByRole('button', {
+                name: copy.retry,
+                exact: true,
+            });
+            await page.keyboard.press('Tab');
+            assert(
+                await clear.evaluate((node) => node === document.activeElement)
+            );
+            await page.keyboard.press('Tab');
+            assert(
+                await retry.evaluate((node) => node === document.activeElement)
+            );
+            assert.equal(await retry.getAttribute('type'), 'button');
+            await page.keyboard.press('Enter');
+            await alert.waitFor({ state: 'hidden' });
+
+            await input.press('ArrowDown');
+            const list = page.getByRole('listbox');
+            await list.waitFor();
+            const options = await list.getByRole('option').allTextContents();
+            assert.deepEqual(options, ['Selected address', 'Second address']);
+            assert.equal(await input.getAttribute('aria-expanded'), 'true');
+            // Tick a full edit debounce after reopening to catch a third read.
+            await page.clock.runFor(800);
+            assert.equal(await input.inputValue(), query);
+            assert.equal(await input.isEditable(), true);
+            const state = await snapshot();
+            assert.deepEqual(state.queries, [query, query]);
+            assert.deepEqual(state.details, []);
+            assert.deepEqual(state.writes, [query]);
+            await finish('localized keyboard prediction retry ' + locale, {
+                error,
+                retryLabel: copy.retry,
+                options,
+                inputValue: query,
+            });
+        }
+        for (const [locale, retry] of [
+            ['en', 'Try again'],
             ['es', 'Intentar de nuevo'],
             ['ja', 'もう一度試す'],
         ]) {
-            input = await open(mode, mode === 'ja');
+            input = await open('retry', locale === 'ja', locale);
             await input.fill('Query');
             await page.getByRole('option').first().waitFor();
             await selectFirstPrediction(input);
@@ -392,7 +472,10 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
             );
             assert.equal((await snapshot()).queries.length, 1);
             assert.equal((await snapshot()).details.length, 2);
-            await finish('localized explicit detail retry ' + mode);
+            await finish(
+                'localized explicit detail retry ' +
+                    (locale === 'en' ? 'retry' : locale)
+            );
         }
         input = await open('loading');
         await input.fill('Query');
@@ -436,6 +519,34 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
             await finish(
                 'natural manual preview, counter, associations and non-submit Clear'
             );
+
+            for (const [locale, copy] of Object.entries(localizedCopy)) {
+                input = await open('manual', true, locale);
+                await page.clock.install();
+                await input.fill('Manual address');
+                await page.clock.runFor(800);
+                assert.equal(await input.inputValue(), 'Manual address');
+                assert.equal(await input.isEditable(), true);
+                assert.equal(await page.getByRole('combobox').count(), 0);
+                assert.equal(await page.getByRole('listbox').count(), 0);
+                const descriptions = await input.evaluate((node) =>
+                    node
+                        .getAttribute('aria-describedby')
+                        .split(/\s+/)
+                        .map((id) => document.getElementById(id)?.textContent)
+                );
+                assert.deepEqual(descriptions, [
+                    'Synthetic address help',
+                    copy.preview,
+                ]);
+                const state = await snapshot();
+                assert.deepEqual(state.queries, []);
+                assert.deepEqual(state.details, []);
+                assert.deepEqual(state.writes, ['Manual address']);
+                await finish('localized embedded manual guidance ' + locale, {
+                    descriptions,
+                });
+            }
 
             input = await open('normal');
             await input.fill('Retired query');

@@ -233,6 +233,18 @@ test('admitted physical and rich facts preserve readonly formatting, literal lab
             emptyLabel: 'No number',
             progress: { fraction: 0, color: '#123456' },
         }),
+        field('over-range', {
+            kind: 'numeric',
+            text: '125,00%',
+            emptyLabel: 'No number',
+            progress: { fraction: 1.25, color: '#123456' },
+        }),
+        field('under-range', {
+            kind: 'numeric',
+            text: '-12,50%',
+            emptyLabel: 'No number',
+            progress: { fraction: -0.125, color: '#123456' },
+        }),
         field('html', {
             kind: 'html',
             value: '<p><strong>Retained HTML</strong><script>unsafe()</script></p>',
@@ -288,16 +300,25 @@ test('admitted physical and rich facts preserve readonly formatting, literal lab
         f.container.querySelectorAll('[role=progressbar]')
     );
     assert.deepEqual(
+        progress.map((element) => element.querySelector('div')?.style.width),
+        ['37.5%', '0%', '100%', '0%']
+    );
+    assert.match(
+        f.container.textContent ?? '',
+        /37,5 %.*0\.00%.*125,00%.*-12,50%/s
+    );
+    assert.deepEqual(
         progress.map((element) => element.getAttribute('aria-valuenow')),
-        ['37.5', '0']
+        ['37.5', '0', '100', '0']
     );
-    assert.equal(
-        progress[0]?.firstElementChild
-            ?.getAttribute('style')
-            ?.includes('width: 37.5%'),
-        true
+    for (const element of progress) {
+        assert.equal(element.getAttribute('aria-valuemin'), '0');
+        assert.equal(element.getAttribute('aria-valuemax'), '100');
+    }
+    assert.deepEqual(
+        progress.map((element) => element.getAttribute('aria-valuetext')),
+        [null, null, '125,00%', '-12,50%']
     );
-    assert.match(f.container.textContent ?? '', /37,5 %.*0\.00%/s);
     assert.equal(
         f.container.querySelector('.mx-sdk-print-html')?.getAttribute('style'),
         'height: 120px;'

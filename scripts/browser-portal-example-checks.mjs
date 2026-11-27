@@ -3710,27 +3710,35 @@ export async function checkBrowserPortalExample({
             }
         );
         await check(
-            'actual main late child Delete acknowledgment cannot retire a replacement visitor presentation',
+            'actual main cancelled dispatched child Delete requires explicit Reload and fresh rows before a successor opens',
             async () => {
                 const delayedDelete = deferred();
                 const h = await recoveryMain({
                     deletable: true,
                     delayedDelete,
                 });
-                const { document } = h;
+                const { document, window } = h;
                 button(document, 'Load records').click();
                 await waitFor(
                     () =>
                         rowIds(document).length === 1 &&
                         document.getElementById('screen').inert === false
                 );
-                button(document, 'Open Form').click();
+                const retainedPortal = [
+                    'Load records',
+                    'Next page',
+                    'Create record',
+                    'Open Form',
+                ].map((title) => button(document, title));
+                retainedPortal.at(-1).click();
                 await waitFor(
                     () =>
                         buttons(document, 'Delete this record').length === 1 &&
                         document.getElementById('screen').inert === false
                 );
-                button(document, 'Delete this record').click();
+                const retainedBack = button(document, 'Back to Portal');
+                const retainedDelete = button(document, 'Delete this record');
+                retainedDelete.click();
                 await waitFor(() => document.querySelector('dialog') != null);
                 button(
                     document.querySelector('dialog'),
@@ -3741,22 +3749,99 @@ export async function checkBrowserPortalExample({
                 );
                 button(document, 'Cancel request').click();
                 await new Promise((resolve) => setImmediate(resolve));
+                const screen = document.getElementById('screen');
+                const statusNode = document.getElementById('status');
+                assert.match(
+                    statusNode.textContent,
+                    /delete outcome is unknown|write may already have committed/i
+                );
+                assert.deepEqual(
+                    {
+                        reloadHint: screen.textContent.includes(
+                            'Choose Reload when ready'
+                        ),
+                        delete: buttons(document, 'Delete this record').length,
+                        back: buttons(document, 'Back to Portal').length,
+                        rows: rowIds(document),
+                    },
+                    { reloadHint: true, delete: 0, back: 0, rows: [] }
+                );
+                const callsAfterCancel = h.calls.length;
+                for (const action of [
+                    retainedDelete,
+                    retainedBack,
+                    ...retainedPortal,
+                ])
+                    action.dispatchEvent(new window.Event('click'));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.calls.length, callsAfterCancel);
+                assert.match(screen.textContent, /Choose Reload when ready/);
+                assert.deepEqual(rowIds(document), []);
                 h.aba();
-                assert.equal(button(document, 'Save').disabled, true);
-                const successor =
-                    document.getElementById('screen').firstElementChild;
-                const status = document.getElementById('status').textContent;
+                assert.match(screen.textContent, /Choose Reload when ready/);
+                assert.equal(h.calls.length, callsAfterCancel);
+
+                h.latest(page([record('rec_fresh', 'Fresh record')]));
+                const rootLoads = h.count('fetchExtensionForEndUser');
+                const collectionLoads = h.count(
+                    'fetchRecordsForLinkedTableOnPortal'
+                );
+                document.getElementById('reload').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Load records').length === 1 &&
+                        !screen.inert
+                );
+                assert.equal(
+                    h.count('fetchExtensionForEndUser'),
+                    rootLoads + 1
+                );
+                assert.equal(
+                    h.count('fetchRecordsForLinkedTableOnPortal'),
+                    collectionLoads
+                );
+                assert.deepEqual(rowIds(document), []);
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).includes('rec_fresh') && !screen.inert
+                );
+                assert.deepEqual(rowIds(document), ['rec_fresh']);
+                assert.equal(
+                    h.count('fetchRecordsForLinkedTableOnPortal'),
+                    collectionLoads + 1
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        !screen.inert
+                );
+                assert.equal(
+                    h.calls.findLast((call) => call.body?.childExtensionInfo)
+                        ?.body.childExtensionInfo.accessType
+                        .childExtensionRecordId,
+                    'rec_fresh'
+                );
+                const input = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                input.value = 'Unsaved fresh child answer';
+                change(window, input, 'input');
+                const successor = screen.firstElementChild;
+                const status = statusNode.textContent;
+                const callsBeforeLateDelete = h.calls.length;
                 delayedDelete.resolve();
                 await new Promise((resolve) => setImmediate(resolve));
                 await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(screen.firstElementChild, successor);
+                assert.equal(statusNode.textContent, status);
                 assert.equal(
-                    document.getElementById('screen').firstElementChild,
-                    successor
+                    document.querySelector('input[data-field-id="fld_title"]'),
+                    input
                 );
-                assert.equal(
-                    document.getElementById('status').textContent,
-                    status
-                );
+                assert.equal(input.value, 'Unsaved fresh child answer');
+                assert.equal(h.calls.length, callsBeforeLateDelete);
                 assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 1);
                 assert.equal(h.count('saveForm'), 0);
                 button(document, 'Disconnect').click();
@@ -4680,20 +4765,23 @@ export async function checkBrowserPortalExample({
                         input
                     ) => {
                         optionCalls.push(structuredClone(input));
+                        const second =
+                            input.offset != null ||
+                            input.filter.searchTerm === 'Acme two';
                         return {
                             records: [
                                 {
-                                    id: input.offset
+                                    id: second
                                         ? 'rec_page_two'
                                         : 'rec_page_one',
                                     fields: {
-                                        fld_name: input.offset
+                                        fld_name: second
                                             ? 'Acme Two'
                                             : 'Acme One',
                                     },
                                 },
                             ],
-                            offset: input.offset ? null : 'next',
+                            offset: second ? null : 'next',
                             tableIdsToLinkedTableStates: {
                                 tbl_targets: {
                                     airtableFields: [
@@ -4763,7 +4851,67 @@ export async function checkBrowserPortalExample({
                         ]
                     );
                     const form = first.closest('form');
-                    if (stale === 'owner' || stale === 'owner-return') {
+                    if (stale === null) {
+                        first.checked = true;
+                        change(h.window, first);
+                        assert.deepEqual(JSON.parse(native.value), [
+                            'rec_page_one',
+                        ]);
+                        search.value = 'Acme two';
+                        change(h.window, search, 'input');
+                        let submits = 0;
+                        form.addEventListener('submit', () => submits++);
+                        const composingEnter = new h.window.KeyboardEvent(
+                            'keydown',
+                            {
+                                key: 'Enter',
+                                isComposing: true,
+                                bubbles: true,
+                                cancelable: true,
+                            }
+                        );
+                        assert.equal(
+                            search.dispatchEvent(composingEnter),
+                            true
+                        );
+                        await h.settle();
+                        assert.equal(optionCalls.length, 2);
+                        const enter = new h.window.KeyboardEvent('keydown', {
+                            key: 'Enter',
+                            bubbles: true,
+                            cancelable: true,
+                        });
+                        assert.equal(search.dispatchEvent(enter), false);
+                        await h.settle();
+                        assert.deepEqual(
+                            optionCalls.map((c) => [
+                                c.filter.searchTerm,
+                                c.offset,
+                            ]),
+                            [
+                                ['Acme', null],
+                                ['Acme', 'next'],
+                                ['Acme two', null],
+                            ]
+                        );
+                        assert.equal(submits, 0);
+                        assert.deepEqual(
+                            h.calls.map((call) => call.operation),
+                            ['list']
+                        );
+                        assert.equal(search.closest('form'), form);
+                        assert.equal(form.isConnected, true);
+                        const result = form.querySelectorAll(
+                            '.choice-list input[type=checkbox]'
+                        );
+                        assert.equal(result.length, 1);
+                        assert.equal(result[0].checked, false);
+                        assert.deepEqual(JSON.parse(native.value), [
+                            'rec_page_one',
+                        ]);
+                        await h.click('Save cell');
+                        assert.equal(submits, 1);
+                    } else if (stale === 'owner' || stale === 'owner-return') {
                         h.switchOwner('visitor_B');
                         if (stale === 'owner-return')
                             h.switchOwner('visitor_A');
@@ -4786,10 +4934,12 @@ export async function checkBrowserPortalExample({
                         view.value = 'view_other';
                         change(h.window, view);
                     }
-                    first.checked = true;
-                    change(h.window, first);
-                    submit(h.window, form);
-                    await h.settle();
+                    if (stale !== null) {
+                        first.checked = true;
+                        change(h.window, first);
+                        submit(h.window, form);
+                        await h.settle();
+                    }
                     const writes = h.calls.filter(
                         (c) => c.operation === 'grid'
                     );
@@ -4809,7 +4959,7 @@ export async function checkBrowserPortalExample({
                                 },
                             ]
                         );
-                    assert.equal(optionCalls.length, 2);
+                    assert.equal(optionCalls.length, stale !== null ? 2 : 3);
                     assert.equal(
                         h.calls.filter((call) => call.operation === 'list')
                             .length,

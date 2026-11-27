@@ -212,7 +212,8 @@ export async function completeRichTextFixture(t: TestContext) {
         async paste(
             view: Editor['view'],
             data: Record<string, string>,
-            extraTypes: string[] = []
+            extraTypes: string[] = [],
+            files: InstanceType<typeof window.File>[] = []
         ) {
             const event = new window.Event('paste', {
                 bubbles: true,
@@ -221,7 +222,7 @@ export async function completeRichTextFixture(t: TestContext) {
             Object.defineProperty(event, 'clipboardData', {
                 value: {
                     types: [...Object.keys(data), ...extraTypes],
-                    files: [],
+                    files,
                     items: [],
                     getData: (type: string) => data[type] ?? '',
                 },

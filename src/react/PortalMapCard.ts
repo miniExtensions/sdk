@@ -54,6 +54,16 @@ export function PortalMapCard({
 }: {
     card: PortalMapCardData;
 }): ReactElement {
+    return h(PortalMapCardView, { card });
+}
+
+export function PortalMapCardView({
+    card,
+    onSharedTouch,
+}: {
+    card: PortalMapCardData;
+    onSharedTouch?: () => boolean;
+}): ReactElement {
     const receipt = useMemo(
         () => ({
             owner: card.owner,
@@ -63,7 +73,11 @@ export function PortalMapCard({
         }),
         [card.owner, card.identity, card.recordId, card.open]
     );
-    type Press = { receipt: typeof receipt; button: HTMLButtonElement };
+    type Press = {
+        receipt: typeof receipt;
+        button: HTMLButtonElement;
+        pointerType?: string;
+    };
     const pointerPress = useRef<Press | null>(null);
     const keyboardPress = useRef<Press | null>(null);
     const committed = useRef<typeof receipt | null>(null);
@@ -146,6 +160,7 @@ export function PortalMapCard({
                           pointerPress.current = {
                               receipt,
                               button: event.currentTarget,
+                              pointerType: event.pointerType,
                           };
                   },
                   onPointerCancel(event: PointerEvent<HTMLButtonElement>) {
@@ -175,6 +190,13 @@ export function PortalMapCard({
                           started.receipt !== receipt
                       )
                           return;
+                      if (
+                          started?.button === event.currentTarget &&
+                          started.pointerType === 'touch' &&
+                          onSharedTouch
+                      ) {
+                          if (onSharedTouch() || !live()) return;
+                      }
                       receipt.open?.activate();
                   },
               })

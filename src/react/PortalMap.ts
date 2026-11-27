@@ -3,10 +3,13 @@ import {
     createElement as h,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ComponentType,
+    type MouseEvent,
     type ReactElement,
     type ReactNode,
+    type SyntheticEvent,
 } from 'react';
 import type { PortalMapCoordinates } from '../portals/map/coordinates.js';
 import { capturePortalMapProviderConfiguration } from '../portals/map/providerCoordinator.js';
@@ -17,7 +20,7 @@ import type {
     PortalMapProviderRefusal,
     PortalMapProviderSnapshot,
 } from '../portals/map/providerCoordinator.js';
-import { PortalMapCard, type PortalMapCardData } from './PortalMapCard.js';
+import { PortalMapCardView, type PortalMapCardData } from './PortalMapCard.js';
 import { loadPortalMapRuntime } from './map/runtimeLoader.js';
 import type { PortalMapRuntimeProps } from './map/types.js';
 
@@ -129,9 +132,11 @@ class MapBoundary extends Component<
 function ProviderBoundMapCard({
     provider,
     card,
+    onSharedTouch,
 }: {
     provider: PortalMapProviderBinding;
     card: PortalMapCardData;
+    onSharedTouch: () => boolean;
 }): ReactElement {
     const owner = useMemo(
         () => ({
@@ -142,7 +147,8 @@ function ProviderBoundMapCard({
         }),
         [provider, card.owner]
     );
-    return h(PortalMapCard, {
+    return h(PortalMapCardView, {
+        onSharedTouch,
         card: {
             recordId: card.recordId,
             identity: card.identity,
@@ -153,6 +159,86 @@ function ProviderBoundMapCard({
             needsReviewLabel: card.needsReviewLabel,
         },
     });
+}
+
+function samePoint(left: PortalMapMarker, right: PortalMapMarker): boolean {
+    return (
+        left.position.lat === right.position.lat &&
+        left.position.lng === right.position.lng
+    );
+}
+
+function isSameMarker(left: PortalMapMarker, right: PortalMapMarker): boolean {
+    return (
+        left.key === right.key &&
+        samePoint(left, right) &&
+        left.card.recordId === right.card.recordId &&
+        left.card.identity === right.card.identity &&
+        left.card.owner === right.card.owner &&
+        left.card.open === right.card.open
+    );
+}
+
+function choiceTitle(marker: PortalMapMarker): string | null {
+    const { projection } = marker.card;
+    return projection.status === 'present' && projection.primary.trim()
+        ? projection.primary
+        : null;
+}
+
+function MapTouchChoices({
+    label,
+    markers,
+    onClose,
+    select,
+}: {
+    label: string;
+    markers: readonly PortalMapMarker[];
+    onClose: () => void;
+    select: (marker: PortalMapMarker) => void;
+}): ReactElement {
+    const dialog = useRef<HTMLDialogElement>(null);
+    useEffect(() => {
+        const element = dialog.current;
+        if (!element) return;
+        element.showModal();
+        return () => element.close();
+    }, []);
+    return h(
+        'dialog',
+        {
+            ref: dialog,
+            className: 'mx-sdk-portal-map-choices',
+            'aria-label': label,
+            onClose(event: SyntheticEvent<HTMLDialogElement>) {
+                if (!event.currentTarget.open) onClose();
+            },
+            onClick(event: MouseEvent<HTMLDialogElement>) {
+                if (event.target === event.currentTarget)
+                    event.currentTarget.close();
+            },
+        },
+        h(
+            'div',
+            null,
+            markers.map((marker) =>
+                h(
+                    'button',
+                    {
+                        key: marker.key,
+                        type: 'button',
+                        onClick() {
+                            const element = dialog.current;
+                            if (!element?.open) return;
+                            element.close();
+                            select(marker);
+                        },
+                    },
+                    choiceTitle(marker)
+                )
+            )
+        )
+    );
 }
 
 /** Complete SDK Map over admitted coordinates/cards and explicit provider ownership. */
@@ -168,6 +254,22 @@ export function PortalMap(props: PortalMapProps): ReactElement {
     const [runtime, setRuntime] =
         useState<ComponentType<PortalMapRuntimeProps> | null>(null);
     const [runtimeFailed, setRuntimeFailed] = useState(false);
+    const markerElements = useRef(
+        new Map<
+            string,
+            {
+                binding: PortalMapProviderBinding;
+                marker: PortalMapMarker;
+                element: HTMLDivElement;
+            }
+        >()
+    );
+    const nextChoice = useRef(0);
+    const [touchChoice, setTouchChoice] = useState<{
+        id: number;
+        binding: PortalMapProviderBinding;
+        markers: readonly PortalMapMarker[];
+    } | null>(null);
     useEffect(() => {
         let mounted = true;
         const result = binding.acquire();
@@ -231,6 +333,59 @@ export function PortalMap(props: PortalMapProps): ReactElement {
                   { role: 'alert', 'data-map-status': code },
                   props.failureLabel(code)
               );
+    const getOpenButton = (marker: PortalMapMarker) => {
+        const current = markerElements.current.get(marker.key);
+        if (
+            !current ||
+            current.binding !== binding ||
+            !marker.card.open ||
+            !isSameMarker(current.marker, marker)
+        )
+            return null;
+        const button = current.element.querySelector<HTMLButtonElement>(
+            '.mx-sdk-portal-map-open'
+        );
+        if (!button?.isConnected) return null;
+        try {
+            return binding.owner.isCurrent() &&
+                current.marker.card.owner.isCurrent() &&
+                binding.owner.isCurrent() &&
+                markerElements.current.get(marker.key) === current &&
+                button.isConnected &&
+                current.element.contains(button)
+                ? button
+                : null;
+        } catch {
+            return null;
+        }
+    };
+    const chooseSharedPoint = (marker: PortalMapMarker): boolean => {
+        const choices = props.markers.filter(
+            (candidate) =>
+                samePoint(candidate, marker) &&
+                choiceTitle(candidate) != null &&
+                getOpenButton(candidate) != null
+        );
+        if (choices.length < 2 || !getOpenButton(marker)) return false;
+        setTouchChoice({ id: ++nextChoice.current, binding, markers: choices });
+        return true;
+    };
+    const visibleChoices =
+        touchChoice?.binding === binding && status === 'ready'
+            ? touchChoice.markers.filter((marker) =>
+                  props.markers.some(
+                      (current) =>
+                          isSameMarker(current, marker) &&
+                          choiceTitle(current) === choiceTitle(marker)
+                  )
+              )
+            : [];
+    useEffect(() => {
+        if (touchChoice && visibleChoices.length < 2)
+            setTouchChoice((current) =>
+                current === touchChoice ? null : current
+            );
+    }, [touchChoice, visibleChoices.length]);
     const content = runtimeFailed
         ? failure('provider-failed')
         : status === 'loading'
@@ -259,10 +414,30 @@ export function PortalMap(props: PortalMapProps): ReactElement {
                                 position: marker.position,
                                 content: h(
                                     'div',
-                                    null,
+                                    {
+                                        ref: (
+                                            element: HTMLDivElement | null
+                                        ) => {
+                                            if (element)
+                                                markerElements.current.set(
+                                                    marker.key,
+                                                    { binding, marker, element }
+                                                );
+                                            else if (
+                                                markerElements.current.get(
+                                                    marker.key
+                                                )?.marker === marker
+                                            )
+                                                markerElements.current.delete(
+                                                    marker.key
+                                                );
+                                        },
+                                    },
                                     h(ProviderBoundMapCard, {
                                         provider: binding,
                                         card: marker.card,
+                                        onSharedTouch: () =>
+                                            chooseSharedPoint(marker),
                                     }),
                                     h('div', {
                                         className: 'mx-sdk-portal-map-pointer',
@@ -278,6 +453,18 @@ export function PortalMap(props: PortalMapProps): ReactElement {
             className: ['mx-sdk-portal-map', props.className ?? ''].join(' '),
             'aria-label': props.label,
         },
-        content
+        content,
+        touchChoice && visibleChoices.length > 1
+            ? h(MapTouchChoices, {
+                  key: touchChoice.id,
+                  label: props.label,
+                  markers: visibleChoices,
+                  onClose: () =>
+                      setTouchChoice((current) =>
+                          current === touchChoice ? null : current
+                      ),
+                  select: (marker) => getOpenButton(marker)?.click(),
+              })
+            : null
     );
 }

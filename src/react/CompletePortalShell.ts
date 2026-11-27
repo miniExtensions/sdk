@@ -179,10 +179,24 @@ export type PortalShellItemHoverRequest = Readonly<{
 }>;
 
 const focusable = 'a[href],button:not([disabled]),summary,[tabindex="0"]';
-function visibleControls(node: HTMLElement): HTMLElement[] {
-    return Array.from(node.querySelectorAll<HTMLElement>(focusable)).filter(
+function visibleControls(
+    node: HTMLElement,
+    includeFrames = false
+): HTMLElement[] {
+    const selector = includeFrames ? `${focusable},iframe[src]` : focusable;
+    return Array.from(node.querySelectorAll<HTMLElement>(selector)).filter(
         (element) => {
             if (element.closest('[hidden]')) return false;
+            if (
+                includeFrames &&
+                element.tagName === 'IFRAME' &&
+                (element.tabIndex < 0 ||
+                    element.closest('[inert]') ||
+                    element.getClientRects().length === 0 ||
+                    element.ownerDocument.defaultView?.getComputedStyle(element)
+                        .visibility !== 'visible')
+            )
+                return false;
             for (
                 let ancestor = element.parentElement;
                 ancestor;
@@ -257,10 +271,14 @@ function positionNavigationAccountMenu(
 
 function trapFocus(
     event: KeyboardEvent<HTMLElement>,
-    boundary = event.currentTarget
+    boundary = event.currentTarget,
+    embeddedFocusStart?: HTMLElement | null
 ) {
     if (event.key !== 'Tab') return;
-    const controls = visibleControls(boundary);
+    const controls = visibleControls(
+        boundary,
+        embeddedFocusStart != null
+    ).filter((control) => control !== embeddedFocusStart);
     const first = controls[0],
         last = controls.at(-1);
     if (!first) {
@@ -308,15 +326,23 @@ function Dialog(props: {
     children: ReactNode;
     onClose: () => void;
     initialFocus?: RefObject<HTMLElement | null>;
+    embeddedTabOrder?: boolean;
 }) {
     const id = useId(),
         ref = useRef<HTMLDivElement>(null);
+    const embeddedFocusStart = useRef<HTMLSpanElement>(null);
     const { initialFocus } = props;
     useEffect(() => {
         const node = ref.current;
         if (!node) return;
         const previous = node.ownerDocument.activeElement as HTMLElement | null;
-        (initialFocus?.current ?? visibleControls(node)[0] ?? node).focus();
+        (
+            initialFocus?.current ??
+            visibleControls(node).find(
+                (control) => control !== embeddedFocusStart.current
+            ) ??
+            node
+        ).focus();
         return () => {
             if (previous?.isConnected) previous.focus();
         };
@@ -343,9 +369,34 @@ function Dialog(props: {
                         event.preventDefault();
                         event.stopPropagation();
                         props.onClose();
-                    } else trapFocus(event);
+                    } else
+                        trapFocus(
+                            event,
+                            event.currentTarget,
+                            embeddedFocusStart.current
+                        );
                 },
             },
+            props.embeddedTabOrder
+                ? h('span', {
+                      ref: embeddedFocusStart,
+                      tabIndex: 0,
+                      'aria-hidden': true,
+                      style: {
+                          position: 'absolute',
+                          width: 1,
+                          height: 1,
+                          overflow: 'hidden',
+                          clipPath: 'inset(50%)',
+                      },
+                      onFocus: () => {
+                          // Tab events inside an iframe do not reach the dialog.
+                          const node = ref.current;
+                          if (!node) return;
+                          (visibleControls(node).at(-1) ?? node).focus();
+                      },
+                  })
+                : null,
             h('h2', { id }, props.title),
             props.children
         )
@@ -1848,6 +1899,7 @@ function Shell(props: CompletePortalShellProps) {
         welcome && !welcome.dismissed && welcome.messageHtml.trim()
             ? h(Dialog, {
                   title: welcome.title,
+                  embeddedTabOrder: true,
                   onClose: () =>
                       emit({ type: 'dismiss-welcome', welcomeId: welcome.id }),
                   children: h(

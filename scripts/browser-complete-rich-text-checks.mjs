@@ -117,6 +117,135 @@ export function installCompleteRichTextFocusObserver({
     };
 }
 
+async function checkCodeImagePaste({
+    page,
+    editor,
+    focusEditor,
+    reset,
+    snapshot,
+    evidence,
+}) {
+    const original = '```\nAlpha Beta\n```';
+    const replacement = '*literal*';
+    // The native code block retains the trailing editable paragraph on a write.
+    const replaced = '```\nAlpha *literal*\n```\n\n\n';
+    const code = editor.locator('pre code');
+    const selectBeta = async () => {
+        await reset(original);
+        await code.waitFor();
+        await focusEditor();
+        await code.evaluate((node) => {
+            const content = node.firstChild;
+            if (!(content instanceof Text) || content.data !== 'Alpha Beta') {
+                throw new Error('Expected one owned code text node');
+            }
+            document.getSelection().setBaseAndExtent(content, 6, content, 10);
+        });
+        await page.waitForFunction(() => {
+            const current = window.completeRichTextProbe.snapshot();
+            return (
+                current.focused &&
+                current.nativeSelection.text === 'Beta' &&
+                current.selection.from === 7 &&
+                current.selection.to === 11
+            );
+        });
+        const before = await snapshot();
+        assert.equal(before.state.value, original);
+        return before;
+    };
+    const paste = (text) =>
+        editor.evaluate((node, text) => {
+            const transfer = new DataTransfer();
+            if (text === null) {
+                const png = Uint8Array.from(
+                    atob(
+                        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV1sAAAAASUVORK5CYII='
+                    ),
+                    (byte) => byte.charCodeAt(0)
+                );
+                transfer.items.add(
+                    new File([png], 'owned.png', { type: 'image/png' })
+                );
+            } else {
+                transfer.setData('text/plain', text);
+            }
+            const payload = {
+                types: Array.from(transfer.types),
+                plain: transfer.getData('text/plain'),
+                html: transfer.getData('text/html'),
+                files: Array.from(transfer.files, ({ name, type, size }) => ({
+                    name,
+                    type,
+                    size,
+                })),
+            };
+            const validPayload =
+                text === null
+                    ? payload.types.join() === 'Files' &&
+                      payload.plain === '' &&
+                      payload.html === '' &&
+                      payload.files.length === 1 &&
+                      payload.files[0].type === 'image/png' &&
+                      payload.files[0].size === 68
+                    : payload.types.join() === 'text/plain' &&
+                      payload.plain === text &&
+                      payload.html === '' &&
+                      payload.files.length === 0;
+            if (!validPayload)
+                throw new Error('Unexpected owned paste payload');
+            const event = new ClipboardEvent('paste', {
+                bubbles: true,
+                cancelable: true,
+                clipboardData: transfer,
+            });
+            node.dispatchEvent(event);
+            return {
+                payload,
+                trusted: event.isTrusted,
+                prevented: event.defaultPrevented,
+            };
+        }, text);
+    const beforeImage = await selectBeta();
+    const image = await paste(null);
+    const afterImage = await snapshot();
+    evidence.codeImagePaste = { image, beforeImage, afterImage };
+    assert.deepEqual(image.payload, {
+        types: ['Files'],
+        plain: '',
+        html: '',
+        files: [{ name: 'owned.png', type: 'image/png', size: 68 }],
+    });
+    assert.equal(image.trusted, false);
+    assert.equal(image.prevented, true);
+
+    const beforeText = await selectBeta();
+    const text = await paste(replacement);
+    await page.waitForFunction(
+        (expected) =>
+            window.completeRichTextProbe.snapshot().state.value === expected,
+        replaced
+    );
+    const afterText = await snapshot();
+    Object.assign(evidence.codeImagePaste, { text, beforeText, afterText });
+    assert.deepEqual(text.payload, {
+        types: ['text/plain'],
+        plain: replacement,
+        html: '',
+        files: [],
+    });
+    assert.equal(await code.textContent(), 'Alpha *literal*');
+    assert.deepEqual(afterText.writes.slice(beforeText.writes.length), [
+        { owner: beforeText.state.owner, value: replaced },
+    ]);
+
+    assert.equal(afterImage.state.value, beforeImage.state.value);
+    assert.equal(afterImage.dom.html, beforeImage.dom.html);
+    assert.deepEqual(afterImage.writes, beforeImage.writes);
+    assert.deepEqual(afterImage.selection, beforeImage.selection);
+    assert.deepEqual(afterImage.nativeSelection, beforeImage.nativeSelection);
+}
+
 // An owned, in-memory consumer of the installed packed public API. No saved
 // customer fixture, identity, provider, API transport or clipboard grant is used.
 export async function checkCompleteRichTextBrowser({
@@ -124,6 +253,7 @@ export async function checkCompleteRichTextBrowser({
     consumer,
     evidence,
     output,
+    codeImagePasteOnly = false,
 }) {
     Object.assign(evidence, {
         status: 'running',
@@ -420,6 +550,22 @@ window.completeRichTextProbe={
                     window.completeRichTextProbe.snapshot().focusReadiness.ready
             );
         };
+        const checkCodePaste = () =>
+            checkCodeImagePaste({
+                page,
+                editor,
+                focusEditor,
+                reset,
+                snapshot,
+                evidence,
+            });
+        if (codeImagePasteOnly) {
+            evidence.phase = 'code-image-paste';
+            await checkCodePaste();
+            await finish('code-image-paste');
+            evidence.status = 'passed';
+            return;
+        }
         let state = await snapshot();
         assert.equal(state.roots, 1);
         assert.equal(state.dom.editable, 'true');
@@ -689,6 +835,9 @@ window.completeRichTextProbe={
         );
         await finish('native-paste');
 
+        evidence.phase = 'code-image-paste';
+        await checkCodePaste();
+
         evidence.phase = 'checkbox-storage-readonly';
         await reset('[ ] Owned task');
         const checkbox = editor.locator('input[type=checkbox]');
@@ -944,6 +1093,6 @@ window.completeRichTextProbe={
                 failure ??= error;
             }
         }
+        if (failure) throw failure;
     }
-    if (failure) throw failure;
 }

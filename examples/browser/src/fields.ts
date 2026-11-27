@@ -602,15 +602,28 @@ export function mountBoundFormField(
         }
         node.append(labeled(initial.field?.title ?? '', input), status);
         let destroyed = false;
+        const stockNumber =
+            initial.scalar?.kind === 'number' &&
+            schema.fieldType === AirtableFieldType.NUMBER &&
+            schema.airtableField.config.type === AirtableFieldType.NUMBER;
+        let applyingNumberInput = false;
         const change = () => {
             if (destroyed || !binding.getSnapshot().canEdit) return;
             beforeChange?.();
-            const accepted =
-                input.type === 'checkbox'
-                    ? binding.scalar!.setChecked(input.checked)
-                    : binding.date
-                      ? binding.date.setInput(input.value)
-                      : binding.scalar!.setInput(input.value);
+            const wasApplyingNumberInput = applyingNumberInput;
+            applyingNumberInput = stockNumber;
+            let accepted: boolean;
+            try {
+                accepted =
+                    input.type === 'checkbox'
+                        ? binding.scalar!.setChecked(input.checked)
+                        : binding.date
+                          ? binding.date.setInput(input.value)
+                          : binding.scalar!.setInput(input.value);
+            } finally {
+                applyingNumberInput = wasApplyingNumberInput;
+                if (stockNumber && !applyingNumberInput && !destroyed) render();
+            }
             if (accepted) changed();
         };
         input.addEventListener('input', change);
@@ -630,7 +643,13 @@ export function mountBoundFormField(
             node.inert = !state.canEdit;
             input.disabled = !state.canEdit || state.date?.canEdit === false;
             input.checked = state.scalar?.checked ?? false;
-            input.value = state.date?.input ?? state.scalar?.input ?? '';
+            const nextInput = state.date?.input ?? state.scalar?.input ?? '';
+            // The binding can publish canonical text before restoring the draft.
+            if (
+                !stockNumber ||
+                (!applyingNumberInput && input.value !== nextInput)
+            )
+                input.value = nextInput;
             input.setAttribute(
                 'aria-invalid',
                 String(

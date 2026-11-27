@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
+import Papa from 'papaparse';
 import {
     projectCSVExport,
     createCSVExportController,
@@ -378,6 +379,109 @@ it('keeps unresolved linked labels private with the standalone formatter', () =>
     });
     assert.equal(document.rows[0][0].readableValue, 'Unavailable');
     assert(!JSON.stringify(document).includes('recSecret'));
+});
+
+it('downloads admitted collaborator labels in order without recovering unavailable email', async () => {
+    const zeta = {
+        id: 'usrZeta',
+        name: 'Zeta Person',
+        email: 'z@example.invalid',
+    };
+    const fallback = {
+        id: 'usrEmail',
+        name: '',
+        email: 'fallback@example.invalid',
+    };
+    const alpha = {
+        id: 'usrAlpha',
+        name: 'Alpha Person',
+        email: 'a@example.invalid',
+    };
+    const unavailable = { id: 'usrUnavailable', name: '', email: '' };
+    const hiddenEmail = 'unavailable@example.invalid';
+    const choices = [{ ...unavailable, email: hiddenEmail }];
+    const team = {
+        id: 'fldTeam',
+        name: 'Collaborators',
+        config: {
+            type: AirtableFieldType.MULTIPLE_COLLABORATORS,
+            options: { choices },
+        },
+    } as const;
+    const owner = {
+        id: 'fldOwner',
+        name: 'Owner',
+        config: {
+            type: AirtableFieldType.SINGLE_COLLABORATOR,
+            options: { choices },
+        },
+    } as const;
+    let hiddenReads = 0;
+    const hidden = {
+        field: { ...owner, id: 'fldHidden', name: 'Redacted column' },
+        get value() {
+            hiddenReads++;
+            return choices[0]!;
+        },
+    };
+    const recEmail = row([
+        { field: team, value: [fallback] },
+        { field: owner, value: fallback },
+        hidden,
+    ]);
+    const recTeam = row([
+        { field: team, value: [zeta, fallback, alpha, zeta] },
+        { field: owner, value: zeta },
+    ]);
+    const recEmpty = row([{ field: team, value: [] }]);
+    const recUnavailable = row([
+        { field: team, value: [unavailable] },
+        { field: owner, value: unavailable },
+    ]);
+    const f = platform();
+    const controller = createCSVExportController({
+        readCurrent: () => ({
+            input: {
+                ...input(),
+                columns: [
+                    { key: team.name, title: team.name },
+                    { key: owner.name, title: owner.name },
+                    {
+                        key: hidden.field.name,
+                        title: hidden.field.name,
+                        isHidden: true,
+                    },
+                ],
+                rows: [recEmail, recTeam, recEmpty, recUnavailable],
+            },
+            filename: 'Synthetic collaborators.csv',
+            platform: f.boundary,
+        }),
+    });
+
+    assert.equal((await controller.request()).status, 'delivered');
+    assert.equal(f.clicks.length, 1);
+    assert.equal(f.clicks[0]?.download, 'Synthetic collaborators.csv');
+    assert.equal(f.texts.length, 1);
+    assert.equal(hiddenReads, 0);
+    assert(!f.texts[0]!.includes(hiddenEmail));
+    const parsed = Papa.parse(f.texts[0]!.trimEnd(), {
+        delimiter: ',',
+        dynamicTyping: false,
+        worker: false,
+        download: false,
+    });
+    assert.deepEqual(parsed.errors, []);
+    assert.deepEqual(parsed.data, [
+        ['Collaborators', 'Owner'],
+        ['fallback@example.invalid', 'fallback@example.invalid'],
+        [
+            'Zeta Person, fallback@example.invalid, Alpha Person, Zeta Person',
+            'Zeta Person',
+        ],
+        ['', ''],
+        ['', ''],
+    ]);
 });
 
 it('uses current confirmation data/policy and zero/99/100 row boundaries', async () => {

@@ -297,12 +297,13 @@ export function DocumentPDF(props: PDFProps): ReactNode {
         text: string,
         label: string,
         change: () => void,
-        disabled = false
+        disabled = false,
+        key = `label:${label}`
     ) =>
         h(
             ActionButton,
             {
-                key: label,
+                key,
                 'aria-label': label,
                 disabled,
                 onClick: (event: SyntheticEvent) => {
@@ -369,7 +370,9 @@ export function DocumentPDF(props: PDFProps): ReactNode {
                       allPages
                           ? props.labels.showSinglePage
                           : props.labels.showAllPages,
-                      () => setAllPages((value) => !value)
+                      () => setAllPages((value) => !value),
+                      false,
+                      'page-mode'
                   ),
                   props.onDownload
                       ? action(

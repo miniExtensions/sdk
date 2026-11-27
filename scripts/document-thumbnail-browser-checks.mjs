@@ -481,14 +481,75 @@ export async function checkDocumentThumbnailBrowser({
                 initialWidth
             );
             await click('Reset zoom');
+            const waitForPages = (expected) =>
+                page.waitForFunction((pages) => {
+                    const rendered = Array.from(
+                        document.querySelectorAll(
+                            '#document-host [data-rendered-page]'
+                        ),
+                        (node) => node.getAttribute('data-rendered-page')
+                    );
+                    return (
+                        rendered.length === pages.length &&
+                        rendered.every((value, i) => value === pages[i])
+                    );
+                }, expected);
+            await waitForPages(['2']);
+            const toggle = (name) =>
+                display().getByRole('button', { name, exact: true });
+            const originalToggle =
+                await toggle('Show all pages').elementHandle();
+            assert.ok(originalToggle);
+            const readFocus = (name) =>
+                toggle(name).evaluate(
+                    (node, original) => ({
+                        same: node === original,
+                        active: node.ownerDocument.activeElement === node,
+                        activeTag: node.ownerDocument.activeElement?.tagName,
+                    }),
+                    originalToggle
+                );
+            const countURLs = () =>
+                page.evaluate(
+                    () => window.documentFixture.snapshot().made.length
+                );
+            const urlsBefore = await countURLs();
+            let downloads = 0;
+            const countDownload = () => downloads++;
+            page.on('download', countDownload);
+            profile.pageModeFocus = {};
+            try {
+                await toggle('Show all pages').focus();
+                await page.keyboard.press('Enter');
+                await waitForPages(['1', '2']);
+                const enter = await readFocus('Show one page');
+                profile.pageModeFocus.enter = enter;
+                assert.deepEqual(enter, {
+                    same: true,
+                    active: true,
+                    activeTag: 'BUTTON',
+                });
+
+                await page.keyboard.press('Space');
+                await waitForPages(['2']);
+                const space = await readFocus('Show all pages');
+                profile.pageModeFocus.space = space;
+                assert.deepEqual(space, {
+                    same: true,
+                    active: true,
+                    activeTag: 'BUTTON',
+                });
+                assert.equal(await countURLs(), urlsBefore);
+                assert.equal(downloads, 0);
+            } finally {
+                profile.pageModeFocus.downloads = downloads;
+                page.off('download', countDownload);
+                await originalToggle.dispose();
+            }
             await click('Show all pages');
-            await page.waitForFunction(
-                () =>
-                    document.querySelectorAll(
-                        '#document-host [data-rendered-page]'
-                    ).length === 2
-            );
+            await waitForPages(['1', '2']);
             await click('Show one page');
+            await waitForPages(['2']);
             const [download] = await Promise.all([
                 page.waitForEvent('download'),
                 click('Download'),

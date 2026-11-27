@@ -272,29 +272,49 @@ it('cancels a focused tooltip when focus leaves before its optional popup commit
     f.unchangedEffects();
 });
 
-it('retains exactly one hidden tooltip help target beside a separately focusable popup', async (t) => {
+it('retains the tooltip description without an invisible help link in the tab order', async (t) => {
     const f = await fixture(t);
     await f.render(
         shell({
-            description: '<p>Tooltip <strong>help</strong></p>',
+            description: '<p>Read <a href="#guide">Guide</a></p>',
             descriptionPlacement: 'tooltip',
         })
     );
     const control = textarea(f);
     const help = describedNodes(f, control)[0];
     assert.ok(help.classList.contains('mx-sdk-field-sr-only'));
-    assert.equal(help.textContent, 'Tooltip help');
+    assert.equal(help.textContent, 'Read Guide');
+    const hiddenLink = help.querySelector('a[href="#guide"]');
+    assert.ok(hiddenLink);
+    assert.equal(
+        hiddenLink.closest('[hidden]') === help,
+        true,
+        'The description link must be excluded from keyboard focus'
+    );
     assert.equal(
         f.window.document.body.querySelector('[role="tooltip"]'),
         null
     );
     const button = trigger(f);
     assert.equal(button.type, 'button');
-    await act(async () => button.focus());
+    await act(async () => {
+        button.focus();
+        await import('../src/react/fieldTooltipPopup.js');
+    });
     assert.equal(f.window.document.activeElement, button);
     const popup = f.window.document.body.querySelector('[role="tooltip"]');
     assert.ok(popup);
-    assert.equal(popup.textContent, 'Tooltip help');
+    assert.equal(popup.textContent, 'Read Guide');
+    const usableLinks = [
+        ...f.window.document.body.querySelectorAll('a'),
+    ].filter(
+        (link) =>
+            link.getAttribute('href') === '#guide' &&
+            !link.closest('[hidden]') &&
+            link.tabIndex >= 0
+    );
+    assert.equal(usableLinks.length, 1);
+    assert.ok(popup.contains(usableLinks[0] ?? null));
     assert.equal(button.getAttribute('aria-describedby'), popup.id);
     assert.equal(f.container.querySelectorAll(`[id="${help.id}"]`).length, 1);
     assertUniqueIds(f);
@@ -311,6 +331,8 @@ it('retains exactly one hidden tooltip help target beside a separately focusable
         null
     );
     assert.equal(button.getAttribute('aria-describedby'), null);
+    assert.ok(describedNodes(f, control)[0] === help);
+    assert.equal(help.textContent, 'Read Guide');
     await f.click(button);
     assert.ok(f.window.document.body.querySelector('[role="tooltip"]'));
     f.unchangedEffects();

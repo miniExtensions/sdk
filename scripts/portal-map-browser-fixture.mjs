@@ -16,7 +16,7 @@ function makePortalMapProps({ name, provider, rows, owner, identity, privateMark
                 projection: { status: 'present', layout: 'map', primary: row.label,
                     primaryIsEmpty: false, unrecognizedHiddenField: privateMarker },
                 unrecognizedPrivateData: privateMarker,
-                open: { label: 'Open ' + row.label, activate: () => onOpen(row), registerTrigger },
+                open: { label: row.openLabel ?? 'Open ' + row.label, activate: () => onOpen(row), registerTrigger },
                 needsReviewLabel: 'Review required' }
         })),
         label: 'Portal Map ' + name, loadingLabel: 'Synthetic Map loading',
@@ -130,6 +130,11 @@ function observedBinding(owner, selected = configuration, copy = 'primary') {
 }
 function initialRows(name) {
     if (mode === 'empty' || mode === 'failure' || mode === 'unmanaged') return [];
+    if (mode === 'colocation-touch') return [
+        { key: 'bay-a', label: 'Bay A', openLabel: 'Open', lat: 5, lng: -11 },
+        { key: 'warehouse-booking-b', label: 'Warehouse booking B', openLabel: 'Open', lat: 5, lng: -11 },
+        { key: 'depot-c', label: 'Depot C', openLabel: 'Open', lat: 15, lng: 0 }
+    ];
     return [{ key: name + '-initial', label: name + ' initial', lat: 1, lng: 2 }];
 }
 let serverSection = null, serverLoading = null;
@@ -266,6 +271,11 @@ window.portalMapProof = {
     laterRows(name = 'first') { setRows(name, [
         { key: name + '-later', label: name + ' later', lat: 9, lng: 10 }
     ]); },
+    removeColocatedWarehouse() {
+        if (mode !== 'colocation-touch') throw Error('Touch fixture required');
+        const item = requireRoot('first');
+        setRows('first', item.rows.filter(row => row.key !== 'warehouse-booking-b'));
+    },
     retireCardOwner(name = 'first') {
         requireRoot(name).cardOwner.advance(); stats.explicitCardRetirements++;
     },

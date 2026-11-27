@@ -27,6 +27,10 @@ import {
     portalMapNodeSSRFixture,
 } from './portal-map-browser-fixture.mjs';
 import { portalMapGoogleBrowserBoundary } from './portal-map-google-browser-boundary.mjs';
+import {
+    assertPortalMapColocationTouchCandidate,
+    capturePortalMapColocationTouchCandidate,
+} from './portal-map-colocation-touch-checks.mjs';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 function regular(path) {
@@ -456,9 +460,15 @@ export async function checkPortalMapBrowser({
                         : '';
                 const bundle =
                     format + (mode === 'mixed' ? '.mixed' : '') + '.bundle.js';
+                const fitTouchViewport =
+                    mode === 'colocation-touch'
+                        ? '.portal-map-proof-root{width:100%;box-sizing:border-box}'
+                        : '';
                 response.setHeader('Content-Type', 'text/html');
                 return response.end(
-                    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Portal Map proof</title><link rel="stylesheet" href="/portal-map.css"><style>body{margin:0;padding:16px;background:#f8fafc}main{display:flex;gap:24px;flex-wrap:wrap}.portal-map-proof-root{width:640px;height:480px;border:1px solid #94a3b8}.mx-sdk-portal-map{height:100%}</style><main>' +
+                    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Portal Map proof</title><link rel="stylesheet" href="/portal-map.css"><style>body{margin:0;padding:16px;background:#f8fafc}main{display:flex;gap:24px;flex-wrap:wrap}.portal-map-proof-root{width:640px;height:480px;border:1px solid #94a3b8}.mx-sdk-portal-map{height:100%}' +
+                        fitTouchViewport +
+                        '</style><main>' +
                         main +
                         '</main><script type="module" src="/' +
                         bundle +
@@ -556,8 +566,12 @@ export async function checkPortalMapBrowser({
         };
         async function visit(format, mode) {
             await closeCurrent();
+            const touch = mode === 'colocation-touch';
             const context = await browser.newContext({
-                viewport: { width: 1440, height: 1100 },
+                viewport: touch
+                    ? { width: 390, height: 780 }
+                    : { width: 1440, height: 1100 },
+                ...(touch && { hasTouch: true, isMobile: true }),
                 serviceWorkers: 'block',
             });
             const responseGate = deferred(),
@@ -993,6 +1007,54 @@ export async function checkPortalMapBrowser({
 
         for (const format of ['esm', 'cjs']) {
             const cases = [];
+            {
+                const touchCases = [];
+                const name = 'colocation-touch';
+                evidence.phase = format + ':' + name;
+                const item = await visit(format, name);
+                await bounded(
+                    'Actual Loader bootstrap request',
+                    () => item.providerSeen.promise
+                );
+                item.responseGate.resolve('fulfill');
+                await waitCards('first', 3);
+                await item.page.evaluate(() =>
+                    window.portalMapGoogleBoundary.draw()
+                );
+                evidence.colocationTouch ??= {};
+                const observation = {};
+                evidence.colocationTouch[format] = observation;
+                await capturePortalMapColocationTouchCandidate(item.page, {
+                    observation,
+                    onDialog: (recordId) =>
+                        item.page.screenshot({
+                            path: join(
+                                output,
+                                `portal-map-${format}-${name}-${recordId}-choices.png`
+                            ),
+                            fullPage: true,
+                        }),
+                });
+                await record(touchCases, format, name);
+                assert.equal(item.providerRequests, 1);
+                assert.equal(item.routeFulfilled, 1);
+                assert.equal(item.routeAborted, 0);
+                assert.equal(item.callbackValidated, true);
+                assert.equal(evidence.externalProviderEgress, 0);
+                await item.page.evaluate(() =>
+                    window.portalMapProof.unmount('first')
+                );
+                const cleanupAfterUnmount = await assertPrivateSafe();
+                assertCleanBoundary(cleanupAfterUnmount.boundary);
+                assert.deepEqual(cleanupAfterUnmount.host.mounted, []);
+                assert.equal(
+                    cleanupAfterUnmount.host.triggerRegistrations,
+                    cleanupAfterUnmount.host.triggerReleases
+                );
+                touchCases[0].cleanupAfterUnmount = cleanupAfterUnmount;
+                assertPortalMapColocationTouchCandidate(observation);
+                observation.case = touchCases[0];
+            }
             evidence.phase = format + ':shared-default-loader';
             let item = await visit(format, 'shared');
             item.mode = 'shared';
@@ -1622,7 +1684,7 @@ export async function checkPortalMapBrowser({
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.status = 'passed';
         evidence.scope =
-            'Actual packed SDK ESM/CJS PortalMap, class GoogleMap, OverlayViewF, default driver and one direct Loader1.16.8; actual browser layout/keyboard/portals under StrictMode, byte-identical physical installed SDK copies using opposite ESM/CJS trees and sharing one host coordinator, and actual no-DOM packed Node SSR followed by hydrateRoot preserving loading nodes without recoverable errors. Only intercepted Google JS/API is synthetic. No real provider egress, Google geography/gestures, key delivery, native host or persistence acceptance.';
+            'Actual packed SDK ESM/CJS PortalMap, class GoogleMap, OverlayViewF, default driver and one direct Loader1.16.8; actual browser layout, keyboard, shared-point touch and portals under StrictMode, byte-identical physical installed SDK copies using opposite ESM/CJS trees and sharing one host coordinator, and actual no-DOM packed Node SSR followed by hydrateRoot preserving loading nodes without recoverable errors. Only intercepted Google JS/API is synthetic. No real provider egress, Google geography/gestures, key delivery, native host or persistence acceptance.';
     } catch (error) {
         const sensitiveDiagnostic =
             String(error.message).includes(portalMapSyntheticKey) ||

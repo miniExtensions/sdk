@@ -102,12 +102,14 @@ function RemoveAttachmentTile({
     onRemove,
     testId,
     label,
+    filename,
     resourceUrl,
     formRemovalOwner,
 }: {
     onRemove(): void;
     testId: string;
     label: string;
+    filename?: string | null;
     resourceUrl: string;
     formRemovalOwner?: object;
 }) {
@@ -190,11 +192,13 @@ function RemoveAttachmentTile({
                       spacePress.current = null;
                   },
               };
+    const name = filename?.trim();
     const control = {
         ...gestures,
         className: `${gallery}__remove`,
         onClick,
         'data-testid': testId,
+        'aria-label': name ? `${label}: ${name}` : undefined,
     };
     return h(
         ActionButton,
@@ -322,6 +326,7 @@ export function AttachmentGallery(
                               `removeAttachmentButton-${row.url}`,
                           onRemove: () => onRemove(index),
                           label: labels.remove,
+                          filename: row.filename,
                       })
                     : null,
                 props.showOpen && props.onAnnotate && row.annotationAllowed

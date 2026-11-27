@@ -30,6 +30,20 @@ export function hasFieldDescription(html: string | null | undefined): boolean {
     );
 }
 
+/** The interactive controls rendered by a rich field description. */
+export function fieldHelpTabStops(popup: HTMLElement): HTMLElement[] {
+    const view = popup.ownerDocument.defaultView;
+    return Array.from(
+        popup.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)')
+    ).filter(
+        (control) =>
+            control.tabIndex >= 0 &&
+            !control.closest('[inert]') &&
+            control.getClientRects().length > 0 &&
+            view?.getComputedStyle(control).visibility === 'visible'
+    );
+}
+
 /** Call once per mounted field; React owns SSR/hydration-safe instance identity. */
 export function useFieldPresentationAssociation(options: {
     kind: FieldPresentationAssociation['kind'];

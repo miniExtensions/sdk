@@ -1,5 +1,7 @@
 import {
+    createContext,
     createElement as h,
+    useContext,
     useState,
     useRef,
     useEffect,
@@ -15,6 +17,7 @@ import {
     CompleteTruncatedDescription,
 } from './html/index.js';
 import {
+    fieldHelpTabStops,
     hasFieldDescription,
     useFieldPresentationAssociation,
     fieldPresentationDescribedBy,
@@ -24,6 +27,7 @@ import {
 
 // Keep optional popup dependencies out of the ordinary leaf import path.
 const FieldTooltipPopup = lazy(() => import('./fieldTooltipPopup.js'));
+export const GridHeaderHelpKeyboard = createContext(false);
 
 export type CompleteFormFieldPresentationProps = {
     /** Already projected by the host. No conditional or writer evaluation occurs here. */
@@ -62,6 +66,7 @@ export type CompleteFormFieldPresentationProps = {
 export function CompleteFormFieldPresentation(
     props: CompleteFormFieldPresentationProps
 ): ReactNode {
+    const gridHeaderHelpKeyboard = useContext(GridHeaderHelpKeyboard);
     const association = useFieldPresentationAssociation({
         kind: props.loading != null ? 'group' : props.associationKind,
         formId: props.formId,
@@ -249,6 +254,26 @@ export function CompleteFormFieldPresentation(
                       : null
               );
     const tooltipId = `${association.controlId}-tooltip`;
+    const enterGridHeaderHelp = (event: KeyboardEvent<HTMLButtonElement>) => {
+        if (
+            event.key !== 'Tab' ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.defaultPrevented ||
+            !descriptionAdmitted()
+        )
+            return;
+        const document = event.currentTarget.ownerDocument;
+        const popup = document.getElementById(tooltipId);
+        const first = popup && fieldHelpTabStops(popup)[0];
+        first?.focus();
+        if (first && document.activeElement === first) {
+            event.preventDefault();
+            cancelClose();
+        }
+    };
     const content =
         props.loading ??
         props.children({
@@ -322,6 +347,8 @@ export function CompleteFormFieldPresentation(
                                           cancelClose();
                                           setTooltipOpen(false);
                                           event.stopPropagation();
+                                      } else if (gridHeaderHelpKeyboard) {
+                                          enterGridHeaderHelp(event);
                                       }
                                   },
                               },
@@ -341,6 +368,8 @@ export function CompleteFormFieldPresentation(
                                             onMouseEnter: openTooltip,
                                             onMouseLeave: leaveTooltip,
                                             keepOpenOnAnchorInteraction: true,
+                                            gridHeaderKeyboard:
+                                                gridHeaderHelpKeyboard,
                                             admitDescription:
                                                 props.admitDescription,
                                         },

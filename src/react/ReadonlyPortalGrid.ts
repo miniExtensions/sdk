@@ -12,7 +12,10 @@ import {
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
-import { CompleteFormFieldPresentation } from './CompleteFormFieldPresentation.js';
+import {
+    CompleteFormFieldPresentation,
+    GridHeaderHelpKeyboard,
+} from './CompleteFormFieldPresentation.js';
 
 export type ReadonlyPortalGridHeaderIcon =
     | 'text'
@@ -404,21 +407,25 @@ function GridHeader({
                 },
             },
             headerIcon(column.icon),
-            h(CompleteFormFieldPresentation, {
-                title: column.title,
-                fieldName: column.title,
-                associationKind: 'group',
-                description: column.description,
-                descriptionImageUrl: column.descriptionImageUrl,
-                descriptionPlacement: 'tooltip',
-                admitDescription: isCurrent,
-                preview,
-                previewControlProps: preview
-                    ? { 'data-config-preview-canvas-control': 'true' }
-                    : undefined,
-                className: 'mx-sdk-readonly-grid__field-heading',
-                children: () => null,
-            })
+            h(
+                GridHeaderHelpKeyboard.Provider,
+                { value: true },
+                h(CompleteFormFieldPresentation, {
+                    title: column.title,
+                    fieldName: column.title,
+                    associationKind: 'group',
+                    description: column.description,
+                    descriptionImageUrl: column.descriptionImageUrl,
+                    descriptionPlacement: 'tooltip',
+                    admitDescription: isCurrent,
+                    preview,
+                    previewControlProps: preview
+                        ? { 'data-config-preview-canvas-control': 'true' }
+                        : undefined,
+                    className: 'mx-sdk-readonly-grid__field-heading',
+                    children: () => null,
+                })
+            )
         ),
         onCommit &&
             h('span', {

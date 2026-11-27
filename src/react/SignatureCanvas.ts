@@ -82,6 +82,8 @@ export const SignatureCanvas: ForwardRefExoticComponent<
             let timer: ReturnType<typeof setTimeout> | undefined;
             let width: number | undefined;
             let height: number | undefined;
+            let layoutWidth: number | undefined;
+            let layoutHeight: number | undefined;
             const pad = new SignaturePad(canvas);
             live.current = pad;
             const begin = () => {
@@ -90,14 +92,21 @@ export const SignatureCanvas: ForwardRefExoticComponent<
             pad.addEventListener('beginStroke', begin);
             const scale = () => {
                 if (!active) return;
+                const cssWidth = canvas.offsetWidth;
+                const cssHeight = canvas.offsetHeight;
+                // A hidden host has no layout size. Keep any existing ink.
+                if (cssWidth === 0 || cssHeight === 0) return;
                 const ratio = Math.max(view.devicePixelRatio || 1, 1);
-                const nextWidth = canvas.offsetWidth * ratio;
-                const nextHeight = canvas.offsetHeight * ratio;
+                const nextWidth = Math.floor(cssWidth * ratio);
+                const nextHeight = Math.floor(cssHeight * ratio);
                 if (width === nextWidth && height === nextHeight) return;
                 width = nextWidth;
                 height = nextHeight;
                 canvas.width = nextWidth;
                 canvas.height = nextHeight;
+                // Attribute writes can affect intrinsic size when CSS leaves it auto.
+                layoutWidth = canvas.offsetWidth;
+                layoutHeight = canvas.offsetHeight;
                 canvas.getContext('2d')?.scale(ratio, ratio);
                 pad.clear();
                 committed.current.onDraft(true);
@@ -107,10 +116,21 @@ export const SignatureCanvas: ForwardRefExoticComponent<
                 timer = setTimeout(scale, 150);
             };
             scale();
+            const observer =
+                view.ResizeObserver &&
+                new view.ResizeObserver(() => {
+                    if (
+                        canvas.offsetWidth !== layoutWidth ||
+                        canvas.offsetHeight !== layoutHeight
+                    )
+                        resize();
+                });
+            observer?.observe(host);
             view.addEventListener('resize', resize);
             return () => {
                 active = false;
                 clearTimeout(timer);
+                observer?.disconnect();
                 view.removeEventListener('resize', resize);
                 pad.removeEventListener('beginStroke', begin);
                 pad.off();

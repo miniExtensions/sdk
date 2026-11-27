@@ -10,16 +10,17 @@ import { assertBrowserInputs } from './package-checks.mjs';
 
 const fixture = String.raw`
 const stats={stores:[],rasters:[],writes:[],releases:[],recoveries:[],submits:0};
-let patch,resolveReceipt,referenceRef,adapterRef,capturedRaster,adapterEmpty=true;let canonical={owner:'A',value:[{id:'old',url:'https://example.invalid/old'}]};
+const hiddenDraw=new URLSearchParams(location.search).has('hiddenDraw');
+let patch,resolveReceipt,referenceRef,adapterRef,capturedRaster,adapterEmpty=true;let canonical={owner:'A',value:hiddenDraw?[]:[{id:'old',url:'https://example.invalid/old'}]};
 const all={allowTypedSignature:true,allowDrawnSignature:true,allowUploadedSignature:true};
 const attachment={id:null,url:'https://example.invalid/signature.png',filename:'signature.png',type:'image/png'};
-function App(){referenceRef=React.useRef();adapterRef=React.useRef();const [state,setState]=React.useState({owner:'A',config:all,value:canonical.value,mounted:true});
+function App(){referenceRef=React.useRef();adapterRef=React.useRef();const [state,setState]=React.useState({owner:'A',config:hiddenDraw?{allowDrawnSignature:true}:all,value:canonical.value,mounted:true});
 patch=next=>{Object.assign(canonical,next);flushSync(()=>setState(old=>({...old,...next})));};
 const storage={async store(file,authority){stats.stores.push({name:file.name,type:file.type,size:file.size,authority});
 const image=await createImageBitmap(file);const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);image.close();capturedRaster=c;const pixels=ctx.getImageData(0,0,c.width,c.height).data;let painted=0,transparent=0;for(let i=0;i<pixels.length;i+=4){if(pixels[i+3]===0)transparent++;if(pixels[i]<128&&pixels[i+3]>0)painted++;}stats.rasters.push({width:c.width,height:c.height,corner:[...pixels.slice(0,4)],painted,transparent});
 return new Promise(resolve=>{resolveReceipt=()=>resolve({attachment,release:async()=>{stats.releases.push(authority.operationId);return 'released';}});});}};
 return h('form',{onSubmit:e=>{e.preventDefault();stats.submits++;throw Error('Signature submitted form');}},
-h('section',{id:'first'},state.mounted&&h(SignatureField,{id:'first-canvas',ownerIdentity:state.owner,value:state.value,config:state.config,storage,onRecovery:r=>stats.recoveries.push(r.phase),appendCurrent(request){if(canonical.owner!==request.ownerIdentity)return 'retired';canonical.value=canonical.value.concat(request.attachment);stats.writes.push([...canonical.value]);flushSync(()=>setState(old=>({...old,value:canonical.value})));return 'appended';}})),
+h('section',{id:'first',hidden:hiddenDraw},state.mounted&&h(SignatureField,{id:'first-canvas',ownerIdentity:state.owner,value:state.value,config:state.config,storage,onRecovery:r=>stats.recoveries.push(r.phase),appendCurrent(request){if(canonical.owner!==request.ownerIdentity)return 'retired';canonical.value=canonical.value.concat(request.attachment);stats.writes.push([...canonical.value]);flushSync(()=>setState(old=>({...old,value:canonical.value})));return 'appended';}})),
 withReference&&h('section',{id:'adapter-reference'},h(SignatureCanvas,{ref:adapterRef,id:'adapter-canvas',label:'Adapter reference',onDraft:empty=>{adapterEmpty=empty;}})),
 withReference&&h('section',{id:'wrapper-reference'},h(ReferencePad,{ref:referenceRef,canvasProps:{className:'mx-sdk-signature-canvas'}})),
 h('section',{id:'second'},h(SignatureField,{id:'second-canvas',ownerIdentity:'independent',value:[],storage,onRecovery:r=>stats.recoveries.push(r.phase),appendCurrent(){throw Error('Second canvas unexpectedly appended');}})));
@@ -27,6 +28,126 @@ h('section',{id:'second'},h(SignatureField,{id:'second-canvas',ownerIdentity:'in
 const root=createRoot(document.querySelector('main'));root.render(h(React.StrictMode,null,h(App)));
 window.signatureProof={snapshot:()=>JSON.parse(JSON.stringify(stats)),raster:()=>capturedRaster,patch:next=>patch(next),resolve:()=>resolveReceipt(),destroy:()=>root.unmount(),parity:()=>({adapter:adapterRef.current.toDataURL(),wrapper:referenceRef.current.toDataURL(),adapterEmpty,wrapperEmpty:referenceRef.current.isEmpty()})};
 `;
+
+async function checkHiddenDraw(context, origin, ratio, evidence) {
+    const page = await context.newPage();
+    page.on('pageerror', (error) => evidence.pageErrors.push(error.message));
+    const result = { ratio, case: 'draw after revealing the same hidden host' };
+    evidence.results.push(result);
+    try {
+        await page.goto(`${origin}/?hiddenDraw`);
+        const host = page.locator('#first');
+        const canvas = host.locator('canvas');
+        await canvas.waitFor({ state: 'attached' });
+        const measure = () =>
+            canvas.evaluate((node) => ({
+                width: node.width,
+                height: node.height,
+                cssWidth: node.offsetWidth,
+                cssHeight: node.offsetHeight,
+                viewport: [innerWidth, innerHeight, devicePixelRatio],
+            }));
+        result.initial = await measure();
+        assert.equal(result.initial.cssWidth, 0);
+        assert.equal(result.initial.cssHeight, 0);
+        assert.equal(result.initial.viewport[2], ratio);
+        const original = await canvas.elementHandle();
+        await page.evaluate(() => {
+            window.signatureProof.resizeEvents = 0;
+            window.addEventListener('resize', () => {
+                window.signatureProof.resizeEvents++;
+            });
+        });
+        const setHidden = (hidden) =>
+            host.evaluate((node, hidden) => {
+                node.hidden = hidden;
+            }, hidden);
+        await setHidden(false);
+        result.revealed = await measure();
+        assert(result.revealed.cssWidth > 0);
+        assert(result.revealed.cssHeight > 0);
+        await page.waitForFunction(
+            () => {
+                const node = document.querySelector('#first canvas');
+                return (
+                    node.width === node.offsetWidth * devicePixelRatio &&
+                    node.height === node.offsetHeight * devicePixelRatio
+                );
+            },
+            null,
+            { timeout: 2500 }
+        );
+        result.scaled = await measure();
+        assert.deepEqual(result.scaled.viewport, result.initial.viewport);
+        assert.equal(
+            await canvas.evaluate(
+                (node, original) => node === original,
+                original
+            ),
+            true
+        );
+
+        const bounds = await canvas.boundingBox();
+        assert(bounds);
+        const empty = await canvas.evaluate((node) => node.toDataURL());
+        await page.mouse.move(bounds.x + 15, bounds.y + 20);
+        await page.mouse.down();
+        await page.mouse.move(bounds.x + 100, bounds.y + 80, { steps: 8 });
+        await page.mouse.up();
+        const ink = await canvas.evaluate((node) => node.toDataURL());
+        assert.notEqual(ink, empty);
+        await setHidden(true);
+        // Leave the host hidden long enough for the installed resize debounce.
+        await page.evaluate(
+            () => new Promise((resolve) => setTimeout(resolve, 200))
+        );
+        await setHidden(false);
+        await page.evaluate(
+            () => new Promise((resolve) => setTimeout(resolve, 200))
+        );
+        assert.deepEqual(await measure(), result.scaled);
+        assert.equal(await canvas.evaluate((node) => node.toDataURL()), ink);
+        result.preservedInk = true;
+
+        const sign = host.getByRole('button', { name: 'Sign', exact: true });
+        assert.equal(await sign.isEnabled(), true);
+        await sign.click();
+        await page.waitForFunction(
+            () => window.signatureProof.snapshot().rasters.length === 1
+        );
+        await page.evaluate(() => window.signatureProof.resolve());
+        await page.waitForFunction(
+            () => window.signatureProof.snapshot().writes.length === 1
+        );
+        const saved = await page.evaluate(() =>
+            window.signatureProof.snapshot()
+        );
+        const [raster] = saved.rasters;
+        assert.equal(raster.width, result.scaled.width);
+        assert.equal(raster.height, result.scaled.height);
+        assert(raster.painted > 0);
+        assert(raster.transparent > 0);
+        assert.equal(saved.stores.length, 1);
+        assert.equal(saved.stores[0].type, 'image/png');
+        assert.equal(saved.writes[0].length, 1);
+        assert.equal(saved.writes[0][0].filename, 'signature.png');
+        assert.equal(saved.submits, 0);
+        assert.equal(
+            await page.evaluate(() => window.signatureProof.resizeEvents),
+            0
+        );
+        await page.evaluate(() => window.signatureProof.destroy());
+        Object.assign(result, {
+            raster,
+            stores: 1,
+            appends: 1,
+            submits: 0,
+            status: 'passed',
+        });
+    } finally {
+        await page.close();
+    }
+}
 
 async function checkTypedRaster(context, origin, evidence) {
     const page = await context.newPage();
@@ -344,6 +465,7 @@ export async function checkSignatureBrowser({
                     evidence.unexpectedRequests.push(url.origin + url.pathname);
                     return route.abort();
                 });
+                await checkHiddenDraw(context, origin, ratio, evidence);
                 if (ratio === 1)
                     await checkTypedRaster(context, origin, evidence);
                 const tabWidth = ratio === 1 ? 375 : 1280;

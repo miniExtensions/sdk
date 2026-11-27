@@ -10,6 +10,7 @@ import {
     AttachmentPreview,
     type AttachmentPreviewSource,
 } from '../src/react/index.js';
+import { htmlPresentationFixture } from './fixtures/htmlPresentationFixture.js';
 
 const word =
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -195,6 +196,50 @@ it('server imports and renders explicit image, audio, video, PDF and localized u
         render({ url: '/legacy.doc', type: 'application/msword' }),
         /Vista previa no disponible/
     );
+});
+
+it('preserves the requested page of a typed PDF in the mounted iframe', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const base = '/guide.pdf?revision=2';
+    const render = async (fragment: string) => {
+        await f.render(
+            h(AttachmentPreview, {
+                attachment: {
+                    url: base + fragment,
+                    type: 'application/pdf',
+                    filename: 'Guide.pdf',
+                },
+            })
+        );
+        const frame = f.container.querySelector('iframe');
+        assert.ok(frame);
+        assert.equal(frame.getAttribute('title'), 'Guide.pdf');
+        const src = frame.getAttribute('src');
+        assert.ok(src);
+        return src;
+    };
+    const src = await render('#page=4');
+    const parsed = new URL(src, f.window.location.href);
+    assert.equal(parsed.pathname, '/guide.pdf');
+    assert.equal(parsed.search, '?revision=2');
+    const parameters = new URLSearchParams(parsed.hash.slice(1));
+    assert.deepEqual(
+        [...parameters],
+        [
+            ['page', '4'],
+            ['toolbar', '0'],
+        ]
+    );
+    assert.equal(src, `${base}#page=4&toolbar=0`);
+    assert.equal(await render('#'), `${base}#toolbar=0`);
+    assert.equal(await render('#page=4&'), `${base}#page=4&toolbar=0`);
+    assert.equal(await render('#page=4&toolbar=0'), `${base}#page=4&toolbar=0`);
+    assert.equal(await render('#page=4&toolbar=1'), `${base}#page=4&toolbar=1`);
+    assert.equal(
+        await render('#page=4&zoom=125%2C0%2C0'),
+        `${base}#page=4&zoom=125%2C0%2C0&toolbar=0`
+    );
+    f.unchangedEffects();
 });
 
 // Retained pre-extraction native characterization, exercised through the public

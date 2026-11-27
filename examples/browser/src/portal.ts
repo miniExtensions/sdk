@@ -31,6 +31,7 @@ import {
     type PortalCollectionCriteria,
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
+import { getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { button, element, labeled } from './dom.js';
 import { createLinkedPickerPresentation } from './linkedPickerPresentation.js';
 import {
@@ -1513,10 +1514,27 @@ export const createPortalView = (options: {
                         column.displayConfig,
                         () => {
                             const value = record.fields[column.fieldId];
-                            return recordField.config.type ===
+                            const config = recordField.config;
+                            if (
+                                config.type ===
                                 AirtableFieldType.MULTIPLE_ATTACHMENTS
-                                ? attachmentSummary(value, column.displayConfig)
-                                : displayValue(value);
+                            )
+                                return attachmentSummary(
+                                    value,
+                                    column.displayConfig
+                                );
+                            if (
+                                config.type === AirtableFieldType.DURATION &&
+                                typeof value === 'number' &&
+                                Number.isFinite(value * 1000)
+                            ) {
+                                return getFormattedDuration(
+                                    String(value),
+                                    config.options.durationFormat,
+                                    true
+                                );
+                            }
+                            return displayValue(value);
                         },
                         () => {
                             const current = renderedData.detailFields.filter(

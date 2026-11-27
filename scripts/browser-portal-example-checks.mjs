@@ -754,6 +754,96 @@ export async function checkBrowserPortalExample({
     });
     try {
         await check(
+            'formats physical Duration columns in the installed starter',
+            async () => {
+                const portal = editablePortal();
+                const values = record('rec_one', 'Timed record', 3661);
+                values.fields.fld_elapsed = 3661;
+                values.fields.fld_minutes = 60;
+                const loaded = page([values]);
+                const table = loaded.tableIdsToLinkedTableStates.tbl_children;
+                const source = structuredClone(
+                    table.recordIdsToAirtableRecords.rec_one.fields
+                );
+                const durations = [
+                    ['fld_elapsed', 'Elapsed', 'h:mm:ss'],
+                    ['fld_minutes', 'Minutes', 'h:mm'],
+                    ['fld_blank', 'Blank duration', 'h:mm:ss'],
+                ];
+                for (const [id, name, durationFormat] of durations) {
+                    table.airtableFields.push({
+                        id,
+                        name,
+                        isComputed: false,
+                        config: {
+                            type: 'duration',
+                            options: { durationFormat },
+                        },
+                    });
+                    portal.payload.linkedRecordFieldIdToDetailFields.fld_children.push(
+                        {
+                            fieldId: id,
+                            fieldName: name,
+                            isHidden: false,
+                            childFormField: null,
+                            fieldIsInEditingChildForm: false,
+                        }
+                    );
+                }
+                const h = await mount({
+                    portal,
+                    handlers: { list: () => loaded },
+                });
+                try {
+                    assert.deepEqual(h.calls, []);
+                    await h.click('Load records');
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['list']
+                    );
+                    assert.deepEqual(
+                        table.recordIdsToAirtableRecords.rec_one.fields,
+                        source
+                    );
+                    assert.deepEqual(rowIds(h.view.node), ['rec_one']);
+                    const tableNode = h.view.node.querySelector('table');
+                    const headings = [
+                        ...tableNode.querySelectorAll('thead th'),
+                    ].map((node) => node.textContent.trim());
+                    const cells = [
+                        ...tableNode.querySelectorAll(
+                            'tbody tr[data-record-id="rec_one"] td'
+                        ),
+                    ];
+                    const displayed = [
+                        'Elapsed',
+                        'Minutes',
+                        'Count',
+                        'Blank duration',
+                    ].map((name) => {
+                        const index = headings.indexOf(name);
+                        assert.ok(
+                            index >= 0,
+                            'Expected installed column ' + name
+                        );
+                        return [...cells[index].childNodes]
+                            .filter((node) => node.nodeType === 3)
+                            .map((node) => node.textContent)
+                            .join('')
+                            .trim();
+                    });
+                    assert.deepEqual(displayed, [
+                        '1:01:01',
+                        '0:01',
+                        '3661',
+                        '',
+                    ]);
+                } finally {
+                    await h.dispose();
+                }
+            }
+        );
+        await check(
             'composed Portal select save and explicit Reload bind current formatted lookup prefill at actual child load and Save',
             async () => {
                 const h = await mountSelectPrefillInteraction();

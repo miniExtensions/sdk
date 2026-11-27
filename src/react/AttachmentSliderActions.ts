@@ -8,6 +8,7 @@ import {
     useRef,
     useState,
     type MouseEvent,
+    type PointerEvent,
     type ReactNode,
 } from 'react';
 import { ActionButton } from './ActionButton.js';
@@ -35,6 +36,7 @@ export type AttachmentSliderActionsProps = {
 };
 
 const actions = 'mx-sdk-attachment-slider-actions';
+type ActionPointer = Pick<PointerEvent, 'pointerId' | 'pointerType'>;
 const iconPaths = {
     delete: 'm14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
     download:
@@ -47,6 +49,7 @@ function AttachmentSliderAction({
     label,
     href,
     isCurrent,
+    pointerOwner,
     onClick,
     disabled,
     tooltipsSuspended,
@@ -55,11 +58,16 @@ function AttachmentSliderAction({
     label: string;
     href?: string;
     isCurrent?(): boolean;
+    pointerOwner?: object;
     onClick?(): void;
     disabled?: boolean;
     tooltipsSuspended?: boolean;
 }) {
     const anchor = useRef<HTMLAnchorElement | null>(null);
+    const presses = useRef(
+        new Map<string, { pointerId: number; owner: object }>()
+    );
+    const release = useRef<ActionPointer | null>(null);
     const { triggerRef, triggerProps, show, tooltip } =
         useAttachmentActionTooltip(label, tooltipsSuspended);
     const attachAnchor = useCallback(
@@ -91,8 +99,55 @@ function AttachmentSliderAction({
     const control = {
         ...triggerProps,
         className: `${actions}__control`,
+        onPointerDown: (event: PointerEvent<HTMLElement>) => {
+            triggerProps.onPointerDown(event);
+            release.current = null;
+            if (pointerOwner && event.isPrimary && event.button === 0)
+                presses.current.set(event.pointerType, {
+                    pointerId: event.pointerId,
+                    owner: pointerOwner,
+                });
+        },
+        onPointerUp: (event: PointerEvent<HTMLElement>) => {
+            if (pointerOwner && event.isPrimary && event.button === 0)
+                release.current = {
+                    pointerType: event.pointerType,
+                    pointerId: event.pointerId,
+                };
+        },
+        onPointerCancel: (event: PointerEvent<HTMLElement>) => {
+            if (
+                presses.current.get(event.pointerType)?.pointerId ===
+                event.pointerId
+            )
+                presses.current.delete(event.pointerType);
+        },
         onClick: (event: MouseEvent<HTMLElement>) => {
             if (!guard(event)) return;
+            if (pointerOwner) {
+                const released = release.current;
+                release.current = null;
+                const click = event.nativeEvent;
+                const pointerType =
+                    'pointerType' in click &&
+                    typeof click.pointerType === 'string'
+                        ? click.pointerType
+                        : undefined;
+                if (event.detail > 0 || pointerType) {
+                    const pointer =
+                        pointerType &&
+                        'pointerId' in click &&
+                        typeof click.pointerId === 'number'
+                            ? { pointerType, pointerId: click.pointerId }
+                            : released;
+                    const press =
+                        pointer && presses.current.get(pointer.pointerType);
+                    if (pointer && press?.pointerId === pointer.pointerId) {
+                        presses.current.delete(pointer.pointerType);
+                        if (press.owner !== pointerOwner) return;
+                    }
+                }
+            }
             onClick?.();
             show();
         },
@@ -183,6 +238,11 @@ export function AttachmentSliderActions({
               active.current === lease &&
               resourceOwnerCurrent(presentationOwner)
         : undefined;
+    // Metadata can refresh while a pointer is held on the same occurrence.
+    const downloadOccurrence = useMemo(
+        () => ({}),
+        [downloadIdentity, attachment.url]
+    );
     const { progress, start } = useAttachmentDownload({
         identity: downloadIdentity,
         url: canDownload ? attachment.url : null,
@@ -217,6 +277,7 @@ export function AttachmentSliderActions({
                       onClick: start,
                       disabled: progress != null,
                       isCurrent,
+                      pointerOwner: downloadOccurrence,
                       tooltipsSuspended,
                   })
                 : null,

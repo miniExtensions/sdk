@@ -3,10 +3,15 @@ import {
     type CSVExportFailureReason,
 } from './csvExportError.js';
 import {
+    arrayJoinSeparator,
     getReadableStringFromAirtableValue,
     type GetReadableStringSource,
 } from '../formulas/valueConversion.js';
-import type { AirtableField, AirtableValue } from '../formulas/types.js';
+import {
+    AirtableFieldType,
+    type AirtableField,
+    type AirtableValue,
+} from '../formulas/types.js';
 import { serializeCSVExportDocument } from './csvSerialization.js';
 
 export type CSVExportColumn = Readonly<{
@@ -58,6 +63,45 @@ export type CSVExportProjection =
     | Readonly<{ status: 'empty' }>
     | Readonly<{ status: 'blocked'; failure: CSVExportFailure }>
     | Readonly<{ status: 'ready'; document: CSVExportDocument }>;
+
+function getCollaboratorLabel(value: unknown): string | undefined {
+    if (
+        value == null ||
+        typeof value !== 'object' ||
+        !('id' in value) ||
+        typeof value.id !== 'string' ||
+        !Object.hasOwn(value, 'name') ||
+        !('name' in value) ||
+        typeof value.name !== 'string' ||
+        !Object.hasOwn(value, 'email') ||
+        !('email' in value) ||
+        typeof value.email !== 'string'
+    )
+        return undefined;
+    return value.name || value.email;
+}
+
+/** Format an admitted Portal CSV collaborator cell using only the supplied value. */
+export function formatPortalCSVExportCollaborator({
+    field,
+    value,
+}: CSVExportFieldValue): string | undefined {
+    if (field.config.type === AirtableFieldType.SINGLE_COLLABORATOR)
+        return getCollaboratorLabel(value);
+    if (
+        field.config.type !== AirtableFieldType.MULTIPLE_COLLABORATORS ||
+        !Array.isArray(value)
+    )
+        return undefined;
+    const labels: string[] = [];
+    for (const collaborator of value) {
+        if (collaborator == null) continue;
+        const label = getCollaboratorLabel(collaborator);
+        if (label === undefined) return undefined;
+        labels.push(label);
+    }
+    return labels.join(arrayJoinSeparator);
+}
 
 /** Detach formatting before any asynchronous serializer or browser operation. */
 function isAdmitted(input: CSVExportInput): boolean {
@@ -125,6 +169,9 @@ export function projectCSVExport(input: CSVExportInput): CSVExportProjection {
         const format =
             input.formatField ??
             ((descriptor: CSVExportFieldValue) =>
+                (input.admission.cohort === 'portal-grid'
+                    ? formatPortalCSVExportCollaborator(descriptor)
+                    : undefined) ??
                 getReadableStringFromAirtableValue({
                     value: descriptor.value,
                     airtableFieldConfig: descriptor.field.config,

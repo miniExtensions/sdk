@@ -149,6 +149,7 @@ export type {
 
 export {
     projectCSVExport,
+    formatPortalCSVExportCollaborator,
     createCSVExportController,
     CSVExportFailure,
 } from './csvExport.js';

@@ -214,12 +214,37 @@ it('retires focused guidance when the selected cell identity changes', async (t)
     fixture.unchangedEffects();
 });
 
-it('selects and focuses without admission, retains composing Enter and commits once with ordinary Enter', async (t) => {
+it('selects without admission, retains IME confirmation and commits once with ordinary Enter', async (t) => {
     const fixture = await htmlPresentationFixture(t);
     const writes: string[] = [];
+    const requests: string[] = [];
+    const queue = createPortalInlineEditQueue<string, string, string>({
+        commit: async (request) => {
+            requests.push(request);
+            return request;
+        },
+        committedValue: (result) => result,
+    });
+    t.after(() => queue.dispose());
+    let value = 'Baseline';
     let selections = 0;
     const editor = {
-        onChange: (text: string) => writes.push(text),
+        onChange(text: string) {
+            writes.push(text);
+            queue.enqueue({
+                cell: { tableId: 'table', recordId: 'A', fieldId: 'note' },
+                value: text,
+                request: text,
+                committedValue: value,
+                applyValue(next) {
+                    value = next;
+                },
+                onError() {},
+                onCommitted() {},
+                onBatchSettled() {},
+                onIdle() {},
+            });
+        },
         owner: { token: 1, isCurrent: () => true },
     };
     await fixture.render(
@@ -239,21 +264,97 @@ it('selects and focuses without admission, retains composing Enter and commits o
     assert.deepEqual(writes, []);
     await fixture.render(table({ editor, selected: true }));
 
-    const edited = await edit(fixture, 'New text  ');
+    const unfinished = '仮 ';
+    const edited = input(fixture);
+    await act(async () => {
+        edited.focus();
+        edited.dispatchEvent(
+            new fixture.window.CompositionEvent('compositionstart', {
+                bubbles: true,
+            })
+        );
+    });
+    assert.equal(await edit(fixture, unfinished), edited);
     await enter(fixture, true);
     assert.equal(fixture.window.document.activeElement, edited);
     assert.deepEqual(writes, []);
+    assert.equal(queue.hasPending(), false);
+
+    const confirmation = new fixture.window.KeyboardEvent('keydown', {
+        key: 'Enter',
+        keyCode: 229,
+        isComposing: false,
+        bubbles: true,
+        cancelable: true,
+    });
+    assert.equal(confirmation.key, 'Enter');
+    assert.equal(confirmation.keyCode, 229);
+    assert.equal(confirmation.isComposing, false);
+    assert.equal(confirmation.bubbles, true);
+    assert.equal(confirmation.cancelable, true);
+    let dispatched = false;
+    await act(async () => {
+        dispatched = edited.dispatchEvent(confirmation);
+    });
+    const confirmationTrace = {
+        dispatched,
+        defaultPrevented: confirmation.defaultPrevented,
+        sameInput: input(fixture) === edited,
+        focused: fixture.window.document.activeElement === edited,
+        value: edited.value,
+        writes: [...writes],
+        pending: queue.hasPending(),
+    };
+    await queue.flush();
+    assert.deepEqual(
+        { ...confirmationTrace, requests },
+        {
+            dispatched: true,
+            defaultPrevented: false,
+            sameInput: true,
+            focused: true,
+            value: unfinished,
+            writes: [],
+            pending: false,
+            requests: [],
+        },
+        'IME confirmation must leave the unfinished draft focused and unwritten'
+    );
+
+    const finalized = '確定  ';
+    await act(async () => {
+        edited.dispatchEvent(
+            new fixture.window.CompositionEvent('compositionend', {
+                bubbles: true,
+            })
+        );
+    });
+    assert.equal(await edit(fixture, finalized), edited);
     await enter(fixture);
-    assert.deepEqual(writes, ['New text  ']);
+    assert.notEqual(fixture.window.document.activeElement, edited);
+    assert.deepEqual(writes, [finalized]);
+    assert.equal(queue.hasPending(), true);
+    await queue.flush();
+    assert.equal(value, finalized);
+    assert.deepEqual(requests, [finalized]);
     await fixture.render(
         table({
             editor,
-            selected: false,
-            value: 'New text  ',
-            displayText: 'New text  ',
+            selected: true,
+            value: finalized,
+            displayText: finalized,
         })
     );
-    assert.deepEqual(writes, ['New text  ']);
+    await act(async () => {
+        edited.focus();
+        edited.blur();
+    });
+    await fixture.render(null);
+    await queue.flush();
+    assert.equal(queue.hasPending(), false);
+    assert.deepEqual(writes, [finalized]);
+    assert.deepEqual(requests, [finalized]);
+    fixture.unchangedEffects();
 });
 
 it('uses the host queue for rollback, keeps newer typing and requires a fresh intent', async (t) => {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { realpathSync, readFileSync, lstatSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
@@ -29,6 +29,7 @@ export const readonlyPortalGridBrowserEntry = String.raw`
 import React,{createElement as h,StrictMode,useEffect,useRef,useState}from'react';
 import{createRoot}from'react-dom/client';
 import{ReadonlyPortalGrid,CompleteReadOnlyTextField,PortalGridSingleLineTextCell,PortalGridEmailCell,PortalGridPhoneNumberCell,PortalGridEmptyCell,PortalGridRatingCell,PortalGridCheckboxCell,PortalGridButtonCell}from'@miniextensions/sdk/react';
+import{createPortalInlineEditQueue}from'@miniextensions/sdk/portals';
 import{DateField}from'@miniextensions/sdk/react/date';
 import{mountNumberGrid}from'./readonly-portal-grid-number.mjs';
 import{mountDateTimeGrid}from'./readonly-portal-grid-datetime.mjs';
@@ -67,9 +68,23 @@ function TextCellProbe() {
         record: 'A', frame: {}, value: 'Committed A', selected: false, conditional: false
     }));
     const writeLog = useRef([]);
+    const requests = useRef([]);
+    const queueRef = useRef(null);
     const openCount = useRef(0);
     const submitCount = useRef(0);
     const currentFrame = useRef(cell.frame);
+    useEffect(() => {
+        const queue = createPortalInlineEditQueue({
+            async commit(request) {
+                requests.current.push(request);
+                if (request.value === 'Rejected A') throw Error('Synthetic host rejection');
+                return request.value;
+            },
+            committedValue: value => value,
+        });
+        queueRef.current = queue;
+        return () => queue.dispose();
+    }, []);
     useEffect(() => {
         window.__textCellProbe = {
             snapshot: () => ({
@@ -77,10 +92,12 @@ function TextCellProbe() {
                 value: cell.value,
                 selected: cell.selected,
                 writes: writeLog.current,
+                requests: requests.current,
+                pending: queueRef.current.hasPending(),
                 opens: openCount.current,
                 submits: submitCount.current,
             }),
-            reject: () => setCell(current => ({ ...current, value: 'Committed A' })),
+            flush: () => queueRef.current.flush(),
             replace: () => {
                 const frame = {};
                 currentFrame.current = frame;
@@ -120,8 +137,21 @@ function TextCellProbe() {
             editor: cell.conditional ? undefined : {
                 owner: { token: cell.frame, isCurrent: () => currentFrame.current === cell.frame },
                 onChange(value) {
-                    writeLog.current.push({ record: cell.record, value });
-                    setCell(current => ({ ...current, value }));
+                    const request = { record: cell.record, value };
+                    writeLog.current.push(request);
+                    queueRef.current.enqueue({
+                        cell: { tableId: 'grid', recordId: cell.record, fieldId: 'note' },
+                        value,
+                        request,
+                        committedValue: cell.value,
+                        applyValue: next => setCell(current =>
+                            current.frame === cell.frame ? { ...current, value: next } : current
+                        ),
+                        onCommitted() {},
+                        onError() {},
+                        onBatchSettled() {},
+                        onIdle() {},
+                    });
                 },
             },
         }), h('td', null, h('button', {
@@ -654,6 +684,8 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
         '/react/complete-readonly-text.css',
         '/react/PortalGridSingleLineTextCell.js',
         '/react/SingleLineTextField.js',
+        '/react/CompleteClearableTextInput.js',
+        '/portals/inlineEditQueue.js',
         '/react/portal-grid-single-line-text-cell.css',
         '/react/PortalGridEmailCell.js',
         '/react/PortalGridPhoneNumberCell.js',
@@ -688,9 +720,14 @@ export async function prepareReadonlyPortalGridBrowserFixtures(args) {
             sha256: hash(bytes),
             bytes: bytes.length,
         };
-        if (path.startsWith(installed + '/')) {
-            item.archiveMember =
-                'package/' + relative(installed, path).replaceAll('\\', '/');
+        const archivePath = relative(installed, path);
+        if (
+            archivePath &&
+            archivePath !== '..' &&
+            !archivePath.startsWith('..' + sep) &&
+            !isAbsolute(archivePath)
+        ) {
+            item.archiveMember = 'package/' + archivePath.replaceAll('\\', '/');
             assert.deepEqual(bytes, readArchiveMember(item.archiveMember));
         }
         return item;
@@ -2247,7 +2284,7 @@ async function checkPlainTextCellBrowser(page) {
     assert.deepEqual((await state()).writes, [
         { record: 'A', value: 'Rejected A' },
     ]);
-    await page.evaluate(() => window.__textCellProbe.reject());
+    await page.evaluate(() => window.__textCellProbe.flush());
     await page.waitForFunction(
         () =>
             document.querySelector('[aria-label="Plain note"]')?.value ===
@@ -2270,6 +2307,7 @@ async function checkPlainTextCellBrowser(page) {
     await page.waitForFunction(
         () => window.__textCellProbe.snapshot().writes.length === 2
     );
+    await page.evaluate(() => window.__textCellProbe.flush());
     await input.fill('Retired by conditional policy');
     await page.evaluate(() => window.__textCellProbe.setConditional(true));
     const guidance = cell.getByRole('button', { name: 'Edit form required' });
@@ -2360,17 +2398,109 @@ async function checkPlainTextCellBrowser(page) {
     await input.waitFor({ state: 'visible' });
     assert.equal(await input.inputValue(), 'Readonly C');
     assert.equal(await guidance.count(), 0);
-    const result = await state();
-    assert.deepEqual(result.writes, [
+    const before = await state();
+    assert.deepEqual(before.writes, [
         { record: 'A', value: 'Rejected A' },
         { record: 'B', value: 'Current B' },
     ]);
+    assert.deepEqual(before.requests, before.writes);
+    assert.equal(before.pending, false);
+
+    const unfinished = '仮 ';
+    await input.focus();
+    await input.dispatchEvent('compositionstart', { bubbles: true });
+    await input.fill(unfinished);
+    const confirmation = await input.evaluate((node) => {
+        const event = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            keyCode: 229,
+            isComposing: false,
+            bubbles: true,
+            cancelable: true,
+        });
+        const dispatched = node.dispatchEvent(event);
+        return {
+            key: event.key,
+            keyCode: event.keyCode,
+            isComposing: event.isComposing,
+            bubbles: event.bubbles,
+            cancelable: event.cancelable,
+            dispatched,
+            defaultPrevented: event.defaultPrevented,
+            sameInput:
+                node
+                    .closest('table')
+                    ?.querySelector('[aria-label="Plain note"]') === node,
+            focused: node.ownerDocument.activeElement === node,
+            value: node.value,
+        };
+    });
+    const beforeFlush = await state();
+    await page.evaluate(() => window.__textCellProbe.flush());
+    const afterFlush = await state();
+    const ime = {
+        ...confirmation,
+        writes: beforeFlush.writes.slice(before.writes.length),
+        pending: beforeFlush.pending,
+        requests: afterFlush.requests.slice(before.requests.length),
+        opens: afterFlush.opens - before.opens,
+        submits: afterFlush.submits - before.submits,
+    };
+    assert.deepEqual(
+        ime,
+        {
+            key: 'Enter',
+            keyCode: 229,
+            isComposing: false,
+            bubbles: true,
+            cancelable: true,
+            dispatched: true,
+            defaultPrevented: false,
+            sameInput: true,
+            focused: true,
+            value: unfinished,
+            writes: [],
+            pending: false,
+            requests: [],
+            opens: 0,
+            submits: 0,
+        },
+        'IME confirmation must leave the unfinished draft focused and unwritten'
+    );
+    const finalized = '確定  ';
+    await input.dispatchEvent('compositionend', {
+        bubbles: true,
+        data: finalized,
+    });
+    await input.fill(finalized);
+    await input.press('Enter');
+    assert.equal(
+        await input.evaluate(
+            (node) => node.ownerDocument.activeElement === node
+        ),
+        false
+    );
+    await page.evaluate(() => window.__textCellProbe.flush());
+    assert.equal(await input.inputValue(), finalized);
+    await input.focus();
+    await input.blur();
+    await page.evaluate(() => window.__textCellProbe.setConditional(true));
+    await input.waitFor({ state: 'detached' });
+    await page.evaluate(() => window.__textCellProbe.flush());
+    const result = await state();
+    assert.deepEqual(result.writes, [
+        ...before.writes,
+        { record: 'C', value: finalized },
+    ]);
+    assert.deepEqual(result.requests, result.writes);
+    assert.equal(result.pending, false);
     assert.equal(result.submits, 0);
     assert.equal(result.opens, 0);
     return {
         status: 'passed',
         conditionalGuidance: true,
         guidanceIdentityRetired: true,
+        ime,
         ...result,
     };
 }
@@ -3629,12 +3759,13 @@ export async function checkReadonlyPortalGridProfile({
             output,
         });
         assert.deepEqual(unexpected, []);
-        evidence.requests = requests;
     } catch (error) {
         failure = error;
         evidence.status = 'failed';
         evidence.error = error.message;
     } finally {
+        evidence.requests = requests;
+        evidence.unexpectedRequests = unexpected;
         evidence.cleanup = {};
         for (const [name, action] of [
             ['context', () => context?.close()],

@@ -190,8 +190,11 @@ export const CompleteDeferredClearableTextInput = forwardRef<
     const handleKeyDown = useCallback(
         (event: KeyboardEvent<HTMLInputElement>) => {
             if (event.key === 'Enter') {
+                const { isComposing, keyCode } = event.nativeEvent;
+                // IME confirmation can report 229 after isComposing clears.
+                if (!isComposing && keyCode === 229) return;
                 event.preventDefault();
-                if (!event.nativeEvent.isComposing) event.currentTarget.blur();
+                if (!isComposing) event.currentTarget.blur();
             }
         },
         []

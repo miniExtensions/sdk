@@ -26,6 +26,8 @@ export type CompleteFormPageNavigationProps = {
     onSelectTitle?: () => void;
     progressTestId?: string;
     progressItemTestId?: string;
+    progressLabel?: string;
+    formatProgressValue?: (currentStep: number, totalSteps: number) => string;
     className?: string;
 };
 
@@ -43,6 +45,9 @@ export function CompleteFormPageNavigation({
     onSelectTitle,
     progressTestId = 'form-page-progress',
     progressItemTestId = 'form-page-progress-item',
+    progressLabel = 'Form progress',
+    formatProgressValue = (currentStep, totalSteps) =>
+        `Step ${currentStep} of ${totalSteps}`,
     className,
 }: CompleteFormPageNavigationProps): ReactElement | null {
     const activePage = pages[activePageIndex];
@@ -86,6 +91,10 @@ export function CompleteFormPageNavigation({
             ({ page }) =>
                 !page.hidden && (page.title != null || page.description != null)
         );
+    const currentStep = visibleSections.filter(
+        ({ index }) => index <= activePageIndex
+    ).length;
+    const totalSteps = visibleSections.length;
     return h(
         'div',
         {
@@ -93,12 +102,20 @@ export function CompleteFormPageNavigation({
                 .filter(Boolean)
                 .join(' '),
         },
-        visibleSections.length > 1
+        totalSteps > 1
             ? h(
                   'div',
                   {
                       className: 'mx-sdk-form-pages-progress',
-                      'aria-hidden': true,
+                      role: 'progressbar',
+                      'aria-label': progressLabel,
+                      'aria-valuemin': 0,
+                      'aria-valuenow': currentStep,
+                      'aria-valuemax': totalSteps,
+                      'aria-valuetext': formatProgressValue(
+                          currentStep,
+                          totalSteps
+                      ),
                       'data-testid': progressTestId,
                   },
                   visibleSections.map(({ index }) =>
@@ -109,6 +126,7 @@ export function CompleteFormPageNavigation({
                                   ? ' mx-sdk-form-pages-progress-item--reached bg-theme-600'
                                   : ' bg-gray-200'
                           }`,
+                          'aria-hidden': true,
                           'data-testid': progressItemTestId,
                       })
                   )

@@ -1147,6 +1147,93 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             visiblePublications,
             'all committed registrations dispose after retirement'
         );
+
+        const pagingPortal = portalFixture();
+        const pagingLabels = {
+            empty: 'Aucun événement',
+            loadMore: 'Charger plus',
+            loading: 'Chargement',
+        };
+        let pageRequests = 0;
+        const pagingFrame = {
+            ...pagingPortal.frame,
+            hasMore: true,
+            loadMore() {
+                pageRequests++;
+                return { type: 'admitted' };
+            },
+        };
+        root = createRoot(host);
+        const publishPage = async (patch = {}) => {
+            await React.act(async () =>
+                root.render(
+                    React.createElement(api.PortalCalendar, {
+                        frame: { ...pagingFrame, ...patch },
+                        clock: pagingPortal.clock,
+                        locale: 'fr-FR',
+                        labels: pagingLabels,
+                        isWide: false,
+                    })
+                )
+            );
+        };
+        const emptyMessage = () =>
+            host.querySelector('.mx-sdk-portal-calendar__empty')?.textContent ??
+            null;
+        const moreSelector = '.mx-sdk-portal-calendar__more';
+        await publishPage();
+        await click('[data-date="2026-02-16"] .mx-sdk-calendar__day');
+        const more = host.querySelector(moreSelector);
+        assert.equal(more?.textContent, pagingLabels.loadMore);
+        assert.equal(host.querySelector('article[data-record-id]'), null);
+        assert.equal(
+            emptyMessage(),
+            null,
+            'Compact empty state requires exhausted pages'
+        );
+        assert.equal(pageRequests, 0);
+        await click(moreSelector);
+        assert.equal(pageRequests, 1);
+        await publishPage({ isLoadingMore: true });
+        const pending = host.querySelector(moreSelector);
+        assert.equal(pending?.textContent, pagingLabels.loading);
+        assert.equal(pending?.disabled, true);
+        assert.equal(emptyMessage(), null);
+        await click(moreSelector);
+        assert.equal(pageRequests, 1);
+        await publishPage({ hasMore: false, isLoadingMore: true });
+        assert.equal(emptyMessage(), null);
+        await publishPage({
+            hasMore: false,
+            records: [
+                ...pagingFrame.records,
+                {
+                    id: 'later',
+                    fields: { date: '2026-02-16' },
+                    display: {
+                        status: 'present',
+                        primary: 'Later appointment',
+                    },
+                },
+            ],
+        });
+        const later = host.querySelector('article[data-record-id="later"]');
+        assert(later?.textContent.includes('Later appointment'));
+        assert.equal(emptyMessage(), null);
+        assert.equal(host.querySelector(moreSelector), null);
+        await click('[data-date="2026-02-17"] .mx-sdk-calendar__day');
+        assert.equal(emptyMessage(), pagingLabels.empty);
+        assert.equal(pageRequests, 1);
+        assert.deepEqual(pagingPortal.reads, []);
+        assert.deepEqual(pagingPortal.opens, []);
+        assert.deepEqual(pagingPortal.removals, []);
+        const compactPortalPaging = {
+            pageRequests,
+            exhaustedMessage: emptyMessage(),
+        };
+        await React.act(async () => root.unmount());
+        root = undefined;
+
         const completePicker = pickerFixture();
         let pickerProps = {
             frame: completePicker.initialFrame,
@@ -1444,6 +1531,7 @@ async function installed(directory, format, happyDomModulePath, archivePath) {
             ambientArabicDateKeys: true,
             hydration: true,
             visibleRecordRegistration: true,
+            compactPortalPaging,
             utcRecordPickerReversal,
             scope: 'Installed complete Calendar picker/Portal composition and shared rich leaves; synthetic host ports only, no native or hosted acceptance.',
         };

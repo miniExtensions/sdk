@@ -39,6 +39,13 @@ const labels={download:'Download',warning:'Current displayed records',continue:'
 const makeInput=(count,text='Original')=>({admission:{cohort:'portal-grid',allowed:true,borrowedRecords:false},columns:[{key:'__proto__',title:'=Header'}],rows:Array.from({length:count},()=>({status:'loaded',viewType:'list',fields:[{field:{id:'name',name:'__proto__',config:{type:'singleLineText'}},value:text}]}))});
 const projected=api.projectCSVExport(makeInput(1,'-42'));assert.equal(projected.status,'ready');assert.equal(await api.serializeCSVExportDocument(projected.document),"'=Header\n'-42\n");
 assert.equal(await api.serializeCSVExportDocument({columns:[{key:'number',title:'Number'}],rows:[[{readableValue:'-42',rawWasNumber:true}]]}),'Number\n-42\n');
+assert.equal(
+    await api.serializeCSVExportDocument({
+        columns: [{ key: 'zone', title: 'Zone\rLabel' }],
+        rows: [[{ readableValue: 'North\rWest', rawWasNumber: false }]],
+    }),
+    '"Zone\rLabel"\n"North\rWest"\n'
+);
 let resources=0,resolveClick;const clicked=new Promise(resolve=>{resolveClick=resolve;});const texts=[],filenames=[],revoked=[];
 const platform={createBlob(text){resources++;texts.push(text);return{};},createObjectURL(){return'blob:synthetic';},revokeObjectURL(url){revoked.push(url);},createAnchor(){let filename;return{setAttribute(key,value){if(key==='download')filename=value;},click(){filenames.push(filename);resolveClick();}};}};
 let props={request:{input:makeInput(100),filename:'Old filename',platform},labels};const element=()=>h(React.StrictMode,null,h(ui.CSVExportButton,props));

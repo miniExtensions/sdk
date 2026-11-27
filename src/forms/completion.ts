@@ -11,6 +11,7 @@ import {
 import { hasRenderableHTMLContent } from '../react/html/sanitizeHTML.js';
 import {
     formCompletionLabels,
+    formCompletionLoadingLabels,
     type FormCompletionLabels,
 } from './completionLabels.js';
 
@@ -65,7 +66,7 @@ export type ProjectFormCompletionInput = {
     hasLogout?: boolean;
 };
 export type FormCompletionProjection = {
-    message: { text: string; format: 'html' | 'text' };
+    message: { text: string; format: 'html' | 'text'; loadingLabel?: string };
     redirectURL: string | null;
     canSubmitAnother: boolean;
     canCopy: boolean;
@@ -253,7 +254,13 @@ export function projectFormCompletion(
                   : 2
               : (c.closeDelay ?? 2));
     return {
-        message,
+        message:
+            c.successMessageDelay != null
+                ? {
+                      ...message,
+                      loadingLabel: formCompletionLoadingLabels[input.language],
+                  }
+                : message,
         redirectURL,
         canSubmitAnother:
             rootActions && c.successMessageCanCreateNewRecord === true,

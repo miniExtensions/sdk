@@ -1,5 +1,25 @@
 import type { RuntimeLanguage } from '../runtime/types.js';
 
+export const formCompletionLoadingLabels: Readonly<
+    Record<RuntimeLanguage, string>
+> = {
+    en: 'Loading',
+    es: 'Cargando',
+    fr: 'Chargement',
+    vi: 'Đang tải',
+    nl: 'Laden',
+    de: 'Wird geladen',
+    ja: '読み込み中',
+    ko: '로딩 중',
+    pt: 'Carregando',
+    cs: 'Načítání',
+    he: 'בטעינה',
+    it: 'Caricamento',
+    ka: 'იტვირთება',
+    'zh-Hans': '正在加载',
+    ca: 'Carregant',
+};
+
 export type FormCompletionLabels = {
     defaultSuccess: string;
     redirectingToNewForm: string;

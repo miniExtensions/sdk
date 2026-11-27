@@ -246,6 +246,50 @@ test('owned DOM engine copies live inputs/styles and preserves its frame until e
     assert.equal(f.source.isConnected, true);
 });
 
+test('copies print frame direction while preserving mixed text and its identifier override', async (t) => {
+    const f = fixture(t);
+    const root = f.document.documentElement;
+    root.lang = 'he';
+    f.source.innerHTML =
+        '<p>פרויקט Atlas — מזהה <span dir="ltr">AB-123</span></p>';
+    for (const [htmlDir, bodyDir] of [
+        ['rtl', null],
+        ['rtl', 'ltr'],
+        [null, null],
+    ]) {
+        if (htmlDir === null) root.removeAttribute('dir');
+        else root.setAttribute('dir', htmlDir);
+        if (bodyDir === null) f.document.body.removeAttribute('dir');
+        else f.document.body.setAttribute('dir', bodyDir);
+        const prepared = await preparePrintableDOM(dom(f.source), f.options);
+        try {
+            const frame = f.document.querySelector(
+                'iframe[data-mx-sdk-print-frame]'
+            );
+            assert.ok(frame instanceof f.window.HTMLIFrameElement);
+            const printed = frame.contentDocument!;
+            assert.equal(printed.documentElement.lang, 'he');
+            assert.equal(
+                printed.querySelector('p')!.textContent,
+                'פרויקט Atlas — מזהה AB-123'
+            );
+            assert.equal(printed.querySelector('span')!.textContent, 'AB-123');
+            assert.equal(
+                printed.querySelector('span')!.getAttribute('dir'),
+                'ltr'
+            );
+            assert.equal(printed.documentElement.getAttribute('dir'), htmlDir);
+            assert.equal(printed.body.getAttribute('dir'), bodyDir);
+        } finally {
+            await prepared.dispose();
+            assert.equal(
+                f.document.querySelector('[data-mx-sdk-print-frame]'),
+                null
+            );
+        }
+    }
+});
+
 test('asynchronous source content is retained until its committed busy marker clears', async (t) => {
     const f = fixture(t);
     f.source.setAttribute('aria-busy', 'true');

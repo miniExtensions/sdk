@@ -219,15 +219,18 @@ export async function preparePrintableDOM(
         printWindow = frame.contentWindow;
         if (!document || !printWindow)
             throw new Error('Print frame unavailable');
+        const html = document.documentElement;
         const head = document.head;
         const body = document.body;
-        document.documentElement.lang =
-            source.lang || host.documentElement.lang;
-        document.documentElement.className = host.documentElement.className;
-        document.documentElement.style.cssText =
-            host.documentElement.style.cssText;
+        html.lang = source.lang || host.documentElement.lang;
+        html.className = host.documentElement.className;
+        html.style.cssText = host.documentElement.style.cssText;
+        const htmlDirection = host.documentElement.getAttribute('dir');
+        if (htmlDirection !== null) html.setAttribute('dir', htmlDirection);
         body.className = host.body.className;
         body.style.cssText = host.body.style.cssText;
+        const bodyDirection = host.body.getAttribute('dir');
+        if (bodyDirection !== null) body.setAttribute('dir', bodyDirection);
         document.title = options.title ?? host.title;
         const base = document.createElement('base');
         base.href = host.baseURI;

@@ -173,6 +173,83 @@ test('rendered slider actions honor permissions, current attachment ownership, a
     fixture.unchangedEffects();
 });
 
+test('a held slider Download belongs to its original occurrence and permits metadata refresh', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const { container, window } = fixture;
+    const reads: string[] = [];
+    const saved: string[] = [];
+    t.mock.method(
+        HTMLAnchorElement.prototype,
+        'click',
+        function (this: HTMLAnchorElement) {
+            saved.push(this.download);
+        }
+    );
+    const render = (identity: string, filename: string) =>
+        fixture.render(
+            h(AttachmentSliderActions, {
+                attachment: { url, filename },
+                downloadIdentity: identity,
+                labels,
+                canDownload: true,
+                canOpen: false,
+                async readDownload(requested) {
+                    reads.push(requested);
+                    return new Response('owned bytes');
+                },
+            })
+        );
+    await render('front', 'front.svg');
+    const button = container.querySelector('button');
+    assert(button);
+    const pointer = (type: string) =>
+        new window.PointerEvent(type, {
+            bubbles: true,
+            isPrimary: true,
+            button: 0,
+            pointerId: 1,
+            pointerType: 'mouse',
+        });
+    const down = () =>
+        act(async () => {
+            button.dispatchEvent(pointer('pointerdown'));
+        });
+    const release = () =>
+        act(async () => {
+            button.dispatchEvent(pointer('pointerup'));
+            button.dispatchEvent(
+                new window.MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    detail: 1,
+                })
+            );
+        });
+
+    await down();
+    await render('rear', 'rear.svg');
+    assert.equal(container.querySelector('button'), button);
+    await release();
+    assert.deepEqual(reads, []);
+    assert.deepEqual(saved, []);
+
+    await down();
+    await render('rear', 'renamed.svg');
+    await release();
+    assert.deepEqual(reads, [url]);
+    assert.deepEqual(saved, ['renamed.svg']);
+
+    await down();
+    await act(async () => {
+        button.dispatchEvent(pointer('pointercancel'));
+    });
+    await release();
+    assert.deepEqual(reads, [url]);
+    await fixture.click(button);
+    assert.deepEqual(reads, [url, url]);
+    assert.deepEqual(saved, ['renamed.svg', 'renamed.svg']);
+});
+
 function TooltipTrigger({ suspended }: { suspended: boolean }) {
     const { show, triggerRef, triggerProps, tooltip } =
         useAttachmentActionTooltip('Attachment action', suspended);

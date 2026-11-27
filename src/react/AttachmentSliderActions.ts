@@ -8,11 +8,13 @@ import {
     useRef,
     useState,
     type MouseEvent,
+    type PointerEvent,
     type ReactNode,
 } from 'react';
 import { ActionButton } from './ActionButton.js';
 import {
     resourceOwnerCurrent,
+    resourceOwnerGeneration,
     type ReadonlyResourceOwner,
 } from './readonlyResourceOwner.js';
 import { useAttachmentActionTooltip } from './useAttachmentActionTooltip.js';
@@ -35,6 +37,7 @@ export type AttachmentSliderActionsProps = {
 };
 
 const actions = 'mx-sdk-attachment-slider-actions';
+type SliderPointer = { pointerId: number; pointerType: string };
 const iconPaths = {
     delete: 'm14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
     download:
@@ -50,6 +53,7 @@ function AttachmentSliderAction({
     onClick,
     disabled,
     tooltipsSuspended,
+    pressOwner,
 }: {
     icon: keyof typeof iconPaths;
     label: string;
@@ -58,8 +62,13 @@ function AttachmentSliderAction({
     onClick?(): void;
     disabled?: boolean;
     tooltipsSuspended?: boolean;
+    pressOwner?: object;
 }) {
     const anchor = useRef<HTMLAnchorElement | null>(null);
+    const presses = useRef(
+        new Map<string, { pointerId: number; owner: object }>()
+    );
+    const released = useRef<SliderPointer | null>(null);
     const { triggerRef, triggerProps, show, tooltip } =
         useAttachmentActionTooltip(label, tooltipsSuspended);
     const attachAnchor = useCallback(
@@ -88,11 +97,61 @@ function AttachmentSliderAction({
         }
         return true;
     };
+    const takePress = ({ pointerId, pointerType }: SliderPointer) => {
+        const press = presses.current.get(pointerType);
+        if (press?.pointerId !== pointerId) return null;
+        presses.current.delete(pointerType);
+        return press;
+    };
     const control = {
         ...triggerProps,
+        onPointerDown(event: PointerEvent<HTMLElement>) {
+            triggerProps.onPointerDown(event);
+            if (!pressOwner || !event.isPrimary || event.button !== 0) return;
+            released.current = null;
+            presses.current.delete(event.pointerType);
+            if (isCurrent?.() !== false)
+                presses.current.set(event.pointerType, {
+                    pointerId: event.pointerId,
+                    owner: pressOwner,
+                });
+        },
+        onPointerUp(event: PointerEvent<HTMLElement>) {
+            if (pressOwner && event.isPrimary && event.button === 0)
+                released.current = {
+                    pointerId: event.pointerId,
+                    pointerType: event.pointerType,
+                };
+        },
+        onPointerCancel(event: PointerEvent<HTMLElement>) {
+            if (pressOwner) takePress(event);
+        },
         className: `${actions}__control`,
         onClick: (event: MouseEvent<HTMLElement>) => {
             if (!guard(event)) return;
+            if (pressOwner) {
+                const release = released.current;
+                released.current = null;
+                const click = event.nativeEvent;
+                const pointerType =
+                    'pointerType' in click &&
+                    typeof click.pointerType === 'string'
+                        ? click.pointerType
+                        : '';
+                if (event.detail > 0 || pointerType !== '') {
+                    const pointer =
+                        pointerType &&
+                        'pointerId' in click &&
+                        typeof click.pointerId === 'number'
+                            ? { pointerId: click.pointerId, pointerType }
+                            : release;
+                    if (!pointer || takePress(pointer)?.owner !== pressOwner) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                    }
+                }
+            }
             onClick?.();
             show();
         },
@@ -191,6 +250,11 @@ export function AttachmentSliderActions({
         read: readDownload,
         onError: onDownloadError,
     });
+    const ownerGeneration = resourceOwnerGeneration(presentationOwner);
+    const downloadPressOwner = useMemo(
+        () => ({}),
+        [downloadIdentity, attachment.url, presentationOwner, ownerGeneration]
+    );
 
     return h(
         'div',
@@ -215,6 +279,7 @@ export function AttachmentSliderActions({
                               ? labels.download
                               : `${progress.toFixed()}%`,
                       onClick: start,
+                      pressOwner: downloadPressOwner,
                       disabled: progress != null,
                       isCurrent,
                       tooltipsSuspended,

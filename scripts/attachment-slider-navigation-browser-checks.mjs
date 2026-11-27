@@ -12,6 +12,8 @@ const galleryRetryImagePath = '/gallery-retry.svg';
 const galleryOfficePath = '/gallery-office-original';
 const galleryOfficeOrigin = 'https://view.officeapps.live.com';
 const galleryOfficeFrameText = 'Synthetic Office iframe';
+const heldDownloadPath = '/held-download';
+const downloadAssetPaths = ['/download/front.svg', '/download/rear.svg'];
 
 const hostSource = (format, nativeConfirm) => `
 ${
@@ -159,6 +161,8 @@ function Host(){
 }
 
 const fullscreenStats={dismissals:[],deleteRequests:0,confirmed:0,confirmDismissals:0,selections:0};
+const heldDownloadProof=location.pathname===${JSON.stringify(heldDownloadPath)};
+const heldDownloadReads=[];
 const fullscreenRows=[
     {...first,id:'fullscreen-front',thumbnailUrl:first.url},
     {...second,id:'fullscreen-rear',thumbnailUrl:second.url},
@@ -174,21 +178,32 @@ function FullscreenHost(){
     const [index,setIndex]=useState(0);
     const [intercomOpen,setIntercomOpen]=useState(false);
     const [confirm,setConfirm]=useState(false);
+    const [rows,setRows]=useState(()=>heldDownloadProof
+        ? fullscreenRows.map(row=>({...row,filename:row.url.slice(1)}))
+        : fullscreenRows);
     const cancel=useRef(null);
     function open(nextMode){setIndex(0);setMode(nextMode);}
     window.fullscreenProbe={
         intercom:setIntercomOpen,
         stats:()=>({...fullscreenStats,dismissals:[...fullscreenStats.dismissals]}),
+        heldReads:()=>[...heldDownloadReads],
+        renameRear:()=>setRows(old=>[old[0],{...old[1],filename:'renamed-rear.svg'}]),
     };
     return h('section',{className:'attachment-fullscreen-host'},
         h('button',{type:'button',onClick:()=>open('standalone')},'Ouvrir le plein écran'),
         NativeDialog&&h('button',{type:'button',onClick:()=>open('native')},'Ouvrir avec confirmation native'),
         mode&&h(AttachmentSlider,{
-            rows:fullscreenRows,currentIndex:index,
+            rows,currentIndex:index,
             setCurrentIndex(next){fullscreenStats.selections++;setIndex(next);},
             navigationOwner:mode,downloadIdentity:index,
             canDownload:true,canOpen:true,
-            readDownload(){calls.fetch++;throw Error('Unexpected fullscreen download');},
+            readDownload(url){
+                if(heldDownloadProof && (url===first.url||url===second.url)){
+                    heldDownloadReads.push(url);
+                    return localGalleryFetch('/download'+url);
+                }
+                calls.fetch++;throw Error('Unexpected fullscreen download');
+            },
             onDelete(){fullscreenStats.deleteRequests++;if(mode==='native')setConfirm(true);},
             onDismiss(){fullscreenStats.dismissals.push(mode);setMode(null);},
             covered:confirm,intercomOpen,labels:fullscreenLabels,
@@ -360,15 +375,19 @@ createRoot(document.querySelector('main')).render(h('div',null,h(Host),h(Gallery
 
 const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>';
+const frontSVG = svg.replace('<rect ', '<rect fill="red" ');
+const rearSVG = svg.replace('<rect ', '<rect fill="blue" ');
 
 export async function checkAttachmentSliderNavigationBrowser({
     browser,
     consumer,
     evidence,
     nativeConfirm = false,
+    heldDownloadOnly = false,
 }) {
     evidence.formats = {};
     const staleGestures = [];
+    const staleDownloads = [];
     const require = createRequire(join(consumer, 'package.json'));
     if (nativeConfirm) {
         assert.equal(require('react').version, '18.3.1');
@@ -490,12 +509,15 @@ export async function checkAttachmentSliderNavigationBrowser({
             ['/favicon.ico', ['image/svg+xml', svg]],
             ['/front.svg', ['image/svg+xml', svg]],
             ['/rear.svg', ['image/svg+xml', svg]],
+            [downloadAssetPaths[0], ['image/svg+xml', frontSVG]],
+            [downloadAssetPaths[1], ['image/svg+xml', rearSVG]],
             [
                 galleryDocumentPath,
                 ['text/plain; charset=utf-8', galleryDocumentText],
             ],
             [galleryRetryImagePath, ['image/svg+xml', svg]],
         ]);
+        assets.set(heldDownloadPath, assets.get('/'));
         const unexpectedRequests = [];
         const pageErrors = [];
         const galleryRequests = {
@@ -586,6 +608,9 @@ export async function checkAttachmentSliderNavigationBrowser({
                     (!isDocumentRead ||
                         (url.pathname === galleryDocumentPath &&
                             request.method() === 'GET' &&
+                            url.search === '') ||
+                        (downloadAssetPaths.includes(url.pathname) &&
+                            request.method() === 'GET' &&
                             url.search === ''))
                 )
                     return route.continue();
@@ -594,6 +619,23 @@ export async function checkAttachmentSliderNavigationBrowser({
             });
             const page = await context.newPage();
             page.on('pageerror', (error) => pageErrors.push(error.message));
+            await page.goto(origin + heldDownloadPath);
+            const heldDownload = await checkFullscreenHeldDownload(page);
+            if (
+                heldDownload.stale.reads.length ||
+                heldDownload.stale.files.length
+            )
+                staleDownloads.push({ format, ...heldDownload.stale });
+            if (heldDownloadOnly) {
+                assert.deepEqual(unexpectedRequests, []);
+                assert.deepEqual(pageErrors, []);
+                evidence.formats[format] = {
+                    heldDownload,
+                    unexpectedRequests,
+                    pageErrors,
+                };
+                continue;
+            }
             await page.goto(origin);
             const navigation = page.getByRole('group', {
                 name: 'Pièces jointes',
@@ -877,6 +919,7 @@ export async function checkAttachmentSliderNavigationBrowser({
                 sliderBody,
                 sliderActions,
                 fullscreenSlider,
+                heldDownload,
                 attachmentGallery,
                 attachmentField,
                 thumbnailRail: {
@@ -910,6 +953,11 @@ export async function checkAttachmentSliderNavigationBrowser({
         staleGestures,
         [],
         'A retired owner’s held gesture selected in its successor'
+    );
+    assert.deepEqual(
+        staleDownloads,
+        [],
+        'A held Download press opened a newly selected file'
     );
 }
 
@@ -1623,6 +1671,144 @@ async function waitForSliderFocus(page, locator) {
     } finally {
         await element.dispose();
     }
+}
+
+async function checkFullscreenHeldDownload(page) {
+    const viewer = page.locator(fullscreenClass);
+    const download = viewer.getByRole('button', {
+        name: 'Télécharger la pièce jointe',
+        exact: true,
+    });
+    const selection = (name) =>
+        page.waitForFunction(
+            ({ selector, name }) =>
+                document.querySelector(selector)?.textContent === name,
+            { selector: fullscreenClass + ' [aria-live="polite"]', name }
+        );
+    const reads = () => page.evaluate(() => window.fullscreenProbe.heldReads());
+    const files = [];
+    page.on('download', (file) => files.push(file));
+    const take = async (file) => {
+        try {
+            return {
+                filename: file.suggestedFilename(),
+                bytes: readFileSync(await file.path(), 'utf8'),
+            };
+        } finally {
+            await file.delete();
+        }
+    };
+    const save = async (trigger) => {
+        const [file] = await Promise.all([
+            page.waitForEvent('download'),
+            trigger(),
+        ]);
+        return take(file);
+    };
+    const press = async () => {
+        const iconLocator = download.locator('svg');
+        await iconLocator.hover();
+        const icon = await iconLocator.boundingBox();
+        assert(icon);
+        const point = {
+            x: icon.x + icon.width / 2,
+            y: icon.y + icon.height / 2,
+        };
+        await page.mouse.move(point.x, point.y);
+        assert(
+            await download.evaluate(
+                (button, { x, y }) =>
+                    button.contains(document.elementFromPoint(x, y)),
+                point
+            )
+        );
+        await page.mouse.down();
+        return point;
+    };
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: 'Ouvrir le plein écran' }).click();
+    await waitForSliderFocus(
+        page,
+        viewer.locator('.mx-sdk-attachment-thumbnail-rail')
+    );
+    await selection('front.svg');
+    await download.evaluate((button) => {
+        window.heldDownloadEvents = [];
+        for (const type of ['pointerdown', 'pointerup', 'click']) {
+            button.addEventListener(type, (event) =>
+                window.heldDownloadEvents.push({
+                    type,
+                    trusted: event.isTrusted,
+                    target: event.target.closest('svg') ? 'icon' : 'control',
+                })
+            );
+        }
+    });
+    const original = await download.elementHandle();
+    assert(original);
+    const point = await press();
+    await page.keyboard.press('ArrowRight');
+    await selection('rear.svg');
+    assert(
+        await download.evaluate(
+            (button, expected) => button === expected,
+            original
+        )
+    );
+    assert(
+        await download.evaluate(
+            (button, { x, y }) =>
+                button.contains(document.elementFromPoint(x, y)),
+            point
+        )
+    );
+    await page.mouse.up();
+    const staleReads = await reads();
+    if (staleReads.length && files.length === 0)
+        await page.waitForEvent('download');
+    const stale = {
+        reads: staleReads,
+        files: await Promise.all(files.map(take)),
+        events: await page.evaluate(() => window.heldDownloadEvents.slice()),
+    };
+    assert.deepEqual(
+        stale.events.map(({ type, trusted }) => [type, trusted]),
+        [
+            ['pointerdown', true],
+            ['pointerup', true],
+            ['click', true],
+        ]
+    );
+    assert.equal(stale.events[0].target, 'icon');
+    const fresh = await save(() => download.click());
+    assert.deepEqual(fresh, { filename: 'rear.svg', bytes: rearSVG });
+    assert.deepEqual((await reads()).slice(staleReads.length), ['/rear.svg']);
+
+    await press();
+    await page.evaluate(() => window.fullscreenProbe.renameRear());
+    await selection('renamed-rear.svg');
+    const metadataRefresh = await save(() => page.mouse.up());
+    assert.deepEqual(metadataRefresh, {
+        filename: 'renamed-rear.svg',
+        bytes: rearSVG,
+    });
+    assert.deepEqual((await reads()).slice(staleReads.length), [
+        '/rear.svg',
+        '/rear.svg',
+    ]);
+    const keyboard = await save(() => download.press('Enter'));
+    assert.deepEqual(keyboard, metadataRefresh);
+    assert.deepEqual((await reads()).slice(staleReads.length), [
+        '/rear.svg',
+        '/rear.svg',
+        '/rear.svg',
+    ]);
+    await viewer
+        .getByRole('button', { name: 'Fermer la visionneuse', exact: true })
+        .click();
+    await viewer.waitFor({ state: 'detached' });
+    return { stale, fresh, metadataRefresh, keyboard };
 }
 
 async function checkFullscreenSlider(page, nativeConfirm) {

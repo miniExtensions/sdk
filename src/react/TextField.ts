@@ -185,8 +185,8 @@ export function TextControl(props: TextControlProps): ReactNode {
                     trailingCompositionInput.current = null;
                     if (
                         trailing === raw &&
-                        (event.nativeEvent as InputEvent).inputType !==
-                            'insertFromPaste'
+                        (event.nativeEvent as InputEvent | undefined)
+                            ?.inputType !== 'insertFromPaste'
                     ) {
                         event.currentTarget.value = props.value;
                         return;

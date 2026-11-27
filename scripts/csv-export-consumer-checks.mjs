@@ -52,9 +52,154 @@ let props={request:{input:makeInput(100),filename:'Old filename',platform},label
 const markup=renderToString(element());assert(markup.includes('Download'));assert(!markup.includes('<dialog'));assert.equal(resources,0);
 const {Window}=require(process.argv[3]);const window=new Window({settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true,disableIframePageLoading:true}});
 const globals={window,document:window.document,navigator:window.navigator,HTMLElement:window.HTMLElement,HTMLDialogElement:window.HTMLDialogElement,IS_REACT_ACT_ENVIRONMENT:true};const originals=Object.keys(globals).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]);for(const[key,value]of Object.entries(globals))Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});
-const errors=[],recoverable=[];const oldError=console.error;console.error=(...args)=>errors.push(args.map(String).join(' '));let root;
-try{const container=window.document.createElement('div');window.document.body.append(container);container.innerHTML=markup;const{hydrateRoot}=await import('react-dom/client');await act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>recoverable.push(error.name)});});const trigger=container.querySelector('button');assert.equal(trigger.type,'button');await act(async()=>trigger.click());const dialog=container.querySelector('dialog');assert(dialog.open);const cancel=[...dialog.querySelectorAll('button')].find(button=>button.textContent==='Cancel');assert.equal(window.document.activeElement,cancel);await act(async()=>cancel.click());assert.equal(resources,0);await act(async()=>trigger.click());props={...props,request:{...props.request,input:makeInput(1,'Current'),filename:'Current filename'}};await act(async()=>root.render(element()));const confirm=[...container.querySelectorAll('dialog button')].find(button=>button.textContent==='Continue');await act(async()=>{confirm.click();await clicked;});assert.deepEqual(texts,["'=Header\nCurrent\n"]);assert.deepEqual(filenames,['Current filename']);assert.deepEqual(revoked,['blob:synthetic']);assert.equal(container.querySelector('dialog'),null);assert.deepEqual(recoverable,[]);assert.deepEqual(errors,[]);}finally{if(root)await act(async()=>root.unmount());console.error=oldError;for(const[key,value]of originals){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}await window.happyDOM.close();}
-console.log(JSON.stringify({format,react:React.version,hydrationErrors:recoverable.length,resources,cleanup:'completed'}));
+const errors=[],recoverable=[];const oldError=console.error;console.error=(...args)=>errors.push(args.map(String).join(' '));
+let root, confirmationResources, rollupDownload;
+
+async function checkMountedRollup(container, trigger) {
+    const Papa = createRequire(require.resolve('@miniextensions/sdk/portals'))('papaparse');
+    const parseRows = (text) => {
+        const parsed = Papa.parse(text, { delimiter: ',', skipEmptyLines: true });
+        assert.deepEqual(parsed.errors, []);
+        return parsed.data;
+    };
+    let hiddenReads = 0;
+    const hidden = {
+        field: { id: 'fldHidden', name: 'Private column', config: { type: 'singleLineText' } },
+        get value() {
+            hiddenReads++;
+            return 'Hidden synthetic value';
+        },
+    };
+    const company = {
+        field: { id: 'fldCompany', name: 'Company', config: { type: 'singleLineText' } },
+        value: 'Acme',
+    };
+    const selectResult = {
+        type: 'multipleSelects',
+        options: { choices: [{ id: 'blue', name: 'Blue' }, { id: 'red', name: 'Red' }] },
+    };
+    const tags = Object.freeze(['Blue', 'Red', 'Blue']);
+    const rollupInput = (value, result = selectResult) => ({
+        admission: { cohort: 'portal-grid', allowed: true, borrowedRecords: false },
+        columns: [
+            { key: 'Company', title: 'Company' },
+            { key: 'Tags', title: 'Tags' },
+            { key: 'Private column', title: 'Private column', isHidden: true },
+        ],
+        rows: [{
+            status: 'loaded',
+            viewType: 'list',
+            fields: [company, {
+                field: {
+                    id: 'fldRollup',
+                    name: 'Tags',
+                    config: { type: 'rollup', options: {
+                        isValid: true,
+                        recordLinkFieldId: 'fldLinked',
+                        fieldIdInLinkedTable: 'fldTags',
+                        referencedFieldIds: [],
+                        result,
+                    } },
+                },
+                value,
+            }, hidden],
+        }],
+    });
+    const readControl = async (input) => {
+        const projection = api.projectCSVExport(input);
+        assert.equal(projection.status, 'ready');
+        return parseRows(await api.serializeCSVExportDocument(projection.document));
+    };
+    const defaultInput = rollupInput(tags);
+    const formatCalls = [];
+    const controls = {
+        empty: await readControl(rollupInput([])),
+        numeric: await readControl(rollupInput(-7.25, { type: 'number', options: { precision: 2 } })),
+        custom: await readControl({
+            ...defaultInput,
+            formatField({ field, value }) {
+                formatCalls.push({ name: field.name, value });
+                return field.name === 'Tags' ? 'Host-formatted tags' : value;
+            },
+        }),
+    };
+
+    const before = { resources, texts: texts.length, filenames: filenames.length, revoked: revoked.length };
+    const createdUrls = [];
+    let settle, timer, outcome;
+    const settled = new Promise((resolve) => { settle = resolve; });
+    props = {
+        ...props,
+        request: {
+            input: defaultInput,
+            filename: 'Synthetic Rollup.csv',
+            platform: {
+                ...platform,
+                createObjectURL(blob) {
+                    const url = platform.createObjectURL(blob);
+                    createdUrls.push(url);
+                    return url;
+                },
+                revokeObjectURL(url) {
+                    platform.revokeObjectURL(url);
+                    settle({ status: 'delivered' });
+                },
+            },
+        },
+        onFailure: ({ reason }) => settle({ status: 'blocked', reason }),
+    };
+    await act(async () => root.render(element()));
+    try {
+        await act(async () => {
+            const timeout = new Promise((_, reject) => {
+                timer = setTimeout(() => reject(Error('Mounted Rollup CSV did not settle')), 5000);
+            });
+            trigger.click();
+            outcome = await Promise.race([settled, timeout]);
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+    const actual = {
+        outcome,
+        controls,
+        formatCalls,
+        hiddenReads,
+        blobs: resources - before.resources,
+        createdUrls,
+        filenames: filenames.slice(before.filenames),
+        revoked: revoked.slice(before.revoked),
+        csv: texts.slice(before.texts),
+        rows: texts.slice(before.texts).map(parseRows),
+        alert: container.querySelector('[role="alert"]')?.textContent ?? null,
+    };
+    assert.deepEqual(actual, {
+        outcome: { status: 'delivered' },
+        controls: {
+            empty: [['Company', 'Tags'], ['Acme', '']],
+            numeric: [['Company', 'Tags'], ['Acme', '-7.25']],
+            custom: [['Company', 'Tags'], ['Acme', 'Host-formatted tags']],
+        },
+        formatCalls: [{ name: 'Company', value: 'Acme' }, { name: 'Tags', value: tags }],
+        hiddenReads: 0,
+        blobs: 1,
+        createdUrls: ['blob:synthetic'],
+        filenames: ['Synthetic Rollup.csv'],
+        revoked: ['blob:synthetic'],
+        csv: ['Company,Tags\nAcme,"Blue, Red, Blue"\n'],
+        rows: [[['Company', 'Tags'], ['Acme', 'Blue, Red, Blue']]],
+        alert: null,
+    }, 'Default mounted CSV must preserve the visible Rollup choice values');
+    return actual;
+}
+
+try{const container=window.document.createElement('div');window.document.body.append(container);container.innerHTML=markup;const{hydrateRoot}=await import('react-dom/client');await act(async()=>{root=hydrateRoot(container,element(),{onRecoverableError:error=>recoverable.push(error.name)});});const trigger=container.querySelector('button');assert.equal(trigger.type,'button');await act(async()=>trigger.click());const dialog=container.querySelector('dialog');assert(dialog.open);const cancel=[...dialog.querySelectorAll('button')].find(button=>button.textContent==='Cancel');assert.equal(window.document.activeElement,cancel);await act(async()=>cancel.click());assert.equal(resources,0);await act(async()=>trigger.click());props={...props,request:{...props.request,input:makeInput(1,'Current'),filename:'Current filename'}};await act(async()=>root.render(element()));const confirm=[...container.querySelectorAll('dialog button')].find(button=>button.textContent==='Continue');await act(async()=>{confirm.click();await clicked;});assert.deepEqual(texts,["'=Header\nCurrent\n"]);assert.deepEqual(filenames,['Current filename']);assert.deepEqual(revoked,['blob:synthetic']);assert.equal(container.querySelector('dialog'),null);
+    confirmationResources = resources;
+    rollupDownload = await checkMountedRollup(container, trigger);
+    assert.deepEqual(recoverable,[]);
+    assert.deepEqual(errors,[]);
+}finally{if(root)await act(async()=>root.unmount());console.error=oldError;for(const[key,value]of originals){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}await window.happyDOM.close();}
+console.log(JSON.stringify({format,react:React.version,hydrationErrors:recoverable.length,resources:confirmationResources,rollupDownload,cleanup:'completed'}));
 `;
 
 export function assertCSVBrowserInputs(metafile) {

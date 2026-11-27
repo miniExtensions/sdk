@@ -59,10 +59,12 @@ const fixture = (configure: (loaded: FormLoadedResult) => void = () => {}) => {
         config = 0,
         lease = true;
     const calls: SaveFormInput[] = [];
+    let fetches = 0;
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         session: { visitor: 'A' },
         fetch: async () => {
+            fetches++;
             throw Error('Unexpected request');
         },
     });
@@ -91,6 +93,7 @@ const fixture = (configure: (loaded: FormLoadedResult) => void = () => {}) => {
         fields,
         pages,
         calls,
+        getFetchCount: () => fetches,
         onScopeRead: (observe: () => void) => {
             observeScope = observe;
         },
@@ -1317,6 +1320,74 @@ describe('multipage Form ownership', () => {
             true
         );
         assert.equal(f.calls.length, 0);
+    });
+    for (const [name, value, allowed] of [
+        ['empty object', {}, false],
+        ['type without text', { type: 'qr' }, false],
+        ['populated Barcode', { type: 'qr', text: '0012' }, true],
+    ] as const) {
+        it(`checks required Barcode before Next: ${name}`, (t) => {
+            const f = fixture((loaded) => {
+                const schema = loaded.payload.fieldIdsToSchemas.a!;
+                schema.fieldType = 'barcode';
+                schema.airtableField.config = {
+                    type: 'barcode',
+                    options: null,
+                };
+                loaded.payload.formRecord.data.a = value;
+            });
+            t.after(() => f.pages.dispose());
+            const draft = structuredClone(f.fields.controller.getState().draft);
+            assert.deepEqual(draft?.data, {
+                a: value,
+                b: 'B',
+                c: 'C',
+                untouched: { text: 'native' },
+            });
+            assert.deepEqual(draft?.dirtyFieldIds, ['untouched']);
+            const before = f.pages.getSnapshot();
+            const result = f.pages.next(before.revision);
+            const after = f.pages.getSnapshot();
+            assert.equal(before.pages.length, 3);
+            assert.equal(before.activePageIndex, 0);
+            assert.deepEqual(f.fields.controller.getState().draft, draft);
+            assert.equal(f.calls.length, 0);
+            assert.equal(f.getFetchCount(), 0);
+            const problems = allowed
+                ? []
+                : [{ fieldId: 'a', code: 'required' }];
+            assert.deepEqual(
+                {
+                    canNext: before.canNext,
+                    problems: before.problems,
+                    result,
+                    pageIndex: after.activePageIndex,
+                },
+                {
+                    canNext: allowed,
+                    problems,
+                    result: allowed
+                        ? { accepted: true }
+                        : { accepted: false, reason: 'validation' },
+                    pageIndex: allowed ? 1 : 0,
+                }
+            );
+            assert.deepEqual(after.problems, problems);
+        });
+    }
+    it('keeps final Submit admission for a last-page type-only Barcode', (t) => {
+        const f = fixture((loaded) => {
+            const schema = loaded.payload.fieldIdsToSchemas.c!;
+            schema.fieldType = 'barcode';
+            schema.airtableField.config = { type: 'barcode', options: null };
+            loaded.payload.formRecord.data.c = { type: 'qr' };
+        });
+        t.after(() => f.pages.dispose());
+        lastPage(f);
+        assert.equal(f.pages.getSnapshot().activePageIndex, 2);
+        assert.deepEqual(f.pages.getSnapshot().problems, []);
+        assert.equal(f.calls.length, 0);
+        assert.equal(f.getFetchCount(), 0);
     });
     it('raw invalid scalar input advances revision without overwriting native; rejects stale Next', () => {
         const f = fixture();

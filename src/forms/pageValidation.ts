@@ -96,7 +96,8 @@ const validateOrdinaryPageField = (
     value: AirtableValue | undefined,
     stored: AirtableValue | undefined,
     hidden: boolean,
-    openedLinkedRecordIds?: ReadonlySet<string>
+    openedLinkedRecordIds?: ReadonlySet<string>,
+    validatingNext = false
 ): FormPageProblem | null => {
     const type = field.fieldType;
     const config: Record<string, unknown> = field.schema.miniExtConfig ?? {};
@@ -157,7 +158,12 @@ const validateOrdinaryPageField = (
         config.required === true &&
         !hidden &&
         !field.readOnly &&
-        pageValueEmpty(type, value)
+        (pageValueEmpty(type, value) ||
+            (validatingNext &&
+                type === 'barcode' &&
+                field.schema.airtableField.config.type === 'barcode' &&
+                object(value) &&
+                !('text' in value)))
     )
         return problem('required');
     if (
@@ -318,9 +324,10 @@ const computedTargets = new Set([
     'aiText',
 ]);
 
-type ConditionalPageContext = {
+type PageValidationContext = {
     data: Readonly<Record<string, AirtableValue>>;
     fieldIdsToSchemas: Readonly<Record<string, RuntimeFieldSchema | undefined>>;
+    validatingNext?: boolean;
 };
 
 /** Ordinary feedback precedes configured validation, as in the frontend. */
@@ -329,7 +336,7 @@ export const validatePageField = (
     value: AirtableValue | undefined,
     stored: AirtableValue | undefined,
     hidden: boolean,
-    context?: ConditionalPageContext,
+    context?: PageValidationContext,
     openedLinkedRecordIds?: ReadonlySet<string>
 ): FormPageProblem | null => {
     const ordinaryProblem = validateOrdinaryPageField(
@@ -337,7 +344,8 @@ export const validatePageField = (
         value,
         stored,
         hidden,
-        openedLinkedRecordIds
+        openedLinkedRecordIds,
+        context?.validatingNext
     );
     if (ordinaryProblem) return ordinaryProblem;
     const config = field.schema.miniExtConfig;

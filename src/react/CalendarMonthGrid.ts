@@ -39,7 +39,7 @@ export type CalendarMonthGridProps = {
     focusedDay?: string;
     /** Portal's >=1024 presentation snapshot. Viewport changes perform no read. */
     isWide?: boolean;
-    /** Local Date components used only for the native visual today highlight. */
+    /** Local Gregorian date parts used only for the native visual today highlight. */
     localToday?: { year: number; month: number; day: number };
     locale?: string;
     labels?: Partial<CalendarMonthGridLabels>;
@@ -112,6 +112,7 @@ function MonthGrid(props: CalendarMonthGridProps): ReactElement {
                 day: now.getDate(),
             };
         })();
+    const localTodayKey = `${String(localToday.year).padStart(4, '0')}-${String(localToday.month).padStart(2, '0')}-${String(localToday.day).padStart(2, '0')}`;
     return h(
         'div',
         {
@@ -173,7 +174,7 @@ function MonthGrid(props: CalendarMonthGridProps): ReactElement {
                                       day,
                                       props,
                                       labels,
-                                      localToday,
+                                      localTodayKey,
                                   })
                                 : h('td', { key: index })
                         )
@@ -196,13 +197,13 @@ function DayCell({
     day,
     props,
     labels,
-    localToday,
+    localTodayKey,
 }: {
     state: CalendarState;
     day: CalendarDate;
     props: CalendarMonthGridProps;
     labels: CalendarMonthGridLabels;
-    localToday: { year: number; month: number; day: number };
+    localTodayKey: string;
 }): ReactElement {
     const ref = useRef<HTMLDivElement | null>(null);
     const {
@@ -215,10 +216,6 @@ function DayCell({
     } = useCalendarCell({ date: day }, state, ref);
     const { focusProps, isFocusVisible } = useFocusRing();
     const date = day.toString();
-    const today =
-        day.year === localToday.year &&
-        day.month === localToday.month &&
-        day.day === localToday.day;
     if (props.surface === 'portal' && isOutsideVisibleRange)
         return h('td', {
             ...cellProps,
@@ -253,7 +250,7 @@ function DayCell({
                 ref,
                 className: 'mx-sdk-calendar__day',
                 'data-selected': isSelected,
-                'data-today': today,
+                'data-today': date === localTodayKey,
                 'data-disabled': isDisabled,
                 'data-focus-visible':
                     props.surface === 'picker' && isFocusVisible,

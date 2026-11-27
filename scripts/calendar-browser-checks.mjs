@@ -56,6 +56,8 @@ const date=id=>({id,name:id,description:null,isComputed:false,isPrimaryField:fal
 const admitted=()=>({type:'admitted'}),refused=reason=>({type:'refused',reason});
 const canonical=['off-day'],attempts=[],writes=[],pickerReads=[],portalReads=[],opens=[],removals=[];
 const scenario=new URLSearchParams(window.location.search);
+const pickerDayCount=scenario.has('picker-day-count');
+const pickerClock=pickerDayCount?{...clock,utcDay:()=> '2026-02-12',localDay:()=> '2026-02-12'}:clock;
 const holdPickerEcho=scenario.has('hold-picker-echo');
 const nestedPickerActions=scenario.has('nested-picker-actions');
 const formList=scenario.get('form-list');
@@ -66,7 +68,9 @@ let pickerOwner={},pickerLive=true,pickerControlLive=true,capped=false,refuseRea
 let portalOwner={},portalLive=true,portalControlLive=true,portalCanOpen=true,retainedMonth='2026-02';
 let setPickerFrame=null,setPortalFrame=null,observed=null;
 const pickerControl={owner:{},isCurrent:()=>pickerControlLive,scheduleRead(request){pickerReads.push(request);return refuseReads?refused('native-read-refusal'):admitted();}};
-const pickerRecords=[{id:'one',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'two',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'off-day',fields:{start:'2026-02-21',end:'2026-02-21'}}];
+const pickerRecords=pickerDayCount
+ ? Array.from({length:12},(_,index)=>({id:'count-'+index,fields:{start:'2026-02-13',end:'2026-02-13'}}))
+ : [{id:'one',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'two',fields:{start:'2026-02-15',end:'2026-02-15'}},{id:'off-day',fields:{start:'2026-02-21',end:'2026-02-21'}}];
 const presentations={one:{type:'list',primary:'Rich appointment',showPreviewFieldTitle:true,details:[{key:'notes',title:'Notes',leaf:{kind:'text',display:{value:'Rich https://example.test/calendar',language:'en',layout:'linked-list'}}},{key:'tag',title:'Tag',leaf:{kind:'pills',items:[{label:'Accepted tag'}]}}]},two:{type:'calendar',primary:'Second appointment',subtitle:'Native compact detail'},'off-day':{type:'calendar',primary:'Off-day selection',subtitle:''}};
 if(formList){
  canonical.push('two');
@@ -133,7 +137,7 @@ function App(){
   h('button',{type:'button','data-complete-calendar':'retire-portal',onClick:()=>{portalLive=false;}},'Retire Portal display'),
   h('button',{type:'button','data-complete-calendar':'retire-portal-control',onClick:()=>{portalControlLive=false;}},'Retire Portal controls'),
   h('button',{type:'button','data-complete-calendar':'unmount',onClick:()=>setMounted(false)},'Unmount complete Calendar')),
-  mounted?h('div',{className:formList?'fixture-form-list':'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock,locale:'en-US',className:formList&&!scenario.has('default-list')?'mx-sdk-calendar-picker--form-record-list':undefined}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null,
+  mounted?h('div',{className:formList?'fixture-form-list':'fixture-complete-host'},mode==='picker'?h(CalendarRecordPicker,{key:'picker',frame:pickerFrame,clock:pickerClock,locale:'en-US',labels:pickerDayCount?{events:'événements'}:undefined,className:formList&&!scenario.has('default-list')?'mx-sdk-calendar-picker--form-record-list':undefined}):h(PortalCalendar,{key:'portal',frame:{...portalFrame,presentationOwner:{...portalFrame.presentationOwner},recordActions:portalFrame.recordActions.map(value=>({...value}))},clock,locale:'en-US',isWide,registerVisibleRecords})):null,
   (nestedPickerActions||formList)?h('button',{type:'button'},'After picker'):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
@@ -867,6 +871,66 @@ export async function checkCalendarBrowser({
         );
 
         await page.setViewportSize({ width: 375, height: 844 });
+        await page.goto(origin + '/complete?picker-day-count');
+        await page.waitForFunction(() =>
+            window.completeCalendarProof?.snapshot()
+        );
+        const emptyDay = day('2026-02-12');
+        const populatedDay = day('2026-02-13');
+        await emptyDay.focus();
+        const beforeCountFocus = await completeSnapshot();
+        await page.keyboard.press('ArrowRight');
+        await page.waitForFunction(
+            () =>
+                document.activeElement?.closest('[data-date]')?.dataset.date ===
+                '2026-02-13'
+        );
+        assert.equal(await emptyDay.getAttribute('data-selected'), 'true');
+        assert.equal(await populatedDay.getAttribute('data-selected'), 'false');
+        assert.equal(
+            await populatedDay.locator('.mx-sdk-calendar__badge').textContent(),
+            '9+'
+        );
+        assert.deepEqual(await completeSnapshot(), beforeCountFocus);
+        const accessibility = await context.newCDPSession(page);
+        const dayAccessibility = async (date) => {
+            const { root } = await accessibility.send('DOM.getDocument');
+            const { nodeId } = await accessibility.send('DOM.querySelector', {
+                nodeId: root.nodeId,
+                selector: `[data-date="${date}"] .mx-sdk-calendar__day`,
+            });
+            const { nodes } = await accessibility.send(
+                'Accessibility.getPartialAXTree',
+                { nodeId, fetchRelatives: false }
+            );
+            assert.equal(nodes[0]?.role?.value, 'button');
+            return nodes[0];
+        };
+        try {
+            const node = await dayAccessibility('2026-02-13');
+            assert.match(node.name?.value ?? '', /Friday, February 13, 2026/);
+            assert.equal(node.description?.value, '12 événements');
+            assert.equal(
+                (await dayAccessibility('2026-02-12')).description?.value,
+                undefined
+            );
+        } finally {
+            await accessibility.detach();
+        }
+        await page.keyboard.press('Enter');
+        await page
+            .locator('[data-date="2026-02-13"] [data-selected="true"]')
+            .waitFor();
+        assert.deepEqual(await completeSnapshot(), beforeCountFocus);
+        evidence.results.push({
+            name: 'complete-picker-accessible-day-count',
+            focusedDay: '2026-02-13',
+            description: '12 événements',
+            badge: '9+',
+            pickerReads: beforeCountFocus.pickerReads,
+            writes: beforeCountFocus.writes,
+        });
+
         await page.goto(origin + '/complete?hold-picker-echo');
         await page.waitForFunction(() =>
             window.completeCalendarProof?.snapshot()

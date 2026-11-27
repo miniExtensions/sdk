@@ -1,6 +1,7 @@
 /// <reference lib="es2023.intl" />
 import {
     createElement as h,
+    useId,
     useRef,
     type ReactElement,
     type ReactNode,
@@ -206,6 +207,7 @@ function DayCell({
     localTodayKey: string;
 }): ReactElement {
     const ref = useRef<HTMLDivElement | null>(null);
+    const countDescriptionId = useId();
     const {
         cellProps,
         buttonProps,
@@ -228,6 +230,7 @@ function DayCell({
         rawCount != null && Number.isSafeInteger(rawCount) && rawCount > 0
             ? rawCount
             : 0;
+    const hasPickerCount = props.surface === 'picker' && count > 0;
     const wide = props.surface === 'portal' && props.isWide;
     const dayProps =
         props.surface === 'picker'
@@ -247,6 +250,14 @@ function DayCell({
             'div',
             {
                 ...dayProps,
+                ...(hasPickerCount && {
+                    'aria-describedby': [
+                        buttonProps['aria-describedby'],
+                        countDescriptionId,
+                    ]
+                        .filter(Boolean)
+                        .join(' '),
+                }),
                 ref,
                 className: 'mx-sdk-calendar__day',
                 'data-selected': isSelected,
@@ -256,7 +267,7 @@ function DayCell({
                     props.surface === 'picker' && isFocusVisible,
             },
             h('span', { className: 'mx-sdk-calendar__number' }, formattedDate),
-            props.surface === 'picker' && count > 0
+            hasPickerCount
                 ? h(
                       'span',
                       { className: 'mx-sdk-calendar__badge' },
@@ -264,6 +275,13 @@ function DayCell({
                   )
                 : null
         ),
+        hasPickerCount
+            ? h(
+                  'span',
+                  { id: countDescriptionId, hidden: true },
+                  `${count} ${labels.events}`
+              )
+            : null,
         props.surface === 'picker' || wide
             ? h(
                   'div',

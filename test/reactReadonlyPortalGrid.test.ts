@@ -202,6 +202,138 @@ it('owns complete table markup, accepted ordering, literal labels and empty head
     f.unchangedEffects();
 });
 
+it('bounds field ID reads for a wide Grid and keeps the first visible cell', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const readsByWidth: Record<number, number> = {};
+    for (const width of [32, 64]) {
+        let reads = 0;
+        const columns = Array.from({ length: width }, (_, index) => ({
+            fieldId: `field-${index}`,
+            title: `Column ${index}`,
+        }));
+        const rows = Array.from({ length: 100 }, (_, index) => {
+            const recordId = `row-${100 - index}`;
+            return {
+                recordId,
+                cells: columns
+                    .map(({ fieldId }) => ({
+                        get fieldId() {
+                            reads++;
+                            return fieldId;
+                        },
+                        node: `${recordId}:${fieldId}`,
+                    }))
+                    .reverse(),
+            };
+        });
+        await f.render(
+            h(
+                ReadonlyPortalGrid,
+                model({ columns, rows, primaryFieldId: columns[0].fieldId })
+            )
+        );
+        readsByWidth[width] = reads;
+        const renderedRows = [...f.container.querySelectorAll('tbody tr')];
+        assert.deepEqual(
+            renderedRows.map((row) => row.getAttribute('data-record-id')),
+            rows.map(({ recordId }) => recordId)
+        );
+        assert.deepEqual(
+            renderedRows.map((row) =>
+                [...row.querySelectorAll('td')].map((cell) => [
+                    cell.getAttribute('data-field-id'),
+                    cell.textContent,
+                ])
+            ),
+            rows.map(({ recordId }) =>
+                columns.map(({ fieldId }) => [
+                    fieldId,
+                    `${recordId}:${fieldId}`,
+                ])
+            )
+        );
+    }
+
+    let ignoredNodeReads = 0;
+    const ignoredCell = (fieldId: string) => ({
+        fieldId,
+        get node() {
+            ignoredNodeReads++;
+            return 'Unexpected node';
+        },
+    });
+    await f.render(
+        h(
+            ReadonlyPortalGrid,
+            model({
+                columns: ['primary', 'null', 'missing', 'hidden'].map(
+                    (fieldId) => ({ fieldId, title: fieldId })
+                ),
+                hiddenColumns: { hidden: true },
+                rows: [
+                    {
+                        recordId: 'sparse',
+                        cells: [
+                            { fieldId: 'null', node: null },
+                            { fieldId: 'primary', node: 'First value' },
+                            ignoredCell('primary'),
+                            ignoredCell('null'),
+                            ignoredCell('hidden'),
+                        ],
+                    },
+                ],
+            })
+        )
+    );
+    assert.deepEqual(
+        [...f.container.querySelectorAll('tbody td')].map((cell) => [
+            cell.getAttribute('data-field-id'),
+            cell.textContent,
+        ]),
+        [
+            ['primary', 'First value'],
+            ['null', ''],
+            ['missing', ''],
+        ]
+    );
+    assert.equal(ignoredNodeReads, 0);
+
+    const opened: string[] = [];
+    let dormantCellReads = 0;
+    const openOnlyRow = { recordId: 'open-only', cells: [] };
+    Object.defineProperty(openOnlyRow, 'cells', {
+        // Keep React's development prop comparison out of the renderer count.
+        enumerable: false,
+        get() {
+            dormantCellReads++;
+            return [];
+        },
+    });
+    await f.render(
+        h(
+            ReadonlyPortalGrid,
+            model({
+                primaryFieldId: null,
+                hiddenColumns: { primary: true, value: true },
+                rows: [openOnlyRow],
+                onOpenRecord(id, trigger) {
+                    assert.equal(trigger, button(f, 'Open record'));
+                    opened.push(id);
+                },
+            })
+        )
+    );
+    await f.click(button(f, 'Open record'));
+    assert.deepEqual(opened, ['open-only']);
+    assert.equal(dormantCellReads, 0);
+    f.unchangedEffects();
+    t.diagnostic(`Grid field ID reads ${JSON.stringify(readsByWidth)}`);
+    assert.ok(
+        readsByWidth[32] <= 6400 && readsByWidth[64] <= 12800,
+        `Wide Grid field ID read limits exceeded: ${JSON.stringify(readsByWidth)}`
+    );
+});
+
 it('protects primary visibility and treats only true as a hidden preference', async (t) => {
     const f = await htmlPresentationFixture(t);
     for (const hidden of [false, null, undefined, 'true', 1]) {

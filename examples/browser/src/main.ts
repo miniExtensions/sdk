@@ -1507,6 +1507,9 @@ const renderForm = (page: FormLoadedResult): void => {
             const choice = element('input');
             choice.placeholder = 'New choice name';
             choice.setAttribute('aria-label', 'New choice name');
+            choice.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') event.preventDefault();
+            });
             const creator = bindingOwner?.selectChoice(
                 fieldId,
                 { journal: recovery, scope, loadVersion },

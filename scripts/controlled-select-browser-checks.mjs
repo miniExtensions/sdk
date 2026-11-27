@@ -594,6 +594,126 @@ function assertAddChoiceRefresh({
     assert.equal(afterEnter.submits, 0);
 }
 
+const gatedChoice = { id: 'gated', name: 'Gated' };
+const keepChoice = { id: 'keep', name: 'Keep' };
+const neighborChoice = { id: 'neighbor', name: 'Neighbor' };
+
+async function readExistingChoiceRefresh(page, snapshot, scenario) {
+    const status = page.getByRole('combobox', { name: 'Status', exact: true });
+    await page
+        .getByRole('button', { name: 'Before Status', exact: true })
+        .focus();
+    await page.keyboard.press('Tab');
+    const input = await status.elementHandle();
+    const read = async () => {
+        const presentation = await input.evaluate((node) => {
+            const document = node.ownerDocument;
+            const activeId = node.getAttribute('aria-activedescendant');
+            const listbox = document.getElementById(
+                node.getAttribute('aria-controls')
+            );
+            const active = activeId && document.getElementById(activeId);
+            const options = Array.from(
+                listbox?.querySelectorAll('[role="option"]') ?? []
+            );
+            return {
+                sameFocusedInput:
+                    node.isConnected && document.activeElement === node,
+                open: node.getAttribute('aria-expanded') === 'true',
+                activeId,
+                active: options.includes(active) ? active.textContent : null,
+                highlighted: options
+                    .filter((option) => option.hasAttribute('data-active'))
+                    .map((option) => option.textContent),
+                options: options.map((option) => option.textContent),
+            };
+        });
+        const { single, writes, submits, choiceIds, keys } = await snapshot();
+        return { presentation, single, writes, submits, choiceIds, keys };
+    };
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('End');
+    const before = await read();
+
+    const replacement =
+        scenario === 'insert'
+            ? [keepChoice, gatedChoice, neighborChoice]
+            : [keepChoice, gatedChoice];
+    await page.evaluate(
+        (choices) => window.selectProof.refreshChoices(choices),
+        replacement
+    );
+    await page.getByRole('option', { name: 'Gated', exact: true }).waitFor();
+    const refreshed = await read();
+    await page.keyboard.press('Enter');
+    const afterEnter = await read();
+    if (scenario === 'insert') return { before, refreshed, afterEnter };
+
+    await page.keyboard.press('End');
+    const renavigated = await read();
+    await page.keyboard.press('Enter');
+    return {
+        before,
+        refreshed,
+        afterEnter,
+        renavigated,
+        afterRenavigatedEnter: await read(),
+    };
+}
+
+function assertExistingChoiceRefresh({
+    scenario,
+    before,
+    refreshed,
+    afterEnter,
+    renavigated,
+    afterRenavigatedEnter,
+}) {
+    const assertState = (state, options, active, keys, committed = null) => {
+        const { activeId, ...presentation } = state.presentation;
+        if (active === null) assert.equal(activeId, null);
+        else assert.ok(activeId, 'Expected a valid active descendant');
+        assert.deepEqual(presentation, {
+            sameFocusedInput: true,
+            open: committed === null,
+            active,
+            highlighted: active === null ? [] : [active],
+            options,
+        });
+        assert.equal(state.single, committed?.name ?? null);
+        assert.deepEqual(state.choiceIds, committed ? [committed.id] : []);
+        assert.deepEqual(
+            state.writes,
+            committed
+                ? [{ kind: 'value', key: 'single', value: committed.name }]
+                : []
+        );
+        assert.equal(state.submits, 0);
+        assert.deepEqual(
+            state.keys,
+            keys.map((key) => ({ key, trusted: true }))
+        );
+    };
+    const keys = ['ArrowDown', 'End'];
+    assertState(before, ['Keep', 'Neighbor'], 'Neighbor', keys);
+    if (scenario === 'insert') {
+        assertState(refreshed, ['Keep', 'Gated', 'Neighbor'], 'Neighbor', keys);
+        assertState(afterEnter, [], null, [...keys, 'Enter'], neighborChoice);
+    } else {
+        const options = ['Keep', 'Gated'];
+        assertState(refreshed, options, null, keys);
+        assertState(afterEnter, options, null, [...keys, 'Enter']);
+        assertState(renavigated, options, 'Gated', [...keys, 'Enter', 'End']);
+        assertState(
+            afterRenavigatedEnter,
+            [],
+            null,
+            [...keys, 'Enter', 'End', 'Enter'],
+            gatedChoice
+        );
+    }
+}
+
 // Synthetic controlled host, installed public entry points, actual browser input.
 // Canonical state and deferred metadata remain host-owned; no provider is called.
 export async function checkControlledSelectBrowser({
@@ -607,6 +727,7 @@ export async function checkControlledSelectBrowser({
         results: [],
         nativeClosedListKorean: [],
         addChoiceRefresh: [],
+        existingChoiceRefresh: [],
         pageErrors: [],
         unexpectedRequests: [],
         cleanup: {},
@@ -657,10 +778,14 @@ const choices=[{id:'a',name:'Alpha',displayName:'First'},{id:'b',name:'Beta',dis
 const nativeEditable=new URLSearchParams(location.search).has('native-editable-dropdown');
 const nativeClosedListKorean=new URLSearchParams(location.search).get('native-closed-list-korean');
 const addRefresh=new URLSearchParams(location.search).has('add-refresh');
+const existingChoiceRefresh=new URLSearchParams(location.search).has('existing-choice-refresh');
+const [keep,gated,neighbor]=${JSON.stringify([keepChoice, gatedChoice, neighborChoice])};
+const configuredChoices=[keep,gated,neighbor];
+const choiceIds=[],keys=[];
 const koreanChoices=${JSON.stringify(koreanChoices)};
 function App(){
- const [state,setState]=useState({single:nativeEditable?'Beta':null,multi:['Alpha','Beta'],limited:['Alpha'],choices:addRefresh?[]:choices,readonly:false,active:true,token:{}});
- if(addRefresh)refreshChoices=replacement=>setState(old=>({...old,choices:replacement}));
+ const [state,setState]=useState({single:nativeEditable?'Beta':null,multi:['Alpha','Beta'],limited:['Alpha'],choices:existingChoiceRefresh?[keep,neighbor]:addRefresh?[]:choices,readonly:false,active:true,token:{}});
+ if(addRefresh||existingChoiceRefresh)refreshChoices=replacement=>setState(old=>({...old,choices:replacement}));
  const latest=useRef(state);latest.current=state;observed=state;
  const canonicalSingle=useRef(state.single);
  const scope=state.token;
@@ -668,6 +793,25 @@ function App(){
  const singleOwner={token:scope,isCurrent:()=>owner.isCurrent()&&canonicalSingle.current===state.single};
  const common={choices:state.choices,availableChoices:state.choices,owner,readOnly:state.readonly,formId:'select-form'};
  const change=(key,value)=>{const writerOwner=key==='single'?singleOwner:owner;const currentBefore=writerOwner.isCurrent();if(!currentBefore||latest.current.readonly)return false;writes.push({kind:'value',key,value});if(key==='single'){canonicalSingle.current=value;singleEchoTransitions.push({renderedValue:state.single,canonicalValue:value,currentBefore,currentAfter:singleOwner.isCurrent()});}setState(old=>({...old,[key]:value}));};
+ if(existingChoiceRefresh){
+    return h('form',{id:'select-form',onSubmit:event=>{event.preventDefault();submits++;},onKeyDownCapture:event=>{
+       if(event.target.id==='status')keys.push({key:event.key,trusted:event.nativeEvent.isTrusted});
+    }},
+      h('button',{type:'button'},'Before Status'),
+      h(SingleSelectField,{
+        ...common,owner:singleOwner,choices:configuredChoices,inputId:'status',ariaLabel:'Status',
+        presentation:'dropdown',editableDropdownLayout:'native-form',value:state.single,allowAddingNewOptions:false,
+        onValueChange(value){
+          const choice=latest.current.choices.find(candidate=>candidate.name===value);
+          if(!choice)throw Error('Expected current configured choice');
+          const accepted=change('single',value);
+          if(accepted!==false)choiceIds.push(choice.id);
+          return accepted;
+        },
+        publishMetadata:choice=>{writes.push({kind:'metadata',choice});return false;},
+      })
+    );
+ }
  if(nativeClosedListKorean){
     const seoul={id:'seoul',name:koreanChoices[nativeClosedListKorean]};
     const unavailable={id:'busan',name:${JSON.stringify(busan)}};
@@ -753,7 +897,7 @@ function App(){
  h('button',{type:'submit'},'Explicit Save'));
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.selectProof={refreshChoices:replacement=>refreshChoices(replacement),snapshot:()=>({react:React.version,writes:[...writes],submits,activations,single:observed.single,multi:observed.multi,limited:observed.limited,singleEchoTransitions:[...singleEchoTransitions]})};
+window.selectProof={refreshChoices:replacement=>refreshChoices(replacement),snapshot:()=>({react:React.version,writes:[...writes],submits,activations,single:observed.single,multi:observed.multi,limited:observed.limited,singleEchoTransitions:[...singleEchoTransitions],...(existingChoiceRefresh?{choiceIds:[...choiceIds],keys:[...keys]}:{})})};
 `;
             const entry = join(
                 directory,
@@ -1371,6 +1515,22 @@ window.selectProof={refreshChoices:replacement=>refreshChoices(replacement),snap
                 const result = await readAddChoiceRefresh(page, snapshot, name);
                 evidence.addChoiceRefresh.push({ format, name, ...result });
             }
+            for (const scenario of ['insert', 'remove']) {
+                evidence.phase = `${format} existing choice refresh ${scenario}`;
+                await page.goto(
+                    `${origin}/?format=${format}&existing-choice-refresh`
+                );
+                const result = await readExistingChoiceRefresh(
+                    page,
+                    snapshot,
+                    scenario
+                );
+                evidence.existingChoiceRefresh.push({
+                    format,
+                    scenario,
+                    ...result,
+                });
+            }
             evidence.results.push({
                 format,
                 synchronousCanonicalEcho,
@@ -1390,10 +1550,14 @@ window.selectProof={refreshChoices:replacement=>refreshChoices(replacement),snap
             evidence.phase = `${receipt.format} Add choice refresh ${receipt.name}`;
             assertAddChoiceRefresh(receipt);
         }
+        for (const receipt of evidence.existingChoiceRefresh) {
+            evidence.phase = `${receipt.format} existing choice refresh ${receipt.scenario}`;
+            assertExistingChoiceRefresh(receipt);
+        }
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =
-            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, Add highlight across choice refresh, caps/radios, readonly Grid events, and native Form dropdown appearance, focus, actions and equivalent Korean closed-list search. Synthetic host and explicit submit sentinel.';
+            'Installed controlled ESM/CJS Select UI; synchronous canonical owner echo, deferred metadata, existing and Add highlights across choice refresh, caps/radios, readonly Grid events, and native Form dropdown appearance, focus, actions and equivalent Korean closed-list search. Synthetic host and explicit submit sentinel.';
         evidence.status = 'passed';
     } catch (error) {
         failure = error;
